@@ -146,3 +146,28 @@ IdSipTransport implements the Transport Layer. SipTransports use Indy
 servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
 data through the IP network, etc. SipTransports provide an
 encapsulated way to access network functionality.
+
+THE TRANSACTION USER LAYER
+
+Most users will find this the most interesting layer - apart from
+logging, almost everything you'd want to do with a SIP stack you'll
+find here.
+
+The Transaction User layer consists of two main things: we create one
+User Agent (typically TIdSipUserAgentCore), and that will create
+Actions (TIdSipAction subclasses) as and when necessary.
+
+For instance, if the User Agent receives an INVITE it creates a
+TIdSipInboundSession and passes the INVITE to this new session. The
+User Agent notifies us of the incoming call via
+  IIdSipUserAgentListener.OnInboundCall
+Should we wish to accept the call, we invoke Session.AcceptCall with
+an appropriate offer and content type. Otherwise, we can reject the
+call with, say, Session.RejectCallBusy.
+
+If we want to register with a registrar, we invoke
+  UserAgent.RegisterWith(a URI)
+which makes the UserAgent create a TIdSipOutboundRegister and gives us
+a pointer to that new Action. We can then choose to listen to that
+Action, and receive success/failure/authentication challenge
+notifications.
