@@ -97,7 +97,7 @@ begin
   Self.Dispatcher.AddTransport(Self.Transport);
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
-  Self.UA.AddAllowedMethod(MethodRegister);
+  Self.UA.AddModule(TIdSipRegisterModule);
   Self.UA.BindingDB := Self.DB;
   Self.UA.HostName := 'wsfrank';
   Self.UA.UserAgentName := 'Frank''s Registration Spike';

@@ -228,7 +228,7 @@ begin
   Self.UA.AddObserver(Self);
   Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.UA.UserAgentName := '';
-  Self.UA.AddAllowedMethod(MethodRegister);
+  Self.UA.AddModule(TIdSipRegisterModule);
 
   try
     BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Port);

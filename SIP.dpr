@@ -14,6 +14,7 @@ uses
   GuiTestRunner,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
+  IdBaseThread in 'src\IdBaseThread.pas',
   IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
   IdNotification in 'src\IdNotification.pas',

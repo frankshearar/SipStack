@@ -92,9 +92,9 @@ begin
   Self.Registrar.BindingDB := Self.DB;
   Self.Registrar.Dispatcher := Self.Dispatch;
   Self.Registrar.MinimumExpiryTime := 3600;
-  Self.Registrar.AddAllowedMethod(MethodRegister);
-  Self.Registrar.RemoveAllowedMethod(MethodInvite);
-  Self.Registrar.RemoveAllowedMethod(MethodBye);
+  Self.Registrar.AddModule(TIdSipRegisterModule);
+  Self.Registrar.RemoveModule(TIdSipInviteModule);
+  Self.Registrar.RemoveModule(TIdSipByeModule);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;

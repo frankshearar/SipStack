@@ -206,6 +206,9 @@ type
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
+  TIdSipMessageModule = class;
+  TIdSipMessageModuleClass = class of TIdSipMessageModule;
+
   // I represent the heart of a User Agent. We split User Agent functionality
   // into multiple levels because some SIP entities (like registrars) behave
   // very similarly to "normal" User Agents. In fact, we can regard a registrar
@@ -218,9 +221,10 @@ type
   private
     fAllowedContentTypeList: TStrings;
     fAllowedLanguageList:    TStrings;
-    fAllowedMethodList:      TStrings;
     fAllowedSchemeList:      TStrings;
     fFrom:                   TIdSipFromHeader;
+    ModuleLock:              TCriticalSection;
+    Modules:                 TObjectList;
 
     function  ConvertToHeader(ValueList: TStrings): String;
     function  GetFrom: TIdSipFromHeader;
@@ -239,7 +243,6 @@ type
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
     property AllowedLanguageList:    TStrings read fAllowedLanguageList;
-    property AllowedMethodList:      TStrings read fAllowedMethodList;
     property AllowedSchemeList:      TStrings read fAllowedSchemeList;
   public
     constructor Create; override;
@@ -247,7 +250,6 @@ type
 
     procedure AddAllowedContentType(const MimeType: String);
     procedure AddAllowedLanguage(const LanguageID: String);
-    procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
@@ -262,11 +264,13 @@ type
     function  IsExtensionAllowed(const Extension: String): Boolean;
     function  IsMethodAllowed(const Method: String): Boolean;
     function  IsSchemeAllowed(const Scheme: String): Boolean;
+    function  ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
     function  NextBranch: String;
     function  NextInitialSequenceNo: Cardinal;
-    procedure RemoveAllowedMethod(const Method: String);
+    procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
+    function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
     property From: TIdSipFromHeader read GetFrom write SetFrom;
   end;
@@ -287,7 +291,6 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
-
   TIdSipInboundOptions = class;
   TIdSipInboundRegistration = class;
   TIdSipOutboundSession = class;
@@ -299,24 +302,22 @@ type
   // * clean up established Sessions
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
-    ActionLock:            TCriticalSection;
-    Actions:               TObjectList;
-    fBindingDB:            TIdSipAbstractBindingDatabase;
-    fContact:              TIdSipContactHeader;
-    fDoNotDisturb:         Boolean;
-    fDoNotDisturbMessage:  String;
-    fHasProxy:             Boolean;
-    fMinimumExpiryTime:    Cardinal; // in seconds
-    fProxy:                TIdSipUri;
-    KnownRegistrars:       TObjectList;
+    ActionLock:           TCriticalSection;
+    Actions:              TObjectList;
+    fBindingDB:           TIdSipAbstractBindingDatabase;
+    fContact:             TIdSipContactHeader;
+    fDoNotDisturb:        Boolean;
+    fDoNotDisturbMessage: String;
+    fHasProxy:            Boolean;
+    fMinimumExpiryTime:   Cardinal; // in seconds
+    fProxy:               TIdSipUri;
+    KnownRegistrars:      TObjectList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
                       Response: TIdSipResponse): TIdSipOutboundSession;
-    function  AddInboundOptions(Options: TIdSipRequest): TIdSipInboundOptions;
-    function  AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
-    function  AddInboundSession(Invite: TIdSipRequest;
-                                UsingSecureTransport: Boolean): TIdSipInboundSession;
+    function  AddInboundRequest(Request: TIdSipRequest;
+                                Receiver: TIdSipTransport): TIdSipAction;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
@@ -362,6 +363,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure AddModule(ModuleType: TIdSipMessageModuleClass);
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
@@ -379,13 +381,13 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
-    procedure TerminateAllCalls;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveAction(Action: TIdSipAction);
     function  SessionCount: Integer;
+    procedure TerminateAllCalls;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  Username: String;
 
@@ -397,6 +399,51 @@ type
     property Proxy:                         TIdSipUri                     read fProxy write SetProxy;
     property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
     property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+  end;
+
+  TIdSipMessageModule = class(TObject)
+  private
+    UserAgent: TIdSipUserAgentCore;
+  public
+    constructor Create(UA: TIdSipUserAgentCore); virtual;
+
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; virtual;
+    function AcceptsMethods: String; virtual;
+    function WillAccept(Request: TIdSipRequest): Boolean; virtual;
+
+  end;
+
+  TIdSipByeModule = class(TIdSipMessageModule)
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
+  end;
+
+  TIdSipInviteModule = class(TIdSipMessageModule)
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
+  end;
+
+  TIdSipOptionsModule = class(TIdSipMessageModule)
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
+  end;
+
+  TIdSipRegisterModule = class(TIdSipMessageModule)
+  public
+    function Accept(Request: TIdSipRequest;
+                    UsingSecureTransport: Boolean): TIdSipAction; override;
+    function AcceptsMethods: String; override;
+    function WillAccept(Request: TIdSipRequest): Boolean; override;
   end;
 
   TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
@@ -1150,14 +1197,23 @@ begin
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fAllowedMethodList      := TStringList.Create;
   Self.fAllowedSchemeList      := TStringList.Create;
+
+  Self.ModuleLock := TCriticalSection.Create;
+  Self.Modules    := TObjectList.Create(true);
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
 begin
+  Self.ModuleLock.Acquire;
+  try
+    Self.Modules.Free;
+  finally
+    Self.ModuleLock.Release;
+  end;
+  Self.ModuleLock.Free;
+
   Self.AllowedSchemeList.Free;
-  Self.AllowedMethodList.Free;
   Self.AllowedLanguageList.Free;
   Self.AllowedContentTypeList.Free;
 
@@ -1179,15 +1235,6 @@ begin
 
   if (Self.AllowedLanguageList.IndexOf(LanguageID) = -1) then
     Self.AllowedLanguageList.Add(LanguageID);
-end;
-
-procedure TIdSipAbstractUserAgent.AddAllowedMethod(const Method: String);
-begin
-  if not TIdSipParser.IsMethod(Method) then
-    raise EIdSipBadSyntax.Create('Not a token');
-
-  if (Self.AllowedMethodList.IndexOf(Method) = -1) then
-    Self.AllowedMethodList.Add(Method);
 end;
 
 procedure TIdSipAbstractUserAgent.AddAllowedScheme(const Scheme: String);
@@ -1220,8 +1267,19 @@ begin
 end;
 
 function TIdSipAbstractUserAgent.AllowedMethods: String;
+var
+  I: Integer;
 begin
-  Result := Self.ConvertToHeader(Self.AllowedMethodList);
+  Result := '';
+  Self.ModuleLock.Acquire;
+  try
+    for I := 0 to Self.Modules.Count - 1 do
+      Result := Result + (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods + ', ';
+
+    Result := Result + MethodCancel;
+  finally
+    Self.ModuleLock.Release;
+  end;
 end;
 
 function TIdSipAbstractUserAgent.AllowedSchemes: String;
@@ -1272,13 +1330,53 @@ begin
 end;
 
 function TIdSipAbstractUserAgent.IsMethodAllowed(const Method: String): Boolean;
+var
+  I:   Integer;
+  Req: TIdSipRequest;
 begin
-  Result := Self.AllowedMethodList.IndexOf(Method) >= 0;
+  Result := false;
+
+  Req := TIdSipRequest.Create;
+  try
+    Req.Method := Method;
+
+    I := 0;
+    Self.ModuleLock.Acquire;
+    try
+      while (I < Self.Modules.Count) and not Result do begin
+        Result := (Self.Modules[I] as TIdSipMessageModule).WillAccept(Req);
+        Inc(I);
+      end;
+    finally
+      Self.ModuleLock.Release;
+    end;
+  finally
+    Req.Free;
+  end;
 end;
 
 function TIdSipAbstractUserAgent.IsSchemeAllowed(const Scheme: String): Boolean;
 begin
   Result := Self.AllowedSchemeList.IndexOf(Scheme) >= 0;
+end;
+
+function TIdSipAbstractUserAgent.ModuleFor(Request: TIdSipRequest): TIdSipMessageModule;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  I := 0;
+  Self.ModuleLock.Acquire;
+  try
+    while (I < Self.Modules.Count) and not Assigned(Result) do
+      if (Self.Modules[I] as TIdSipMessageModule).WillAccept(Request) then
+        Result := Self.Modules[I] as TIdSipMessageModule
+      else
+        Inc(I);
+  finally
+    Self.ModuleLock.Release;
+  end;
 end;
 
 function TIdSipAbstractUserAgent.NextBranch: String;
@@ -1291,14 +1389,24 @@ begin
   Result := GRandomNumber.NextCardinal($7FFFFFFF);
 end;
 
-procedure TIdSipAbstractUserAgent.RemoveAllowedMethod(const Method: String);
+procedure TIdSipAbstractUserAgent.RemoveModule(ModuleType: TIdSipMessageModuleClass);
 var
-  Index: Integer;
+  I: Integer;
 begin
-  Index := Self.AllowedMethodList.IndexOf(Method);
-
-  if (Index <> -1) then
-    Self.AllowedMethodList.Delete(Index);
+  Self.ModuleLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Modules.Count) do begin
+      if ((Self.Modules[I] as TIdSipMessageModule).ClassType = ModuleType) then begin
+        Self.Modules.Delete(I);
+        Break;
+      end
+      else
+        Inc(I);
+    end;
+  finally
+    Self.ModuleLock.Release;
+  end;
 end;
 
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
@@ -1311,6 +1419,24 @@ begin
     Self.Dispatcher.SendResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+function TIdSipAbstractUserAgent.UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
+var
+  I: Integer;
+begin
+  I := 0;
+  Result := false;
+
+  Self.ModuleLock.Acquire;
+  try
+    while (I < Self.Modules.Count) and not Result do begin
+      Result := Self.Modules[I] is ModuleType;
+      if not Result then Inc(I);
+    end;
+  finally
+    Self.ModuleLock.Release;
   end;
 end;
 
@@ -1540,10 +1666,11 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
-  Self.AddAllowedMethod(MethodBye);
-  Self.AddAllowedMethod(MethodCancel);
-  Self.AddAllowedMethod(MethodInvite);
-  Self.AddAllowedMethod(MethodOptions);
+
+  Self.AddModule(TIdSipByeModule);
+  Self.AddModule(TIdSipInviteModule);
+  Self.AddModule(TIdSipOptionsModule);
+
   Self.AddAllowedScheme(SipScheme);
 
   Self.DoNotDisturb        := false;
@@ -1559,12 +1686,24 @@ begin
   Self.Contact.Free;
   Self.From.Free;
   Self.Actions.Free;
-  Self.ActionLock.Free;  
+  Self.ActionLock.Free;
   Self.KnownRegistrars.Free;
   Self.Proxy.Free;
 
   inherited Destroy;
 end;
+
+procedure TIdSipUserAgentCore.AddModule(ModuleType: TIdSipMessageModuleClass);
+begin
+  Self.ModuleLock.Acquire;
+  try
+    if not Self.UsesModule(ModuleType) then
+      Self.Modules.Add(ModuleType.Create(Self));
+  finally
+    Self.ModuleLock.Release;
+  end;
+end;
+
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
                                   const InitialOffer: String;
@@ -1694,31 +1833,6 @@ begin
   Result.RegisterWith(Registrar, Self.Contact);
 end;
 
-procedure TIdSipUserAgentCore.TerminateAllCalls;
-var
-  CopyOfSessions: TObjectList;
-  I:              Integer;
-begin
-  // We copy the sessions because when they terminate we lose our reference
-  // to them and we remove them from Self.Actions
-  Self.ActionLock.Acquire;
-  try
-    CopyOfSessions := TObjectList.Create(false);
-    try
-      for I := 0 to Self.Actions.Count - 1 do
-        if Self.ActionAt(I).IsSession and not Self.ActionAt(I).IsTerminated then
-          CopyOfSessions.Add(Self.ActionAt(I));
-
-      for I := 0 to CopyOfSessions.Count - 1 do
-        (CopyOfSessions[I] as TIdSipAction).Terminate;
-    finally
-      CopyOfSessions.Free;
-    end;
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
 function TIdSipUserAgentCore.OptionsCount: Integer;
 var
   I: Integer;
@@ -1799,6 +1913,31 @@ begin
   end;
 end;
 
+procedure TIdSipUserAgentCore.TerminateAllCalls;
+var
+  CopyOfSessions: TObjectList;
+  I:              Integer;
+begin
+  // We copy the sessions because when they terminate we lose our reference
+  // to them and we remove them from Self.Actions
+  Self.ActionLock.Acquire;
+  try
+    CopyOfSessions := TObjectList.Create(false);
+    try
+      for I := 0 to Self.Actions.Count - 1 do
+        if Self.ActionAt(I).IsSession and not Self.ActionAt(I).IsTerminated then
+          CopyOfSessions.Add(Self.ActionAt(I));
+
+      for I := 0 to CopyOfSessions.Count - 1 do
+        (CopyOfSessions[I] as TIdSipAction).Terminate;
+    finally
+      CopyOfSessions.Free;
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
 function TIdSipUserAgentCore.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
   Result := Self.AddOutboundRegistration;
@@ -1816,32 +1955,18 @@ end;
 procedure TIdSipUserAgentCore.ActOnRequest(Request: TIdSipRequest;
                                            Receiver: TIdSipTransport);
 var
-  Action:             TIdSipAction;
-  ExpectedStatusCode: Cardinal;
+  Action: TIdSipAction;
 begin
   inherited ActOnRequest(Request, Receiver);
 
   // Processing the request - 8.2.5
   Action := Self.FindAction(Request);
 
+  if not Assigned(Action) then
+    Action := Self.AddInboundRequest(Request, Receiver);
+
   if Assigned(Action) then
-    Action.ReceiveRequest(Request)
-  else begin
-    if Request.IsBye then
-      Self.ReturnResponse(Request,
-                          SIPCallLegOrTransactionDoesNotExist)
-    else if Request.IsInvite then begin
-      ExpectedStatusCode := Self.ResponseForInvite;
-      if (ExpectedStatusCode <> SIPOK) then
-        Self.ReturnResponse(Request, ExpectedStatusCode)
-      else
-        Self.AddInboundSession(Request, Receiver.IsSecure)
-    end
-    else if Request.IsRegister then
-      Self.AddInboundRegistration(Request).ReceiveRequest(Request)
-    else if Request.IsOptions then
-      Self.AddInboundOptions(Request).ReceiveRequest(Request);
-  end;
+    Action.ReceiveRequest(Request);
 
   // TIdSipSession generates the response - 8.2.6
 end;
@@ -1958,63 +2083,27 @@ begin
   Self.NotifyOfChange;
 end;
 
-function TIdSipUserAgentCore.AddInboundOptions(Options: TIdSipRequest): TIdSipInboundOptions;
+function TIdSipUserAgentCore.AddInboundRequest(Request: TIdSipRequest;
+                                               Receiver: TIdSipTransport): TIdSipAction;
+var
+  Module: TIdSipMessageModule;
 begin
-  Result := TIdSipInboundOptions.Create(Self, Options);
-  try
-    Self.ActionLock.Acquire;
-    try
-      Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
+  Module := Self.ModuleFor(Request);
+
+  if Assigned(Module) then begin
+    Result := Module.Accept(Request, Receiver.IsSecure);
+
+    if Assigned(Result) then begin
+      Self.ActionLock.Acquire;
+      try
+        Self.Actions.Add(Result);
+      finally
+        Self.ActionLock.Release;
+      end;
     end;
-
-  except
-    FreeAndNil(Result);
-  end;
-end;
-
-function TIdSipUserAgentCore.AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
-begin
-  Result := TIdSipInboundRegistration.Create(Self, Reg);
-  try
-    Self.ActionLock.Acquire;
-    try
-      Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
-    end;
-
-  except
-    FreeAndNil(Result);
-  end;
-end;
-
-function TIdSipUserAgentCore.AddInboundSession(Invite: TIdSipRequest;
-                                               UsingSecureTransport: Boolean): TIdSipInboundSession;
-begin
-  Result := TIdSipInboundSession.Create(Self, Invite, UsingSecureTransport);
-  try
-    Self.ActionLock.Acquire;
-    try
-      Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
-    end;
-
-    Self.NotifyOfInboundCall(Result);
-    Self.NotifyOfChange;
-
-    if Invite.HasHeader(ExpiresHeader) then begin
-      TIdSipSingleShotTimer.Create(Self.OnInboundSessionExpire,
-                                   Invite.FirstExpires.NumericValue,
-                                   Invite.Copy);
-    end;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
+  end
+  else
+    Result := nil;
 end;
 
 procedure TIdSipUserAgentCore.AddKnownRegistrar(Registrar: TIdSipUri;
@@ -2335,6 +2424,143 @@ begin
   // proper payload processor capable of handling multiple content types
   OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
+end;
+
+//******************************************************************************
+//* TIdSipMessageModule                                                        *
+//******************************************************************************
+//* TIdSipMessageModule Public methods *****************************************
+
+constructor TIdSipMessageModule.Create(UA: TIdSipUserAgentCore);
+begin
+  inherited Create;
+
+  Self.UserAgent := UA;
+end;
+
+function TIdSipMessageModule.Accept(Request: TIdSipRequest;
+                                    UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := nil;
+end;
+
+function TIdSipMessageModule.AcceptsMethods: String;
+begin
+  Result := '';
+end;
+
+function TIdSipMessageModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := false;
+end;
+
+//******************************************************************************
+//* TIdSipByeModule                                                            *
+//******************************************************************************
+//* TIdSipByeModule Public methods *********************************************
+
+function TIdSipByeModule.Accept(Request: TIdSipRequest;
+                                UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := nil;
+
+  Self.UserAgent.ReturnResponse(Request,
+                                SIPCallLegOrTransactionDoesNotExist)
+end;
+
+function TIdSipByeModule.AcceptsMethods: String;
+begin
+  Result := MethodBye;
+end;
+
+function TIdSipByeModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsBye;
+end;
+
+//******************************************************************************
+//* TIdSipInviteModule                                                         *
+//******************************************************************************
+//* TIdSipInviteModule Public methods ******************************************
+
+function TIdSipInviteModule.Accept(Request: TIdSipRequest;
+                                   UsingSecureTransport: Boolean): TIdSipAction;
+var
+  ExpectedStatusCode: Cardinal;
+  Session:            TIdSipInboundSession;
+begin
+  ExpectedStatusCode := Self.UserAgent.ResponseForInvite;
+  if (ExpectedStatusCode <> SIPOK) then begin
+    Result := nil;
+    Self.UserAgent.ReturnResponse(Request, ExpectedStatusCode)
+  end
+  else begin
+    Session := TIdSipInboundSession.Create(Self.UserAgent,
+                                           Request,
+                                           UsingSecureTransport);
+
+    Self.UserAgent.NotifyOfInboundCall(Session);
+    Self.UserAgent.NotifyOfChange;
+
+    if Request.HasHeader(ExpiresHeader) then begin
+      TIdSipSingleShotTimer.Create(Self.UserAgent.OnInboundSessionExpire,
+                                   Request.FirstExpires.NumericValue,
+                                   Request.Copy);
+    end;
+    Result := Session;
+  end;
+end;
+
+function TIdSipInviteModule.AcceptsMethods: String;
+begin
+  Result := MethodInvite + ', ' + MethodAck;
+end;
+
+function TIdSipInviteModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsInvite;
+end;
+
+//******************************************************************************
+//* TIdSipOptionsModule                                                        *
+//******************************************************************************
+//* TIdSipOptionsModule Public methods *****************************************
+
+function TIdSipOptionsModule.Accept(Request: TIdSipRequest;
+                                    UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := TIdSipInboundOptions.Create(Self.UserAgent, Request);
+end;
+
+function TIdSipOptionsModule.AcceptsMethods: String;
+begin
+  Result := MethodOptions;
+end;
+
+function TIdSipOptionsModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsOptions;
+end;
+
+//******************************************************************************
+//* TIdSipRegisterModule                                                       *
+//******************************************************************************
+//* TIdSipRegisterModule Public methods ****************************************
+
+function TIdSipRegisterModule.Accept(Request: TIdSipRequest;
+                                     UsingSecureTransport: Boolean): TIdSipAction;
+begin
+  Result := TIdSipInboundRegistration.Create(Self.UserAgent, Request);
+end;
+
+function TIdSipRegisterModule.AcceptsMethods: String;
+begin
+  Result := MethodRegister;
+end;
+
+function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.IsRegister;
 end;
 
 //******************************************************************************
@@ -3452,16 +3678,20 @@ begin
   else if Request.IsCancel then
     Self.ProcessCancel(Request)
   else if Request.IsInvite then begin
-    if Self.Dialog.IsOutOfOrder(Request) then begin
-      Self.RejectOutOfOrderRequest(Request);
-      Exit;
+    // No dialog? For an inbound call? Then do nothing - Request represents
+    // the initial request that caused the creation of this session.
+    if Self.DialogEstablished then begin
+      if Self.Dialog.IsOutOfOrder(Request) then begin
+        Self.RejectOutOfOrderRequest(Request);
+        Exit;
+      end;
+
+//      if Request.Disposition.IsSession then
+//        Self.PayloadProcessor.RemoteSessionDescription := Request.Body;
+
+      Self.AddOpenTransaction(Request);
+      Self.NotifyOfModifiedSession(Request);
     end;
-
-//    if Request.Disposition.IsSession then
-//      Self.PayloadProcessor.RemoteSessionDescription := Request.Body;
-
-    Self.AddOpenTransaction(Request);
-    Self.NotifyOfModifiedSession(Request);
   end;
 end;
 
