@@ -7,15 +7,18 @@ interface
 uses MMsystem, Sysutils, Classes, Windows;
 
 const
-  ChannelsMono   = 1;
-  ChannelsStereo = 2;
-  AnyAudioDevice = WAVE_MAPPER;
+  ChannelsMono      = 1;
+  ChannelsStereo    = 2;
+  AnyAudioDevice    = WAVE_MAPPER;
+  MaxAudioInstances = 10;
+  LockingTimeOut    = 3000;
 
 type
   TAudioFormat = (afPCM, afALaw, afMuLaw);
   TAudioDataSourceType = (stNone, stUnknown, stFile, stMemory, stString, stSocket);
 
   TAudioData = class;
+  TMutex = class;
   TAudioEvent = procedure(Origin: TAudioData) of object;
   TAudioDataEvent = procedure(Origin: TAudioData; BlockCounter: Cardinal) of object;
   TAudioDataVersion = record
@@ -38,6 +41,7 @@ type
     FOnData: TAudioDataEvent;
     FBlockCounter: Cardinal;
     FBusy: Boolean;
+    FMutex: TMutex;
     procedure SetAudioFormat(AAudioFormat: TAudioFormat);
     procedure SetChannels(AChannels: Word);
     procedure SetBitsPerSample(AValue: Word);
@@ -59,12 +63,14 @@ type
 
   public
     procedure Assign(AStream: TStream);
-    constructor Create; 
+    constructor Create;
     destructor Destroy; override;
     procedure LoadFromFile(AFileName: String);
+    function Lock: Boolean;
+    function UnLock: Boolean;
     function Play(ADevice: Cardinal): Boolean;
-    function Stop: Boolean;
     procedure SetFormatParameters(AFormat: TAudioFormat; AChannels: Word; ASamplesPerSecond: LongWord; ABitsPerSample: Word);
+    function Stop: Boolean;
     property AudioFormat: TAudioFormat read FAudioFormat write SetAudioFormat;
     property AutoFreeSource: Boolean read FAutoFreeSource write FAutoFreeSource;
     property BitsPerSample: Word read FBitsPerSample write SetBitsPerSample;
@@ -82,6 +88,16 @@ type
     property OnStart: TAudioEvent read FOnStart write FOnStart;
     property OnStop: TAudioEvent read FOnStop write FOnStop;
     property Version: TAudioDataVersion read GetVersion;
+  end;
+
+  TMutex = class
+  private
+    FMutexHandle: THandle;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Acquire: Boolean;
+    function Release: Boolean;
   end;
 
   EAudioError = class(Exception);
@@ -108,6 +124,7 @@ type
   private
     FDeviceID: Cardinal;
     FAudioData: TAudioData;
+    StartPosition: Int64;
     AudioPlaybackCriticalSection: TRTLCriticalSection;
     NextFreeBuffer: Integer;
     NextOutPutBuffer: Integer;
@@ -132,6 +149,8 @@ resourcestring
   rsErrorWhilePreparingHeader      = 'An error (%u) occurred while preparing the header %s.';
   rsPlaybackError                  = 'The audio device %u reported an error %u during playback.';
   rsErrorIllegalStreamType         = 'Error: %s not allowed in this context.';
+  rsErrorWhileCreatingMutex        = 'Error while creating a mutex (%u).';
+  rsErrorMaxNumberOfInstances      = 'Error: maximum number of AudioClasses instances reached.';
 
 { Helper functions }
 
@@ -177,6 +196,7 @@ begin
   inherited;
   FBusy:=False;
   FSource:=nil;
+  FMutex:=TMutex.Create;
   AudioFormat:=afPCM;
   Channels:=ChannelsMono;
   SamplesPerSecond:=8000;
@@ -187,6 +207,7 @@ end;
 destructor TAudioData.Destroy;
 begin
   if AutoFreeSource and Assigned(FSource) then FreeAndNil(FSource);
+  FreeAndNil(FMutex);
   inherited;
 end;
 
@@ -202,15 +223,15 @@ end;
 
 function TAudioData.GetSourceType: TAudioDataSourceType;
 begin
+  Result:=stNone;
   if Assigned(FSource) then
   begin
     if FSource is TFileStream then Result:=stFile
-    else if FSource is TFileStream then Result:=stMemory
-         else if FSource is TStringStream then Result:=stString
-              else if FSource is TWinSocketStream then Result:=stSocket
-                   else Result:=stUnknown;
-  end
-  else Result:=stNone;
+       else if FSource is TMemoryStream then Result:=stMemory
+            else if FSource is TStringStream then Result:=stString
+                 else if FSource is TWinSocketStream then Result:=stSocket
+                      else Result:=stUnknown;
+  end;
 end;
 
 function TAudioData.GetWaveFormat: tWAVEFORMATEX;
@@ -364,7 +385,17 @@ end;
 function TAudioData.GetVersion: TAudioDataVersion;
 begin
   Result.Major:=0;
-  Result.Minor:=2;
+  Result.Minor:=3;
+end;
+
+function TAudioData.Lock: Boolean;
+begin
+  Result:=FMutex.Acquire;
+end;
+
+function TAudioData.UnLock: Boolean;
+begin
+  Result:=FMutex.Release;
 end;
 
 { TAudioPlayThread }
@@ -380,6 +411,7 @@ begin
   FreeOnTerminate:=True;
   NextOutPutBuffer:=1;
   NextFreeBuffer:=1;
+  StartPosition:=0;
   {Initialise all the buffers}
   for I:=1 to NumberOfOutputBuffers do
   begin
@@ -409,15 +441,18 @@ var
   WaveDeviceHandle: HWAVEOUT;
   I, Error: Integer;
   Counter: Integer;
+  CurrentPosition: Int64;
 begin
   inherited;
-  if Assigned(AudioData.Source) then
+  if AudioData.SourceType<>stNone then
   begin
-    if AudioData.Source is TFileStream then AudioData.Source.Seek(0,soFromBeginning);
+    if AudioData.SourceType=stFile
+       then AudioData.Source.Seek(0,soFromBeginning);
     WaveFormat:=AudioData.WaveFormat;
     Error:=waveOutOpen(@WaveDeviceHandle,DeviceID,@WaveFormat,Cardinal(@WaveCallBack),Cardinal(Self),CALLBACK_FUNCTION);
     try
-      if Error<>0 then raise EAudioError.CreateResFmt(@rsCannotOpenOutputDevice,[DeviceID,Error]);
+      if Error<>0 then
+         raise EAudioError.CreateResFmt(@rsCannotOpenOutputDevice,[DeviceID,Error]);
       Synchronize(AudioData.StartEvent);
       repeat
         while OutPutBuffers[NextOutPutBuffer].State<>bsAvailable do
@@ -431,19 +466,37 @@ begin
         if (OutPutBuffers[NextOutPutBuffer].Header.dwFlags and WHDR_PREPARED)<>0 then
         begin
           Error:=waveOutUnprepareHeader(WaveDeviceHandle,@OutPutBuffers[NextOutPutBuffer].Header,SizeOf(TWaveHdr));
-          if Error<>0 then raise EAudioError.CreateResFmt(@rsErrorWhileUnPreparingHeader,[Error,'for playback']);
+          if Error<>0
+             then raise EAudioError.CreateResFmt(@rsErrorWhileUnPreparingHeader,[Error,'for playback']);
           OutPutBuffers[NextOutPutBuffer].Header.dwFlags:=0;
         end;
-        {Now read information into this buffer and queue it}
-        BytesRead:=AudioData.Source.Read(OutPutBuffers[NextOutPutBuffer].Buffer,OutPutBufferSize);
+        if AudioData.Lock then
+        begin
+          try
+            CurrentPosition:=AudioData.Source.Position;
+            if AudioData.SourceType<>stFile
+               then AudioData.Source.Seek(StartPosition,soFromBeginning);
+            BytesRead:=AudioData.Source.Read(OutPutBuffers[NextOutPutBuffer].Buffer,OutPutBufferSize);
+            if AudioData.SourceType<>stFile then
+            begin
+              StartPosition:=AudioData.Source.Position;
+              AudioData.Source.Position:=CurrentPosition;
+            end;
+          finally
+            AudioData.UnLock;
+          end;
+        end
+        else BytesRead:=0;
         if BytesRead>0 then {only if there actually IS data to be played...}
         begin
           OutPutBuffers[NextOutPutBuffer].Header.dwBufferLength:=BytesRead;
           OutPutBuffers[NextOutPutBuffer].Header.dwFlags:=WHDR_INQUEUE;
           Error:=waveOutPrepareHeader(WaveDeviceHandle,@OutPutBuffers[NextOutPutBuffer].Header,SizeOf(TWaveHdr));
-          if Error<>0 then raise EAudioError.CreateResFmt(@rsErrorWhilePreparingHeader,[Error,'for playback']);
+          if Error<>0 then
+             raise EAudioError.CreateResFmt(@rsErrorWhilePreparingHeader,[Error,'for playback']);
           Error:=waveOutWrite(WaveDeviceHandle,@OutPutBuffers[NextOutPutBuffer].Header,SizeOf(TWaveHdr));
-          if Error<>0 then raise EAudioError.CreateResFmt(@rsPlaybackError,[DeviceID,Error]);
+          if Error<>0 then
+             raise EAudioError.CreateResFmt(@rsPlaybackError,[DeviceID,Error]);
           Synchronize(AudioData.DataEvent);
           IncreaseCounter(NextOutPutBuffer);
         end
@@ -453,7 +506,8 @@ begin
             OutPutBuffers[NextOutPutBuffer].State:=bsAvailable;
           LeaveCriticalSection(AudioPlaybackCriticalSection);
           {...bail out if end of file is reached in case of a filestream}
-          if AudioData.Source is TFileStream then Break;
+          if (AudioData.SourceType=stFile)
+             then Break;
         end;
       until Terminated;
     finally
@@ -469,13 +523,15 @@ begin
             begin
               sleep(100);
               Inc(Counter);
-              if Counter>50 then break;
+              if Counter>50
+                 then break;
             end;
             {Unprepare the buffer if necessary}
             if (OutPutBuffers[I].Header.dwFlags and WHDR_PREPARED)<>0 then
             begin
               Error:=waveOutUnprepareHeader(WaveDeviceHandle,@OutPutBuffers[I].Header,SizeOf(TWaveHdr));
-              if Error<>0 then raise EAudioError.CreateResFmt(@rsErrorWhileUnPreparingHeader,[Error,'while finalising']);
+              if Error<>0 then
+                 raise EAudioError.CreateResFmt(@rsErrorWhileUnPreparingHeader,[Error,'while finalising']);
               OutPutBuffers[I].Header.dwFlags:=0;
             end;
           end;
@@ -490,6 +546,48 @@ begin
       end;
     end;
   end;
+end;
+
+{ TMutex }
+
+function TMutex.Acquire: Boolean;
+begin
+  Result:=WaitForSingleObject(FMutexHandle,LockingTimeOut)=WAIT_OBJECT_0;
+end;
+
+constructor TMutex.Create;
+const
+  MutexNameBase = 'AUDIOCLASSESMUTEX';
+var
+  Error: Integer;
+  Instance: Integer;
+  MutexName: String;
+begin
+  inherited Create;
+  Instance:=1;
+  repeat
+    MutexName:=MutexNameBase+IntToStr(Instance);
+    FMutexHandle:=CreateMutex(nil,False,PChar(MutexName));
+    if FMutexHandle=0 then
+    begin
+      Error:=GetLastError;
+      if Error<>ERROR_ALREADY_EXISTS then raise EAudioError.CreateResFmt(@rsErrorWhileCreatingMutex,[Error]);
+    end
+    else Break;
+    inc(Instance);
+    if Instance>MaxAudioInstances then raise EAudioError.CreateRes(@rsErrorMaxNumberOfInstances);
+  until FMutexHandle<>0
+end;
+
+destructor TMutex.Destroy;
+begin
+  CloseHandle(FMutexHandle);
+  inherited;
+end;
+
+function TMutex.Release: Boolean;
+begin
+  Result:=ReleaseMutex(FMutexHandle);
 end;
 
 end.
