@@ -1152,15 +1152,6 @@ type
     property MimeType:     String              read fMimeType write fMimeType;
   end;
 
-  TIdActionMethod = class(TIdMethod)
-  private
-    fAction:   TIdSipAction;
-    fResponse: TIdSipResponse;
-  public
-    property Action:   TIdSipAction   read fAction write fAction;
-    property Response: TIdSipResponse read fResponse write fResponse;
-  end;
-
   TIdSipInviteMethod = class(TIdMethod)
   private
     fInvite: TIdSipInboundInvite;
@@ -1294,7 +1285,7 @@ type
 
   // Ask the listeners for a username/password pair. First listener to set
   // either Password or Username wins.
-  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdActionMethod)
+  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdMethod)
   private
     fChallenge:     TIdSipResponse;
     fFirstPassword: String;
