@@ -158,9 +158,12 @@ begin
   Self.LastRequest.Assign(R);
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipMockTransport.SendRequest');
+    raise EIdSipTransport.Create(Self,
+                                 R,
+                                 'TIdSipMockTransport.SendRequest ('
+                               + Self.FailWith.ClassName + ')');
 
-  if R.IsAck then 
+  if R.IsAck then
     Inc(Self.fACKCount)
   else
     Inc(Self.fSentRequestCount);
@@ -177,7 +180,10 @@ begin
   Self.LastResponse.Assign(R);
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipMockTransport.SendResponse');
+    raise EIdSipTransport.Create(Self,
+                                 R,
+                                 'TIdSipMockTransport.SendResponse ('
+                               + Self.FailWith.ClassName + ')');
 
   Inc(Self.fSentResponseCount);
 

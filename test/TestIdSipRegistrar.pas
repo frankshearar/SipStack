@@ -187,6 +187,7 @@ begin
   Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
   Self.Request.CSeq.Method := Self.Request.Method;
   Self.Request.CallID := '1@selftest.foo';
+  Self.Request.From.Address.Uri := 'sip:case@fried.neurons.org';
 
   Self.FirstContact := Self.Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
 end;
@@ -413,8 +414,10 @@ end;
 
 procedure TestTIdSipRegistrar.TestReceiveInvite;
 begin
-  Self.Request.Method := MethodInvite;
+  Self.Request.Method      := MethodInvite;
+  Self.Request.CSeq.Method := Self.Request.Method;
   Self.SimulateRemoteRequest;
+  
   Self.CheckServerReturned(SIPMethodNotAllowed,
                            'INVITE');
 end;
