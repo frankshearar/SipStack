@@ -133,7 +133,7 @@ type
     destructor  Destroy; override;
 
     procedure AddAttribute(const Name, Value: String);
-    function  AttributeAt(const Index: Integer): TIdSdpAttribute;
+    function  AttributeAt(Index: Integer): TIdSdpAttribute;
     function  AttributeCount: Integer;
     procedure AddFormat(const Fmt: String);
     function  FormatCount: Integer;
@@ -223,7 +223,7 @@ type
 
     procedure Clear;
     function  Count: Integer;
-    function  Contains(const O: TObject): Boolean;
+    function  Contains(O: TObject): Boolean;
     procedure PrintOn(Dest: TStream); override;
     procedure Remove(O: TObject);
   end;
@@ -233,7 +233,7 @@ type
     function GetItems(Index: Integer): TIdSdpAttribute;
   public
     procedure Add(Att: TIdSdpAttribute); overload;
-    procedure Add(NameAndValue: String); overload;
+    procedure Add(const NameAndValue: String); overload;
 
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
   end;
@@ -349,15 +349,15 @@ type
     procedure AddMediaDescription(NewDesc: TIdSdpMediaDescription); overload;
     function  AddMediaDescription: TIdSdpMediaDescription; overload;
     function  AllDescriptionsHaveConnections: Boolean;
-    function  AttributeAt(const Index: Integer): TIdSdpAttribute;
+    function  AttributeAt(Index: Integer): TIdSdpAttribute;
     function  AttributeCount: Integer;
     function  AsString: String;
-    function  ConnectionAt(const Index: Integer): TIdSdpConnection;
+    function  ConnectionAt(Index: Integer): TIdSdpConnection;
     function  ConnectionCount: Integer;
     procedure GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
     function  HasKey: Boolean;
     procedure InitializeProfile(Profile: TIdRTPProfile);
-    function  MediaDescriptionAt(const Index: Integer): TIdSdpMediaDescription;
+    function  MediaDescriptionAt(Index: Integer): TIdSdpMediaDescription;
     function  MediaDescriptionCount: Integer;
     procedure PrintOn(Dest: TStream);
     procedure ReadFrom(Src: TStream);
@@ -390,26 +390,26 @@ type
 
     procedure AssertHeaderOrder;
     function  GetAndCheckInfo: String;
-    procedure ParseAttribute(const Attributes: TIdSdpAttributes);
-    procedure ParseBandwidth(const Bandwidths: TIdSdpBandwidths);
-    procedure ParseConnection(const Connections: TIdSdpConnections);
-    procedure ParseEmail(const Payload: TIdSdpPayload);
+    procedure ParseAttribute(Attributes: TIdSdpAttributes);
+    procedure ParseBandwidth(Bandwidths: TIdSdpBandwidths);
+    procedure ParseConnection(Connections: TIdSdpConnections);
+    procedure ParseEmail(Payload: TIdSdpPayload);
     procedure ParseHeader(var Name, Value: String);
-    procedure ParseInfo(const MediaDescription: TIdSdpMediaDescription); overload;
-    procedure ParseInfo(const Payload: TIdSdpPayload); overload;
-    procedure ParseKey(const Key: TIdSdpKey);
-    procedure ParseMediaDescription(const Payload: TIdSdpPayload);
-    procedure ParseMediaOptionalHeaders(const MediaDescription: TIdSdpMediaDescription);
-    procedure ParseOrigin(const Payload: TIdSdpPayload);
-    procedure ParsePhone(const Payload: TIdSdpPayload);
-    procedure ParseRepeat(const Time: TIdSdpTime);
-    procedure ParseSessionHeaders(const Payload: TIdSdpPayload);
-    procedure ParseSessionOptionalHeaders(const Payload: TIdSdpPayload);
-    procedure ParseSessionName(const Payload: TIdSdpPayload);
-    procedure ParseTime(const Payload: TIdSdpPayload);
-    procedure ParseZoneAdjustment(const Time: TIdSdpTime);
-    procedure ParseURI(const Payload: TIdSdpPayload);
-    procedure ParseVersion(const Payload: TIdSdpPayload);
+    procedure ParseInfo(MediaDescription: TIdSdpMediaDescription); overload;
+    procedure ParseInfo(Payload: TIdSdpPayload); overload;
+    procedure ParseKey(Key: TIdSdpKey);
+    procedure ParseMediaDescription(Payload: TIdSdpPayload);
+    procedure ParseMediaOptionalHeaders(MediaDescription: TIdSdpMediaDescription);
+    procedure ParseOrigin(Payload: TIdSdpPayload);
+    procedure ParsePhone(Payload: TIdSdpPayload);
+    procedure ParseRepeat(Time: TIdSdpTime);
+    procedure ParseSessionHeaders(Payload: TIdSdpPayload);
+    procedure ParseSessionOptionalHeaders(Payload: TIdSdpPayload);
+    procedure ParseSessionName(Payload: TIdSdpPayload);
+    procedure ParseTime(Payload: TIdSdpPayload);
+    procedure ParseZoneAdjustment(Time: TIdSdpTime);
+    procedure ParseURI(Payload: TIdSdpPayload);
+    procedure ParseVersion(Payload: TIdSdpPayload);
   public
     class function IsAddressType(const Token: String): Boolean;
     class function IsBandwidthType(const Token: String): Boolean;
@@ -417,7 +417,7 @@ type
     class function IsKeyData(const Token: String): Boolean;
     class function IsKeyType(const Token: String): Boolean;
     class function IsMediaType(const Token: String): Boolean;
-    class function IsMulticastAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+    class function IsMulticastAddress(IpVersion: TIdIPVersion; const Token: String): Boolean;
     class function IsNetType(const Token: String): Boolean;
     class function IsPhone(const Token: String): Boolean;
     class function IsPhoneNumber(const Header: String): Boolean;
@@ -426,7 +426,7 @@ type
     class function IsTime(const Token: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
 
-    procedure Parse(const Payload: TIdSdpPayload);
+    procedure Parse(Payload: TIdSdpPayload);
   end;
 
   TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
@@ -446,7 +446,7 @@ type
                        LocalDescription,
                        RemoteDescription: TIdSdpMediaDescription); reintroduce;
 
-    procedure SendPacket(Host: String;
+    procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); override;
 
@@ -455,6 +455,10 @@ type
     property Peer:              IIdAbstractRTPPeer     read GetPeer;
   end;
 
+  // I process SDP (RFC 2327) payloads. This means that I instantiate (RTP)
+  // servers on appropriate ports based on a local session description.
+  // You can give me a remote session description too, which allows you to
+  // use me to send (RTP) data to the remote peer.
   TIdSdpPayloadProcessor = class(TIdInterfacedObject,
                                  IIdRTPListener)
   private
@@ -462,12 +466,14 @@ type
     DataListeners:             TList;
     fBasePort:                 Integer;
     fHost:                     String;
+    Filters:                   TObjectList;
     fUsername:                 String;
     fProfile:                  TIdRTPProfile;
     fRemoteSessionDescription: String;
+    RTPClients:                TObjectList;
+    RTPClientLock:             TCriticalSection;
     RTPServerLock:             TCriticalSection;
     RTPServers:                TObjectList;
-    Filters:                   TObjectList;
 
     procedure ActivateServerOnNextFreePort(Server: TIdRTPServer;
                                            StartFrom: Cardinal);
@@ -481,7 +487,7 @@ type
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdSocketHandle);
     function  PeerAt(Index: Integer): TIdFilteredRTPPeer;
-    function  ServerAt(const Index: Integer): TIdRTPServer;
+    function  ServerAt(Index: Integer): TIdRTPServer;
     procedure SetRemoteSessionDescription(const Value: String);
     procedure SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
     procedure SetUpSingleStream(MediaDesc: TIdSdpMediaDescription);
@@ -528,7 +534,7 @@ const
   // MIME types etc
 const
   PlainTextMimeType = 'text/plain';
-  SdpMimeType       = 'application/sdp';  
+  SdpMimeType       = 'application/sdp';
 
 // for IdAssignedNumbers
 const
@@ -939,7 +945,7 @@ begin
   Self.Attributes.Add(Name + ':' + Value);
 end;
 
-function TIdSdpMediaDescription.AttributeAt(const Index: Integer): TIdSdpAttribute;
+function TIdSdpMediaDescription.AttributeAt(Index: Integer): TIdSdpAttribute;
 begin
   Result := Self.Attributes[Index];
 end;
@@ -1186,7 +1192,7 @@ begin
   Result := Self.List.Count;
 end;
 
-function TIdSdpList.Contains(const O: TObject): Boolean;
+function TIdSdpList.Contains(O: TObject): Boolean;
 begin
   Result := Self.List.IndexOf(O) <> -1;
 end;
@@ -1214,7 +1220,7 @@ begin
   Self.List.Add(Att);
 end;
 
-procedure TIdSdpAttributes.Add(NameAndValue: String);
+procedure TIdSdpAttributes.Add(const NameAndValue: String);
 begin
   Self.Add(TIdSdpAttribute.CreateAttribute(NameAndValue));
 end;
@@ -1472,7 +1478,7 @@ begin
   Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
 end;
 
-function TIdSdpPayload.AttributeAt(const Index: Integer): TIdSdpAttribute;
+function TIdSdpPayload.AttributeAt(Index: Integer): TIdSdpAttribute;
 begin
   Result := Self.Attributes[Index];
 end;
@@ -1495,7 +1501,7 @@ begin
   end;
 end;
 
-function TIdSdpPayload.ConnectionAt(const Index: Integer): TIdSdpConnection;
+function TIdSdpPayload.ConnectionAt(Index: Integer): TIdSdpConnection;
 begin
   if (Index >= 0) and (Index < Self.ConnectionCount) then
     Result := Self.Connections[Index]
@@ -1546,7 +1552,7 @@ begin
   end;
 end;
 
-function TIdSdpPayload.MediaDescriptionAt(const Index: Integer): TIdSdpMediaDescription;
+function TIdSdpPayload.MediaDescriptionAt(Index: Integer): TIdSdpMediaDescription;
 begin
   if (Index >= 0) and (Index < Self.MediaDescriptionCount) then
     Result := Self.MediaDescriptions[Index]
@@ -1794,7 +1800,7 @@ begin
   end;
 end;
 
-class function TIdSdpParser.IsMulticastAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion; const Token: String): Boolean;
 var
   Address: String;
   N:       String;
@@ -1917,7 +1923,7 @@ begin
          or (Token = Id_SDP_TCP);
 end;
 
-procedure TIdSdpParser.Parse(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.Parse(Payload: TIdSdpPayload);
 begin
   Self.ParseSessionHeaders(Payload);
 
@@ -1979,7 +1985,7 @@ begin
     Self.LastMediaHeader := RSSDPInformationName;
 end;
 
-procedure TIdSdpParser.ParseAttribute(const Attributes: TIdSdpAttributes);
+procedure TIdSdpParser.ParseAttribute(Attributes: TIdSdpAttributes);
 var
   Att:           TIdSdpAttribute;
   OriginalValue: String;
@@ -2009,7 +2015,7 @@ begin
   end;
 end;
 
-procedure TIdSdpParser.ParseBandwidth(const Bandwidths: TIdSdpBandwidths);
+procedure TIdSdpParser.ParseBandwidth(Bandwidths: TIdSdpBandwidths);
 var
   BW:            TIdSdpBandwidth;
   Name:          String;
@@ -2054,7 +2060,7 @@ begin
     Self.LastMediaHeader := RSSDPBandwidthName;
 end;
 
-procedure TIdSdpParser.ParseConnection(const Connections: TIdSdpConnections);
+procedure TIdSdpParser.ParseConnection(Connections: TIdSdpConnections);
   procedure AddConnection(Connections: TIdSdpConnections;
                           NetType: String;
                           AddrType: TIdIPVersion;
@@ -2151,7 +2157,7 @@ begin
     Self.LastMediaHeader := RSSDPConnectionName;
 end;
 
-procedure TIdSdpParser.ParseEmail(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseEmail(Payload: TIdSdpPayload);
 var
   Name, Value: String;
 begin
@@ -2187,17 +2193,17 @@ begin
 //    raise EParser.Create(Format(MalformedToken, [Trim(Name), Line]));
 end;
 
-procedure TIdSdpParser.ParseInfo(const MediaDescription: TIdSdpMediaDescription);
+procedure TIdSdpParser.ParseInfo(MediaDescription: TIdSdpMediaDescription);
 begin
   MediaDescription.Info := Self.GetAndCheckInfo;
 end;
 
-procedure TIdSdpParser.ParseInfo(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseInfo(Payload: TIdSdpPayload);
 begin
   Payload.Info := Self.GetAndCheckInfo;
 end;
 
-procedure TIdSdpParser.ParseKey(const Key: TIdSdpKey);
+procedure TIdSdpParser.ParseKey(Key: TIdSdpKey);
 var
   Name:          String;
   OriginalValue: String;
@@ -2237,7 +2243,7 @@ begin
     Self.LastMediaHeader := RSSDPKeyName;
 end;
 
-procedure TIdSdpParser.ParseMediaDescription(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseMediaDescription(Payload: TIdSdpPayload);
 var
   Count:         String;
   Name:          String;
@@ -2306,7 +2312,7 @@ begin
   Self.LastMediaHeader   := RSSDPMediaDescriptionName;
 end;
 
-procedure TIdSdpParser.ParseMediaOptionalHeaders(const MediaDescription: TIdSdpMediaDescription);
+procedure TIdSdpParser.ParseMediaOptionalHeaders(MediaDescription: TIdSdpMediaDescription);
 var
   NextHeader: String;
 begin
@@ -2328,7 +2334,7 @@ begin
   end;
 end;
 
-procedure TIdSdpParser.ParseOrigin(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseOrigin(Payload: TIdSdpPayload);
 var
   Name:          String;
   OriginalValue: String;
@@ -2379,7 +2385,7 @@ begin
   Self.LastSessionHeader := RSSDPOriginName;
 end;
 
-procedure TIdSdpParser.ParsePhone(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParsePhone(Payload: TIdSdpPayload);
 var
   Name, Value: String;
 begin
@@ -2396,7 +2402,7 @@ begin
   Self.LastSessionHeader := RSSDPPhoneName;
 end;
 
-procedure TIdSdpParser.ParseRepeat(const Time: TIdSdpTime);
+procedure TIdSdpParser.ParseRepeat(Time: TIdSdpTime);
 var
   Name:          String;
   OriginalValue: String;
@@ -2430,7 +2436,7 @@ begin
   end;
 end;
 
-procedure TIdSdpParser.ParseSessionHeaders(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseSessionHeaders(Payload: TIdSdpPayload);
 begin
   Self.ParsingSessionHeaders := true;
 
@@ -2442,7 +2448,7 @@ begin
   Self.ParsingSessionHeaders := false;
 end;
 
-procedure TIdSdpParser.ParseSessionOptionalHeaders(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseSessionOptionalHeaders(Payload: TIdSdpPayload);
 var
   NextHeader: String;
 begin
@@ -2469,7 +2475,7 @@ begin
   end;
 end;
 
-procedure TIdSdpParser.ParseSessionName(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseSessionName(Payload: TIdSdpPayload);
 var
   Name, Value: String;
 begin
@@ -2485,7 +2491,7 @@ begin
   Self.LastSessionHeader := RSSDPSessionName;
 end;
 
-procedure TIdSdpParser.ParseTime(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseTime(Payload: TIdSdpPayload);
 var
   Name:          String;
   OriginalValue: String;
@@ -2525,7 +2531,7 @@ begin
   Self.LastSessionHeader := RSSDPTimeName;
 end;
 
-procedure TIdSdpParser.ParseZoneAdjustment(const Time: TIdSdpTime);
+procedure TIdSdpParser.ParseZoneAdjustment(Time: TIdSdpTime);
 var
   Name:          String;
   OriginalValue: String;
@@ -2556,7 +2562,7 @@ begin
   end;
 end;
 
-procedure TIdSdpParser.ParseURI(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseURI(Payload: TIdSdpPayload);
 var
   Name, Value: String;
 begin
@@ -2570,7 +2576,7 @@ begin
   Self.LastSessionHeader := RSSDPUriName;
 end;
 
-procedure TIdSdpParser.ParseVersion(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseVersion(Payload: TIdSdpPayload);
 var
   E:     Integer;
   N:     Cardinal;
@@ -2612,7 +2618,7 @@ begin
   Self.Peer.AddListener(Self);
 end;
 
-procedure TIdFilteredRTPPeer.SendPacket(Host: String;
+procedure TIdFilteredRTPPeer.SendPacket(const Host: String;
                                         Port: Cardinal;
                                         Packet: TIdRTPBasePacket);
 begin
@@ -2655,6 +2661,9 @@ begin
   Self.DataListeners := TList.Create;
   Self.DataListenerLock := TCriticalSection.Create;
 
+  Self.RTPClients    := TObjectList.Create(true);
+  Self.RTPClientLock := TCriticalSection.Create;
+
   Self.RTPServers    := TObjectList.Create(true);
   Self.Filters       := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
@@ -2669,6 +2678,9 @@ begin
   Self.Filters.Free;
   Self.RTPServers.Free;
   Self.RTPServerLock.Free;
+
+  Self.RTPClients.Free;
+  Self.RTPClientLock.Free;
 
   Self.DataListeners.Free;
   Self.DataListenerLock.Free;
@@ -2864,14 +2876,19 @@ begin
   Result := Self.Filters[Index] as TIdFilteredRTPPeer;
 end;
 
-function TIdSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
+function TIdSdpPayloadProcessor.ServerAt(Index: Integer): TIdRTPServer;
 begin
   Result := Self.RTPServers[Index] as TIdRTPServer;
 end;
 
 procedure TIdSdpPayloadProcessor.SetRemoteSessionDescription(const Value: String);
 begin
-  Self.fRemoteSessionDescription := Value;
+  Self.RTPClientLock.Acquire;
+  try
+    Self.fRemoteSessionDescription := Value;
+  finally
+    Self.RTPClientLock.Release;
+  end;
 end;
 
 procedure TIdSdpPayloadProcessor.SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
@@ -2900,7 +2917,6 @@ begin
       Self.RTPServers.Add(NewServer);
       NewPeer := TIdFilteredRTPPeer.Create(NewServer, nil, nil);
       try
-        NewServer.AddListener(NewPeer);
         NewPeer.AddListener(Self);
 
         Self.ActivateServerOnNextFreePort(NewServer,
