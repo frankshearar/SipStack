@@ -8,9 +8,9 @@ uses
 type
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
-    NameRecords: TObjectList;
-    NAPTR:       TIdNaptrRecords;
-    SRV:         TIdSrvRecords;
+    fNAPTR:       TIdNaptrRecords;
+    fNameRecords: TIdDomainNameRecords;
+    SRV:          TIdSrvRecords;
 
     function  NameRecordsAt(Index: Integer): TIdDomainNameRecord;
     function  NaptrRecAt(Index: Integer): TIdNaptrRecord;
@@ -42,6 +42,9 @@ type
                      Weight: Word;
                      Port: Cardinal;
                      const Target: String);
+
+    property NameRecords: TIdDomainNameRecords read fNameRecords;
+    property NAPTR:       TIdNaptrRecords      read fNAPTR;
   end;
 
 implementation
@@ -55,9 +58,9 @@ constructor TIdSipMockLocator.Create;
 begin
   inherited Create;
 
-  Self.NameRecords := TObjectList.Create(true);
-  Self.NAPTR       := TIdNaptrRecords.Create;
-  Self.SRV         := TIdSrvRecords.Create;
+  Self.fNameRecords := TIdDomainNameRecords.Create;
+  Self.fNAPTR       := TIdNaptrRecords.Create;
+  Self.SRV          := TIdSrvRecords.Create;
 end;
 
 destructor TIdSipMockLocator.Destroy;
@@ -97,17 +100,14 @@ procedure TIdSipMockLocator.AddNAPTR(const AddressOfRecord: String;
                                      const Flags: String;
                                      const Service: String;
                                      const DomainName: String);
-var
-  NewNaptr: TIdNaptrRecord;
 begin
-  NewNaptr := TIdNaptrRecord.Create(AddressOfRecord,
-                                    Order,
-                                    Preference,
-                                    Flags,
-                                    Service,
-                                    NaptrNullFlag,
-                                    DomainName);
-  Self.NAPTR.Add(NewNaptr);
+  Self.NAPTR.Add(AddressOfRecord,
+                 Order,
+                 Preference,
+                 Flags,
+                 Service,
+                 NaptrNullFlag,
+                 DomainName);
 end;
 
 procedure TIdSipMockLocator.AddSRV(const Domain: String;

@@ -104,9 +104,15 @@ type
   // message.
   TIdSipAbstractLocator = class(TObject)
   private
+    procedure AddNameRecordsTo(Locations: TIdSipLocations;
+                               const Transport: String;
+                               NameRecords: TStrings;
+                               Port: Cardinal);
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                            Recs: TIdNaptrRecords);
     procedure ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
+    function  FindTransportFromSrv(AddressOfRecord: TIdUri;
+                                   SRV: TIdSrvRecords): String;
     function  PassNaptrFiltering(TargetUri: TIdUri;
                                  NAPTR: TIdNaptrRecord): Boolean;
   protected
@@ -162,8 +168,21 @@ type
     property RecordType: String read fRecordType;
   end;
 
+  TIdDomainNameRecords = class(TIdBaseList)
+  private
+    function GetItems(Index: Integer): TIdDomainNameRecord;
+  public
+    procedure Add(Copy: TIdDomainNameRecord);
+    procedure Sort;
+
+    property Items[Index: Integer]: TIdDomainNameRecord read GetItems; default;
+  end;
+
   // cf RFCs 2915, 3401-3
   // I represent a single NAPTR record.
+  //
+  // My Value property gets its name from RFC 3401's nomenclature. in "classic
+  // NAPTR" language it would be called "Replacement".
   TIdNaptrRecord = class(TObject)
   private
     fFlags:      String;
@@ -172,7 +191,7 @@ type
     fPreference: Word;
     fRegex:      String;
     fService:    String;
-    fValue:      String; // The DDDS value (a domain name we can feed into SRV queries
+    fValue:      String; // The DDDS value (a domain name we can feed into SRV queries)
   public
     constructor Create(const Key: String;
                        Order: Word;
@@ -228,6 +247,7 @@ type
                        const Target: String);
 
     function Copy: TIdSrvRecord;
+    function SipTransport: String;
 
     property Domain:   String   read fDomain;
     property Port:     Cardinal read fPort;
@@ -253,15 +273,24 @@ const
   DnsAAAARecord = 'AAAA';
 
 // NAPTR (RFCs 2915, 3401-3) constants
+// Example full services: 'SIP+D2U', 'SIPS+D2S'
 const
-  NaptrDelimiter   = '+';
-  NaptrNullFlag    = '';
-  NaptrSipService  = 'SIP';
-  NaptrSipsService = 'SIPS';
-  SipSctpService   = NaptrSipService  + NaptrDelimiter + 'D2S';
-  SipsTlsService   = NaptrSipsService + NaptrDelimiter + 'D2T';
-  SipTcpService    = NaptrSipService  + NaptrDelimiter + 'D2T';
-  SipUdpService    = NaptrSipService  + NaptrDelimiter + 'D2U';
+  NaptrDelimiter          = '+';
+  NaptrDeliverTo          = 'D2';
+  NaptrServiceMiddleToken = NaptrDelimiter + NaptrDeliverTo;
+
+  NaptrNullFlag          = '';
+  NaptrSipService        = 'SIP';
+  NaptrSipsService       = 'SIPS';
+  NaptrSctpTransport     = 'S';
+  NaptrTcpTransport      = 'T';
+  NaptrUdpTransport      = 'U';
+
+  SipSctpService         = NaptrSipService  + NaptrServiceMiddleToken + NaptrSctpTransport;
+  SipTcpService          = NaptrSipService  + NaptrServiceMiddleToken + NaptrTcpTransport;
+  SipsTlsService         = NaptrSipsService + NaptrServiceMiddleToken + NaptrTcpTransport;
+  SipsTlsOverSctpService = NaptrSipsService + NaptrServiceMiddleToken + NaptrSctpTransport;
+  SipUdpService          = NaptrSipService  + NaptrServiceMiddleToken + NaptrUdpTransport;
 
 // SRV (RFC 2782) constants
 const
@@ -270,11 +299,13 @@ const
   SrvSipService         = 'sip';
   SrvSipsService        = 'sips';
   SrvTcpPrefix          = '_sip._tcp';
-  SrvUdpPrefix          = '_sip._udp';
   SrvTlsPrefix          = '_sips._tcp';
+  SrvTlsOverSctpPrefix  = '_sips._sctp';
+  SrvUdpPrefix          = '_sip._udp';
 
+function DomainNameSort(Item1, Item2: Pointer): Integer;
 function NaptrSort(Item1, Item2: Pointer): Integer;
-function ServiceToTransport(const NaptrService: String): String;
+function NaptrServiceToTransport(const NaptrService: String): String;
 function SrvSort(Item1, Item2: Pointer): Integer;
 
 implementation
@@ -286,6 +317,11 @@ uses
 //* Unit functions & procedures                                                *
 //******************************************************************************
 //* Unit Public functions & procedures *****************************************
+
+function DomainNameSort(Item1, Item2: Pointer): Integer;
+begin
+  raise Exception.Create('Implement DomainNameSort');
+end;
 
 function NaptrSort(Item1, Item2: Pointer): Integer;
 var
@@ -327,7 +363,7 @@ begin
     Result := A.Preference - B.Preference;
 end;
 
-function ServiceToTransport(const NaptrService: String): String;
+function NaptrServiceToTransport(const NaptrService: String): String;
 begin
   // TODO: We really need to reference a transport registry of some kind.
   if      IsEqual(NaptrService, SipsTlsService) then
@@ -495,6 +531,17 @@ begin
           Exit;
         end;
 
+        if AddressOfRecord.PortIsSpecified then begin
+          // AddressOfRecord's Host is a domain name
+          Self.ResolveNameRecords(AddressOfRecord.Host, ARecords);
+
+          Self.AddNameRecordsTo(Result,
+                                Transport,
+                                ARecords,
+                                AddressOfRecord.Port);
+          Exit;
+        end;
+
         Self.ResolveNAPTR(AddressOfRecord, Naptr);
 
         Self.ResolveSRV(Naptr[0].Value, Srv);
@@ -580,6 +627,10 @@ begin
   // My subclasses perform a DNS lookup for SRV records. ServiceAndDomain
   // typically looks something like "_sips._tcp.example.com".
 
+  // DNS servers that support SRV RRs SHOULD return all name records (A, AAAA,
+  // etc.) for the SRV targets. If they don't, we'll have to look up the
+  // name records ourselves. 
+
   Self.PerformSRVLookup(ServiceAndDomain, Result);
   Self.ClearOutUnwantedSrvRecords(Result);
   Result.Sort;
@@ -626,12 +677,13 @@ begin
   Self.ResolveNAPTR(AddressOfRecord, NAPTR);
 
   if NAPTR.IsEmpty then begin
-    raise Exception.Create('Look up what to do when there''re no NAPTR records')
-    // SRV queries on each transport this stack supports.
-    // If none, use TCP (i.e., TLS) for a SIPS URI, or UDP otherwise
+    Result := Self.FindTransportFromSrv(AddressOfRecord, SRV);
+
+    if SRV.IsEmpty then
+      Result := ParamToTransport(AddressOfRecord.Transport);
   end
   else
-    Result := ServiceToTransport(NAPTR[0].Service)
+    Result := NaptrServiceToTransport(NAPTR[0].Service)
 {
    First, a client resolving a SIPS URI MUST discard any services that
    do not contain "SIPS" as the protocol in the service field.  The
@@ -707,6 +759,18 @@ end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
 
+procedure TIdSipAbstractLocator.AddNameRecordsTo(Locations: TIdSipLocations;
+                                                 const Transport: String;
+                                                 NameRecords: TStrings;
+                                                 Port: Cardinal);
+var
+  I: Integer;
+begin
+  for I := 0 to NameRecords.Count - 1 do begin
+    Locations.AddLocation(Transport, NameRecords[I], Port);
+  end;
+end;
+
 procedure TIdSipAbstractLocator.ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                                              Recs: TIdNaptrRecords);
 var
@@ -723,6 +787,41 @@ end;
 
 procedure TIdSipAbstractLocator.ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
 begin
+end;
+
+function TIdSipAbstractLocator.FindTransportFromSrv(AddressOfRecord: TIdUri;
+                                                    SRV: TIdSrvRecords): String;
+var
+  I:          Integer;
+  Transports: array of String;
+begin
+  // Set up our transport queries, in preference order.
+  if AddressOfRecord.IsSipsUri then begin
+    SetLength(Transports, 1);
+    Transports[0] := TlsTransport;
+  end
+  else begin
+    SetLength(Transports, 3);
+    Transports[0] := TcpTransport;
+    Transports[1] := UdpTransport;
+    Transports[2] := SctpTransport;
+  end;
+
+  // We look up SRV records for each of the transports we support.
+  I := Low(Transports);
+
+  while (I < High(Transports)) and SRV.IsEmpty do begin
+    Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSipsUri,
+                                   Transports[I],
+                                   AddressOfRecord.Host),
+                    SRV);
+    Inc(I);
+  end;
+
+  if Srv.IsEmpty then
+    Result := ''
+  else
+    Result := SRV[0].SipTransport;
 end;
 
 function TIdSipAbstractLocator.PassNaptrFiltering(TargetUri: TIdUri;
@@ -776,6 +875,28 @@ begin
   Result := TIdDomainNameRecord.Create(Self.RecordType,
                                        Self.Domain,
                                        Self.IPAddress);
+end;
+
+//******************************************************************************
+//* TIdDomainNameRecords                                                       *
+//******************************************************************************
+//* TIdDomainNameRecords Public methods ****************************************
+
+procedure TIdDomainNameRecords.Add(Copy: TIdDomainNameRecord);
+begin
+  Self.List.Add(Copy.Copy);
+end;
+
+procedure TIdDomainNameRecords.Sort;
+begin
+  Self.List.Sort(DomainNameSort);
+end;
+
+//* TIdDomainNameRecords Private methods ***************************************
+
+function TIdDomainNameRecords.GetItems(Index: Integer): TIdDomainNameRecord;
+begin
+  Result := Self.List[Index] as TIdDomainNameRecord;
 end;
 
 //******************************************************************************
@@ -885,6 +1006,37 @@ begin
                                 Self.Weight,
                                 Self.Port,
                                 Self.Target);
+end;
+
+function TIdSrvRecord.SipTransport: String;
+var
+  UriType:   String;
+  Transport: String;
+begin
+  // This should actually use a registry or something?
+  Transport := Self.Service;
+  UriType   := Fetch(Transport, '.');
+
+  // Strip off leading underscores
+  Transport := System.Copy(Transport, 2, Length(Transport));
+  UriType   := System.Copy(UriType, 2, Length(UriType));
+
+  if IsEqual(UriType, SipsScheme) then begin
+    if IsEqual(Transport, TcpTransport) then
+      Result := TlsTransport
+    else
+      raise Exception.Create('We don''t yet know how to handle non-TCP SIPS transports (' + Self.Service + ')');
+  end
+  else begin
+    if IsEqual(Transport, TcpTransport) then
+      Result := TcpTransport
+    else if IsEqual(Transport, UdpTransport) then
+      Result := UdpTransport
+    else if IsEqual(Transport, SctpTransport) then
+      Result := SctpTransport
+    else
+      raise Exception.Create('We don''t know about ' + Self.Service);
+  end;
 end;
 
 //******************************************************************************
