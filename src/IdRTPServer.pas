@@ -24,7 +24,6 @@ type
   TIdRTPServer = class(TIdUDPServer,
                        IIdAbstractRTPPeer)
   private
-    fControlPort: Cardinal;
     fOnRTCPRead:  TIdRTCPReadEvent;
     fOnRTPRead:   TIdRTPReadEvent;
     fSession:     TIdRTPSession;
@@ -50,7 +49,6 @@ type
                          Packet: TIdRTPBasePacket);
 
   published
-    property ControlPort: Cardinal         read fControlPort write fControlPort;
     property OnRTCPRead:  TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
     property OnRTPRead:   TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
     property Profile:     TIdRTPProfile    read GetProfile write SetProfile;
@@ -76,7 +74,6 @@ begin
   Self.ThreadedEvent := true;
 
   Self.DefaultPort := 8000;
-  Self.ControlPort := 8001;
 end;
 
 destructor TIdRTPServer.Destroy;

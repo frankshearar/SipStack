@@ -80,8 +80,8 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
-    procedure ProcessPCMMu(const Data: TStream);
-    procedure ReceiveText(Text: String);
+    procedure ProcessPCM(const Data: TStream);
+    procedure ProcessText(Text: String);
     procedure StartReadingData(const SDP: String);
     procedure StopReadingData;
   public
@@ -309,13 +309,13 @@ begin
   if (Lowercase(Data.Name) = Lowercase(PCMMuLawEncoding)) then begin
     S := TStringStream.Create((Data as TIdRTPRawPayload).Data);
     try
-      Self.ProcessPCMMu(S);
+      Self.ProcessPCM(S);
     finally
       S.Free;
     end;
   end
   else if (Data is TIdRTPT140Payload) then begin
-    Self.ReceiveText((Data as TIdRTPT140Payload).Block);
+    Self.ProcessText((Data as TIdRTPT140Payload).Block);
   end;
 end;
 
@@ -357,7 +357,7 @@ begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpike.ProcessPCMMu(const Data: TStream);
+procedure TrnidSpike.ProcessPCM(const Data: TStream);
 begin
   Self.Lock.Acquire;
   try
@@ -377,7 +377,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.ReceiveText(Text: String);
+procedure TrnidSpike.ProcessText(Text: String);
 begin
   Self.Lock.Acquire;
   try
