@@ -154,6 +154,7 @@ type
     function  FullValue: String;
     function  HasParam(Name: String): Boolean;
     function  IndexOfParam(Name: String): Integer;
+    function  IsContact: Boolean; virtual;
     function  IsEqualTo(const Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
@@ -189,7 +190,7 @@ type
   public
     function HasSipsUri: Boolean;
 
-    property DisplayName: String    read fDisplayName write fDisplayName;
+    property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
   TIdSipCallIdHeader = class(TIdSipHeader)
@@ -1473,6 +1474,11 @@ begin
 
   if (Result = Self.Parameters.Count) then
     Result := -1;
+end;
+
+function TIdSipHeader.IsContact: Boolean;
+begin
+  Result := TIdSipHeaders.IsContact(Self.Name);
 end;
 
 function TIdSipHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
