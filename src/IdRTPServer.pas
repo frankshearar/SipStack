@@ -16,18 +16,16 @@ type
   // While I look like a Server, I really represent a peer in an RTP session.
   // You may use me not only to receive RTP/RTCP data, but also to send data.
   //
-  // Typically, you create an instance of me, and then call JoinSession with
-  // the session host/port you want to join. After this, you use the Session
-  // property to send data/control packets, or leave the session.
+  // Typically, you create an instance of me, and then reference the Session.
   //
   // SendPacket provides a service to the Session. Don't use it directly.
   TIdRTPServer = class(TIdUDPServer,
                        IIdAbstractRTPPeer)
   private
-    fOnRTCPRead:  TIdRTCPReadEvent;
-    fOnRTPRead:   TIdRTPReadEvent;
-    fSession:     TIdRTPSession;
-    Peer:         TIdBaseRTPAbstractPeer;
+    fOnRTCPRead: TIdRTCPReadEvent;
+    fOnRTPRead:  TIdRTPReadEvent;
+    fSession:    TIdRTPSession;
+    Peer:        TIdBaseRTPAbstractPeer; // We delegate to this to facilitate code reuse
 
     function  GetProfile: TIdRTPProfile;
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
@@ -49,10 +47,10 @@ type
                          Packet: TIdRTPBasePacket);
 
   published
-    property OnRTCPRead:  TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
-    property OnRTPRead:   TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
-    property Profile:     TIdRTPProfile    read GetProfile write SetProfile;
-    property Session:     TIdRTPSession    read fSession;
+    property OnRTCPRead: TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
+    property OnRTPRead:  TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
+    property Profile:    TIdRTPProfile    read GetProfile write SetProfile;
+    property Session:    TIdRTPSession    read fSession;
   end;
 
 implementation

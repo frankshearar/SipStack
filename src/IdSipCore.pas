@@ -87,6 +87,8 @@ type
 
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
   end;
 
@@ -117,6 +119,7 @@ type
     fDispatcher: TIdSipTransactionDispatcher;
     fHostName:   String;
 
+    function  DefaultHostName: String;
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
                                         Transaction: TIdSipTransaction;
                                         Receiver: TIdSipTransport); overload;
@@ -278,8 +281,11 @@ type
     function  GetContact: TIdSipContactHeader;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure NotifyOfChange;
+    procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
+                                      Receiver: TIdSipTransport);
     procedure ProcessAck(Ack: TIdSipRequest;
                          Transaction: TIdSipTransaction;
                          Receiver: TIdSipTransport);
@@ -293,7 +299,6 @@ type
     procedure SendByeToAppropriateSession(Bye: TIdSipRequest;
                                           Transaction: TIdSipTransaction;
                                           Receiver: TIdSipTransport);
-    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetProxy(Value: TIdSipUri);
   protected
@@ -481,6 +486,9 @@ type
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
                                          Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport): Boolean; override;
+    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean; override;
   public
     destructor  Destroy; override;
 
@@ -489,7 +497,7 @@ type
     function  DialogEstablished: Boolean;
     function  IsInboundCall: Boolean; virtual; abstract;
     procedure Terminate;
-    procedure Modify;
+    procedure Modify(const Offer, ContentType: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport); override;
@@ -587,6 +595,8 @@ const
 constructor TIdSipAbstractCore.Create;
 begin
   inherited Create;
+
+  Self.HostName := Self.DefaultHostName;
 end;
 
 function TIdSipAbstractCore.NextCallID: String;
@@ -630,6 +640,11 @@ begin
 end;
 
 //* TIdSipAbstractCore Private methods *****************************************
+
+function TIdSipAbstractCore.DefaultHostName: String;
+begin
+  Result := 'localhost';
+end;
 
 procedure TIdSipAbstractCore.OnReceiveUnhandledRequest(Request: TIdSipRequest;
                                                        Transaction: TIdSipTransaction;
@@ -774,10 +789,14 @@ end;
 function TIdSipAbstractUserAgent.CreateResponse(Request: TIdSipRequest;
                                                 ResponseCode: Cardinal): TIdSipResponse;
 begin
-  Result := TIdSipResponse.InResponseTo(Request, ResponseCode);
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        ResponseCode);
 
   if not Request.ToHeader.HasTag then
     Result.ToHeader.Tag := Self.NextTag;
+
+    if (Self.UserAgentName <> '') then
+      Result.AddHeader(ServerHeader).Value := Self.UserAgentName;
 end;
 
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
@@ -1213,8 +1232,8 @@ begin
   if not Request.ToHeader.HasTag then
     Result.ToHeader.Tag := Self.NextTag;
 
-  if (Self.UserAgentName <> '') then
-    Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
+    if (Self.UserAgentName <> '') then
+      Result.AddHeader(ServerHeader).Value := Self.UserAgentName;
 end;
 
 function TIdSipUserAgentCore.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipRegistration;
@@ -1365,7 +1384,9 @@ begin
     Session := Self.FindSession(Response);
     if Assigned(Session) then
       Session.OnReceiveResponse(Response, Transaction, Receiver);
-  end;
+  end
+  else
+    Self.NotifyOfDroppedResponse(Response, Receiver);
 end;
 
 procedure TIdSipUserAgentCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -1552,6 +1573,17 @@ begin
   Result := Self.IndexOfRegistrar(Registrar) <> -1;
 end;
 
+function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+var
+  RegInfo: TIdSipRegistrationInfo;
+begin
+  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
+
+  RegInfo := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar));
+  Result := RegInfo.SequenceNo;
+  RegInfo.SequenceNo := Result + 1;
+end;
+
 procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
   I: Integer;
@@ -1575,6 +1607,21 @@ begin
       IIdSipObserver(Self.Observers[I]).OnChanged(Self);
   finally
     Self.ObserverLock.Release;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;
+                                                      Receiver: TIdSipTransport);
+var
+  I: Integer;
+begin
+  Self.UserAgentListenerLock.Acquire;
+  try
+    for I := 0 to Self.UserAgentListeners.Count - 1 do
+      IIdSipUserAgentListener(Self.UserAgentListeners[I]).OnDroppedUnmatchedResponse(Response,
+                                                                                     Receiver);
+  finally
+    Self.UserAgentListenerLock.Release;
   end;
 end;
 
@@ -1648,17 +1695,6 @@ begin
                         SIPCallLegOrTransactionDoesNotExist,
                         Transaction);
 
-end;
-
-function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
-var
-  RegInfo: TIdSipRegistrationInfo;
-begin
-  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
-
-  RegInfo := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar));
-  Result := RegInfo.SequenceNo;
-  RegInfo.SequenceNo := Result + 1;
 end;
 
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
@@ -1954,18 +1990,16 @@ end;
 
 procedure TIdSipSession.Terminate;
 begin
-  if Self.DialogEstablished then begin
-    Self.SendBye;
-  end
-  else begin
+  if Self.DialogEstablished then
+    Self.SendBye
+  else 
     Self.SendCancel;
-  end;
 
   Self.MarkAsTerminated;
   Self.UA.RemoveSession(Self);
 end;
 
-procedure TIdSipSession.Modify;
+procedure TIdSipSession.Modify(const Offer, ContentType: String);
 begin
 end;
 
@@ -2087,11 +2121,12 @@ begin
 
   if not Self.DialogEstablished then begin
     fDialog := Self.CreateOutboundDialog(Response, Transaction, Receiver);
+    Self.PayloadProcessor.RemoteSessionDescription := Response.Body;
     Self.NotifyOfEstablishedSession;
   end;
 
-  if Response.IsOK then
-    Self.SendAck(Response);
+  Self.SendAck(Response);
+
   Result := true;
 end;
 
@@ -2101,13 +2136,22 @@ function TIdSipSession.ReceiveProvisionalResponse(Response: TIdSipResponse;
 begin
   // We should check for "and Response.ToHeader.HasTag" but that would prevent
   // us connecting to X-Lite, the non-compliant SIP phone.
-  if not Response.IsTrying{ and Response.ToHeader.HasTag} then begin
+  if not Response.IsTrying and Response.ToHeader.HasTag then begin
     if not Self.DialogEstablished then begin
       fDialog := Self.CreateOutboundDialog(Response, Transaction, Receiver);
       Self.NotifyOfEstablishedSession;
     end;
   end;
+
   Result := true;
+end;
+
+function TIdSipSession.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                  Transaction: TIdSipTransaction;
+                                                  Receiver: TIdSipTransport): Boolean;
+begin
+  Self.SendAck(Response);
+  Result := inherited ReceiveRedirectionResponse(Response, Transaction, Receiver);
 end;
 
 //* TIdSipSession Private methods **********************************************
@@ -2369,6 +2413,8 @@ begin
   Self.InitialTransport := Receiver;
 
   Self.InitialTran.AddTransactionListener(Self);
+
+  Self.PayloadProcessor.RemoteSessionDescription := Invite.Body;
 end;
 
 function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;

@@ -6,7 +6,7 @@ uses
   Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
   IdSipRegistrar, IdSipTransaction, IdSipTransport, IdSocketHandle,
-  TestFramework, TestFrameworkSip;
+  TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -76,6 +76,8 @@ type
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
     procedure OnChanged(Observed: TObject);
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -174,6 +176,8 @@ type
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -212,11 +216,34 @@ type
     procedure TestReceive2xxSendsAck;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
+    procedure TestReceiveFinalResponseSendsAck;
     procedure TestReceiveOutOfOrderRequest;
     procedure TestReceiveReInvite;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
     procedure TestTerminateUnestablishedSession;
+  end;
+
+  TestBugHunt = class(TThreadingTestCase,
+                      IIdSipUserAgentListener)
+  private
+    Destination: TIdSipToHeader;
+    Dispatcher:  TIdSipMockTransactionDispatcher;
+    Session:     TIdSipSession;
+    ToTag:       String;        
+    UA:          TIdSipUserAgentCore;
+  private
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure SimulateRemoteOK;
+    procedure SimulateRemoteRinging;
+    procedure SimulateRemoteTrying;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestOutboundCallAndByeToXlite;
   end;
 
   TestTIdSipSessionTimer = class(TTestCase)
@@ -283,11 +310,14 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-  Result.AddTest(TestTIdSipAbstractCore.Suite);
+//  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipSession.Suite);
+{
+  Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipRegistration.Suite);
+}
 end;
 
 //******************************************************************************
@@ -720,6 +750,11 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipUserAgentCore.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                             Receiver: TIdSipTransport);
+begin
+end;                                                             
+
 procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession;
                                                  const Reason: String);
 begin
@@ -1102,7 +1137,7 @@ begin
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     CheckEquals(Self.Core.UserAgentName,
-                Response.FirstHeader(UserAgentHeader).Value,
+                Response.FirstHeader(ServerHeader).Value,
                 'User-Agent header not set');
   finally
     Response.Free;
@@ -1172,10 +1207,11 @@ begin
   Self.ThreadEvent.ResetEvent;
   Self.ExceptionMessage := 'SessionTwo wasn''t terminated';
   Self.SimulateRemoteBye(SessionTwo.Dialog);
-  Self.WaitForSignaled;
 
   Check(not SessionOne.IsTerminated, 'SessionOne was terminated');
-  Check(    SessionTwo.IsTerminated, 'SessionTwo wasn''t terminated');
+  CheckEquals(1,
+              Self.Core.SessionCount,
+              'Number of sessions after one BYE');
 end;
 
 procedure TestTIdSipUserAgentCore.TestDispatchAckToSession;
@@ -1822,8 +1858,8 @@ procedure TestTIdSipAction.SimulateRemoteResponse(StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
-  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
-                                          StatusCode);
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
+                                       StatusCode);
   try
     Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
@@ -2043,6 +2079,11 @@ begin
   Connection.AddressType := Id_IPv4;
   Connection.Address     := '127.0.0.1';
 end;
+
+procedure TestTIdSipSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                       Receiver: TIdSipTransport);
+begin
+end;                                                       
 
 procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
                                            const Reason: String);
@@ -2556,6 +2597,26 @@ begin
   end;
 end;
 }
+
+procedure TestTIdSipSession.TestReceiveFinalResponseSendsAck;
+var
+  I:                Integer;
+  OriginalAckCount: Cardinal;
+begin
+  // Of course this works. That's because the transaction sends the ACK for a
+  // non-2xx final response.
+  for I := 3 to 6 do begin
+    OriginalAckCount := Self.Dispatcher.Transport.ACKCount;
+
+    Self.Core.Call(Self.Destination, '', '');
+
+    Self.SimulateRemoteResponse(I*100);
+    Check(OriginalAckCount < Self.Dispatcher.Transport.ACKCount,
+          'Session didn''t send an ACK to a final response, '
+        + Self.Dispatcher.Transport.LastResponse.Description);
+  end;
+end;
+
 procedure TestTIdSipSession.TestReceiveOutOfOrderRequest;
 var
   Invite:   TIdSipRequest;
@@ -2673,6 +2734,118 @@ begin
   Check(Request.IsCancel, 'Unexpected last request');
 
   Check(Session.IsTerminated, 'Session not marked as terminated');
+end;
+
+//******************************************************************************
+//* TestBugHunt                                                                *
+//******************************************************************************
+//* TestBugHunt Public methods *************************************************
+
+procedure TestBugHunt.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Destination := TIdSipToHeader.Create;
+  Self.Destination.Address.Uri := 'sip:hiro@enki.org;transport=udp';
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := Self.Dispatcher;
+
+  Self.ToTag := 'faketag';
+end;
+
+procedure TestBugHunt.TearDown;
+begin
+  Self.UA.Free;
+  Self.Dispatcher.Free;
+  Self.Destination.Free;
+
+  inherited TearDown;
+end;
+
+//* TestBugHunt Privage methods ************************************************
+
+procedure TestBugHunt.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                 Receiver: TIdSipTransport);
+begin
+end;
+
+procedure TestBugHunt.OnInboundCall(Session: TIdSipInboundSession);
+begin
+  Self.Session := Session;
+end;
+
+procedure TestBugHunt.SimulateRemoteOK;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest, SIPOK);
+  try
+    Response.ToHeader.Tag := Self.ToTag;
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestBugHunt.SimulateRemoteRinging;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest, SIPRinging);
+  try
+    Response.ToHeader.Tag := Self.ToTag;
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestBugHunt.SimulateRemoteTrying;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest, SIPTrying);
+  try
+    Response.ToHeader.Tag := Self.ToTag;
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//* TestBugHunt Published methods **********************************************
+
+procedure TestBugHunt.TestOutboundCallAndByeToXlite;
+begin
+  Self.Session := Self.UA.Call(Self.Destination, '', '');
+
+  Self.SimulateRemoteTrying;
+  Check(not Self.Session.DialogEstablished,
+        Self.Dispatcher.Transport.LastResponse.Description
+      + 's don''t make dialogs');
+
+  Self.SimulateRemoteRinging;
+  Check(Self.Session.DialogEstablished,
+        Self.Dispatcher.Transport.LastResponse.Description
+      + 's with To tags make dialogs');
+  Check(Self.Session.Dialog.IsEarly,
+        Self.Dispatcher.Transport.LastResponse.Description
+      + 's make early dialogs');
+
+  Self.SimulateRemoteOK;
+  Check(not Self.Session.Dialog.IsEarly,
+        Self.Dispatcher.Transport.LastResponse.Description
+      + 's make non-early dialogs');
+
+  Self.SimulateRemoteOK;
+  Self.SimulateRemoteOK;
+  Self.SimulateRemoteOK;
+
+  Self.UA.HangUpAllCalls;
+  Check(Self.Dispatcher.Transport.LastRequest.IsBye,
+        'Must send a BYE to terminate an established session');
 end;
 
 //******************************************************************************

@@ -833,6 +833,9 @@ type
   // I provide a protocol for things that listen for RTP data, that is, for
   // things that have no interest in the infrastructure of RTP, but just the
   // data.
+  //
+  // Implicitly we assume that the bits you connect together all use the same
+  // profile.
   IIdRTPDataListener = interface
     ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
     procedure OnNewData(Data: TIdRTPPayload;
@@ -915,6 +918,8 @@ type
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
     fSessionBandwidth:          Cardinal;
+    ListenerLock:               TCriticalSection;
+    Listeners:                  TList;
     MemberLock:                 TCriticalSection;
     Members:                    TIdRTPMemberTable;
     NextTransmissionTime:       TDateTime;
@@ -941,6 +946,8 @@ type
     function  DefaultSenderBandwidthFraction: Double;
     procedure IncSentOctetCount(N: Cardinal);
     procedure IncSentPacketCount;
+    procedure NotifyListenersOfData(Data: TIdRTPPayload;
+                                    Binding: TIdSocketHandle);
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdSocketHandle);
     procedure OnRTP(Packet: TIdRTPPacket;
@@ -956,6 +963,7 @@ type
     destructor  Destroy; override;
 
     function  AcceptableSSRC(SSRC: Cardinal): Boolean;
+    procedure AddListener(const Listener: IIdRTPDataListener);
     function  AddMember(SSRC: Cardinal): TIdRTPMember;
     function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
@@ -979,6 +987,7 @@ type
     procedure ReceiveData(RTP: TIdRTPPacket;
                           Binding: TIdSocketHandle);
     function  ReceiverCount: Cardinal;
+    procedure RemoveListener(const Listener: IIdRTPDataListener);
     procedure RemoveMember(SSRC: Cardinal);
     procedure RemoveSender(SSRC: Cardinal);
     procedure RemoveTimedOutMembers;
@@ -1186,9 +1195,10 @@ const
   DTMFC                   = 14;
   DTMFD                   = 15;
   DTMFFlash               = 16;
-  TelephoneEventEncoding  = 'telephone-event';
-  TelephoneEventMimeType  = AudioMediaType + '/' + TelephoneEventEncoding;
+  TelephoneEventEncodingName = 'telephone-event';
+  TelephoneEventMimeType  = AudioMediaType + '/' + TelephoneEventEncodingName;
   TelephoneEventClockRate = 8000;
+  TelephoneEventEncoding = TelephoneEventEncodingName + '/8000';
 
 const
   NullEncodingName     = 'null';
@@ -1491,7 +1501,7 @@ begin
 
   if (Lowercase(EncodingName) = Lowercase(T140Encoding)) then
     Result := TIdRTPT140Payload.Create
-  else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncoding)) then
+  else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncodingName)) then
     Result := TIdRTPTelephoneEventPayload.Create
   else
     Result := TIdRTPRawPayload.Create(EncodingName);
@@ -1788,7 +1798,7 @@ end;
 
 function TIdRTPTelephoneEventPayload.GetName: String;
 begin
-  Result := TelephoneEventEncoding;
+  Result := TelephoneEventEncodingName;
 end;
 
 //******************************************************************************
@@ -3859,19 +3869,19 @@ end;
 
 function TIdRTPMember.UpdateStatistics(Data: TIdRTPPacket; CurrentTime: TIdRTPTimestamp): Boolean;
 begin
+  Self.LastRTPReceiptTime := Now;
+  
   Result := Self.UpdateSequenceNo(Data);
   Self.UpdateJitter(Data, CurrentTime);
   Self.UpdatePrior;
-
-  Self.LastRTPReceiptTime := Now;
 end;
 
 procedure TIdRTPMember.UpdateStatistics(Stats: TIdRTCPPacket);
 begin
-  if Stats.IsSenderReport then
-    Self.LastSenderReportReceiptTime := Now;
-
   Self.LastRTCPReceiptTime := Now;
+
+  if Stats.IsSenderReport then
+    Self.LastSenderReportReceiptTime := Self.LastRTCPReceiptTime;
 end;
 
 //* TIdRTPMember Private methods ***********************************************
@@ -4519,6 +4529,9 @@ constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer);
 begin
   inherited Create;
 
+  Self.ListenerLock := TCriticalSection.Create;
+  Self.Listeners    := TList.Create;
+
   Self.Agent          := Agent;
   Self.fNoControlSent := true;
   Self.MinimumRTCPSendInterval := Self.DefaultMinimumRTCPSendInterval;
@@ -4550,12 +4563,25 @@ begin
   Self.MemberLock.Free;
   Self.Agent := nil;
 
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
+
   inherited Destroy;
 end;
 
 function TIdRTPSession.AcceptableSSRC(SSRC: Cardinal): Boolean;
 begin
   Result := (SSRC <> 0) and not Self.IsMember(SSRC);
+end;
+
+procedure TIdRTPSession.AddListener(const Listener: IIdRTPDataListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 function TIdRTPSession.AddMember(SSRC: Cardinal): TIdRTPMember;
@@ -4801,6 +4827,7 @@ begin
                            DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
                                                   RTP.Payload.ClockRate)) then begin
     // Valid, in-sequence RTP can be sent up the stack
+    Self.NotifyListenersOfData(RTP.Payload, Binding);
   end;
 end;
 
@@ -4813,6 +4840,16 @@ begin
     Result := Members.ReceiverCount;
   finally
     Members.Free;
+  end;
+end;
+
+procedure TIdRTPSession.RemoveListener(const Listener: IIdRTPDataListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
   end;
 end;
 
@@ -5120,6 +5157,20 @@ end;
 procedure TIdRTPSession.IncSentPacketCount;
 begin
   Inc(Self.fSentPacketCount);
+end;
+
+procedure TIdRTPSession.NotifyListenersOfData(Data: TIdRTPPayload;
+                                              Binding: TIdSocketHandle);
+var
+  I: Integer;                                              
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdRTPDataListener(Self.Listeners[I]).OnNewData(Data, Binding);
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdRTPSession.OnRTCP(Packet: TIdRTCPPacket;
