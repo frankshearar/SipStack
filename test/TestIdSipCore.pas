@@ -454,11 +454,28 @@ type
     procedure TestXlitesAckNonBug;
   end;
 
-  TestTIdSipActionAuthenticationChallengeMethod = class(TTestCase)
+  TActionMethodTestCase = class(TTestCase)
   private
-    Method:   TIdSipActionAuthenticationChallengeMethod;
     Response: TIdSipResponse;
-    UA:       TIdSipUserAgentCore;
+    UA: TIdSipUserAgentCore;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
+  private
+    Method: TIdSipActionAuthenticationChallengeMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure Run;
+  end;
+
+  TestTIdSipActionRedirectMethod = class(TActionMethodTestCase)
+  private
+    Method: TIdSipActionRedirectMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -5030,6 +5047,30 @@ begin
 end;
 
 //******************************************************************************
+//* TActionMethodTestCase                                                      *
+//******************************************************************************
+//* TActionMethodTestCase Public methods ***************************************
+
+procedure TActionMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.Response := TIdSipResponse.Create;
+end;
+
+procedure TActionMethodTestCase.TearDown;
+begin
+  Self.Response.Free;
+  Self.UA.Dispatcher.Free;
+  Self.UA.Free;
+  
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipActionAuthenticationChallengeMethod                              *
 //******************************************************************************
 //* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
@@ -5039,11 +5080,6 @@ var
   Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
 
@@ -5060,9 +5096,7 @@ end;
 procedure TestTIdSipActionAuthenticationChallengeMethod.TearDown;
 begin
   Self.Method.Free;
-  Self.Response.Free;
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
+
   inherited TearDown;
 end;
 
@@ -5099,6 +5133,56 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipActionRedirectMethod                                             *
+//******************************************************************************
+//* TestTIdSipActionRedirectMethod Public methods ******************************
+
+procedure TestTIdSipActionRedirectMethod.SetUp;
+var
+  Nowhere: TIdSipAddressHeader;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipActionRedirectMethod.Create;
+
+  Nowhere := TIdSipAddressHeader.Create;
+  try
+    Self.Method.Action := Self.UA.Call(Nowhere, '', '');
+  finally
+    Nowhere.Free;
+  end;
+
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipActionRedirectMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionRedirectMethod Published methods ***************************
+
+procedure TestTIdSipActionRedirectMethod.Run;
+var
+  Listener: TIdSipTestActionListener;
+begin
+  Listener := TIdSipTestActionListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Redirect, 'Listener not notified');
+    Check(Self.Method.Action = Listener.ActionParam,
+          'Action param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          'Response param');
+  finally
+    Listener.Free;
   end;
 end;
 
