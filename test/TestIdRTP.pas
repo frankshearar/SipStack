@@ -2013,8 +2013,8 @@ procedure TestTIdRTPProfile.TestAddEncoding;
 begin
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
   CheckEquals(1, Self.Profile.Count, 'New MIME type not added');
-  CheckEquals(Self.T140Encoding.ClassName,
-              Self.Profile.EncodingFor(Self.ArbPT).ClassName,
+  CheckEquals(Self.T140Encoding.ClassType,
+              Self.Profile.EncodingFor(Self.ArbPT).ClassType,
               'Incorrect class type used for new MIME type');
 
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT - 1);
@@ -2037,8 +2037,8 @@ begin
                            Self.T140Encoding.ClockRate,
                            '',
                            Self.ArbPT);
-  CheckEquals(Self.T140Encoding.ClassName,
-              Self.Profile.EncodingFor(Self.ArbPT).ClassName,
+  CheckEquals(Self.T140Encoding.ClassType,
+              Self.Profile.EncodingFor(Self.ArbPT).ClassType,
               'Incorrect class type used for new MIME type');
 end;
 
@@ -2065,8 +2065,8 @@ begin
                     'Encoding count');
 
         for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
-          CheckEquals(NewProfile.EncodingFor(I).ClassName,
-                      Self.Profile.EncodingFor(I).ClassName,
+          CheckEquals(NewProfile.EncodingFor(I).ClassType,
+                      Self.Profile.EncodingFor(I).ClassType,
                       IntToStr(I) + '''s type');
 
           CheckEquals(NewProfile.EncodingFor(I).Name,
@@ -2386,16 +2386,16 @@ begin
 
           Self.Profile.Assign(NewProfile);
 
-          CheckEquals(VirginProfile.EncodingFor(0).ClassName,
-                      Self.Profile.EncodingFor(0).ClassName,
+          CheckEquals(VirginProfile.EncodingFor(0).ClassType,
+                      Self.Profile.EncodingFor(0).ClassType,
                       '0''s type');
 
           CheckEquals(VirginProfile.EncodingFor(0).EncodingName,
                       Self.Profile.EncodingFor(0).EncodingName,
                       '0''s details');
 
-          CheckEquals(NewProfile.EncodingFor(98).ClassName,
-                      Self.Profile.EncodingFor(98).ClassName,
+          CheckEquals(NewProfile.EncodingFor(98).ClassType,
+                      Self.Profile.EncodingFor(98).ClassType,
                       '98''s type');
 
           CheckEquals(NewProfile.EncodingFor(98).EncodingName,
@@ -3346,8 +3346,8 @@ begin
                           + #$00#$00#$00#$0E); // 14 octets
   try
     Self.Packet.ReadFrom(S);
-    CheckEquals(TIdRTPT140Payload.ClassName,
-                Self.Packet.Payload.ClassName,
+    CheckEquals(TIdRTPT140Payload,
+                Self.Packet.Payload.ClassType,
                 'Payload type');
     CheckEquals('This is black sunshine',
                 (Self.Packet.Payload as TIdRTPT140Payload).Block,
@@ -3404,8 +3404,8 @@ begin
       Self.Packet.PayloadType := Self.T140PT;
       Self.Packet.ReadPayload(S, Self.AVP);
 
-      CheckEquals(Expected.ClassName,
-                  Self.Packet.Payload.ClassName,
+      CheckEquals(Expected.ClassType,
+                  Self.Packet.Payload.ClassType,
                   'Payload type');
       CheckEquals(Expected.Block,
                   (Self.Packet.Payload as TIdRTPT140Payload).Block,
@@ -3430,8 +3430,8 @@ begin
 
     Self.Packet.ReadPayload(Expected);
 
-    CheckEquals(Expected.ClassName,
-                Self.Packet.Payload.ClassName,
+    CheckEquals(Expected.ClassType,
+                Self.Packet.Payload.ClassType,
                 'Payload type');
     CheckEquals(Expected.Block,
                 (Self.Packet.Payload as TIdRTPT140Payload).Block,
@@ -3460,8 +3460,8 @@ begin
       Self.Packet.PayloadType := Self.T140PT;
       Self.Packet.ReadPayload(S.DataString, Self.AVP);
 
-      CheckEquals(Expected.ClassName,
-                  Self.Packet.Payload.ClassName,
+      CheckEquals(Expected.ClassType,
+                  Self.Packet.Payload.ClassType,
                   'Payload type');
       CheckEquals(Expected.Block,
                   (Self.Packet.Payload as TIdRTPT140Payload).Block,
@@ -3498,20 +3498,20 @@ procedure TestTIdRTCPPacket.TestRTCPType;
 var
   I: Byte;
 begin
-  CheckEquals(TIdRTCPSenderReport.ClassName,
-              TIdRTCPPacket.RTCPType(RTCPSenderReport).ClassName,
+  CheckEquals(TIdRTCPSenderReport,
+              TIdRTCPPacket.RTCPType(RTCPSenderReport),
               'Sender Report');
-  CheckEquals(TIdRTCPReceiverReport.ClassName,
-              TIdRTCPPacket.RTCPType(RTCPReceiverReport).ClassName,
+  CheckEquals(TIdRTCPReceiverReport,
+              TIdRTCPPacket.RTCPType(RTCPReceiverReport),
               'Receiver Report');
-  CheckEquals(TIdRTCPSourceDescription.ClassName,
-              TIdRTCPPacket.RTCPType(RTCPSourceDescription).ClassName,
+  CheckEquals(TIdRTCPSourceDescription,
+              TIdRTCPPacket.RTCPType(RTCPSourceDescription),
               'Source Description');
-  CheckEquals(TIdRTCPBye.ClassName,
-              TIdRTCPPacket.RTCPType(RTCPGoodbye).ClassName,
+  CheckEquals(TIdRTCPBye,
+              TIdRTCPPacket.RTCPType(RTCPGoodbye),
               'Goodbye');
-  CheckEquals(TIdRTCPApplicationDefined.ClassName,
-              TIdRTCPPacket.RTCPType(RTCPApplicationDefined).ClassName,
+  CheckEquals(TIdRTCPApplicationDefined,
+              TIdRTCPPacket.RTCPType(RTCPApplicationDefined),
               'Application Defined');
 
   for I := Low(Byte) to RTCPSenderReport - 1 do
@@ -3543,29 +3543,29 @@ end;
 
 procedure TestTIdSrcDescChunkItem.TestItemType;
 begin
-  CheckEquals(TIdSDESCanonicalName.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESCName).ClassName,
+  CheckEquals(TIdSDESCanonicalName,
+              TIdSrcDescChunkItem.ItemType(SDESCName),
               'SDESCName');
-  CheckEquals(TIdSDESUserName.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESName).ClassName,
+  CheckEquals(TIdSDESUserName,
+              TIdSrcDescChunkItem.ItemType(SDESName),
               'SDESName');
-  CheckEquals(TIdSDESEmail.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESEmail).ClassName,
+  CheckEquals(TIdSDESEmail,
+              TIdSrcDescChunkItem.ItemType(SDESEmail),
               'SDESEmail');
-  CheckEquals(TIdSDESPhone.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESPhone).ClassName,
+  CheckEquals(TIdSDESPhone,
+              TIdSrcDescChunkItem.ItemType(SDESPhone),
               'SDESPhone');
-  CheckEquals(TIdSDESLocation.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESLoc).ClassName,
+  CheckEquals(TIdSDESLocation,
+              TIdSrcDescChunkItem.ItemType(SDESLoc),
               'SDESLoc');
-  CheckEquals(TIdSDESTool.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESTool).ClassName,
+  CheckEquals(TIdSDESTool,
+              TIdSrcDescChunkItem.ItemType(SDESTool),
               'SDESTool');
-  CheckEquals(TIdSDESNote.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESNote).ClassName,
+  CheckEquals(TIdSDESNote,
+              TIdSrcDescChunkItem.ItemType(SDESNote),
               'SDESNote');
-  CheckEquals(TIdSDESPriv.ClassName,
-              TIdSrcDescChunkItem.ItemType(SDESPriv).ClassName,
+  CheckEquals(TIdSDESPriv,
+              TIdSrcDescChunkItem.ItemType(SDESPriv),
               'SDESPriv');
 
   try
@@ -7506,11 +7506,11 @@ begin
   try
     // One (full) RR and the obligatory SDES
     CheckEquals(2, Pkt.PacketCount, 'Packet count');
-    CheckEquals(TIdRTCPReceiverReport.ClassName,
-                Pkt.PacketAt(0).ClassName,
+    CheckEquals(TIdRTCPReceiverReport,
+                Pkt.PacketAt(0).ClassType,
                 '1st packet');
-    CheckEquals(TIdRTCPSourceDescription.ClassName,
-                Pkt.PacketAt(1).ClassName,
+    CheckEquals(TIdRTCPSourceDescription,
+                Pkt.PacketAt(1).ClassType,
                 '2nd packet');
 
     CheckEquals(31,
@@ -7533,14 +7533,14 @@ begin
   try
     // Two RRs and the obligatory SDES
     CheckEquals(3, Pkt.PacketCount, 'Packet count');
-    CheckEquals(TIdRTCPReceiverReport.ClassName,
-                Pkt.PacketAt(0).ClassName,
+    CheckEquals(TIdRTCPReceiverReport,
+                Pkt.PacketAt(0).ClassType,
                 '1st packet');
-    CheckEquals(TIdRTCPReceiverReport.ClassName,
-                Pkt.PacketAt(1).ClassName,
+    CheckEquals(TIdRTCPReceiverReport,
+                Pkt.PacketAt(1).ClassType,
                 '2nd packet');
-    CheckEquals(TIdRTCPSourceDescription.ClassName,
-                Pkt.PacketAt(2).ClassName,
+    CheckEquals(TIdRTCPSourceDescription,
+                Pkt.PacketAt(2).ClassType,
                 '3rd packet');
 
     CheckEquals(31,
