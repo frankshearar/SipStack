@@ -1504,7 +1504,7 @@ end;
 procedure TPayloadTestCase.TestCreateFromBadEncodingName;
 begin
   try
-    TIdRTPPayload.CreatePayload(T140Encoding);
+    TIdRTPPayload.CreatePayload(T140EncodingName);
     Fail('Failed to bail out on malformed encoding name (no clock rate)');
   except
     on EBadEncodingName do;
@@ -1669,7 +1669,7 @@ end;
 
 procedure TestTIdRTPT140Payload.TestName;
 begin
-  CheckEquals(T140Encoding,
+  CheckEquals(T140EncodingName,
               Self.Payload.Name,
               Self.Payload.ClassName + ' Name');
 end;
@@ -7905,7 +7905,7 @@ begin
   // 888 < minimum RTCP interval
   Self.Session.MaxRTCPBandwidth := 100; // bytes per second
 
-  Data := TIdRTPPayload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
+  Data := TIdRTPPayload.CreatePayload(T140Encoding);
   try
     Self.Session.SendData(Data);
   finally
