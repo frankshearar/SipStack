@@ -813,7 +813,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
@@ -823,10 +822,8 @@ begin
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
-}
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-{
   Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
@@ -844,7 +841,6 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -4534,7 +4530,13 @@ procedure TestTIdSipOutboundInvite.TestReceiveRequestFailed;
 var
   StatusCode: Integer;
 begin
-  for StatusCode := 400 to 499 do
+  for StatusCode := 400 to SIPUnauthorized - 1 do
+    Self.CheckReceiveFailed(StatusCode);
+
+  for StatusCode := SIPUnauthorized + 1 to SIPProxyAuthenticationRequired - 1 do
+    Self.CheckReceiveFailed(StatusCode);
+
+  for StatusCode := SIPProxyAuthenticationRequired + 1 to 499 do
     Self.CheckReceiveFailed(StatusCode);
 end;
 

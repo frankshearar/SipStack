@@ -3726,7 +3726,7 @@ begin
     Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
                           WaitTime,
                           Self.InitialRequest.Copy);
-    Result := true;
+    Result := false;
   end
   else
     Result := inherited ReceiveFailureResponse(Response);
@@ -4599,7 +4599,7 @@ end;
 function TIdSipSession.Modify(const Offer, ContentType: String): TIdSipOutboundInvite;
 begin
   Result := nil;
-  
+
   if not Self.FullyEstablished then
     raise EIdSipTransactionUser.Create(CannotModifyBeforeEstablished);
 
