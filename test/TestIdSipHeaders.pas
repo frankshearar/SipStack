@@ -625,7 +625,8 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdUnicode, SysUtils, TestFrameworkSip;
+  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdUnicode, SysUtils,
+  TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -3794,20 +3795,35 @@ procedure TestTIdSipViaHeader.TestSrvQuery;
 const
   Domain = 'gw1.leo-ix.net';
 begin
-  Self.V.Value := 'SIP/2.0/TLS ' + Domain;
-  CheckEquals('_sips._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  // No, it's not hugely safe to not use a try..finally for each transport, but
+  // really. It's a test. We really don't need THAT much work!
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
+  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
+  try
+    Self.V.Value := 'SIP/2.0/TLS ' + Domain;
+    CheckEquals('_sips._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-  Self.V.Transport := TcpTransport;
-  CheckEquals('_sip._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+    Self.V.Transport := TcpTransport;
+    CheckEquals('_sip._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-  Self.V.Transport := UdpTransport;
-  CheckEquals('_sip._udp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+    Self.V.Transport := UdpTransport;
+    CheckEquals('_sip._udp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-  Self.V.Transport := SctpTransport;
-  CheckEquals('_sip._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+    Self.V.Transport := SctpTransport;
+    CheckEquals('_sip._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-  Self.V.Transport := TlsOverSctpTransport;
-  CheckEquals('_sips._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+    Self.V.Transport := TlsOverSctpTransport;
+    CheckEquals('_sips._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  finally
+    TIdSipTransport.UnregisterTransport(UdpTransport);
+    TIdSipTransport.UnregisterTransport(TlsTransport);
+    TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
+    TIdSipTransport.UnregisterTransport(TcpTransport);
+    TIdSipTransport.UnregisterTransport(SctpTransport);
+  end;
 end;
 
 procedure TestTIdSipViaHeader.TestTTL;

@@ -19,6 +19,8 @@ type
                                  Result: TIdNaptrRecords); override;
     procedure PerformSRVLookup(const ServiceAndDomain: String;
                                Result: TIdSrvRecords); override;
+    procedure PostFindServersFor(AddressOfRecord: TIdSipUri); overload; override;
+    procedure PostFindServersFor(Response: TIdSipResponse); overload; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -152,8 +154,6 @@ begin
     if (Self.NameRecords[I].Domain = DomainName) then
       Result.Add(Self.NameRecords[I]);
   end;
-
-  Inc(Self.fLookupCount);
 end;
 
 procedure TIdSipMockLocator.PerformNAPTRLookup(TargetUri: TIdUri;
@@ -167,8 +167,6 @@ begin
     if (Self.NAPTR[I].Key = TargetUri.Host) then
       Result.Add(Self.NAPTR[I]);
   end;
-
-  Inc(Self.fLookupCount);
 end;
 
 procedure TIdSipMockLocator.PerformSRVLookup(const ServiceAndDomain: String;
@@ -185,8 +183,16 @@ begin
                               Result.Last.NameRecords);
     end;
   end;
+end;
 
-  Inc(Self.fLookupCount);  
+procedure TIdSipMockLocator.PostFindServersFor(AddressOfRecord: TIdSipUri);
+begin
+  Inc(Self.fLookupCount);
+end;
+
+procedure TIdSipMockLocator.PostFindServersFor(Response: TIdSipResponse);
+begin
+  Inc(Self.fLookupCount);
 end;
 
 end.

@@ -12,7 +12,7 @@ unit IdSipLocator;
 interface
 
 uses
-  Classes, Contnrs, IdSipDns, IdSipMessage;
+  Classes, Contnrs, IdSipDns, IdSipMessage, SysUtils;
 
 // The classes below all encapsulate DNS lookups, or the SIP processing of these
 // lookups according to RFC 3263.
@@ -118,12 +118,16 @@ type
                                  Result: TIdNaptrRecords); virtual;
     procedure PerformSRVLookup(const ServiceAndDomain: String;
                                Result: TIdSrvRecords); virtual;
+    procedure PreFindServersFor(AddressOfRecord: TIdSipUri); overload; virtual;
+    procedure PreFindServersFor(Response: TIdSipResponse); overload; virtual;
+    procedure PostFindServersFor(AddressOfRecord: TIdSipUri); overload; virtual;
+    procedure PostFindServersFor(Response: TIdSipResponse); overload; virtual;
   public
     constructor Create; virtual;
 
-    function  FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; overload;
-    function  FindServersFor(const AddressOfRecord: String): TIdSipLocations; overload;
-    function  FindServersFor(Response: TIdSipResponse): TIdSipLocations; overload;
+    procedure FindServersFor(AddressOfRecord: TIdSipUri; Result: TIdSipLocations); overload;
+    procedure FindServersFor(const AddressOfRecord: String; Result: TIdSipLocations); overload;
+    procedure FindServersFor(Response: TIdSipResponse; Result: TIdSipLocations); overload;
     procedure ResolveNameRecords(const DomainName: String;
                                  Result: TIdDomainNameRecords); virtual;
     procedure ResolveNAPTR(TargetUri: TIdUri;
@@ -142,10 +146,12 @@ type
                            NameRecords: TIdDomainNameRecords): String;
   end;
 
+  ESipLocator = class(Exception);
+
 implementation
 
 uses
-  IdSimpleParser, IdSipTransport, SysUtils;
+  IdSimpleParser, IdSipTransport;
 
 const
   NoRecordFound = 'No record found: %s';
@@ -240,7 +246,8 @@ begin
   inherited Create;
 end;
 
-function TIdSipAbstractLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
+procedure TIdSipAbstractLocator.FindServersFor(AddressOfRecord: TIdSipUri;
+                                               Result: TIdSipLocations);
 var
   ARecords:  TIdDomainNameRecords;
   Naptr:     TIdNaptrRecords;
@@ -248,102 +255,110 @@ var
   Target:    TIdUri;
   Transport: String;
 begin
-  // See doc/locating_servers.txt for a nice flow chart of this algorithm.
-  Result := TIdSipLocations.Create;
+  // See doc/locating_servers.txt for a nice flow chart of this algorithm.begin
 
-  Target := TIdUri.Create;
+  Self.PreFindServersFor(AddressOfRecord);
   try
-    Target.Scheme := AddressOfRecord.Scheme;
+    Result.Clear;
 
-    Naptr := TIdNaptrRecords.Create;
+    Target := TIdUri.Create;
     try
-      Srv := TIdSrvRecords.Create;
+      Target.Scheme := AddressOfRecord.Scheme;
+
+      Naptr := TIdNaptrRecords.Create;
       try
-        ARecords := TIdDomainNameRecords.Create;
-
-        Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+        Srv := TIdSrvRecords.Create;
         try
-          if AddressOfRecord.HasMaddr then
-            Target.Host := AddressOfRecord.Maddr
-          else
-            Target.Host := AddressOfRecord.Host;
+          ARecords := TIdDomainNameRecords.Create;
 
-          if TIdIPAddressParser.IsNumericAddress(Target.Host) then begin
-            Result.AddLocation(Transport, Target.Host, AddressOfRecord.Port);
-            Exit;
-          end;
+          Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+          try
+            if AddressOfRecord.HasMaddr then
+              Target.Host := AddressOfRecord.Maddr
+            else
+              Target.Host := AddressOfRecord.Host;
 
-          if AddressOfRecord.PortIsSpecified then begin
-            // AddressOfRecord's Host is a domain name
-            Self.ResolveNameRecords(Target.Host, ARecords);
+            if TIdIPAddressParser.IsNumericAddress(Target.Host) then begin
+              Result.AddLocation(Transport, Target.Host, AddressOfRecord.Port);
+              Exit;
+            end;
 
-            Result.AddLocationsFromNames(Transport,
-                                         AddressOfRecord.Port,
-                                         ARecords);
+            if AddressOfRecord.PortIsSpecified then begin
+              // AddressOfRecord's Host is a domain name
+              Self.ResolveNameRecords(Target.Host, ARecords);
 
-            Exit;
-          end;
-
-          if not Naptr.IsEmpty then begin
-            Self.ResolveSRVs(Naptr, Srv);
-
-            Self.AddLocationsFromSRVsOrNames(Result,
-                                             Transport,
-                                             Target.Host,
-                                             AddressOfRecord.Port,
-                                             Srv, ARecords);
-
-            Exit;
-          end;
-
-          if AddressOfRecord.TransportIsSpecified then begin
-            Self.ResolveSRV(Self.SrvTarget(Target,
-                                           Transport),
-                            Srv);
-
-            Self.AddLocationsFromSRVsOrNames(Result,
-                                             Transport,
-                                             Target.Host,
-                                             AddressOfRecord.Port,
-                                             Srv, ARecords);
-
-            Exit;
-          end;
-
-          Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
-
-          Self.AddLocationsFromSRVsOrNames(Result,
-                                           Transport,
-                                           Target.Host,
+              Result.AddLocationsFromNames(Transport,
                                            AddressOfRecord.Port,
-                                           Srv, ARecords);
+                                           ARecords);
+
+              Exit;
+            end;
+
+            if not Naptr.IsEmpty then begin
+              Self.ResolveSRVs(Naptr, Srv);
+
+              Self.AddLocationsFromSRVsOrNames(Result,
+                                               Transport,
+                                               Target.Host,
+                                               AddressOfRecord.Port,
+                                               Srv, ARecords);
+
+              Exit;
+            end;
+
+            if AddressOfRecord.TransportIsSpecified then begin
+              Self.ResolveSRV(Self.SrvTarget(Target,
+                                             Transport),
+                              Srv);
+
+              Self.AddLocationsFromSRVsOrNames(Result,
+                                               Transport,
+                                               Target.Host,
+                                               AddressOfRecord.Port,
+                                               Srv, ARecords);
+
+              Exit;
+            end;
+
+            Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
+
+            Self.AddLocationsFromSRVsOrNames(Result,
+                                             Transport,
+                                             Target.Host,
+                                             AddressOfRecord.Port,
+                                             Srv, ARecords);
+          finally
+            ARecords.Free;
+          end;
         finally
-          ARecords.Free;
+          Srv.Free;
         end;
       finally
-        Srv.Free;
+        Naptr.Free;
       end;
     finally
-      Naptr.Free;
+      Target.Free;
     end;
   finally
-    Target.Free;
+    Self.PostFindServersFor(AddressOfRecord);
   end;
 end;
 
-function TIdSipAbstractLocator.FindServersFor(const AddressOfRecord: String): TIdSipLocations;
+procedure TIdSipAbstractLocator.FindServersFor(const AddressOfRecord: String;
+                                               Result: TIdSipLocations);
 var
   Uri: TIdSipUri;
 begin
   Uri := TIdSipUri.Create(AddressOfRecord);
   try
-    Result := Self.FindServersFor(Uri);
+    Self.FindServersFor(Uri, Result);
   finally
     Uri.Free;
   end;
 end;
 
-function TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse): TIdSipLocations;
+procedure TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse;
+                                               Result: TIdSipLocations);
 var
   Names:    TIdDomainNameRecords;
   Port:     Cardinal;
@@ -363,46 +378,54 @@ begin
   //
   // See doc/locating_servers.txt for a nice flow chart of this algorithm.
 
-  Result := TIdSipLocations.Create;
+  Self.PreFindServersFor(Response);
+  try
+    Result.Clear;
 
-  if Response.LastHop.HasReceived then begin
-    if Response.LastHop.HasRport then
-      Port := Response.LastHop.RPort
-    else
-      Port := Response.LastHop.Port;
+    if Response.Path.IsEmpty then
+      raise ESipLocator.Create('You cannot find locations for a response with no Via headers');
 
-    Result.AddLocation(Response.LastHop.Transport,
-                       Response.LastHop.Received,
-                       Port);
-  end;
+    if Response.LastHop.HasReceived then begin
+      if Response.LastHop.HasRport then
+        Port := Response.LastHop.RPort
+      else
+        Port := Response.LastHop.Port;
 
-  if TIdIPAddressParser.IsIPv4Address(Response.LastHop.SentBy)
-  or TIdIPAddressParser.IsIPv6Reference(Response.LastHop.SentBy) then
-    Result.AddLocation(Response.LastHop.Transport,
-                       Response.LastHop.SentBy,
-                       Response.LastHop.Port)
-  else begin
-    Services := TIdSrvRecords.Create;
-    try
-      Names := TIdDomainNameRecords.Create;
-      try
-        Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
-
-        if Services.IsEmpty then begin
-          Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
-
-          Result.AddLocationsFromNames(Response.LastHop.Transport,
-                                       Response.LastHop.Port,
-                                       Names);
-        end
-        else
-          Result.AddLocationsFromSRVs(Services);
-      finally
-        Names.Free;
-      end;
-    finally
-      Services.Free;
+      Result.AddLocation(Response.LastHop.Transport,
+                         Response.LastHop.Received,
+                         Port);
     end;
+
+    if TIdIPAddressParser.IsIPv4Address(Response.LastHop.SentBy)
+    or TIdIPAddressParser.IsIPv6Reference(Response.LastHop.SentBy) then
+      Result.AddLocation(Response.LastHop.Transport,
+                         Response.LastHop.SentBy,
+                         Response.LastHop.Port)
+    else begin
+      Services := TIdSrvRecords.Create;
+      try
+        Names := TIdDomainNameRecords.Create;
+        try
+          Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
+
+          if Services.IsEmpty then begin
+            Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
+
+            Result.AddLocationsFromNames(Response.LastHop.Transport,
+                                         Response.LastHop.Port,
+                                         Names);
+          end
+          else
+            Result.AddLocationsFromSRVs(Services);
+        finally
+          Names.Free;
+        end;
+      finally
+        Services.Free;
+      end;
+    end;
+  finally
+    Self.PostFindServersFor(Response);
   end;
 end;
 
@@ -570,6 +593,22 @@ procedure TIdSipAbstractLocator.PerformSRVLookup(const ServiceAndDomain: String;
                                                  Result: TIdSrvRecords);
 begin
   raise Exception.Create(Self.ClassName + ' doesn''t know how to PerformSRVLookup');
+end;
+
+procedure TIdSipAbstractLocator.PreFindServersFor(AddressOfRecord: TIdSipUri);
+begin
+end;
+
+procedure TIdSipAbstractLocator.PreFindServersFor(Response: TIdSipResponse);
+begin
+end;
+
+procedure TIdSipAbstractLocator.PostFindServersFor(AddressOfRecord: TIdSipUri);
+begin
+end;
+
+procedure TIdSipAbstractLocator.PostFindServersFor(Response: TIdSipResponse);
+begin
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
@@ -749,13 +788,10 @@ procedure TIdSipAbstractLocator.SupportedTransports(TargetUri: TIdUri; Transport
 begin
   Transports.Clear;
 
-  Transports.Add(TlsTransport);
-  Transports.Add(TlsOverSctpTransport);
+  TIdSipTransport.SecureTransports(Transports);
 
   if not TargetUri.IsSipsUri then begin
-    Transports.Add(TcpTransport);
-    Transports.Add(UdpTransport);
-    Transports.Add(SctpTransport);
+    TIdSipTransport.InsecureTransports(Transports);
   end;
 end;
 

@@ -29,8 +29,10 @@ type
     procedure CheckNoACKSent(const Msg: String);
     procedure CheckNoRequestSent(const Msg: String);
     procedure CheckNoResponseSent(const Msg: String);
-    procedure CheckRequestSent(const Msg: String);
-    procedure CheckResponseSent(const Msg: String);
+    procedure CheckRequestSent(const Msg: String;
+                               Transport: TIdSipMockTransport = nil);
+    procedure CheckResponseSent(const Msg: String;
+                                Transport: TIdSipMockTransport = nil);
 
     function  LastSentACK: TIdSipRequest;
     function  LastSentRequest: TIdSipRequest;
@@ -52,6 +54,7 @@ type
     D:                      TIdSipTransactionDispatcher;
     Destination:            TIdSipLocation;
     Invite:                 TIdSipRequest;
+    Locator:                TIdSipMockLocator;
     MockTcpTransport:       TIdSipMockTransport;
     MockUdpTransport:       TIdSipMockTransport;
     OnReceiveResponseFired: Boolean;
@@ -66,7 +69,6 @@ type
     TranRequest:            TIdSipRequest;
     Username:               String;
 
-    function  AddTransport(const TransportType: String): TIdSipMockTransport;
     procedure CheckAuthentication(const AuthenticationHeaderName: String;
                                   const AuthorizationHeaderName: String;
                                   const QopType: String);
@@ -149,7 +151,6 @@ type
     procedure TestProxyAuthenticationQopAuthInt;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
-    procedure TestSendRequestOverTls;
     procedure TestSendRequestOverUdp;
     procedure TestSendResponse;
     procedure TestSendMessageButNoAppropriateTransport;
@@ -175,6 +176,7 @@ type
     procedure TestCompleteNetworkFailure;
     procedure TestNetworkFailureTriesAlternateDestinations;
     procedure TestNormalOperation;
+    procedure TestTransactionsWontRelookupDns;
   end;
 
   TestTIdSipTransaction = class(TTestCase)
@@ -598,14 +600,22 @@ begin
   CheckEquals(Self.ResponseCount, Self.SentResponseCount, Msg);
 end;
 
-procedure TMessageCountingTestCase.CheckRequestSent(const Msg: String);
+procedure TMessageCountingTestCase.CheckRequestSent(const Msg: String;
+                                                    Transport: TIdSipMockTransport = nil);
 begin
-  Check(Self.RequestCount < Self.SentRequestCount, Msg);
+  if Assigned(Transport) then
+    Check(Self.RequestCount < Transport.SentRequestCount, Msg)
+  else
+    Check(Self.RequestCount < Self.SentRequestCount, Msg);
 end;
 
-procedure TMessageCountingTestCase.CheckResponseSent(const Msg: String);
+procedure TMessageCountingTestCase.CheckResponseSent(const Msg: String;
+                                                     Transport: TIdSipMockTransport = nil);
 begin
-  Check(Self.ResponseCount < Self.SentResponseCount, Msg);
+  if Assigned(Transport) then
+    Check(Self.ResponseCount < Transport.SentResponseCount, Msg)
+  else
+    Check(Self.ResponseCount < Self.SentResponseCount, Msg);
 end;
 
 function TMessageCountingTestCase.LastSentACK: TIdSipRequest;
@@ -664,9 +674,11 @@ begin
 
   Self.Core := TIdSipMockCore.Create;
 
-  Self.MockTcpTransport := Self.AddTransport(TcpTransport);
-  Self.MockUdpTransport := Self.AddTransport(UdpTransport);
-  Self.MockTransport := Self.MockTcpTransport;
+  Self.Locator := TIdSipMockLocator.Create;
+
+  Self.MockTcpTransport := TIdSipMockTcpTransport.Create;
+  Self.MockUdpTransport := TIdSipMockUdpTransport.Create;
+  Self.MockTransport    := Self.MockTcpTransport;
 
   Self.D := TIdSipTransactionDispatcher.Create;
   Self.D.AddTransactionDispatcherListener(Self);
@@ -675,6 +687,7 @@ begin
 
   Self.D.AddTransport(Self.MockTcpTransport);
   Self.D.AddTransport(Self.MockUdpTransport);
+  Self.D.Locator := Self.Locator;
 
   Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.1', IdPORT_SIP);
 
@@ -723,6 +736,7 @@ begin
   Self.D.Free;
   Self.MockUdpTransport.Free;
   Self.MockTcpTransport.Free;
+  Self.Locator.Free;
   Self.Core.Free;
 
   inherited TearDown;
@@ -740,12 +754,6 @@ begin
 end;
 
 //* TestTIdSipTransactionDispatcher Private methods ****************************
-
-function TestTIdSipTransactionDispatcher.AddTransport(const TransportType: String): TIdSipMockTransport;
-begin
-  Result := TIdSipMockTransport.Create;
-  Result.TransportType := TransportType;
-end;
 
 procedure TestTIdSipTransactionDispatcher.CheckAuthentication(const AuthenticationHeaderName: String;
                                                               const AuthorizationHeaderName: String;
@@ -1132,12 +1140,12 @@ var
 begin
   OriginalCount := Self.D.TransportCount;
 
-  T1 := TIdSipMockTransport.Create;
+  T1 := TIdSipMockUdpTransport.Create;
   try
     Self.D.AddTransport(T1);
     CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
 
-    T2 := TIdSipMockTransport.Create;
+    T2 := TIdSipMockTcpTransport.Create;
     try
       Self.D.AddTransport(T1);
       CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
@@ -1196,11 +1204,11 @@ procedure TestTIdSipTransactionDispatcher.TestClearTransports;
 var
   T1, T2: TIdSipMockTransport;
 begin
-  T1 := TIdSipMockTransport.Create;
+  T1 := TIdSipMockUdpTransport.Create;
   try
     Self.D.AddTransport(T1);
 
-    T2 := TIdSipMockTransport.Create;
+    T2 := TIdSipMockUdpTransport.Create;
     try
       Self.D.AddTransport(T1);
 
@@ -1609,9 +1617,11 @@ begin
   // If Timer G fires then the transaction resends the last response.
   // cf RFC 3261, section 17.2.1
 
+  Self.Locator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
+
   // Timer G only has meaning when using an unreliable transport.
-  Self.Invite.LastHop.Transport    := UdpTransport;
-  Self.MockTransport.TransportType := Self.Invite.LastHop.Transport;
+  Self.Invite.LastHop.Transport := UdpTransport;
+  Self.MockTransport            := Self.MockUdpTransport;
 
   Tran := Self.D.AddServerTransaction(Self.Invite,
                                       Self.MockTransport) as TIdSipServerInviteTransaction;
@@ -1630,7 +1640,7 @@ begin
     Wait.Free;
   end;
 
-  CheckResponseSent('Timer G didn''t fire');
+  CheckResponseSent('Timer G didn''t fire', Self.MockUdpTransport);
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestOnServerInviteTransactionTimerH;
@@ -1778,11 +1788,11 @@ var
 begin
   UdpDest := TIdSipLocation.Create(UdpTransport, '127.0.0.1', IdPORT_SIP);
   try
-    Self.MockTransport.TransportType := UdpTransport;
+    Self.MockTransport := Self.MockUdpTransport;
 
     Self.MarkSentRequestCount;
 
-    Self.TranRequest.LastHop.Transport := Self.MockTransport.TransportType;
+    Self.TranRequest.LastHop.Transport := Self.MockTransport.GetTransportType;
     Self.D.SendToTransport(Self.TranRequest, UdpDest);
 
     CheckRequestSent('No Request sent');
@@ -1791,59 +1801,73 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestSendRequestOverTls;
+procedure TestTIdSipTransactionDispatcher.TestSendResponse;
 var
-  TlsDest: TIdSipLocation;
+  Destinations: TIdSipLocations;
 begin
-  TlsDest := TIdSipLocation.Create(TlsTransport, '127.0.0.1', IdPORT_SIP);
+  Self.MockTransport := Self.MockUdpTransport;
+  Self.Response200.LastHop.Transport := Self.MockTransport.GetTransportType;
+
+  Destinations := TIdSipLocations.Create;
   try
-    Self.MockTransport.TransportType := TlsTransport;
+    Destinations.AddLocation(Self.MockTransport.GetTransportType,
+                             '127.0.0.1',
+                             Self.MockUdpTransport.DefaultPort);
 
-    Self.MarkSentRequestCount;
+    Self.MarkSentResponseCount;
 
-    Self.TranRequest.LastHop.Transport := Self.MockTransport.TransportType;
-    Self.D.SendToTransport(Self.TranRequest, TlsDest);
+    Self.D.SendToTransport(Self.Response200, Destinations);
 
-    CheckRequestSent('No Request sent');
+    CheckResponseSent('No response sent');
   finally
-    TlsDest.Free;
+    Destinations.Free;
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestSendResponse;
-begin
-  Self.MockTransport.TransportType := Self.Response200.LastHop.Transport;
-
-  Self.MarkSentResponseCount;
-
-  Self.D.SendToTransport(Self.Response200);
-
-  CheckResponseSent('No response sent');
-end;
-
 procedure TestTIdSipTransactionDispatcher.TestSendMessageButNoAppropriateTransport;
+var
+  Destinations: TIdSipLocations;
 begin
-  Self.Response200.LastHop.Transport := TcpTransport;
-  Self.MockTransport.TransportType   := SctpTransport;
+  Self.Response200.LastHop.Transport := 'SOME-UNKNOWN-TRANSPORT';
 
+  Destinations := TIdSipLocations.Create;
   try
-    Self.D.SendToTransport(Self.Response200);
-    Fail('Failed to bail out');
-  except
-    on EUnknownTransport do;
+    Destinations.AddLocation('SOME-UNKNOWN-TRANSPORT',
+                             '127.0.0.1',
+                             Self.MockUdpTransport.DefaultPort);
+
+    try
+      Self.D.SendToTransport(Self.Response200, Destinations);
+      Fail('Failed to bail out');
+    except
+      on EUnknownTransport do;
+    end;
+  finally
+    Destinations.Free;
   end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendMessageWithAppropriateTransport;
 var
+  Destinations:     TIdSipLocations;
   TcpResponseCount: Cardinal;
   UdpResponseCount: Cardinal;
 begin
   TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
   UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
 
-  Self.Response200.LastHop.Transport := Self.MockUdpTransport.TransportType;
-  Self.D.SendToTransport(Self.Response200);
+  Self.Response200.LastHop.Transport := Self.MockUdpTransport.GetTransportType;
+
+  Destinations := TIdSipLocations.Create;
+  try
+    Destinations.AddLocation(Self.MockUdpTransport.GetTransportType,
+                             '127.0.0.1',
+                             Self.MockUdpTransport.DefaultPort);
+
+    Self.D.SendToTransport(Self.Response200, Destinations);
+  finally
+    Destinations.Free;
+  end;
 
   Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
         'No response sent down UDP');
@@ -1933,13 +1957,13 @@ procedure TestLocation.SetUp;
 begin
   inherited SetUp;
 
+  TIdSipTransport.RegisterTransport(IdSipMessage.TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransport.RegisterTransport(IdSipMessage.UdpTransport, TIdSipMockUdpTransport);
+
   Self.L := TIdSipMockLocator.Create;
 
-  Self.TcpTransport := TIdSipMockTransport.Create;
-  Self.TcpTransport.TransportType := IdSipMessage.TcpTransport;
-
-  Self.UdpTransport := TIdSipMockTransport.Create;
-  Self.UdpTransport.TransportType := IdSipMessage.UdpTransport;
+  Self.TcpTransport := TIdSipMockTcpTransport.Create;
+  Self.UdpTransport := TIdSipMockUdpTransport.Create;
 
   Self.MockTransport := Self.UdpTransport;
 
@@ -1948,8 +1972,11 @@ begin
   Self.D.AddTransport(Self.UdpTransport);
   Self.D.Locator := Self.L;
 
-  Self.Request := TIdSipTestResources.CreateBasicRequest;
+  Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
+
+  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
+  Self.L.AddA('localhost', '127.0.0.1');
 end;
 
 procedure TestLocation.TearDown;
@@ -1961,6 +1988,9 @@ begin
   Self.UdpTransport.Free;
   Self.TcpTransport.Free;
   Self.L.Free;
+
+  TIdSipTransport.UnregisterTransport(IdSipMessage.TcpTransport);
+  TIdSipTransport.UnregisterTransport(IdSipMessage.UdpTransport);
 
   inherited TearDown;
 end;
@@ -1976,40 +2006,63 @@ end;
 
 procedure TestLocation.TestNetworkFailureTriesAlternateDestinations;
 var
-  Tran: TIdSipTransaction;
+  DnsLookupCount: Cardinal;
+  Tran:           TIdSipTransaction;
 begin
   // The transaction should try send the response to all the IPs returned by
   // the A/AAAA lookup of the SRV of the sent-by (phew!).
 
-  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
-  Self.L.AddA('localhost', '127.0.0.1');
   Self.L.AddA('localhost', '127.0.0.2');
 
   Self.TcpTransport.FailWith := EIdSipTransport;
 
   Tran := Self.D.AddServerTransaction(Self.Request, Self.TcpTransport);
 
+  DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
+
   Tran.SendResponse(Self.Response);
 
   CheckEquals(Self.RequestCount + Cardinal(Self.L.NameRecords.Count),
               Self.TcpTransport.SentResponseCount,
               'Number of locations tried');
+  CheckEquals(DnsLookupCount + 1,
+              Self.L.LookupCount,
+              'DNS lookups');
 end;
 
 procedure TestLocation.TestNormalOperation;
 var
-  Tran: TIdSipTransaction;
+  DnsLookupCount: Cardinal;
+  Tran:           TIdSipTransaction;
 begin
   Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
 
-  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
-  Self.L.AddA('localhost', '127.0.0.1');
-
+  DnsLookupCount := Self.L.LookupCount;
   Self.MarkSentResponseCount;
+
   Tran.SendResponse(Self.Response);
+
   Check(Self.ResponseCount < Self.TcpTransport.SentResponseCount,
         'No response sent');
+  CheckEquals(DnsLookupCount + 1, Self.L.LookupCount, 'DNS lookups');
+end;
+
+procedure TestLocation.TestTransactionsWontRelookupDns;
+var
+  DnsLookupCount: Cardinal;
+  Tran:           TIdSipTransaction;
+begin
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+
+  DnsLookupCount := Self.L.LookupCount;
+
+  Self.Response.StatusCode := SIPTrying;
+  Tran.SendResponse(Self.Response);
+  Self.Response.StatusCode := SIPNotFound;
+  Tran.SendResponse(Self.Response);
+
+  CheckEquals(DnsLookupCount + 1, Self.L.LookupCount, 'DNS lookups');
 end;
 
 //******************************************************************************
@@ -2108,7 +2161,7 @@ var
   R: TIdSipRequest;
   T: TIdSipTransaction;
 begin
-  R := TIdSipRequest.Create;
+  R := TIdSipTestResources.CreateBasicRequest;
   try
     R.Method := MethodInvite;
 
@@ -2588,8 +2641,7 @@ begin
   Self.MockDispatcher.Timer := Self.DebugTimer;
 
   Self.MockTransport := Self.MockDispatcher.Transport;
-  Self.MockTransport.TransportType := UdpTransport;
-  Self.MockTransport.HostName      := 'gw1.leo-ix.org';
+  Self.MockTransport.HostName := 'gw1.leo-ix.org';
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);
@@ -3010,7 +3062,7 @@ begin
   // messages. Hence we terminate it.
   Self.Terminate(Self.Tran);
 
-  Self.MockTransport.TransportType := TlsTransport;
+  Self.MockDispatcher.TransportType := TlsTransport;
   Self.Request.LastHop.Transport := TlsTransport;
 
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
@@ -4334,8 +4386,8 @@ begin
   // Hack: we terminate Self.Tran so it doesn't keep sending INVITEs
   Self.Terminate(Self.Tran);
 
-  Self.MockTransport.TransportType := TcpTransport;
-  Self.Request.LastHop.Transport := TcpTransport;
+  Self.MockDispatcher.TransportType := TcpTransport;
+  Self.Request.LastHop.Transport    := Self.MockDispatcher.TransportType;
 
   Self.MockTransport.ResetSentRequestCount;
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
@@ -5164,7 +5216,7 @@ procedure TTransactionDispatcherListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipMockTransport.Create;
+  Self.Receiver := TIdSipMockUdpTransport.Create;
 end;
 
 procedure TTransactionDispatcherListenerMethodTestCase.TearDown;

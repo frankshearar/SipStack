@@ -346,6 +346,7 @@ type
                         Response: TIdSipResponse);
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestAllLocationsFail;
     procedure TestLooseRoutingProxy;
@@ -1088,7 +1089,6 @@ begin
   Self.Destination.Value := 'sip:franks@localhost';
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatcher.Transport.TransportType := TcpTransport;
 
   Self.Locator := TIdSipMockLocator.Create;
 
@@ -1964,7 +1964,7 @@ var
 begin
   inherited SetUp;
 
-  Self.Dispatcher.Transport.AddTransportSendingListener(Self);
+  Self.Dispatcher.AddTransportSendingListener(Self);
 
   Self.OnChangedEvent := TSimpleEvent.Create;
 
@@ -4147,26 +4147,27 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestViaMatchesTransportParameter;
-const
-  Transports: array[1..3] of String = (TcpTransport,
-                                       TlsTransport,
-                                       UdpTransport);
-var
-  Trans: Integer;
 begin
   // Iterate over the registered transports? Or does
   // TIdSipTransport.TransportFor return the null transport instead?
 
-  for Trans := Low(Transports) to High(Transports) do begin
-    Self.Dispatcher.Transport.TransportType := Transports[Trans];
-    Self.Destination.Address.Transport := Transports[Trans];
-    Self.Core.Call(Self.Destination, '', '').Send;
+  Self.Dispatcher.TransportType := UdpTransport;
+  Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
+  Self.Core.Call(Self.Destination, '', '').Send;
 
-    CheckEquals(Transports[Trans],
-                Self.LastSentRequest.LastHop.Transport,
-                'Transport parameter = '
-              + Self.Destination.Address.Transport);
-  end;
+  CheckEquals(Self.Dispatcher.Transport.GetTransportType,
+              Self.LastSentRequest.LastHop.Transport,
+              'Transport parameter = '
+            + Self.Destination.Address.Transport);
+
+  Self.Dispatcher.TransportType := TlsTransport;
+  Self.Destination.Address.Transport := Self.Dispatcher.Transport.GetTransportType;
+  Self.Core.Call(Self.Destination, '', '').Send;
+
+  CheckEquals(Self.Dispatcher.Transport.GetTransportType,
+              Self.LastSentRequest.LastHop.Transport,
+              'Transport parameter = '
+            + Self.Destination.Address.Transport);
 end;
 
 //******************************************************************************
@@ -4321,6 +4322,15 @@ begin
   Self.InviteOffer    := '';
   Self.NetworkFailure := false;
   Self.TransportParam := SctpTransport;
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSctpTransport);
+end;
+
+procedure TestLocation.TearDown;
+begin
+  TIdSipTransport.UnregisterTransport(SctpTransport);
+
+  inherited TearDown;
 end;
 
 //* TestLocation Private methods ***********************************************
@@ -4384,8 +4394,10 @@ begin
   Self.MarkSentRequestCount;
   Self.CreateAction;
 
-  Locations := Self.Locator.FindServersFor(Self.Destination.Address);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Locator.FindServersFor(Self.Destination.Address, Locations);
+
     // Locations.Count >= 0, so the typecast is safe.
     CheckEquals(Self.RequestCount + Cardinal(Locations.Count),
                 Self.SentRequestCount,
@@ -4458,25 +4470,28 @@ var
   Action: TIdSipAction;
   Domain: String;
 begin
-  Self.Dispatcher.Transport.TransportType := CorrectTransport;
+  TIdSipTransport.RegisterTransport(CorrectTransport, TIdSipMockSctpTransport);
+  try
+    Domain := Self.Destination.Address.Host;
 
-  Domain := Self.Destination.Address.Host;
+    // NAPTR record points to SCTP SRV record whose target resolves to the A
+    // record.
+    Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
+    Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
+    Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
 
-  // NAPTR record points to SCTP SRV record whose target resolves to the A
-  // record.
-  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
-  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
-  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
+    Self.MarkSentRequestCount;
+    Action := Self.CreateAction;
 
-  Self.MarkSentRequestCount;
-  Action := Self.CreateAction;
-
-  CheckRequestSent('No request sent');
-  CheckEquals(CorrectTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'Incorrect transport');
-  Check(Self.LastSentRequest.Equals(Action.InitialRequest),
-        'Action''s InitialRequest not updated to the latest attempt');
+    CheckRequestSent('No request sent');
+    CheckEquals(CorrectTransport,
+                Self.LastSentRequest.LastHop.Transport,
+                'Incorrect transport');
+    Check(Self.LastSentRequest.Equals(Action.InitialRequest),
+          'Action''s InitialRequest not updated to the latest attempt');
+  finally
+    TIdSipTransport.UnregisterTransport(CorrectTransport);
+  end;
 end;
 
 procedure TestLocation.TestUseTransportParam;
@@ -8251,7 +8266,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatcher.Transport.TransportType := TlsTransport;
+  Self.Dispatcher.TransportType := TlsTransport;
 
   Self.Destination.Address.Scheme := SipsScheme;
   Session := Self.CreateAction as TIdSipSession;
@@ -8273,9 +8288,10 @@ var
   SentInvite: TIdSipRequest;
   Session:    TIdSipSession;
 begin
-  Self.MarkSentRequestCount;
-  Self.Dispatcher.Transport.TransportType := TcpTransport;
+  Self.Dispatcher.TransportType := TcpTransport;
   Self.Destination.Address.Scheme := SipsScheme;
+
+  Self.MarkSentRequestCount;
 
   Session := Self.CreateAction as TIdSipSession;
 
@@ -8292,7 +8308,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatcher.Transport.TransportType := TcpTransport;
+  Self.Dispatcher.TransportType := TcpTransport;
 
   Session := Self.CreateAction as TIdSipSession;
 
@@ -9761,7 +9777,7 @@ procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipMockTransport.Create;
+  Self.Receiver := TIdSipMockUdpTransport.Create;
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;

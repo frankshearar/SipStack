@@ -57,7 +57,7 @@ begin
   inherited SetUp;
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatcher.Transport.TransportType := TcpTransport;
+  Self.Dispatcher.TransportType := TcpTransport;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);

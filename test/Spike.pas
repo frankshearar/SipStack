@@ -206,6 +206,10 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipTcpTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);  
+
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.Transports := TObjectList.Create(true);
@@ -309,6 +313,10 @@ begin
   Self.Transports.Free;
 
   Self.Timer.Terminate;
+
+  TIdSipTransport.UnregisterTransport(TcpTransport);
+  TIdSipTransport.UnregisterTransport(TlsTransport);
+  TIdSipTransport.UnregisterTransport(UdpTransport);
 
   inherited Destroy;
 end;

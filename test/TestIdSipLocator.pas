@@ -44,7 +44,13 @@ type
     procedure TestIsEmpty;
   end;
 
-  TestTIdSipAbstractLocator = class(TTestCase)
+  TLocatorTest = class(TTestCase)
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipAbstractLocator = class(TLocatorTest)
   private
     ARecord:        String;
     AAAARecord:     String;
@@ -67,6 +73,7 @@ type
                                   const ExpectedTransport: String;
                                   const MsgPrefix: String);
   published
+    procedure TestFindServersForResponseWithMalformedResponse;
     procedure TestFindServersForResponseWithNameAndPort;
     procedure TestFindServersForResponseWithNameNoSrv;
     procedure TestFindServersForResponseWithNumericSentBy;
@@ -111,7 +118,7 @@ type
     procedure TestFindServersForNumericAddressWithPort;
   end;
 
-  TestTIdSipMockLocator = class(TTestCase)
+  TestTIdSipMockLocator = class(TLocatorTest)
   private
     AOR: TIdUri;
     Loc: TIdSipMockLocator;
@@ -130,7 +137,8 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipTransport, Math, SysUtils;
+  IdSipConsts, IdSipMockTransport, IdSipTransport, Math, SysUtils,
+  TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -308,6 +316,33 @@ begin
 end;
 
 //******************************************************************************
+//* TLocatorTest                                                               *
+//******************************************************************************
+//* TLocatorTest Public methods ************************************************
+
+procedure TLocatorTest.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransport.RegisterTransport(SctpTransport,        TIdSipMockSctpTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport,         TIdSipMockTcpTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport,         TIdSipMockTlsTransport);
+  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport,         TIdSipMockUdpTransport);
+end;
+
+procedure TLocatorTest.TearDown;
+begin
+  TIdSipTransport.UnregisterTransport(SctpTransport);
+  TIdSipTransport.UnregisterTransport(TcpTransport);
+  TIdSipTransport.UnregisterTransport(TlsTransport);
+  TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
+  TIdSipTransport.UnregisterTransport(UdpTransport);
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipAbstractLocator                                                  *
 //******************************************************************************
 //* TestTIdSipAbstractLocator Public methods ***********************************
@@ -343,33 +378,28 @@ procedure TestTIdSipAbstractLocator.CheckAorAAAARecords(Locations: TIdSipLocatio
                                                         const ExpectedTransport: String;
                                                         const MsgPrefix: String);
 begin
-  Locations := Self.Loc.FindServersFor(Self.Target);
-  try
-    CheckEquals(Self.Loc.NameRecords.Count,
-                Locations.Count, MsgPrefix + ': Location count');
+  CheckEquals(Self.Loc.NameRecords.Count,
+              Locations.Count, MsgPrefix + ': Location count');
 
-    CheckEquals(ExpectedTransport,
-                Locations[0].Transport,
-                MsgPrefix + ': 1st record Transport');
-    CheckEquals(Self.ARecord,
-                Locations[0].IPAddress,
-                MsgPrefix + ': 1st record IPAddress');
-    CheckEquals(Self.Port,
-                Locations[0].Port,
-                MsgPrefix + ': 1st record Port');
+  CheckEquals(ExpectedTransport,
+              Locations[0].Transport,
+              MsgPrefix + ': 1st record Transport');
+  CheckEquals(Self.ARecord,
+              Locations[0].IPAddress,
+              MsgPrefix + ': 1st record IPAddress');
+  CheckEquals(Self.Port,
+              Locations[0].Port,
+              MsgPrefix + ': 1st record Port');
 
-    CheckEquals(ExpectedTransport,
-                Locations[1].Transport,
-                MsgPrefix + ': 2nd record Transport');
-    CheckEquals(Self.AAAARecord,
-                Locations[1].IPAddress,
-                MsgPrefix + ': 2nd record IPAddress');
-    CheckEquals(Self.Port,
-                Locations[1].Port,
-                MsgPrefix + ': 2nd record Port');
-  finally
-    Locations.Free;
-  end;
+  CheckEquals(ExpectedTransport,
+              Locations[1].Transport,
+              MsgPrefix + ': 2nd record Transport');
+  CheckEquals(Self.AAAARecord,
+              Locations[1].IPAddress,
+              MsgPrefix + ': 2nd record IPAddress');
+  CheckEquals(Self.Port,
+              Locations[1].Port,
+              MsgPrefix + ': 2nd record Port');
 end;
 
 //* TestTIdSipAbstractLocator Private methods **********************************
@@ -381,6 +411,30 @@ begin
 end;
 
 //* TestTIdSipAbstractLocator Published methods ********************************
+
+procedure TestTIdSipAbstractLocator.TestFindServersForResponseWithMalformedResponse;
+var
+  Locations: TIdSipLocations;
+  Response: TIdSipResponse;
+begin
+  // No Via headers? No locations!
+
+  Response := TIdSipResponse.Create;
+  try
+    Locations := TIdSipLocations.Create;
+    try
+      try
+        Self.Loc.FindServersFor(Response, Locations);
+      except
+        on ESipLocator do;
+      end;
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForResponseWithNameAndPort;
 var
@@ -394,8 +448,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + Domain + ':6666';
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -435,8 +491,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + Domain;
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -473,8 +531,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1';
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -501,8 +561,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1:666';
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -529,8 +591,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.net;received=' + Self.IP;
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -560,8 +624,10 @@ begin
                                              + ';received=' + Self.IP
                                              + ';rport=' + IntToStr(Self.Port);
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -590,8 +656,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + SentByIP + ';received=' + Self.IP;
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[1].Transport,
                   'First location transport');
@@ -620,8 +688,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + SentByIP + ';received=' + Self.IP;
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[1].Transport,
                   'First location transport');
@@ -648,8 +718,10 @@ begin
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1;rport=666';
 
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
@@ -688,8 +760,10 @@ begin
   Response := TIdSipResponse.Create;
   try
     Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TLS ' + Self.Domain;
-    Locations := Self.Loc.FindServersFor(Response);
+    Locations := TIdSipLocations.Create;
     try
+      Self.Loc.FindServersFor(Response, Locations);
+
       CheckEquals(2,
                   Locations.Count,
                   'Wrong number of records');
@@ -738,8 +812,10 @@ begin
   Self.Loc.AddA('reliable.example.com',   '127.0.0.2');
   Self.Loc.AddA('unreliable.example.com', '127.0.0.3');
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1, Locations.Count, 'Number of locations');
     CheckEquals('127.0.0.3', Locations[0].IPAddress, 'Wrong location');
   finally
@@ -756,8 +832,10 @@ begin
 
   Self.AddNameRecords(Self.Target.Host);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations, UdpTransport, 'No NAPTR no SRV');
   finally
     Locations.Free;
@@ -779,8 +857,10 @@ begin
   Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP, 'sip.' + Self.Domain);
   Self.Loc.AddAAAA('sip.' + Self.Domain, Self.AAAARecord);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(Self.Loc.NameRecords.Count,
                 Locations.Count,
                 'No SRV lookup for NAPTR records beyond the first?');
@@ -796,8 +876,10 @@ begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
@@ -814,8 +896,10 @@ var
 begin
   Self.Target.Uri := 'sip:' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
@@ -833,8 +917,10 @@ begin
   Self.Port       := IdPORT_SIPS;
   Self.Target.Uri := 'sips:' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
@@ -852,8 +938,10 @@ begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
@@ -870,8 +958,10 @@ var
 begin
   Self.Target.Uri := 'sip:foo.com;maddr=' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
@@ -888,8 +978,10 @@ var
 begin
   Self.Target.Uri := 'sip:foo.com;maddr=' + Self.AAAARecord;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport,    Locations.First.Transport, 'Transport');
@@ -906,8 +998,10 @@ var
 begin
   Self.Target.Uri := 'sips:foo.com;maddr=' + Self.ARecord;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
@@ -924,8 +1018,10 @@ var
 begin
   Self.Target.Uri := 'sips:foo.com;maddr=' + Self.AAAARecord;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport,    Locations.First.Transport, 'Transport');
@@ -945,8 +1041,10 @@ begin
   Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix,  0, 0, 0, Self.Domain);
   Self.Loc.AddSRV(Self.Domain, SrvSctpPrefix, 0, 0, 0, Self.Domain);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.IsEmpty,
           'The locator added locations that don''t exist');
   finally
@@ -970,8 +1068,10 @@ begin
 
   Self.Loc.AddA(Self.Domain, Self.ARecord);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1,
                 Locations.Count,
                 'The locator didn''t filter out the "unavailable" SRV');
@@ -1006,8 +1106,10 @@ begin
   Self.TransportParam := TransportParamSCTP;
   Self.Target.Uri := 'sip:127.0.0.1;transport=' + Self.TransportParam;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(ParamToTransport(Self.TransportParam),
@@ -1214,8 +1316,10 @@ begin
   Self.Loc.AddA('server1.example.com', '127.0.0.1');
   Self.Loc.AddA('server2.example.com', '127.0.0.2');
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Check(Locations.Count > 1, 'Too few locations');
     CheckEquals('127.0.0.1', Locations[0].IPAddress, '1st record address');
     CheckEquals('127.0.0.2', Locations[1].IPAddress, '2nd record address');
@@ -1235,8 +1339,10 @@ begin
                     '_sip._tcp.' + Self.Domain);
   Self.AddNameRecords(Self.Target.Host);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations,
                              Self.Loc.NAPTR[0].AsSipTransport,
                              'NAPTR, no SRV');
@@ -1261,8 +1367,10 @@ begin
 
   Self.AddNameRecords(Self.Target.Host);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(4,                    Locations.Count,        'Location count');
     CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
     CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
@@ -1293,6 +1401,8 @@ begin
 
   Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations,
                              ParamToTransport(Self.Target.Transport),
                              'No NAPTR, no SRV, transport param');
@@ -1315,8 +1425,10 @@ begin
 
   Self.AddNameRecords(Self.Target.Host);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(2,                    Locations.Count,        'Location count');
     CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
     CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
@@ -1339,8 +1451,10 @@ begin
   Self.Port := IdPORT_SIPS; // default for TLS
   Self.AddNameRecords(Self.Target.Host);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations,
                              TlsTransport,
                              'No NAPTR, no SRV, no transport param');
@@ -1360,8 +1474,10 @@ begin
   Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
 
   // iterate over SRV
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(4,                    Locations.Count,        'Location count');
     CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
     CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
@@ -1389,8 +1505,10 @@ begin
 
   Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations, UdpTransport, 'SIP URI');
   finally
     Locations.Free;
@@ -1398,8 +1516,10 @@ begin
 
   Self.Target.Scheme := SipsScheme;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     Self.CheckAorAAAARecords(Locations, TlsTransport, 'SIPS URI');
   finally
     Locations.Free;
@@ -1412,8 +1532,10 @@ var
 begin
   Self.Target.Uri := 'sip:' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1,            Locations.Count,        'SIP Location count');
     CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
     CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
@@ -1422,10 +1544,27 @@ begin
     Locations.Free;
   end;
 
+  Self.IP := '[::1]';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIP IPv6 Location count');
+    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP IPv6 Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPv6 IPAddress');
+    CheckEquals(IdPORT_SIP,   Locations[0].Port,      'SIP IPv6 Port');
+  finally
+    Locations.Free;
+  end;
+
   Self.Target.Scheme := SipsScheme;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1,            Locations.Count,        'SIPS Location count');
     CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
     CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
@@ -1441,8 +1580,10 @@ var
 begin
   Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1,            Locations.Count,        'SIP Location count');
     CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
     CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
@@ -1453,8 +1594,10 @@ begin
 
   Self.Target.Scheme := SipsScheme;
 
-  Locations := Self.Loc.FindServersFor(Self.Target);
+  Locations := TIdSipLocations.Create;
   try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
     CheckEquals(1,            Locations.Count,        'SIPS Location count');
     CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
     CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
@@ -1488,43 +1631,32 @@ end;
 
 procedure TestTIdSipMockLocator.TestLookupCount;
 var
-  Names: TIdDomainNameRecords;
-  Naptr: TIdNaptrRecords;
-  Srv:   TIdSrvRecords;
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
 begin
   CheckEquals(0, Self.Loc.LookupCount, 'Initial value');
 
-  Names := TIdDomainNameRecords.Create;
+  Locations := TIdSipLocations.Create;
   try
-    Self.Loc.ResolveNameRecords('', Names);
+    Self.Loc.FindServersFor('', Locations);
 
-    CheckEquals(1,
-                Self.Loc.LookupCount,
-                'LookuCount after name lookup');
+    CheckEquals(1, Self.Loc.LookupCount, 'After FindServersFor(URI)');
   finally
-    Names.Free;
+    Locations.Free;
   end;
 
-  Naptr := TIdNaptrRecords.Create;
+  Response := TIdSipTestResources.CreateBasicResponse;
   try
-    Self.Loc.ResolveNAPTR(Self.AOR, Naptr);
+    Locations := TIdSipLocations.Create;
+    try
+      Self.Loc.FindServersFor(Response, Locations);
 
-    CheckEquals(2,
-                Self.Loc.LookupCount,
-                'LookuCount after NAPTR lookup');
+      CheckEquals(2, Self.Loc.LookupCount, 'After FindServersFor(SipResponse)');
+    finally
+      Locations.Free;
+    end;
   finally
-    Naptr.Free;
-  end;
-
-  Srv := TIdSrvRecords.Create;
-  try
-    Self.Loc.ResolveSRV('', Srv);
-
-    CheckEquals(3,
-                Self.Loc.LookupCount,
-                'LookuCount after SRV lookup');
-  finally
-    Srv.Free;
+    Response.Free;
   end;
 
   Self.Loc.ResetLookupCount;
@@ -1657,8 +1789,5 @@ begin
 end;
 
 initialization
-  // Some tests use SCTP.
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSctpTransport);
-
   RegisterTest('SIP Location Services', Suite);
 end.

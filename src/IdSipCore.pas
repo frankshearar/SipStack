@@ -3967,8 +3967,10 @@ begin
     Inc(Self.NonceCount);
 
   // cf RFC 3263, section 4.3
-  TargetLocations := Self.UA.Locator.FindServersFor(Request.DestinationUri);
+  TargetLocations := TIdSipLocations.Create;
   try
+    Self.UA.Locator.FindServersFor(Request.DestinationUri, TargetLocations);
+
     if TargetLocations.IsEmpty then begin
       // The Locator should at the least return a location based on the
       // Request-URI. Thus this clause should never execute. Still, this

@@ -1015,24 +1015,16 @@ begin
 end;
 
 procedure TestTIdSipTransport.TestTransportFor;
+const
+  NewTransport = 'UNKNOWN-TRANSPORT';
 begin
-  CheckEquals(TIdSipTCPTransport,
-              TIdSipTransport.TransportFor(TcpTransport),
-              TcpTransport);
-  CheckEquals(TIdSipTLSTransport,
-              TIdSipTransport.TransportFor(TlsTransport),
-              TlsTransport);
-  CheckEquals(TIdSipUDPTransport,
-              TIdSipTransport.TransportFor(UdpTransport),
-              UdpTransport);
-
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSCTPTransport);
+  TIdSipTransport.RegisterTransport(NewTransport, TIdSipSCTPTransport);
   try
     CheckEquals(TIdSipSCTPTransport,
-                TIdSipTransport.TransportFor(SctpTransport),
-                SctpTransport);
+                TIdSipTransport.TransportFor(NewTransport),
+                NewTransport);
   finally
-    TIdSipTransport.UnregisterTransport(SctpTransport);
+    TIdSipTransport.UnregisterTransport(NewTransport);
   end;
 end;
 
@@ -1937,7 +1929,7 @@ procedure TTransportMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Transport := TIdSipMockTransport.Create;
+  Self.Transport := TIdSipMockUdpTransport.Create;
 end;
 
 procedure TTransportMethodTestCase.TearDown;

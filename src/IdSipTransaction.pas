@@ -174,7 +174,8 @@ type
                             Request: TIdSipMessage);
     procedure SendToTransport(Request: TIdSipRequest;
                               Dest: TIdSipLocation); overload; virtual;
-    procedure SendToTransport(Response: TIdSipResponse); overload; virtual;
+    procedure SendToTransport(Response: TIdSipResponse;
+                              Dests: TIdSipLocations); overload; virtual;
     procedure SendRequest(Request: TIdSipRequest;
                           Dest: TIdSipLocation); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
@@ -242,7 +243,6 @@ type
     procedure TryResendInitialRequest;
     procedure TrySendRequest(R: TIdSipRequest;
                              Dest: TIdSipLocation);
-    procedure TrySendResponse(R: TIdSipResponse); virtual;
   public
     class function CreateClientTransactionType(Dispatcher: TIdSipTransactionDispatcher;
                                                Request: TIdSipRequest): TIdSipTransaction;
@@ -279,11 +279,16 @@ type
   end;
 
   TIdSipServerTransaction = class(TIdSipTransaction)
+  private
+    ResponseLocations: TIdSipLocations;
+
+    procedure TrySendResponse(R: TIdSipResponse); virtual;
   protected
-    LastResponseSent: TIdSipResponse;
+    LastResponseSent:  TIdSipResponse;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
+    destructor  Destroy; override;
 
     function  IsClient: Boolean; override;
   end;
@@ -765,34 +770,29 @@ begin
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
 
-procedure TIdSipTransactionDispatcher.SendToTransport(Response: TIdSipResponse);
+procedure TIdSipTransactionDispatcher.SendToTransport(Response: TIdSipResponse;
+                                                      Dests: TIdSipLocations);
 var
   Current:   Integer;
   Sent:      Boolean;
-  Targets:   TIdSipLocations;
   Transport: TIdSipTransport;
 begin
-  Targets := Self.Locator.FindServersFor(Response);
-  try
-    Current := 0;
-    Sent    := false;
+  Current := 0;
+  Sent    := false;
 
-    while not Sent and (Current < Targets.Count) do begin
-      Transport := Self.FindAppropriateTransport(Targets[Current]);
+  while not Sent and (Current < Dests.Count) do begin
+    Transport := Self.FindAppropriateTransport(Dests[Current]);
 
-      if Assigned(Transport) then begin
-        try
-          Transport.Send(Response);
-          Sent := true;
-        except
-          on EIdSipTransport do;
-        end;
+    if Assigned(Transport) then begin
+      try
+        Transport.Send(Response);
+        Sent := true;
+      except
+        on EIdSipTransport do;
       end;
-
-      Inc(Current);
     end;
-  finally
-    Targets.Free;
+
+    Inc(Current);
   end;
 end;
 
@@ -823,7 +823,8 @@ end;
 
 procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
-  Tran: TIdSipTransaction;
+  Destinations: TIdSipLocations;
+  Tran:         TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Response, false);
 
@@ -838,7 +839,13 @@ begin
     // transaction, but the Transaction-User layer resend the OKs until we
     // receive an ACK (cf. RFC 3261, section 13.3.1.4).
 
-    Self.SendToTransport(Response);
+    Destinations := TIdSipLocations.Create;
+    try
+      Self.Locator.FindServersFor(Response, Destinations);
+      Self.SendToTransport(Response, Destinations);
+    finally
+      Destinations.Free;
+    end;
   end;
 end;
 
@@ -1514,20 +1521,6 @@ begin
   end;
 end;
 
-procedure TIdSipTransaction.TrySendResponse(R: TIdSipResponse);
-begin
-  try
-    Self.Dispatcher.SendToTransport(R);
-  except
-    on E: EIdSipTransport do begin
-      Self.DoOnTransportError(E.Transport,
-                              E.SipMessage as TIdSipResponse,
-                              E.Message);
-      raise;
-    end;
-  end;
-end;
-
 //******************************************************************************
 //* TIdSipServerTransaction                                                    *
 //******************************************************************************
@@ -1538,12 +1531,39 @@ constructor TIdSipServerTransaction.Create(Dispatcher: TIdSipTransactionDispatch
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.LastResponseSent := Self.LastResponse;
+  Self.LastResponseSent  := Self.LastResponse;
+  Self.ResponseLocations := TIdSipLocations.Create;
+end;
+
+destructor TIdSipServerTransaction.Destroy;
+begin
+  Self.ResponseLocations.Free;
+
+  inherited Destroy;
 end;
 
 function TIdSipServerTransaction.IsClient: Boolean;
 begin
   Result := false;
+end;
+
+//* TIdSipServerTransaction Public methods *************************************
+
+procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
+begin
+  if Self.ResponseLocations.IsEmpty then
+    Self.Dispatcher.Locator.FindServersFor(R, Self.ResponseLocations);
+
+  try
+    Self.Dispatcher.SendToTransport(R, Self.ResponseLocations);
+  except
+    on E: EIdSipTransport do begin
+      Self.DoOnTransportError(E.Transport,
+                              E.SipMessage as TIdSipResponse,
+                              E.Message);
+      raise;
+    end;
+  end;
 end;
 
 //******************************************************************************
