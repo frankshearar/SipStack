@@ -4509,8 +4509,11 @@ begin
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
+var
+  StatusCode: Integer;
 begin
-  Self.CheckReceiveFailed(SIPDecline);
+  for StatusCode := 600 to 699 do
+    Self.CheckReceiveFailed(StatusCode);
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
@@ -4528,13 +4531,19 @@ begin
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRequestFailed;
+var
+  StatusCode: Integer;
 begin
-  Self.CheckReceiveFailed(SIPBusyHere);
+  for StatusCode := 400 to 499 do
+    Self.CheckReceiveFailed(StatusCode);
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveServerFailed;
+var
+  StatusCode: Integer;
 begin
-  Self.CheckReceiveFailed(SIPServiceUnavailable);
+  for StatusCode := 500 to 599 do
+    Self.CheckReceiveFailed(StatusCode);
 end;
 
 procedure TestTIdSipOutboundInvite.TestRedirectedInvite;
