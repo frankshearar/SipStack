@@ -3750,6 +3750,7 @@ end;
 
 procedure TIdSdpPayloadProcessor.SetUpSingleStream(MediaDesc: TIdSdpMediaDescription);
 var
+  I:       Integer;
   NewPeer: TIdRTPServer;
 begin
   // Realise that the MediaDesc contains a Port value. We TRY to allocate that
@@ -3758,22 +3759,24 @@ begin
 
   Self.RTPServerLock.Acquire;
   try
-    NewPeer := TIdRTPServer.Create(nil);
-    try
-      Self.RTPServers.Add(NewPeer);
+    for I := 1 to MediaDesc.PortCount do begin
+      NewPeer := TIdRTPServer.Create(nil);
+      try
+        Self.RTPServers.Add(NewPeer);
 
-      NewPeer.Profile := Self.Profile;
-      NewPeer.Session.AddListener(Self);
-      NewPeer.AddListener(Self);
+        NewPeer.Profile := Self.Profile;
+        NewPeer.Session.AddListener(Self);
+        NewPeer.AddListener(Self);
 
-      Self.ActivateServerOnNextFreePort(NewPeer, MediaDesc.Port);
-    except
-      if (Self.RTPServers.IndexOf(NewPeer) <> -1) then
-        Self.RTPServers.Remove(NewPeer)
-      else
-        FreeAndNil(NewPeer);
+        Self.ActivateServerOnNextFreePort(NewPeer, MediaDesc.Port);
+      except
+        if (Self.RTPServers.IndexOf(NewPeer) <> -1) then
+          Self.RTPServers.Remove(NewPeer)
+        else
+          FreeAndNil(NewPeer);
 
-      raise;
+        raise;
+      end;
     end;
   finally
     Self.RTPServerLock.Release;

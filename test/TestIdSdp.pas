@@ -5807,12 +5807,15 @@ begin
 
   Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
   try
-    CheckEquals(1,
+    CheckEquals(2,
                 Description.MediaDescriptionCount,
                 'Number of media descriptions');
     CheckEquals(8000,
                 Description.MediaDescriptionAt(0).Port,
                 'First media description port');
+    CheckEquals(8002,
+                Description.MediaDescriptionAt(1).Port,
+                'Second media description port');
   finally
     Description.Free;
   end;
