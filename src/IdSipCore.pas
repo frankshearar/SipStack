@@ -30,6 +30,7 @@ uses
 
 type
   TIdSipAction = class;
+  TIdSipOutboundOptions = class;
   TIdSipOutboundRegistration = class;
   TIdSipSession = class;
   TIdSipSessionEvent = procedure(Session: TIdSipSession) of object;
@@ -55,6 +56,15 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String);
+  end;
+
+  IIdSipOptionsListener = interface(IIdSipActionListener)
+    ['{3F2ED4DF-4854-4255-B156-F4581AEAEDA3}']
+    procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
+                        Response: TIdSipResponse);
   end;
 
   // I provide a protocol for using a registrar. You send a REGISTER, and
@@ -198,6 +208,7 @@ type
     fAllowedSchemeList:      TStrings;
     fFrom:                   TIdSipFromHeader;
 
+    function  ConvertToHeader(ValueList: TStrings): String;
     function  GetFrom: TIdSipFromHeader;
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
@@ -225,6 +236,7 @@ type
     procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AllowedContentTypes: String;
+    function  AllowedEncodings: String;
     function  AllowedExtensions: String;
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
@@ -261,6 +273,8 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
+
+  TIdSipInboundOptions = class;
   TIdSipInboundRegistration = class;
   TIdSipOutboundSession = class;
 
@@ -291,12 +305,14 @@ type
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
                       Response: TIdSipResponse): TIdSipOutboundSession;
+    function  AddInboundOptions(Options: TIdSipRequest): TIdSipInboundOptions;
     function  AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
     function  AddInboundSession(Invite: TIdSipRequest;
                                 UsingSecureTransport: Boolean): TIdSipInboundSession;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
+    function  AddOptions: TIdSipOutboundOptions;
     function  AddOutboundSession: TIdSipOutboundSession;
     function  AddRegistration: TIdSipOutboundRegistration;
     function  CallIDFor(Registrar: TIdSipUri): String;
@@ -349,6 +365,7 @@ type
     function  CreateInvite(Dest: TIdSipAddressHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
+    function  CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CreateReInvite(Dialog: TIdSipDialog;
                              const Body: String;
@@ -357,6 +374,8 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  OptionsCount: Integer;
+    function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
@@ -419,12 +438,15 @@ type
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; virtual;
+    procedure SendRequest(Request: TIdSipRequest); virtual;
+    procedure SendResponse(Response: TIdSipResponse); virtual;
   public
     class function Method: String; virtual; abstract;
 
     constructor Create(UA: TIdSipUserAgentCore); virtual;
     destructor  Destroy; override;
 
+    function  IsOptions: Boolean; virtual;
     function  IsRegistration: Boolean; virtual;
     function  IsSession: Boolean; virtual;
     function  Match(Msg: TIdSipMessage): Boolean; virtual;
@@ -580,11 +602,41 @@ type
     procedure Terminate; override;
   end;
 
+  TIdSipOptions = class(TIdSipAction)
+  public
+    class function Method: String; override;
+
+    function  IsOptions: Boolean; override;
+    procedure Terminate; override;
+  end;
+
+  TIdSipInboundOptions = class(TIdSipOptions)
+  private
+    function DetermineAppropriateResponse: Cardinal;
+  public
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Options: TIdSipRequest); reintroduce;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
+  TIdSipOutboundOptions = class(TIdSipOptions)
+  private
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
+  protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+  public
+    procedure AddListener(const Listener: IIdSipOptionsListener);
+    procedure QueryOptions(Server: TIdSipAddressHeader);
+    procedure RemoveListener(const Listener: IIdSipOptionsListener);
+  end;
+
   TIdSipRegistration = class(TIdSipAction)
   public
     class function Method: String; override;
 
-    function IsRegistration: Boolean; override;
+    function  IsRegistration: Boolean; override;
+    procedure Terminate; override;
   end;
 
   TIdSipInboundRegistration = class(TIdSipRegistration)
@@ -623,24 +675,22 @@ type
                              MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
                                      Response: TIdSipResponse);
-    procedure Send(Request: TIdSipRequest);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; override;
+    procedure SendRequest(Request: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipUserAgentCore); override;
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
     procedure FindCurrentBindings(Registrar: TIdSipUri);
-    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
-    procedure Terminate; override;
     procedure Unregister(Registrar: TIdSipUri);
   end;
 
@@ -938,7 +988,12 @@ end;
 
 function TIdSipAbstractUserAgent.AllowedContentTypes: String;
 begin
-  Result := Self.AllowedContentTypeList.CommaText;
+  Result := Self.ConvertToHeader(Self.AllowedContentTypeList);
+end;
+
+function TIdSipAbstractUserAgent.AllowedEncodings: String;
+begin
+  Result := '';
 end;
 
 function TIdSipAbstractUserAgent.AllowedExtensions: String;
@@ -948,17 +1003,17 @@ end;
 
 function TIdSipAbstractUserAgent.AllowedLanguages: String;
 begin
-  Result := Self.AllowedLanguageList.CommaText;
+  Result := Self.ConvertToHeader(Self.AllowedLanguageList);
 end;
 
 function TIdSipAbstractUserAgent.AllowedMethods: String;
 begin
-  Result := Self.AllowedMethodList.CommaText;
+  Result := Self.ConvertToHeader(Self.AllowedMethodList);
 end;
 
 function TIdSipAbstractUserAgent.AllowedSchemes: String;
 begin
-  Result := Self.AllowedSchemeList.CommaText;
+  Result := Self.ConvertToHeader(Self.AllowedSchemeList);
 end;
 
 function TIdSipAbstractUserAgent.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
@@ -1139,6 +1194,11 @@ end;
 
 //* TIdSipAbstractUserAgent Private methods ************************************
 
+function TIdSipAbstractUserAgent.ConvertToHeader(ValueList: TStrings): String;
+begin
+  Result := StringReplace(ValueList.CommaText, ',', ', ', [rfReplaceAll]);
+end;
+
 function TIdSipAbstractUserAgent.GetFrom: TIdSipFromHeader;
 begin
   if not Assigned(fFrom) then
@@ -1267,7 +1327,9 @@ begin
 
   Self.AddAllowedContentType(SdpMimeType);
   Self.AddAllowedMethod(MethodBye);
+  Self.AddAllowedMethod(MethodCancel);
   Self.AddAllowedMethod(MethodInvite);
+  Self.AddAllowedMethod(MethodOptions);
   Self.AddAllowedScheme(SipScheme);
 
   Self.DoNotDisturb        := false;
@@ -1351,6 +1413,19 @@ begin
   end;
 end;
 
+function TIdSipUserAgentCore.CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
+begin
+  Result := Self.CreateRequest(Dest);
+  try
+    Result.Method := MethodOptions;
+    Result.CSeq.Method := Result.Method;
+
+    Result.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
+  except
+    FreeAndNil(Result);
+  end;
+end;
+
 function TIdSipUserAgentCore.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
 begin
   Result := Self.CreateRequest(Registrar);
@@ -1417,6 +1492,30 @@ begin
   Result := Self.AddRegistration;
 
   Result.RegisterWith(Registrar, Self.Contact);
+end;
+
+function TIdSipUserAgentCore.OptionsCount: Integer;
+var
+  I: Integer;
+begin
+  // Return the number of ongoing options queries
+  Self.ActionLock.Acquire;
+  try
+    Result := 0;
+
+    for I := 0 to Self.Actions.Count - 1 do
+      if Self.ActionAt(I).IsOptions
+        and not Self.ActionAt(I).IsTerminated then Inc(Result);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+function TIdSipUserAgentCore.QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
+begin
+  Result := Self.AddOptions;
+
+  Result.QueryOptions(Server);
 end;
 
 function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -1558,7 +1657,9 @@ begin
         Self.AddInboundSession(Request, Receiver.IsSecure)
     end
     else if Request.IsRegister then
-      Self.AddInboundRegistration(Request).ReceiveRequest(Request);
+      Self.AddInboundRegistration(Request).ReceiveRequest(Request)
+    else if Request.IsOptions then
+      Self.AddInboundOptions(Request).ReceiveRequest(Request);
   end;
 
   // TIdSipSession generates the response - 8.2.6
@@ -1675,6 +1776,22 @@ begin
   Self.NotifyOfChange;
 end;
 
+function TIdSipUserAgentCore.AddInboundOptions(Options: TIdSipRequest): TIdSipInboundOptions;
+begin
+  Result := TIdSipInboundOptions.Create(Self, Options);
+  try
+    Self.ActionLock.Acquire;
+    try
+      Self.Actions.Add(Result);
+    finally
+      Self.ActionLock.Release;
+    end;
+
+  except
+    FreeAndNil(Result);
+  end;
+end;
+
 function TIdSipUserAgentCore.AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
 begin
   Result := TIdSipInboundRegistration.Create(Self, Reg);
@@ -1731,6 +1848,24 @@ begin
     NewReg.CallID        := CallID;
     NewReg.Registrar.Uri := Registrar.Uri;
     NewReg.SequenceNo    := SequenceNo;
+  end;
+end;
+
+function TIdSipUserAgentCore.AddOptions: TIdSipOutboundOptions;
+begin
+  Result := TIdSipOutboundOptions.Create(Self);
+  try
+    Self.ActionLock.Acquire;
+    try
+      Self.Actions.Add(Result);
+    finally
+      Self.ActionLock.Release;
+    end;
+    Self.NotifyOfChange;
+  except
+    FreeAndNil(Result);
+
+    raise;
   end;
 end;
 
@@ -2033,6 +2168,11 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipAction.IsOptions: Boolean;
+begin
+  Result := false;
+end;
+
 function TIdSipAction.IsRegistration: Boolean;
 begin
   Result := false;
@@ -2045,7 +2185,7 @@ end;
 
 function TIdSipAction.Match(Msg: TIdSipMessage): Boolean;
 begin
-  Result := false;
+  Result := Self.CurrentRequest.Match(Msg);
 end;
 
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
@@ -2220,7 +2360,7 @@ begin
       ReInvite.LastHop.Branch := Self.UA.NextBranch;
       ReInvite.FirstContact.Assign(Response.FirstContact);
 
-      Self.UA.SendRequest(ReInvite);
+      Self.SendRequest(ReInvite);
     finally
       ReInvite.Free;
     end;
@@ -2231,6 +2371,16 @@ end;
 function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean;
 begin
   Result := false;
+end;
+
+procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
+begin
+  Self.UA.SendRequest(Request);
+end;
+
+procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
+begin
+  Self.UA.SendResponse(Response);
 end;
 
 //* TIdSipAction Private methods ***********************************************
@@ -2264,7 +2414,7 @@ begin
     AuthHeader.Username := Self.Username;
 
     Self.CurrentRequest.Assign(ReInvite);
-    Self.UA.SendRequest(ReInvite);
+    Self.SendRequest(ReInvite);
   finally
     ReInvite.Free;
   end;
@@ -2600,7 +2750,7 @@ begin
   try
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
-    Self.UA.SendRequest(Bye);
+    Self.SendRequest(Bye);
   finally
     Bye.Free;
   end;
@@ -2638,7 +2788,7 @@ begin
 
   OK := Self.UA.CreateResponse(Request, SIPOK);
   try
-    Self.UA.SendResponse(OK);
+    Self.SendResponse(OK);
   finally
     OK.Free;
   end;
@@ -2653,7 +2803,7 @@ begin
                                      SIPInternalServerError);
   try
     Response.StatusText := RSSIPRequestOutOfOrder;
-    Self.UA.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -2666,7 +2816,7 @@ begin
   Response := Self.UA.CreateResponse(Request,
                                      SIPRequestTerminated);
   try
-    Self.UA.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -2739,7 +2889,7 @@ begin
     finally
       Self.DialogLock.Release;
     end;
-    Self.UA.SendResponse(OkResponse);
+    Self.SendResponse(OkResponse);
     Self.OkTimer.Start;
   finally
     OkResponse.Free;
@@ -2756,7 +2906,7 @@ begin
                                                   SIPMovedTemporarily);
   try
     RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
-    Self.UA.SendResponse(RedirectResponse);
+    Self.SendResponse(RedirectResponse);
   finally
     RedirectResponse.Free;
   end;
@@ -2788,7 +2938,7 @@ begin
   BusyHereResponse := TIdSipResponse.InResponseTo(Self.CurrentRequest,
                                                   SIPBusyHere);
   try
-    Self.UA.SendResponse(BusyHereResponse);
+    Self.SendResponse(BusyHereResponse);
   finally
     BusyHereResponse.Free;
   end;
@@ -2799,7 +2949,7 @@ end;
 procedure TIdSipInboundSession.ResendLastResponse;
 begin
   if Assigned(Self.LastResponse) then
-    Self.UA.Dispatcher.Send(Self.LastResponse);
+    Self.SendResponse(Self.LastResponse);
 end;
 
 procedure TIdSipInboundSession.Terminate;
@@ -2824,7 +2974,7 @@ begin
     Response := Self.UA.CreateResponse(Self.CurrentRequest,
                                        SIPRequestTerminated);
     try
-      Self.UA.SendResponse(Response);
+      Self.SendResponse(Response);
     finally
       Response.Free;
     end;
@@ -2852,7 +3002,7 @@ begin
   TerminateResponse := Self.UA.CreateResponse(Self.CurrentRequest,
                                               SIPBusyHere);
   try
-    Self.UA.Dispatcher.Send(TerminateResponse);
+    Self.SendResponse(TerminateResponse);
   finally
     TerminateResponse.Free;
   end;
@@ -2893,7 +3043,7 @@ begin
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
       Self.CurrentRequest.Assign(Invite);
-      Self.UA.SendRequest(Self.CurrentRequest);
+      Self.SendRequest(Self.CurrentRequest);
     finally
       Invite.Free;
     end;
@@ -3035,7 +3185,7 @@ var
 begin
   Ack := Self.CurrentRequest.AckFor(Final);
   try
-    Self.UA.Dispatcher.Send(Ack);
+    Self.SendRequest(Ack);
   finally
     Ack.Free;
   end;
@@ -3047,7 +3197,7 @@ var
 begin
   Cancel := Self.CurrentRequest.CreateCancel;
   try
-    Self.UA.Dispatcher.Send(Cancel);
+    Self.SendRequest(Cancel);
   finally
     Cancel.Free;
   end;
@@ -3057,6 +3207,137 @@ procedure TIdSipOutboundSession.TerminateAfterSendingCancel;
 begin
   Self.MarkAsTerminated;
   Self.NotifyOfEndedSession(LocalCancel);
+end;
+
+//******************************************************************************
+//* TIdSipOptions                                                              *
+//******************************************************************************
+//* TIdSipOptions Public methods ***********************************************
+
+class function TIdSipOptions.Method: String;
+begin
+  Result := MethodOptions;
+end;
+
+function TIdSipOptions.IsOptions: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSipOptions.Terminate;
+begin
+  Self.UA.RemoveAction(Self);
+end;
+
+//******************************************************************************
+//* TIdSipInboundOptions                                                       *
+//******************************************************************************
+//* TIdSipInboundOptions Public methods ****************************************
+
+constructor TIdSipInboundOptions.Create(UA: TIdSipUserAgentCore;
+                                        Options: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.CurrentRequest.Assign(Options);
+end;
+
+procedure TIdSipInboundOptions.ReceiveRequest(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request, Self.DetermineAppropriateResponse);
+  try
+    Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
+    Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
+    Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
+    Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
+    Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
+
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+//* TIdSipInboundOptions Private methods ***************************************
+
+function TIdSipInboundOptions.DetermineAppropriateResponse: Cardinal;
+begin
+  Result := SIPOK;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundOptions                                                      *
+//******************************************************************************
+//* TIdSipOutboundOptions Public methods ***************************************
+
+procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipOutboundOptions.QueryOptions(Server: TIdSipAddressHeader);
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.UA.CreateOptions(Server);
+  try
+    Self.CurrentRequest.Assign(Options);
+    Self.SendRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
+procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+//* TIdSipOutboundOptions Protected methods ************************************
+
+procedure TIdSipOutboundOptions.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+//* TIdSipOutboundOptions Private methods **************************************
+
+procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  Copy:            TList;
+  CurrentBindings: TIdSipContacts;
+  I:               Integer;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Copy := TList.Create;
+    try
+      Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+
+      for I := 0 to Copy.Count - 1 do
+        IIdSipOptionsListener(Copy[I]).OnSuccess(Self, Response);
+    finally
+      Copy.Free;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
 end;
 
 //******************************************************************************
@@ -3072,6 +3353,11 @@ end;
 function TIdSipRegistration.IsRegistration: Boolean;
 begin
   Result := true;
+end;
+
+procedure TIdSipRegistration.Terminate;
+begin
+  Self.UA.RemoveAction(Self);
 end;
 
 //******************************************************************************
@@ -3127,7 +3413,7 @@ begin
           Date.Free;
         end;
 
-        Self.UA.SendResponse(Response);
+        Self.SendResponse(Response);
       finally
         Response.Free;
       end;
@@ -3139,7 +3425,7 @@ begin
     Bindings.Free;
   end;
 
-  Self.UA.RemoveAction(Self);
+  Self.Terminate;
 end;
 
 //* TIdSipInboundRegistration Private methods **********************************
@@ -3203,7 +3489,7 @@ begin
   Response := Self.UA.CreateResponse(Request, SIPIntervalTooBrief);
   try
     Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.UA.MinimumExpiryTime);
-    Self.UA.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3231,7 +3517,7 @@ var
 begin
   Response := Self.UA.CreateResponse(Request, StatusCode);
   try
-    Self.UA.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3244,7 +3530,7 @@ begin
   Response := Self.UA.CreateResponse(Request, SIPInternalServerError);
   try
     Response.StatusText := 'TIdSipRegistrar.RejectUnauthorized not yet implemented';
-    Self.UA.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3292,11 +3578,6 @@ begin
   end;
 end;
 
-function TIdSipOutboundRegistration.Match(Msg: TIdSipMessage): Boolean;
-begin
-  Result := Self.CurrentRequest.Match(Msg);
-end;
-
 procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
 var
   Request: TIdSipRequest;
@@ -3306,7 +3587,7 @@ begin
     Self.Bindings.Clear;
     Self.Bindings.Add(Bindings);
 
-    Self.Send(Request);
+    Self.SendRequest(Request);
   finally
     Request.Free;
   end;
@@ -3336,11 +3617,6 @@ begin
   end;
 end;
 
-procedure TIdSipOutboundRegistration.Terminate;
-begin
-  Self.UA.RemoveAction(Self);
-end;
-
 procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
 var
   RemovalBindings: TIdSipContacts;
@@ -3358,7 +3634,7 @@ begin
     try
       Request.FirstExpires.NumericValue := 0;
 
-      Self.Send(Request);
+      Self.SendRequest(Request);
     finally
       Request.Free;
     end;
@@ -3425,7 +3701,7 @@ begin
 end;
 
 function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                       UsingSecureTransport: Boolean): Boolean;
+                                                               UsingSecureTransport: Boolean): Boolean;
 begin
   Result := false;
 
@@ -3436,10 +3712,17 @@ begin
   end;
 end;
 
+procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
+begin
+  Self.CurrentRequest.Assign(Request);
+
+  inherited SendRequest(Request);
+end;
+
 //* TIdSipOutboundRegistration Private methods *********************************
 
 function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
-                                           Bindings: TIdSipContacts): TIdSipRequest;
+                                                   Bindings: TIdSipContacts): TIdSipRequest;
 var
   OldContacts: TIdSipContacts;
   ToHeader: TIdSipToHeader;
@@ -3513,7 +3796,7 @@ begin
     end;
 
     Request.FirstExpires.NumericValue := MinimumExpiry;
-    Self.Send(Request);
+    Self.SendRequest(Request);
   finally
     Request.Free;
   end;
@@ -3540,7 +3823,7 @@ begin
       else
         Request.FirstRequire.RemoveValues(Response.FirstUnsupported);
 
-      Self.Send(Request);
+      Self.SendRequest(Request);
     finally
       Request.Free;
     end;
@@ -3548,13 +3831,5 @@ begin
     Bindings.Free;
   end;
 end;
-
-procedure TIdSipOutboundRegistration.Send(Request: TIdSipRequest);
-begin
-  Self.CurrentRequest.Assign(Request);
-
-  Self.UA.SendRequest(Request);
-end;
-
 
 end.

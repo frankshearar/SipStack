@@ -95,6 +95,7 @@ type
                                 Invite: TIdSipRequest);
     procedure SimulateRemoteAck(Response: TIdSipResponse);
     procedure SimulateRemoteBye(Dialog: TIdSipDialog);
+    procedure SimulateRemoteOptions;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -107,6 +108,7 @@ type
     procedure TestCreateInvite;
     procedure TestCreateInviteInsideDialog;
     procedure TestCreateInviteWithBody;
+    procedure TestCreateOptions;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateReInvite;
@@ -130,6 +132,7 @@ type
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
     procedure TestNotificationOfNewSession;
+    procedure TestOptions;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
@@ -160,9 +163,14 @@ type
     function  CreateAction: TIdSipAction; virtual; abstract;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteMovedPermanently(const SipUrl: String);
+    procedure SimulateRemoteOK;
+    procedure SimulateRemoteResponse(StatusCode: Cardinal);
   public
     procedure SetUp; override;
   published
+    procedure TestIsOptions; virtual;
+    procedure TestIsRegistration; virtual;
+    procedure TestIsSession; virtual;
 {
     procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
     procedure TestReceiveResponseBadExtensionWithoutRequires;
@@ -170,6 +178,8 @@ type
   end;
 
   TestTIdSipSession = class(TestTIdSipAction)
+  published
+    procedure TestIsSession; override;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -324,8 +334,36 @@ type
     procedure TestTimerIntervalIncreases;
   end;
 
-  TestTIdSipOutboundRegistration = class(TestTIdSipAction,
-                                 IIdSipRegistrationListener)
+  TestTIdSipInboundOptions = class(TestTIdSipAction)
+  published
+    procedure TestIsOptions; override;
+    procedure TestIsRegistration; override;
+    procedure TestIsSession; override;
+  end;
+
+  TestTIdSipOutboundOptions = class(TestTIdSipAction)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestAddListener;
+    procedure TestIsOptions; override;
+    procedure TestRemoveListener;
+  end;
+
+  TestTIdSipRegistration = class(TestTIdSipAction)
+  published
+    procedure TestIsRegistration; override;
+  end;
+
+  TestTIdSipInboundRegistration = class(TestTIdSipRegistration)
+  published
+    procedure TestIsOptions; override;
+    procedure TestIsRegistration; override;
+    procedure TestIsSession; override;
+  end;
+
+  TestTIdSipOutboundRegistration = class(TestTIdSipRegistration,
+                                         IIdSipRegistrationListener)
   private
     Challenged:  Boolean;
     Contacts:    TIdSipContacts;
@@ -345,9 +383,7 @@ type
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure SimulateRemoteIntervalTooBrief;
-    procedure SimulateRemoteOK;
     procedure SimulateRemoteRejectProxyAuthenticationRequired;
-    procedure SimulateRemoteResponse(StatusCode: Cardinal);
   protected
     function CreateAction: TIdSipAction; override;
   public
@@ -391,6 +427,9 @@ begin
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
+  Result.AddTest(TestTIdSipInboundOptions.Suite);
+  Result.AddTest(TestTIdSipOutboundOptions.Suite);
+  Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
 end;
 
@@ -1050,6 +1089,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.SimulateRemoteOptions;
+var
+  Options: TIdSipRequest;
+  Temp:    String;
+begin
+  Options := Self.Core.CreateOptions(Self.Destination);
+  try
+    // Swop To & From because this comes from the network
+    Temp := Options.From.FullValue;
+    Options.From.Value := Options.ToHeader.FullValue;
+    Options.ToHeader.Value := Temp;
+
+    Self.Dispatcher.Transport.FireOnRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
 //* TestTIdSipUserAgentCore Published methods **********************************
 
 procedure TestTIdSipUserAgentCore.TestAddObserver;
@@ -1228,6 +1285,23 @@ begin
                 'Content-Disposition value');
   finally
     Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateOptions;
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.Core.CreateOptions(Self.Destination);
+  try
+    CheckEquals(MethodOptions, Options.Method,      'Incorrect method');
+    CheckEquals(MethodOptions, Options.CSeq.Method, 'Incorrect CSeq method');
+    Check(Options.HasHeader(AcceptHeader),          'Missing Accept header');
+    CheckEquals(Self.Core.AllowedContentTypes,
+                Options.FirstHeader(AcceptHeader).Value,
+                'Accept value');
+  finally
+    Options.Free;
   end;
 end;
 
@@ -1690,6 +1764,50 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Self.OnInboundCallFired, 'UI not notified of new session');
+end;
+
+procedure TestTIdSipUserAgentCore.TestOptions;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteOptions;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  Check(Response.HasHeader(AllowHeader),
+        'No Allow header');
+  CheckEquals(Self.Core.AllowedMethods,
+              Response.FirstHeader(AllowHeader).FullValue,
+              'Allow header');
+
+
+  Check(Response.HasHeader(AcceptHeader),
+        'No Accept header');
+  CheckEquals(Self.Core.AllowedContentTypes,
+              Response.FirstHeader(AcceptHeader).FullValue,
+              'Accept header');
+
+  Check(Response.HasHeader(AcceptEncodingHeader),
+        'No Accept-Encoding header');
+  CheckEquals(Self.Core.AllowedEncodings,
+              Response.FirstHeader(AcceptEncodingHeader).FullValue,
+              'Accept-Encoding header');
+
+  Check(Response.HasHeader(AcceptLanguageHeader),
+        'No Accept-Language header');
+  CheckEquals(Self.Core.AllowedLanguages,
+              Response.FirstHeader(AcceptLanguageHeader).FullValue,
+              'Accept-Language header');
+
+  Check(Response.HasHeader(SupportedHeaderFull),
+        'No Supported header');
+  CheckEquals(Self.Core.AllowedExtensions,
+              Response.FirstHeader(SupportedHeaderFull).FullValue,
+              'Supported header value');
 end;
 
 procedure TestTIdSipUserAgentCore.TestReceiveByeForUnmatchedDialog;
@@ -2177,7 +2295,56 @@ begin
   end;
 end;
 
+procedure TestTIdSipAction.SimulateRemoteOK;
+begin
+  Self.SimulateRemoteResponse(SIPOK);
+end;
+
+procedure TestTIdSipAction.SimulateRemoteResponse(StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
+                                       StatusCode);
+  try
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 //* TestTIdSipAction Published methods *****************************************
+
+procedure TestTIdSipAction.TestIsOptions;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(not Action.IsOptions,
+        Action.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipAction.TestIsRegistration;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(not Action.IsRegistration,
+        Action.ClassName + ' marked as a Registration');
+end;
+
+procedure TestTIdSipAction.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(not Action.IsSession,
+        Action.ClassName + ' marked as a Session');
+end;
+
 {
 procedure TestTIdSipAction.TestReceiveResponseBadExtension;
 var
@@ -2218,6 +2385,21 @@ begin
   Check(Self.ActionFailed, ActionClassName + ' failure not reported');
 end;
 }
+
+//******************************************************************************
+//* TestTIdSipSession                                                          *
+//******************************************************************************
+//* TestTIdSipSession Public methods *******************************************
+
+procedure TestTIdSipSession.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  Action := Self.CreateAction;
+  // Self.UA owns the action!
+  Check(Action.IsSession,
+        Action.ClassName + ' not marked as a Session');
+end;
 
 //******************************************************************************
 //* TestTIdSipInboundSession                                                   *
@@ -3522,6 +3704,186 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipInboundOptions                                                   *
+//******************************************************************************
+//* TestTIdSipInboundOptions Public methods ************************************
+
+procedure TestTIdSipInboundOptions.TestIsOptions;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
+  try
+    Check(Action.IsOptions,
+          Action.ClassName + 'not marked as an Options');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundOptions.TestIsRegistration;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsRegistration,
+          Action.ClassName + ' marked as a Registration');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundOptions.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsSession,
+          Action.ClassName + ' marked as a Session');
+  finally
+    Action.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundOptions                                                  *
+//******************************************************************************
+//* TestTIdSipOutboundOptions Public methods ***********************************
+
+procedure TestTIdSipOutboundOptions.TestAddListener;
+var
+  L1, L2:  TIdSipTestOptionsListener;
+  Options: TIdSipOutboundOptions;
+begin
+  Options := Self.Core.QueryOptions(Self.Core.From);
+
+  L1 := TIdSipTestOptionsListener.Create;
+  try
+    L2 := TIdSipTestOptionsListener.Create;
+    try
+      Options.AddListener(L1);
+      Options.AddListener(L2);
+
+      Self.SimulateRemoteOK;
+
+      Check(L1.Success, 'L1 not informed of success');
+      Check(L2.Success, 'L2 not informed of success');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundOptions.TestIsOptions;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(Action.IsOptions,
+        Action.ClassName + ' marked as an Options');
+end;
+
+procedure TestTIdSipOutboundOptions.TestRemoveListener;
+var
+  L1, L2:       TIdSipTestOptionsListener;
+  Options: TIdSipOutboundOptions;
+begin
+  Options := Self.Core.QueryOptions(Self.Core.From);
+
+  L1 := TIdSipTestOptionsListener.Create;
+  try
+    L2 := TIdSipTestOptionsListener.Create;
+    try
+      Options.AddListener(L1);
+      Options.AddListener(L2);
+      Options.RemoveListener(L2);
+
+      Self.SimulateRemoteOK;
+
+      Check(L1.Success,
+            'First listener not notified');
+      Check(not L2.Success,
+            'Second listener erroneously notified, ergo not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+//* TestTIdSipOutboundOptions Protected methods ********************************
+
+function TestTIdSipOutboundOptions.CreateAction: TIdSipAction;
+begin
+  Result := Self.Core.QueryOptions(Self.Core.From);
+end;
+
+//******************************************************************************
+//*  TestTIdSipRegistration                                                    *
+//******************************************************************************
+//*  TestTIdSipRegistration Public methods *************************************
+
+procedure TestTIdSipRegistration.TestIsRegistration;
+var
+  Action: TIdSipAction;
+begin
+  // Self.UA owns the action!
+  Action := Self.CreateAction;
+  Check(Action.IsRegistration,
+        Action.ClassName + ' marked as a Registration');
+end;
+
+//******************************************************************************
+//*  TestTIdSipInboundRegistration                                             *
+//******************************************************************************
+//*  TestTIdSipInboundRegistration Public methods ******************************
+
+procedure TestTIdSipInboundRegistration.TestIsOptions;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsOptions,
+          Action.ClassName + ' marked as an Options');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundRegistration.TestIsRegistration;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
+  try
+    Check(Action.IsRegistration,
+          Action.ClassName + 'not marked as a Registration');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundRegistration.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsSession,
+          Action.ClassName + ' marked as a Session');
+  finally
+    Action.Free;
+  end;
+end;
+
+//******************************************************************************
 //*  TestTIdSipOutboundRegistration                                            *
 //******************************************************************************
 //*  TestTIdSipOutboundRegistration Public methods *****************************
@@ -3627,11 +3989,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundRegistration.SimulateRemoteOK;
-begin
-  Self.SimulateRemoteResponse(SIPOK);
-end;
-
 procedure TestTIdSipOutboundRegistration.SimulateRemoteRejectProxyAuthenticationRequired;
 var
   Response: TIdSipResponse;
@@ -3641,19 +3998,6 @@ begin
   try
     Response.AddHeader(ProxyAuthenticateHeader).Value := 'Digest realm="' + Self.Core.Realm + '"';
 
-    Self.Dispatcher.Transport.FireOnResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegistration.SimulateRemoteResponse(StatusCode: Cardinal);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Registrar.CreateResponse(Self.Dispatcher.Transport.LastRequest,
-                                            StatusCode);
-  try
     Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;

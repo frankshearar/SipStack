@@ -708,7 +708,9 @@ begin
   Tran := Self.FindTransaction(Response, false);
 
   if Assigned(Tran) then
-    Tran.SendResponse(Response);
+    Tran.SendResponse(Response)
+  else
+    Self.Send(Response);
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
