@@ -65,8 +65,10 @@ begin
   // This test just makes sure nothing blows up.
   Check(Self.Random.NextCardinal(10) <= 10,
         'NextCardinal(10)');
-  Check(Self.Random.NextCardinal(High(Cardinal)) <= High(Cardinal),
-        'NextCardinal(High(Cardinal))');
+
+  // These make sure that NextCardinal works with all values possible Cardinals.
+  Self.Random.NextCardinal(0);
+  Self.Random.NextCardinal(High(Cardinal));
 end;
 
 procedure TestTIdRandomNumber.TestNextHighestPowerOf2;
