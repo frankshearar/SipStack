@@ -95,7 +95,6 @@ type
     HighPortServer:         TIdSipTcpServer;
     LowPortServer:          TIdSipTcpServer;
     MethodCallCount:        Cardinal;
-    Parser:                 TIdSipParser;
     ServerReceivedResponse: Boolean;
     SipClient:              TIdSipTcpClient;
 
@@ -313,7 +312,6 @@ begin
   inherited SetUp;
 
   Self.Client         := TIdTcpClient.Create(nil);
-  Self.Parser         := TIdSipParser.Create;
   Self.HighPortServer := Self.ServerType.Create(nil);
   Self.LowPortServer  := Self.ServerType.Create(nil);
   Self.SipClient      := Self.HighPortServer.CreateClient;
@@ -356,7 +354,6 @@ begin
   Self.HighPortServer.DestroyClient(Self.SipClient);
   Self.LowPortServer.Free;
   Self.HighPortServer.Free;
-  Self.Parser.Free;
   Self.Client.Free;
 
   inherited TearDown;
@@ -534,7 +531,7 @@ procedure TestTIdSipTcpServer.Send200OK(Sender: TObject;
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
+  Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
   try
     Response.StatusCode := SIPOK;
     LowPortServer.SendResponse(Response);
@@ -562,7 +559,7 @@ var
 begin
   Self.CheckingRequestEvent := Self.RaiseException;
 
-  Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
+  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
     SipClient.OnResponse  := Self.CheckInternalServerError;
     SipClient.Host        := '127.0.0.1';
@@ -674,7 +671,7 @@ var
 begin
   Self.CheckingResponseEvent := Self.CheckSendResponsesDownClosedConnection;
 
-  Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
+  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
     Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
     Self.SipClient.Host        := '127.0.0.1';
@@ -692,7 +689,7 @@ begin
     // Not exactly an ideal situation.
     IdGlobal.Sleep(500);
 
-    Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
+    Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
     try
       Response.StatusCode := SIPOK;
       Self.LowPortServer.SendResponse(Response);
@@ -728,7 +725,7 @@ begin
       try
         Self.LowPortServer.AddMessageListener(LowPortListener);
         try
-          Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
+          Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
           try
             Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
             Self.SipClient.Host        := Self.HighPortServer.Bindings[0].IP;
@@ -747,7 +744,7 @@ begin
             // to be completely torn down.
             IdGlobal.Sleep(500);
 
-            Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
+            Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
             try
               Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
               Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
@@ -784,7 +781,7 @@ var
 begin
   Self.CheckingRequestEvent := Self.Send200OK;
 
-  Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
+  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
     SipClient := Self.HighPortServer.CreateClient;
     try

@@ -49,7 +49,7 @@ type
     InputText: TMemo;
     TextTimer: TTimer;
     BasePort: TEdit;
-    RegistrarUri: TEdit;
+    Password: TEdit;
     LowerInput: TPanel;
     Splitter4: TSplitter;
     OutputText: TMemo;
@@ -77,7 +77,7 @@ type
     procedure OptionsClick(Sender: TObject);
     procedure ContactUriChange(Sender: TObject);
     procedure UseAsProxyClick(Sender: TObject);
-    procedure RegistrarUriChange(Sender: TObject);
+    procedure PasswordChange(Sender: TObject);
     procedure HostNameChange(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
@@ -237,7 +237,7 @@ begin
   Self.UA.Contact.Value := Self.ContactUri.Text;
   Self.UA.From.Value    := Self.ContactUri.Text;
   Self.UA.HasProxy := Self.UseAsProxy.Checked;
-  Self.UA.Proxy.Uri := Self.RegistrarUri.Text + ';lr';
+  Self.UA.Proxy.Uri := Self.TargetUri.Text + ';lr';
 
   Self.fPayloadProcessor := TIdSdpPayloadProcessor.Create;
 
@@ -411,6 +411,7 @@ begin
 //  Session.RejectCallBusy;
   Session.AcceptCall(Self.PayloadProcessor.LocalSessionDescription,
                      SdpMimeType);
+
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -670,7 +671,7 @@ procedure TrnidSpike.RegisterClick(Sender: TObject);
 var
   Registrar: TIdSipUri;
 begin
-  Registrar := TIdSipUri.Create(Self.RegistrarUri.Text);
+  Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
     Self.UA.RegisterWith(Registrar).AddListener(Self);
   finally
@@ -687,7 +688,7 @@ procedure TrnidSpike.UnregisterClick(Sender: TObject);
 var
   Registrar: TIdSipUri;
 begin
-  Registrar := TIdSipUri.Create(Self.RegistrarUri.Text);
+  Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
     Self.UA.UnregisterFrom(Registrar).AddListener(Self);
   finally
@@ -719,11 +720,11 @@ begin
   Self.UA.HasProxy := Self.UseAsProxy.Checked;
 end;
 
-procedure TrnidSpike.RegistrarUriChange(Sender: TObject);
+procedure TrnidSpike.PasswordChange(Sender: TObject);
 var
   Uri: String;
 begin
-  Uri := Self.RegistrarUri.Text;
+  Uri := Self.TargetUri.Text;
 
   if Self.UseLooseRouting.Checked then
     Uri := Uri + ';lr';

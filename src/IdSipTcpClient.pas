@@ -20,11 +20,12 @@ type
                                   R: TIdSipResponse;
                                   ReceivedFrom: TIdSipConnectionBindings) of object;
 
+  // Note that the Timeout property determines the maximum length of time to
+  // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fOnFinished: TNotifyEvent;
     fOnResponse: TIdSipResponseEvent;
-    fTimeout:    Cardinal;
 
     procedure DoOnFinished;
     procedure DoOnResponse(R: TIdSipResponse;
@@ -40,8 +41,8 @@ type
     procedure Send(Request: TIdSipRequest); overload;
     procedure Send(Response: TIdSipResponse); overload;
 
-    property OnFinished:    TNotifyEvent        read fOnFinished write fOnFinished;
-    property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property OnFinished: TNotifyEvent        read fOnFinished write fOnFinished;
+    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
@@ -122,7 +123,6 @@ procedure TIdSipTcpClient.ReadResponses;
 var
   Finished:     Boolean;
   S:            String;
-  P:            TIdSipParser;
   R:            TIdSipResponse;
   ReceivedFrom: TIdSipConnectionBindings;
 begin
@@ -134,30 +134,29 @@ begin
   ReceivedFrom.PeerPort  := Self.Socket.Binding.PeerPort;
 
   try
-    P := TIdSipParser.Create;
-    try
-      while (not Finished) do begin
-        S := Self.ReadResponse(Finished);
+    while (not Finished) do begin
+      S := Self.ReadResponse(Finished);
 
-        if (S <> '') then begin
-          R := P.ParseAndMakeResponse(S);
+      if (S <> '') then begin
+        R := TIdSipMessage.ReadResponseFrom(S);
+        try
           try
             R.Body := Self.ReadString(R.ContentLength);
-            Self.DoOnResponse(R, ReceivedFrom);
-
-            Finished := R.IsFinal;
-          finally
-            R.Free;
+          except
+            on EIdConnClosedGracefully do;
           end;
+          Self.DoOnResponse(R, ReceivedFrom);
+
+          Finished := R.IsFinal;
+        finally
+          R.Free;
         end;
       end;
-    finally
-      P.Free;
     end;
   except
     on EIdConnClosedGracefully do;
   end;
-  
+
   Self.DoOnFinished;
 end;
 

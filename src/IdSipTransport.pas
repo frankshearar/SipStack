@@ -423,7 +423,8 @@ var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
   Assert(not Request.IsMalformed,
-         'A Transport must NEVER send invalid requests up the stack');
+         'A Transport must NEVER send invalid requests up the stack ('
+       + Request.ParseFailReason + ')');
 
   Notification := TIdSipTransportReceiveRequestMethod.Create;
   try
@@ -441,7 +442,8 @@ var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
   Assert(not Response.IsMalformed,
-         'A Transport must NEVER send invalid responses up the stack');
+         'A Transport must NEVER send invalid responses up the stack ('
+       + Response.ParseFailReason + ')');
 
   Notification := TIdSipTransportReceiveResponseMethod.Create;
   try

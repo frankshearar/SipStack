@@ -213,6 +213,8 @@ type
                                                   R: TIdSipRequest);
     procedure CheckMaddrUser(Sender: TObject;
                              R: TIdSipResponse);
+    procedure CheckMissingContentLength(Sender: TObject;
+                                        R: TIdSipRequest);
     procedure NoteSourcePort(Sender: TObject;
                              R: TIdSipRequest);
     procedure OnMalformedMessage(const Msg: String;
@@ -237,6 +239,7 @@ type
     procedure TestIsSecure;
     procedure TestLeaveNonRportRequestsUntouched;
     procedure TestMaddrUsed;
+    procedure TestMissingContentLength;
     procedure TestRespectRport;
     procedure TestRportParamFilledIn;
     procedure TestRportListening;
@@ -596,8 +599,6 @@ begin
   Self.LowPortTransport.Port     := Self.DefaultPort;
   Self.LowPortTransport.Start;
 
-  Self.Parser := TIdSipParser.Create;
-
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy  := Self.LowPortTransport.Address;
   Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
@@ -619,7 +620,6 @@ begin
   Self.RecvdRequest.Free;
   Self.Response.Free;
   Self.Request.Free;
-  Self.Parser.Free;
 
   Self.LowPortTransport.Stop;
   Self.HighPortTransport.Stop;
@@ -1558,6 +1558,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipUDPTransport.CheckMissingContentLength(Sender: TObject;
+                                                           R: TIdSipRequest);
+begin
+  try
+    Check(R.HasHeader(ContactHeaderFull),
+          'Content-Length not added');
+    CheckEquals('foofoo',
+                R.Body,
+                'Body');
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipUDPTransport.NoteSourcePort(Sender: TObject;
                                                 R: TIdSipRequest);
 begin
@@ -1677,6 +1695,22 @@ begin
   finally
     Self.MaddrTransport.Stop;
   end;
+end;
+
+procedure TestTIdSipUDPTransport.TestMissingContentLength;
+begin
+  Self.CheckingRequestEvent := Self.CheckMissingContentLength;
+
+  Self.SendMessage('INVITE sip:foo SIP/2.0'#13#10
+                 + 'Via: SIP/2.0/127.0.0.1;branch=' + BranchMagicCookie + 'f00L'#13#10
+                 + 'Call-ID: foo'#13#10
+                 + 'CSeq: 1 INVITE'#13#10
+                 + 'From: sip:foo'#13#10
+                 + 'To: sip:foo'#13#10
+                 + #13#10
+                 + 'foofoo');
+
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipUDPTransport.TestRespectRport;

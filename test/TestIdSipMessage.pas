@@ -27,8 +27,9 @@ type
 
   TIdSipTrivialMessage = class(TIdSipMessage)
   protected
-    function FirstLine: String; override;
-    function MatchRequest(Request: TIdSipRequest): Boolean; override;
+    function  FirstLine: String; override;
+    function  MatchRequest(Request: TIdSipRequest): Boolean; override;
+    procedure ParseStartLine(Parser: TIdSipParser); override;
   public
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
@@ -38,8 +39,12 @@ type
   TestTIdSipMessage = class(TTestCaseSip)
   private
     Msg: TIdSipMessage;
+
   protected
     procedure AddRequiredHeaders(Msg: TIdSipMessage);
+    procedure CheckBasicMessage(Msg: TIdSipMessage;
+                                CheckBody: Boolean = true);
+    function  MessageType: TIdSipMessageClass; virtual; abstract;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -57,6 +62,7 @@ type
     procedure TestFirstRequire;
     procedure TestHasExpiry;
     procedure TestIsMalformedContentLength;
+    procedure TestIsMalformedMalformedHeader;
     procedure TestIsMalformedMissingContentType;
     procedure TestIsMalformedMissingCallID;
     procedure TestIsMalformedMissingCseq;
@@ -89,6 +95,11 @@ type
   private
     Request:  TIdSipRequest;
     Response: TIdSipResponse;
+
+    procedure CheckBasicRequest(Msg: TIdSipMessage;
+                                CheckBody: Boolean = true);
+  protected
+    function MessageType: TIdSipMessageClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -112,6 +123,9 @@ type
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
+    procedure TestIsMalformedCSeqMethod;
+    procedure TestIsMalformedSipVersion;
+    procedure TestIsMalformedMethod;
     procedure TestIsMalformedMissingVia;
     procedure TestIsAck;
     procedure TestIsBye;
@@ -132,6 +146,12 @@ type
     procedure TestIsRequest;
     procedure TestMatchSipsakOptions;
     procedure TestNewRequestHasContentLength;
+    procedure TestParse;
+    procedure TestParseCompoundHeader;
+    procedure TestParseFoldedHeader;
+    procedure TestParseLeadingBlankLines;
+    procedure TestParseMalformedRequestLine;
+    procedure TestParseWithRequestUriInAngleBrackets;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
@@ -142,6 +162,11 @@ type
     Contact:  TIdSipContactHeader;
     Request:  TIdSipRequest;
     Response: TIdSipResponse;
+
+    procedure CheckBasicResponse(Msg: TIdSipMessage;
+                                 CheckBody: Boolean = true);
+  protected
+    function MessageType: TIdSipMessageClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -171,11 +196,16 @@ type
     procedure TestInResponseToTryingWithTimestamps;
     procedure TestInResponseToWithContact;
     procedure TestIsAuthenticationChallenge;
+    procedure TestIsMalformedStatusCode;
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
     procedure TestIsRequest;
     procedure TestIsTrying;
+    procedure TestParse;
+    procedure TestParseEmptyString;
+    procedure TestParseFoldedHeader;
+    procedure TestParseLeadingBlankLines;
   end;
 
   TestTIdSipResponseList = class(TTestCase)
@@ -197,7 +227,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, TestMessages;
+  Classes, IdSimpleParser, IdSipConsts, TestMessages;
 
 const
   AllMethods: array[1..7] of String = (MethodAck, MethodBye, MethodCancel,
@@ -224,7 +254,6 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipResponseList.Suite);
@@ -346,6 +375,10 @@ begin
   Result := false;
 end;
 
+procedure TIdSipTrivialMessage.ParseStartLine(Parser: TIdSipParser);
+begin
+end;
+
 //******************************************************************************
 //* TestTIdSipMessage                                                          *
 //******************************************************************************
@@ -355,7 +388,7 @@ procedure TestTIdSipMessage.SetUp;
 begin
   inherited SetUp;
 
-  Self.Msg := TIdSipTrivialMessage.Create;
+  Self.Msg := Self.MessageType.Create;
 end;
 
 procedure TestTIdSipMessage.TearDown;
@@ -374,6 +407,49 @@ begin
   Msg.AddHeader(FromHeaderFull).Value   := 'sip:foo';
   Msg.AddHeader(ToHeaderFull).Value     := 'sip:foo';
   Msg.AddHeader(ViaHeaderFull).Value    := 'SIP/2.0/UDP foo';
+end;
+
+procedure TestTIdSipMessage.CheckBasicMessage(Msg: TIdSipMessage;
+                                             CheckBody: Boolean = true);
+begin
+  CheckEquals('SIP/2.0',                              Msg.SIPVersion,              'SipVersion');
+  CheckEquals(29,                                     Msg.ContentLength,           'ContentLength');
+  CheckEquals('text/plain',                           Msg.ContentType,             'ContentType');
+  CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Msg.CallID,                  'CallID');
+  CheckEquals('Wintermute',                           Msg.ToHeader.DisplayName,    'ToHeader.DisplayName');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Msg.ToHeader.Address.URI,    'ToHeader.Address.GetFullURI');
+  CheckEquals(';tag=1928301775',                      Msg.ToHeader.ParamsAsString, 'Msg.ToHeader.ParamsAsString');
+  CheckEquals('Case',                                 Msg.From.DisplayName,        'From.DisplayName');
+  CheckEquals('sip:case@fried.neurons.org',           Msg.From.Address.URI,        'From.Address.GetFullURI');
+  CheckEquals(';tag=1928301774',                      Msg.From.ParamsAsString,     'Msg.From.ParamsAsString');
+  CheckEquals(314159,                                 Msg.CSeq.SequenceNo,         'Msg.CSeq.SequenceNo');
+  CheckEquals('INVITE',                               Msg.CSeq.Method,             'Msg.CSeq.Method');
+
+  CheckEquals(1,                  Msg.Path.Length,              'Path.Length');
+  CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
+  Check      (sttTCP =            Msg.LastHop.Transport,        'LastHop.Transport');
+  CheckEquals('gw1.leo-ix.org',   Msg.LastHop.SentBy,           'LastHop.SentBy');
+  CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
+  CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
+
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
+              Msg.FirstHeader(ToHeaderFull).AsString,
+              'To');
+  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
+              Msg.FirstHeader(FromHeaderFull).AsString,
+              'From');
+  CheckEquals('CSeq: 314159 INVITE',
+              Msg.FirstHeader(CSeqHeader).AsString,
+              'CSeq');
+  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',
+              Msg.FirstContact.AsString,
+              'Contact');
+  CheckEquals('Content-Type: text/plain',
+              Msg.FirstHeader(ContentTypeHeaderFull).AsString,
+              'Content-Type');
+
+  if CheckBody then
+    CheckEquals(BasicBody, Msg.Body, 'message-body');
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
@@ -599,6 +675,40 @@ begin
   Self.Msg.ContentLength := 3;
   Check(not Self.Msg.IsMalformed,
         'Content-Length = 3; body = ''foo''');
+end;
+
+procedure TestTIdSipMessage.TestIsMalformedMalformedHeader;
+const
+  // Note the malformed Expires header
+  MalformedMessage = 'SIP/2.0 200 OK'#13#10
+                   + 'Expires: a'#13#10
+                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                   + 'Max-Forwards:     70'#13#10
+                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                   + 'CSeq:    1 INVITE'#13#10
+                   + #13#10;
+var
+  ExpectedReason: String;
+  Res:            TIdSipResponse;
+begin
+  ExpectedReason := Format(MalformedToken, [ExpiresHeader, 'a']);
+
+  Res := TIdSipMessage.ReadResponseFrom(MalformedMessage);
+  try
+    Check(Res.IsMalformed,
+          'Response not marked as invalid');
+
+    CheckEquals(ExpectedReason,
+                Res.ParseFailReason,
+                'Unexpected parse fail reason');
+
+    Check(Res.HasHeader(CSeqHeader),
+          'The bad syntax bailed us out of parsing the rest of the message');
+  finally
+    Res.Free;
+  end;
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingContentType;
@@ -983,6 +1093,10 @@ procedure TestTIdSipRequest.SetUp;
 begin
   inherited SetUp;
 
+  Self.Msg.SIPVersion := SIPVersion;
+  (Self.Msg as TIdSipRequest).Method := 'foo';
+  (Self.Msg as TIdSipRequest).RequestUri.Uri := 'sip:foo';
+
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipTestResources.CreateBasicResponse;
 end;
@@ -993,6 +1107,32 @@ begin
   Self.Request.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSipRequest Protected methods ****************************************
+
+function TestTIdSipRequest.MessageType: TIdSipMessageClass;
+begin
+  Result := TIdSipRequest;
+end;
+
+//* TestTIdSipRequest Private methods ******************************************
+
+procedure TestTIdSipRequest.CheckBasicRequest(Msg: TIdSipMessage;
+                                             CheckBody: Boolean = true);
+begin
+  CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
+
+  CheckEquals('INVITE',
+              (Msg as TIdSipRequest).Method,
+              'Method');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
+              (Msg as TIdSipRequest).RequestUri.URI,
+              'Request-URI');
+  CheckEquals(70, (Msg as TIdSipRequest).MaxForwards, 'MaxForwards');
+  CheckEquals(9,  Msg.HeaderCount, 'Header count');
+
+  Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
@@ -1180,8 +1320,7 @@ procedure TestTIdSipRequest.TestAsString;
 var
   Expected: TStringList;
   Received: TStringList;
-  Parser:   TIdSipParser;
-  Str:      TStringStream;
+  Req:      TIdSipRequest;
 begin
   Expected := TStringList.Create;
   try
@@ -1192,18 +1331,11 @@ begin
     try
       Received.Text := Self.Request.AsString;
 
-      Parser := TIdSipParser.Create;
+      Req := TIdSipMessage.ReadRequestFrom(Self.Request.AsString);
       try
-        Str := TStringStream.Create(Received.Text);
-        try
-          Parser.Source := Str;
-
-          Parser.ParseRequest(Self.Request);
-        finally
-          Str.Free;
-        end;
+        Check(not Req.IsMalformed, 'Sanity check AsString');
       finally
-        Parser.Free;
+        Req.Free;
       end;
 
       Received.Sort;
@@ -1383,6 +1515,58 @@ begin
 
   Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
   Check(Self.Request.HasSipsUri, 'sips URI');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedCSeqMethod;
+begin
+  Self.Request.Method := MethodInvite;
+  Self.Request.CSeq.Method := Self.Request.Method;
+  Check(not Self.Request.IsMalformed,
+       'CSeq method matches request method');
+
+  Self.Request.CSeq.Method := Self.Request.CSeq.Method + '1';;
+  Check(Self.Request.IsMalformed,
+       'CSeq method matches request method');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedSipVersion;
+const
+  MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
+                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                   + 'Max-Forwards:     70'#13#10
+                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                   + 'CSeq:    1 INVITE'#13#10
+                   + #13#10;
+var
+  ExpectedReason: String;
+  Msg:            TIdSipMessage;
+begin
+  ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
+
+  Msg := TIdSipMessage.ReadMessageFrom(MalformedMessage);
+  try
+    Check(Msg.IsMalformed,
+          'Msg has invalid SIP-Version, but not branded as such');
+    CheckEquals(ExpectedReason,
+                Msg.ParseFailReason,
+                'Unexpected parse error reason');
+    CheckEquals(Copy(MalformedMessage, 1, 255),
+                Copy(Msg.RawMessage, 1, 255),
+                'Unexpected raw message');
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedMethod;
+begin
+  Self.Request.ClearHeaders;
+  Self.AddRequiredHeaders(Self.Request);
+  Self.Request.Method := 'Bad"Method';
+
+  Check(Self.Msg.IsMalformed, 'Bad Method');
 end;
 
 procedure TestTIdSipRequest.TestIsMalformedMissingVia;
@@ -1759,6 +1943,182 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestParse;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipMessage.ReadRequestFrom(BasicRequest);
+  try
+    Self.CheckBasicRequest(Req);
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestParseCompoundHeader;
+const
+  Route = 'Route: <sip:127.0.0.1>'#13#10
+        + 'Route: wsfrank <sip:192.168.0.1>;low, <sip:192.168.0.1>'#13#10
+        + BasicContentLengthHeader;
+var
+  Expected: TIdSipHeaders;
+  Req: TIdSipRequest;
+  Routes:   TIdSipHeadersFilter;
+begin
+  Req := TIdSipMessage.ReadRequestFrom(StringReplace(BasicRequest,
+                                                     BasicContentLengthHeader,
+                                                     Route,
+                                                     []));
+  try
+    Expected := TIdSipHeaders.Create;
+    try
+      Expected.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+      Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.0.1>;low';
+      Expected.Add(RouteHeader).Value := '<sip:192.168.0.1>';
+
+      Routes := TIdSipHeadersFilter.Create(Req.Headers, RouteHeader);
+      try
+        Check(Expected.Equals(Routes),
+        'Routes not split into separate headers');
+      finally
+        Routes.Free;
+      end;
+    finally
+      Expected.Free;
+    end;
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestParseFoldedHeader;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipMessage.ReadRequestFrom('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'From: Case'#13#10
+                            + ' <sip:case@fried.neurons.org>'#13#10
+                            + #9';tag=1928301774'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                            + 'CSeq: 8'#13#10
+                            + '  INVITE'#13#10
+                            + #13#10);
+  try
+    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
+                Req.FirstHeader(FromHeaderFull).AsString,
+                'From header');
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestParseLeadingBlankLines;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipMessage.ReadRequestFrom(#13#10#13#10 + BasicRequest);
+  try
+    Self.CheckBasicRequest(Req);
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestParseMalformedRequestLine;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipMessage.ReadRequestFrom('INVITE  sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10);
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (too many spaces between Method and Request-URI) parsed without error');
+    CheckEquals(RequestUriNoSpaces,
+                Req.ParseFailReason,
+                'Unexpected fail reason (too many spaces between Method and Request-URI)');
+  finally
+    Req.Free;
+  end;
+
+  Req := TIdSipMessage.ReadRequestFrom('INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0'#13#10);
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (no spaces between Method and Request-URI) parsed without error');
+    CheckEquals(Format(MalformedToken,
+                       ['Method', 'INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0']),
+                Req.ParseFailReason,
+                'Unexpected fail reason (no spaces between Method and Request-URI)');
+  finally
+    Req.Free;
+  end;
+
+  Req := TIdSipMessage.ReadRequestFrom('sip:wintermute@tessier-ashpool.co.luna SIP/2.0');
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (no Method) parsed without error');
+    CheckEquals(Format(MalformedToken,
+                       ['Method', 'sip:wintermute@tessier-ashpool.co.luna']),
+                Req.ParseFailReason,
+                'Unexpected fail reason (no Method)');
+  finally
+    Req.Free;
+  end;
+
+  Req := TIdSipMessage.ReadRequestFrom('INVITE'#13#10);
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (no Request-URI, no SIP-Version) parsed without error');
+    CheckEquals(RequestUriNoSpaces,
+                Req.ParseFailReason,
+                'Unexpected fail reason (no Request-URI, no SIP-Version)');
+  finally
+    Req.Free;
+  end;
+
+  Req := TIdSipMessage.ReadRequestFrom('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10);
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (malformed SIP-Version) parsed without error');
+    CheckEquals(Format(InvalidSipVersion,
+                       ['SIP/;2.0']),
+                Req.ParseFailReason,
+                'Unexpected fail reason (malformed SIP-Version)');
+  finally
+    Req.Free;
+  end;
+
+  Req := TIdSipMessage.ReadRequestFrom('INVITE <sip:abc@80.168.137.82:5060> SIP/2.0'#13#10);
+  try
+    Check(Req.IsMalformed,
+          'Malformed start line (Request-URI in angle brackets) parsed without error');
+    CheckEquals(RequestUriNoAngleBrackets,
+                Req.ParseFailReason,
+                'Unexpected fail reason (Request-URI in angle brackets)');
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestParseWithRequestUriInAngleBrackets;
+var
+  R: TIdSipRequest;
+begin
+  R := TIdSipMessage.ReadRequestFrom('INVITE <sip:foo> SIP/2.0'#13#10);
+  try
+    Self.AddRequiredHeaders(R);
+    Check(R.IsMalformed,
+          'Request not marked as malformed');
+
+    CheckEquals(RequestUriNoAngleBrackets,
+                R.ParseFailReason,
+                'Unexpected error message');
+  finally
+    R.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestRequiresResponse;
 begin
   Self.Request.Method := MethodAck;
@@ -1825,6 +2185,9 @@ procedure TestTIdSipResponse.SetUp;
 begin
   inherited SetUp;
 
+  Self.Msg.SIPVersion := SIPVersion;
+  (Self.Msg as TIdSipResponse).StatusCode := SIPTrying;
+
   Self.Request := TIdSipTestResources.CreateBasicRequest;
 
   Self.Contact := TIdSipContactHeader.Create;
@@ -1842,6 +2205,26 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipResponse Protected methods ***************************************
+
+function TestTIdSipResponse.MessageType: TIdSipMessageClass;
+begin
+  Result := TIdSipResponse;
+end;
+
+//* TestTIdSipResponse Private methods *****************************************
+
+procedure TestTIdSipResponse.CheckBasicResponse(Msg: TIdSipMessage;
+                                                CheckBody: Boolean = true);
+begin
+  CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
+
+  CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
+  CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
+  CheckEquals(8,           Msg.HeaderCount,                'Header count');
+
+  Self.CheckBasicMessage(Msg, CheckBody);
+end;
 //* TestTIdSipResponse Published methods ***************************************
 
 procedure TestTIdSipResponse.TestAssign;
@@ -1890,8 +2273,7 @@ procedure TestTIdSipResponse.TestAsString;
 var
   Expected: TStrings;
   Received: TStrings;
-  Parser:   TIdSipParser;
-  Str:      TStringStream;
+  Res:      TIdSipResponse;
 begin
   Self.Response.StatusCode                             := 486;
   Self.Response.StatusText                             := 'Busy Here';
@@ -1916,18 +2298,11 @@ begin
 
       CheckEquals(Expected, Received, 'AsString');
 
-      Parser := TIdSipParser.Create;
+      Res := TIdSipMessage.ReadResponseFrom(Self.Response.AsString);
       try
-        Str := TStringStream.Create(Received.Text);
-        try
-          Parser.Source := Str;
-
-          Parser.ParseResponse(Self.Response);
-        finally
-          Str.Free;
-        end;
+        Check(not Res.IsMalformed, 'Sanity check AsString');
       finally
-        Parser.Free;
+        Res.Free;
       end;
     finally
       Received.Free;
@@ -2358,6 +2733,22 @@ begin
   end;
 end;
 
+procedure TestTIdSipResponse.TestIsMalformedStatusCode;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom('SIP/2.0 Aheh OK'#13#10);
+  try
+    Check(Res.IsMalformed,
+          'Failed to reject a non-numeric Status-Code');
+    CheckEquals(Format(InvalidStatusCode, ['Aheh']),
+                Res.ParseFailReason,
+                'Unexpected parse fail reason');
+  finally
+    Res.Free;
+  end;
+end;
+
 procedure TestTIdSipResponse.TestIsFinal;
 var
   I: Integer;
@@ -2437,6 +2828,73 @@ begin
 
   Self.Response.StatusCode := SIPTrying;
   Check(Self.Response.IsTrying, Self.Response.StatusText);
+end;
+
+procedure TestTIdSipResponse.TestParse;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom(BasicResponse);
+  try
+    Self.CheckBasicResponse(Res);
+  finally
+    Res.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestParseEmptyString;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom('');
+  try
+    CheckEquals('', Res.SipVersion, 'Sip-Version');
+    CheckEquals(0,  Res.StatusCode, 'Status-Code');
+    CheckEquals('', Res.StatusText, 'Status-Text');
+  finally
+    Res.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestParseFoldedHeader;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom('SIP/2.0 200 OK'#13#10
+                          + 'From: Case'#13#10
+                          + ' <sip:case@fried.neurons.org>'#13#10
+                          + #9';tag=1928301774'#13#10
+                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                          + 'Via: SIP/2.0/TCP gw1.leo-ix.org'#13#10
+                          + 'CSeq: 271828 INVITE'#13#10
+                          + 'Call-ID: cafebabe@sip.neurons.org'#13#10
+                          + #13#10);
+  try
+    CheckEquals('SIP/2.0', Res.SipVersion, 'SipVersion');
+    CheckEquals(200,       Res.StatusCode, 'StatusCode');
+    CheckEquals('OK',      Res.StatusText, 'StatusTest');
+
+    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
+                Res.From.AsString,
+                'From header');
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
+                Res.ToHeader.AsString,
+                'To header');
+  finally
+    Res.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestParseLeadingBlankLines;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipMessage.ReadResponseFrom(#13#10#13#10 + BasicResponse);
+  try
+    Self.CheckBasicResponse(Res);
+  finally
+    Res.Free;
+  end;
 end;
 
 //******************************************************************************

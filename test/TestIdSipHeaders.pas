@@ -193,7 +193,7 @@ type
   published
     procedure TestIncrement;
     procedure TestValue; override;
-    procedure TestVeryLargeValue; 
+    procedure TestVeryLargeValue;
   end;
 
   TestTIdSipDateHeader = class(THeaderTestCase)
@@ -374,6 +374,7 @@ type
     procedure TestReceived;
     procedure TestTTL;
     procedure TestValue; override;
+    procedure TestValueTorture;
     procedure TestValueWithBranch;
     procedure TestValueWithMaddr;
     procedure TestValueWithReceived;
@@ -3324,6 +3325,13 @@ begin
   CheckEquals(666,             Self.V.Port,           '5: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '5: SipVersion');
   Check      (sttTLS =         Self.V.Transport,      '5: Transport');
+end;
+
+procedure TestTIdSipViaHeader.TestValueTorture;
+begin
+  Self.V.Value := 'Via: SIP/2.0/UDP 135.180.130.133;;,;';
+  Check(Self.V.IsMalformed,
+        'Mad Via syntax doesn''t show up as invalid');
 end;
 
 procedure TestTIdSipViaHeader.TestValueWithBranch;

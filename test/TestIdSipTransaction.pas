@@ -548,6 +548,7 @@ begin
   Self.Response200 := TIdSipResponse.Create;
   Self.Response200.Assign(Self.ReceivedResponse);
   Self.Response200.StatusCode := SIPOK;
+  Self.Response200.AddHeader(Self.ReceivedRequest.FirstContact);
 
   Self.OnReceiveResponseFired := false;
   Self.OnTerminatedFired      := false;

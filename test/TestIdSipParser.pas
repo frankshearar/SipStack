@@ -25,8 +25,6 @@ type
   TestTIdSipParser = class(TTestCase)
   private
     P:          TIdSipParser;
-    ParseError: String;
-    RawMessage: String;
     Request:    TIdSipRequest;
     Response:   TIdSipResponse;
 
@@ -36,13 +34,11 @@ type
                                 CheckBody: Boolean = true);
     procedure CheckBasicResponse(Msg: TIdSipMessage;
                                  CheckBody: Boolean = true);
-    procedure CheckParserError(const RawMessage, Reason: String);
     procedure CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestCaseInsensitivityOfContentLengthHeader;
     procedure TestGetHeaderName;
     procedure TestGetHeaderValue;
 //    procedure TestHasValidSyntax;
@@ -50,56 +46,26 @@ type
     procedure TestIsMethod;
     procedure TestIsQuotedString;
     procedure TestIsQValue;
+    procedure TestIsRequest;
     procedure TestIsSipVersion;
     procedure TestIsScheme;
     procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestIsWord;
-    procedure TestOnParseError;
     procedure TestParseAndMakeMessageEmptyStream;
     procedure TestParseAndMakeMessageFromString;
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
-    procedure TestParseAndMakeRequest;
     procedure TestParseAndMakeRequestFromString;
-    procedure TestParseAndMakeResponse;
     procedure TestParseAndMakeResponseFromString;
     procedure TestParseExtensiveRequest;
-    procedure TestParseRequest;
-    procedure TestParseRequestEmptyString;
-    procedure TestParseRequestFoldedHeader;
-    procedure TestParseRequestFromAResponseString;
-    procedure TestParseRequestMalformedHeader;
-    procedure TestParseRequestMalformedMethod;
-    procedure TestParseRequestMalformedRequestLine;
     procedure TestParseRequestMessageBodyLongerThanContentLength;
-    procedure TestParseRequestMissingCallID;
-    procedure TestParseRequestMissingCSeq;
-    procedure TestParseRequestMissingFrom;
-    procedure TestParseRequestMissingMaxForwards;
-    procedure TestParseRequestMissingTo;
-    procedure TestParseRequestMissingVia;
     procedure TestParseRequestMultipleVias;
     procedure TestParseRequestRequestUriHasSpaces;
     procedure TestParseRequestRequestUriInAngleBrackets;
-    procedure TestParseRequestWithLeadingCrLfs;
-    procedure TestParseRequestWithBodyAndNoContentType;
-    procedure TestParseRequestWithMultipleRoutes;
-    procedure TestParseResponse;
-    procedure TestParseResponseEmptyString;
-    procedure TestParseResponseFoldedHeader;
-    procedure TestParseResponseInvalidStatusCode;
-    procedure TestParseResponseMalformedHeader;
-    procedure TestParseResponseWithLeadingCrLfs;
-    procedure TestParseShortFormContentLength;
 //    procedure TestTortureTest1; // commented out because right now we don't accept non-SIP/SIPS URIs
-    procedure TestTortureTest8;
-    procedure TestTortureTest11;
-    procedure TestTortureTest13;
-    procedure TestTortureTest15;
     procedure TestTortureTest19;
-    procedure TestTortureTest21;
     procedure TestTortureTest22;
     procedure TestTortureTest23;
     procedure TestTortureTest24;
@@ -208,25 +174,6 @@ begin
 end;
 
 //* TestTIdSipParser Published methods *****************************************
-
-procedure TestTIdSipParser.TestCaseInsensitivityOfContentLengthHeader;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(StringReplace(BasicRequest,
-                                            'Content-Length',
-                                            'Content-LENGTH',
-                                            [rfReplaceAll]));
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-
-    CheckEquals(29, Self.Request.ContentLength, 'ContentLength');
-  finally
-    Str.Free;
-  end;
-end;
 
 procedure TestTIdSipParser.TestGetHeaderName;
 begin
@@ -344,6 +291,16 @@ begin
   Check(    TIdSipParser.IsQValue('1.000'),  '1.000');
 end;
 
+procedure TestTIdSipParser.TestIsRequest;
+begin
+  Check(    TIdSipParser.IsRequest('INVITE sip:foo SIP/2.0'),    'Normal Request-Line');
+  Check(    TIdSipParser.IsRequest('INVITE sip:foo SIP/2.0'),    'Unknown SIP-Version');
+  Check(    TIdSipParser.IsRequest('UNKNOWN sip:foo SIP/2.0'),   'Unknown method');
+  Check(    TIdSipParser.IsRequest('INVITE mailto:foo SIP/2.0'), 'mailto Request-URI');
+  Check(not TIdSipParser.IsRequest('SIP/2.0 200 OK'),            'Status-Line');
+  Check(not TIdSipParser.IsRequest(''),                          'Empty string');
+end;
+
 procedure TestTIdSipParser.TestIsSipVersion;
 begin
   Check(not TIdSipParser.IsSipVersion(''),         '''''');
@@ -364,6 +321,7 @@ end;
 procedure TestTIdSipParser.TestIsToken;
 begin
   Check(not TIdSipParser.IsToken(''),         '''''');
+  Check(not TIdSipParser.IsToken('SIP/2.0'),  'SIP/2.0');
   Check(    TIdSipParser.IsToken('one'),      'one');
   Check(    TIdSipParser.IsToken('1two'),     '1two');
   Check(    TIdSipParser.IsToken('1-two'),    '1-two');
@@ -411,72 +369,24 @@ begin
         '-.!%*_+`''~()<>:\"/[]?{}');
 end;
 
-procedure TestTIdSipParser.TestOnParseError;
-const
-  MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
-                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
-                   + 'Max-Forwards:     70'#13#10
-                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
-                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
-                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
-                   + 'CSeq:    1 INVITE'#13#10
-                   + #13#10;
-var
-  ExpectedReason: String;
-  Msg:            TIdSipMessage;
-  Str:            TStringStream;
-begin
-  ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
-
-  Str := TStringStream.Create(MalformedMessage);
-  try
-    Self.P.OnParserError := Self.CheckParserError;
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Check(Msg.IsMalformed,
-            'Msg has invalid syntax, but not branded as such');
-    finally
-      Msg.Free;
-    end;
-    CheckEquals(ExpectedReason,
-                Self.ParseError,
-                'Unexpected parse error reason');
-    CheckEquals(Copy(MalformedMessage, 1, 255),
-                Copy(Self.RawMessage, 1, 255),
-                'Unexpected raw message');
-  finally
-    Str.Free;
-  end;
-end;
-
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyStream;
 var
   Msg: TIdSipMessage;
-  Str: TStringStream;
 begin
-  Str := TStringStream.Create('');
+  Msg := TIdSipMessage.ReadMessageFrom('');
   try
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Check(Msg.IsMalformed,
-            'Failed to bail out of empty string');
-    finally
-      Msg.Free;
-    end;
+    Check(Msg.IsMalformed,
+          'Failed to bail out of empty string');
   finally
-    Str.Free;
+    Msg.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageFromString;
 var
-  R: TIdSipRequest;
+  R: TIdSipMessage;
 begin
-  R := Self.P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
+  R := TIdSipMessage.ReadMessageFrom(BasicRequest);
   try
     CheckBasicRequest(R, false);
     CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
@@ -488,82 +398,38 @@ end;
 procedure TestTIdSipParser.TestParseAndMakeMessageMalformedRequest;
 var
   Msg: TIdSipMessage;
-  Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
-                            + #13#10);
+  Msg := TIdSipMessage.ReadMessageFrom('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
+                                     + #13#10);
   try
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Check(Msg.IsMalformed,
-            'Failed to bail out on parsing a malformed message');
-    finally
-      Msg.Free;
-    end;
+    Check(Msg.IsMalformed,
+          'Failed to bail out on parsing a malformed message');
   finally
-    Str.Free;
+    Msg.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageRequest;
 var
   Msg: TIdSipMessage;
-  Str: TStringStream;
 begin
-  Str := TStringStream.Create(BasicRequest);
+  Msg := TIdSipMessage.ReadMessageFrom(BasicRequest);
   try
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Self.CheckBasicRequest(Msg);
-    finally
-      Msg.Free;
-    end;
+    Self.CheckBasicRequest(Msg);
   finally
-    Str.Free;
+    Msg.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageResponse;
 var
   Msg: TIdSipMessage;
-  Str: TStringStream;
 begin
-  Str := TStringStream.Create(BasicResponse);
+  Msg := TIdSipMessage.ReadMessageFrom(BasicResponse);
   try
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Self.CheckBasicResponse(Msg);
-    finally
-      Msg.Free;
-    end;
+    Self.CheckBasicResponse(Msg);
   finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseAndMakeRequest;
-var
-  Req: TIdSipRequest;
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(BasicRequest);
-  try
-    Self.P.Source := Str;
-
-    Req := Self.P.ParseAndMakeRequest;
-    try
-      Self.CheckBasicRequest(Req);
-    finally
-      Req.Free;
-    end;
-  finally
-    Str.Free;
+    Msg.Free;
   end;
 end;
 
@@ -571,7 +437,7 @@ procedure TestTIdSipParser.TestParseAndMakeRequestFromString;
 var
   R: TIdSipRequest;
 begin
-  R := Self.P.ParseAndMakeRequest(BasicRequest);
+  R := TIdSipMessage.ReadRequestFrom(BasicRequest);
   try
     CheckBasicRequest(R, false);
     CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
@@ -580,31 +446,11 @@ begin
   end;
 end;
 
-procedure TestTIdSipParser.TestParseAndMakeResponse;
-var
-  Res: TIdSipResponse;
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(BasicResponse);
-  try
-    Self.P.Source := Str;
-
-    Res := Self.P.ParseAndMakeResponse;
-    try
-      Self.CheckBasicResponse(Res);
-    finally
-      Res.Free;
-    end;
-  finally
-    Str.Free;
-  end;
-end;
-
 procedure TestTIdSipParser.TestParseAndMakeResponseFromString;
 var
   R: TIdSipResponse;
 begin
-  R := Self.P.ParseAndMakeResponse(BasicResponse);
+  R := TIdSipMessage.ReadResponseFrom(BasicResponse);
   try
     CheckBasicResponse(R, false);
     CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
@@ -615,419 +461,88 @@ end;
 
 procedure TestTIdSipParser.TestParseExtensiveRequest;
 var
-  Str: TStringStream;
+  Req: TIdSipRequest;
 begin
-  Str := TStringStream.Create(ExtensiveRequest);
+  Req := TIdSipMessage.ReadRequestFrom(ExtensiveRequest);
   try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-
     CheckEquals('Accept: text/t140, text/plain;q=0.7;foo=bar, text/xml',
-                Self.Request.FirstHeader(AcceptHeader).AsString,
+                Req.FirstHeader(AcceptHeader).AsString,
                 'Accept');
     CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',
-                Self.Request.FirstHeader(CallIdHeaderFull).AsString,
+                Req.FirstHeader(CallIdHeaderFull).AsString,
                 'Call-ID');
     CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',
-                Self.Request.FirstContact.AsString,
+                Req.FirstContact.AsString,
                 'Contact');
     CheckEquals('Content-Length: 29',
-                Self.Request.FirstHeader(ContentLengthHeaderFull).AsString,
+                Req.FirstHeader(ContentLengthHeaderFull).AsString,
                 'Content-Length');
     CheckEquals('Content-Type: text/plain',
-                Self.Request.FirstHeader(ContentTypeHeaderFull).AsString,
+                Req.FirstHeader(ContentTypeHeaderFull).AsString,
                 'Content-Type');
     CheckEquals('CSeq: 314159 INVITE',
-                Self.Request.FirstHeader(CSeqHeader).AsString,
+                Req.FirstHeader(CSeqHeader).AsString,
                 'CSeq');
     CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 +0000',
-                Self.Request.FirstHeader(DateHeader).AsString,
+                Req.FirstHeader(DateHeader).AsString,
                 'Date');
     CheckEquals('Error-Info: <http://www.error.com/info/bloop.wav>',
-                Self.Request.FirstHeader(ErrorInfoHeader).AsString,
+                Req.FirstHeader(ErrorInfoHeader).AsString,
                 'Error-Info');
     CheckEquals('Expires: 1000',
-                Self.Request.FirstHeader(ExpiresHeader).AsString,
+                Req.FirstHeader(ExpiresHeader).AsString,
                 'Expires');
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Self.Request.FirstHeader(FromHeaderFull).AsString,
+                Req.FirstHeader(FromHeaderFull).AsString,
                 'From');
     CheckEquals('Max-Forwards: 70',
-                Self.Request.FirstHeader(MaxForwardsHeader).AsString,
+                Req.FirstHeader(MaxForwardsHeader).AsString,
                 'Max-Forwards');
     CheckEquals('Record-Route: localhost <sip:127.0.0.1>;lr',
-                Self.Request.FirstHeader(RecordRouteHeader).AsString,
+                Req.FirstHeader(RecordRouteHeader).AsString,
                 'Record-Route');
     CheckEquals('Route: localhost <sip:127.0.0.1>;lr',
-                Self.Request.FirstHeader(RouteHeader).AsString,
+                Req.FirstHeader(RouteHeader).AsString,
                 'Route');
     CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
-                Self.Request.FirstHeader(ToHeaderFull).AsString,
+                Req.FirstHeader(ToHeaderFull).AsString,
                 'To');
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
-                Self.Request.FirstHeader(ViaHeaderFull).AsString,
+                Req.FirstHeader(ViaHeaderFull).AsString,
                 'Via');
     CheckEquals('Warning: 301 draugr "Not really interested"',
-                Self.Request.FirstHeader(WarningHeader).AsString,
+                Req.FirstHeader(WarningHeader).AsString,
                 'Warning');
     CheckEquals('X-Not-A-Header: I am not defined in RFC 3261',
-                Self.Request.FirstHeader('X-Not-A-Header').AsString,
+                Req.FirstHeader('X-Not-A-Header').AsString,
                 'X-Not-A-Header');
   finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequest;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(BasicRequest);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Self.CheckBasicRequest(Self.Request);
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestEmptyString;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('');
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Failed to bail out on parsing an empty string');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestFoldedHeader;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'From: Case'#13#10
-                            + ' <sip:case@fried.neurons.org>'#13#10
-                            + #9';tag=1928301774'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'CSeq: 8'#13#10
-                            + '  INVITE'#13#10
-                            + #13#10);
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Self.Request.FirstHeader(FromHeaderFull).AsString,
-                'From header');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestFromAResponseString;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('SIP/;2.0 200 OK'#13#10
-                            + #13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Failed to bail out creating a request from a malformed response');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMalformedHeader;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(StringReplace(BasicRequest,
-                                            'CSeq: 314159 INVITE',
-                                            'CSeq: 314159 REGISTER',
-                                            []));
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMalformedMethod;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('Bad"method sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                          + 'From: Case'#13#10
-                          + ' <sip:case@fried.neurons.org>'#13#10
-                          + #9';tag=1928301774'#13#10
-                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                          + #13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Failed to bail out on a Bad Request');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMalformedRequestLine;
-var
-  Str: TStringStream;
-begin
-  // Double space between the Method and Request-URI
-  Str := TStringStream.Create('INVITE  sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Malformed start line (too many spaces between Method and Request-URI) parsed without error');
-  finally
-    Str.Free;
-  end;
-
-  // No space between the Method and Request-URI
-  Str := TStringStream.Create('INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0'#13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Malformed start line (no spaces between Method and Request-URI) parsed without error');
-  finally
-    Str.Free;
-  end;
-
-  // No Method
-  Str := TStringStream.Create('sip:wintermute@tessier-ashpool.co.luna SIP/2.0');
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Malformed start line (no Method) parsed without error');
-  finally
-    Str.Free;
-  end;
-
-  // No Request-URI or SIP-Version
-  Str := TStringStream.Create('INVITE'#13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Malformed start line (no Request-URI, no SIP-Version) parsed without error');
-  finally
-    Str.Free;
-  end;
-
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Malformed start line (malformed SIP-Version) parsed without error');
-  finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseRequestMessageBodyLongerThanContentLength;
 var
   Leftovers: array[0..99] of Char;
+  Req:       TIdSipMessage;
   Str:       TStringStream;
 begin
   Str := TStringStream.Create(StringReplace(BasicRequest,
-                                            'Content-Length: 29',
-                                            'Content-Length: 4',
-                                            []));
+                              'Content-Length: 29',
+                              'Content-Length: 4',
+                              []));
   try
-    Self.P.Source := Str;
+    Req := TIdSipMessage.ReadMessageFrom(Str);
+    try
+      CheckEquals(4,  Req.ContentLength, 'ContentLength');
+      CheckEquals('', Req.Body,          'Body');
 
-    Self.P.ParseRequest(Self.Request);
-    CheckEquals(4,  Self.Request.ContentLength, 'ContentLength');
-    CheckEquals('', Self.Request.Body,          'Body');
-
-    CheckEquals(Length('I am a message. Hear me roar!'),
-                Str.Read(LeftOvers, Length(Leftovers)),
-                'Read unexpected number of bytes from the stream');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingCallID;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingCSeq;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingFrom;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingMaxForwards;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    CheckEquals(Self.Request.DefaultMaxForwards,
-                Self.Request.MaxForwards,
-                'Max-Forwards wasn''t set to the default value');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingTo;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestMissingVia;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-                            + 'Content-Type: text/plain'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out');
+      CheckEquals(Length('I am a message. Hear me roar!'),
+                  Str.Read(LeftOvers, Length(Leftovers)),
+                  'Read unexpected number of bytes from the stream');
+    finally
+      Req.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -1035,10 +550,10 @@ end;
 
 procedure TestTIdSipParser.TestParseRequestMultipleVias;
 var
-  Str:        TStringStream;
+  Req:        TIdSipRequest;
   Via0, Via1: TIdSipViaHeader;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
+  Req := TIdSipMessage.ReadRequestFrom('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org:5061;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
                             + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
@@ -1052,12 +567,9 @@ begin
                             + #13#10
                             + 'I am a message. Hear me roar!');
   try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
+    CheckEquals(2, Req.Path.Length, 'Path.Length');
 
-    CheckEquals(2, Self.Request.Path.Length, 'Path.Length');
-
-    Via0 := Self.Request.Path.Items[0] as TIdSipViaHeader;
+    Via0 := Req.Path.Items[0] as TIdSipViaHeader;
     CheckEquals('Via',              Via0.Name,             'LastHop.Name');
     CheckEquals('SIP/2.0',          Via0.SipVersion,       'LastHop.SipVersion');
     Check      (sttTCP =            Via0.Transport,        'LastHop.Transport');
@@ -1071,7 +583,7 @@ begin
                 Via0.AsString,
                 'LastHop.AsString');
 
-    Via1 := Request.Path.Items[1] as TIdSipViaHeader;
+    Via1 := Req.Path.Items[1] as TIdSipViaHeader;
     CheckEquals('Via',                   Via1.Name,             'Via1.Name');
     CheckEquals('SIP/3.0',               Via1.SipVersion,       'Via1.SipVersion');
     Check      (sttTLS =                 Via1.Transport,        'Via1.Transport');
@@ -1085,281 +597,45 @@ begin
                 Via1.AsString,
                 'Via1.AsString');
   finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseRequestRequestUriHasSpaces;
 var
-  Str: TStringStream;
+  Req: TIdSipRequest;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier ashpool.co.lu SIP/2.0'#13#10);
+  Req := TIdSipMessage.ReadRequestFrom('INVITE sip:wintermute@tessier ashpool.co.lu SIP/2.0'#13#10);
   try
-    Self.P.Source := Str;
-     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Malformed start line (Request-URI has spaces) parsed without error');
+    Check(Req.IsMalformed,
+          'Malformed start line (Request-URI has spaces) parsed without error');
   finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 
 procedure TestTIdSipParser.TestParseRequestRequestUriInAngleBrackets;
 var
-  Str: TStringStream;
+  Req: TIdSipRequest;
 begin
-  Str := TStringStream.Create('INVITE <sip:wintermute@tessier-ashpool.co.luna> SIP/2.0'#13#10);
+  Req := TIdSipMessage.ReadRequestFrom('INVITE <sip:wintermute@tessier-ashpool.co.luna> SIP/2.0'#13#10);
   try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
+    Check(Req.IsMalformed,
+          'Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
   finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestWithLeadingCrLfs;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(#13#10#13#10 + BasicRequest);
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-
-    Self.CheckBasicRequest(Request);
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestWithBodyAndNoContentType;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(EmptyRequest
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-          'Failed to bail out');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseRequestWithMultipleRoutes;
-const
-  Route = 'Route: <sip:127.0.0.1>'#13#10
-        + 'Route: wsfrank <sip:192.168.0.1>;low, <sip:192.168.0.1>'#13#10
-        + BasicContentLengthHeader;
-var
-  Expected: TIdSipHeaders;
-  Routes:   TIdSipHeadersFilter;
-  Str:      TStringStream;
-begin
-  Str := TStringStream.Create(StringReplace(BasicRequest, BasicContentLengthHeader, Route, []));
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-
-    Expected := TIdSipHeaders.Create;
-    try
-      Expected.Add(RouteHeader).Value := '<sip:127.0.0.1>';
-      Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.0.1>;low';
-      Expected.Add(RouteHeader).Value := '<sip:192.168.0.1>';
-
-      Routes := TIdSipHeadersFilter.Create(Self.Request.Headers, RouteHeader);
-      try
-        Check(Expected.Equals(Routes),
-        'Routes not split into separate headers');
-      finally
-        Routes.Free;
-      end;
-    finally
-      Expected.Free;
-    end;
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponse;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(BasicResponse);
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseResponse(Response);
-    Self.CheckBasicResponse(Response);
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponseEmptyString;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('');
-  try
-    Self.P.Source := Str;
-
-    Self.P.ParseResponse(Self.Response);
-
-    CheckEquals('', Self.Response.SipVersion, 'Sip-Version');
-    CheckEquals(0,  Self.Response.StatusCode, 'Status-Code');
-    CheckEquals('', Self.Response.StatusText, 'Status-Text');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponseFoldedHeader;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
-                          + 'From: Case'#13#10
-                          + ' <sip:case@fried.neurons.org>'#13#10
-                          + #9';tag=1928301774'#13#10
-                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                          + 'Via: SIP/2.0/TCP gw1.leo-ix.org'#13#10
-                          + 'CSeq: 271828 INVITE'#13#10
-                          + 'Call-ID: cafebabe@sip.neurons.org'#13#10
-                          + #13#10);
-  try
-    Self.P.Source := Str;
-    Self.P.ParseResponse(Self.Response);
-
-    CheckEquals('SIP/2.0', Self.Response.SipVersion, 'SipVersion');
-    CheckEquals(200,       Self.Response.StatusCode, 'StatusCode');
-    CheckEquals('OK',      Self.Response.StatusText, 'StatusTest');
-
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Self.Response.From.AsString,
-                'From header');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
-                Self.Response.ToHeader.AsString,
-                'To header');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponseInvalidStatusCode;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('SIP/2.0 Aheh OK'#13#10);
-  try
-    Self.P.Source := Str;
-    Self.P.ParseResponse(Self.Response);
-
-    Check(Self.Response.IsMalformed,
-          'Failed to reject a non-numeric Status-Code');
-    CheckEquals(Format(InvalidStatusCode, ['Aheh']),
-                Self.Response.ParseFailReason,
-                'Unexpected parse fail reason');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponseMalformedHeader;
-const
-  // Note the malformed Expires header
-  MalformedMessage = 'SIP/2.0 200 OK'#13#10
-                   + 'Expires: a'#13#10
-                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
-                   + 'Max-Forwards:     70'#13#10
-                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
-                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
-                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
-                   + 'CSeq:    1 INVITE'#13#10
-                   + #13#10;
-var
-  ExpectedReason: String;
-  Str:            TStringStream;
-begin
-  ExpectedReason := Format(MalformedToken, [ExpiresHeader, 'a']);
-
-  Str := TStringStream.Create(MalformedMessage);
-  try
-    Self.P.OnParserError := Self.CheckParserError;
-    Self.P.Source := Str;
-    Self.P.ParseResponse(Self.Response);
-
-    Check(Self.Response.IsMalformed,
-          'Response not marked as invalid');
-
-    CheckEquals(ExpectedReason,
-                Self.Response.ParseFailReason,
-                'Unexpected parse fail reason');
-
-    CheckEquals(ExpectedReason,
-                Self.ParseError,
-                'Unexpected parse error reason');
-    CheckEquals(Copy(MalformedMessage, 1, 255),
-                Copy(Self.RawMessage, 1, 255),
-                'Unexpected raw message');
-    CheckEquals(7,
-                Self.Response.HeaderCount,
-                'Parsing bailed out after the first malformed header');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseResponseWithLeadingCrLfs;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(#13#10#13#10 + BasicResponse);
-  try
-    Self.P.Source := Str;
-    Self.P.ParseResponse(Self.Response);
-
-    Self.CheckBasicResponse(Self.Response);
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseShortFormContentLength;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(StringReplace(BasicRequest,
-                                            'Content-Length',
-                                            'l',
-                                            [rfReplaceAll]));
-  try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-    CheckEquals(29, Self.Request.ContentLength, 'ContentLength');
-  finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 {
 procedure TestTIdSipParser.TestTortureTest1;
 var
-  Str: TStringStream;
+  Res: TIdSipResponse;
 begin
-  Str := TStringStream.Create(TortureTest1);
+  Res := TIdSipMessage.ReadResponseFrom(TortureTest1);
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    
+
     CheckEquals('INVITE',                              Self.Request.Method,         'Method');
     CheckEquals('SIP/2.0',                             Self.Request.SipVersion,     'SipVersion');
     CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.Request.RequestUri.URI, 'RequestUri');
@@ -1428,44 +704,15 @@ begin
                 Self.Request.HeaderAt(12).AsString,
                 'Contact header #2');
   finally
-    Str.Free;
+    Res.Free;
   end;
 end;
 }
-procedure TestTIdSipParser.TestTortureTest8;
-begin
-  Self.CheckTortureTest(TortureTest8, CSeqMethodMismatch);
-end;
-
-procedure TestTIdSipParser.TestTortureTest11;
-begin
-  Self.CheckTortureTest(TortureTest11, MissingCallID);
-end;
-
-procedure TestTIdSipParser.TestTortureTest13;
-begin
-  Self.CheckTortureTest(TortureTest13,
-                        Format(MalformedToken, [ExpiresHeader,
-                                                'Expires: Thu, 44 Dec 19999 16:00:00 EDT']));
-end;
-
-procedure TestTIdSipParser.TestTortureTest15;
-begin
-  Self.CheckTortureTest(TortureTest15,
-                        Format(MalformedToken, [ViaHeaderFull,
-                                                'Via: SIP/2.0/UDP 135.180.130.133;;,;']));
-end;
-
 procedure TestTIdSipParser.TestTortureTest19;
 begin
   Self.CheckTortureTest(TortureTest19,
                         Format(MalformedToken, [ToHeaderFull,
                                                 'To: "Mr. J. User <sip:j.user@company.com>']));
-end;
-
-procedure TestTIdSipParser.TestTortureTest21;
-begin
-  Self.CheckTortureTest(TortureTest21, RequestUriNoAngleBrackets);
 end;
 
 procedure TestTIdSipParser.TestTortureTest22;
@@ -1480,18 +727,15 @@ end;
 
 procedure TestTIdSipParser.TestTortureTest24;
 var
-  Str: TStringStream;
+  Req: TIdSipRequest;
 begin
-  Str := TStringStream.Create(StringReplace(TortureTest24, '%s', 'company.com', [rfReplaceAll]));
+  Req := TIdSipMessage.ReadRequestFrom(StringReplace(TortureTest24, '%s', 'company.com', [rfReplaceAll]));
   try
-    Self.P.Source := Str;
-    Self.P.ParseRequest(Self.Request);
-
     CheckEquals('sip:sip%3Auser%40example.com@company.com;other-param=summit',
-                Self.Request.RequestUri.URI,
+                Req.RequestUri.URI,
                 'Request-URI');
   finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 
@@ -1551,7 +795,7 @@ begin
               'Content-Type');
 
   if CheckBody then
-    CheckEquals('', Msg.Body, 'message-body');
+    CheckEquals(BasicBody, Msg.Body, 'message-body');
 end;
 
 procedure TestTIdSipParser.CheckBasicRequest(Msg: TIdSipMessage;
@@ -1583,25 +827,16 @@ begin
   Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
-procedure TestTIdSipParser.CheckParserError(const RawMessage, Reason: String);
-begin
-  Self.RawMessage := RawMessage;
-  Self.ParseError := Reason;
-end;
-
 procedure TestTIdSipParser.CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);
 var
-  Str: TStringStream;
+  Req: TIdSipRequest;
 begin
-  Str := TStringStream.Create(RequestStr);
+  Req := TIdSipMessage.ReadRequestFrom(RequestStr);
   try
-    Self.P.Source := Str;
-
-    Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.IsMalformed,
-                'Failed to bail out of a bad request');
+    Check(Req.IsMalformed,
+          'Failed to bail out of a bad request');
   finally
-    Str.Free;
+    Req.Free;
   end;
 end;
 

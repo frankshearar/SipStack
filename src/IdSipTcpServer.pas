@@ -86,13 +86,11 @@ type
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
-    procedure DoOnParserError(const RawMessage, Reason: String);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
-                                        Reason: String;
-                                        Parser: TIdSipParser);
+                                        Reason: String);
     procedure SendResponseTo(Response: TIdSipResponse;
                              Dest: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
@@ -352,7 +350,6 @@ end;
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
   Msg:          TIdSipMessage;
-  Parser:       TIdSipParser;
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStream;
   ConnTimedOut: Boolean;
@@ -368,48 +365,40 @@ begin
 
     S := Self.ReadMessage(AThread.Connection);
     try
-      Parser := TIdSipParser.Create;
+      Msg := TIdSipMessage.ReadMessageFrom(S);
       try
-        Parser.Source := S;
-        Parser.OnParserError := Self.DoOnParserError;
-
-        Msg := Parser.ParseAndMakeMessage;
         try
           try
-            try
-              Msg.Body := Self.ReadBody(AThread.Connection, Msg);
-            except
-              on EIdReadTimeout do
-                ConnTimedOut := true;
-              on EIdConnClosedGracefully do
-                ConnTimedOut := true;
-            end;
-
-            if Msg.IsRequest then begin
-              // If Self.ReadBody closes the connection, we don't want to AddConnection!
-              if not ConnTimedOut then
-                Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-
-              Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
-                                                     ReceivedFrom);
-            end
-            else
-              Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
-                                                      ReceivedFrom);
+            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
           except
-            on E: Exception do begin
-              // This results in returning a 500 Internal Server Error to a response!
-              Self.ReturnInternalServerError(AThread.Connection, E.Message, Parser);
-              AThread.Connection.DisconnectSocket;
-              Self.Notifier.NotifyListenersOfException(E,
-                                                       'TCP Server: ' + E.Message);
-            end;
+            on EIdReadTimeout do
+              ConnTimedOut := true;
+            on EIdConnClosedGracefully do
+              ConnTimedOut := true;
           end;
-        finally
-          Msg.Free;
+
+          if Msg.IsRequest then begin
+            // If Self.ReadBody closes the connection, we don't want to AddConnection!
+            if not ConnTimedOut then
+              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+
+            Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
+                                                   ReceivedFrom);
+          end
+          else
+            Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
+                                                    ReceivedFrom);
+        except
+          on E: Exception do begin
+            // This results in returning a 500 Internal Server Error to a response!
+            Self.ReturnInternalServerError(AThread.Connection, E.Message);
+            AThread.Connection.DisconnectSocket;
+            Self.Notifier.NotifyListenersOfException(E,
+                                                     'TCP Server: ' + E.Message);
+          end;
         end;
       finally
-        Parser.Free;
+        Msg.Free;
       end;
     finally
       S.Free;
@@ -430,11 +419,6 @@ begin
   finally
     Self.ConnectionMap.UnlockList;
   end;
-end;
-
-procedure TIdSipTcpServer.DoOnParserError(const RawMessage, Reason: String);
-begin
-  Self.Notifier.NotifyListenersOfMalformedMessage(RawMessage, Reason);
 end;
 
 function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection;
@@ -463,8 +447,7 @@ begin
 end;
 
 procedure TIdSipTcpServer.ReturnInternalServerError(Connection: TIdTCPConnection;
-                                                    Reason: String;
-                                                    Parser: TIdSipParser);
+                                                    Reason: String);
 var
   Res: TIdSipResponse;
 begin
