@@ -38,6 +38,7 @@ type
     procedure MarkSentAckCount;
     procedure MarkSentRequestCount;
     procedure MarkSentResponseCount;
+    function  SecondLastSentResponse: TIdSipResponse;
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse);
     function  SentAckCount: Cardinal;
@@ -267,6 +268,7 @@ type
     procedure TestAccept;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
+    procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
@@ -320,6 +322,7 @@ type
     procedure TestCancelBeforeProvisional;
     procedure TestInviteThenReInvite;
     procedure TestInviteTwice;
+    procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestMethod;
     procedure TestProxyAuthentication; override;
@@ -459,6 +462,7 @@ type
     procedure TestModifyGlareOutbound;
     procedure TestModifyRejectedWithTimeout;
     procedure TestModifyWaitTime;
+    procedure TestReceiveByeWithPendingRequests;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
   end;
@@ -503,7 +507,6 @@ type
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
     procedure TestReceiveBye;
-//    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
@@ -969,6 +972,11 @@ end;
 procedure TTestCaseTU.MarkSentResponseCount;
 begin
   Self.ResponseCount := Self.SentResponseCount;
+end;
+
+function TTestCaseTU.SecondLastSentResponse: TIdSipResponse;
+begin
+  Result := Self.Dispatcher.Transport.SecondLastResponse;
 end;
 
 procedure TTestCaseTU.SendRequest(Request: TIdSipRequest);
@@ -3648,6 +3656,55 @@ begin
     CheckResendWaitTime(Session.ModifyWaitTime, Session.ClassName);
 end;
 
+procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
+var
+  Bye:      TIdSipRequest;
+  ReInvite: TIdSipRequest;
+  Session:  TIdSipSession;
+begin
+  // <---         INVITE          ---
+  //  ---         200 OK          --->
+  // <---          ACK            ---
+  // <---         INVITE          ---
+  // <---          BYE            ---
+  //  ---  487 Request Terminated --- (for the re-INVITE)
+  // <---          ACK            ---
+  //  ---         200 OK          ---> (for the BYE)
+  Session := Self.CreateAndEstablishSession;
+
+  Self.SimulateRemoteReInvite(Session);
+
+  ReInvite := TIdSipRequest.Create;
+  try
+    ReInvite.Assign(Self.Invite);
+
+    Self.MarkSentResponseCount;
+    Self.SimulateBye(Session.Dialog);
+
+    Bye := Self.CreateRemoteBye(Session.Dialog);
+    try
+      Check(Self.ResponseCount + 2 <= Self.SentResponseCount,
+            Self.ClassName + ': No responses to both BYE and re-INVITE');
+
+      Check(Bye.InSameDialogAs(Self.LastSentResponse),
+            Self.ClassName + ': No response for BYE');
+      CheckEquals(SIPOK,
+                  Self.LastSentResponse.StatusCode,
+                  Self.ClassName + ': Wrong response for BYE');
+
+      Check(ReInvite.Match(Self.SecondLastSentResponse),
+            Self.ClassName + ': No response for re-INVITE');
+      CheckEquals(SIPRequestTerminated,
+                  Self.SecondLastSentResponse.StatusCode,
+                  Self.ClassName + ': Wrong response for re-INVITE');
+    finally
+      Bye.Free;
+    end;
+  finally
+    ReInvite.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestModify;
 var
   Session: TIdSipSession;
@@ -3952,6 +4009,12 @@ begin
         'Action not marked as terminated');
   Check(Self.Failed,
         'Listeners not notified of failure');
+end;
+
+procedure TestTIdSipInboundInvite.TestIsInbound;
+begin
+  Check(Self.InviteAction.IsInbound,
+        Self.InviteAction.ClassName + ' not marked as inbound');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsInvite;
@@ -4590,6 +4653,16 @@ begin
   except
     on EIdSipTransactionUser do;
   end;
+end;
+
+procedure TestTIdSipOutboundInvite.TestIsInbound;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  Invite := Self.Core.AddOutboundInvite;
+
+  Check(not Invite.IsInbound,
+        Invite.ClassName + ' marked as inbound');
 end;
 
 procedure TestTIdSipOutboundInvite.TestIsInvite;
@@ -5920,28 +5993,6 @@ begin
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
 end;
-{
-procedure TestTIdSipInboundSession.TestReceiveByeWithPendingRequests;
-var
-  ReInvite: TIdSipRequest;
-begin
-  Self.Session.AcceptCall('', '');
-
-  Self.Dispatcher.Transport.AddTransportSendingListener(Self);
-
-  // This must be a CLIENT transaction!
-  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
-  try
-    Self.SendRequest(ReInvite);
-    Self.SimulateBye(Self.Session.Dialog);
-
-    Check(Self.SentRequestTerminated,
-          'Pending request wasn''t responded to with a 487 Request Terminated');
-  finally
-    ReInvite.Free;
-  end;
-end;
-}
 
 procedure TestTIdSipInboundSession.TestRedirectCall;
 var

@@ -646,6 +646,7 @@ type
   public
     class function Method: String; override;
 
+    function IsInbound: Boolean; virtual;
     function IsInvite: Boolean; override;
   end;
 
@@ -684,6 +685,7 @@ type
 
     procedure Accept(const Offer, ContentType: String);
     procedure AddListener(const Listener: IIdSipInboundInviteListener);
+    function  IsInbound: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Redirect(NewDestination: TIdSipAddressHeader;
                        Temporary: Boolean = true);
@@ -877,6 +879,7 @@ type
     procedure RejectReInvite(Invite: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
     procedure RescheduleModify(InviteAgent: TIdSipInvite);
+    procedure TerminateAnyPendingRequests;
   protected
     FullyEstablished: Boolean;
     ModifyAttempt:    TIdSipInvite;
@@ -3523,6 +3526,11 @@ begin
   Result := MethodInvite;
 end;
 
+function TIdSipInvite.IsInbound: Boolean;
+begin
+  Result := false;
+end;
+
 function TIdSipInvite.IsInvite: Boolean;
 begin
   Result := true;
@@ -3599,6 +3607,11 @@ end;
 procedure TIdSipInboundInvite.AddListener(const Listener: IIdSipInboundInviteListener);
 begin
   Self.Listeners.AddListener(Listener);
+end;
+
+function TIdSipInboundInvite.IsInbound: Boolean;
+begin
+  Result := true;
 end;
 
 function TIdSipInboundInvite.Match(Msg: TIdSipMessage): Boolean;
@@ -5056,6 +5069,8 @@ procedure TIdSipSession.ReceiveBye(Bye: TIdSipRequest);
 var
   OK: TIdSipResponse;
 begin
+  Self.TerminateAnyPendingRequests;
+
   Self.MarkAsTerminated;
   Self.Dialog.ReceiveRequest(Bye);
 
@@ -5215,6 +5230,18 @@ begin
   Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
                         Self.ModifyWaitTime,
                         InviteAgent.InitialRequest.Copy);
+end;
+
+procedure TIdSipSession.TerminateAnyPendingRequests;
+begin
+  Self.ModifyLock.Acquire;
+  try
+    if Assigned(Self.ModifyAttempt) and Self.ModifyAttempt.IsInbound then
+      Self.ModifyAttempt.Terminate;
+    Self.ModifyAttempt := nil;
+  finally
+    Self.ModifyLock.Release;
+  end;
 end;
 
 //******************************************************************************
