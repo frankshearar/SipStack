@@ -15,11 +15,6 @@ uses
   Classes, IdSipLocator, IdSipMessage, IdSipMockLocator, TestFramework;
 
 type
-  TestFunctions = class(TTestCase)
-  published
-    procedure TestNaptrServiceIsSecure;
-  end;
-
   TestTIdSipLocation = class(TTestCase)
   private
     Address:   String;
@@ -64,6 +59,9 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckAorAAAARecords(Locations: TIdSipLocations;
+                                  const ExpectedTransport: String);
   published
     procedure TestFindServersForResponseWithNameAndPort;
     procedure TestFindServersForResponseWithNameNoSrv;
@@ -76,9 +74,10 @@ type
     procedure TestFindServersForResponseWithRport;
     procedure TestFindServersForResponseWithSrv;
     procedure TestNameAndPort;
+    procedure TestNameAndPortWithTransportParam;
     procedure TestNameAndPortSips;
-    procedure TestNameAndPortWithMultipleNameRecords;
     procedure TestNameNoNaptrNoSrv;
+    procedure TestNameNaptrSomeSrv;
     procedure TestNumericAddressNonStandardPort;
     procedure TestNumericAddressUsesUdp;
     procedure TestNumericAddressSipsUriUsesTls;
@@ -158,8 +157,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsSipTransport;
     procedure TestCopy;
     procedure TestInstantiation;
+    procedure TestIsSecureService;
   end;
 
   TestTIdNaptrRecords = class(TTestCase)
@@ -171,6 +172,7 @@ type
   published
     procedure TestAdd;
     procedure TestAddWithParameters;
+    procedure TestAnyAppropriateRecord;
     procedure TestClear;
     procedure TestDelete;
     procedure TestIsEmpty;
@@ -220,7 +222,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipLocator unit tests');
-  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipLocation.Suite);
   Result.AddTest(TestTIdSipLocations.Suite);
   Result.AddTest(TestTIdSipAbstractLocator.Suite);
@@ -231,26 +232,6 @@ begin
   Result.AddTest(TestTIdNaptrRecords.Suite);
   Result.AddTest(TestTIdSrvRecord.Suite);
   Result.AddTest(TestTIdSrvRecords.Suite);
-end;
-
-//******************************************************************************
-//* TestFunctions                                                              *
-//******************************************************************************
-//* TestFunctions Public methods ***********************************************
-
-procedure TestFunctions.TestNaptrServiceIsSecure;
-begin
-  Check(NaptrServiceIsSecure('SIPS+D2T'),    'SIPS+D2T');
-  Check(NaptrServiceIsSecure('SIPS+D2S'),    'SIPS+D2S');
-  Check(not NaptrServiceIsSecure('SIP+D2T'), 'SIP+D2T');
-  Check(not NaptrServiceIsSecure('SIP+D2U'), 'SIP+D2U');
-
-  Check(NaptrServiceIsSecure('SIPS+'), 'SIPS+');
-  Check(NaptrServiceIsSecure('SIPS'),  'SIPS');
-
-  Check(not NaptrServiceIsSecure(''),             'The empty string');
-  Check(not NaptrServiceIsSecure('+'),            '+');
-  Check(not NaptrServiceIsSecure('gobbledegook'), 'gobbledegook');
 end;
 
 //******************************************************************************
@@ -449,6 +430,26 @@ begin
   Self.Loc.Free;
 
   inherited Destroy;
+end;
+
+procedure TestTIdSipAbstractLocator.CheckAorAAAARecords(Locations: TIdSipLocations;
+                                                        const ExpectedTransport: String);
+begin
+  Locations := Self.Loc.FindServersFor(Self.Target);
+  try
+    CheckEquals(Self.Loc.NameRecords.Count,
+                Locations.Count, 'Location count');
+
+    CheckEquals(ExpectedTransport, Locations[0].Transport, '1st record Transport');
+    CheckEquals(Self.ARecord,      Locations[0].Address,   '1st record Address');
+    CheckEquals(Self.Port,         Locations[0].Port,      '1st record Port');
+
+    CheckEquals(ExpectedTransport, Locations[1].Transport, '2nd record Transport');
+    CheckEquals(Self.AAAARecord,   Locations[1].Address,   '2nd record Address');
+    CheckEquals(Self.Port,         Locations[1].Port,      '2nd record Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 //* TestTIdSipAbstractLocator Published methods ********************************
@@ -795,17 +796,41 @@ procedure TestTIdSipAbstractLocator.TestNameAndPort;
 var
   Locations: TIdSipLocations;
 begin
+  // Use all A/AAAA RRs for the host
   Self.Target.Uri := 'sip:foo.com:' + IntToStr(Self.Port);
-  Self.Loc.AddA(Self.Target.Host, Self.IP);
+  Self.Loc.AddA   (Self.Target.Host, Self.ARecord);
+  Self.Loc.AddAAAA(Self.Target.Host, Self.AAAARecord);
 
   Locations := Self.Loc.FindServersFor(Self.Target);
   try
-    Check(Locations.Count > 0, 'Too few locations');
+    Self.CheckAorAAAARecords(Locations, UdpTransport);
+  finally
+    Locations.Free;
+  end;
+end;
 
-    CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
-    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+procedure TestTIdSipAbstractLocator.TestNameAndPortWithTransportParam;
+var
+  Locations: TIdSipLocations;
+begin
+  // Iterate over the SRV RRs for _sip._udp (despite the remote side preferring
+  // TLS).
+  Self.Target.Uri := 'sip:example.com;transport=udp';
 
+  Self.Loc.AddNAPTR(Self.IP,  50, 50, 's', NaptrTlsService, '_sips._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', NaptrTcpService, '_sip._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
+  Self.Loc.AddSRV('example.com', '_sips._tcp', 0, 0, 5061, 'paranoid.example.com');
+  Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 0, 5061,  'reliable.example.com');
+  Self.Loc.AddSRV('example.com', '_sip._udp', 0, 0, 5061,  'unreliable.example.com');
+  Self.Loc.AddA('paranoid.example.com',   '127.0.0.1');
+  Self.Loc.AddA('reliable.example.com',   '127.0.0.2');
+  Self.Loc.AddA('unreliable.example.com', '127.0.0.3');
+
+  Locations := Self.Loc.FindServersFor(Self.Target);
+  try
+    CheckEquals(1, Locations.Count, 'Number of locations');
+    CheckEquals('127.0.0.3', Locations[0].Address, 'Wrong location');
   finally
     Locations.Free;
   end;
@@ -815,41 +840,15 @@ procedure TestTIdSipAbstractLocator.TestNameAndPortSips;
 var
   Locations: TIdSipLocations;
 begin
+  // Use all A/AAAA RRs for the host
   Self.Port := 5060;
   Self.Target.Uri := 'sips:foo.com:' + IntToStr(Self.Port);
-  Self.Loc.AddA(Self.Target.Host, Self.IP);
+  Self.Loc.AddA   (Self.Target.Host, Self.ARecord);
+  Self.Loc.AddAAAA(Self.Target.Host, Self.AAAARecord);
 
   Locations := Self.Loc.FindServersFor(Self.Target);
   try
-    Check(Locations.Count > 0, 'Too few locations');
-
-    CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
-    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestNameAndPortWithMultipleNameRecords;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
-  Self.Loc.AddAAAA(Self.Domain, Self.AAAARecord);
-  Self.Loc.AddA(Self.Domain, Self.ARecord);
-
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
-  try
-    CheckEquals(Self.Loc.NameRecords.Count,
-                Locations.Count,
-                'Location count');
-    CheckEquals(Self.AAAARecord,
-                Self.Loc.NameRecords[0].IPAddress,
-                '1st record');
-    CheckEquals(Self.ARecord,
-                Self.Loc.NameRecords[1].IPAddress,
-                '2nd record');
+    Self.CheckAorAAAARecords(Locations, TlsTransport);
   finally
     Locations.Free;
   end;
@@ -859,22 +858,40 @@ procedure TestTIdSipAbstractLocator.TestNameNoNaptrNoSrv;
 var
   Locations: TIdSipLocations;
 begin
+  // Use all A/AAAA RRs for the host
   Self.Target.Uri := 'sip:' + Self.Domain;
-  
-  Self.Loc.AddAAAA(Self.Domain, Self.AAAARecord);
-  Self.Loc.AddA(Self.Domain, Self.ARecord);
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Self.Loc.AddA   (Self.Domain, Self.ARecord);
+  Self.Loc.AddAAAA(Self.Domain, Self.AAAARecord);
+
+  Locations := Self.Loc.FindServersFor(Self.Target);
+  try
+    Self.CheckAorAAAARecords(Locations, UdpTransport);
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestNameNaptrSomeSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // Iterate over SRV records
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  // We have two NAPTR records. Probably as a result of an admin slip-up,
+  // there're no SRV records for the first NAPTR. This test shows that we look
+  // up SRV stuff for NAPTR records at least until we find some SRVs.
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService, SrvTlsPrefix + '.' + Self.Domain);
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService, SrvTcpPrefix + '.' + Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP, 'sip.' + Self.Domain);
+  Self.Loc.AddAAAA('sip.' + Self.Domain, Self.AAAARecord);
+
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     CheckEquals(Self.Loc.NameRecords.Count,
                 Locations.Count,
-                'Location count');
-    CheckEquals(Self.AAAARecord,
-                Self.Loc.NameRecords[0].IPAddress,
-                '1st record');
-    CheckEquals(Self.ARecord,
-                Self.Loc.NameRecords[1].IPAddress,
-                '2nd record');
+                'No SRV lookup for NAPTR records beyond the first?');
   finally
     Locations.Free;
   end;
@@ -887,7 +904,7 @@ begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -905,7 +922,7 @@ var
 begin
   Self.Target.Uri := 'sip:' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -924,7 +941,7 @@ begin
   Self.Port       := IdPORT_SIPS;
   Self.Target.Uri := 'sips:' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -943,7 +960,7 @@ begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -961,7 +978,7 @@ var
 begin
   Self.Target.Uri := 'sip:foo.com;maddr=' + Self.IP;
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -979,7 +996,7 @@ var
 begin
   Self.Target.Uri := 'sip:foo.com;maddr=' + Self.AAAARecord;
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -1066,6 +1083,7 @@ begin
     CheckEquals(1,
                 Locations.Count,
                 'The locator didn''t filter out the "unavailable" SRV');
+    CheckEquals(SctpTransport, Locations[0].Transport, 'Wrong location found');
   finally
     Locations.Free;
   end;
@@ -1097,7 +1115,7 @@ begin
   Self.TransportParam := TransportParamSCTP;
   Self.Target.Uri := 'sip:127.0.0.1;transport=' + Self.TransportParam;
 
-  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 0, 'Too few locations');
 
@@ -1230,7 +1248,7 @@ begin
   Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', NaptrTcpService, '_sip._tcp.example.com');
   Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
 
-  CheckEquals(NaptrServiceToTransport(Self.Loc.NAPTR[0].Service),
+  CheckEquals(Self.Loc.NAPTR[0].AsSipTransport,
               Self.Loc.TransportFor(Self.Target,
                                     Self.Naptr,
                                     Self.Srv,
@@ -1674,6 +1692,33 @@ end;
 
 //* TestTIdNaptrRecord Published methods ***************************************
 
+procedure TestTIdNaptrRecord.TestAsSipTransport;
+type
+  TNaptrSipTransportMap = record
+    NaptrService: String;
+    SipTransport: String;
+  end;
+const
+  Tests: array[1..5] of TNaptrSipTransportMap =
+         ((NaptrService: NaptrSctpService; SipTransport: SctpTransport),
+          (NaptrService: NaptrSctpService; SipTransport: SctpTransport),
+          (NaptrService: NaptrTlsService; SipTransport: TlsTransport),
+          (NaptrService: NaptrTlsOverSctpService; SipTransport: TlsOverSctpTransport),
+          (NaptrService: NaptrUdpService;  SipTransport: UdpTransport));
+var
+  I: Integer;
+  N: TIdNaptrRecord;
+begin
+  for I := Low(Tests) to High(Tests) do begin
+    N := TIdNaptrRecord.Create('', 0, 0, '', Tests[I].NaptrService, '', '');
+    try
+      CheckEquals(Tests[I].SipTransport, N.AsSipTransport, Tests[I].NaptrService);
+    finally
+      N.Free;
+    end;
+  end;
+end;
+
 procedure TestTIdNaptrRecord.TestCopy;
 var
   Copy: TIdNaptrRecord;
@@ -1701,6 +1746,33 @@ begin
   CheckEquals(Self.Regex,      Self.Rec.Regex,      'Regex');
   CheckEquals(Self.Service,    Self.Rec.Service,    'Service');
   CheckEquals(Self.Value,      Self.Rec.Value,      'Value');
+end;
+
+procedure TestTIdNaptrRecord.TestIsSecureService;
+type
+  TFacts = record
+    Service:  String;
+    IsSecure: Boolean;
+  end;
+const
+  Tests: array[1..5] of TFacts =
+         ((Service: NaptrTlsService; IsSecure: true),
+          (Service: NaptrTlsOverSctpService; IsSecure: true),
+          (Service: NaptrTcpService; IsSecure: false),
+          (Service: NaptrUdpService; IsSecure: false),
+          (Service: NaptrSctpService; IsSecure: false));
+var
+  I: Integer;
+  N: TIdNaptrRecord;
+begin
+  for I := Low(Tests) to High(Tests) do begin
+    N := TIdNaptrRecord.Create('', 0, 0, '', Tests[I].Service, '', '');
+    try
+      Check(Tests[I].IsSecure = N.IsSecureService, Tests[I].Service);
+    finally
+      N.Free;
+    end;
+  end;
 end;
 
 //******************************************************************************
@@ -1764,6 +1836,40 @@ begin
   CheckEquals(Service,    Self.List[0].Service,    'Service');
   CheckEquals(Regex,      Self.List[0].Regex,      'Regex');
   CheckEquals(Value,      Self.List[0].Value,      'Value');
+end;
+
+procedure TestTIdNaptrRecords.TestAnyAppropriateRecord;
+var
+  SupportedTrans: TStrings;
+begin
+  Self.List.Add('foo', 0, 0, NaptrDefaultFlags, NaptrTlsService,  '', SrvTlsPrefix + '.foo');
+  Self.List.Add('foo', 1, 0, NaptrDefaultFlags, NaptrTcpService,  '', SrvTcpPrefix + '.foo');
+  Self.List.Add('foo', 2, 0, NaptrDefaultFlags, NaptrUdpService,  '', SrvUdpPrefix + '.foo');
+  Self.List.Add('foo', 3, 0, NaptrDefaultFlags, NaptrSctpService, '', SrvSctpPrefix + '.foo');
+
+  SupportedTrans := TStringList.Create;
+  try
+    Check(not Assigned(Self.List.AnyAppropriateRecord(SupportedTrans)),
+          'Return nil for no appropriate transports');
+
+    SupportedTrans.Add(SctpTransport);
+
+    Check(Assigned(Self.List.AnyAppropriateRecord(SupportedTrans)),
+          'No record found for ' + SupportedTrans[0]);
+
+    CheckEquals(NaptrSctpService,
+                Self.List.AnyAppropriateRecord(SupportedTrans).Service,
+                'Wrong record found');
+
+    SupportedTrans.Add(TcpTransport);
+    Check(Assigned(Self.List.AnyAppropriateRecord(SupportedTrans)),
+          'No record found for ' + SupportedTrans[1]);
+    CheckEquals(NaptrTcpService,
+                Self.List.AnyAppropriateRecord(SupportedTrans).Service,
+                'Preferences ignored');
+  finally
+    SupportedTrans.Free;
+  end;
 end;
 
 procedure TestTIdNaptrRecords.TestClear;

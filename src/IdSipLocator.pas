@@ -109,6 +109,14 @@ type
   // send a SIP message.
   TIdSipAbstractLocator = class(TObject)
   private
+    procedure AddLocationsFromSRVsOrNames(Result: TIdSipLocations;
+                                          const Transport: String;
+                                          const Target: String;
+                                          Port: Cardinal;
+                                          Srv: TIdSrvRecords;
+                                          Names: TIdDomainNameRecords);
+    function  ChooseSupportedTransport(TargetUri: TIdUri;
+                                       Naptr: TIdNaptrRecords): String;
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                            Recs: TIdNaptrRecords);
     procedure ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
@@ -142,8 +150,10 @@ type
                            Result: TIdNaptrRecords);
     procedure ResolveSRV(const ServiceAndDomain: String;
                          Result: TIdSrvRecords);
+    procedure ResolveSRVs(Naptr: TIdNaptrRecords;
+                          Result: TIdSrvRecords); overload;
     procedure ResolveSRVs(ServiceAndDomains: TStrings;
-                          Result: TIdSrvRecords);
+                          Result: TIdSrvRecords); overload;
     function  SrvTarget(UsingSips: Boolean;
                         const Protocol: String;
                         const Domain: String): String;
@@ -212,7 +222,9 @@ type
                        const Service: String;
                        const Regex: String;
                        const Value: String);
+    function AsSipTransport: String;
     function Copy: TIdNaptrRecord;
+    function IsSecureService: Boolean;
 
     property Flags:      String read fFlags;
     property Key:        String read fKey;
@@ -236,6 +248,7 @@ type
                   const Service: String;
                   const Regex: String;
                   const Value: String); overload;
+    function  AnyAppropriateRecord(Transports: TStrings): TIdNaptrRecord;
     procedure Sort;
 
     property Items[Index: Integer]: TIdNaptrRecord read GetItems; default;
@@ -246,7 +259,7 @@ type
   // A/AAAA records for the targets of each SRV RR. We support this with the
   // NameRecords property.
   //
-  // Note that while I aspire to be a Value Object, by NameRecords property
+  // Note that while I aspire to be a Value Object, my NameRecords property
   // is actually mutable. This might seem odd, but remember that the NameRecords
   // have no bearing on my SRV RR - they're included as a convenience, a
   // denormalisation for efficiency, if you like.
@@ -286,6 +299,7 @@ type
     function GetItems(Index: Integer): TIdSrvRecord;
     function ItemFor(const Target: String): TIdSrvRecord;
   public
+    class function TransportToPrefix(const Transport: String): String;
     procedure Add(Copy: TIdSrvRecord); overload;
     procedure Add(const Domain: String;
                   const Service: String;
@@ -340,8 +354,6 @@ const
 
 function DomainNameSort(Item1, Item2: Pointer): Integer;
 function NaptrSort(Item1, Item2: Pointer): Integer;
-function NaptrServiceToTransport(const NaptrService: String): String;
-function NaptrServiceIsSecure(NaptrService: String): Boolean;
 function SrvSort(Item1, Item2: Pointer): Integer;
 
 implementation
@@ -397,8 +409,8 @@ begin
     //   SIP+D2T < SIP+D2U;
     //   SIPS+D2T < SIP+D2T
 
-    AIsSecure := NaptrServiceIsSecure(A.Service);
-    BIsSecure := NaptrServiceIsSecure(B.Service);
+    AIsSecure := A.IsSecureService;
+    BIsSecure := B.IsSecureService;
 
     if AIsSecure xor BIsSecure then begin
       if AIsSecure then
@@ -417,30 +429,6 @@ begin
     Result := A.Preference - B.Preference;
 end;
 
-function NaptrServiceToTransport(const NaptrService: String): String;
-begin
-  // TODO: We really need to reference a transport registry of some kind.
-  if      IsEqual(NaptrService, NaptrTlsService) then
-    Result := TlsTransport
-  else if IsEqual(NaptrService, NaptrTcpService) then
-    Result := TcpTransport
-  else if IsEqual(NaptrService, NaptrUdpService) then
-    Result := UdpTransport
-  else if IsEqual(NaptrService, NaptrSctpService) then
-    Result := SctpTransport
-  else
-    raise Exception.Create('Don''t know what transport to use for a NAPTR service ''' + NaptrService + '''');
-end;
-
-function NaptrServiceIsSecure(NaptrService: String): Boolean;
-var
-  Service:  String;
-begin
-  Service := Fetch(NaptrService, NaptrDelimiter);
-
-  Result := IsEqual(NaptrSipsService, Service);
-end;
-
 function SrvSort(Item1, Item2: Pointer): Integer;
 var
   A: TIdSrvRecord;
@@ -454,6 +442,31 @@ begin
   B := TIdSrvRecord(Item2);
 
   Result := A.Priority - B.Priority;
+
+  // TODO: This weight algorithm's actually wrong. See RFC 2782:
+  //      In the absence of a protocol whose specification calls for the
+  //      use of other weighting information, a client arranges the SRV
+  //      RRs of the same Priority in the order in which target hosts,
+  //      specified by the SRV RRs, will be contacted. The following
+  //     algorithm SHOULD be used to order the SRV RRs of the same
+  //      priority:
+
+  //      To select a target to be contacted next, arrange all SRV RRs
+  //      (that have not been ordered yet) in any order, except that all
+  //      those with weight 0 are placed at the beginning of the list.
+  //
+  //      Compute the sum of the weights of those RRs, and with each RR
+  //      associate the running sum in the selected order. Then choose a
+  //      uniform random number between 0 and the sum computed
+  //      (inclusive), and select the RR whose running sum value is the
+  //      first in the selected order which is greater than or equal to
+  //      the random number selected. The target host specified in the
+  //      selected SRV RR is the next one to be contacted by the client.
+  //      Remove this SRV RR from the set of the unordered SRV RRs and
+  //      apply the described algorithm to the unordered SRV RRs to select
+  //      the next target host.  Continue the ordering process until there
+  //      are no unordered SRV RRs.  This process is repeated for each
+  //      Priority.
 
   // Lower weight = less often used
   if (Result = 0) then
@@ -595,6 +608,7 @@ var
   Target:    String;
   Transport: String;
 begin
+  // See doc/locating_servers.txt for a nice flow chart of this algorithm.
   Result := TIdSipLocations.Create;
 
   Naptr := TIdNaptrRecords.Create;
@@ -617,7 +631,7 @@ begin
 
         if AddressOfRecord.PortIsSpecified then begin
           // AddressOfRecord's Host is a domain name
-          Self.ResolveNameRecords(AddressOfRecord.Host, ARecords);
+          Self.ResolveNameRecords(Target, ARecords);
 
           Result.AddLocationsFromNames(Transport,
                                        AddressOfRecord.Port,
@@ -626,22 +640,43 @@ begin
           Exit;
         end;
 
-        Self.ResolveNAPTR(AddressOfRecord, Naptr);
+        if not Naptr.IsEmpty then begin
+          Self.ResolveSRVs(Naptr, Srv);
 
-        if Naptr.IsEmpty then begin
-          if Srv.IsEmpty then
-            Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
-        end
-        else
-          Self.ResolveSRV(Naptr[0].Value, Srv);
+          Self.AddLocationsFromSRVsOrNames(Result,
+                                           Transport,
+                                           Target,
+                                           AddressOfRecord.Port,
+                                           Srv, ARecords);
 
-        if Srv.IsEmpty then begin
-          Self.ResolveNameRecords(AddressOfRecord.Host, ARecords);
+          Exit;
+        end;
 
-          Result.AddLocationsFromNames(Transport, AddressOfRecord.Port, ARecords);
-        end
-        else
-          Result.AddLocationsFromSRVs(Srv);
+        if AddressOfRecord.TransportIsSpecified then begin
+          Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSecure,
+                                         Transport,
+                                         Target),
+                          Srv);
+
+          Self.AddLocationsFromSRVsOrNames(Result,
+                                           Transport,
+                                           Target,
+                                           AddressOfRecord.Port,
+                                           Srv, ARecords);
+
+          Exit;
+        end;
+
+        // If Srv isn't empty then it means we already have SRV RRs for a NAPTR
+        // record, in which case we might as well try use them.
+        if Srv.IsEmpty then
+          Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
+
+        Self.AddLocationsFromSRVsOrNames(Result,
+                                         Transport,
+                                         Target,
+                                         AddressOfRecord.Port,
+                                         Srv, ARecords);
       finally
         ARecords.Free;
       end;
@@ -682,6 +717,8 @@ begin
   // 2.3 Name and no port? Query SRV for that name using "_sips" if TLS or
   //     "_sip" otherwise. Iterate over the list using the transport in the
   //     sent-by and the IP/ports from the SRV query.
+  //
+  // See doc/locating_servers.txt for a nice flow chart of this algorithm.
 
   Result := TIdSipLocations.Create;
 
@@ -762,6 +799,23 @@ begin
   Result.Sort;
 end;
 
+procedure TIdSipAbstractLocator.ResolveSRVs(Naptr: TIdNaptrRecords;
+                                            Result: TIdSrvRecords);
+var
+  I:        Integer;
+  Services: TStrings;
+begin
+  Services := TStringList.Create;
+  try
+    for I := 0 to Naptr.Count - 1 do
+      Services.Add(Naptr[I].Value);
+
+    Self.ResolveSRVs(Services, Result);
+  finally
+    Services.Free;
+  end;
+end;
+
 procedure TIdSipAbstractLocator.ResolveSRVs(ServiceAndDomains: TStrings;
                                             Result: TIdSrvRecords);
 var
@@ -797,6 +851,8 @@ function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
 var
   Target: String;
 begin
+  // See doc/locating_servers.txt for a nice flow chart of this algorithm.
+  
   if AddressOfRecord.HasMaddr then
     Target := AddressOfRecord.Maddr
   else
@@ -817,11 +873,13 @@ begin
   if NAPTR.IsEmpty then begin
     Result := Self.FindTransportFromSrv(AddressOfRecord, SRV);
 
+    // No NAPTR records, no SRV records: use whatever default the URI thinks
+    // we should.
     if SRV.IsEmpty then
       Result := ParamToTransport(AddressOfRecord.Transport);
   end
   else
-    Result := NaptrServiceToTransport(NAPTR[0].Service)
+    Result := Self.ChooseSupportedTransport(AddressOfRecord, NAPTR);
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
@@ -882,6 +940,50 @@ begin
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
+
+procedure TIdSipAbstractLocator.AddLocationsFromSRVsOrNames(Result: TIdSipLocations;
+                                                            const Transport: String;
+                                                            const Target: String;
+                                                            Port: Cardinal;
+                                                            Srv: TIdSrvRecords;
+                                                            Names: TIdDomainNameRecords);
+begin
+  if Srv.IsEmpty then begin
+    Self.ResolveNameRecords(Target, Names);
+
+    Result.AddLocationsFromNames(Transport, Port, Names);
+  end
+  else
+    Result.AddLocationsFromSRVs(Srv);
+end;
+
+function TIdSipAbstractLocator.ChooseSupportedTransport(TargetUri: TIdUri;
+                                                        Naptr: TIdNaptrRecords): String;
+var
+  I:              Integer;
+  OurTransports:  TStrings;
+  TransportIndex: Integer;
+begin
+//  Result := Naptr[0].AsSipTransport;
+
+  OurTransports := TStringList.Create;
+  try
+    Self.SupportedTransports(TargetUri, OurTransports);
+
+    Result := '';
+    I      := 0;
+
+    while (I < Naptr.Count) and (Result = '') do begin
+      TransportIndex := OurTransports.IndexOf(Naptr[I].AsSipTransport);
+      if (TransportIndex <> -1) then
+        Result := OurTransports[TransportIndex]
+      else
+        Inc(I);
+    end;
+  finally
+    OurTransports.Free;
+  end;
+end;
 
 procedure TIdSipAbstractLocator.ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                                              Recs: TIdNaptrRecords);
@@ -995,10 +1097,10 @@ procedure TIdSipAbstractLocator.SupportedTransports(TargetUri: TIdUri; Transport
 begin
   Transports.Clear;
 
-  if TargetUri.IsSipsUri then begin
-    Transports.Add(TlsTransport);
-  end
-  else begin
+  Transports.Add(TlsTransport);
+  Transports.Add(TlsOverSctpTransport);
+
+  if not TargetUri.IsSipsUri then begin
     Transports.Add(TcpTransport);
     Transports.Add(UdpTransport);
     Transports.Add(SctpTransport);
@@ -1099,6 +1201,23 @@ begin
   Self.fValue      := Value;
 end;
 
+function TIdNaptrRecord.AsSipTransport: String;
+begin
+  // TODO: We really need to reference a transport registry of some kind.
+  if      IsEqual(Self.Service, NaptrTlsService) then
+    Result := TlsTransport
+  else if IsEqual(Self.Service, NaptrTcpService) then
+    Result := TcpTransport
+  else if IsEqual(Self.Service, NaptrUdpService) then
+    Result := UdpTransport
+  else if IsEqual(Self.Service, NaptrSctpService) then
+    Result := SctpTransport
+  else if IsEqual(Self.Service, NaptrTlsOverSctpService) then
+    Result := TlsOverSctpTransport
+  else
+    raise Exception.Create('Don''t know what transport to use for a NAPTR service ''' + Self.Service + '''');
+end;
+
 function TIdNaptrRecord.Copy: TIdNaptrRecord;
 begin
   Result := TIdNaptrRecord.Create(Self.Key,
@@ -1108,6 +1227,18 @@ begin
                                   Self.Service,
                                   Self.Regex,
                                   Self.Value);
+end;
+
+function TIdNaptrRecord.IsSecureService: Boolean;
+var
+  Service:  String;
+begin
+  // TODO: move to TIdNaptrRecord
+  Service := Self.Service;
+
+  Service := Fetch(Service, NaptrDelimiter);
+
+  Result := IsEqual(NaptrSipsService, Service);
 end;
 
 //******************************************************************************
@@ -1138,6 +1269,20 @@ begin
                                   Regex,
                                   Value);
   Self.List.Add(NewRec);
+end;
+
+function TIdNaptrRecords.AnyAppropriateRecord(Transports: TStrings): TIdNaptrRecord;
+var
+  I: Integer;
+begin
+  Result := nil;
+  I      := 0;
+
+  while (I < Self.Count) and not Assigned(Result) do
+    if (Transports.IndexOf(Self[I].AsSipTransport) <> -1) then
+      Result := Self[I]
+    else
+      Inc(I);
 end;
 
 procedure TIdNaptrRecords.Sort;
@@ -1237,6 +1382,20 @@ end;
 //* TIdSrvRecords                                                              *
 //******************************************************************************
 //* TIdSrvRecords Public methods ***********************************************
+
+class function TIdSrvRecords.TransportToPrefix(const Transport: String): String;
+begin
+  if IsEqual(Transport, TlsTransport) then
+    Result := SrvTlsPrefix
+  else if IsEqual(Transport, TcpTransport) then
+    Result := SrvTcpPrefix
+  else if IsEqual(Transport, UdpTransport) then
+    Result := SrvUdpPrefix
+  else if IsEqual(Transport, SctpTransport) then
+    Result := SrvSctpPrefix
+  else if IsEqual(Transport, TlsOverSctpTransport) then
+    Result := SrvTlsOverSctpPrefix;
+end;
 
 procedure TIdSrvRecords.Add(Copy: TIdSrvRecord);
 begin
