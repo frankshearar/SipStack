@@ -25,6 +25,25 @@ type
   TIdSipRequest = class;
   TIdSipResponse = class;
 
+  TIdSipConnectionBindings = record
+    LocalIP:   String;
+    LocalPort: Integer;
+    PeerIP:    String;
+    PeerPort:  Integer;
+  end;  
+
+  IIdSipMessageListener = interface
+    ['{941E4681-89F9-4491-825C-F6458F7E663C}']
+    procedure OnException(E: Exception;
+                          const Reason: String);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
+  end;
+
   TIdSipNotifyEvent = TNotifyEvent;
 
   IIdSipMessageVisitor = interface
@@ -3416,7 +3435,12 @@ begin
   if not TIdSipParser.IsNumber(Value) then
     Self.FailParse(InvalidNumber)
   else begin
-    fNumericValue := StrToInt(Value);
+    try
+      fNumericValue := StrToInt(Value);
+    except
+      on EConvertError do
+        Self.FailParse(InvalidNumber);
+    end;
 
     inherited Parse(Value);
   end;
@@ -6160,7 +6184,9 @@ end;
 
 procedure TIdSipParser.CheckContentLengthContentType(Msg: TIdSipMessage);
 begin
-  if (Msg.ContentLength > 0) and (Msg.ContentType = '') then
+  if Msg.HasHeader(ContentLengthHeaderFull)
+    and (Msg.ContentLength > 0)
+    and (Msg.ContentType = '') then
     Self.FailParse(Msg, MissingContentType);
 end;
 
@@ -6212,19 +6238,9 @@ begin
 end;
 
 procedure TIdSipParser.DoOnParseError(const Reason: String);
-var
-  S: TStringStream;
 begin
-  Self.Source.Seek(0, soFromBeginning);
-  S := TStringStream.Create('');
-  try
-    S.CopyFrom(Self.Source, 0);
-
-    if Assigned(Self.OnParserError) then
-      Self.OnParserError(S.DataString, Reason);
-  finally
-    S.Free;
-  end;
+  if Assigned(Self.OnParserError) then
+    Self.OnParserError(StreamToStr(Self.Source), Reason);
 end;
 
 procedure TIdSipParser.FailParse(Msg: TIdSipMessage; const Reason: String);

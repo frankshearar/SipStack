@@ -12,9 +12,8 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTransport,
-  IdSocketHandle, IdTcpServer, SyncObjs, SysUtils, TestFramework,
-  TestFrameworkEx;
+  Classes, IdSipMessage, IdSipTcpServer, IdSipTransport, IdSocketHandle,
+  IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)   

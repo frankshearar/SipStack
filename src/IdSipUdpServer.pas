@@ -12,28 +12,22 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdNotification, IdSipConsts, IdSipMessage, IdSipTcpClient,
-  IdSipTcpServer, IdSocketHandle, IdUDPServer, SysUtils;
+  Classes, IdNotification, IdSipConsts, IdSipMessage, IdSipServerNotifier,
+  IdSocketHandle, IdUDPServer, SysUtils;
 
 type
   TIdSipUdpServer = class(TIdUDPServer)
   private
-    Listeners: TIdNotificationList;
+    Notifier: TIdSipServerNotifier;
 
     procedure DoOnParserError(const RawMessage, Reason: String);
-    procedure NotifyListeners(const Request: TIdSipRequest;
-                              const ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyListenersOfException(E: Exception;
-                                         const Reason: String);
-    procedure NotifyListenersOfMalformedMessage(const Msg: String;
-                                                const Reason: String);
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
                                Request: TIdSipRequest;
                                const Reason: String);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
-    procedure NotifyListeners(const Response: TIdSipResponse;
-                              const ReceivedFrom: TIdSipConnectionBindings); overload; virtual;
+    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
+                                        ReceivedFrom: TIdSipConnectionBindings); overload; virtual;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -57,25 +51,25 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort   := IdPORT_SIP;
-  Self.Listeners     := TIdNotificationList.Create;
+  Self.Notifier      := TIdSipServerNotifier.Create;
   Self.ThreadedEvent := true;
 end;
 
 destructor TIdSipUdpServer.Destroy;
 begin
-  Self.Listeners.Free;
+  Self.Notifier.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipUdpServer.AddMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.Notifier.AddMessageListener(Listener);
 end;
 
 procedure TIdSipUdpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.Notifier.RemoveMessageListener(Listener);
 end;
 
 //* TIdSipUdpServer Protected methods ******************************************
@@ -111,8 +105,10 @@ begin
           Reason := Format(UnexpectedMessageLength,
                            [RemainingBytes, Msg.ContentLength]);
           RawMsg := StreamToStr(AData);
-          Self.NotifyListenersOfMalformedMessage(RawMsg, Reason);
-          Self.ReturnBadRequest(ABinding, Msg as TIdSipRequest, Reason);
+          Self.Notifier.NotifyListenersOfMalformedMessage(RawMsg, Reason);
+          Self.ReturnBadRequest(ABinding,
+                                Msg as TIdSipRequest,
+                                Reason);
         end;
 
         if Msg.HasInvalidSyntax then begin
@@ -121,22 +117,22 @@ begin
           if Msg.IsRequest then
             Self.ReturnBadRequest(ABinding, Msg as TIdSipRequest, Reason);
 
-          Self.NotifyListenersOfMalformedMessage(StreamToStr(AData), Reason);
+          Self.Notifier.NotifyListenersOfMalformedMessage(StreamToStr(AData), Reason);
         end
         else begin
           Msg.ReadBody(Parser.Source);
 
           if Msg.IsRequest then
-            Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom)
+            Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest, ReceivedFrom)
           else
-            Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+            Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse, ReceivedFrom);
         end;
       finally
         Msg.Free;
       end;
     except
       on E: Exception do begin
-        Self.NotifyListenersOfException(E, E.Message);
+        Self.Notifier.NotifyListenersOfException(E, E.Message);
       end;
     end;
   finally
@@ -144,75 +140,17 @@ begin
   end;
 end;
 
-procedure TIdSipUdpServer.NotifyListeners(const Response: TIdSipResponse;
-                                          const ReceivedFrom: TIdSipConnectionBindings);
-var
-  Notification: TIdSipTcpServerReceiveResponseMethod;
+procedure TIdSipUdpServer.NotifyListenersOfResponse(Response: TIdSipResponse;
+                                                    ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Notification := TIdSipTcpServerReceiveResponseMethod.Create;
-  try
-    Notification.ReceivedFrom := ReceivedFrom;
-    Notification.Response     := Response;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Self.Notifier.NotifyListenersOfResponse(Response, ReceivedFrom);
 end;
 
 //* TIdSipUdpServer Private methods ********************************************
 
 procedure TIdSipUdpServer.DoOnParserError(const RawMessage, Reason: String);
 begin
-  Self.NotifyListenersOfMalformedMessage(RawMessage, Reason);
-end;
-
-procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest;
-                                          const ReceivedFrom: TIdSipConnectionBindings);
-var
-  Notification: TIdSipTcpServerReceiveRequestMethod;
-begin
-  Notification := TIdSipTcpServerReceiveRequestMethod.Create;
-  try
-    Notification.ReceivedFrom := ReceivedFrom;
-    Notification.Request     := Request;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipUdpServer.NotifyListenersOfException(E: Exception;
-                                                     const Reason: String);
-var
-  Notification: TIdSipTcpServerExceptionMethod;
-begin
-  Notification := TIdSipTcpServerExceptionMethod.Create;
-  try
-    Notification.Exception := E;
-    Notification.Reason    := Reason;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipUdpServer.NotifyListenersOfMalformedMessage(const Msg: String;
-                                                            const Reason: String);
-var
-  Notification: TIdSipTcpServerMalformedMessageMethod;
-begin
-  Notification := TIdSipTcpServerMalformedMessageMethod.Create;
-  try
-    Notification.Msg    := Msg;
-    Notification.Reason := Reason;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Self.Notifier.NotifyListenersOfMalformedMessage(RawMessage, Reason);
 end;
 
 procedure TIdSipUdpServer.ReturnBadRequest(Binding: TIdSocketHandle;

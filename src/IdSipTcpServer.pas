@@ -12,28 +12,16 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, Contnrs, IdNotification, IdSipConsts, IdSipMessage, 
-  IdSipTcpClient, IdSipTimer, IdTCPConnection, IdTCPServer, IdThread,
-  SyncObjs, SysUtils;
+  Classes, Contnrs, IdNotification, IdSipConsts, IdSipMessage,
+  IdSipServerNotifier, IdSipTcpClient, IdSipTimer, IdTCPConnection,
+  IdTCPServer, IdThread, SyncObjs, SysUtils;
 
 type
-  IIdSipMessageListener = interface
-    ['{941E4681-89F9-4491-825C-F6458F7E663C}']
-    procedure OnException(E: Exception;
-                          const Reason: String);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
-  end;
-
   // Use me, TIdSipConnectionTableEntry and TIdSipConnectionTable to keep track
   // of currently open connections. Section 18 of RFC 3261 requires that we
   // send re-issues of requests/responses down the same connection, and also
   // that we send responses down the same connection that we received a request
-  // from (provided that connection hasn't since been torn down, of course). 
+  // from (provided that connection hasn't since been torn down, of course).
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
   private
     fConnection: TIdTCPConnection;
@@ -94,19 +82,11 @@ type
     ConnectionMap:      TIdSipConnectionTableLock;
     fConnectionTimeout: Cardinal;
     fReadBodyTimeout:   Cardinal;
-    Listeners:          TIdNotificationList;
+    Notifier:           TIdSipServerNotifier;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
     procedure DoOnParserError(const RawMessage, Reason: String);
-    procedure NotifyListeners(Request: TIdSipRequest;
-                              ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyListeners(Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyListenersOfException(E: Exception;
-                                         const Reason: String);
-    procedure NotifyListenersOfMalformedMessage(const Msg: String;
-                                                const Reason: String);
     procedure OnException(T: TIdThread;
                           E: Exception);
     procedure OnReadBodyTimeout(Sender: TObject);
@@ -144,54 +124,7 @@ type
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
 
-  TIdSipTcpServerExceptionMethod = class(TIdMethod)
-  private
-    fException: Exception;
-    fReason:    String;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Exception: Exception read fException write fException;
-    property Reason:    String    read fReason write fReason;
-  end;
-
-  TIdSipTcpServerMalformedMessageMethod = class(TIdMethod)
-  private
-    fMsg:    String;
-    fReason: String;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Msg:    String read fMsg write fMsg;
-    property Reason: String read fReason write fReason;
-  end;
-
-  TIdSipTcpServerReceiveRequestMethod = class(TIdMethod)
-  private
-    fReceivedFrom: TIdSipConnectionBindings;
-    fRequest:      TIdSipRequest;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Request:      TIdSipRequest            read fRequest write fRequest;
-  end;
-
-  TIdSipTcpServerReceiveResponseMethod = class(TIdMethod)
-  private
-    fReceivedFrom: TIdSipConnectionBindings;
-    fResponse:     TIdSipResponse;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Response:     TIdSipResponse           read fResponse write fResponse;
-  end;
-
 implementation
-
-uses
-  IdSipTransaction;
 
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *
@@ -338,12 +271,12 @@ begin
   Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
   Self.ConnectionTimeout := Self.DefaultTimeout;
   Self.DefaultPort       := IdPORT_SIP;
-  Self.Listeners         := TIdNotificationList.Create;
+  Self.Notifier          := TIdSipServerNotifier.Create;
 end;
 
 destructor TIdSipTcpServer.Destroy;
 begin
-  Self.Listeners.Free;
+  Self.Notifier.Free;
   Self.ConnectionMap.Free;
 
   inherited Destroy;
@@ -351,7 +284,7 @@ end;
 
 procedure TIdSipTcpServer.AddMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.Listeners.AddListener(Listener);
+  Self.Notifier.AddMessageListener(Listener);
 end;
 
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
@@ -371,7 +304,7 @@ end;
 
 procedure TIdSipTcpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.Listeners.RemoveListener(Listener);
+  Self.Notifier.RemoveMessageListener(Listener);
 end;
 
 procedure TIdSipTcpServer.SendResponse(Response: TIdSipResponse);
@@ -451,18 +384,23 @@ begin
             if Msg.HasInvalidSyntax then begin
               Reason := Msg.ParseFailReason;
 
-              Self.ReturnBadRequest(AThread.Connection, Msg as TIdSipRequest, Reason);
+              Self.ReturnBadRequest(AThread.Connection,
+                                    Msg as TIdSipRequest,
+                                    Reason);
               AThread.Connection.DisconnectSocket;
 
-              Self.NotifyListenersOfMalformedMessage(StreamToStr(S), Reason);
+              Self.Notifier.NotifyListenersOfMalformedMessage(StreamToStr(S),
+                                                              Reason);
             end
             else begin
               if Msg.IsRequest then begin
                 Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-                Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom);
+                Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
+                                                       ReceivedFrom);
               end
               else
-                Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+                Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
+                                                        ReceivedFrom);
             end;
           finally
             Msg.Free;
@@ -471,7 +409,8 @@ begin
           on E: Exception do begin
             Self.ReturnInternalServerError(AThread.Connection, E.Message, Parser);
             AThread.Connection.DisconnectSocket;
-            Self.NotifyListenersOfException(E, 'TCP Server: ' + E.Message);
+            Self.Notifier.NotifyListenersOfException(E,
+                                                     'TCP Server: ' + E.Message);
           end;
         end;
       finally
@@ -500,78 +439,15 @@ end;
 
 procedure TIdSipTcpServer.DoOnParserError(const RawMessage, Reason: String);
 begin
-  Self.NotifyListenersOfMalformedMessage(RawMessage, Reason);
-end;
-
-procedure TIdSipTcpServer.NotifyListeners(Request: TIdSipRequest;
-                                          ReceivedFrom: TIdSipConnectionBindings);
-var
-  Notification: TIdSipTcpServerReceiveRequestMethod;
-begin
-  Notification := TIdSipTcpServerReceiveRequestMethod.Create;
-  try
-    Notification.ReceivedFrom := ReceivedFrom;
-    Notification.Request      := Request;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipTcpServer.NotifyListeners(Response: TIdSipResponse;
-                                          ReceivedFrom: TIdSipConnectionBindings);
-var
-  Notification: TIdSipTcpServerReceiveResponseMethod;
-begin
-  Notification := TIdSipTcpServerReceiveResponseMethod.Create;
-  try
-    Notification.ReceivedFrom := ReceivedFrom;
-    Notification.Response     := Response;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipTcpServer.NotifyListenersOfException(E: Exception;
-                                                     const Reason: String);
-var
-  Notification: TIdSipTcpServerExceptionMethod;
-begin
-  Notification := TIdSipTcpServerExceptionMethod.Create;
-  try
-    Notification.Exception := E;
-    Notification.Reason    := Reason;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipTcpServer.NotifyListenersOfMalformedMessage(const Msg: String;
-                                                            const Reason: String);
-var
-  Notification: TIdSipTcpServerMalformedMessageMethod;
-begin
-  Notification := TIdSipTcpServerMalformedMessageMethod.Create;
-  try
-    Notification.Msg    := Msg;
-    Notification.Reason := Reason;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
+  Self.Notifier.NotifyListenersOfMalformedMessage(RawMessage, Reason);
 end;
 
 procedure TIdSipTcpServer.OnException(T: TIdThread;
                                       E: Exception);
 begin
-  Self.NotifyListenersOfException(E,
-                                  'Connection Cutter Timer: ' + E.Message);
+  Self.Notifier.NotifyListenersOfException(E,
+                                           'Connection Cutter Timer: '
+                                         + E.Message);
 end;
 
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
@@ -678,50 +554,6 @@ procedure TIdSipTcpServer.WriteMessage(Connection: TIdTCPConnection;
                                        AMessage: TIdSipMessage);
 begin
   Connection.Write(AMessage.AsString);
-end;
-
-//******************************************************************************
-//* TIdSipTcpServerExceptionMethod                                             *
-//******************************************************************************
-//* TIdSipTcpServerExceptionMethod Public methods ******************************
-
-procedure TIdSipTcpServerExceptionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipMessageListener).OnException(Self.Exception,
-                                                 Self.Reason);
-end;
-
-//******************************************************************************
-//* TIdSipTcpServerMalformedMessageMethod                                      *
-//******************************************************************************
-//* TIdSipTcpServerMalformedMessageMethod Public methods ***********************
-
-procedure TIdSipTcpServerMalformedMessageMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipMessageListener).OnMalformedMessage(Self.Msg,
-                                                        Self.Reason);
-end;
-
-//******************************************************************************
-//* TIdSipTcpServerReceiveRequestMethod                                        *
-//******************************************************************************
-//* TIdSipTcpServerReceiveRequestMethod Public methods *************************
-
-procedure TIdSipTcpServerReceiveRequestMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipMessageListener).OnReceiveRequest(Self.Request,
-                                                      Self.ReceivedFrom);
-end;
-
-//******************************************************************************
-//* TIdSipTcpServerReceiveResponseMethod                                       *
-//******************************************************************************
-//* TIdSipTcpServerReceiveResponseMethod Public methods ************************
-
-procedure TIdSipTcpServerReceiveResponseMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipMessageListener).OnReceiveResponse(Self.Response,
-                                                       Self.ReceivedFrom);
 end;
 
 end.

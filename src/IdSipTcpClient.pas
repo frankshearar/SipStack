@@ -15,15 +15,7 @@ uses
   Classes, IdSipMessage, IdTCPClient;
 
 type
-  TIdSipConnectionBindings = record
-    LocalIP:   String;
-    LocalPort: Integer;
-    PeerIP:    String;
-    PeerPort:  Integer;
-  end;
-
   TIdSipTcpClient = class;
-  TIdSipClientEvent = procedure(Sender: TObject) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   R: TIdSipResponse;
                                   ReceivedFrom: TIdSipConnectionBindings) of object;
@@ -32,7 +24,7 @@ type
   // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
-    fOnFinished: TIdSipClientEvent;
+    fOnFinished: TNotifyEvent;
     fOnResponse: TIdSipResponseEvent;
     fTimeout:    Cardinal;
 
@@ -50,7 +42,7 @@ type
     procedure Send(Request: TIdSipRequest); overload;
     procedure Send(Response: TIdSipResponse); overload;
 
-    property OnFinished:    TIdSipClientEvent   read fOnFinished write fOnFinished;
+    property OnFinished:    TNotifyEvent        read fOnFinished write fOnFinished;
     property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
     property Timeout:       Cardinal            read fTimeout write fTimeout;
   end;

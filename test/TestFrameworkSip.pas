@@ -81,10 +81,16 @@ type
   TIdSipTestMessageListener = class(TIdSipMockListener,
                                     IIdSipMessageListener)
   private
-    fException:        Boolean;
-    fMalformedMessage: Boolean;
-    fReceivedRequest:  Boolean;
-    fReceivedResponse: Boolean;
+    fException:             Boolean;
+    fExceptionParam:        Exception;
+    fMalformedMessage:      Boolean;
+    fMalformedMessageParam: String;
+    fReasonParam:           String;
+    fReceivedFromParam:     TIdSipConnectionBindings;
+    fReceivedRequest:       Boolean;
+    fReceivedResponse:      Boolean;
+    fRequestParam:          TIdSipRequest;
+    fResponseParam:         TIdSipResponse;
 
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -97,10 +103,16 @@ type
   public
     constructor Create; override;
 
-    property Exception:        Boolean read fException;
-    property MalformedMessage: Boolean read fMalformedMessage;
-    property ReceivedRequest:  Boolean read fReceivedRequest;
-    property ReceivedResponse: Boolean read fReceivedResponse;
+    property Exception:             Boolean                  read fException;
+    property ExceptionParam:        Exception                read fExceptionParam;
+    property MalformedMessage:      Boolean                  read fMalformedMessage;
+    property MalformedMessageParam: String                   read fMalformedMessageParam;
+    property ReasonParam:           String                   read fReasonParam;
+    property ReceivedFromParam:     TIdSipConnectionBindings read fReceivedFromParam;
+    property ReceivedRequest:       Boolean                  read fReceivedRequest;
+    property ReceivedResponse:      Boolean                  read fReceivedResponse;
+    property RequestParam:          TIdSipRequest            read fRequestParam;
+    property ResponseParam:         TIdSipResponse           read fResponseParam;
   end;
 
   TIdSipTestObserver = class(TIdSipMockListener,
@@ -522,7 +534,9 @@ end;
 procedure TIdSipTestMessageListener.OnException(E: Exception;
                                                 const Reason: String);
 begin
-  Self.fException := true;
+  Self.fException      := true;
+  Self.fExceptionParam := E;
+  Self.fReasonParam    := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestMessageListener.OnException');
@@ -531,7 +545,9 @@ end;
 procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
                                                        const Reason: String);
 begin
-  Self.fMalformedMessage := true;
+  Self.fMalformedMessage      := true;
+  Self.fMalformedMessageParam := Msg;
+  Self.fReasonParam           := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestMessageListener.OnMalformedMessage');
@@ -540,7 +556,9 @@ end;
 procedure TIdSipTestMessageListener.OnReceiveRequest(Request: TIdSipRequest;
                                                      ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Self.fReceivedRequest := true;
+  Self.fReceivedRequest   := true;
+  Self.fRequestParam      := Request;
+  Self.fReceivedFromParam := ReceivedFrom;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestMessageListener.OnReceiveRequest');
@@ -549,7 +567,9 @@ end;
 procedure TIdSipTestMessageListener.OnReceiveResponse(Response: TIdSipResponse;
                                                       ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Self.fReceivedResponse := true;
+  Self.fReceivedResponse  := true;
+  Self.fResponseParam     := Response;
+  Self.fReceivedFromParam := ReceivedFrom;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestMessageListener.OnReceiveResponse');

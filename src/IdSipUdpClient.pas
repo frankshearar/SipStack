@@ -12,19 +12,19 @@ unit IdSipUdpClient;
 interface
 
 uses
-  IdSipMessage, IdSipTcpClient, IdSipUdpServer;
+  Classes, IdSipMessage, IdSipUdpServer;
 
 type
   TIdSipUdpClient = class(TIdSipUdpServer)
   private
-    fOnFinished: TIdSipClientEvent;
+    fOnFinished: TNotifyEvent;
 
     procedure DoOnFinished;
   protected
-    procedure NotifyListeners(const Response: TIdSipResponse;
-                              const ReceivedFrom: TIdSipConnectionBindings); overload; override;
+    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
+                                        ReceivedFrom: TIdSipConnectionBindings); overload; override;
   public
-    property OnFinished: TIdSipClientEvent read fOnFinished write fOnFinished;
+    property OnFinished: TNotifyEvent read fOnFinished write fOnFinished;
   end;
 
 implementation
@@ -34,10 +34,10 @@ implementation
 //******************************************************************************
 //* TIdSipUdpClient Protected methods ******************************************
 
-procedure TIdSipUdpClient.NotifyListeners(const Response: TIdSipResponse;
-                                          const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipUdpClient.NotifyListenersOfResponse(Response: TIdSipResponse;
+                                                    ReceivedFrom: TIdSipConnectionBindings);
 begin
-  inherited NotifyListeners(Response, ReceivedFrom);
+  inherited NotifyListenersOfResponse(Response, ReceivedFrom);
 
   if Response.IsFinal then Self.DoOnFinished;
 end;

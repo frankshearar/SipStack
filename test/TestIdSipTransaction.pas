@@ -13,8 +13,8 @@ interface
 
 uses
   IdSipCore, IdSipDialog, IdSipMessage, IdSipMockCore,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTcpClient,
-  IdSipTransaction, IdSipTransport, TestFramework, TestFrameworkSip;
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
+  IdSipTransport, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase,
