@@ -127,7 +127,7 @@ type
 implementation
 
 uses
-  IdSipTransaction, IdSipHeaders;
+  IdSipTransaction;
 
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *

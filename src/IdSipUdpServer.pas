@@ -35,7 +35,7 @@ type
 implementation
 
 uses
-  IdSipHeaders, IdUDPBase, SysUtils;
+  IdUDPBase, SysUtils;
 
 //*******************************************************************************
 //* TIdSipUdpServer                                                             *

@@ -30,6 +30,10 @@ type
     procedure TestCanonicaliseAsAddressOfRecordSips;
     procedure TestClearHeaders;
     procedure TestClearParameters;
+    procedure TestCreateRequest;
+    procedure TestCreateRequestWithDangerousHeaders;
+    procedure TestCreateRequestWithMethodParam;
+    procedure TestCreateRequestWithUnknownParams;
     procedure TestCreateSetsUri;
     procedure TestCreateUri;
     procedure TestDecode;
@@ -360,6 +364,141 @@ begin
   CheckEquals(0,
               Self.Uri.ParamCount,
               'Parameters not cleared');
+end;
+
+procedure TestTIdSipUri.TestCreateRequest;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  
+  Request := Self.Uri.CreateRequest;
+  try
+    CheckEquals(Self.Uri.AsString,
+                Request.RequestUri.AsString,
+                'Request-URI');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipUri.TestCreateRequestWithDangerousHeaders;
+var
+  Request: TIdSipRequest;
+begin
+  // We add the headers in the order they occur in section 19.1.5 of RFC 3261
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Headers.Add(FromHeaderFull).Value       := 'sip:case@fried.neurons.org';
+  Self.Uri.Headers.Add(CallIDHeaderFull).Value     := '1';
+  Self.Uri.Headers.Add(CSeqHeader).Value           := '0 INVITE';
+  Self.Uri.Headers.Add(ViaHeaderFull).Value        := 'SIP/2.0/TCP gw.tessier-ashpool.co.luna';
+  Self.Uri.Headers.Add(RecordRouteHeader).Value    := '<sip:gw2.tessier-ashpool.co.luna>';
+  Self.Uri.Headers.Add(RouteHeader).Value          := '<sip:gw2.tessier-ashpool.co.luna>';
+  Self.Uri.Headers.Add(AcceptHeader).Value         := 'application/sdp';
+  Self.Uri.Headers.Add(AcceptEncodingHeader).Value := 'gzip';
+  Self.Uri.Headers.Add(AcceptLanguageHeader).Value := 'en';
+  Self.Uri.Headers.Add(AllowHeader).Value          := 'REGISTER';
+  Self.Uri.Headers.Add(ContactHeaderFull).Value    := 'sip:case@fried.neurons.org';
+  Self.Uri.Headers.Add(OrganizationHeader).Value   := 'Foo-Using Bars';
+  Self.Uri.Headers.Add(SupportedHeaderFull).Value  := '100rel';
+  Self.Uri.Headers.Add(UserAgentHeader).Value      := 'Foo/1.1';
+
+  Request := Self.Uri.CreateRequest;
+  try
+    CheckNotEquals(Self.Uri.Headers.Headers[FromHeaderFull].AsString,
+                   Request.From.AsString,
+                   'From header');
+    CheckNotEquals(Self.Uri.Headers.Headers[CallIDHeaderFull].AsString,
+                   Request.CallID,
+                   'Call-ID header');
+    CheckNotEquals(Self.Uri.Headers.Headers[CSeqHeader].AsString,
+                   Request.CSeq.AsString,
+                   'CSeq header');
+    CheckEquals(0, Request.Path.Count, 'Via header');
+    CheckEquals(0, Request.RecordRoute.Count, 'Record-Route header');
+    CheckEquals(0, Request.Route.Count, 'Route header');
+    Check(not Request.HasHeader(AcceptHeader),
+          'Accept header');
+    Check(not Request.HasHeader(AcceptEncodingHeader),
+          'Accept-Encoding header');
+    Check(not Request.HasHeader(AcceptLanguageHeader),
+          'Accept-Language header');
+    Check(not Request.HasHeader(AllowHeader),
+          'Allow header');
+    Check(not Request.HasHeader(ContactHeaderFull),
+          'Contact header');
+    Check(not Request.HasHeader(OrganizationHeader),
+          'Organization header');
+    Check(not Request.HasHeader(SupportedHeaderFull),
+          'Supported header');
+    Check(not Request.HasHeader(UserAgentHeader),
+          'User-Agent header');
+
+    Check(not Request.RequestUri.Headers.HasHeader(FromHeaderFull),
+          'From header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(CallIDHeaderFull),
+          'Call-ID header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(CSeqHeader),
+          'CSeq header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(ViaHeaderFull),
+          'Via header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(RecordRouteHeader),
+          'Record-Route header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(RouteHeader),
+          'Route header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(AcceptHeader),
+          'Accept header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(AcceptEncodingHeader),
+          'Accept-Encoding header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(AcceptLanguageHeader),
+          'Accept-Language header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(AllowHeader),
+          'Allow header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(ContactHeaderFull),
+          'Contact header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(OrganizationHeader),
+          'Organization header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(SupportedHeaderFull),
+          'Supported header in Request-URI');
+    Check(not Request.RequestUri.Headers.HasHeader(UserAgentHeader),
+          'User-Agent header in Request-URI');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipUri.TestCreateRequestWithMethodParam;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;method=REGISTER';
+
+  Request := Self.Uri.CreateRequest;
+  try
+    Check(Request.IsRegister,
+                'Method');
+    Check(not Request.RequestUri.HasParameter(MethodParam),
+          'Method param not removed from Request-URI');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipUri.TestCreateRequestWithUnknownParams;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar;baz';
+
+  Request := Self.Uri.CreateRequest;
+  try
+    Check(Request.RequestUri.HasParameter('foo'),
+          'foo param removed from Request-URI');
+    Check(Request.RequestUri.HasParameter('baz'),
+          'baz param removed from Request-URI');
+  finally
+    Request.Free;
+  end;
 end;
 
 procedure TestTIdSipUri.TestCreateSetsUri;

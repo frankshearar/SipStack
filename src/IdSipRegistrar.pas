@@ -3,7 +3,7 @@ unit IdSipRegistrar;
 interface
 
 uses
-  IdSipCore, IdSipDialog, IdSipHeaders, IdSipMessage, IdSipTransaction,
+  IdSipCore, IdSipDialog, IdSipMessage, IdSipTransaction,
   IdSipTransport;
 
 type

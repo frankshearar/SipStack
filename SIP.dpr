@@ -56,7 +56,8 @@ uses
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdSipUri in 'test\TestIdSipUri.pas';
+  TestIdSipUri in 'test\TestIdSipUri.pas',
+  SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister};
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
@@ -73,7 +74,9 @@ uses
 begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
-  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+//  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+//  Forms.Application.CreateForm(TIdSpikeT140, IdSpikeT140);
+  Application.CreateForm(TrnidSpikeRegister, rnidSpikeRegister);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

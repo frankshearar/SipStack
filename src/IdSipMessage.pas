@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdInterfacedObject,
-  IdSimpleParser, IdSipHeaders, SyncObjs, SysUtils;
+  IdSimpleParser, SyncObjs, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -13,6 +13,17 @@ type
   TIdSipChars = set of Char;
 
 type
+  TIdSipRequest = class;
+  TIdSipResponse = class;
+
+  TIdSipNotifyEvent = TNotifyEvent;
+
+  IIdSipMessageVisitor = interface
+    ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
+    procedure VisitRequest(Request: TIdSipRequest);
+    procedure VisitResponse(Response: TIdSipResponse);
+  end;
+
   TIdSipHeader = class;
   TIdSipHeaders = class;
 
@@ -88,6 +99,7 @@ type
     function  CanonicaliseAsAddressOfRecord: String;
     procedure ClearHeaders;
     procedure ClearParameters;
+    function  CreateRequest: TIdSipRequest;
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
@@ -610,6 +622,17 @@ type
     function CurrentExpires: Cardinal;
   end;
 
+  TIdSipRecordRoutePath = class(TIdSipHeadersFilter)
+  private
+    BlankHeaders: TIdSipHeaders;
+  public
+    constructor Create(Headers: TIdSipHeaders); overload;
+    constructor Create; overload;
+    destructor  Destroy; override;
+
+    function CurrentRecordRoute: TIdSipRecordRouteHeader;
+  end;
+
   TIdSipRoutePath = class(TIdSipHeadersFilter)
   private
     BlankHeaders: TIdSipHeaders;
@@ -629,18 +652,6 @@ type
     function  LastHop: TIdSipViaHeader;
     function  Length: Integer;
     procedure RemoveLastHop;
-  end;
-
-type
-  TIdSipRequest = class;
-  TIdSipResponse = class;
-
-  TIdSipNotifyEvent = TNotifyEvent;
-
-  IIdSipMessageVisitor = interface
-    ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
-    procedure VisitRequest(Request: TIdSipRequest);
-    procedure VisitResponse(Response: TIdSipResponse);
   end;
 
   EBadMessage = class;
@@ -722,12 +733,14 @@ type
 
   TIdSipRequest = class(TIdSipMessage)
   private
-    fMethod:     String;
-    fRequestUri: TIdSipURI;
-    fRoute:      TIdSipRoutePath;
+    fMethod:      String;
+    fRecordRoute: TIdSipRecordRoutePath;
+    fRequestUri:  TIdSipURI;
+    fRoute:       TIdSipRoutePath;
 
     function  GetMaxForwards: Byte;
     procedure SetMaxForwards(Value: Byte);
+    procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
@@ -755,10 +768,11 @@ type
     function  Match(Msg: TIdSipMessage): Boolean;
     function  RequiresResponse: Boolean;
 
-    property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
-    property Method:      String          read fMethod write fMethod;
-    property RequestUri:  TIdSipURI       read fRequestUri write SetRequestUri;
-    property Route:       TIdSipRoutePath read fRoute write SetRoute;
+    property MaxForwards: Byte                  read GetMaxForwards write SetMaxForwards;
+    property Method:      String                read fMethod write fMethod;
+    property RecordRoute: TIdSipRecordRoutePath read fRecordRoute write SetRecordRoute;
+    property RequestUri:  TIdSipURI             read fRequestUri write SetRequestUri;
+    property Route:       TIdSipRoutePath       read fRoute write SetRoute;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -1373,6 +1387,20 @@ end;
 procedure TIdSipUri.ClearParameters;
 begin
   Self.Parameters.Clear;
+end;
+
+function TIdSipUri.CreateRequest: TIdSipRequest;
+begin
+  Result := TIdSipRequest.Create;
+  Result.RequestUri := Self;
+
+  if Result.RequestUri.HasParameter(MethodParam) then begin
+    Result.Method := Result.RequestUri.ParamValue(MethodParam);
+    Result.CSeq.Method := Result.Method;
+    Result.RequestUri.RemoveParameter(MethodParam);
+  end;
+
+  Result.RequestUri.Headers.Clear;
 end;
 
 function TIdSipUri.DefaultPort: Cardinal;
@@ -3854,6 +3882,34 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRecordRoutePath                                                      *
+//******************************************************************************
+//* TIdSipRecordRoutePath Public methods ***************************************
+
+constructor TIdSipRecordRoutePath.Create(Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, RecordRouteHeader);
+end;
+
+constructor TIdSipRecordRoutePath.Create;
+begin
+  Self.BlankHeaders := TIdSipHeaders.Create;
+  inherited Create(Self.BlankHeaders, RecordRouteHeader);
+end;
+
+destructor TIdSipRecordRoutePath.Destroy;
+begin
+  Self.BlankHeaders.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipRecordRoutePath.CurrentRecordRoute: TIdSipRecordRouteHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipRecordRouteHeader;
+end;
+
+//******************************************************************************
 //* TIdSipRoutePath                                                            *
 //******************************************************************************
 //* TIdSipRoutePath Public methods *********************************************
@@ -4261,8 +4317,9 @@ constructor TIdSipRequest.Create;
 begin
   inherited Create;
 
-  fRequestUri := TIdSipURI.Create('');
-  fRoute      := TIdSipRoutePath.Create(Self.Headers);
+  fRecordRoute := TIdSipRecordRoutePath.Create(Self.Headers);
+  fRequestUri  := TIdSipURI.Create('');
+  fRoute       := TIdSipRoutePath.Create(Self.Headers);
 
   Self.ContentLength := 0;
 end;
@@ -4271,6 +4328,7 @@ destructor TIdSipRequest.Destroy;
 begin
   Self.Route.Free;
   Self.RequestUri.Free;
+  Self.RecordRoute.Free;
 
   inherited Destroy;
 end;
@@ -4481,6 +4539,12 @@ end;
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
+end;
+
+procedure TIdSipRequest.SetRecordRoute(Value: TIdSipRecordRoutePath);
+begin
+  Self.RecordRoute.Clear;
+  Self.RecordRoute.Add(Value);
 end;
 
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);

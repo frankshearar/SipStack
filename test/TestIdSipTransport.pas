@@ -190,8 +190,8 @@ type
 implementation
 
 uses
-  IdGlobal, IdSipHeaders, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack,
-  IdTcpClient, IdUDPServer, TestMessages, TestFrameworkSip;
+  IdGlobal, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack, IdTcpClient,
+  IdUDPServer, TestMessages, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin

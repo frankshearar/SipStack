@@ -105,7 +105,7 @@ type
 implementation
 
 uses
-  DateUtils, IdSipConsts, IdSimpleParser, IdSipHeaders, SysUtils, TestMessages;
+  DateUtils, IdSipConsts, IdSimpleParser, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin

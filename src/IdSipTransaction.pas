@@ -460,7 +460,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, IdSipHeaders, Math, SysUtils;
+  IdException, IdSipConsts, IdSipDialogID, Math, SysUtils;
 
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *

@@ -3,7 +3,7 @@ unit IdSipMockTransport;
 interface
 
 uses
-  IdSipHeaders, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
+  IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
 
 type
   TIdSipMockTransport = class(TIdSipTransport)

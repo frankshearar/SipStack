@@ -3,8 +3,7 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipHeaders, IdSipDialogID, IdSipMessage, SysUtils, TestFramework,
-  TestFrameworkSip;
+  IdSipDialogID, IdSipMessage, SysUtils, TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -111,6 +110,7 @@ type
     procedure TestNewRequestHasContentLength;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
+    procedure TestSetRecordRoute;
     procedure TestSetRoute;
   end;
 
@@ -1489,6 +1489,30 @@ begin
   CheckEquals(OrigMaxForwards + 1,
               Self.Request.MaxForwards,
               'Max-Forwards not set');
+end;
+
+procedure TestTIdSipRequest.TestSetRecordRoute;
+var
+  H: TIdSipHeaders;
+  P: TIdSipRecordRoutePath;
+begin
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:gw1.leo-ix.org>';
+
+  H := TIdSipHeaders.Create;
+  try
+    H.Add(RecordRouteHeader).Value := '<sip:gw2.leo-ix.org>';
+    H.Add(RecordRouteHeader).Value := '<sip:gw3.leo-ix.org;lr>';
+    P := TIdSipRecordRoutePath.Create(H);
+    try
+      Self.Request.RecordRoute := P;
+
+      Check(Self.Request.RecordRoute.IsEqualTo(P), 'Path not correctly set');
+    finally
+      P.Free;
+    end;
+  finally
+    H.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestSetRoute;

@@ -3,8 +3,8 @@ unit TestIdSipRegistrar;
 interface
 
 uses
-  Classes, Contnrs, IdSipConsts, IdSipHeaders, IdSipMessage,
-  IdSipMockTransactionDispatcher, IdSipRegistrar, TestFramework;
+  Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipMockTransactionDispatcher,
+  IdSipRegistrar, TestFramework;
 
 type
   TIdSipMockBindingDatabase = class;

@@ -3,8 +3,7 @@ unit TestIdSipDialog;
 interface
 
 uses
-  IdSipDialog, IdSipDialogID, IdSipHeaders, IdSipMessage, TestFramework,
-  TestFrameworkSip;
+  IdSipDialog, IdSipDialogID, IdSipMessage, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipDialog = class(TTestCaseSip)

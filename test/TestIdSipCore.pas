@@ -4,9 +4,9 @@ interface
 
 uses
   Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockCore,
-  IdSipMockTransactionDispatcher, IdSipRegistrar, IdSipTransaction,
-  IdSipTransport, IdSocketHandle, TestFramework, TestFrameworkSip;
+  IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
+  IdSipRegistrar, IdSipTransaction, IdSipTransport, IdSocketHandle,
+  TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)

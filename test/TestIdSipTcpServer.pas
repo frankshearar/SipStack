@@ -147,8 +147,8 @@ const
 implementation
 
 uses
-  Classes, IdGlobal, IdSocketHandle, IdSipConsts, IdSipHeaders, IdSimpleParser,
-  IdStack, TestFrameworkSip, TestMessages;
+  Classes, IdGlobal, IdSocketHandle, IdSipConsts, IdSimpleParser, IdStack,
+  TestFrameworkSip, TestMessages;
 
 function Suite: ITestSuite;
 begin

@@ -344,8 +344,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSdp, IdSipConsts, IdSipHeaders, Math, SyncObjs,
-  SysUtils, TestMessages, TypInfo;
+  Classes, IdException, IdSdp, IdSipConsts, Math, SyncObjs, SysUtils,
+  TestMessages, TypInfo;
 
 function Suite: ITestSuite;
 begin

@@ -25,8 +25,7 @@ interface
 
 uses
   Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
-  IdSipHeaders, IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport,
-  SyncObjs;
+  IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
 
 type
   TIdSipRegistration = class;

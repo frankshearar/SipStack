@@ -4,8 +4,8 @@ interface
 
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdRTP, IdSdp,
-  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdSipTransport,
-  IdSocketHandle, StdCtrls, SyncObjs;
+  IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle,
+  StdCtrls, SyncObjs;
 
 type
   TIdDTMFPanel = class;

@@ -3,8 +3,8 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdRTP, IdSdp, IdSipHeaders, IdSipMessage,
-  IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
+  Classes, IdInterfacedObject, IdRTP, IdSdp, IdSipMessage, IdSipCore,
+  IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
   IdSocketHandle, TestFrameworkEx;
 
 type
