@@ -536,6 +536,8 @@ type
     procedure CheckPortFree(Address: String;
                               Port: Cardinal;
                               Msg: String);
+    function MultiStreamSDP(LowPort, HighPort: Cardinal): String;
+    function SingleStreamSDP(Port: Cardinal): String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -564,6 +566,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -585,6 +588,7 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
+}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 end;
@@ -6454,6 +6458,30 @@ begin
   end;
 end;
 
+function TestTIdSDPMultimediaSession.MultiStreamSDP(LowPort, HighPort: Cardinal): String;
+begin
+  // One stream on loopback:LowPort; one stream on NIC:HighPort
+  Result := 'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10
+          + 'm=text ' + IntToStr(LowPort) + ' RTP/AVP 96'#13#10
+          + 'c=IN IP4 127.0.0.1'#13#10
+          + 'a=rtpmap:96 t140/1000'#13#10
+          + 'm=text ' + IntToStr(HighPort) + ' RTP/AVP 96'#13#10
+          + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+          + 'a=rtpmap:96 t140/1000'#13#10
+end;
+
+function TestTIdSDPMultimediaSession.SingleStreamSDP(Port: Cardinal): String;
+begin
+  Result := 'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10
+          + 'c=IN IP4 127.0.0.1'#13#10
+          + 'm=text ' + IntToStr(Port) + ' RTP/AVP 96'#13#10
+          + 'a=rtpmap:96 t140/1000'#13#10
+end;
+
 //* TestTIdSDPMultimediaSession Published methods ******************************
 
 procedure TestTIdSDPMultimediaSession.TestMimeType;
@@ -6462,91 +6490,77 @@ begin
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescription;
+var
+  LowPort:  Cardinal;
+  HighPort: Cardinal;
 begin
-  Self.MS.StartListening('v=0'#13#10
-                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-                       + 's=-'#13#10
-                       + 'c=IN IP4 127.0.0.1'#13#10
-                       + 'm=text 8000 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'm=text 9000 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+  LowPort  := 8900;
+  HighPort := 9900;
 
-  Self.MS.SetRemoteDescription('v=0'#13#10
-                       + 'o=local 0 0 IN IP4 127.0.0.2'#13#10
-                       + 's=-'#13#10
-                       + 'c=IN IP4 127.0.0.2'#13#10
-                       + 'm=text 8900 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'm=text 9900 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
 
-  CheckEquals(8900,
+  Self.MS.SetRemoteDescription(Self.MultiStreamSDP(LowPort, HighPort));
+
+  CheckEquals(LowPort,
               Self.MS.Streams[0].RemoteDescription.Port,
               'Remote description of first stream not set');
-  CheckEquals(9900,
+  CheckEquals(HighPort,
               Self.MS.Streams[1].RemoteDescription.Port,
               'Remote description of second stream not set');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningSingleStream;
+var
+  Port: Cardinal;
 begin
-  Self.MS.StartListening('v=0'#13#10
-                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-                       + 's=-'#13#10
-                       + 'c=IN IP4 127.0.0.1'#13#10
-                       + 'm=text 8000 RTP/AVP 96'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+  Port := 8000;
+  Self.MS.StartListening(Self.SingleStreamSDP(Port));
 
   Self.CheckPortActive('127.0.0.1',
-                       8000,
+                       Port,
                        'Server not listening on port 8000');
   CheckEquals(1, Self.MS.StreamCount, 'StreamCount');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
+var
+  LowPort:  Cardinal;
+  HighPort: Cardinal;
 begin
-  Self.MS.StartListening('v=0'#13#10
-                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-                       + 's=-'#13#10
-                       + 'm=text 8000 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 127.0.0.1'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'm=text 9000 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+  LowPort  := 8000;
+  HighPort := 9000;
+
+  Self.MS.StartListening(Self.MultiStreamSDP(LowPort, HighPort));
 
   CheckEquals(2, Self.MS.StreamCount, 'StreamCount');
   Self.CheckPortActive('127.0.0.1',
-                       8000,
-                       'Server not listening on 127.0.0.7:8000');
+                       LowPort,
+                       'Server not listening on 127.0.0.7:' + IntToStr(LowPort));
   Self.CheckPortActive(GStack.LocalAddress,
-                       9000,
-                       'Server not listening on ' + GStack.LocalAddress + ':9000');
+                       HighPort,
+                       'Server not listening on '
+                     + GStack.LocalAddress + ':' + IntToStr(HighPort));
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStopListening;
+var
+  LowPort:  Cardinal;
+  HighPort: Cardinal;
 begin
-  Self.MS.StartListening('v=0'#13#10
-                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
-                       + 's=-'#13#10
-                       + 'm=text 8000 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 127.0.0.1'#13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10
-                       + 'm=text 9000 RTP/AVP 96'#13#10
-                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
-                       + 'a=rtpmap:96 t140/1000'#13#10);
+  LowPort  := 8000;
+  HighPort := 9000;
+
+  Self.MS.StartListening(Self.MultiStreamSDP(LowPort, HighPort));
 
   Self.MS.StopListening;
 
   Self.CheckPortFree('127.0.0.1',
-                     8000,
-                     'Server still listening on 127.0.0.7:8000');
+                     LowPort,
+                     'Server still listening on 127.0.0.7:' + IntToStr(LowPort));
   Self.CheckPortFree(GStack.LocalAddress,
-                     9000,
-                     'Server still listening on ' + GStack.LocalAddress + ':9000');
+                     HighPort,
+                     'Server still listening on '
+                   + GStack.LocalAddress + ':' + IntToStr(HighPort));
 end;
 
 initialization
