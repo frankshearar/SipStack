@@ -1256,6 +1256,8 @@ type
   TIdSipResponseList = class(TObject)
   private
     List: TObjectList;
+
+    function GetItems(Index: Integer): TIdSipResponse;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -1267,6 +1269,8 @@ type
     function  IsEmpty: Boolean;
     function  Last: TIdSipResponse;
     function  SecondLast: TIdSipResponse;
+
+    property Items[Index: Integer]: TIdSipResponse read GetItems; default;
   end;
 
   TIdSipParserError = procedure(const RawMessage, Reason: String) of object;
@@ -7648,6 +7652,16 @@ begin
     Result := nil
   else
     Result := Self.List[Self.List.Count - 2] as TIdSipResponse;
+end;
+
+//* TIdSipRequestList Private methods ******************************************
+
+function TIdSipResponseList.GetItems(Index: Integer): TIdSipResponse;
+begin
+  if (Index <0) or (Index >= Self.Count) then
+    Result := nil
+  else
+    Result := Self.List[Index] as TidSipResponse;
 end;
 
 //******************************************************************************

@@ -251,6 +251,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestDefaultProperty;
     procedure TestDelete;
     procedure TestFirst;
     procedure TestIsEmpty;
@@ -268,6 +269,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestDefaultProperty;
     procedure TestDelete;
     procedure TestFirst;
     procedure TestIsEmpty;
@@ -3632,6 +3634,28 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequestList.TestDefaultProperty;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodInvite;
+    Self.List.AddCopy(Request);
+
+    Request.Method := MethodRegister;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodInvite,   Self.List[0].Method, 'Index = 0');
+    CheckEquals(MethodRegister, Self.List[1].Method, 'Index = 1');
+
+    Check(not Assigned(Self.List[-1]), 'Index < 0');
+    Check(not Assigned(Self.List[Self.List.Count]), 'Index >= List.Count');
+  finally
+    Request.Free;
+  end;
+end;
+
 procedure TestTIdSipRequestList.TestDelete;
 var
   Request: TIdSipRequest;
@@ -3866,6 +3890,28 @@ begin
 
     Self.List.AddCopy(Response);
     CheckEquals(3, Self.List.Count, 'Three responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestDefaultProperty;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPTrying;
+    Self.List.AddCopy(Response);
+
+    Response.StatusCode := SIPOK;
+    Self.List.AddCopy(Response);
+
+    CheckEquals(SIPTrying, Self.List[0].StatusCode, 'Index = 0');
+    CheckEquals(SIPOK,     Self.List[1].StatusCode, 'Index = 1');
+
+    Check(not Assigned(Self.List[-1]), 'Index < 0');
+    Check(not Assigned(Self.List[Self.List.Count]), 'Index >= List.Count');
   finally
     Response.Free;
   end;
