@@ -3975,7 +3975,9 @@ end;
 
 procedure TestTIdSdpPayloadProcessor.TestStopListening;
 var
-  Server: TIdUDPServer;
+  Binding: TIdSocketHandle;
+  I:       Integer;
+  Server:  TIdUDPServer;
 begin
   Self.Proc.Process('v=0'#13#10
                   + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
@@ -3987,12 +3989,17 @@ begin
 
   Server := TIdUDPServer.Create(nil);
   try
-    Server.DefaultPort := 8000;
-    Server.Active      := true;
-
-    Server.Active      := false;
-    Server.DefaultPort := 8002;
-    Server.Active      := true;
+    Binding := Server.Bindings.Add;
+    for I := 8000 to 8003 do begin
+      try
+        Binding.Port  := I;
+        Server.Active := true;
+        Server.Active := false;
+      except
+        on EIdCouldNotBindSocket do
+          Fail('Port ' + IntToStr(I) + ' not closed');
+      end;
+    end
   finally
     Server.Free;
   end;
