@@ -5248,6 +5248,7 @@ var
   I:      Cardinal;
   Packet: TIdRTPPacket;
 begin
+  // Precondition: You've locked Table
   Packet := TIdRTPPacket.Create(Self.Profile);
   try
     Packet.ReadPayload(Data);
