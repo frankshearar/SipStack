@@ -125,6 +125,8 @@ end;
 function TIdSipMockBindingDatabase.RemoveBinding(Request: TIdSipRequest;
                                                  Contact: TIdSipContactHeader): Boolean;
 begin
+  Self.NotifyListenersOfChange;
+
   Self.DeleteBinding(Self.IndexOfBinding(Request.AddressOfRecord,
                                          Contact));
 

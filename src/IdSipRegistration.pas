@@ -172,6 +172,8 @@ begin
     Result := false;
     Self.Rollback;
   end;
+
+  Self.NotifyListenersOfChange;
 end;
 
 function TIdSipAbstractBindingDatabase.BindingExpires(const AddressOfRecord: String;
@@ -226,6 +228,8 @@ begin
     Result := false;
     Self.Rollback;
   end;
+
+  Self.NotifyListenersOfChange;
 end;
 
 function TIdSipAbstractBindingDatabase.CorrectExpiry(Request: TIdSipRequest;
