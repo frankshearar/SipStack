@@ -957,11 +957,13 @@ end;
 procedure TIdSipAbstractCore.ActOnRequest(Request: TIdSipRequest;
                                           Receiver: TIdSipTransport);
 begin
+  // By default do nothing
 end;
 
 procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
                                            Receiver: TIdSipTransport);
 begin
+  // By default do nothing
 end;
 
 function TIdSipAbstractCore.AuthenticationHeader: String;
