@@ -40,15 +40,15 @@ type
 
   TIdSipMockSession = class(TIdSipInboundSession)
   private
-    fIsInboundCall:  Boolean;
+    fIsInbound:  Boolean;
     fResponseResent: Boolean;
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Invite: TIdSipRequest;
                        UsingSecureTransport: Boolean); override;
 
-    function  IsInboundCall: Boolean; override;
-    procedure SetIsInboundCall(Value: Boolean);
+    function  IsInbound: Boolean; override;
+    procedure SetIsInbound(Value: Boolean);
 
     property ResponseResent: Boolean read fResponseResent;
   end;
@@ -128,17 +128,17 @@ begin
   inherited Create(UA, Invite, UsingSecureTransport);
 
   Self.fResponseResent := false;
-  Self.SetIsInboundCall(false);
+  Self.SetIsInbound(false);
 end;
 
-function TIdSipMockSession.IsInboundCall: Boolean;
+function TIdSipMockSession.IsInbound: Boolean;
 begin
-  Result := Self.fIsInboundCall;
+  Result := Self.fIsInbound;
 end;
 
-procedure TIdSipMockSession.SetIsInboundCall(Value: Boolean);
+procedure TIdSipMockSession.SetIsInbound(Value: Boolean);
 begin
-  Self.fIsInboundCall := Value;
+  Self.fIsInbound := Value;
 end;
 
 end.

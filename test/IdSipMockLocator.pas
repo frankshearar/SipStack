@@ -12,9 +12,9 @@ type
 
     procedure FreeLocations;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
-    function ServerFor(AddressOfRecord: TIdSipUri): TIdSipLocation; override;
+    function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; override;
 
     procedure AddLocation(const AddressOfRecord: String;
                           const Transport: String;
@@ -47,16 +47,23 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipMockLocator.ServerFor(AddressOfRecord: TIdSipUri): TIdSipLocation;
+function TIdSipMockLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
 var
-  Index: Integer;
+  CurrLoc: TIdSipLocation;
+  I:       Integer;
 begin
-  Index := Self.Locations.IndexOf(AddressOfRecord.Uri);
+  Result := TIdSipLocations.Create;
 
-  if (Index <> -1) then
-    Result := Self.Locations.Objects[Index] as TIdSipLocation
-  else
-    raise Exception.Create('Er, what to do when there''s no location?');
+  for I := 0 to Self.Locations.Count - 1 do begin
+    CurrLoc := Self.Locations.Objects[I] as TIdSipLocation;
+
+    if (Self.Locations[I] = AddressOfRecord.AsString) then
+      Result.AddLocation(CurrLoc.Transport,
+                         CurrLoc.Address,
+                         CurrLoc.Port);
+  end;
+
+  Self.AddUriLocation(AddressOfRecord, Result);
 end;
 
 procedure TIdSipMockLocator.AddLocation(const AddressOfRecord: String;

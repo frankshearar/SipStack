@@ -136,9 +136,11 @@ type
                              const Reason: String);
     procedure OnException(E: Exception;
                           const Reason: String);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                        const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String); overload;
+                        const Reason: String); 
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -422,6 +424,11 @@ begin
   finally
     Self.Lock.Release;
   end;
+end;
+
+procedure TrnidSpike.OnNetworkFailure(Action: TIdSipAction;
+                                      const Reason: String);
+begin
 end;
 
 procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;

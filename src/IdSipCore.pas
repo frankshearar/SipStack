@@ -1,4 +1,3 @@
-
 {
   (c) 2004 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
 
@@ -37,13 +36,71 @@ unit IdSipCore;
 //   (b) all classes that instantiate threads should not free the threads, but
 //      just Terminate (and possibly nil any references to the threads).
 
+{
+CODE FROM THE TRANSACTION LAYER TO ASSIMILATE
+
+var
+  MsgLen:       Cardinal;
+  RewrittenVia: Boolean;
+
+  MsgLen := Length(Msg.AsString);
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
+              and (Msg.LastHop.Transport = UdpTransport);
+
+  if RewrittenVia then
+    Msg.LastHop.Transport := TcpTransport;
+
+procedure TestTIdSipTransactionDispatcher.TestSendVeryBigMessageWithTcpFailure;
+var
+  TcpResponseCount: Cardinal;
+  UdpResponseCount: Cardinal;
+begin
+  Self.MockTransport.TransportType := TcpTransport;
+  Self.MockTransport.FailWith      := EIdConnectTimeout;
+
+  TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
+  UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
+
+  while (Length(Self.Response200.AsString) < MaximumUDPMessageSize) do
+    Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
+
+  Self.Response200.LastHop.Transport := Self.MockUdpTransport.TransportType;
+  Self.D.SendToTransport(Self.Response200);
+
+  Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
+        'No response sent down UDP');
+  CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
+              'TCP response was sent');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestSendVeryBigRequest;
+var
+  TcpRequestCount: Cardinal;
+  UdpRequestCount: Cardinal;
+begin
+  TcpRequestCount := Self.MockTcpTransport.SentRequestCount;
+  UdpRequestCount := Self.MockUdpTransport.SentRequestCount;
+
+  Self.TranRequest.LastHop.Transport := UdpTransport;
+  while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
+    Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
+                                                         + 'and with strange aeons even death may die.';
+
+  Self.D.SendToTransport(Self.TranRequest);
+
+  CheckEquals(UdpRequestCount, Self.MockUdpTransport.SentRequestCount,
+              'UDP response was sent');
+  Check(TcpRequestCount < Self.MockTcpTransport.SentRequestCount,
+        'No response sent down TCP');
+end;
+}
 interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
-  IdSipMessage, IdSipRegistration, IdSipTransaction, IdSipTransport,
-  IdTimerQueue, SyncObjs;
+  IdSipLocator, IdSipMessage, IdSipRegistration, IdSipTransaction,
+  IdSipTransport, IdTimerQueue, SyncObjs;
 
 const
   SipStackVersion = '0.4';
@@ -56,6 +113,8 @@ type
   //
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               const Reason: String);
   end;
 
   TIdSipInboundInvite = class;
@@ -192,6 +251,7 @@ type
     fAuthenticator:         TIdSipAbstractAuthenticator;
     fDispatcher:            TIdSipTransactionDispatcher;
     fHostName:              String;
+    fLocator:               TIdSipAbstractLocator;
     fRealm:                 String;
     fRequireAuthentication: Boolean;
     fTimer:                 TIdTimerQueue;
@@ -213,6 +273,7 @@ type
     function  AuthenticationHeaderValue: String; virtual;
     function  AuthenticationStatusCode: Cardinal; virtual;
     function  HasAuthorization(Request: TIdSipRequest): Boolean; virtual;
+    procedure MaybeChangeTransport(Msg: TIdSipMessage);
     procedure NotifyOfChange;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
@@ -255,6 +316,7 @@ type
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write fAuthenticator;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:              String                      read fHostName write fHostName;
+    property Locator:               TIdSipAbstractLocator       read fLocator write fLocator;
     property Realm:                 String                      read fRealm write SetRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property Timer:                 TIdTimerQueue               read fTimer write fTimer;
@@ -695,13 +757,15 @@ type
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
   protected
-    Listeners: TIdNotificationList;
+    Listeners:       TIdNotificationList;
+    TargetLocations: TIdSipLocations;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     procedure AddListeners(Listeners: TIdNotificationList);
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
+    procedure NotifyOfNetworkFailure(const Reason: String); virtual;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
@@ -726,6 +790,7 @@ type
     constructor Create(UA: TIdSipAbstractUserAgent); virtual;
     destructor  Destroy; override;
 
+    function  IsInbound: Boolean; virtual;
     function  IsInvite: Boolean; virtual;
     function  IsOptions: Boolean; virtual;
     function  IsRegistration: Boolean; virtual;
@@ -751,7 +816,6 @@ type
 
     constructor Create(UA: TIdSipAbstractUserAgent); override;
 
-    function IsInbound: Boolean; virtual;
     function IsInvite: Boolean; override;
   end;
 
@@ -931,6 +995,8 @@ type
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Options: TIdSipRequest); reintroduce;
+
+    function  IsInbound: Boolean; override;
   end;
 
   TIdSipOutboundOptions = class(TIdSipOptions)
@@ -979,6 +1045,8 @@ type
   public
     constructor Create(UA: TIdSipAbstractUserAgent;
                        Reg: TIdSipRequest); reintroduce;
+
+    function IsInbound: Boolean; override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -1100,10 +1168,12 @@ type
     procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
                                          const MimeType: String);
-    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); overload; override;
     procedure NotifyOfModifySession(Modify: TIdSipInboundInvite);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog); virtual;
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               const Reason: String); virtual;
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String); overload; virtual;
@@ -1129,7 +1199,6 @@ type
     function  IsEarly: Boolean;
     function  DialogEstablished: Boolean;
     function  DialogMatches(DialogID: TIdSipDialogID): Boolean;
-    function  IsInboundCall: Boolean; virtual; abstract;
     function  IsOutboundCall: Boolean;
     function  IsSession: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
@@ -1167,7 +1236,7 @@ type
                        UsingSecureTransport: Boolean); reintroduce; virtual;
 
     function  AcceptCall(const Offer, ContentType: String): String;
-    function  IsInboundCall: Boolean; override;
+    function  IsInbound: Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
     procedure RedirectCall(NewDestination: TIdSipAddressHeader);
     procedure RejectCallBusy;
@@ -1216,7 +1285,6 @@ type
 
     procedure Cancel;
     function  CanForkOn(Response: TIdSipResponse): Boolean;
-    function  IsInboundCall: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
     procedure Send; override;
@@ -1252,6 +1320,17 @@ type
     procedure Execute(Action: TIdSipAction); override;
 
     property Invite: TIdSipRequest read fInvite write fInvite;
+  end;
+
+  TIdSipActionNetworkFailureMethod = class(TIdNotification)
+  private
+    fActionAgent: TIdSipAction;
+    fReason:      String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property ActionAgent: TIdSipAction read fActionAgent write fActionAgent;
+    property Reason:      String       read fReason write fReason;
   end;
 
   TIdSipInviteMethod = class(TIdNotification)
@@ -1439,6 +1518,7 @@ type
 
 const
   BadAuthorizationTokens  = 'Bad Authorization tokens';
+  MaximumUDPMessageSize   = 1300;
   MaxPrematureInviteRetry = 10;
   MissingContactHeader    = 'Missing Contact Header';
   OneMinute               = 60;
@@ -1460,8 +1540,10 @@ const
   InviteTimeout                  = 'Incoming call timed out';
   LocalCancel                    = 'Local end cancelled call';
   LocalHangUp                    = 'Local end hung up';
+  InboundActionFailed            = 'An inbound %s failed because: %s';
   ItemNotFoundIndex              = -1;
   NoSuchRegistrar                = 'No such registrar known: %s';
+  OutboundActionFailed           = 'An outbound %s failed because: %s';
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
   RedirectWithNoContacts         = 'Call redirected to nowhere';
   RedirectWithNoMoreTargets      = 'Call redirected but no more targets';
@@ -1572,11 +1654,15 @@ end;
 
 procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest);
 begin
+  Self.MaybeChangeTransport(Request);
+
   Self.Dispatcher.SendRequest(Request);
 end;
 
 procedure TIdSipAbstractCore.SendResponse(Response: TIdSipResponse);
 begin
+  Self.MaybeChangeTransport(Response);
+
   Self.Dispatcher.SendResponse(Response);
 end;
 
@@ -1601,6 +1687,7 @@ end;
 
 function TIdSipAbstractCore.AuthenticationHeaderValue: String;
 begin
+  // TODO: remove hardcoded qop & algorithm
   Result := Format('realm="%s",algorith="MD5",qop="auth",nonce="%s"',
                    [Self.Realm, Self.NextNonce]);
 end;
@@ -1618,6 +1705,19 @@ begin
   // challenge/authenticate.
 
   Result := Request.HasAuthorization;
+end;
+
+procedure TIdSipAbstractCore.MaybeChangeTransport(Msg: TIdSipMessage);
+var
+  MsgLen:       Cardinal;
+  RewrittenVia: Boolean;
+begin
+  MsgLen := Length(Msg.AsString);
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
+              and (Msg.LastHop.Transport = UdpTransport);
+
+  if RewrittenVia then
+    Msg.LastHop.Transport := TcpTransport;
 end;
 
 procedure TIdSipAbstractCore.NotifyOfChange;
@@ -2901,13 +3001,11 @@ var
 begin
   // TODO: We must discover the transport using RFC 3263
 
-  // TODO: Lies. Pure hack to get X-Lite talking
+  // cf RFC 3263, section 4.1
   if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
     Transport := OutboundRequest.ToHeader.Address.Transport
   else
-    Transport := TransportParamTCP;
-
-//  Transport := TransportParamUDP;
+    Transport := TransportParamUDP;
 
   OutboundRequest.AddHeader(ViaHeaderFull);
   OutboundRequest.LastHop.SipVersion := SipVersion;
@@ -3647,10 +3745,16 @@ end;
 
 destructor TIdSipAction.Destroy;
 begin
+  Self.TargetLocations.Free;
   Self.Listeners.Free;
   Self.InitialRequest.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipAction.IsInbound: Boolean;
+begin
+  Result := false;
 end;
 
 function TIdSipAction.IsInvite: Boolean;
@@ -3770,6 +3874,23 @@ begin
   // By default do nothing
 end;
 
+procedure TIdSipAction.NotifyOfNetworkFailure(const Reason: String);
+var
+  Notification: TIdSipActionNetworkFailureMethod;
+begin
+  Notification := TIdSipActionNetworkFailureMethod.Create;
+  try
+    Notification.ActionAgent := Self;
+    Notification.Reason      := Reason;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  Self.MarkAsTerminated;
+end;
+
 procedure TIdSipAction.ReceiveAck(Ack: TIdSipRequest);
 begin
   Assert(Ack.IsAck, 'TIdSipAction.ReceiveBye must only receive ACKs');
@@ -3851,18 +3972,53 @@ begin
 end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
+var
+  CurrentLocation: Integer;
+  EMessage:        String;
+
+  Succeeded:       Boolean;
 begin
   Self.SentRequest := true;
-  
+
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
-  Self.UA.SendRequest(Request);
+  // Freed in Destroy
+  if not Assigned(Self.TargetLocations) then
+    Self.TargetLocations := Self.UA.Locator.FindServersFor(Request.RequestUri);
+
+  if Self.TargetLocations.IsEmpty then begin
+    // FAIL
+    Exit;
+  end;
+
+  CurrentLocation := 0;
+  Succeeded       := false;
+
+  while not Succeeded and (CurrentLocation < Self.TargetLocations.Count) do begin
+    try
+      Request.LastHop.Transport := Self.TargetLocations[CurrentLocation].Transport;
+      Self.UA.SendRequest(Request);
+      Succeeded := true;
+    except
+      on E: EIdSipTransport do
+        EMessage := E.Message;
+    end;
+    Inc(CurrentLocation);
+  end;
+
+  if not Succeeded then
+    Self.NotifyOfNetworkFailure(Format(OutboundActionFailed, [Self.Method, EMessage]));
 end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
 begin
-  Self.UA.SendResponse(Response);
+  try
+    Self.UA.SendResponse(Response);
+  except
+    on E: EIdSipTransport do
+      Self.NotifyOfNetworkFailure(Format(InboundActionFailed, [Self.Method, E.Message]));
+  end;
 end;
 
 //* TIdSipAction Private methods ***********************************************
@@ -3893,11 +4049,6 @@ begin
 
   // Invites are always owned by a Session
   Self.fIsOwned := true;
-end;
-
-function TIdSipInvite.IsInbound: Boolean;
-begin
-  Result := false;
 end;
 
 function TIdSipInvite.IsInvite: Boolean;
@@ -4727,6 +4878,11 @@ begin
   Self.InitialRequest.Assign(Options);
 end;
 
+function TIdSipInboundOptions.IsInbound: Boolean;
+begin
+  Result := true;
+end;
+
 //* TIdSipInboundOptions Protected methods *************************************
 
 procedure TIdSipInboundOptions.ReceiveOptions(Options: TIdSipRequest);
@@ -4882,6 +5038,11 @@ begin
 
   Self.InitialRequest.Assign(Reg);
   Self.RegisterModule := Self.UA.ModuleFor(MethodRegister) as TIdSipRegisterModule;
+end;
+
+function TIdSipInboundRegistration.IsInbound: Boolean;
+begin
+  Result := true;
 end;
 
 //* TIdSipInboundRegistration Protected methods ********************************
@@ -5550,7 +5711,7 @@ end;
 
 function TIdSipSession.IsOutboundCall: Boolean;
 begin
-  Result := not Self.IsInboundCall;
+  Result := not Self.IsInbound;
 end;
 
 function TIdSipSession.IsSession: Boolean;
@@ -5719,6 +5880,12 @@ begin
   finally
     Self.DialogLock.Release;
   end;
+end;
+
+procedure TIdSipSession.OnNetworkFailure(Action: TIdSipAction;
+                                         const Reason: String);
+begin
+  Self.NotifyOfNetworkFailure(Reason);
 end;
 
 procedure TIdSipSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -6013,7 +6180,7 @@ begin
   Self.FullyEstablished := true;
 end;
 
-function TIdSipInboundSession.IsInboundCall: Boolean;
+function TIdSipInboundSession.IsInbound: Boolean;
 begin
   Result := true;
 end;
@@ -6199,11 +6366,6 @@ function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
 begin
   Result := (Self.InitialInvite.InitialRequest.CallID = Response.CallID)
         and (Self.InitialInvite.InitialRequest.From.Tag = Response.From.Tag);
-end;
-
-function TIdSipOutboundSession.IsInboundCall: Boolean;
-begin
-  Result := false;
 end;
 
 function TIdSipOutboundSession.Match(Msg: TIdSipMessage): Boolean;
@@ -6543,6 +6705,17 @@ begin
   if not Session.IsTerminated then
     Session.Modify(Invite.Body,
                    Invite.ContentType);
+end;
+
+//******************************************************************************
+//* TIdSipActionNetworkFailureMethod                                           *
+//******************************************************************************
+//* TIdSipActionNetworkFailureMethod Public methods ****************************
+
+procedure TIdSipActionNetworkFailureMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionListener).OnNetworkFailure(Self.ActionAgent,
+                                                     Self.Reason);
 end;
 
 //******************************************************************************

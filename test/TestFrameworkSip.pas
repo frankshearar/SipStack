@@ -44,13 +44,22 @@ type
     procedure Parse(const Value: String); override;
   end;
 
-  TIdSipMockListener = class(TIdInterfacedObject)
+  TIdSipMockListener = class(TIdInterfacedObject,
+                             IIdSipActionListener)
   private
-    fFailWith: ExceptClass;
+    fFailWith:      ExceptClass;
+    fNetworkFailed: Boolean;
+
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               const Reason: String);
+  protected
+    fReasonParam: String;
   public
     constructor Create; virtual;
 
-    property FailWith: ExceptClass read fFailWith write fFailWith;
+    property FailWith:      ExceptClass read fFailWith write fFailWith;
+    property NetworkFailed: Boolean     read fNetworkFailed;
+    property ReasonParam:   String      read fReasonParam;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -76,7 +85,6 @@ type
     fExceptionParam:        Exception;
     fMalformedMessage:      Boolean;
     fMalformedMessageParam: String;
-    fReasonParam:           String;
     fReceivedFromParam:     TIdSipConnectionBindings;
     fReceivedRequest:       Boolean;
     fReceivedResponse:      Boolean;
@@ -98,7 +106,6 @@ type
     property ExceptionParam:        Exception                read fExceptionParam;
     property MalformedMessage:      Boolean                  read fMalformedMessage;
     property MalformedMessageParam: String                   read fMalformedMessageParam;
-    property ReasonParam:           String                   read fReasonParam;
     property ReceivedFromParam:     TIdSipConnectionBindings read fReceivedFromParam;
     property ReceivedRequest:       Boolean                  read fReceivedRequest;
     property ReceivedResponse:      Boolean                  read fReceivedResponse;
@@ -621,7 +628,22 @@ end;
 
 constructor TIdSipMockListener.Create;
 begin
-  Self.FailWith := nil;
+  inherited Create;
+
+  Self.FailWith       := nil;
+  Self.fNetworkFailed := false;
+  Self.fReasonParam   := '';
+end;
+
+//* TIdSipMockListener Private methods *****************************************
+
+procedure TIdSipMockListener.OnNetworkFailure(Action: TIdSipAction;
+                                              const Reason: String);
+begin
+  Self.fNetworkFailed := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
 end;
 
 //******************************************************************************

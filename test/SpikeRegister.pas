@@ -40,9 +40,11 @@ type
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnException(E: Exception;
                           const Reason: String);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        const Reason: String); 
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -149,6 +151,11 @@ begin
   Self.Log.Lines.Add('---- Exception ' + E.ClassName
                    + ' raised: ' + E.Message
                    + ' because: ''' + Reason + ''' ----');
+end;
+
+procedure TrnidSpikeRegister.OnNetworkFailure(Action: TIdSipAction;
+                                              const Reason: String);
+begin
 end;
 
 procedure TrnidSpikeRegister.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
