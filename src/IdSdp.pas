@@ -427,6 +427,7 @@ type
     procedure InitializeProfile(Profile: TIdRTPProfile);
     function  MediaDescriptionAt(Index: Integer): TIdSdpMediaDescription;
     function  MediaDescriptionCount: Integer;
+    function  MimeType: String;
     procedure PrintOn(Dest: TStream);
     procedure ReadFrom(Src: TStream);
 
@@ -2116,6 +2117,11 @@ end;
 function TIdSdpPayload.MediaDescriptionCount: Integer;
 begin
   Result := Self.MediaDescriptions.Count;
+end;
+
+function TIdSdpPayload.MimeType: String;
+begin
+  Result := SdpMimeType;
 end;
 
 procedure TIdSdpPayload.PrintOn(Dest: TStream);

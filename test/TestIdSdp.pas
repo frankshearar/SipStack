@@ -305,6 +305,7 @@ type
     procedure TestMediaDescriptionAt;
     procedure TestMediaDescriptionCount;
     procedure TestMediaDescriptionGetsSessionConnections;
+    procedure TestMimeType;
     procedure TestNewSessionConnectionGetsCopiedToMediaDescriptions;
     procedure TestPrintOnBasic;
     procedure TestPrintOnWithAttributes;
@@ -3219,6 +3220,11 @@ begin
   CheckEquals(1,
               Self.Payload.MediaDescriptionAt(0).Connections.Count,
               'Media description didn''t "inherit" session connection');
+end;
+
+procedure TestTIdSdpPayload.TestMimeType;
+begin
+  CheckEquals(SdpMimeType, Self.Payload.MimeType, 'SDP MIME type');
 end;
 
 procedure TestTIdSdpPayload.TestNewSessionConnectionGetsCopiedToMediaDescriptions;
