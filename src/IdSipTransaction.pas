@@ -370,9 +370,11 @@ type
 
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
   private
-    Timer: TIdSipClientInviteTransactionTimer;
+    Cancelled: Boolean;
+    Timer:     TIdSipClientInviteTransactionTimer;
 
     procedure ChangeToCalling;
+    procedure SendCancel;
     procedure TrySendACK(R: TIdSipResponse);
   protected
     procedure ChangeToCompleted(R: TIdSipResponse;
@@ -1807,6 +1809,8 @@ constructor TIdSipClientInviteTransaction.Create(Dispatcher: TIdSipTransactionDi
 begin
   inherited Create(Dispatcher, InitialRequest);
 
+  Self.Cancelled := false;
+
   Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self,
                                                           Self.Dispatcher.T1Interval);
   Self.ChangeToCalling;
@@ -1820,15 +1824,11 @@ begin
 end;
 
 procedure TIdSipClientInviteTransaction.Cancel;
-var
-  Cancel: TIdSipRequest;
 begin
-  Cancel := Self.InitialRequest.CreateCancel;
-  try
-    Self.Dispatcher.Send(Cancel);
-  finally
-    Cancel.Free;
-  end;
+  if (Self.State = itsCalling) then
+    Self.Cancelled := true
+  else if not (Self.State in [itsCompleted, itsTerminated]) then
+    Self.SendCancel;
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;
@@ -1863,6 +1863,10 @@ end;
 procedure TIdSipClientInviteTransaction.ReceiveResponse(R: TIdSipResponse;
                                                         T: TIdSipTransport);
 begin
+  if R.IsProvisional and Self.Cancelled then begin
+    Self.SendCancel;
+  end;
+
   case Self.State of
     itsCalling: begin
       case R.StatusCode div 100 of
@@ -1930,6 +1934,18 @@ end;
 procedure TIdSipClientInviteTransaction.ChangeToCalling;
 begin
   Self.SetState(itsCalling);
+end;
+
+procedure TIdSipClientInviteTransaction.SendCancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.InitialRequest.CreateCancel;
+  try
+    Self.Dispatcher.AddClientTransaction(Cancel).SendRequest;
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TIdSipClientInviteTransaction.SetState(Value: TIdSipTransactionState);

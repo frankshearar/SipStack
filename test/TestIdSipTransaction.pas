@@ -227,6 +227,8 @@ type
 
   TestTIdSipClientInviteTransaction = class(TTestTransaction)
   private
+    ClientInviteTran: TIdSipClientInviteTransaction;
+
     procedure CheckACK(Sender: TObject; const R: TIdSipResponse);
     procedure MoveToCompletedState(const Tran: TIdSipTransaction);
     procedure MoveToProceedingState(const Tran: TIdSipTransaction);
@@ -238,6 +240,8 @@ type
   published
     procedure TestACK;
     procedure TestCancel;
+    procedure TestCancelAfterFinalResponse;
+    procedure TestCancelBeforeProvisionalResponse;
     procedure TestInitialState;
     procedure TestInviteWithHostUnreachable;
     procedure TestIsClient;
@@ -2604,6 +2608,8 @@ begin
   inherited SetUp;
 
   Self.Tran.SendRequest;
+
+  Self.ClientInviteTran := Self.Tran as TIdSipClientInviteTransaction;
 end;
 
 //* TestTIdSipClientInviteTransaction Protected methods ************************
@@ -2611,7 +2617,7 @@ end;
 procedure TestTIdSipClientInviteTransaction.Terminate(Tran: TIdSipTransaction);
 begin
   Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
-  (Tran as TIdSipClientInviteTransaction).FireTimerA;
+  Self.ClientInviteTran.FireTimerA;
   Self.MockDispatcher.Transport.FailWith := nil;
 end;
 
@@ -2723,9 +2729,14 @@ procedure TestTIdSipClientInviteTransaction.TestCancel;
 var
   Cancel:       TIdSipRequest;
   RequestCount: Cardinal;
+  TranCount:    Integer;
 begin
+  Self.MoveToProceedingState(Self.Tran);
+
   RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
-  (Self.Tran as TIdSipClientInviteTransaction).Cancel;
+  TranCount    := Self.MockDispatcher.TransactionCount;
+
+  Self.ClientInviteTran.Cancel;
 
   Check(RequestCount < Self.MockDispatcher.Transport.SentRequestCount,
         'no request sent');
@@ -2739,6 +2750,33 @@ begin
   finally
     Cancel.Free;
   end;
+
+  Check(TranCount < Self.MockDispatcher.TransactionCount,
+        'No new transaction created');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestCancelAfterFinalResponse;
+var
+  RequestCount: Cardinal;
+begin
+  Self.MoveToProceedingState(Self.ClientInviteTran);
+  Self.MoveToCompletedState(Self.ClientInviteTran);
+  RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+  Self.ClientInviteTran.Cancel;
+  CheckEquals(RequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'No CANCEL should be sent after receipt of a final response');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestCancelBeforeProvisionalResponse;
+var
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+  Self.ClientInviteTran.Cancel;
+  CheckEquals(RequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'No CANCEL must be sent prior to receipt of a provisional response');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestInitialState;
@@ -2799,7 +2837,7 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestMultipleInviteSending;
 begin
-  (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
+  Self.ClientInviteTran.FireTimerA;
   CheckEquals(2,
               Self.MockDispatcher.Transport.SentRequestCount,
               'Insufficient or too many requests sent');
@@ -2809,7 +2847,7 @@ procedure TestTIdSipClientInviteTransaction.TestNoInviteResendingInProceedingSta
 begin
   Self.MoveToProceedingState(Self.Tran);
   Self.MockDispatcher.Transport.ResetSentRequestCount;
-  (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
+  Self.ClientInviteTran.FireTimerA;
   CheckEquals(0,
               Self.MockDispatcher.Transport.SentRequestCount,
               'Timer A wasn''t stopped');
@@ -3038,7 +3076,7 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReliableTransportNoInviteRetransmissions;
 var
-  Tran: TIdSipTransaction;
+  Tran: TIdSipClientInviteTransaction;
 begin
   // Hack: we terminate Self.Tran so it doesn't keep sending INVITEs
   Self.Terminate(Self.Tran);
@@ -3048,12 +3086,12 @@ begin
 
   Self.MockDispatcher.Transport.ResetSentRequestCount;
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                      Self.Request);
+                                      Self.Request) as TIdSipClientInviteTransaction;
   try
     Tran.SendRequest;
 
     Self.MockDispatcher.Transport.ResetSentRequestCount;
-    (Tran as TIdSipClientInviteTransaction).FireTimerA;
+    Tran.FireTimerA;
     CheckEquals(0,
                 Self.MockDispatcher.Transport.SentRequestCount,
                 'Reliable transports should not resend INVITE');
@@ -3064,10 +3102,10 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimerDFired;
 var
-  Tran: TIdSipTransaction;
+  Tran: TIdSipClientInviteTransaction;
 begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                      Self.Request);
+                                      Self.Request) as TIdSipClientInviteTransaction;
   try
     Tran.AddTransactionListener(Self);
     Self.CheckTerminated := Self.Terminated;
@@ -3076,7 +3114,7 @@ begin
 
     Self.MoveToProceedingState(Tran);
     Self.MoveToCompletedState(Tran);
-    (Tran as TIdSipClientInviteTransaction).FireTimerD;
+    Tran.FireTimerD;
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
@@ -3091,15 +3129,15 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimeout;
 var
-  Tran: TIdSipTransaction;
+  Tran: TIdSipClientInviteTransaction;
 begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                      Self.Request);
+                                      Self.Request)  as TIdSipClientInviteTransaction;
   try
     Tran.AddTransactionListener(Self);
     Tran.SendRequest;
 
-    (Tran as TIdSipClientInviteTransaction).FireTimerB;
+    Tran.FireTimerB;
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
