@@ -193,19 +193,6 @@ type
     procedure Stop; override;
   end;
 
-  EIdSipTransport = class(Exception)
-  private
-    fSipMessage: TIdSipMessage;
-    fTransport:  TIdSipTransport;
-  public
-    constructor Create(Transport: TIdSipTransport;
-                       SipMessage: TIdSipMessage;
-                       const Msg: String);
-
-    property SipMessage: TIdSipMessage   read fSipMessage;
-    property Transport:  TIdSipTransport read fTransport;
-  end;
-
   TIdSipNullTransport = class(TIdSipTransport)
   private
     FakeBindings: TIdSocketHandles;
@@ -219,6 +206,19 @@ type
 
     function GetTransportType: TIdSipTransportType; override;
     function IsNull: Boolean; override;
+  end;
+
+  EIdSipTransport = class(Exception)
+  private
+    fSipMessage: TIdSipMessage;
+    fTransport:  TIdSipTransport;
+  public
+    constructor Create(Transport: TIdSipTransport;
+                       SipMessage: TIdSipMessage;
+                       const Msg: String);
+
+    property SipMessage: TIdSipMessage   read fSipMessage;
+    property Transport:  TIdSipTransport read fTransport;
   end;
 
   EUnknownTransport = class(EIdException);
@@ -956,13 +956,13 @@ end;
 //* EIdSipTransport Public methods *********************************************
 
 constructor EIdSipTransport.Create(Transport: TIdSipTransport;
-                                        SipMessage: TIdSipMessage;
-                                        const Msg: String);
+                                   SipMessage: TIdSipMessage;
+                                   const Msg: String);
 begin
   inherited Create(Msg);
 
   Self.fSipMessage := SipMessage;
-  Self.fTransport := Transport;
+  Self.fTransport  := Transport;
 end;
 
 end.
