@@ -2171,7 +2171,9 @@ begin
   Result := fValue;
 end;
 
-procedure TIdSipHeader.ParseParameters(Value: String; Parameters: TStrings; Delimiter: String = ';');
+procedure TIdSipHeader.ParseParameters(Value: String;
+                                       Parameters: TStrings;
+                                       Delimiter: String = ';');
 var
   ParamName:  String;
   ParamValue: String;
