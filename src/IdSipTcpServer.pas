@@ -24,9 +24,11 @@ type
   TIdSipTcpServer = class(TIdTCPServer)
   private
     fOnRequest:       TIdSipTcpRequestEvent;
+    fOnResponse:      TIdSipTcpResponseEvent;
     fReadBodyTimeout: Cardinal;
 
     procedure DoOnRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure DoOnResponse(AThread: TIdPeerThread; const Response: TIdSipResponse);
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
@@ -39,6 +41,7 @@ type
   published
     property DefaultPort default IdPORT_SIP;
     property OnRequest:       TIdSipTcpRequestEvent  read fOnRequest write fOnRequest;
+    property OnResponse:      TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
     property ReadBodyTimeout: Cardinal               read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
@@ -63,7 +66,7 @@ end;
 
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
-  Req:    TIdSipRequest;
+  Msg:    TIdSipMessage;
   Parser: TIdSipParser;
   S:      TStream;
 begin
@@ -77,23 +80,30 @@ begin
         Parser.Source := S;
 
         try
-          Req := Parser.ParseAndMakeRequest;
+          Msg := Parser.ParseAndMakeMessage;
           try
-            if not Req.Headers.HasHeader(ContentLengthHeaderFull) then
-              Req.ContentLength := 0;
-            Req.Body := Self.ReadBody(AThread.Connection, Req);
+            if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
+              Msg.ContentLength := 0;
+            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
-            if TIdSipParser.IsFQDN(Req.Path.LastHop.SentBy)
-              or (Req.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
-              Req.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
+            if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
+              or (Msg.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
+              Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
-            Self.DoOnRequest(AThread, Req)
+            if (Msg is TIdSipRequest) then
+              Self.DoOnRequest(AThread, Msg as TIdSipRequest)
+            else if (Msg is TIdSipResponse) then
+              Self.DoOnResponse(AThread, Msg as TIdSipResponse)
           finally
-            Req.Free;
+            Msg.Free;
           end;
         except
           on E: EBadRequest do begin
             Self.ReturnBadRequest(AThread.Connection, E.Message, Parser);
+            AThread.Connection.DisconnectSocket;
+          end;
+          on E: EBadResponse do begin
+            // drop it on the floor
             AThread.Connection.DisconnectSocket;
           end;
         end;
@@ -112,6 +122,12 @@ procedure TIdSipTcpServer.DoOnRequest(AThread: TIdPeerThread; const Request: TId
 begin
   if Assigned(Self.OnRequest) then
     Self.OnRequest(AThread, Request);
+end;
+
+procedure TIdSipTcpServer.DoOnResponse(AThread: TIdPeerThread; const Response: TIdSipResponse);
+begin
+  if Assigned(Self.OnResponse) then
+    Self.OnResponse(AThread, Response);
 end;
 
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
@@ -158,16 +174,19 @@ end;
 
 procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
 var
-  Msg: TIdSipResponse;
+  Res: TIdSipResponse;
 begin
-  Msg := TIdSipResponse.Create;
+  Res := TIdSipResponse.Create;
   try
-    Msg.StatusCode := SIPBadRequest;
-    Msg.StatusText := Reason;
-    Msg.SipVersion := SipVersion;
-    Self.WriteMessage(Connection, Msg);
+    // We really can't do much more than this. The message was unparseable,
+    // so what else can we do?
+    Res.StatusCode := SIPBadRequest;
+    Res.StatusText := Reason;
+    Res.SipVersion := SipVersion;
+    
+    Self.WriteMessage(Connection, Res);
   finally
-    Msg.Free;
+    Res.Free;
   end;
 end;
 

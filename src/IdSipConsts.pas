@@ -2,9 +2,6 @@ unit IdSipConsts;
 
 interface
 
-const
-  SIPVersion = 'SIP/2.0';
-
 // for IdResourceStrings ?
 const
   AcceptHeader               = 'Accept';
@@ -80,6 +77,9 @@ const
   ViaHeaderShort             = 'v';
   WarningHeader              = 'Warning';
   WWWAuthenticateHeader      = 'WWW-Authenticate';
+
+const
+  SIPVersion = SipName + '/2.0';  
 
 // for IdAssignedNumbers
 const

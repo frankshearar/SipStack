@@ -263,11 +263,10 @@ begin
     if FirstRoute.HasLr then begin
       R.RequestUri := Self.RemoteTarget.GetFullURI;
 
-      for I := 0 to Self.RouteSet.Count - 1 do
-        R.Headers.Add(RouteHeader).Assign(Self.RouteSet.Items[I]);
+      R.Headers.Add(Self.RouteSet);
     end
     else begin
-      R.RequestUri := (FirstRoute).Address.GetFullUri;
+      R.RequestUri := FirstRoute.Address.GetFullUri;
 
       // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
       // remember?

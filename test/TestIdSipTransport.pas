@@ -9,7 +9,11 @@ uses
 type
   TestTIdSipTransport = class(TThreadingTestCase)
   protected
-    Transport: TIdSipAbstractTransport;
+    ReceivedRequest:  Boolean;
+    ReceivedResponse: Boolean;
+    Request:          TIdSipRequest;
+    Response:         TIdSipResponse;
+    Transport:        TIdSipAbstractTransport;
 
     function TransportType: TIdSipTransportClass; virtual;
   public
@@ -19,18 +23,12 @@ type
 
   TestTIdSipTcpTransport = class(TestTIdSipTransport)
   private
-    ReceivedMessage: Boolean;
-    Request:         TIdSipRequest;
-    Response:        TIdSipResponse;
-
-    procedure ReturnResponse(AThread: TIdPeerThread);
     procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
     procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
+    procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
+    procedure SendOkResponse(Thread: TIdPeerThread);
   protected
     function TransportType: TIdSipTransportClass; override;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
@@ -39,17 +37,11 @@ type
 
   TestTIdSipUdpTransport = class(TestTIdSipTransport)
   private
-    ReceivedMessage: Boolean;
-    Request:         TIdSipRequest;
-    Response:        TIdSipResponse;
-
     procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
     procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
+    procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
   protected
     function TransportType: TIdSipTransportClass; override;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
@@ -59,12 +51,11 @@ type
 implementation
 
 uses
-  IdSipConsts, IdTcpClient, IdUdpClient, TestMessages;
+  IdSocketHandle, IdSipConsts, IdTcpClient, IdUdpClient, TestMessages;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-  Result.AddTest(TestTIdSipTransport.Suite);
   Result.AddTest(TestTIdSipTcpTransport.Suite);
   Result.AddTest(TestTIdSipUdpTransport.Suite);
 end;
@@ -75,14 +66,30 @@ end;
 //* TestTIdSipTransport Public methods *****************************************
 
 procedure TestTIdSipTransport.SetUp;
+var
+  P: TIdSipParser;
 begin
   inherited SetUp;
 
   Self.Transport := Self.TransportType.Create;
+
+  P := TIdSipParser.Create;
+  try
+    Self.Request  := P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
+    Self.Request.RequestUri := 'sip:franks@127.0.0.1';
+
+    Self.Response := P.ParseAndMakeMessage(BasicResponse) as TIdSipResponse;
+    Self.Response.ToHeader.Value := 'sip:franks@127.0.0.1';
+  finally
+    P.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.TearDown;
 begin
+  Self.Response.Free;
+  Self.Request.Free;
+
   Self.Transport.Free;
 
   inherited TearDown;
@@ -98,33 +105,6 @@ end;
 //******************************************************************************
 //* TestTIdSipTcpTransport                                                     *
 //******************************************************************************
-//* TestTIdSipTcpTransport Public methods **************************************
-
-procedure TestTIdSipTcpTransport.SetUp;
-var
-  P: TIdSipParser;
-begin
-  inherited SetUp;
-
-  Self.ReceivedMessage := false;
-
-  P := TIdSipParser.Create;
-  try
-    Self.Request  := P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
-    Self.Response := P.ParseAndMakeMessage(BasicResponse) as TIdSipResponse;
-  finally
-    P.Free;
-  end;
-end;
-
-procedure TestTIdSipTcpTransport.TearDown;
-begin
-  Self.Response.Free;
-  Self.Request.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdSipTcpTransport Protected methods ***********************************
 
 function TestTIdSipTcpTransport.TransportType: TIdSipTransportClass;
@@ -134,28 +114,11 @@ end;
 
 //* TestTIdSipTcpTransport Private methods *************************************
 
-procedure TestTIdSipTcpTransport.ReturnResponse(AThread: TIdPeerThread);
-var
-  OK: TIdSipResponse;
-  P:  TIdSipParser;
-begin
-  P := TIdSipParser.Create;
-  try
-    OK := P.ParseAndMakeResponse(BasicResponse);
-    try
-      AThread.Connection.Write(OK.AsString);
-    finally
-      OK.Free;
-    end;
-  finally
-    P.Free;
-  end;
-end;
-
 procedure TestTIdSipTcpTransport.CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
 begin
   try
-    Self.ReceivedMessage := true;
+    Self.ReceivedRequest := true;
+    Self.SendOkResponse(Sender as TIdPeerThread);
 
     Self.ThreadEvent.SetEvent;
   except
@@ -169,7 +132,7 @@ end;
 procedure TestTIdSipTcpTransport.CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
 begin
   try
-    Self.ReceivedMessage := true;
+    Self.ReceivedResponse := true;
 
     Self.ThreadEvent.SetEvent;
   except
@@ -180,6 +143,35 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpTransport.ReturnResponse(Sender: TObject; const R: TIdSipRequest);
+begin
+  try
+    Self.SendOkResponse(Sender as TIdPeerThread);
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpTransport.SendOkResponse(Thread: TIdPeerThread);
+var
+  OK: TIdSipResponse;
+  P:  TIdSipParser;
+begin
+  P := TIdSipParser.Create;
+  try
+    OK := P.ParseAndMakeResponse(BasicResponse);
+    try
+      Thread.Connection.Write(OK.AsString);
+    finally
+      OK.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
 
 //* TestTIdSipTcpTransport Published methods ***********************************
 
@@ -204,34 +196,26 @@ begin
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Request not received');
+    Check(Self.ReceivedRequest, 'Request not received');
   finally
     Self.Transport.Stop;
   end;
 end;
 
 procedure TestTIdSipTcpTransport.TestCanReceiveResponse;
-var
-  Client: TIdTcpClient;
 begin
   Self.ExceptionMessage     := 'Response not received - event didn''t fire';
+  Self.Transport.OnRequest  := Self.ReturnResponse;
   Self.Transport.OnResponse := Self.CheckCanReceiveResponse;
   Self.Transport.Start;
   try
-    Client := TIdTcpClient.Create(nil);
-    try
-      Client.Host := '127.0.0.1';
-      Client.Port := IdPORT_SIP;
-      Client.Connect(1000);
-      Client.Write(BasicRequest);
-    finally
-      Client.Free;
-    end;
+    Self.Request.RequestUri := 'sip:franks@127.0.0.1';
+    Self.Transport.SendRequest(Self.Request);
 
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Response not received');
+    Check(Self.ReceivedResponse, 'Response not received');
   finally
     Self.Transport.Stop;
   end;
@@ -248,8 +232,7 @@ begin
   try
     T := TIdSipTcpTransport.Create(IdPORT_SIP + 10000);
     try
-      T.Start;
-      Self.Request.RequestUri := 'sip:127.0.0.1';
+      Self.Request.RequestUri := 'sip:franks@127.0.0.1';
       T.SendRequest(Self.Request);
     finally
       T.Free;
@@ -258,7 +241,7 @@ begin
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Response not received');
+    Check(Self.ReceivedRequest, 'Request not received');
   finally
     Self.Transport.Stop;
   end;
@@ -267,33 +250,6 @@ end;
 //******************************************************************************
 //* TestTIdSipUdpTransport                                                     *
 //******************************************************************************
-//* TestTIdSipUdpTransport Public methods **************************************
-
-procedure TestTIdSipUdpTransport.SetUp;
-var
-  P: TIdSipParser;
-begin
-  inherited SetUp;
-
-  Self.ReceivedMessage := false;
-
-  P := TIdSipParser.Create;
-  try
-    Self.Request  := P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
-    Self.Response := P.ParseAndMakeMessage(BasicResponse) as TIdSipResponse;
-  finally
-    P.Free;
-  end;
-end;
-
-procedure TestTIdSipUdpTransport.TearDown;
-begin
-  Self.Response.Free;
-  Self.Request.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdSipUdpTransport Protected methods ***********************************
 
 function TestTIdSipUdpTransport.TransportType: TIdSipTransportClass;
@@ -306,7 +262,7 @@ end;
 procedure TestTIdSipUdpTransport.CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
 begin
   try
-    Self.ReceivedMessage := true;
+    Self.ReceivedRequest := true;
 
     Self.ThreadEvent.SetEvent;
   except
@@ -320,7 +276,7 @@ end;
 procedure TestTIdSipUdpTransport.CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
 begin
   try
-    Self.ReceivedMessage := true;
+    Self.ReceivedResponse := true;
 
     Self.ThreadEvent.SetEvent;
   except
@@ -331,6 +287,21 @@ begin
   end;
 end;
 
+procedure TestTIdSipUdpTransport.ReturnResponse(Sender: TObject; const R: TIdSipRequest);
+var
+  Client: TIdUdpClient;
+begin
+  Self.Response.StatusCode := SIPOK;
+
+  Client := TIdUdpClient.Create(nil);
+  try
+    Client.Host := Self.Response.ToHeader.Address.Host;
+    Client.Port := StrToIntDef(Self.Response.ToHeader.Address.Port, IdPORT_SIP);
+    Client.Send(Self.Response.AsString);
+  finally
+    Client.Free;
+  end;
+end;
 
 //* TestTIdSipUdpTransport Published methods ***********************************
 
@@ -354,7 +325,7 @@ begin
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Request not received');
+    Check(Self.ReceivedRequest, 'Request not received');
   finally
     Self.Transport.Stop;
   end;
@@ -365,14 +336,16 @@ var
   Client: TIdUdpClient;
 begin
   Self.ExceptionMessage     := 'Response not received - event didn''t fire';
+  Self.Transport.OnRequest  := Self.ReturnResponse;
   Self.Transport.OnResponse := Self.CheckCanReceiveResponse;
+
   Self.Transport.Start;
   try
     Client := TIdUdpClient.Create(nil);
     try
       Client.Host := '127.0.0.1';
       Client.Port := IdPORT_SIP;
-      Client.Send(BasicRequest);
+      Client.Send(Self.Request.AsString);
     finally
       Client.Free;
     end;
@@ -380,7 +353,7 @@ begin
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Response not received');
+    Check(Self.ReceivedResponse, 'Response not received');
   finally
     Self.Transport.Stop;
   end;
@@ -397,9 +370,15 @@ begin
   try
     T := TIdSipUdpTransport.Create(IdPORT_SIP + 10000);
     try
+      T.OnRequest := Self.ReturnResponse;
+
       T.Start;
-      Self.Request.RequestUri := 'sip:127.0.0.1';
-      T.SendRequest(Self.Request);
+      try
+        Self.Request.RequestUri := 'sip:127.0.0.1';
+        T.SendRequest(Self.Request);
+      finally
+        T.Stop;
+      end;
     finally
       T.Free;
     end;
@@ -407,7 +386,7 @@ begin
     if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedMessage, 'Response not received');
+    Check(Self.ReceivedRequest, 'Request not received');
   finally
     Self.Transport.Stop;
   end;

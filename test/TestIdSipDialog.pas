@@ -71,7 +71,7 @@ end;
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('Foo unit tests');
+  Result := TTestSuite.Create('IdSipDialog unit tests');
   Result.AddTest(TestTIdSipDialogID.Suite);
   Result.AddTest(TestTIdSipDialog.Suite);
   Result.AddTest(TestTIdSipUACDialog.Suite);
@@ -278,12 +278,10 @@ begin
                 R.RequestUri,
                 'Request-URI');
 
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RecordRouteHeader);
     try
-      CheckEquals(3, Routes.Count, 'Route header count');
-      CheckEquals('<sip:server10.biloxi.com;lr>', Routes.Items[0].Value, '1st Route');
-      CheckEquals('<sip:server9.biloxi.com>',     Routes.Items[1].Value, '2nd Route');
-      CheckEquals('<sip:server8.biloxi.com;lr>',  Routes.Items[2].Value, '3rd Route');
+      Check(Routes.IsEqualTo(Self.D.RouteSet),
+            'Record-Route headers not set to the Dialog route set');
     finally
       Routes.Free;
     end;
@@ -529,5 +527,5 @@ begin
 end;
 
 initialization
-  RegisterTest('Foo', Suite);
+  RegisterTest('Dialog', Suite);
 end.

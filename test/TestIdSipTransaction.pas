@@ -3,7 +3,7 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipMessage, IdSipTransport, IdSipTransaction, TestFramework;
+  IdSipCore, IdSipMessage, IdSipTransport, IdSipTransaction, TestFramework;
 
   // Transactions behave slightly differently if a reliable transport is used -
   // certain messages are not resent. To this end, we test unreliable transports
@@ -12,8 +12,10 @@ uses
 type
   TestTIdSipTransactionDispatcher = class(TTestCase)
   private
+    Core:             TIdSipMockCore;
     D:                TIdSipTransactionDispatcher;
     Invite:           TIdSipRequest;
+    MockTransport:    TIdSipMockTransport;
     Options:          TIdSipRequest;
     ReceivedRequest:  TIdSipRequest;
     ReceivedResponse: TIdSipResponse;
@@ -29,7 +31,8 @@ type
     procedure TestClearTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
-    procedure TestDropUnmatchedResponse;
+    procedure TestHandUnmatchedRequestToCore;
+    procedure TestHandUnmatchedResponseToCore;
     procedure TestMatchInviteClient;
     procedure TestMatchInviteClientAckWithInvite;
     procedure TestMatchInviteClientDifferentCSeqMethod;
@@ -47,6 +50,7 @@ type
 
   TTestTransaction = class(TTestCase)
   protected
+    Core:                  TIdSipAbstractCore;
     FailMsg:               String;
     InitialRequest:        TIdSipRequest;
     MockDispatcher:        TIdSipMockTransactionDispatcher;
@@ -233,7 +237,12 @@ var
 begin
   inherited SetUp;
 
-  Self.D := TIdSipTransactionDispatcher.Create;
+  Self.Core := TIdSipMockCore.Create;
+
+  Self.D := TIdSipTransactionDispatcher.Create(Self.Core);
+
+  Self.MockTransport := TIdSipMockTransport.Create;
+  Self.D.AddTransport(Self.MockTransport);
 
   P := TIdSipParser.Create;
   try
@@ -285,6 +294,8 @@ begin
   Self.ReceivedRequest.Free;
 
   Self.D.Free;
+  Self.MockTransport.Free;
+  Self.Core.Free;
 
   inherited TearDown;
 end;
@@ -311,19 +322,20 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
 var
-  T1, T2: TIdSipMockTransport;
+  OriginalCount: Cardinal;
+  T1, T2:        TIdSipMockTransport;
 begin
-  CheckEquals(0, Self.D.TransportCount, 'Initial value of TransportCount');
+  OriginalCount := Self.D.TransportCount;
 
   T1 := TIdSipMockTransport.Create;
   try
     Self.D.AddTransport(T1);
-    CheckEquals(1, Self.D.TransportCount, 'After one AddTransport');
+    CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
 
     T2 := TIdSipMockTransport.Create;
     try
       Self.D.AddTransport(T1);
-      CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
+      CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
     finally
       T2.Free;
     end;
@@ -336,8 +348,6 @@ procedure TestTIdSipTransactionDispatcher.TestClearTransports;
 var
   T1, T2: TIdSipMockTransport;
 begin
-  CheckEquals(0, Self.D.TransportCount, 'Initial value of TransportCount');
-
   T1 := TIdSipMockTransport.Create;
   try
     Self.D.AddTransport(T1);
@@ -345,7 +355,7 @@ begin
     T2 := TIdSipMockTransport.Create;
     try
       Self.D.AddTransport(T1);
-      CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
+
       Self.D.ClearTransports;
       CheckEquals(0, Self.D.TransportCount, 'After Clear');
     finally
@@ -358,72 +368,50 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestCreateNewTransaction;
 var
-  T: TIdSipMockTransport;
+  OriginalCount: Integer;
 begin
-  T := TIdSipMockTransport.Create;
-  try
-    Self.D.AddTransport(T);
+  OriginalCount := Self.D.TransactionCount;
 
-    CheckEquals(0,
-                Self.D.TransactionCount,
-                'Initially there should be no transactions');
+  Self.D.AddTransaction(TIdSipClientInviteTransaction, Self.Invite);
 
-    T.FireOnRequest(Self.Invite);
-
-    CheckEquals(1,
-                Self.D.TransactionCount,
-                'No new transaction was created');
-  finally
-    T.Free;
-  end;
+  CheckEquals(OriginalCount + 1,
+              Self.D.TransactionCount,
+              'No new transaction was created');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestDispatchToCorrectTransaction;
 var
-  T:           TIdSipMockTransport;
-  InviteTran:  TIdSipTransaction;
-  OptionsTran: TIdSipTransaction;
+  InviteTran:    TIdSipTransaction;
+  OptionsTran:   TIdSipTransaction;
+  OriginalCount: Integer;
 begin
-  T := TIdSipMockTransport.Create;
-  try
-    Self.D.AddTransport(T);
+  OriginalCount := Self.D.TransactionCount;
 
-    T.FireOnRequest(Self.Invite);
-    T.FireOnRequest(Self.Options);
-    CheckEquals(2, Self.D.TransactionCount, 'Sanity check on transaction count');
+  InviteTran  := Self.D.AddTransaction(TIdSipClientInviteTransaction, Self.Invite);
+  OptionsTran := Self.D.AddTransaction(TIdSipClientNonInviteTransaction, Self.Options);
 
-    InviteTran  := Self.D.TransactionAt(0);
-    OptionsTran := Self.D.TransactionAt(0);
+  CheckEquals(OriginalCount + 2,
+              Self.D.TransactionCount,
+              'Sanity check on transaction count');
 
-    InviteTran.OnReceiveResponse  := Self.CheckDispatchToCorrectTransaction;
-    OptionsTran.OnReceiveResponse := Self.CheckDispatchToCorrectTransaction;
+  InviteTran.OnReceiveResponse  := Self.CheckDispatchToCorrectTransaction;
+  OptionsTran.OnReceiveResponse := Self.CheckDispatchToCorrectTransaction;
 
-    T.FireOnResponse(Self.Response200);
-  finally
-    T.Free;
-  end;
+  Self.MockTransport.FireOnResponse(Self.Response200);
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestDropUnmatchedResponse;
-var
-  T: TIdSipMockTransport;
+procedure TestTIdSipTransactionDispatcher.TestHandUnmatchedRequestToCore;
 begin
-  T := TIdSipMockTransport.Create;
-  try
-    Self.D.AddTransport(T);
+  Self.MockTransport.FireOnRequest(Self.ReceivedRequest);
+  Check(Self.Core.HandleUnmatchedRequestCalled,
+        'Unmatched request not handed to Core');
+end;
 
-    CheckEquals(0,
-                Self.D.TransactionCount,
-                'Initially there should be no transactions');
-
-    T.FireOnResponse(Self.ReceivedResponse);
-
-    CheckEquals(0,
-                Self.D.TransactionCount,
-                'Response wasn''t dropped');
-  finally
-    T.Free;
-  end;
+procedure TestTIdSipTransactionDispatcher.TestHandUnmatchedResponseToCore;
+begin
+  Self.MockTransport.FireOnResponse(Self.ReceivedResponse);
+  Check(Self.Core.HandleUnmatchedResponseCalled,
+        'Unmatched Response not handed to Core');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestMatchInviteClient;
@@ -620,6 +608,8 @@ procedure TTestTransaction.SetUp;
 begin
   inherited SetUp;
 
+  Self.Core := TIdSipMockCore.Create;
+
   // this is just BasicRequest from TestIdSipParser
   Self.InitialRequest := TIdSipRequest.Create;
   Self.InitialRequest.Method                           := MethodInvite;
@@ -638,7 +628,7 @@ begin
   Self.InitialRequest.Body                             := 'I am a message. Hear me roar!';
 
   Self.FailMsg               := '';
-  Self.MockDispatcher         := TIdSipMockTransactionDispatcher.Create;
+  Self.MockDispatcher        := TIdSipMockTransactionDispatcher.Create(Self.Core);
   Self.Response              := TIdSipResponse.Create;
   Self.Tran                  := Self.TransactionType.Create;
   Self.TransactionCompleted  := false;
@@ -652,8 +642,10 @@ end;
 procedure TTestTransaction.TearDown;
 begin
   Self.Tran.Free;
+  Self.Response.Free;
   Self.MockDispatcher.Free;
   Self.InitialRequest.Free;
+  Self.Core.Free;
 
   inherited TearDown;
 end;
@@ -1083,12 +1075,7 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.CheckReceiveInvite(Sender: TObject; const R: TIdSipResponse);
 begin
-//  CheckEquals(SIPRinging, R.StatusCode, 'Unexpected response sent');
-
-  CheckEquals(1, R.Path.Length, 'Too many Via headers');
-  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
-              R.Path.LastHop.Value,
-              'Topmost Via');
+  Check(R.Path.IsEqualTo(Self.InitialRequest.Path), 'Via path differs');
 
   Self.CheckReceiveInviteFired := true;
 end;
@@ -1113,12 +1100,17 @@ begin
   CheckEquals(SIPTrying,   R.StatusCode, 'Status-Code');
   CheckEquals(RSSIPTrying, R.StatusText, 'Status-Text');
 
-  CheckEquals('100', R.Headers[TimestampHeader].Value, 'Timestamp');
-
-  CheckEquals(1, R.Path.Length, 'Via path');
-  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
-              R.Path.LastHop.Value,
-              'Topmost Via');
+  CheckEquals(R.CallID,
+              Self.Request.CallID,
+              'Response and Request Call_ID headers must match');
+  Check(R.CSeq.IsEqualTo(Self.Request.CSeq),
+        'Response and Request CSeq headers must match');
+  Check(R.From.IsEqualTo(Self.Request.From),
+        'Response and Request From headers must match');
+  Check(R.ToHeader.IsEqualTo(Self.Request.ToHeader),
+        'Response and Request To headers must match');
+  Check(R.Path.IsEqualTo(Self.Request.Path),
+        'Response and Request Via headers must match and have identical order');
 
   Self.CheckSending100Fired := true;
 end;
@@ -1163,9 +1155,6 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.ReceiveInvite;
 begin
-//  Self.Response.StatusCode := SIPRinging;
-//  Self.Tran.HandleResponse(Self.Response);
-
   Self.MockDispatcher.Transport.OnResponse := Self.CheckReceiveInvite;
   Self.Tran.HandleRequest(Self.InitialRequest);
 
@@ -1352,6 +1341,7 @@ procedure TestTIdSipServerInviteTransaction.TestSending100;
 begin
   Self.InitialRequest.Headers.Add(TimestampHeader).Value := '100';
   Self.MockDispatcher.Transport.OnResponse := Self.CheckSending100;
+  
   Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
 
   Check(Self.CheckSending100Fired, 'Event didn''t fire');

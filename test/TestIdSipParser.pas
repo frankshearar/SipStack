@@ -46,6 +46,7 @@ type
     procedure TestParseAndMakeMessageResponse;
     procedure TestParseAndMakeRequest;
     procedure TestParseAndMakeRequestFromAResponseString;
+    procedure TestParseAndMakeRequestFromString;
     procedure TestParseAndMakeResponse;
     procedure TestParseAndMakeResponseFromString;
     procedure TestParseExtensiveRequest;
@@ -97,7 +98,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipParser tests');
+  Result := TTestSuite.Create('IdSipMessage tests (parsing)');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipParser.Suite);
 end;
@@ -513,6 +514,19 @@ begin
     end;
   finally
     Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeRequestFromString;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.P.ParseAndMakeRequest(BasicRequest);
+  try
+    CheckBasicRequest(R, false);
+    CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
+  finally
+    R.Free;
   end;
 end;
 

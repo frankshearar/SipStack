@@ -18,6 +18,7 @@ type
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckSendInvite(AThread: TIdPeerThread; const Request: TIdSipRequest);
     procedure CheckSendTwoInvites(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure CutConnection(AThread: TIdPeerThread; const R: TIdSipRequest);
     procedure SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
   public
@@ -29,6 +30,7 @@ type
     procedure TestReceiveProvisionalAndOkResponse;
     procedure TestSendInvite;
     procedure TestSendTwoInvites;
+    procedure TestSendWithServerDisconnect;
   end;
 
 const
@@ -162,6 +164,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpClient.CutConnection(AThread: TIdPeerThread; const R: TIdSipRequest);
+begin
+  try
+    AThread.Connection.DisconnectSocket;
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipTcpClient.SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
   AThread.Connection.Write(BasicResponse);
@@ -235,8 +251,20 @@ begin
   Self.Client.Send(Self.Invite);
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);  
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
+
+procedure TestTIdSipTcpClient.TestSendWithServerDisconnect;
+begin
+  Self.Server.OnRequest := Self.CutConnection;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
 
 initialization
   RegisterTest('IdSipTcpClient', Suite);

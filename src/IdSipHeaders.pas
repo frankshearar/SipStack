@@ -119,7 +119,7 @@ type
 
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
-    fIsWild: Boolean;
+    fIsWildCard: Boolean;
 
     function  GetExpires: Cardinal;
     function  GetQ: TIdSipQValue;
@@ -129,9 +129,9 @@ type
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
   public
-    property Expires: Cardinal     read GetExpires write SetExpires;
-    property IsWild:  Boolean      read fIsWild write fIsWild;
-    property Q:       TIdSipQValue read GetQ write SetQ;
+    property Expires:    Cardinal     read GetExpires write SetExpires;
+    property IsWildCard: Boolean      read fIsWildCard write fIsWildCard;
+    property Q:          TIdSipQValue read GetQ write SetQ;
   end;
 
   TIdSipCSeqHeader = class(TIdSipHeader)
@@ -318,14 +318,22 @@ type
     fHeaderClass: TIdSipHeaderClass;
   public
     constructor Create(HeaderName: String; HeaderClass: TIdSipHeaderClass);
-    
+
     property HeaderName:  String            read fHeaderName;
     property HeaderClass: TIdSipHeaderClass read fHeaderClass;
   end;
 
   TIdSipHeadersFilter = class;
-  
-  TIdSipHeaders = class(TObject)
+
+  TIdSipHeaderList = class(TObject)
+  protected
+    function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
+  public
+    function  Count: Integer; virtual; abstract;
+    property  Items[const I: Integer]:      TIdSipHeader read GetItems;
+  end;
+
+  TIdSipHeaders = class(TIdSipHeaderList)
   private
     List: TObjectList;
 
@@ -334,10 +342,11 @@ type
 
     function  ConstructHeader(HeaderName: String): TIdSipHeader;
     function  GetHeaders(const Name: String): TIdSipHeader;
-    function  GetItems(const I: Integer): TIdSipHeader;
     function  GetValues(const Name: String): String;
     function  IndexOf(const HeaderName: String): Integer;
     procedure SetValues(const Header, Value: String);
+  protected
+    function  GetItems(const I: Integer): TIdSipHeader; override;
   public
     class function CanonicaliseName(HeaderName: String): String;
     class function GetHeaderName(Header: String): String;
@@ -360,39 +369,41 @@ type
 
     function  Add(const HeaderName: String): TIdSipHeader; overload;
     procedure Add(const Header: TIdSipHeader); overload;
-    procedure Add(const Headers: TIdSipHeaders); overload;
-    procedure Add(const Headers: TIdSipHeadersFilter); overload;
+    procedure Add(const Headers: TIdSipHeaderList); overload;
     procedure AddInReverseOrder(const Headers: TIdSipHeadersFilter);
     function  AsString: String;
     procedure Clear;
     procedure Delete(const I: Integer);
-    function  Count: Integer;
+    function  Count: Integer; override;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsEmpty: Boolean;
     procedure Remove(const Header: TIdSipHeader);
     procedure RemoveAll(const HeaderName: String);
 
     property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
-    property  Items[const I: Integer]:      TIdSipHeader read GetItems;
     property  Values[const Header: String]: String       read GetValues write SetValues;
   end;
 
-  TIdSipHeadersFilter = class(TObject)
+  TIdSipHeadersFilter = class(TIdSipHeaderList)
   private
-    HeaderName: String;
-    Headers:    TIdSipHeaders;
-
-    function GetItems(const Index: Integer): TIdSipHeader;
+    fHeaderName: String;
+    Headers:     TIdSipHeaders;
+  protected
+    function GetItems(const Index: Integer): TIdSipHeader; override;
   public
     constructor Create(const Headers: TIdSipHeaders; const HeaderName: String);
 
-    procedure Add(Header: TIdSipHeader);
+    procedure Add(Header: TIdSipHeader); overload;
+    procedure Add(Headers: TIdSipHeaderList); overload;
     procedure Clear;
-    function  Count: Integer;
+    function  Count: Integer; override;
     function  IsEmpty: Boolean;
+    function  IsEqualTo(const OtherHeaders: TIdSipHeadersFilter): Boolean; overload;
+    function  IsEqualTo(const OtherHeaders: TIdSipHeaders): Boolean; overload;
     procedure Remove(Header: TIdSipHeader);
     procedure RemoveAll;
 
+    property HeaderName:                  String       read fHeaderName;
     property Items[const Index: Integer]: TIdSipHeader read GetItems;
   end;
 
@@ -1082,9 +1093,9 @@ var
   S: String;
 begin
   S := Value;
-  Self.IsWild := Fetch(S, ';') = '*';
+  Self.IsWildCard := Fetch(S, ';') = '*';
 
-  if not Self.IsWild then
+  if not Self.IsWildCard then
     inherited SetValue(Value)
   else
     Self.ParseParameters(S, Self.Parameters);
@@ -1947,11 +1958,15 @@ end;
 
 function TIdSipHeaders.Add(const HeaderName: String): TIdSipHeader;
 begin
-  Self.List.Add(Self.ConstructHeader(HeaderName));
+  Result := Self.ConstructHeader(HeaderName);
+  try
+    Self.List.Add(Result);
+    Result.Name := HeaderName;
+  except
+    Result.Free;
 
-  Result := Self.List[Self.List.Count - 1] as TIdSipHeader;
-
-  Result.Name := HeaderName;
+    raise;
+  end;
 end;
 
 procedure TIdSipHeaders.Add(const Header: TIdSipHeader);
@@ -1964,15 +1979,7 @@ begin
   Self.List.Add(H);
 end;
 
-procedure TIdSipHeaders.Add(const Headers: TIdSipHeaders);
-var
-  I: Integer;
-begin
-  for I := 0 to Headers.Count - 1 do
-    Self.Add(Headers.Items[I]);
-end;
-
-procedure TIdSipHeaders.Add(const Headers: TIdSipHeadersFilter);
+procedure TIdSipHeaders.Add(const Headers: TIdSipHeaderList);
 var
   I: Integer;
 begin
@@ -2041,6 +2048,13 @@ begin
     else
       Inc(I);
   end;
+end;
+
+//* TIdSipHeaders Protected methods ********************************************
+
+function TIdSipHeaders.GetItems(const I: Integer): TIdSipHeader;
+begin
+  Result := Self.List[I] as TIdSipHeader;
 end;
 
 //* TIdSipHeaders Private methods **********************************************
@@ -2126,11 +2140,6 @@ begin
     Result := Self.List[I] as TIdSipHeader;
 end;
 
-function TIdSipHeaders.GetItems(const I: Integer): TIdSipHeader;
-begin
-  Result := Self.List[I] as TIdSipHeader;
-end;
-
 function TIdSipHeaders.GetValues(const Name: String): String;
 var
   I: Integer;
@@ -2180,13 +2189,18 @@ end;
 
 constructor TIdSipHeadersFilter.Create(const Headers: TIdSipHeaders; const HeaderName: String);
 begin
-  Self.HeaderName := HeaderName;
-  Self.Headers    := Headers;
+  Self.fHeaderName := HeaderName;
+  Self.Headers     := Headers;
 end;
 
 procedure TIdSipHeadersFilter.Add(Header: TIdSipHeader);
 begin
   Self.Headers.Add(Header);
+end;
+
+procedure TIdSipHeadersFilter.Add(Headers: TIdSipHeaderList);
+begin
+  Self.Headers.Add(Headers);
 end;
 
 procedure TIdSipHeadersFilter.Clear;
@@ -2209,6 +2223,36 @@ begin
   Result := Self.Count = 0;
 end;
 
+function TIdSipHeadersFilter.IsEqualTo(const OtherHeaders: TIdSipHeadersFilter): Boolean;
+var
+  I: Integer;
+begin
+  Result := Self.Count = OtherHeaders.Count;
+
+  I := 0;
+  if Result then begin
+    while Result and (I < Self.Count) do begin
+      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
+      Inc(I);
+    end;
+  end;
+end;
+
+function TIdSipHeadersFilter.IsEqualTo(const OtherHeaders: TIdSipHeaders): Boolean;
+var
+  I: Integer;
+begin
+  Result := Self.Count = OtherHeaders.Count;
+
+  I := 0;
+  if Result then begin
+    while Result and (I < Self.Count) do begin
+      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
+      Inc(I);
+    end;
+  end;
+end;
+
 procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);
 begin
   Self.Headers.Remove(Header);
@@ -2219,7 +2263,7 @@ begin
   Self.Headers.RemoveAll(Self.HeaderName);
 end;
 
-//* TIdSipHeadersFilter Private methods ****************************************
+//* TIdSipHeadersFilter Protected methods **************************************
 
 function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
 var

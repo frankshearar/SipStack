@@ -412,8 +412,9 @@ begin
   Self.Client.Send(Method + ' 200 OK'#13#10
                  + #13#10);
 
-  Self.CheckMalformedRequestResponse(Client.ReceiveString(DefaultTimeout),
-                                     Format(MalformedToken, ['Method', Method]));
+  CheckEquals('',
+              Client.ReceiveString(DefaultTimeout),
+              'Response not just dropped on the floor');
 end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamDifferentIPv4SentBy;

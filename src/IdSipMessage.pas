@@ -64,6 +64,8 @@ type
     property ToHeader:      TIdSipFromToHeader  read GetTo write SetTo;
   end;
 
+  TIdSipMessageClass = class of TIdSipMessage;
+
   TIdSipRequest = class(TIdSipMessage)
   private
     fMethod:     String;
@@ -152,7 +154,9 @@ type
 //    function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
     function  ParseAndMakeMessage: TIdSipMessage; overload;
     function  ParseAndMakeMessage(const Src: String): TIdSipMessage; overload;
-    function  ParseAndMakeRequest: TIdSipRequest;
+    function  ParseAndMakeMessage(const Src: String; const MessageType: TIdSipMessageClass): TIdSipMessage; overload;
+    function  ParseAndMakeRequest: TIdSipRequest; overload;
+    function  ParseAndMakeRequest(const Src: String): TIdSipRequest; overload;
     function  ParseAndMakeResponse: TIdSipResponse; overload;
     function  ParseAndMakeResponse(const Src: String): TIdSipResponse; overload;
     procedure ParseMessage(const Msg: TIdSipMessage);
@@ -722,7 +726,7 @@ begin
     FirstToken := Fetch(FirstLine);
     FirstToken := Fetch(FirstToken, '/');
 
-    // It's safe to do this because we know the string starts with "SIP/",
+    // It's safe to do this because we know a SIP response starts with "SIP/",
     // and the "/" is not allowed in a Method.
     Result := Self.CreateResponseOrRequest(FirstToken);
     try
@@ -747,9 +751,43 @@ begin
     S := TStringStream.Create(Src);
     try
       Self.Source := S;
-      Result := Self.ParseAndMakeMessage;
 
-      Result.Body := S.ReadString(Result.ContentLength);
+      Result := Self.ParseAndMakeMessage;
+      try
+        Result.Body := S.ReadString(Result.ContentLength);
+      except
+        Result.Free;
+
+        raise;
+      end;
+    finally
+      S.Free;
+    end;
+  finally
+    Self.Source := OriginalSrc;
+  end;
+end;
+
+function TIdSipParser.ParseAndMakeMessage(const Src: String; const MessageType: TIdSipMessageClass): TIdSipMessage;
+var
+  OriginalSrc: TStream;
+  S:           TStringStream;
+begin
+  OriginalSrc := Self.Source;
+  try
+    S := TStringStream.Create(Src);
+    try
+      Self.Source := S;
+
+      Result := MessageType.Create;
+      try
+        Self.ParseMessage(Result);
+        Result.Body := S.ReadString(Result.ContentLength);
+      except
+        Result.Free;
+
+        raise;
+      end;
     finally
       S.Free;
     end;
@@ -770,6 +808,11 @@ begin
   end;
 end;
 
+function TIdSipParser.ParseAndMakeRequest(const Src: String): TIdSipRequest;
+begin
+  Result := Self.ParseAndMakeMessage(Src, TIdSipRequest) as TIdSipRequest;
+end;
+
 function TIdSipParser.ParseAndMakeResponse: TIdSipResponse;
 begin
   Result := TIdSipResponse.Create;
@@ -784,7 +827,7 @@ end;
 
 function TIdSipParser.ParseAndMakeResponse(const Src: String): TIdSipResponse;
 begin
-  Result := Self.ParseAndMakeMessage(Src) as TIdSipResponse;
+  Result := Self.ParseAndMakeMessage(Src, TIdSipResponse) as TIdSipResponse;
 end;
 
 procedure TIdSipParser.ParseMessage(const Msg: TIdSipMessage);

@@ -7,7 +7,7 @@ uses
 
 type
   TPeerInfo = record
-    PeerIP: string;
+    PeerIP:   String;
     PeerPort: Integer;
   end;
 
@@ -17,11 +17,13 @@ type
   TIdSipUdpServer = class(TIdUDPServer)
   private
     fOnRequest:  TIdSipRequestEvent;
+    fOnResponse: TIdSipResponseEvent;
     Parser:      TIdSipParser;
-    procedure DoOnRequest(const Request: TIdSipRequest);
+    procedure DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
 
     procedure SendBadRequestResponse(PeerInfo: TPeerInfo;
-                                     const Reason: String;
+                               const Reason: String;
                                      Parser: TIdSipParser);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
@@ -29,7 +31,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
   published
-    property OnRequest: TIdSipRequestEvent read fOnRequest write fOnRequest;
+    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
+    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
 
 implementation
@@ -63,7 +66,7 @@ end;
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
   RemainingBytes: Cardinal;
-  Req:            TIdSipRequest;
+  Msg:            TIdSipMessage;
   PeerInfo:       TPeerInfo;
 begin
   inherited DoUDPRead(AData, ABinding);
@@ -73,59 +76,68 @@ begin
 
   Self.Parser.Source := AData;
 
-  // what happens if the message is malformed?!
   try
-    Req := Self.Parser.ParseAndMakeRequest;
+    Msg := Self.Parser.ParseAndMakeMessage;
     try
       RemainingBytes := AData.Size - AData.Position;
-      // Yes, typecasting an Integer to a Cardinal is not clever. However, the
-      // Abs() ensures that Length(Msg.Body) >= 0 and so we can rest in peace
-      // knowing we shan't cause an overflow. And we just the compiler warning
-      // about comparing signed and unsigned types.
-      if Req.HasHeader(ContentLengthHeaderFull) and
-        (RemainingBytes <> Req.ContentLength) then
-        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Req.ContentLength]));
+      if Msg.HasHeader(ContentLengthHeaderFull) and
+        (RemainingBytes <> Msg.ContentLength) then
+        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
 
-      Req.ReadBody(Self.Parser.Source);
+      Msg.ReadBody(Self.Parser.Source);
 
-      if TIdSipParser.IsFQDN(Req.Path.LastHop.SentBy)
-        or (Req.Path.LastHop.SentBy <> ABinding.IP) then
-        Req.Path.LastHop.Received := ABinding.IP;
+      if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
+        or (Msg.Path.LastHop.SentBy <> ABinding.IP) then
+        Msg.Path.LastHop.Received := ABinding.IP;
 
-      Self.DoOnRequest(Req);
+      if (Msg is TIdSipRequest) then
+        Self.DoOnRequest(ABinding, Msg as TIdSipRequest)
+      else
+        Self.DoOnResponse(ABinding, Msg as TIdSipResponse);
     finally
-      Req.Free;
+      Msg.Free;
     end;
   except
     on E: EBadRequest do begin
       Self.SendBadRequestResponse(PeerInfo, E.Message, Parser);
+    end;
+    on E: EBadResponse do begin
+      // drop it on the floor
     end;
   end;
 end;
 
 //* TestFoo Private methods *****************************************************
 
-procedure TIdSipUdpServer.DoOnRequest(const Request: TIdSipRequest);
+procedure TIdSipUdpServer.DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
   if Assigned(Self.OnRequest) then
-    Self.OnRequest(Self, Request);
+    Self.OnRequest(Sender, Request);
+end;
+
+procedure TIdSipUdpServer.DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
+begin
+  if Assigned(Self.OnResponse) then
+    Self.OnResponse(Sender, Response);
 end;
 
 procedure TIdSipUdpServer.SendBadRequestResponse(PeerInfo: TPeerInfo;
-                                                 const Reason: String;
+                                           const Reason: String;
                                                  Parser: TIdSipParser);
 var
-  Msg: TIdSipResponse;
+  Res: TIdSipResponse;
 begin
-  Msg := TIdSipResponse.Create;
+  Res := TIdSipResponse.Create;
   try
-    Msg.StatusCode := SIPBadRequest;
-    Msg.StatusText := Reason;
-    Msg.SipVersion := SipVersion;
+    // We really can't do much more than this. The message was unparseable,
+    // so what else can we do?
+    Res.StatusCode := SIPBadRequest;
+    Res.StatusText := Reason;
+    Res.SipVersion := SipVersion;
 
-    Self.Send(PeerInfo.PeerIP, PeerInfo.PeerPort, Msg.AsString);
+    Self.Send(PeerInfo.PeerIP, PeerInfo.PeerPort, Res.AsString);
   finally
-    Msg.Free;
+    Res.Free;
   end;
 end;
 

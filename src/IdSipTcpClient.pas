@@ -23,7 +23,7 @@ type
 implementation
 
 uses
-  Classes;
+  Classes, IdException;
 
 //******************************************************************************
 //* TIdSipTcpClient                                                            *
@@ -53,31 +53,35 @@ var
 begin
   ReceivedFinalResponse := false;
 
-  while (not ReceivedFinalResponse) do begin
-    S := TStringStream.Create('');
-    try
-      while (S.DataString = '') do
-        Self.Capture(S, '');
-      S.Seek(0, soFromBeginning);
-
-      P := TIdSipParser.Create;
+  try
+    while (not ReceivedFinalResponse) do begin
+      S := TStringStream.Create('');
       try
-        P.Source := S;
-        R := P.ParseAndMakeMessage as TIdSipResponse;
-        try
-          R.Body := Self.ReadString(R.ContentLength);
-          Self.DoOnResponse(R);
+        while (S.DataString = '') do
+          Self.Capture(S, '');       // this won't time out :/
+        S.Seek(0, soFromBeginning);
 
-          ReceivedFinalResponse := R.IsFinal;
+        P := TIdSipParser.Create;
+        try
+          P.Source := S;
+          R := P.ParseAndMakeResponse;
+          try
+            R.Body := Self.ReadString(R.ContentLength);
+            Self.DoOnResponse(R);
+
+            ReceivedFinalResponse := R.IsFinal;
+          finally
+            R.Free;
+          end;
         finally
-          R.Free;
+          P.Free;
         end;
       finally
-        P.Free;
+        S.Free;
       end;
-    finally
-      S.Free;
     end;
+  except
+    on EIdConnClosedGracefully do;
   end;
 end;
 

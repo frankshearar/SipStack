@@ -24,20 +24,15 @@ uses
   TestMessages in 'test\TestMessages.pas',
   TestIdSdpParser in 'test\TestIdSdpParser.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
+  TestIdSipCore in 'test\TestIdSipCore.pas',
   TestIdSipDialog in 'test\TestIdSipDialog.pas',
+  TestIdSipHeaders in 'test\TestIdSipHeaders.pas',
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipSession in 'test\TestIdSipSession.pas',
-  TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
-  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
-  TestIdSipTimer in 'test\TestIdSipTimer.pas',
-  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
-  TestIdSipTransport in 'test\TestIdSipTransport.pas',
-  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdURI in 'test\TestIdURI.pas';
-
+  TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',  TestIdSipTimer in 'test\TestIdSipTimer.pas',  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',  TestIdSipTransport in 'test\TestIdSipTransport.pas',  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',  TestIdUri in 'test\TestIdUri.pas';
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
