@@ -43,13 +43,22 @@ type
     procedure OnChanged(Observed: TObject);
   end;
 
-  // I provide a protocol for using a registrar. You send a REGISTER, and
-  // listen for the events below.
+
+  // I provide a protocol for generic Actions.
   //
   // You can use OnAuthenticationChallenge to authenticate to a proxy (or
-  // registrar). Note that we cannot distinguish between (1) you contacting
-  // the proxy/registrar for the first time and it asking for credentials,
-  // and (2) you offering invalid credentials.
+  // registrar or user agent server). Note that we cannot distinguish between
+  // (1) you contactingthe proxy/registrar for the first time and it asking
+  // for credentials, and (2) you offering invalid credentials.
+  IIdSipActionListener = interface
+    ['{C3255325-A52E-46FF-9C21-478880FB350A}']
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
+  end;
+
+  // I provide a protocol for using a registrar. You send a REGISTER, and
+  // listen for the events below.
   //
   // OnFailure and OnSuccess, apart from the obvious, tell you that the
   // registration agent has terminated, and that you should remove all
