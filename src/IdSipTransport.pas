@@ -19,6 +19,8 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
+    procedure OnRejectedMessage(Message: TIdSipMessage;
+                                const Reason: String);
   end;
 
   // I listen for when messages are sent, rather than received. I'm most useful
@@ -48,6 +50,8 @@ type
     function  GetPort: Cardinal; virtual; abstract;
     procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
+    procedure NotifyTransportListenersOfRejectedMessage(Message: TIdSipMessage;
+                                                        const Reason: String);
     procedure NotifyTransportSendingListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportSendingListeners(Response: TIdSipResponse); overload;
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -201,6 +205,9 @@ type
   end;
 
   EUnknownTransport = class(EIdException);
+
+const
+  ResponseNotSentFromHere = 'Received response could not have been sent from here';
 
 implementation
 
@@ -359,6 +366,20 @@ begin
   end;
 end;
 
+procedure TIdSipTransport.NotifyTransportListenersOfRejectedMessage(Message: TIdSipMessage;
+                                                                    const Reason: String);
+var
+  I: Integer;
+begin
+  Self.TransportListenerLock.Acquire;
+  try
+    for I := 0 to Self.TransportListeners.Count - 1 do
+      IIdSipTransportListener(Self.TransportListeners[I]).OnRejectedMessage(Message, Reason);
+  finally
+    Self.TransportListenerLock.Release;
+  end;
+end;
+
 procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest);
 var
   I: Integer;
@@ -393,6 +414,9 @@ begin
     or (Request.LastHop.SentBy <> ReceivedFrom.PeerIP) then
     Request.LastHop.Received := ReceivedFrom.PeerIP;
 
+  // We let the UA handle rejecting messages because of things like the UA
+  // not supporting the SIP version or whatnot. This allows us to centralise
+  // response generation.
   Self.NotifyTransportListeners(Request);
 end;
 
@@ -403,7 +427,10 @@ begin
 
   if Self.SentByIsRecognised(Response.LastHop) then begin
     Self.NotifyTransportListeners(Response);
-  end;
+  end
+  else
+    Self.NotifyTransportListenersOfRejectedMessage(Response,
+                                                   ResponseNotSentFromHere);
 end;
 
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest);

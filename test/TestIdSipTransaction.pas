@@ -22,7 +22,6 @@ type
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
     Response200:            TIdSipResponse;
-    Session:                TIdSipSession;
     TranRequest:            TIdSipRequest;
 
     function  CreateAck(const Response: TIdSipResponse): TIdSipRequest;
@@ -33,7 +32,6 @@ type
                      const Reason: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
-    procedure OnNewSession(Session: TIdSipSession);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Transport: TIdSipTransport);
@@ -69,7 +67,6 @@ type
     procedure TestServerInviteTransactionGetsAck;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
-//    procedure TestTortureTest41;
   end;
 
   TestTIdSipTransaction = class(TTestCase)
@@ -476,11 +473,6 @@ end;
 procedure TestTIdSipTransactionDispatcher.OnModifiedSession(Session: TIdSipSession;
                                                             Invite: TIdSipRequest);
 begin
-end;
-
-procedure TestTIdSipTransactionDispatcher.OnNewSession(Session: TIdSipSession);
-begin
-  Self.Session := Session;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -988,30 +980,7 @@ begin
     R.Free;
   end;
 end;
-{
-procedure TestTIdSipTransactionDispatcher.TestTortureTest41;
-var
-  P: TIdSipParser;
-  Req: TIdSipRequest;
-begin
-  P := TIdSipParser.Create;
-  try
-    Req := P.ParseAndMakeRequest(TortureTest41);
-    try
-      Self.MockTransport.FireOnRequest(Req);
-      Fail('not implemented yet');
-//      Self.MockTransport.
-      CheckEquals(SIPSIPVersionNotSupported,
-                  Self.MockTransport.LastResponse.StatusCode,
-                  '');
-    finally
-      Req.Free;
-    end;
-  finally
-    P.Free;
-  end;
-end;
-}
+
 //******************************************************************************
 //* TestTIdSipTransaction                                                      *
 //******************************************************************************

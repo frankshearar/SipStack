@@ -3,9 +3,9 @@ unit Spike;
 interface
 
 uses
-  audioclasses, Classes, Controls, ExtCtrls, Forms, IdRTP, IdSdp, IdSipCore,
-  IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle, StdCtrls,
-  SyncObjs;
+  audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdRTP, IdSdp,
+  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdSipTransport,
+  IdSocketHandle, StdCtrls, SyncObjs;
 
 type
   TIdDTMFPanel = class;
@@ -13,6 +13,7 @@ type
   TrnidSpike = class(TForm,
                      IIdRTPDataListener,
                      IIdSipObserver,
+                     IIdSipRegistrationListener,
                      IIdSipSessionListener,
                      IIdSipTransportListener,
                      IIdSipTransportSendingListener,
@@ -39,6 +40,8 @@ type
     InputText: TMemo;
     TextTimer: TTimer;
     BasePort: TEdit;
+    Register: TButton;
+    RegistrarUri: TEdit;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -46,6 +49,7 @@ type
     procedure TextTimerTimer(Sender: TObject);
     procedure InputTextKeyPress(Sender: TObject; var Key: Char);
     procedure BasePortChange(Sender: TObject);
+    procedure RegisterClick(Sender: TObject);
   private
     CounterLock:  TCriticalSection;
     Lock:         TCriticalSection;
@@ -57,16 +61,23 @@ type
     DTMFPanel:    TIdDTMFPanel;
     Media:        TIdSdpPayloadProcessor;
     RTPByteCount: Integer;
+    RunningPort:  Cardinal;
     SendBuffer:   String;
     StopEvent:    TEvent;
-    TransportUDP: TIdSipTransport;
+    Transports:   TObjectList;
     UA:           TIdSipUserAgentCore;
     UDPByteCount: Integer;
 
+    function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     procedure LogMessage(Msg: TIdSipMessage);
+    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                        Response: TIdSipResponse);
     procedure OnChanged(Observed: TObject);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        const Reason: String);
     procedure OnInboundCall(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
@@ -77,14 +88,20 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
+    procedure OnRejectedMessage(Message: TIdSipMessage;
+                                const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Transport: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Transport: TIdSipTransport);
+    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure StartReadingData(const SDP: String);
+    procedure StartTransports;
     procedure StopReadingData;
+    procedure StopTransports;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -151,7 +168,10 @@ implementation
 {$R *.dfm}
 
 uses
-  Dialogs, Graphics, IdGlobal, IdSipConsts, IdSipHeaders, IdStack, SysUtils;
+  Dialogs, Graphics, IdGlobal, IdSipConsts, IdStack, SysUtils;
+
+const
+  LocalHostName = '127.0.0.1';
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -159,17 +179,14 @@ uses
 //* TrnidSpike Public methods **************************************************
 
 constructor TrnidSpike.Create(AOwner: TComponent);
-const
-  LocalHostName = '127.0.0.1';
 var
-  Binding:     TIdSocketHandle;
-  Contact:     TIdSipContactHeader;
-  From:        TIdSipFromHeader;
-  RunningPort: Cardinal;
+  Contact: TIdSipContactHeader;
+  From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
 
-  RunningPort := IdPORT_SIP;
+  Self.Transports := TObjectList.Create(true);
+  Self.RunningPort := IdPORT_SIP;
 
   Self.DTMFPanel := TIdDTMFPanel.Create(nil);
   Self.DTMFPanel.Align  := alLeft;
@@ -189,43 +206,28 @@ begin
   Self.AudioPlayer.Assign(Self.DataStore);
 //  Self.AudioPlayer.Play(AnyAudioDevice);
 
-  Self.StopEvent   := TSimpleEvent.Create;
+  Self.StopEvent := TSimpleEvent.Create;
 
-  Self.TransportUDP := TIdSipUdpTransport.Create(IdPORT_SIP);
-  if (GStack.LocalAddress <> LocalHostName) then begin
-    Binding      := Self.TransportUDP.Bindings.Add;
-    Binding.IP   := GStack.LocalAddress;
-    Binding.Port := RunningPort;
-    Self.TransportUDP.HostName := Binding.IP;
-  end
-  else
-    Self.TransportUDP.HostName := LocalHostName;
-
-  Binding      := Self.TransportUDP.Bindings.Add;
-  Binding.IP   := LocalHostName;
-  Binding.Port := RunningPort;
+  Self.Dispatch := TIdSipTransactionDispatcher.Create;
+//  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
+  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
   Self.Media      := TIdSdpPayloadProcessor.Create;
-  Self.Media.Host := Self.TransportUDP.HostName;
+  Self.Media.Host := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.Media.AddDataListener(Self);
-
-  Self.TransportUDP.AddTransportListener(Self);
-  Self.TransportUDP.AddTransportSendingListener(Self);
-  Self.Dispatch := TIdSipTransactionDispatcher.Create;
-  Self.Dispatch.AddTransport(Self.TransportUDP);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
-  Self.UA.HostName := Self.TransportUDP.HostName;
+  Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.UA.UserAgentName := 'X-Lite build 1086';
 
   Contact := TIdSipContactHeader.Create;
   try
     Contact.Value := 'sip:franks@'
-                   + Self.TransportUDP.HostName + ':'
-                   + IntToStr(Self.TransportUDP.Bindings[0].Port);
+                   + (Self.Transports[0] as TIdSipTransport).HostName + ':'
+                   + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -233,31 +235,30 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@' + Self.TransportUDP.HostName;
+    From.Value := 'sip:franks@' + (Self.Transports[0] as TIdSipTransport).HostName;
     Self.UA.From := From;
   finally
     From.Free;
   end;
 
   try
-    BasePort.Text := IntToStr(Self.TransportUDP.Bindings[0].Port);
-    Self.TransportUDP.Start;
+    BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
+    Self.StartTransports;
   except
     on EIdCouldNotBindSocket do
       ShowMessage('Something''s hogged the SIP port '
-                + '(' + IntToStr(Self.TransportUDP.Bindings[0].Port) + ') - '
+                + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port) + ') - '
                 + 'kill it and restart this');
   end;
 end;
 
 destructor TrnidSpike.Destroy;
 begin
-  Self.TransportUDP.Stop;
+  Self.StopTransports;
 
   Self.UA.Free;
   Self.Dispatch.Free;
   Self.Media.Free;
-  Self.TransportUDP.Free;
 
   Self.TextLock.Free;
   Self.CounterLock.Free;
@@ -272,16 +273,46 @@ begin
   Self.StopEvent.Free;
   Self.DTMFPanel.Free;
 
+  Self.Transports.Free;
+
   inherited Destroy;
 end;
 
 //* TrnidSpike Private methods *************************************************
+
+function TrnidSpike.AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
+var
+  Binding: TIdSocketHandle;
+begin
+  Result := TransportType.Create(IdPORT_SIP);
+  Self.Transports.Add(Result);
+
+  if (GStack.LocalAddress <> LocalHostName) then begin
+    Binding      := Result.Bindings.Add;
+    Binding.IP   := GStack.LocalAddress;
+    Binding.Port := RunningPort;
+    Result.HostName := Binding.IP;
+  end
+  else
+    Result.HostName := LocalHostName;
+
+  Binding      := Result.Bindings.Add;
+  Binding.IP   := LocalHostName;
+  Binding.Port := RunningPort;
+  Result.AddTransportListener(Self);
+  Result.AddTransportSendingListener(Self);
+end;
 
 procedure TrnidSpike.LogMessage(Msg: TIdSipMessage);
 begin
   Self.Log.Lines.Add(Msg.AsString);
   Self.Log.Lines.Add('----');
 end;
+
+procedure TrnidSpike.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                               Response: TIdSipResponse);
+begin
+end;                                               
 
 procedure TrnidSpike.OnChanged(Observed: TObject);
 begin
@@ -295,6 +326,12 @@ end;
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession);
 begin
   Self.StopReadingData;
+end;
+
+procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipRegistration;
+                               CurrentBindings: TIdSipContacts;
+                               const Reason: String);
+begin
 end;
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipSession);
@@ -346,6 +383,13 @@ begin
   Self.LogMessage(Response);
 end;
 
+procedure TrnidSpike.OnRejectedMessage(Message: TIdSipMessage;
+                                       const Reason: String);
+begin
+  Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
+  Self.LogMessage(Message);
+end;
+
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
                                    Transport: TIdSipTransport);
 begin
@@ -356,6 +400,11 @@ procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
                                     Transport: TIdSipTransport);
 begin
   Self.LogMessage(Response);
+end;
+
+procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipRegistration;
+                               CurrentBindings: TIdSipContacts);
+begin
 end;
 
 procedure TrnidSpike.ProcessPCM(Data: TStream);
@@ -397,10 +446,26 @@ begin
   Self.Media.StartListening(SDP);
 end;
 
+procedure TrnidSpike.StartTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Transports.Count - 1 do
+    (Self.Transports[I] as TIdSipTransport).Start;
+end;
+
 procedure TrnidSpike.StopReadingData;
 begin
   Self.Media.StopListening;
   Self.Invite.Enabled := true;
+end;
+
+procedure TrnidSpike.StopTransports;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Transports.Count - 1 do
+    (Self.Transports[I] as TIdSipTransport).Stop;
 end;
 
 //* TrnidSpike Published methods ***********************************************
@@ -417,7 +482,7 @@ var
   SDP:     String;
   Target:  TIdSipToHeader;
 begin
-  Address := Self.TransportUDP.Bindings[0].IP;
+  Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
 
   Target := TIdSipToHeader.Create;
   try
@@ -737,13 +802,27 @@ end;
 
 procedure TrnidSpike.BasePortChange(Sender: TObject);
 var
-  I: Integer;
+  I, J: Integer;
 begin
-  Self.TransportUDP.Stop;
+  Self.StopTransports;
 
-  for I := 0 to Self.TransportUDP.Bindings.Count - 1 do
-    Self.TransportUDP.Bindings[I].Port := StrToInt(BasePort.Text);
-  Self.TransportUDP.Start;
+  for I := 0 to Self.Transports.Count - 1 do
+    for J := 0 to (Self.Transports[I] as TIdSipTransport).Bindings.Count - 1 do
+      (Self.Transports[I] as TIdSipTransport).Bindings[J].Port := StrToInt(BasePort.Text);
+
+  Self.StartTransports;
+end;
+
+procedure TrnidSpike.RegisterClick(Sender: TObject);
+var
+  Registrar: TIdSipUri;
+begin
+  Registrar := TIdSipUri.Create(Self.RegistrarUri.Text);
+  try
+    Self.UA.RegisterWith(Registrar);
+  finally
+    Registrar.Free;
+  end;
 end;
 
 end.

@@ -131,16 +131,20 @@ type
   private
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
+    fRejectedMessage:  Boolean;
 
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
+    procedure OnRejectedMessage(Message: TIdSipMessage;
+                                const Reason: String);
   public
     constructor Create;
 
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
+    property RejectedMessage:  Boolean read fRejectedMessage;
   end;
 
   TIdSipTestTransportSendingListener = class(TIdInterfacedObject,
@@ -405,6 +409,7 @@ begin
 
   Self.fReceivedRequest  := false;
   Self.fReceivedResponse := false;
+  Self.fRejectedMessage  := false;
 end;
 
 //* TIdSipTestTransportListener Private methods ********************************
@@ -419,6 +424,12 @@ procedure TIdSipTestTransportListener.OnReceiveResponse(Response: TIdSipResponse
                                                         Transport: TIdSipTransport);
 begin
   Self.fReceivedResponse := true;
+end;
+
+procedure TIdSipTestTransportListener.OnRejectedMessage(Message: TIdSipMessage;
+                                                        const Reason: String);
+begin
+  Self.fRejectedMessage := true;
 end;
 
 //******************************************************************************

@@ -32,6 +32,8 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
+    procedure OnRejectedMessage(Message: TIdSipMessage;
+                                const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Transport: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
@@ -64,6 +66,7 @@ type
     LowPortTransport:      TIdSipTransport;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
+    RejectedMessage:       Boolean;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
     WrongServer:           Boolean;
@@ -87,6 +90,8 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
+    procedure OnRejectedMessage(Message: TIdSipMessage;
+                                const Reason: String);
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest);
     procedure SendOkResponse(Transport: TIdSipTransport);
@@ -261,6 +266,11 @@ begin
 
   Check(Self.Response = Response,   'Response not correct');
   Check(Self.Transport = Transport, 'Transport not correct');
+end;
+
+procedure TestTIdSipTransportEventNotifications.OnRejectedMessage(Message: TIdSipMessage;
+                                                                  const Reason: String);
+begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendRequest(Request: TIdSipRequest;
@@ -441,6 +451,7 @@ begin
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
+  Self.RejectedMessage  := false; 
   Self.WrongServer      := false;
 end;
 
@@ -580,6 +591,12 @@ begin
 //  Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipTransport.OnRejectedMessage(Message: TIdSipMessage;
+                                                const Reason: String);
+begin
+  Self.RejectedMessage := true;
+end;
+
 procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
                                              R: TIdSipRequest);
 begin
@@ -615,8 +632,7 @@ begin
 
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.ReceivedRequest, 'Request not received');
 end;
@@ -631,8 +647,7 @@ begin
 
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.ReceivedResponse, 'Response not received');
 end;
@@ -643,8 +658,7 @@ begin
 
   Self.HighPortTransport.Send(Self.Response);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.ReceivedResponse, 'Response not received');
 end;
@@ -670,6 +684,7 @@ begin
 
   Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
         'Response not silently discarded');
+  Check(Self.RejectedMessage, 'Rejected message event didn''t fire');      
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
@@ -679,8 +694,7 @@ begin
   Self.Request.LastHop.SentBy := '127.0.0.3';
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamFQDNSentBy;
@@ -690,8 +704,7 @@ begin
   Self.Request.LastHop.SentBy := 'localhost';
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
@@ -703,8 +716,7 @@ begin
   Self.LowPortTransport.HostName := Self.HighPortTransport.Bindings[0].IP;
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTransport.TestSendRequest;
@@ -713,8 +725,7 @@ begin
 
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.ReceivedRequest, 'Request not received');
 end;
@@ -724,8 +735,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTransport.TestSendResponse;
@@ -734,8 +744,7 @@ begin
 
   Self.LowPortTransport.Send(Self.Response);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(5000)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.ReceivedResponse, 'Response not received');
 end;
@@ -1023,8 +1032,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckLeaveNonRportRequestsUntouched;
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;  
 
   CheckEquals(0, Self.RPort, 'rport value');
 end;
@@ -1039,8 +1047,7 @@ begin
 
     Self.LowPortTransport.Send(Self.Response);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
   finally
     Self.MaddrTransport.Stop;
   end;
@@ -1087,8 +1094,7 @@ begin
   Self.Request.LastHop.Params[RportParam] := '';
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   CheckNotEquals(0, Self.RPort, 'rport value');
 end;
@@ -1104,8 +1110,7 @@ begin
   Self.Request.LastHop.Params[RportParam] := '';
   Self.LowPortTransport.Send(Self.Request);
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Server := TIdUdpServer.Create(nil);
   try
