@@ -2641,6 +2641,7 @@ var
   Listener:          IIdSipActionListener;
 begin
   Listener := Subject as IIdSipActionListener;
+  
   if (Self.FirstPassword = '') then
     Listener.OnAuthenticationChallenge(Self.Action,
                                        Self.Response,
