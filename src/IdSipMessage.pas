@@ -5467,35 +5467,34 @@ end;
 
 function TIdSipMessage.MissingRequiredHeaders: Boolean;
 begin
-  if not Self.HasHeader(CallIDHeaderFull) then begin
-    Result := true;
+  Result := true;
 
+  if not Self.HasHeader(CallIDHeaderFull) then begin
     Self.MarkAsInvalid(MissingCallID);
+    Exit;
   end;
 
   if not Self.HasHeader(CSeqHeader) then begin
-    Result := true;
-
     Self.MarkAsInvalid(MissingCSeq);
+    Exit;
   end;
 
   if not Self.HasHeader(FromHeaderFull) then begin
-    Result := true;
-
     Self.MarkAsInvalid(MissingFrom);
+    Exit;
   end;
 
   if not Self.HasHeader(ToHeaderFull) then begin
-    Result := true;
-
     Self.MarkAsInvalid(MissingTo);
+    Exit;
   end;
 
   if not Self.HasHeader(ViaHeaderFull) then begin
-    Result := true;
-
     Self.MarkAsInvalid(MissingVia);
+    Exit;
   end;
+
+  Result := false;
 end;
 
 procedure TIdSipMessage.ParseCompoundHeader(const Header: String;
