@@ -3168,7 +3168,7 @@ begin
   Result := TIdSipUserAgentActOnResponse.Create;
 
   Result.Receiver  := Receiver;
-  Result.Response   := Response;
+  Result.Response  := Response;
   Result.UserAgent := Self;
 end;
 
