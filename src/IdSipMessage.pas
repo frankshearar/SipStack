@@ -5456,12 +5456,6 @@ begin
     end;
   end
   else begin
-
-{
-    Assert(not Response.WillEstablishDialog(Self),
-           'A UA that makes an ACK for a response that creates a dialog '
-         + 'must make that ACK as an in-dialog request');
-}
     Result := TIdSipRequest.Create;
     try
       Result.SIPVersion  := Self.SIPVersion;
