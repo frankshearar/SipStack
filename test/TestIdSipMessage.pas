@@ -449,8 +449,6 @@ begin
 end;
 
 procedure TestTIdSipMessage.TestMinimumExpiry;
-var
-  Expires: TIdSipExpiresHeaders;
 begin
   Self.Msg.ClearHeaders;
   CheckEquals(0, Self.Msg.MinimumExpiry, 'No headers');
