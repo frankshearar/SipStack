@@ -948,7 +948,6 @@ begin
   Self.M.Value := '42';
   CheckEquals(42, Self.M.NumericValue, 'NumericValue, 42');
 
-
   Self.M.Value := '0';
   CheckEquals(0, Self.M.NumericValue, 'NumericValue, 0');
 

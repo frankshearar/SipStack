@@ -22,6 +22,7 @@ type
 
   TIdSipClient = class(TObject)
   public
+    function  GetTransport(const Target: TIdURI): TIdSipTransportType;
     procedure Invite(const Target: TIdURI);
   end;
 
@@ -48,8 +49,28 @@ end;
 //******************************************************************************
 //* TIdSipClient Public methods ************************************************
 
-procedure TIdSipClient.Invite(const Target: TIdURI);
+function TIdSipClient.GetTransport(const Target: TIdURI): TIdSipTransportType;
+var
+  Scheme: String;
 begin
+  Scheme := Target.Protocol;
+end;
+
+procedure TIdSipClient.Invite(const Target: TIdURI);
+var
+  Msg: TIdSipRequest;
+begin
+  Msg := TIdSipRequest.Create;
+  try
+    Msg.Method     := MethodInvite;
+    Msg.SIPVersion := SIPVersion;
+    Msg.Request    := Target.GetFullURI;
+    Msg.Headers.Add(ToHeaderFull).Value := Msg.Request;
+    Msg.Headers.Add(FromHeaderFull).Value := 'sip:i@dont.know';
+    // how do we get what actual iface through which the packet was sent?
+    Msg.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + '';
+  finally
+  end;
 end;
 
 //* TIdSipClient Protected methods *********************************************

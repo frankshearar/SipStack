@@ -3,6 +3,7 @@ program SIP;
 uses
   Forms,
   GuiTestRunner,
+  IdSdpParser in 'src\IdSdpParser.pas',
   IdSipParser in 'src\IdSipParser.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
@@ -10,6 +11,7 @@ uses
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
   TortureTests in 'test\TortureTests.pas',
   XmlCgi in '..\IctWebsiteCgi\src\XmlCgi.pas',
+  TestIdSdpParser in 'test\TestIdSdpParser.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas' {,

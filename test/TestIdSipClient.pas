@@ -13,6 +13,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   public
+    procedure TestGetTransport;
     procedure TestInvite;
   end;
 
@@ -41,6 +42,10 @@ end;
 
 //* TestTIdSipClient Private methods *******************************************
 //* TestTIdSipClient Published methods *****************************************
+
+procedure TestTIdSipClient.TestGetTransport;
+begin
+end;
 
 procedure TestTIdSipClient.TestInvite;
 begin
