@@ -738,7 +738,8 @@ type
     function  PacketLossCount: Cardinal;
     function  PacketLossFraction: Byte;
     function  SequenceNumberRange: Cardinal;
-    function  UpdateStatistics(Data:  TIdRTPPacket; CurrentTime: TIdRTPTimestamp): Boolean; overload;
+    function  UpdateStatistics(Data:  TIdRTPPacket;
+                               CurrentTime: TIdRTPTimestamp): Boolean; overload;
     procedure UpdateStatistics(Stats: TIdRTCPPacket); overload;
 
     property CanonicalName:               String    read fCanonicalName write fCanonicalName;
@@ -3915,7 +3916,8 @@ begin
   Result := High(Self.BaseSeqNo) + 1; // 1 shl 16
 end;
 
-function TIdRTPMember.UpdateStatistics(Data: TIdRTPPacket; CurrentTime: TIdRTPTimestamp): Boolean;
+function TIdRTPMember.UpdateStatistics(Data: TIdRTPPacket;
+                                       CurrentTime: TIdRTPTimestamp): Boolean;
 begin
   Self.LastRTPReceiptTime := Now;
   
