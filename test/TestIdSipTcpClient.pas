@@ -100,9 +100,9 @@ begin
   Self.Server := TIdSipTcpServer.Create(nil);
   Self.Server.AddMessageListener(Self);
 
-  Self.Client.Host    := '127.0.0.1';
-  Self.Client.Port    := Self.Server.DefaultPort;
-  Self.Client.Timeout := 1000;
+  Self.Client.Host        := '127.0.0.1';
+  Self.Client.Port        := Self.Server.DefaultPort;
+  Self.Client.ReadTimeout := 1000;
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 

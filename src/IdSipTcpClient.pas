@@ -20,8 +20,6 @@ type
                                   R: TIdSipResponse;
                                   ReceivedFrom: TIdSipConnectionBindings) of object;
 
-  // Note that the Timeout property determines the maximum length of time to
-  // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fOnFinished: TNotifyEvent;
@@ -44,7 +42,6 @@ type
 
     property OnFinished:    TNotifyEvent        read fOnFinished write fOnFinished;
     property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
-    property Timeout:       Cardinal            read fTimeout write fTimeout;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
@@ -63,7 +60,7 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.Timeout := Self.DefaultTimeout;
+  Self.ReadTimeout := Self.DefaultTimeout;
 end;
 
 procedure TIdSipTcpClient.Send(Request: TIdSipRequest);
@@ -111,11 +108,11 @@ var
 begin
   Result := '';
 
-  Line := Self.ReadLn(#$A, Self.Timeout);
+  Line := Self.ReadLn(#$A, Self.ReadTimeout);
 
   while (Line <> '') do begin
     Result := Result + Line + #13#10;
-    Line := Self.ReadLn(#$A, Self.Timeout);
+    Line := Self.ReadLn(#$A, Self.ReadTimeout);
   end;
 
   TimedOut := Self.ReadLnTimedOut;

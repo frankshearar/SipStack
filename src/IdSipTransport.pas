@@ -692,9 +692,9 @@ function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   // Precondition: Self.ClientLock has been acquired.
   Result := TIdSipTcpClient.Create(nil);
-  Result.OnFinished := Self.DoOnClientFinished;
-  Result.OnResponse := Self.DoOnTcpResponse;
-  Result.Timeout    := Self.Timeout;
+  Result.OnFinished  := Self.DoOnClientFinished;
+  Result.OnResponse  := Self.DoOnTcpResponse;
+  Result.ReadTimeout := Self.Timeout;
 end;
 
 function TIdSipTCPTransport.GetPort: Cardinal;
@@ -710,9 +710,9 @@ begin
 
   Client := Self.AddClient;
 
-  Client.Host    := R.RequestUri.Host;
-  Client.Port    := R.RequestUri.Port;
-  Client.Timeout := Self.Timeout;
+  Client.Host        := R.RequestUri.Host;
+  Client.Port        := R.RequestUri.Port;
+  Client.ReadTimeout := Self.Timeout;
 
   Client.Connect(Self.Timeout);
   Client.Send(R);

@@ -564,10 +564,10 @@ begin
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
-    SipClient.OnResponse := Self.CheckInternalServerError;
-    SipClient.Host       := '127.0.0.1';
-    SipClient.Port       := LowPortServer.DefaultPort;
-    SipClient.Timeout    := 1000;
+    SipClient.OnResponse  := Self.CheckInternalServerError;
+    SipClient.Host        := '127.0.0.1';
+    SipClient.Port        := LowPortServer.DefaultPort;
+    SipClient.ReadTimeout := 1000;
 
     SipClient.Connect;
     try
@@ -676,10 +676,10 @@ begin
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
-    Self.SipClient.OnResponse := Self.ClientOnResponseDownClosedConnection;
-    Self.SipClient.Host       := '127.0.0.1';
-    Self.SipClient.Port       := IdPORT_SIP;
-    Self.SipClient.Timeout    := 100;
+    Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
+    Self.SipClient.Host        := '127.0.0.1';
+    Self.SipClient.Port        := IdPORT_SIP;
+    Self.SipClient.ReadTimeout := 100;
 
     Self.SipClient.Connect;
     try
@@ -730,10 +730,10 @@ begin
         try
           Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
           try
-            Self.SipClient.OnResponse := Self.ClientOnResponseDownClosedConnection;
-            Self.SipClient.Host       := Self.HighPortServer.Bindings[0].IP;
-            Self.SipClient.Port       := Self.HighPortServer.Bindings[0].Port;
-            Self.SipClient.Timeout    := 100;
+            Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
+            Self.SipClient.Host        := Self.HighPortServer.Bindings[0].IP;
+            Self.SipClient.Port        := Self.HighPortServer.Bindings[0].Port;
+            Self.SipClient.ReadTimeout := 100;
 
             Self.SipClient.Connect;
             try
@@ -788,10 +788,10 @@ begin
   try
     SipClient := Self.HighPortServer.CreateClient;
     try
-      SipClient.OnResponse := Self.ClientOnResponse;
-      SipClient.Host       := '127.0.0.1';
-      SipClient.Port       := IdPORT_SIP;
-      SipClient.Timeout    := 1000;
+      SipClient.OnResponse  := Self.ClientOnResponse;
+      SipClient.Host        := '127.0.0.1';
+      SipClient.Port        := IdPORT_SIP;
+      SipClient.ReadTimeout := 1000;
 
       SipClient.Connect;
       try
