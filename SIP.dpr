@@ -70,7 +70,8 @@ uses
 begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
-  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+//  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+  Forms.Application.CreateForm(TIdSpikeT140, IdSpikeT140);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

@@ -181,7 +181,7 @@ begin
     Payload := TIdRTPT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
     try
       Payload.Block := Self.SendBuffer;
-      Self.Server.Session.SendDataTo(Payload, Host, StrToInt(Port));
+      Self.Server.Session.SendData(Payload);
       Self.SendBuffer := '';
     finally
       Payload.Free;

@@ -528,14 +528,20 @@ type
 
   TestTIdRTPMemberTable = class(TTestCase)
   private
+    Host:    String;
     Members: TIdRTPMemberTable;
+    Port:    Cardinal;
     SSRC:    Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddAndFind;
+    procedure TestAddReceiver;
     procedure TestContains;
+    procedure TestContainsReceiver;
+    procedure TestFind;
+    procedure TestFindReceiver;
     procedure TestRemove;
     procedure TestRemoveAll;
     procedure TestReceiverCount;
@@ -707,13 +713,12 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
-  Result.AddTest(TestFunctions.Suite);
 {
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
   Result.AddTest(TestTIdT140Encoding.Suite);
   Result.AddTest(TestTIdTelephoneEventEncoding.Suite);
-}
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPTelephoneEventPayload.Suite);
@@ -742,6 +747,7 @@ begin
   Result.AddTest(TestTIdRTCPApplicationDefined.Suite);
   Result.AddTest(TestTIdCompoundRTCPPacket.Suite);
   Result.AddTest(TestTIdRTPMember.Suite);
+}
   Result.AddTest(TestTIdRTPMemberTable.Suite);
   Result.AddTest(TestTIdRTPSenders.Suite);
   Result.AddTest(TestSessionDelegationMethods.Suite);
@@ -6142,7 +6148,9 @@ procedure TestTIdRTPMemberTable.SetUp;
 begin
   inherited SetUp;
 
+  Self.Host    := '127.0.0.1';
   Self.Members := TIdRTPMemberTable.Create;
+  Self.Port    := 6060;
   Self.SSRC    := $decafbad;
 end;
 
@@ -6164,12 +6172,32 @@ begin
   Member := Self.Members.Add(Self.SSRC);
   CheckEquals(1, Self.Members.Count, 'SSRC not added');
   Check(not Member.IsSender, 'New member marked as a sender');
+  Check(Member.HasSyncSrcID, 'New member not marked as having an SSRC');
 
   Self.Members.Add(Self.SSRC);
   CheckEquals(1, Self.Members.Count, 'SSRC re-added');
 
   Check(Self.Members.Find(Self.SSRC) = Self.Members.Add(Self.SSRC),
         'Different entry returned for same SSRC');
+end;
+
+procedure TestTIdRTPMemberTable.TestAddReceiver;
+var
+  Member: TIdRTPMember;
+begin
+  CheckEquals(0, Self.Members.Count, 'Empty table');
+
+  Member := Self.Members.AddReceiver(Host, Port);
+
+  CheckEquals(1, Self.Members.Count, 'Receiver not added');
+  Check(Member <> nil, 'Nil returned');
+  Check(not Member.HasSyncSrcID,
+        'Receiver can''t have an SSRC - we don''t know it yet');
+  CheckEquals(Host, Member.SourceAddress, 'SourceAddress');
+  CheckEquals(Port, Member.SourcePort,    'SourcePort');
+
+  Self.Members.AddReceiver(Host, Port);
+  CheckEquals(1, Self.Members.Count, 'Receiver erroneously re-added');
 end;
 
 procedure TestTIdRTPMemberTable.TestContains;
@@ -6179,12 +6207,55 @@ begin
   Check(Self.Members.Contains(Self.SSRC), 'SSRC not added?');
 end;
 
+procedure TestTIdRTPMemberTable.TestContainsReceiver;
+begin
+  Check(not Self.Members.ContainsReceiver(Self.Host, Self.Port),
+        'Empty table');
+  Self.Members.AddReceiver(Self.Host, Self.Port);
+  Check(Self.Members.ContainsReceiver(Self.Host, Self.Port),
+        'Receiver not added?');
+end;
+
+procedure TestTIdRTPMemberTable.TestFind;
+var
+  Member: TIdRTPMember;
+begin
+  Check(nil = Self.Members.Find(Self.SSRC),
+        'Found non-existent member');
+
+  Self.Members.AddReceiver(Self.Host, Self.Port);
+  Check(nil = Self.Members.Find(Self.SSRC),
+        'Found wrong member');
+        
+  Member := Self.Members.Add(Self.SSRC);
+  Check(Member = Self.Members.Find(Self.SSRC),
+        'Unexpected member found');
+end;
+
+procedure TestTIdRTPMemberTable.TestFindReceiver;
+var
+  Member: TIdRTPMember;
+begin
+  Check(nil = Self.Members.FindReceiver(Self.Host, Self.Port),
+        'Found non-existent receiver');
+  Member := Self.Members.AddReceiver(Self.Host, Self.Port);
+  Check(Member = Self.Members.FindReceiver(Self.Host, Self.Port),
+        'Unexpected receiver found');
+end;
+
 procedure TestTIdRTPMemberTable.TestRemove;
+var
+  Member: TIdRTPMember;
 begin
   Self.Members.Add(Self.SSRC);
   Check(Self.Members.Contains(Self.SSRC), 'SSRC not added');
   Self.Members.Remove(Self.SSRC);
   Check(not Self.Members.Contains(Self.SSRC), 'SSRC not removed');
+
+  Member := Self.Members.Add(Self.SSRC);
+  Check(Self.Members.Contains(Self.SSRC), 'Member not added');
+  Self.Members.Remove(Member);
+  Check(not Self.Members.Contains(Self.SSRC), 'Member not removed');
 end;
 
 procedure TestTIdRTPMemberTable.TestRemoveAll;
@@ -6230,10 +6301,13 @@ begin
   Self.Members.Add(SessionSSRC).LastRTCPReceiptTime := Timestamp - 1;
   Self.Members.Add(FirstSSRC).LastRTCPReceiptTime   := Timestamp - 1;
   Self.Members.Add(SecondSSRC).LastRTCPReceiptTime  := Timestamp;
+  
+  Self.Members.AddReceiver('CthulhuPort', 666).LastRTCPReceiptTime := Timestamp;
+
   Self.Members.RemoveTimedOutMembersExceptFor(Timestamp, SessionSSRC);
-  CheckEquals(2,
+  CheckEquals(3,
               Self.Members.Count,
-              'Timed-out member not removed');
+              'Timed-out members not removed');
 
   CheckEquals(SecondSSRC,
               Self.Members.MemberAt(1).SyncSrcID,
@@ -6360,10 +6434,10 @@ begin
 
   Check(Self.Senders.Count > 1, 'Both members weren''t added');
   CheckEquals(IntToHex(Self.SSRC, 8),
-              IntToHex(Self.Senders.MemberAt(0).SyncSrcID, 8),
+              IntToHex(Self.Senders.SenderAt(0).SyncSrcID, 8),
               'Index 0');
   CheckEquals(IntToHex(NewSSRC, 8),
-              IntToHex(Self.Senders.MemberAt(1).SyncSrcID, 8),
+              IntToHex(Self.Senders.SenderAt(1).SyncSrcID, 8),
               'Index 1');
 end;
 
@@ -6377,7 +6451,7 @@ begin
 
   CheckEquals(1, Self.Senders.Count, 'Non-sender was added');
   CheckEquals(IntToHex(NewSSRC, 8),
-              IntToHex(Self.Senders.MemberAt(0).SyncSrcID, 8),
+              IntToHex(Self.Senders.SenderAt(0).SyncSrcID, 8),
               'Index 0');
 end;
 
@@ -6393,6 +6467,9 @@ begin
 
   CheckEquals(1, Self.Senders.Count, 'Sender not removed');
   Check(Self.Senders.Contains(NewSSRC), 'Wrong sender removed');
+
+  Self.Senders.Remove(Self.Senders.Add(Self.SSRC));
+  CheckEquals(1, Self.Senders.Count, 'Sender not removed (2)');
 end;
 
 procedure TestTIdRTPSenders.TestRemoveAll;

@@ -677,6 +677,7 @@ type
     fCycles:                      Cardinal; // The (shifted) count of sequence number wraparounds
     fExpectedPrior:               Cardinal;
     fHasLeftSession:              Boolean;
+    fHasSyncSrcID:                Boolean;
     fHighestSeqNo:                Word;
     fIsSender:                    Boolean;
     fJitter:                      Cardinal;
@@ -722,6 +723,7 @@ type
     property ControlAddress:              String    read fControlAddress write fControlAddress;
     property ControlPort:                 Cardinal  read fControlPort write fControlPort;
     property HasLeftSession:              Boolean   read fHasLeftSession write fHasLeftSession;
+    property HasSyncSrcID:                Boolean   read fHasSyncSrcID write fHasSyncSrcID;
     property IsSender:                    Boolean   read fIsSender write fIsSender;
     property LocalAddress:                Boolean   read fLocalAddress write fLocalAddress;
     property LastRTCPReceiptTime:         TDateTime read fLastRTCPReceiptTime write fLastRTCPReceiptTime;
@@ -762,19 +764,23 @@ type
     destructor  Destroy; override;
 
     function  Add(SSRC: Cardinal): TIdRTPMember;
+    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     procedure AdjustTransmissionTime(PreviousMemberCount: Cardinal;
                                      var NextTransmissionTime: TDateTime;
                                      var PreviousTransmissionTime: TDateTime);
     function  Contains(SSRC: Cardinal): Boolean;
+    function  ContainsReceiver(Host: String; Port: Cardinal): Boolean;
     function  Count: Cardinal;
     function  DeterministicSendInterval(ForSender: Boolean;
                                         Session: TIdRTPSession): TDateTime;
     function  Find(SSRC: Cardinal): TIdRTPMember;
+    function  FindReceiver(Host: String; Port: Cardinal): TIdRTPMember;
     function  MemberAt(Index: Cardinal): TIdRTPMember;
     function  MemberTimeout(Session: TIdRTPSession): TDateTime;
     function  ReceiverCount: Cardinal;
-    procedure Remove(SSRC: Cardinal);
+    procedure Remove(SSRC: Cardinal); overload;
+    procedure Remove(Member: TIdRTPMember); overload;
     procedure RemoveAll;
     procedure RemoveSources(Bye: TIdRTCPBye);
     procedure RemoveTimedOutMembersExceptFor(CutoffTime: TDateTime;
@@ -805,8 +811,9 @@ type
     function  Contains(SSRC: Cardinal): Boolean;
     function  Count: Cardinal;
     function  Find(SSRC: Cardinal): TIdRTPMember;
-    function  MemberAt(Index: Cardinal): TIdRTPMember;
-    procedure Remove(SSRC: Cardinal);
+    function  SenderAt(Index: Cardinal): TIdRTPMember;
+    procedure Remove(SSRC: Cardinal); overload;
+    procedure Remove(Sender: TIdRTPMember); overload;
     procedure RemoveAll;
   end;
 
@@ -882,7 +889,7 @@ type
 
     function  AcceptableSSRC(SSRC: Cardinal): Boolean;
     function  AddMember(SSRC: Cardinal): TIdRTPMember;
-//    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember; // How about this to add a new receiver?
+    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     function  CreateNextReport: TIdCompoundRTCPPacket;
     function  DeterministicSendInterval(ForSender: Boolean): TDateTime;
@@ -3587,6 +3594,7 @@ begin
   Self.ControlAddress           := '';
   Self.ControlPort              := 0;
   Self.HasLeftSession           := false;
+  Self.HasSyncSrcID             := false;
   Self.IsSender                 := false;
   Self.LocalAddress             := false;
   Self.MaxDropout               := Self.DefaultMaxDropout;
@@ -3856,11 +3864,38 @@ begin
   try
     Self.List.Add(Result);
 
-    Result.ControlAddress := '';
-    Result.ControlPort    := 0;
-    Result.SourceAddress  := '';
-    Result.SourcePort     := 0;
-    Result.SyncSrcID      := SSRC;
+    Result.HasSyncSrcID := true;
+    Result.SyncSrcID    := SSRC;
+  except
+    if (Self.List.IndexOf(Result) <> -1) then
+      Self.List.Remove(Result)
+    else
+      FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdRTPMemberTable.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+begin
+  // Sometimes we know we want to send data to someone even though they've not
+  // sent us data first. For instance, when you set up a SIP session, you know
+  // very well the session contains someone else (the remote end) but you don't
+  // know their SSRC because you're sending data first. (Either that, or the
+  // remote end faces the same problem - sending us data when they don't know
+  // our SSRC).
+
+  if Self.FindReceiver(Host, Port) <> nil then begin
+    Result := Self.FindReceiver(Host, Port);
+    Exit;
+  end;
+
+  Result := TIdRTPMember.Create;
+  try
+    Self.List.Add(Result);
+
+    Result.SourceAddress  := Host;
+    Result.SourcePort     := Port;
   except
     if (Self.List.IndexOf(Result) <> -1) then
       Self.List.Remove(Result)
@@ -3895,6 +3930,11 @@ end;
 function TIdRTPMemberTable.Contains(SSRC: Cardinal): Boolean;
 begin
   Result := Assigned(Self.Find(SSRC));
+end;
+
+function TIdRTPMemberTable.ContainsReceiver(Host: String; Port: Cardinal): Boolean;
+begin
+  Result := Assigned(Self.FindReceiver(Host, Port));
 end;
 
 function TIdRTPMemberTable.Count: Cardinal;
@@ -3947,7 +3987,22 @@ begin
   I := 0;
 
   while (I < Self.Count) and not Assigned(Result) do
-    if (Self.MemberAt(I).SyncSrcID = SSRC) then
+    if Self.MemberAt(I).HasSyncSrcID and (Self.MemberAt(I).SyncSrcID = SSRC) then
+      Result := Self.MemberAt(I)
+    else
+      Inc(I);
+end;
+
+function TIdRTPMemberTable.FindReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+var
+  I: Cardinal;
+begin
+  Result := nil;
+  I := 0;
+
+  while (I < Self.Count) and not Assigned(Result) do
+    if (Self.MemberAt(I).SourceAddress = Host)
+      and (Self.MemberAt(I).SourcePort = Port) then
       Result := Self.MemberAt(I)
     else
       Inc(I);
@@ -3973,6 +4028,11 @@ end;
 procedure TIdRTPMemberTable.Remove(SSRC: Cardinal);
 begin
   Self.List.Remove(Self.Find(SSRC));
+end;
+
+procedure TIdRTPMemberTable.Remove(Member: TIdRTPMember);
+begin
+  Self.List.Remove(Member);
 end;
 
 procedure TIdRTPMemberTable.RemoveAll;
@@ -4099,7 +4159,7 @@ end;
 function TIdRTPMemberTable.CompensationFactor: Double;
 begin
   // cf RFC 3550, section 6.3.1:
-  // The resulting value of T is divided by e-3/2=1.21828 to compensate
+  // We divide the resulting value of T by e-3/2=1.21828 to compensate
   // for the fact that the timer reconsideration algorithm converges to
   // a value of the RTCP bandwidth below the intended average.
 
@@ -4170,7 +4230,7 @@ begin
       end;
 end;
 
-function TIdRTPSenderTable.MemberAt(Index: Cardinal): TIdRTPMember;
+function TIdRTPSenderTable.SenderAt(Index: Cardinal): TIdRTPMember;
 var
   I:           Cardinal;
   MemberIndex: Cardinal;
@@ -4198,6 +4258,11 @@ end;
 procedure TIdRTPSenderTable.Remove(SSRC: Cardinal);
 begin
   Self.Members.Remove(SSRC);
+end;
+
+procedure TIdRTPSenderTable.Remove(Sender: TIdRTPMember);
+begin
+  Self.Members.Remove(Sender);
 end;
 
 procedure TIdRTPSenderTable.RemoveAll;
@@ -4265,6 +4330,16 @@ begin
   finally
     Self.MemberLock.Release;
   end;
+end;
+
+function TIdRTPSession.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+begin
+  // When we start up a session with the intention of sending data to someone
+  // (as opposed to solely listening), we need to send data to that person
+  // knowing only their address. Since they've not sent US any data, we can't
+  // know their SSRC. Therefore we add them as a receiver, and note the first
+  // SSRC we get from that address. From then on we act as normal.
+  Result := nil;
 end;
 
 function TIdRTPSession.AddSender(SSRC: Cardinal): TIdRTPMember;
@@ -4575,7 +4650,7 @@ end;
 
 function TIdRTPSession.SenderAt(Index: Cardinal): TIdRTPMember;
 begin
-  Result := Self.Senders.MemberAt(Index);
+  Result := Self.Senders.SenderAt(Index);
 end;
 
 function TIdRTPSession.SenderCount: Cardinal;
@@ -4665,8 +4740,10 @@ end;
 procedure TIdRTPSession.AddReports(Packet: TIdCompoundRTCPPacket);
 var
   I, J:    Cardinal;
+  Members: TIdRTPMemberTable;
   NumSrcs: Cardinal;
-  Report:  TIdRTCPReceiverReport;  
+  Report:  TIdRTCPReceiverReport;
+  Senders: TIdRTPSenderTable;
 begin
   // Sender Reports and Receiver Reports can hold at most 31 report blocks.
   // Sessions can have many more members. Therefore we pack at most
@@ -4680,26 +4757,32 @@ begin
   // transport) we should send several sets of RRs/SRs covering (more or
   // less disjoint) subsets of the session members.
 
-  Self.MemberLock.Acquire;
+  Report := Self.AddAppropriateReportTo(Packet);
+
+  Members := Self.LockMembers;
   try
-    Report := Self.AddAppropriateReportTo(Packet);
+    Senders := TIdRTPSenderTable.Create(Members);
+    try
+      I := 0;
+      while (I < Senders.Count) do begin
 
-    I := 0;
-    while (I < Self.SenderCount) do begin
-      J := 0;
-      NumSrcs := Min(High(TIdRTCPReceptionCount), Self.SenderCount - I);
-      Report.ReceptionReportCount := NumSrcs;
-      while (J < NumSrcs) do begin
-        Report.Reports[J].GatherStatistics(Self.SenderAt(I));
-        Inc(J);
-        Inc(I);
+        J := 0;
+        NumSrcs := Min(High(TIdRTCPReceptionCount), Senders.Count - I);
+        Report.ReceptionReportCount := NumSrcs;
+        while (J < NumSrcs) do begin
+          Report.Reports[J].GatherStatistics(Senders.SenderAt(I));
+          Inc(J);
+          Inc(I);
+        end;
+
+        if (I < Senders.Count) then
+          Report := Self.AddAppropriateReportTo(Packet);
       end;
-
-      if (I < Self.SenderCount) then
-        Report := Self.AddAppropriateReportTo(Packet);
+    finally
+      Senders.Free;
     end;
   finally
-    Self.MemberLock.Release;
+    Self.UnlockMembers;
   end;
 end;
 
