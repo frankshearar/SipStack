@@ -1601,7 +1601,6 @@ end;
 
 function TIdSipAbstractCore.AuthenticationHeaderValue: String;
 begin
-  // TODO: Change the nonce value
   Result := Format('realm="%s",algorith="MD5",qop="auth",nonce="%s"',
                    [Self.Realm, Self.NextNonce]);
 end;
