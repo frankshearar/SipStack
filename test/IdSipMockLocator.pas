@@ -73,10 +73,7 @@ procedure TIdSipMockLocator.AddLocation(const AddressOfRecord: String;
 var
   NewLocation: TIdSipLocation;
 begin
-  NewLocation := TIdSipLocation.Create;
-  NewLocation.Address   := Address;
-  NewLocation.Port      := Port;
-  NewLocation.Transport := Transport;
+  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
 
   Self.Locations.AddObject(AddressOfRecord, NewLocation);
 end;

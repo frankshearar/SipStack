@@ -21,9 +21,16 @@ type
     fAddress:   String;
     fPort:      Cardinal;
   public
-    property Transport: String   read fTransport write fTransport;
-    property Address:   String   read fAddress write fAddress;
-    property Port:      Cardinal read fPort write fPort;
+    constructor Create(const Transport: String;
+                       const Address:   String;
+                             Port: Cardinal); overload;
+    constructor Create(Via: TIdSipViaHeader); overload;
+    
+    function Copy: TIdSipLocation;
+
+    property Transport: String   read fTransport;
+    property Address:   String   read fAddress;
+    property Port:      Cardinal read fPort;
   end;
 
   TIdSipLocations = class(TObject)
@@ -74,6 +81,36 @@ uses
   SysUtils;
 
 //******************************************************************************
+//* TIdSipLocation                                                             *
+//******************************************************************************
+//* TIdSipLocation Public methods **********************************************
+
+constructor TIdSipLocation.Create(const Transport: String;
+                                  const Address:   String;
+                                  Port: Cardinal);
+begin
+  inherited Create;
+
+  Self.fTransport := Transport;
+  Self.fAddress   := Address;
+  Self.fPort      := Port;
+end;
+
+constructor TIdSipLocation.Create(Via: TIdSipViaHeader);
+begin
+  inherited Create;
+
+  Self.fTransport := Via.Transport;
+  Self.fAddress   := Via.SentBy;
+  Self.fPort      := Via.Port;
+end;
+
+function TIdSipLocation.Copy: TIdSipLocation;
+begin
+  Result := TIdSipLocation.Create(Self.Transport, Self.Address, Self.Port);
+end;
+
+//******************************************************************************
 //* TIdSipLocations                                                            *
 //******************************************************************************
 //* TIdSipLocations Public methods *********************************************
@@ -98,10 +135,7 @@ procedure TIdSipLocations.AddLocation(const Transport: String;
 var
   NewLocation: TIdSipLocation;
 begin
-  NewLocation := TIdSipLocation.Create;
-  NewLocation.Address   := Address;
-  NewLocation.Port      := Port;
-  NewLocation.Transport := Transport;
+  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
   Self.List.Add(NewLocation);
 end;
 
@@ -171,21 +205,25 @@ begin
 end;
 
 function TIdSipAbstractLocator.CreateLocationFromUri(AddressOfRecord: TIdSipUri): TIdSipLocation;
+var
+  Address:   String;
+  Port:      Cardinal;
+  Transport: String;
 begin
-  Result := TIdSipLocation.Create;
-
   if AddressOfRecord.HasParameter(TransportParam) then begin
-    Result.Transport := ParamToTransport(AddressOfRecord.Transport);
+    Transport := ParamToTransport(AddressOfRecord.Transport);
   end
   else begin
     if (AddressOfRecord.Scheme = SipsScheme) then
-      Result.Transport := TlsTransport
+      Transport := TlsTransport
     else
-      Result.Transport := UdpTransport;
+      Transport := UdpTransport;
   end;
 
-  Result.Address := AddressOfRecord.Host;
-  Result.Port    := AddressOfRecord.Port;
+  Address := AddressOfRecord.Host;
+  Port    := AddressOfRecord.Port;
+
+  Result := TIdSipLocation.Create(Transport, Address, Port);
 end;
 
 //******************************************************************************

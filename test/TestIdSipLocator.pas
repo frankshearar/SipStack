@@ -15,6 +15,21 @@ uses
   IdSipLocator, IdSipMessage, IdSipMockLocator, TestFramework;
 
 type
+  TestTIdSipLocation = class(TTestCase)
+  private
+    Address:   String;
+    Loc:       TIdSipLocation;
+    Port:      Cardinal;
+    Transport: String;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+    procedure TestCreate;
+    procedure TestCreateFromVia;
+  end;
+
   TestTIdSipLocations = class(TTestCase)
   private
     Locs: TIdSipLocations;
@@ -63,9 +78,80 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipLocator unit tests');
+  Result.AddTest(TestTIdSipLocation.Suite);
   Result.AddTest(TestTIdSipLocations.Suite);
   Result.AddTest(TestTIdSipLocator.Suite);
   Result.AddTest(TestTIdSipMockLocator.Suite);
+end;
+
+//******************************************************************************
+//* TestTIdSipLocation                                                         *
+//******************************************************************************
+//* TestTIdSipLocation Public methods ******************************************
+
+procedure TestTIdSipLocation.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Address   := '127.0.0.1';
+  Self.Port      := 9999;
+  Self.Transport := TcpTransport;
+
+  Self.Loc := TIdSipLocation.Create(Self.Transport, Self.Address, Self.Port);
+end;
+
+procedure TestTIdSipLocation.TearDown;
+begin
+  Self.Loc.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipLocation Published methods ***************************************
+
+procedure TestTIdSipLocation.TestCopy;
+var
+  Copy: TIdSipLocation;
+begin
+  Copy := Self.Loc.Copy;
+  try
+    CheckEquals(Self.Loc.Transport, Copy.Transport, 'Transport');
+    CheckEquals(Self.Loc.Address,   Copy.Address,   'Address');
+    CheckEquals(Self.Loc.Port,      Copy.Port,      'Port');
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure TestTIdSipLocation.TestCreate;
+begin
+  CheckEquals(Self.Address,   Self.Loc.Address,   'Address');
+  CheckEquals(Self.Port,      Self.Loc.Port,      'Port');
+  CheckEquals(Self.Transport, Self.Loc.Transport, 'Transport');
+end;
+
+procedure TestTIdSipLocation.TestCreateFromVia;
+var
+  Loc: TIdSipLocation;
+  Via: TIdSipViaHeader;
+begin
+  Via := TIdSipViaHeader.Create;
+  try
+    Via.Port      := Self.Port;
+    Via.SentBy    := Self.Address;
+    Via.Transport := Self.Transport;
+
+    Loc := TIdSipLocation.Create(Via);
+    try
+      CheckEquals(Via.Port,      Loc.Port,      'Port');
+      CheckEquals(Via.SentBy,    Loc.Address,   'Address');
+      CheckEquals(Via.Transport, Loc.Transport, 'Transport');
+    finally
+      Loc.Free;
+    end;
+  finally
+    Via.Free;
+  end;
 end;
 
 //******************************************************************************
