@@ -285,7 +285,13 @@ type
   private
     function GetItems(Index: Integer): TIdSrvRecord;
   public
-    procedure Add(Copy: TIdSrvRecord);
+    procedure Add(Copy: TIdSrvRecord); overload;
+    procedure Add(const Domain: String;
+                  const Service: String;
+                  Priority: Word;
+                  Weight: Word;
+                  Port: Cardinal;
+                  const Target: String); overload;
     function  Last: TIdSrvRecord;
     procedure Sort;
 
@@ -1203,6 +1209,24 @@ end;
 procedure TIdSrvRecords.Add(Copy: TIdSrvRecord);
 begin
   Self.List.Add(Copy.Copy);
+end;
+
+procedure TIdSrvRecords.Add(const Domain: String;
+                            const Service: String;
+                            Priority: Word;
+                            Weight: Word;
+                            Port: Cardinal;
+                            const Target: String);
+var
+  NewRec: TIdSrvRecord;
+begin
+  NewRec := TIdSrvRecord.Create(Domain,
+                                Service,
+                                Priority,
+                                Weight,
+                                Port,
+                                Target);
+  Self.List.Add(NewRec);
 end;
 
 function TIdSrvRecords.Last: TIdSrvRecord;

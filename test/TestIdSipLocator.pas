@@ -133,6 +133,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAdd;
+    procedure TestAddWithParameters;
     procedure TestClear;
     procedure TestCopy;
     procedure TestIsEmpty;
@@ -164,6 +165,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAdd;
+    procedure TestAddWithParameters;
     procedure TestClear;
     procedure TestDelete;
     procedure TestIsEmpty;
@@ -198,6 +200,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAdd;
+    procedure TestAddWithParameters;
     procedure TestClear;
     procedure TestLast;
     procedure TestIsEmpty;
@@ -1516,6 +1519,19 @@ begin
   end;
 end;
 
+procedure TestTIdDomainNameRecords.TestAddWithParameters;
+const
+  RecordType = DnsAAAARecord;
+  Domain     = 'sipproxy.leo-ix.net';
+  IPAddress  = '::1';
+begin
+  Self.List.Add(RecordType, Domain, IPAddress);
+
+  CheckEquals(RecordType, Self.List[0].RecordType, 'RecordType');
+  CheckEquals(Domain,     Self.List[0].Domain,     'Domain');
+  CheckEquals(IPAddress,  Self.List[0].IPAddress,  'IPAddress');
+end;
+
 procedure TestTIdDomainNameRecords.TestClear;
 var
   NewRec: TIdDomainNameRecord;
@@ -1694,6 +1710,33 @@ begin
   finally
     NewRec.Free;
   end;
+end;
+
+procedure TestTIdNaptrRecords.TestAddWithParameters;
+const
+  Key        = 'leo-ix.net';
+  Order      = 0;
+  Preference = 1;
+  Flags      = NaptrDefaultFlags;
+  Service    = SipsTlsService;
+  Regex      = '';
+  Value      = '_sips._tcp.leo-ix.net';
+begin
+  Self.List.Add(Key,
+                Order,
+                Preference,
+                Flags,
+                Service,
+                Regex,
+                Value);
+
+  CheckEquals(Key,        Self.List[0].Key,        'Key');
+  CheckEquals(Order,      Self.List[0].Order,      'Order');
+  CheckEquals(Preference, Self.List[0].Preference, 'Preference');
+  CheckEquals(Flags,      Self.List[0].Flags,      'Flags');
+  CheckEquals(Service,    Self.List[0].Service,    'Service');
+  CheckEquals(Regex,      Self.List[0].Regex,      'Regex');
+  CheckEquals(Value,      Self.List[0].Value,      'Value');
 end;
 
 procedure TestTIdNaptrRecords.TestClear;
@@ -1932,6 +1975,26 @@ begin
   finally
     NewRec.Free;
   end;
+end;
+
+procedure TestTIdSrvRecords.TestAddWithParameters;
+const
+  Domain   = 'leo-ix.net';
+  Service  = '_sips.sctp';
+  Priority = 0;
+  Weight   = 1;
+  Port     = IdPORT_SIPS;
+  Target   = 'gw1.leo-ix.net';
+
+begin
+  Self.List.Add(Domain, Service, Priority, Weight, Port, Target);
+
+  CheckEquals(Domain,   Self.List[0].Domain,   'Domain');
+  CheckEquals(Service,  Self.List[0].Service,  'Service');
+  CheckEquals(Priority, Self.List[0].Priority, 'Priority');
+  CheckEquals(Weight,   Self.List[0].Weight,   'Weight');
+  CheckEquals(Port,     Self.List[0].Port,     'Port');
+  CheckEquals(Target,   Self.List[0].Target,   'Target');
 end;
 
 procedure TestTIdSrvRecords.TestClear;
