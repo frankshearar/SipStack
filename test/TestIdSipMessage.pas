@@ -34,6 +34,7 @@ type
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestReadBody;
+    procedure TestReadBodyWithZeroContentLength;
     procedure TestRemoveHeader;
     procedure TestRemoveHeaders;
     procedure TestSetCallID;
@@ -344,21 +345,51 @@ end;
 
 procedure TestTIdSipMessage.TestReadBody;
 var
-  Len: Integer;
-  S:   String;
-  Str: TStringStream;
+  Len:       Integer;
+  Msg:       String;
+  Remainder: String;
+  S:         String;
+  Str:       TStringStream;
 begin
   Self.Msg.ContentLength := 8;
 
-  Str := TStringStream.Create('Negotium perambuians in tenebris');
+  Msg := 'Negotium perambuians in tenebris';
+  Str := TStringStream.Create(Msg);
   try
     Self.Msg.ReadBody(Str);
-    CheckEquals('Negotium', Self.Msg.Body, 'Body');
+    CheckEquals(System.Copy(Msg, 1, 8), Self.Msg.Body, 'Body');
 
-    Len := Length(' perambuians in tenebris');
+    Remainder := Msg;
+    Delete(Remainder, 1, 8);
+
+    Len := Length(Remainder);
     SetLength(S, Len);
     Str.Read(S[1], Len);
-    CheckEquals(' perambuians in tenebris', S, 'Unread bits of the stream');
+    CheckEquals(Remainder, S, 'Unread bits of the stream');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestReadBodyWithZeroContentLength;
+var
+  Len: Integer;
+  S:   String;
+  Str: TStringStream;
+  Msg: String;
+begin
+  Self.Msg.ContentLength := 0;
+  Msg := 'Negotium perambuians in tenebris';
+
+  Str := TStringStream.Create(Msg);
+  try
+    Self.Msg.ReadBody(Str);
+    CheckEquals('', Self.Msg.Body, 'Body');
+
+    Len := Length(Msg);
+    SetLength(S, Len);
+    Str.Read(S[1], Len);
+    CheckEquals(Msg, S, 'Unread bits of the stream');
   finally
     Str.Free;
   end;

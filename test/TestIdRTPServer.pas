@@ -4,14 +4,9 @@ interface
 
 uses
   Classes, IdRTPClient, IdRTPServer, IdSocketHandle, IdUDPClient, TestFramework,
-  TestFrameworkEx;
+  TestFrameworkEx, TestFrameworkSip;
 
 type
-  TTestRTP = class(TThreadingTestCase)
-  public
-    procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-  end;
-
   TestFunctions = class(TTestCase)
   published
     procedure TestEncodeAsStringCardinal;
@@ -21,6 +16,8 @@ type
     procedure TestNtoHL;
     procedure TestNtoHS;
     procedure TestReadCardinal;
+    procedure TestReadRemainderOfStream;
+    procedure TestReadRemainderOfStreamLong;
     procedure TestReadWord;
     procedure TestWriteCardinal;
     procedure TestWriteWord;
@@ -159,7 +156,7 @@ type
   end;
 
 const
-  DefaultTimeout = 50000; // ms
+  DefaultTimeout = 5000; // ms
 
 implementation
 
@@ -178,30 +175,6 @@ begin
   Result.AddTest(TestTIdRTPPacket.Suite);
   Result.AddTest(TestTIdRTPServer.Suite);
   Result.AddTest(TestT140.Suite);
-end;
-
-//******************************************************************************
-//* TTestRTP                                                                   *
-//******************************************************************************
-//* TTestRTP Public methods ****************************************************
-
-procedure TTestRTP.CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-var
-  I: Integer;
-begin
-  CheckEquals(Expected.Version,     Received.Version,     'Version');
-  CheckEquals(Expected.HasPadding,  Received.HasPadding,  'HasPadding');
-  CheckEquals(Expected.CsrcCount,   Received.CsrcCount,   'CSRC count');
-  CheckEquals(Expected.IsMarker,    Received.IsMarker,    'IsMarker');
-  CheckEquals(Expected.PayloadType, Received.PayloadType, 'PayloadType');
-  CheckEquals(Expected.SequenceNo,  Received.SequenceNo,  'SequenceNo');
-  CheckEquals(Expected.Timestamp,   Received.Timestamp,   'Timestamp');
-  CheckEquals(Expected.SyncSrcID,   Received.SyncSrcID,   'SSRC ID');
-
-  for I := 0 to Expected.CsrcCount - 1 do
-    CheckEquals(Integer(Expected.CsrcIDs[I]),
-                Integer(Received.CsrcIDs[I]),
-                IntToStr(I) + 'th CSRC ID');
 end;
 
 //******************************************************************************
@@ -290,6 +263,46 @@ begin
   try
     C := ReadCardinal(S);
     CheckEquals($11223344, C, 'Cardinal incorrectly read - check byte order');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestReadRemainderOfStream;
+var
+  C: Char;
+  S: TStringStream;
+begin
+  S := TStringStream.Create('1234567890');
+  try
+    S.Read(C, 1);
+    S.Read(C, 1);
+    S.Read(C, 1);
+
+    CheckEquals('4567890', ReadRemainderOfStream(S), 'ReadRemainderOfStream');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestReadRemainderOfStreamLong;
+var
+  C:   Char;
+  S:   TStringStream;
+  Src: String;
+begin
+  while (Length(Src) < 1000) do
+    Src := Src + '0123456789';
+
+  S := TStringStream.Create(Src);
+  try
+    S.Read(C, 1);
+    S.Read(C, 1);
+    S.Read(C, 1);
+
+    CheckEquals(Length(Src) - 3,
+                Length(ReadRemainderOfStream(S)),
+                'ReadRemainderOfStream, length of remainder');
   finally
     S.Free;
   end;
@@ -1317,7 +1330,7 @@ begin
   Self.Server := TIdRTPServer.Create(nil);
   Self.Server.DefaultPort := 5004;
 
-  T140Encoding := TIdRTPEncoding.Create(T140EncodingName, 1000);
+  T140Encoding := TIdRTPEncoding.Create(T140EncodingName, T140ClockRate);
   try
     Self.Server.Profile.AddEncoding(T140Encoding, Self.T140PT);
   finally
@@ -1327,6 +1340,7 @@ begin
   Self.Client := TIdRTPClient.Create(nil);
   Self.Client.Host := '127.0.0.1';
   Self.Client.Port := Self.Server.DefaultPort;
+  Self.Client.Profile := Self.Server.Profile;
 end;
 
 procedure TestT140.TearDown;
@@ -1363,34 +1377,14 @@ end;
 //* TestT140 Published methods *************************************************
 
 procedure TestT140.TestTransmission;
-var
-  Packet: TIdRTPPacket;
-  S:      TStringStream;
 begin
   Self.Server.OnRTPRead := Self.StoreT140Data;
   Self.Server.Active := true;
   try
-    Packet := TIdRTPPacket.Create(Self.Server.Profile);
-    try
-      Packet.PayloadType := Self.T140PT;
-      Packet.CsrcCount  := 0;
-      Packet.SequenceNo := 0;
-      Packet.Timestamp  := 0;
+    Client.Send(#$00#$00 + Self.Msg, Self.T140PT);
 
-      S := TStringStream.Create(#$00#$00 + Self.Msg);
-      try
-        Packet.ReadPayload(S);
-      finally
-        S.Free;
-      end;
-
-      Client.Send(Packet);
-
-      if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-        raise Self.ExceptionType.Create(Self.ExceptionMessage);
-    finally
-      Packet.Free;
-    end;
+    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
   finally
     Self.Server.Active := false;
   end;

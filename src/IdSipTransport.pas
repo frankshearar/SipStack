@@ -7,9 +7,6 @@ uses
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipUdpServer, IdSocketHandle,
   IdSSLOpenSSL, IdTCPClient, IdTCPServer, SyncObjs, SysUtils;
 
-const
-  DefaultTimeout = 5000;
-
 type
   TIdSipTransport = class;
   TIdSipTransportClass = class of TIdSipTransport;
@@ -66,6 +63,7 @@ type
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     function  DefaultPort: Cardinal; virtual;
+    function  DefaultTimeout: Cardinal; virtual;
     function  GetTransportType: TIdSipTransportType; virtual; abstract;
     function  IsReliable: Boolean; virtual;
     function  IsSecure: Boolean; virtual;
@@ -201,6 +199,8 @@ begin
 
   Self.TransportSendingListenerLock := TCriticalSection.Create;
   Self.TransportSendingListeners    := TList.Create;
+
+  Self.Timeout := Self.DefaultTimeout;
 end;
 
 destructor TIdSipTransport.Destroy;
@@ -237,6 +237,11 @@ end;
 function TIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
+end;
+
+function TIdSipTransport.DefaultTimeout: Cardinal;
+begin
+  Result := 5000;
 end;
 
 function TIdSipTransport.IsReliable: Boolean;
@@ -444,6 +449,7 @@ begin
   Result := TIdSipTcpClient.Create(nil);
   Result.OnFinished := Self.DoOnClientFinished;
   Result.OnResponse := Self.DoOnTcpResponse;
+  Result.Timeout    := Self.Timeout;
 end;
 
 function TIdSipTCPTransport.GetPort: Cardinal;

@@ -19,7 +19,7 @@ uses
   IdSipTransaction in 'src\IdSipTransaction.pas',
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSdpParser in 'src\IdSdpParser.pas',
-  IdSipTlsServer in '\\Ictfilesrv\ICT Group\FrankS\Projects\SIP\src\IdSipTlsServer.pas';
+  IdSipTlsServer in 'src\IdSipTlsServer.pas';
 
 {$R *.res}
 

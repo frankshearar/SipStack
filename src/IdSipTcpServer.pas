@@ -63,10 +63,11 @@ type
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer, IIdSipMessageVisitor)
   private
-    ConnectionMap:    TIdSipConnectionTableLock;
-    fReadBodyTimeout: Cardinal;
-    ListenerLock:     TCriticalSection;
-    Listeners:        TList;
+    ConnectionMap:      TIdSipConnectionTableLock;
+    fConnectionTimeout: Cardinal;
+    fReadBodyTimeout:   Cardinal;
+    ListenerLock:       TCriticalSection;
+    Listeners:          TList;
 
     procedure AddConnection(const Connection: TIdTCPConnection; const Request: TIdSipRequest);
     procedure NotifyListeners(const Request: TIdSipRequest); overload;
@@ -87,20 +88,19 @@ type
 
     procedure AddMessageListener(const Listener: IIdSipMessageListener);
     function  CreateClient: TIdSipTcpClient; virtual;
+    function  DefaultTimeout: Cardinal; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure SendResponse(const Response: TIdSipResponse);
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
   published
+    property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
     property DefaultPort default IdPORT_SIP;
-    property ReadBodyTimeout: Cardinal read fReadBodyTimeout write fReadBodyTimeout;
+    property ReadBodyTimeout:   Cardinal read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
-
-const
-  DefaultTimeout = 5000;
 
 implementation
 
@@ -249,10 +249,11 @@ constructor TIdSipTcpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.ConnectionMap := TIdSipConnectionTableLock.Create;
-  Self.DefaultPort   := IdPORT_SIP;
-  Self.ListenerLock  := TCriticalSection.Create;
-  Self.Listeners     := TList.Create;
+  Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
+  Self.ConnectionTimeout := Self.DefaultTimeout;
+  Self.DefaultPort       := IdPORT_SIP;
+  Self.ListenerLock      := TCriticalSection.Create;
+  Self.Listeners         := TList.Create;
 end;
 
 destructor TIdSipTcpServer.Destroy;
@@ -277,6 +278,11 @@ end;
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
+end;
+
+function TIdSipTcpServer.DefaultTimeout: Cardinal;
+begin
+  Result := 5000;
 end;
 
 procedure TIdSipTcpServer.DestroyClient(Client: TIdSipTcpClient);
@@ -541,7 +547,7 @@ begin
     Client.Host := Dest.IP;
     Client.Port := Dest.Port;
 
-    Client.Connect(DefaultTimeout);
+    Client.Connect(Self.ConnectionTimeout);
     try
       Client.Send(Response);
     finally

@@ -51,7 +51,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts, IdSipHeaders, SysUtils;
+  IdSipConsts, IdSipHeaders, IdSocketHandle, SysUtils;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -60,13 +60,18 @@ uses
 
 constructor TrnidSpike.Create(AOwner: TComponent);
 var
+  Binding: TIdSocketHandle;
   Contact: TIdSipContactHeader;
   From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
 
   Self.Transport := TIdSipTcpTransport.Create(IdPORT_SIP);
+  Binding := Self.Transport.Bindings.Add;
+  Binding.IP := '127.0.0.1';
+  Binding.Port := 5060;
   Self.Transport.HostName := 'wsfrank';
+
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
@@ -131,7 +136,7 @@ end;
 procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
                                        const Invite: TIdSipRequest);
 begin
-end;                                       
+end;
 
 procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
 begin

@@ -3,30 +3,52 @@ unit TestIdRTPClient;
 interface
 
 uses
-  IdRTPClient, IdRTPServer, IdSocketHandle, TestIdRTPServer;
+  Classes, IdRTPClient, IdRTPServer, IdSocketHandle, TestFrameworkSip;
 
 type
   TestTIdRTPClient = class(TTestRTP)
   private
-    AVP:    TIdAudioVisualProfile;
-    Client: TIdRTPClient;
-    Packet: TIdRTPPacket;
-    Server: TIdRTPServer;
+    CallCount:     Cardinal;
+    Client:        TIdRTPClient;
+    ExpectedSeqNo: TIdRTPSequenceNo;
+    Msg:           String;
+    Packet:        TIdRTPPacket;
+    ReceiveBuffer: TStringStream;
+    ReceivedBytes: Integer;
+    SendBuffer:    TStream;
+    Server:        TIdRTPServer;
 
-    procedure CheckSend(Sender: TObject;
-                        APacket: TIdRTPPacket;
-                        ABinding: TIdSocketHandle);
+    procedure CheckEquals(Expected, Received: TStream); overload;
+    procedure CheckSmallString(Sender: TObject;
+                               APacket: TIdRTPPacket;
+                               ABinding: TIdSocketHandle);
+    procedure CheckString(Sender: TObject;
+                          APacket: TIdRTPPacket;
+                          ABinding: TIdSocketHandle);
+    procedure CheckSendStream(Sender: TObject;
+                              APacket: TIdRTPPacket;
+                              ABinding: TIdSocketHandle);
+    procedure CheckSequenceNoIncrements(Sender: TObject;
+                                        APacket: TIdRTPPacket;
+                                        ABinding: TIdSocketHandle);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestSend;
+    procedure TestSendSmallString;
+    procedure TestSendString;
+    procedure TestSendStream;
+    procedure TestSequenceNoIncrements;
   end;
+
+const
+  DefaultTimeout = 5000; // ms
+  TargetFile     = '..\etc\arb';
 
 implementation
 
 uses
-  TestFramework;
+  IdStack, SyncObjs, SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -43,9 +65,15 @@ procedure TestTIdRTPClient.SetUp;
 begin
   inherited SetUp;
 
-  Self.AVP := TIdAudioVisualProfile.Create;
+  Self.ReceivedBytes := 0;
+  Self.CallCount := 0;
 
-  Self.Packet := TIdRTPPacket.Create(Self.AVP);
+  Self.Server := TIdRTPServer.Create(nil);
+
+  Self.SendBuffer := TFileStream.Create(TargetFile, fmOpenRead or fmShareDenyWrite);
+  Self.ReceiveBuffer := TStringStream.Create('');
+
+  Self.Packet := TIdRTPPacket.Create(Self.Server.Profile);
   Self.Packet.Version      := 2;
   Self.Packet.HasPadding   := true;
   Self.Packet.HasExtension := false;
@@ -59,43 +87,215 @@ begin
   Self.Packet.SyncSrcID    := $10203040;
 
   Self.Client := TIdRTPClient.Create(nil);
-  Self.Server := TIdRTPServer.Create(nil);
 
   Self.Server.DefaultPort := 5004;
-  Self.Client.Host        := '127.0.0.1';
+  Self.Client.Host        := GStack.LocalAddress;
   Self.Client.Port        := Self.Server.DefaultPort;
+
+  Self.Server.Active := true;
 end;
 
 procedure TestTIdRTPClient.TearDown;
 begin
-  Self.Server.Free;
+  Self.Server.Active := false;
+
   Self.Client.Free;
-  Self.AVP.Free;
+  Self.Packet.Free;
+  Self.ReceiveBuffer.Free;
+  Self.SendBuffer.Free;
+  Self.Server.Free;
 
   inherited TearDown;
 end;
 
 //* TestTIdRTPClient Private methods *******************************************
 
-procedure TestTIdRTPClient.CheckSend(Sender: TObject;
-                                     APacket: TIdRTPPacket;
-                                     ABinding: TIdSocketHandle);
+procedure TestTIdRTPClient.CheckEquals(Expected, Received: TStream);
+const
+  BufLen = 255;
+var
+  BytesRead:      Cardinal;
+  ExpectedBuffer: PChar;
+  ReceivedBuffer: PChar;
+  TotalBytesRead: Cardinal;
 begin
-  CheckHasEqualHeaders(Self.Packet, APacket);
+  CheckEquals(Expected.Size, Received.Size, 'Stream size mismatch');
+
+  TotalBytesRead := 0;
+  ExpectedBuffer := AllocMem(BufLen);
+  try
+    ReceivedBuffer := AllocMem(BufLen);
+    try
+      Expected.Seek(0, soFromBeginning);
+      Received.Seek(0, soFromBeginning);
+      repeat
+        BytesRead := Expected.Read(ExpectedBuffer^, BufLen);
+        Inc(TotalBytesRead, BytesRead);
+
+        CheckEquals(BytesRead,
+                    Received.Read(ReceivedBuffer^, BufLen),
+                    'Stream size mismatch after ' + IntToStr(TotalBytesRead)
+                  + ' bytes read');
+
+        CheckEquals(String(ExpectedBuffer),
+                    String(ReceivedBuffer),
+                    'Differing contents after ' + IntToStr(TotalBytesRead)
+                  + ' bytes read');
+      until (BytesRead < BufLen);
+    finally
+      FreeMem(ReceivedBuffer);
+    end;
+  finally
+    FreeMem(ExpectedBuffer);
+  end;
+end;
+
+procedure TestTIdRTPClient.CheckSmallString(Sender: TObject;
+                                            APacket: TIdRTPPacket;
+                                            ABinding: TIdSocketHandle);
+begin
+  try
+    CheckEquals(TIdRawPayload.ClassName,
+                APacket.Payload.ClassName,
+                'Payload type');
+
+    CheckEquals(Self.Msg,
+                TIdRawPayload(APacket.Payload).Data,
+                'Payload');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdRTPClient.CheckString(Sender: TObject;
+                                       APacket: TIdRTPPacket;
+                                       ABinding: TIdSocketHandle);
+var
+  NewBytes: Cardinal;
+begin
+  try
+    CheckEquals(TIdRawPayload.ClassName,
+                APacket.Payload.ClassName,
+                'Payload type');
+
+    NewBytes := Length(TIdRawPayload(APacket.Payload).Data);
+    CheckEquals(System.Copy(Self.Msg, Self.ReceivedBytes + 1, NewBytes),
+                TIdRawPayload(APacket.Payload).Data,
+                'Payload after ' + IntToStr(Self.ReceivedBytes) + ' bytes');
+
+    Inc(Self.ReceivedBytes, Length(TIdRawPayload(APacket.Payload).Data));
+
+    if (Self.ReceivedBytes >= Length(Self.Msg)) then begin
+      Self.ThreadEvent.SetEvent;
+    end;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdRTPClient.CheckSendStream(Sender: TObject;
+                                           APacket: TIdRTPPacket;
+                                           ABinding: TIdSocketHandle);
+begin
+  try
+    CheckEquals(TIdRawPayload.ClassName,
+                APacket.Payload.ClassName,
+                'Payload type');
+
+    Inc(Self.ReceivedBytes, Length(TIdRawPayload(APacket.Payload).Data));
+    APacket.Payload.PrintOn(Self.ReceiveBuffer);
+
+    if (Self.ReceivedBytes >= Self.SendBuffer.Size) then begin
+      CheckEquals(Self.SendBuffer, Self.ReceiveBuffer);
+      Self.ThreadEvent.SetEvent;
+    end;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdRTPClient.CheckSequenceNoIncrements(Sender: TObject;
+                                                     APacket: TIdRTPPacket;
+                                                     ABinding: TIdSocketHandle);
+begin
+  try
+    Inc(Self.CallCount);
+
+    if (Self.CallCount = 1) then
+      Self.ExpectedSeqNo := APacket.SequenceNo + 1
+    else
+      CheckEquals(Self.ExpectedSeqNo, APacket.SequenceNo, 'SequenceNo');
+
+    if (Self.CallCount > 1) then
+      Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
 end;
 
 //* TestTIdRTPClient Published methods *****************************************
 
-procedure TestTIdRTPClient.TestSend;
+procedure TestTIdRTPClient.TestSendSmallString;
 begin
-  Self.Server.OnRTPRead := Self.CheckSend;
+  Self.Server.OnRTPRead := Self.CheckSmallString;
 
-  Self.Server.Active := true;
-  try
-    Self.Client.Send(Self.Packet);
-  finally
-    Self.Server.Active := false;
-  end;
+  Self.Msg := 'Ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+  Self.Client.Send(Self.Msg, Self.Server.Profile.FirstFreePayloadType);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdRTPClient.TestSendString;
+begin
+  Self.Server.OnRTPRead := Self.CheckString;
+
+  Self.Msg := '';
+  while (Length(Self.Msg) < 500) do
+    Self.Msg := Self.Msg + '0123456789';
+
+  Self.Client.Send(Self.Msg, Self.Server.Profile.FirstFreePayloadType);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdRTPClient.TestSendStream;
+begin
+  Self.Server.OnRTPRead := Self.CheckSendStream;
+
+  Self.Client.Send(Self.SendBuffer, Self.Server.Profile.FirstFreePayloadType);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout*10)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdRTPClient.TestSequenceNoIncrements;
+begin
+  Self.Server.OnRTPRead := Self.CheckSequenceNoIncrements;
+
+  Self.Msg := 'Ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+  Self.Client.Send(Self.Msg, Self.Server.Profile.FirstFreePayloadType);
+  Self.Client.Send(Self.Msg, Self.Server.Profile.FirstFreePayloadType);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 initialization

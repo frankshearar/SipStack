@@ -1362,12 +1362,8 @@ end;
 procedure TIdSipSession.OnFail(const Transaction: TIdSipTransaction;
                                const Reason: String);
 begin
-  Self.RemoveTransaction(Transaction);
-
-  if (Transaction = Self.InitialTran) then begin
+  if (Transaction = Self.InitialTran) then
     Self.MarkAsTerminated;
-    Self.NotifyOfEndedSession;
-  end;
 end;
 
 procedure TIdSipSession.OnReceiveResponse(const Response: TIdSipResponse;
@@ -1412,6 +1408,9 @@ end;
 procedure TIdSipSession.OnTerminated(const Transaction: TIdSipTransaction);
 begin
   Self.RemoveTransaction(Transaction);
+
+  if Self.IsTerminated then
+    Self.NotifyOfEndedSession;    
 end;
 
 procedure TIdSipSession.RejectRequest(const Request: TIdSipRequest;

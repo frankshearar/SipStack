@@ -435,20 +435,30 @@ procedure TIdSipMessage.ReadBody(const S: TStream);
 const
   BufLen = 100;
 var
-  Buf:  PChar;
-  Read: Integer;
+  Buf:         PChar;
+  BytesToRead: Integer;
+  Read:        Integer;
+  StrBuf:      String;
 begin
   // It is the responsibility of the transport to ensure that
-  // Content-Length is set before this method is called.
+  // Content-Length is set before this method is called!
 
-  Buf := AllocMem(BufLen);
-  try
-    repeat
-      Read := S.Read(Buf, BufLen);
-      Self.Body := Self.Body + Buf;
-    until (Read < BufLen);
-  finally
-    FreeMem(Buf);
+  if (Self.ContentLength > 0) then begin
+    BytesToRead := Self.ContentLength;
+
+    Buf := AllocMem(BufLen);
+    try
+      repeat
+        Read := S.Read(Buf^, Min(BufLen, BytesToRead));
+        Dec(BytesToRead, Read);
+
+        StrBuf := Buf;
+        SetLength(StrBuf, Read);
+        Self.Body := Self.Body + StrBuf;
+      until (Read < BufLen) or (BytesToRead <= 0);
+    finally
+      FreeMem(Buf);
+    end;
   end;
 end;
 

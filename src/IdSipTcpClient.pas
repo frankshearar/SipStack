@@ -25,6 +25,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
 
+    function  DefaultTimeout: Cardinal; virtual;
     procedure Send(const Request: TIdSipRequest); overload;
     procedure Send(const Response: TIdSipResponse); overload;
 
@@ -35,9 +36,6 @@ type
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
-
-const
-  DefaultTimeout = 5000;
 
 implementation
 
@@ -53,7 +51,12 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.Timeout := DefaultTimeout;
+  Self.Timeout := Self.DefaultTimeout;
+end;
+
+function TIdSipTcpClient.DefaultTimeout: Cardinal;
+begin
+  Result := 5000;
 end;
 
 procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);

@@ -22,6 +22,8 @@ type
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -60,7 +62,7 @@ begin
   Tran.AddTransportSendingListener(Self);
   UA.Dispatcher.AddTransport(Tran);
 
-  UA.From.Address.URI    := 'sip:franks@' + Tran.HostName + ':' + IntToStr(Tran.Bindings[0].Port);
+  UA.From.Address.URI    := 'sip:franks' + ':' + IntToStr(Tran.Bindings[0].Port) + '@' + Tran.HostName;
   UA.From.Tag            := '1';
   UA.Contact.Address.URI := UA.From.Address.URI;
   UA.HostName := Tran.HostName;
@@ -111,6 +113,11 @@ procedure TSpike.OnEndedSession(const Session: TIdSipSession);
 begin
   ShowMessage('Session ended');
 end;
+
+procedure TSpike.OnModifiedSession(const Session: TIdSipSession;
+                                   const Invite: TIdSipRequest);
+begin
+end;                                   
 
 procedure TSpike.OnNewSession(const Session: TIdSipSession);
 begin

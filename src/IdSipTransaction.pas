@@ -988,9 +988,10 @@ begin
 
   if Self.FirstTime then begin
     Self.FirstTime := false;
-    Self.ChangeToProceeding(R, T);
 
     Self.TrySend100Response(Self.InitialRequest);
+
+    Self.ChangeToProceeding(R, T);
   end else begin
     case Self.State of
       itsProceeding: Self.TrySendLastResponse(R);

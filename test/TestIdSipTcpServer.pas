@@ -930,18 +930,18 @@ end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnectionReceivedParam;
 var
-  Listener:      TIdSipTestMessageListener;
-  LocalListener: TIdSipTestMessageListener;
-  Request:       TIdSipRequest;
-  Response:      TIdSipResponse;
+  LocalAddressListener: TIdSipTestMessageListener;
+  LocalHostListener:    TIdSipTestMessageListener;
+  Request:              TIdSipRequest;
+  Response:             TIdSipResponse;
 begin
-  Listener := TIdSipTestMessageListener.Create;
+  LocalAddressListener := TIdSipTestMessageListener.Create;
   try
-    LocalListener := TIdSipTestMessageListener.Create;
+    LocalHostListener := TIdSipTestMessageListener.Create;
     try
-      Self.LocalAddressServer.AddMessageListener(Listener);
+      Self.LocalAddressServer.AddMessageListener(LocalAddressListener);
       try
-        Self.LocalHostServer.AddMessageListener(LocalListener);
+        Self.LocalHostServer.AddMessageListener(LocalHostListener);
         try
           Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
           try
@@ -958,7 +958,8 @@ begin
             end;
 
             // I can't say WHY we need to pause here, but it seems to work...
-            // Not exactly an ideal situation.
+            // Not exactly an ideal situation. We're waiting for the connection
+            // to be completely torn down.
             Sleep(500);
 
             Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
@@ -970,22 +971,23 @@ begin
               Response.Free;
             end;
 
-            Check(Listener.ReceivedResponse and not LocalListener.ReceivedResponse,
+            Check(LocalAddressListener.ReceivedResponse
+                  and not LocalHostListener.ReceivedResponse,
                   'Wrong server received response');
           finally
             Request.Free;
           end;
         finally
-          Self.LocalHostServer.RemoveMessageListener(LocalListener);
+          Self.LocalHostServer.RemoveMessageListener(LocalHostListener);
         end;
       finally
-        Self.LocalAddressServer.RemoveMessageListener(Listener);
+        Self.LocalAddressServer.RemoveMessageListener(LocalAddressListener);
       end;
     finally
-      LocalListener.Free;
+      LocalHostListener.Free;
     end;
   finally
-    Listener.Free;
+    LocalAddressListener.Free;
   end;
 end;
 

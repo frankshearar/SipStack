@@ -260,7 +260,7 @@ begin
   Sleep(200);
   Threads := Self.Server.Threads.LockList;
   try
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
   finally
     Self.Server.Threads.UnlockList;
   end;
@@ -272,7 +272,7 @@ var
 begin
   Threads := Self.Server.Threads.LockList;
   try
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
   finally
     Self.Server.Threads.UnlockList;
   end;
@@ -286,7 +286,7 @@ begin
   try
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []));
     Sleep(500);
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
   finally
     Self.Server.Threads.UnlockList;
   end;

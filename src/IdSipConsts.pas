@@ -203,7 +203,9 @@ const
 
 // MIME types etc
 const
+  InterleavedT140ClockRate    = 8000;
   RedundancyEncodingParameter = 'red';
+  T140ClockRate               = 1000;
   T140EncodingName            = 't140';
 
   InterleavedT140MimeType = 'audio/t140';
