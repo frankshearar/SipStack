@@ -37,7 +37,4 @@ begin
   Result := TlsOverSctpTransport;
 end;
 
-initialization
-  TIdSipTransport.RegisterTransport(TlsOverSctpTransport,
-                                    TIdSipTlsOverSctpTransport);
 end.
