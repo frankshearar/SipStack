@@ -675,6 +675,7 @@ type
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestRedirectAndAccept;
+    procedure TestRedirectWithMultipleContacts;
     procedure TestTerminateUnestablishedSession;
     procedure TestTerminateEstablishedSession;
   end;
@@ -7686,6 +7687,27 @@ begin
 
   Check(Self.OnEstablishedSessionFired,
         'Listeners not notified of a successful call');
+end;
+
+procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
+var
+  Redir: TIdSipResponse;
+begin
+  Redir := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPMovedTemporarily);
+  try
+    Redir.AddHeader(ContactHeaderFull).Value := 'sip:foo@bar.org';
+    Redir.AddHeader(ContactHeaderFull).Value := 'sip:bar@bar.org';
+
+    Self.MarkSentRequestCount;
+
+    Self.ReceiveResponse(Redir);
+
+    CheckEquals(Self.RequestCount + Redir.ContactCount,
+                Self.Dispatcher.Transport.SentRequestCount,
+                'Session didn''t attempt to contact all Contacts');
+  finally
+    Redir.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
