@@ -44,6 +44,7 @@ type
     Buttons:          TIdDTMFButtonArray;
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
+    fPreferredHeight: Integer;  
     fProcessor:       TIdSDPMediaStream;
     Timer:            TIdTimerQueue;
 
@@ -79,7 +80,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    property Processor: TIdSDPMediaStream read fProcessor write SetProcessor;
+    property PreferredHeight: Integer           read fPreferredHeight write fPreferredHeight;
+    property Processor:       TIdSDPMediaStream read fProcessor write SetProcessor;
   end;
 
 implementation
@@ -149,10 +151,12 @@ constructor TIdDTMFPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.PreferredHeight := 120;
+
   Self.Timer := TIdTimerQueue.Create(false);
 
   Self.ButtonHeight := 25;
-  Self.Height       := 120;
+  Self.Height       := Self.PreferredHeight;
   Self.OnResize     := Self.DoOnResize;
   Self.Width        := 96;
 
