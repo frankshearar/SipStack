@@ -110,7 +110,6 @@ type
   private
     fEncoding:   TIdRTPEncoding;
     fClockRate:  Cardinal;
-    fName:       String;
     fParameters: String;
     fStartTime:  TDateTime;
   protected
@@ -122,10 +121,13 @@ type
                               Src: TStream): TIdRTPPayload;
     class function NullPayload: TIdRTPPayload;
 
-    constructor Create(Encoding: TIdRTPEncoding);
+    constructor Create(Encoding: TIdRTPEncoding); virtual;
 
     procedure Assign(Src: TPersistent); override;
+    function  Clone: TIdRTPPayload;
+    function  EncodingName: String;
     function  HasKnownLength: Boolean; virtual;
+    function  HasSameEncoding(Other: TIdRTPPayload): Boolean;
     function  IsNull: Boolean; virtual;
     function  Length: Cardinal; virtual;
     function  NumberOfSamples: Cardinal; virtual;
@@ -136,6 +138,7 @@ type
     property ClockRate:  Cardinal       read fClockRate write fClockRate;
     property Name:       String         read GetName;
     property Parameters: String         read fParameters write fParameters;
+//    property RawData:    String         read fRawData write fRawData; //??desired??
     property StartTime:  TDateTime      read GetStartTime write SetStartTime;
   end;
 
@@ -143,6 +146,7 @@ type
   // payload.
   TIdNullPayload = class(TIdRTPPayload)
   protected
+    function  GetName: String; override;
     function  GetStartTime: TDateTime; override;
     procedure SetStartTime(const Value: TDateTime); override;
   public
@@ -151,13 +155,22 @@ type
 
   // I represent a raw (i.e., unparsed) payload.
   // I typically provide a fallback case for a malconfigured RTP server.
+  // I slurp up the entire contents of a source stream, because there's not
+  // much else I can do - I don't know my own length (or at least, I can't
+  // derive my expected length from a source stream).
   TIdRawPayload = class(TIdRTPPayload)
   private
     fData: String;
+    fName: String;
+  protected
+    function GetName: String; override;
   public
+    constructor Create(Encoding: TIdRTPEncoding); override;
+
     function  Length: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
     procedure PrintOn(Dest: TStream); override;
+    procedure SetName(const Value: String);
 
     property Data: String read fData write fData;
   end;
@@ -169,6 +182,8 @@ type
   protected
     function GetName: String; override;
   public
+    constructor Create(Encoding: TIdRTPEncoding); override;
+
     function  HasKnownLength: Boolean; override;
     function  Length: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
@@ -214,7 +229,8 @@ type
     NullEncoding:     TIdRTPEncoding;
     ReservedEncoding: TIdRTPEncoding;
 
-    function  IndexOfEncoding(const Encoding: TIdRTPEncoding): Integer;
+    function  IndexOfEncoding(const Encoding: TIdRTPEncoding): Integer; overload;
+    function  IndexOfEncoding(const EncodingName: String): Integer; overload;
     procedure Initialize;
     procedure RemoveEncoding(const PayloadType: TIdRTPPayloadType);
   protected
@@ -244,7 +260,8 @@ type
     function  HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
     function  IsFull: Boolean;
     function  IsRTCPPayloadType(const PayloadType: Byte): Boolean;
-    function  PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType;
+    function  PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType; overload;
+    function  PayloadTypeFor(EncodingName: String): TIdRTPPayloadType; overload;
     function  StreamContainsEncoding(Src: TStream): TIdRTPEncoding;
     function  StreamContainsPayloadType(Src: TStream): TIdRTPPayloadType;
     function  TransportDesc: String; virtual;
@@ -1597,7 +1614,6 @@ constructor TIdRTPPayload.Create(Encoding: TIdRTPEncoding);
 begin
   inherited Create;
 
-  fName           := Encoding.Name;
   Self.ClockRate  := Encoding.ClockRate;
   Self.Parameters := Encoding.Parameters;
 
@@ -1625,9 +1641,27 @@ begin
   end;
 end;
 
+function TIdRTPPayload.Clone: TIdRTPPayload;
+begin
+  Result := TIdRTPPayloadClass(Self.ClassType).Create(Self.Encoding);
+end;
+
+function TIdRTPPayload.EncodingName: String;
+begin
+  Result := Self.Name + '/' + IntToStr(Self.ClockRate);
+
+  if (Self.Parameters <> '') then
+    Result := Result + '/' + Self.Parameters;
+end;
+
 function TIdRTPPayload.HasKnownLength: Boolean;
 begin
   Result := false;
+end;
+
+function TIdRTPPayload.HasSameEncoding(Other: TIdRTPPayload): Boolean;
+begin
+  Result := true;
 end;
 
 function TIdRTPPayload.IsNull: Boolean;
@@ -1677,6 +1711,11 @@ end;
 
 //* TIdNullPayload Protected methods *******************************************
 
+function TIdNullPayload.GetName: String;
+begin
+  Result := 'null';
+end;
+
 function TIdNullPayload.GetStartTime: TDateTime;
 begin
   Result := Now;
@@ -1690,6 +1729,13 @@ end;
 //* TIdRawPayload                                                              *
 //******************************************************************************
 //* TIdRawPayload Public methods ***********************************************
+
+constructor TIdRawPayload.Create(Encoding: TIdRTPEncoding);
+begin
+  inherited Create(Encoding);
+
+  fName := Encoding.Name;
+end;
 
 function TIdRawPayload.Length: Cardinal;
 begin
@@ -1706,10 +1752,29 @@ begin
   WriteString(Dest, Self.Data);
 end;
 
+procedure TIdRawPayload.SetName(const Value: String);
+begin
+  fName := Value;
+end;
+
+//* TIdRawPayload Protected methods ********************************************
+
+function TIdRawPayload.GetName: String;
+begin
+  Result := fName;
+end;
+
 //******************************************************************************
 //* TIdT140Payload                                                             *
 //******************************************************************************
 //* TIdT140Payload Public methods **********************************************
+
+constructor TIdT140Payload.Create(Encoding: TIdRTPEncoding);
+begin
+  inherited Create(Encoding);
+
+  Self.ClockRate := T140ClockRate;
+end;
 
 function TIdT140Payload.HasKnownLength: Boolean;
 begin
@@ -1950,6 +2015,18 @@ begin
     Result := TIdRTPPayloadType(Index);
 end;
 
+function TIdRTPProfile.PayloadTypeFor(EncodingName: String): TIdRTPPayloadType;
+var
+  Index: Integer;
+begin
+  Index := Self.IndexOfEncoding(EncodingName);
+
+  if (Index = -1) then
+    raise ENoPayloadTypeFound.Create(EncodingName)
+  else
+    Result := TIdRTPPayloadType(Index);
+end;
+
 function TIdRTPProfile.StreamContainsEncoding(Src: TStream): TIdRTPEncoding;
 begin
   Result := Self.EncodingFor(Self.StreamContainsPayloadType(Src));
@@ -1994,6 +2071,18 @@ begin
 
   while (Result <= High(TIdRTPPayloadType))
     and not Self.EncodingFor(Result).IsEqualTo(Encoding) do
+      Inc(Result);
+
+  if (Result > High(TIdRTPPayloadType)) then
+    Result := -1;
+end;
+
+function TIdRTPProfile.IndexOfEncoding(const EncodingName: String): Integer;
+begin
+  Result := 0;
+
+  while (Result <= High(TIdRTPPayloadType))
+    and not (Self.EncodingFor(Result).AsString = EncodingName) do
       Inc(Result);
 
   if (Result > High(TIdRTPPayloadType)) then
@@ -2280,7 +2369,7 @@ destructor TIdRTPPacket.Destroy;
 begin
   fHeaderExtension.Free;
 
-  if not Self.Payload.IsNull then
+  if (Self.Payload <> TIdNullPayload.NullPayload) then
     Self.Payload.Free;
 
   inherited Destroy;
@@ -2338,7 +2427,7 @@ begin
   Self.SequenceNo := Session.NextSequenceNo;
 
   Self.Timestamp := DateTimeToRTPTimestamp(Session.TimeOffsetFromStart(Self.Payload.StartTime),
-                                           Self.Payload.Encoding.ClockRate);
+                                           Self.Payload.ClockRate);
 end;
 
 procedure TIdRTPPacket.PrintOn(Dest: TStream);
@@ -5025,5 +5114,6 @@ end;
 initialization
 finalization
   GNullEncoding.Free;
+  // This turns into a dangling pointer. What makes it dangle?
   GNullPayload.Free;
 end.

@@ -105,7 +105,19 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestClone;
     procedure TestIsNull; virtual;
+  end;
+
+  TestTIdNullPayload = class(TPayloadTestCase)
+  published
+    procedure TestIsNull; override;
+  end;
+
+  TestTIdRawPayload = class(TPayloadTestCase)
+  published
+    procedure TestEncodingName;
+    procedure TestName;
   end;
 
   TestTIdT140Payload = class(TPayloadTestCase)
@@ -117,6 +129,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestInitialClockRate;
     procedure TestLength;
     procedure TestName;
     procedure TestPrintOn;
@@ -1688,9 +1701,61 @@ end;
 
 //* TPayloadTestCase Published methods *****************************************
 
+procedure TPayloadTestCase.TestClone;
+var
+  Copy: TIdRTPPayload;
+begin
+  Copy := Self.Payload.Clone;
+  try
+    Check(Copy <> nil,
+          'Clone returned the nil pointer');
+    Check(Copy <> Self.Payload,
+          'Clone returned the original object, not a copy');
+    Check(Copy.HasSameEncoding(Self.Payload),
+          'Copy has different encoding to original');
+  finally
+    Copy.Free;
+  end;
+end;
+
 procedure TPayloadTestCase.TestIsNull;
 begin
   Check(not Self.Payload.IsNull, Self.Payload.ClassName + 'IsNull');
+end;
+
+//******************************************************************************
+//* TestTIdNullPayload                                                         *
+//******************************************************************************
+//* TestTIdNullPayload Published methods ***************************************
+
+procedure TestTIdNullPayload.TestIsNull;
+begin
+  Check(Self.Payload.IsNull, Self.Payload.ClassName + 'IsNull');
+end;
+
+//******************************************************************************
+//* TestTIdRawPayload                                                          *
+//******************************************************************************
+//* TestTIdRawPayload Published methods ****************************************
+
+procedure TestTIdRawPayload.TestEncodingName;
+begin
+  CheckEquals('/0', Self.Payload.EncodingName, 'Degenerate');
+  (Self.Payload as TIdRawPayload).SetName('foo');
+  Self.Payload.ClockRate := 8000;
+  CheckEquals('foo/8000', Self.Payload.EncodingName, 'No parameters');
+  Self.Payload.Parameters := '2';
+  CheckEquals('foo/8000/2', Self.Payload.EncodingName, 'Parameters');
+end;
+
+procedure TestTIdRawPayload.TestName;
+var
+  NewName: String;
+begin
+  NewName := 'foo';
+  CheckEquals('', Self.Payload.Name, 'New payload');
+  (Self.Payload as TIdRawPayload).SetName(NewName);
+  CheckEquals(NewName, Self.Payload.Name, 'After SetName');
 end;
 
 //******************************************************************************
@@ -1718,6 +1783,11 @@ begin
 end;
 
 //* TestTIdT140Payload Published methods ***************************************
+
+procedure TestTIdT140Payload.TestInitialClockRate;
+begin
+  CheckEquals(T140ClockRate, Self.Payload.ClockRate, 'Initial clock rate');
+end;
 
 procedure TestTIdT140Payload.TestLength;
 var
@@ -6647,7 +6717,7 @@ begin
   Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
 
   Self.T140PT := Self.Profile.FirstFreePayloadType;
-  T140 := TIdT140Encoding.Create;
+  T140 := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
   try
     Self.Profile.AddEncoding(T140, Self.T140PT);
   finally
@@ -6745,12 +6815,26 @@ begin
   Self.Session.RemoveMember(Self.Session.SyncSrcID);
   CheckEquals(1, Self.Session.MemberCount, 'Self was removed from session');
 end;
-
+{
 procedure TestSessionDelegationMethods.TestIsSenderSelf;
 begin
   Check(not Self.Session.IsSender, 'New session');
   Self.Session.SendData(TIdNullPayload.NullPayload);
   Check(Self.Session.IsSender, 'Sent data');
+end;
+}
+procedure TestSessionDelegationMethods.TestIsSenderSelf;
+var
+  Data: TIdRTPPayload;
+begin
+  Data := Self.Profile.EncodingFor(Self.T140PT).CreatePayload;
+  try
+    Check(not Self.Session.IsSender, 'New session');
+    Self.Session.SendData(Data);
+    Check(Self.Session.IsSender, 'Sent data');
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TestSessionDelegationMethods.TestIsMember;
