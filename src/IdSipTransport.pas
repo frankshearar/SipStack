@@ -230,7 +230,7 @@ type
   TIdSipTransportReceiveResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
-    fResponse:  TIdSipResponse;
+    fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
@@ -252,7 +252,7 @@ type
   TIdSipTransportSendingRequestMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
-    fRequest:   TIdSipRequest;
+    fRequest:  TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
@@ -263,7 +263,7 @@ type
   TIdSipTransportSendingResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
-    fResponse:   TIdSipResponse;
+    fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
