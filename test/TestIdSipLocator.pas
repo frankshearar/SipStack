@@ -242,70 +242,86 @@ end;
 
 procedure TestTIdSipLocator.TestNumericAddressNonStandardPort;
 var
-  Location: TIdSipLocation;
+  Locations: TIdSipLocations;
 begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sip:' + IP + ':' + IntToStr(Self.Port);
 
-  Location := Self.Loc.FindServersFor(Self.Target.Uri).First;
-
-  CheckEquals(UdpTransport, Location.Transport, 'Transport');
-  CheckEquals(Self.IP,      Location.Address,   'Address');
-  CheckEquals(Self.Port,    Location.Port,      'Port');
+  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  try
+    CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 procedure TestTIdSipLocator.TestNumericAddressUsesUdp;
 var
-  Location: TIdSipLocation;
+  Locations: TIdSipLocations;
 begin
   Self.Target.Uri := 'sip:' + Self.IP;
 
-  Location := Self.Loc.FindServersFor(Self.Target.Uri).First;
-
-  CheckEquals(UdpTransport, Location.Transport, 'Transport');
-  CheckEquals(Self.IP,      Location.Address,   'Address');
-  CheckEquals(Self.Port,    Location.Port,      'Port');
+  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  try
+    CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 procedure TestTIdSipLocator.TestNumericAddressSipsUriUsesTls;
 var
-  Location: TIdSipLocation;
+  Locations: TIdSipLocations;
 begin
   Self.Port       := IdPORT_SIPS;
   Self.Target.Uri := 'sips:' + Self.IP;
 
-  Location := Self.Loc.FindServersFor(Self.Target.Uri).First;
-
-  CheckEquals(TlsTransport, Location.Transport, 'Transport');
-  CheckEquals(Self.IP,      Location.Address,   'Address');
-  CheckEquals(Self.Port,    Location.Port,      'Port');
+  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  try
+    CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 procedure TestTIdSipLocator.TestNumericAddressSipsUriNonStandardPort;
 var
-  Location: TIdSipLocation;
+  Locations: TIdSipLocations;
 begin
   Self.Port       := 3000;
   Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
 
-  Location := Self.Loc.FindServersFor(Self.Target.Uri).First;
-
-  CheckEquals(TlsTransport, Location.Transport, 'Transport');
-  CheckEquals(Self.IP,      Location.Address,   'Address');
-  CheckEquals(Self.Port,    Location.Port,      'Port');
+  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  try
+    CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 procedure TestTIdSipLocator.TestTransportParamTakesPrecedence;
 var
-  Location: TIdSipLocation;
+  Locations: TIdSipLocations;
 begin
   Self.TransportParam := TransportParamSCTP;
   Self.Target.Uri := 'sip:foo.com;transport=' + Self.TransportParam;
 
-  Location := Self.Loc.FindServersFor(Self.Target.Uri).First;
-  CheckEquals(ParamToTransport(Self.TransportParam),
-              Location.Transport,
-              'Transport');
+  Locations := Self.Loc.FindServersFor(Self.Target.Uri);
+  try
+    CheckEquals(ParamToTransport(Self.TransportParam),
+                Locations.First.Transport,
+                'Transport');
+  finally
+    Locations.Free;
+  end;
 end;
 
 //******************************************************************************
