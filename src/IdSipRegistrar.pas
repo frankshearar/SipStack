@@ -411,16 +411,12 @@ end;
 
 function TIdSipRegistrar.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
+  // Step 3 (Authorization)
+  // Taken care of in the superclass.
   Result := inherited WillAcceptRequest(Request);
 
   // cf RFC 3261 section 10.3
   if (Result = uarAccept) then begin
-{
-    // Step 3
-    if not Request.HasAuthenticationInfo
-    or not Self.BindingDB.IsAuthenticated(Request) then
-      Result := uarUnauthorized
-}
     // Step 4
     if not Self.BindingDB.IsAuthorized(Request.From) then
       Result := uarForbidden
@@ -446,6 +442,7 @@ begin
   end;
 
   // The rest of Step 6 takes place in ActOnRequest
+  // Ditto for Steps 7 & 8
 end;
 
 //* TIdSipRegistrar Private methods ********************************************
