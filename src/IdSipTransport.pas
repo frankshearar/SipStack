@@ -1180,9 +1180,9 @@ end;
 initialization
   GTransportTypes := TStringList.Create;
 
-  TIdSipTransport.RegisterTransport(TcpTransport,  TIdSipTCPTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport,  TIdSipTLSTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport,  TIdSipUDPTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipTCPTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTLSTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUDPTransport);
 finalization
   GTransportTypes.Free;
 end.
