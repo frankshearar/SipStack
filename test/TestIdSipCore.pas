@@ -277,6 +277,7 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestFork;
+    procedure TestHangUp;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
@@ -3211,6 +3212,23 @@ begin
   finally
     Ok.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.TestHangUp;
+var
+  RequestCount: Cardinal;
+begin
+  Self.SimulateRemoteOK;
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Self.Session.Terminate;
+
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'No BYE sent');
+  CheckEquals(MethodBye,
+              Self.Dispatcher.Transport.LastRequest.Method,
+        'TU didn''t sent a BYE');
+  Self.SimulateRemoteOK;
 end;
 
 procedure TestTIdSipOutboundSession.TestIsInboundCall;
