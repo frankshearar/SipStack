@@ -12,6 +12,7 @@ program SIP;
 uses
   Forms,
   GuiTestRunner,
+  SysUtils,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
   IdBaseThread in 'src\IdBaseThread.pas',
@@ -53,7 +54,6 @@ uses
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
-  SysUtils,
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
