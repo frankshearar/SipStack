@@ -1548,12 +1548,21 @@ procedure TIdSipSession.ApplyTo(const List: TList;
                                 const Lock: TCriticalSection;
                                 Proc: TIdSipProcedure);
 var
+  Copy: TList;
   I: Integer;
 begin
   Lock.Acquire;
   try
-    for I := 0 to List.Count - 1 do
-      Proc(List[I]);
+    Copy := TList.Create;
+    try
+      for I := 0 to List.Count - 1 do
+        Copy.Add(List[I]);
+
+      for I := 0 to Copy.Count - 1 do
+        Proc(Copy[I]);
+    finally
+      Copy.Free;
+    end;
   finally
     Lock.Release;
   end;
