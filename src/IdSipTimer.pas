@@ -19,19 +19,16 @@ type
   // triggered over and over at a (more or less) constant interval.
   TIdSipTimer = class(TIdBaseThread)
   private
-    CoarseTiming: Boolean;
-    fInterval:    Cardinal;
-    fOnTimer:     TNotifyEvent;
-    fStart:       TDateTime;
-    Resolution:   Cardinal;
+    fInterval: Cardinal;
+    fOnTimer:  TNotifyEvent;
+    WaitEvent: TEvent;
   protected
     procedure Run; override;
   public
-    constructor Create(CreateSuspended: Boolean = True;
-                       CoarseTiming: Boolean = True); reintroduce;
+    constructor Create(CreateSuspended: Boolean = True); reintroduce;
+    destructor  Destroy; override;
 
-    function  ElapsedTime: TDateTime;
-    procedure ResetTime;
+    procedure Terminate; override;
 
     property Interval: Cardinal     read fInterval write fInterval;
     property OnTimer:  TNotifyEvent read fOnTimer write fOnTimer;
@@ -69,46 +66,36 @@ uses
 //******************************************************************************
 //* TIdSipTimer Public methods *************************************************
 
-constructor TIdSipTimer.Create(CreateSuspended: Boolean = True;
-                               CoarseTiming: Boolean = True);
+constructor TIdSipTimer.Create(CreateSuspended: Boolean = True);
 begin
-  Self.CoarseTiming := CoarseTiming;
-  if Self.CoarseTiming then
-    Self.Resolution := 50;
+  Self.WaitEvent := TSimpleEvent.Create;
 
   inherited Create(CreateSuspended);
 end;
 
-function TIdSipTimer.ElapsedTime: TDateTime;
+destructor TIdSipTimer.Destroy;
 begin
-  Result := Now - Self.fStart
+  Self.WaitEvent.Free;
+
+  inherited Destroy;
 end;
 
-procedure TIdSipTimer.ResetTime;
+procedure TIdSipTimer.Terminate;
 begin
-  Self.fStart := Now;
+  inherited Terminate;
+
+  Self.WaitEvent.SetEvent;
 end;
 
 //* TIdSipTimer Protected methods **********************************************
 
 procedure TIdSipTimer.Run;
 begin
-  Self.ResetTime;
   while not Self.Terminated do begin
-    if Self.CoarseTiming then begin
-      IdGlobal.Sleep(Self.Resolution);
+    Self.WaitEvent.WaitFor(Self.Interval);
 
-      if not Self.Terminated
-        and (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
-        Self.ResetTime;
-        Self.OnTimer(Self);
-      end;
-    end
-    else begin
-      IdGlobal.Sleep(Self.Interval);
-      if not Self.Terminated then
-        Self.OnTimer(Self);
-    end;
+    if not Self.Terminated and Assigned(Self.OnTimer) then
+      Self.OnTimer(Self);
   end;
 end;
 
