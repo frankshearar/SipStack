@@ -122,14 +122,16 @@ type
                                         var Password: String;
                                         var TryAgain: Boolean);
     procedure OnChanged(Observed: TObject);
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
     procedure OnModifySession(Modify: TIdSipInboundInvite);
@@ -163,6 +165,7 @@ type
     procedure TestCancelNotifiesTU;
     procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
+    procedure TestCreateAck;
     procedure TestCreateBye;
     procedure TestCreateInvite;
     procedure TestCreateInviteInsideDialog;
@@ -583,9 +586,11 @@ type
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean); overload;
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -644,9 +649,11 @@ type
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean);
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
     procedure ReceiveRemoteDecline;
     procedure ReceiveForbidden;
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
@@ -1536,9 +1543,9 @@ begin
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
 
-  Invite := TIdSipRequest.Create;
+  Invite := TIdSipTestResources.CreateBasicRequest;
   try
-    Response := TIdSipResponse.Create;
+    Response := TIdSipTestResources.CreateBasicResponse;
     try
       Self.Dlg := TIdSipDialog.Create(Invite,
                                       Response,
@@ -1683,7 +1690,8 @@ begin
   Self.OnChangedEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                        Message: TIdSipMessage;
                                                         Receiver: TIdSipTransport);
 begin
 end;
@@ -1704,7 +1712,8 @@ begin
   Self.SessionEstablished  := true;
 end;
 
-procedure TestTIdSipUserAgent.OnInboundCall(Session: TIdSipInboundSession);
+procedure TestTIdSipUserAgent.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                            Session: TIdSipInboundSession);
 begin
   Self.InboundCallMimeType := Session.RemoteMimeType;
   Self.InboundCallOffer    := Session.RemoteSessionDescription;
@@ -2224,6 +2233,18 @@ begin
   CheckEquals(SdpMimeType,
               Self.Core.AllowedContentTypes,
               'AllowedContentTypes');
+end;
+
+procedure TestTIdSipUserAgent.TestCreateAck;
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.Core.CreateAck(Self.Dlg);
+  try
+    CheckEquals(1, Ack.Path.Count, 'Wrong number of Via headers');
+  finally
+    Ack.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestCreateBye;
@@ -6882,7 +6903,8 @@ procedure TestTIdSipInboundSession.OnAuthenticationChallenge(UserAgent: TIdSipAb
 begin
 end;
 
-procedure TestTIdSipInboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+procedure TestTIdSipInboundSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                             Message: TIdSipMessage;
                                                              Receiver: TIdSipTransport);
 begin
 end;
@@ -6902,7 +6924,8 @@ procedure TestTIdSipInboundSession.OnEstablishedSession(Session: TIdSipSession;
 begin
 end;
 
-procedure TestTIdSipInboundSession.OnInboundCall(Session: TIdSipInboundSession);
+procedure TestTIdSipInboundSession.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                                 Session: TIdSipInboundSession);
 begin
   Self.Session := Session;
   Self.Session.AddSessionListener(Self);
@@ -7527,13 +7550,15 @@ procedure TestTIdSipOutboundSession.OnAuthenticationChallenge(UserAgent: TIdSipA
 begin
 end;
 
-procedure TestTIdSipOutboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+procedure TestTIdSipOutboundSession.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                              Message: TIdSipMessage;
                                                               Receiver: TIdSipTransport);
 begin
   Self.OnDroppedMessage := true;
 end;
 
-procedure TestTIdSipOutboundSession.OnInboundCall(Session: TIdSipInboundSession);
+procedure TestTIdSipOutboundSession.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                                  Session: TIdSipInboundSession);
 begin
 end;
 
@@ -9352,6 +9377,8 @@ begin
           'Receiver param');
     Check(Self.Method.Message = L.MessageParam,
           'Message param');
+    Check(Self.Method.UserAgent = L.UserAgentParam,
+          'UserAgent param');
   finally
     L.Free;
   end;
@@ -9399,6 +9426,8 @@ begin
     Check(L.InboundCall, 'Listener not notified');
     Check(Self.Method.Session = L.SessionParam,
           'Session param');
+    Check(Self.Method.UserAgent = L.UserAgentParam,
+          'UserAgent param');
   finally
     L.Free;
   end;

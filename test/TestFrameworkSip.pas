@@ -501,9 +501,11 @@ type
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean);
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
-                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
   public
     constructor Create; override;
 
@@ -1744,21 +1746,25 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
 end;
 
-procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                                                Message: TIdSipMessage;
                                                                 Receiver: TIdSipTransport);
 begin
   Self.fDroppedUnmatchedMessage := true;
   Self.fReceiverParam           := Receiver;
   Self.fMessageParam            := Message;
+  Self.fUserAgentParam          := UserAgent;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnDroppedUnmatchedMessage');
 end;
 
-procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipInboundSession);
+procedure TIdSipTestUserAgentListener.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                                    Session: TIdSipInboundSession);
 begin
-  Self.fInboundCall  := true;
-  Self.fSessionParam := Session;
+  Self.fInboundCall    := true;
+  Self.fSessionParam   := Session;
+  Self.fUserAgentParam := UserAgent;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');

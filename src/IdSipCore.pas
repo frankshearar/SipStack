@@ -175,9 +175,11 @@ type
                                         var Username: String;
                                         var Password: String;
                                         var TryAgain: Boolean);
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
   end;
 
   TIdSipUserAgentReaction =
@@ -1468,20 +1470,24 @@ type
   private
     fReceiver: TIdSipTransport;
     fMessage:  TIdSipMessage;
+    fUserAgent: TIdSipAbstractUserAgent;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Message:  TIdSipMessage  read fMessage write fMessage;
+    property Receiver:  TIdSipTransport read fReceiver write fReceiver;
+    property Message:   TIdSipMessage  read fMessage write fMessage;
+    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
   TIdSipUserAgentInboundCallMethod = class(TIdNotification)
   private
-    fSession: TIdSipInboundSession;
+    fSession:   TIdSipInboundSession;
+    fUserAgent: TIdSipAbstractUserAgent;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Session: TIdSipInboundSession read fSession write fSession;
+    property Session:   TIdSipInboundSession read fSession write fSession;
+    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -6931,7 +6937,8 @@ end;
 
 procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedMessage(Self.Message,
+  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedMessage(Self.UserAgent,
+                                                                 Self.Message,
                                                                  Self.Receiver);
 end;
 
@@ -6942,7 +6949,8 @@ end;
 
 procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
+  (Subject as IIdSipUserAgentListener).OnInboundCall(Self.UserAgent,
+                                                     Self.Session);
 end;
 
 //******************************************************************************
