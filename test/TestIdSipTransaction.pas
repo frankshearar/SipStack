@@ -256,7 +256,6 @@ type
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
-    procedure TestPrematureDestruction;
     procedure TestReceive1xxInCallingState;
     procedure TestReceive1xxInCompletedState;
     procedure TestReceive1xxInProceedingState;
@@ -271,6 +270,7 @@ type
     procedure TestReliableTransportNoInviteRetransmissions;
     procedure TestTimerDFired;
     procedure TestTimeout;
+    procedure TestTransportErrorInCallingState;
     procedure TestTransportErrorInCompletedState;
   end;
 
@@ -298,6 +298,7 @@ type
     procedure TestReceiveFinalResponseInProceedingState;
     procedure TestReceiveFinalResponseInTryingState;
     procedure TestTimerKFired;
+    procedure TestTransportErrorInProceedingState;
     procedure TestTransportErrorInTryingState;
   end;
 
@@ -499,8 +500,8 @@ begin
   Self.Core.Dispatcher := Self.D;
 
   Self.MockTransport := TIdSipMockTransport.Create;
-
   Self.MockTransport.TransportType := sttTCP;
+
   Self.D.AddTransport(Self.MockTransport);
 
   Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
@@ -1098,18 +1099,15 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestTransactionsCleanedUp;
 var
-  Tran:      TIdSipTransaction;
   TranCount: Integer;
 begin
-  Tran := Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
-  Tran.ReceiveRequest(Self.TranRequest, Self.MockTransport);
+  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+
   TranCount := Self.D.TransactionCount;
 
-  Tran.SendResponse(Self.Response200);
+  // A 200 OK response terminates an INVITE transaction
+  Self.D.SendResponse(Self.Response200);
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Tran.State),
-              'Transaction wasn''t terminated');
   Check(Self.D.TransactionCount < TranCount,
         'Terminated transaction wasn''t cleaned up');
 end;
@@ -2927,26 +2925,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipClientInviteTransaction.TestPrematureDestruction;
-var
-  Tran:      TIdSipTransaction;
-  TranCount: Cardinal;
-begin
-  // When the INVITE is sent, if there's a network error we go directly to the
-  // Terminated state. Terminated transactions are immediately killed by the
-  // dispatcher. This means that sending requests should be the last thing done
-  // by a method.
-  Tran := Self.MockDispatcher.AddClientTransaction(Self.Request);
-  TranCount := Self.MockDispatcher.TransactionCount;
-
-  Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
-  Tran.SendRequest;
-
-  CheckEquals(TranCount - 1,
-              Self.MockDispatcher.TransactionCount,
-              'Transaction wasn''t terminated and removed');
-end;
-
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;
 begin
   Self.CheckReceiveResponse := Self.Proceeding;
@@ -3205,10 +3183,31 @@ begin
   end;
 end;
 
+procedure TestTIdSipClientInviteTransaction.TestTransportErrorInCallingState;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
+  try
+    Tran.AddTransactionListener(Self);
+    Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
+    Tran.SendRequest;
+
+    CheckEquals(Transaction(itsTerminated),
+                Transaction(Tran.State),
+                'Connection timed out');
+    Check(Self.TransactionFailed,
+          'Listener not told about failure');
+  finally
+    Tran.Free;
+  end;
+end;
+
 procedure TestTIdSipClientInviteTransaction.TestTransportErrorInCompletedState;
 begin
   Self.MoveToProceedingState(Self.Tran);
 
+  // This makes the transaction try send an ACK, which fails.
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
@@ -3502,6 +3501,21 @@ begin
   Check(not Self.TransactionTerminated, 'OnTerminated fired');
 end;
 
+procedure TestTIdSipClientNonInviteTransaction.TestTransportErrorInProceedingState;
+begin
+  Self.MoveToProceedingState(Self.Tran);
+  Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
+
+  // When Timer E fires, the transaction resends the request. 
+  (Self.Tran as TIdSipClientNonInviteTransaction).FireTimerE;
+
+  CheckEquals(Transaction(itsTerminated),
+              Transaction(Tran.State),
+              'Connection timed out');
+  Check(Self.TransactionFailed,
+        'Listener not told about failure');
+end;
+
 procedure TestTIdSipClientNonInviteTransaction.TestTransportErrorInTryingState;
 var
   Tran: TIdSipTransaction;
@@ -3514,6 +3528,9 @@ begin
 
     Tran.SendRequest;
 
+    CheckEquals(Transaction(itsTerminated),
+                Transaction(Tran.State),
+                'Connection timed out');
     Check(Self.TransactionFailed,
           'Listener not told about failure');
   finally

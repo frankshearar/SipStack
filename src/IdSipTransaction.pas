@@ -709,6 +709,9 @@ var
   MsgLen:       Cardinal;
   RewrittenVia: Boolean;
 begin
+  // Don't call this method. Transactions use this method to send messages to
+  // the Transport layer.                                                                          
+
   MsgLen := Length(Msg.AsString);
   RewrittenVia := (MsgLen > MaximumUDPMessageSize) and (Msg.LastHop.Transport = sttUDP);
 
@@ -721,6 +724,8 @@ begin
     on EIdSipTransport do begin
       Msg.LastHop.Transport := sttUDP;
 
+      // If this too raises an EIdSipTransport exception, the transaction will
+      // receive the exception and handle it accordingly.
       Self.FindAppropriateTransport(Msg).Send(Msg);
     end;
   end;
@@ -744,6 +749,9 @@ begin
       Tran := Self.AddClientTransaction(Request);
       Tran.SendRequest;
     end;
+
+    if (Tran.State = itsTerminated) then
+      Self.RemoveTransaction(Tran);
   end;
 end;
 
@@ -757,8 +765,11 @@ begin
   // cf RFC 3261, section 17.2.3, last paragraph
   Tran := Self.FindTransaction(Response, false);
 
-  if Assigned(Tran) then
-    Tran.SendResponse(Response)
+  if Assigned(Tran) then begin
+    Tran.SendResponse(Response);
+    if (Tran.State = itsTerminated) then
+      Self.RemoveTransaction(Tran);
+  end
   else
     Self.Send(Response);
 end;
@@ -926,8 +937,11 @@ var
 begin
   Tran := Self.FindTransaction(Response, true);
 
-  if Assigned(Tran) then
-    Tran.ReceiveResponse(Response, Receiver)
+  if Assigned(Tran) then begin
+    Tran.ReceiveResponse(Response, Receiver);
+    if (Tran.State = itsTerminated) then
+      Self.RemoveTransaction(Tran);
+  end
   else begin
     // Sometimes responses won't match a transaction. For instance, a UA A might
     // send an INVITE to B. B responds with a 200, which terminates that INVITE
@@ -1237,7 +1251,7 @@ begin
 
   // WARNING - I am not sure if this is safe or even sane. We're
   // asking an object to commit suicide.
-  Self.Dispatcher.RemoveTransaction(Self);
+//  Self.Dispatcher.RemoveTransaction(Self);
 end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
@@ -1817,7 +1831,7 @@ end;
 procedure TIdSipClientInviteTransactionTimer.StartTimerD;
 begin
   Self.Timer.AddEvent(Self.TimerDInterval, Self.OnTimerD);
-  Self.fTimerDIsRunning := true;
+  Self.fTimerDIsRunning := true;  
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerA;
