@@ -1053,7 +1053,6 @@ begin
     Result.CSeq.Method := MethodRegister;
     Result.RequestUri.EraseUserInfo;
     Result.CallID := Self.CallIDFor(Registrar.Address);
-    Result.CSeq.SequenceNo := Self.NextSequenceNoFor(Registrar.Address);
 
     Result.ToHeader.Value := Self.Contact.Value;
     Result.From.Value     := Self.Contact.Value;
