@@ -15,7 +15,7 @@ uses
   IdGlobal, IdRTP, TestFramework, TestFrameworkRtp;
 
 type
-  TestFunctions = class(TTestCase)
+  TestFunctions = class(TTestRTP)
   published
     procedure TestAddModulo;
     procedure TestAddModuloWord;
@@ -27,6 +27,7 @@ type
     procedure TestDateTimeToRTPTimestamp;
     procedure TestEncodeAsStringCardinal;
     procedure TestEncodeAsStringWord;
+    procedure TestEof;
     procedure TestHtoNL;
     procedure TestHtoNS;
     procedure TestMultiplyCardinal;
@@ -37,6 +38,7 @@ type
     procedure TestReadByte;
     procedure TestReadCardinal;
     procedure TestReadRemainderOfStream;
+    procedure TestReadRemainderOfStreamAsWideString;
     procedure TestReadRemainderOfStreamLong;
     procedure TestReadTimestamp;
     procedure TestReadString;
@@ -44,12 +46,13 @@ type
     procedure TestRoundUpToMultipleOfFour;
     procedure TestTwosComplement;
     procedure TestWriteCardinal;
+    procedure TestWriteNTPTimestamp;
     procedure TestWriteString;
-    procedure TestWriteTimestamp;
+    procedure TestWriteWideString;
     procedure TestWriteWord;
   end;
 
-  TPayloadTestCase = class(TTestCase)
+  TPayloadTestCase = class(TTestRTP)
   protected
     Payload:  TIdRTPPayload;
 
@@ -1068,6 +1071,23 @@ begin
               '$0102');
 end;
 
+procedure TestFunctions.TestEof;
+var
+  B: Byte;
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#0#0);
+  try
+    Check(not Eof(S), 'Beginning of stream');
+    S.Read(B, 1);
+    Check(not Eof(S), 'First byte');
+    S.Read(B, 1);
+    Check(Eof(S), 'Second byte');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestFunctions.TestHtoNL;
 begin
   CheckEquals(0,         HtoNL(0),         '0');
@@ -1246,6 +1266,25 @@ begin
   end;
 end;
 
+procedure TestFunctions.TestReadRemainderOfStreamAsWideString;
+var
+  C: Char;
+  S: TStringStream;
+  W: WideString;
+begin
+  S := TStringStream.Create(#0'1'#0'2'#0'3'#0'4'#0'5'#0'6'#0'7'#0'8'#0'9'#0'0');
+  try
+    S.Read(C, 1);
+    S.Read(C, 1);
+
+    W := ReadRemainderOfStreamAsWideString(S);
+
+    CheckEqualsW('234567890', W, 'Buffer');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestFunctions.TestReadRemainderOfStreamLong;
 var
   C:   Char;
@@ -1368,6 +1407,26 @@ begin
   end;
 end;
 
+procedure TestFunctions.TestWriteNTPTimestamp;
+var
+  T: TIdNTPTimestamp;
+  S: TStringStream;
+begin
+  T.IntegerPart    := $decafbad;
+  T.FractionalPart := $beeff00d;
+
+  S := TStringStream.Create('');
+  try
+    WriteNTPTimestamp(S, T);
+
+    CheckEquals(#$de#$ca#$fb#$ad#$be#$ef#$f0#$0d,
+                S.DataString,
+                'Timestamp incorrectly written - check byte order');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestFunctions.TestWriteString;
 const
   TestStrings: array[1..4] of String = ('',
@@ -1392,23 +1451,27 @@ begin
   end;
 end;
 
-procedure TestFunctions.TestWriteTimestamp;
+procedure TestFunctions.TestWriteWideString;
+const
+  TestStrings: array[1..4] of WideString = ('',
+                                            'Cthulhu',
+                                            #0'Azathoth'#0,
+                                            #$be#$ef#$ca'ke');
 var
-  T: TIdNTPTimestamp;
+  I: Integer;
   S: TStringStream;
 begin
-  T.IntegerPart    := $decafbad;
-  T.FractionalPart := $beeff00d;
+  for I := Low(TestStrings) to High(TestStrings) do begin
+    S := TStringStream.Create('');
+    try
+      WriteWideString(S, TestStrings[I]);
 
-  S := TStringStream.Create('');
-  try
-    WriteNTPTimestamp(S, T);
-
-    CheckEquals(#$de#$ca#$fb#$ad#$be#$ef#$f0#$0d,
-                S.DataString,
-                'Timestamp incorrectly written - check byte order');
-  finally
-    S.Free;
+      CheckUnicode(TestStrings[I],
+                   S.DataString,
+                   'String incorrectly written');
+    finally
+      S.Free;
+    end;
   end;
 end;
 
@@ -1629,7 +1692,9 @@ begin
 
   S := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
   Self.Packet.Block := S;
-  CheckEquals(Length(S), Self.Packet.Length, 'Length');
+  CheckEquals(Length(S)*SizeOf(WideChar),
+              Self.Packet.Length,
+              'Length');
 end;
 
 procedure TestTIdRTPT140Payload.TestName;
@@ -1641,7 +1706,7 @@ end;
 
 procedure TestTIdRTPT140Payload.TestPrintOn;
 var
-  Data: String;
+  Data: WideString;
   S:    TStringStream;
 begin
   Data := 'fooing the bar';
@@ -1651,27 +1716,36 @@ begin
 
     Self.Packet.PrintOn(S);
 
-    CheckEquals(Data,
-                S.DataString,
-                'PrintOn');
+    CheckUnicode(Data,
+                 S.DataString,
+                 'PrintOn');
   finally
     S.Free;
   end;
 end;
 
 procedure TestTIdRTPT140Payload.TestReadFrom;
+
+  function WideStringToStr(const W: WideString): String;
+  var
+    I: Integer;
+  begin
+    Result := '';
+    for I := 1 to Length(W) do
+      Result := Result + #0 + Char((Ord(W[I]) and $00ff));
+  end;
 var
   Data: String;
   S:    TStringStream;
 begin
-  Data := 'fooing the bar';
-  S := TStringStream.Create(Data);
+  Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+  S := TStringStream.Create(WideStringToStr(Data));  // we actually need a stream that contains a WideString. This isn't it!
   try
     Self.Packet.ReadFrom(S);
 
-    CheckEquals(Data,
-                Self.Packet.Block,
-                'Block');
+    CheckUnicode(Data,
+                 S.DataString,
+                 'Block');
   finally
     S.Free;
   end;
@@ -2680,21 +2754,12 @@ end;
 //* TestTIdRTPPacket Public methods ********************************************
 
 procedure TestTIdRTPPacket.SetUp;
-var
-  Encoding: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
   Self.AVP := TIdAudioVisualProfile.Create;
 
   Self.T140PT := 96;
-
-  Encoding := TIdRTPT140Payload.Create('');
-  try
-    Self.AVP.AddEncoding(Encoding, Self.T140PT);
-  finally
-    Encoding.Free;
-  end;
 
   Self.Packet := TIdRTPPacket.Create(Self.AVP);
 end;
@@ -3346,12 +3411,12 @@ begin
                           + #$00#$00#$00#$0E); // 14 octets
   try
     Self.Packet.ReadFrom(S);
-    CheckEquals(TIdRTPT140Payload,
+    CheckEquals(TIdRTPRawPayload,
                 Self.Packet.Payload.ClassType,
                 'Payload type');
-    CheckEquals('This is black sunshine',
-                (Self.Packet.Payload as TIdRTPT140Payload).Block,
-                'T140block');
+    CheckEqualsW('This is black sunshine',
+                 (Self.Packet.Payload as TIdRTPRawPayload).Data,
+                 'Data');
   finally
     S.Free;
   end;
@@ -3387,14 +3452,14 @@ end;
 
 procedure TestTIdRTPPacket.TestReadPayloadStream;
 var
-  Data:     String;
-  Expected: TIdRTPT140Payload;
+  Data:     WideString;
+  Expected: TIdRTPRawPayload;
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdRTPT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPRawPayload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
-    Expected.Block := Data;
+    Expected.Data := Data;
 
     S := TStringStream.Create('');
     try
@@ -3407,8 +3472,8 @@ begin
       CheckEquals(Expected.ClassType,
                   Self.Packet.Payload.ClassType,
                   'Payload type');
-      CheckEquals(Expected.Block,
-                  (Self.Packet.Payload as TIdRTPT140Payload).Block,
+      CheckEquals(Expected.Data,
+                  (Self.Packet.Payload as TIdRTPRawPayload).Data,
                   'Payload data');
     finally
       S.Free;
@@ -3420,22 +3485,22 @@ end;
 
 procedure TestTIdRTPPacket.TestReadPayloadPayload;
 var
-  Data:     String;
-  Expected: TIdRTPT140Payload;
+  Data:     WideString;
+  Expected: TIdRTPRawPayload;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
+  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdRTPRawPayload;
   try
-    Expected.Block := Data;
+    Expected.Data := Data;
 
     Self.Packet.ReadPayload(Expected);
 
     CheckEquals(Expected.ClassType,
                 Self.Packet.Payload.ClassType,
                 'Payload type');
-    CheckEquals(Expected.Block,
-                (Self.Packet.Payload as TIdRTPT140Payload).Block,
-                'Payload data');
+    CheckEqualsW(Expected.Data,
+                 (Self.Packet.Payload as TIdRTPRawPayload).Data,
+                 'Payload data');
   finally
     Expected.Free;
   end;
@@ -3444,13 +3509,13 @@ end;
 procedure TestTIdRTPPacket.TestReadPayloadString;
 var
   Data:     String;
-  Expected: TIdRTPT140Payload;
+  Expected: TIdRTPRawPayload;
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdRTPT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPRawPayload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
-    Expected.Block := Data;
+    Expected.Data := Data;
 
     S := TStringStream.Create('');
     try
@@ -3463,8 +3528,8 @@ begin
       CheckEquals(Expected.ClassType,
                   Self.Packet.Payload.ClassType,
                   'Payload type');
-      CheckEquals(Expected.Block,
-                  (Self.Packet.Payload as TIdRTPT140Payload).Block,
+      CheckEqualsW(Expected.Data,
+                  (Self.Packet.Payload as TIdRTPRawPayload).Data,
                   'Payload data');
     finally
       S.Free;
@@ -6828,26 +6893,19 @@ end;
 //* TRTPSessionTestCase Public methods *****************************************
 
 procedure TRTPSessionTestCase.SetUp;
-var
-  T140: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
   Self.Profile := TIdAudioVisualProfile.Create;
+
+  Self.T140PT := Self.Profile.FirstFreePayloadType;
+  Self.Profile.AddEncoding('T140', 1000, '', Self.T140PT);
 
   Self.Agent   := TIdMockRTPPeer.Create;
   Self.Agent.Profile := Self.Profile;
 
   Self.Session := TIdRTPSession.Create(Self.Agent);
   Self.Session.Profile := Self.Profile;
-
-  Self.T140PT := Self.Profile.FirstFreePayloadType;
-  T140 := TIdRTPT140Payload.Create('');
-  try
-    Self.Profile.AddEncoding(T140, Self.T140PT);
-  finally
-    T140.Free;
-  end;
 end;
 
 procedure TRTPSessionTestCase.TearDown;
@@ -7610,8 +7668,6 @@ var
 begin
   Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
-    Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-
     Self.Session.SendData(Payload);
   finally
     Payload.Free;

@@ -13,12 +13,18 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdObservable, IdRTP, IdSipCore,
-  SyncObjs, SysUtils, TestFrameworkEx;
+  SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)
   public
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
+    procedure CheckEqualsW(Expected,
+                           Actual: WideString;
+                           Msg: String);
+    procedure CheckUnicode(Expected: WideString;
+                           Actual: String;
+                           Msg: String);
   end;
 
   TIdMockRTPPeer = class(TIdInterfacedObject,
@@ -114,7 +120,18 @@ type
     property RTPPacketParam:  TIdRTPPacket    read fRTPPacketParam;
   end;
 
+  TestTTestRTP = class(TTestRTP)
+  published
+    procedure TestCheckUnicode;
+  end;
+
 implementation
+
+function Suite: ITestSuite;
+begin
+  Result := TTestSuite.Create('TestFrameworkRtp unit tests');
+  Result.AddTest(TestTTestRTP.Suite);
+end;
 
 //******************************************************************************
 //* TTestRTP                                                                   *
@@ -138,6 +155,40 @@ begin
     CheckEquals(Integer(Expected.CsrcIDs[I]),
                 Integer(Received.CsrcIDs[I]),
                 IntToStr(I) + 'th CSRC ID');
+end;
+
+procedure TTestRTP.CheckEqualsW(Expected,
+                                Actual: WideString;
+                                Msg: String);
+begin
+  if (Expected <> Actual) then
+    FailNotEquals(Expected, Actual, Msg, CallerAddr);
+end;
+
+procedure TTestRTP.CheckUnicode(Expected: WideString;
+                                Actual: String;
+                                Msg: String);
+var
+  ActualI:   Integer;
+  ExpectedI: Integer;
+  W:         WideChar;
+begin
+  // Check that Actual contains the same data, byte-for-byte, as Expected.
+
+  ActualI   := 1;
+  ExpectedI := 1;
+  while ActualI <= Length(Actual) - 1 do begin
+    W := WideChar((Ord(Actual[ActualI]) shl 8) + Ord(Actual[ActualI + 1]));
+    Check(Expected[ExpectedI] = W,
+          Msg + ': character ' + IntToStr(ExpectedI)
+              + ' ($' + IntToHex(Ord(W), 4) + ') differs');
+    Inc(ActualI, SizeOf(WideChar));
+    Inc(ExpectedI);
+  end;
+
+  CheckEquals(Length(Expected),
+              Length(Actual) div SizeOf(WideChar),
+              Msg + ': differing lengths');
 end;
 
 //******************************************************************************
@@ -337,4 +388,38 @@ begin
   Self.fReceivedRTP    := true;
 end;
 
+//******************************************************************************
+//* TestTTestRTP                                                               *
+//******************************************************************************
+//* TestTTestRTP Published methods *********************************************
+
+procedure TestTTestRTP.TestCheckUnicode;
+var
+  S:                String;
+  ShouldHaveFailed: Boolean;
+  W:                WideString;
+begin
+  W := '';
+  S := '';
+  CheckUnicode(W, S, 'Empty strings');
+
+  W := 'Cthulhu';
+  S := 'Cthulhu';
+  try
+    CheckUnicode(W, S, '''Cthulhu''');
+    ShouldHaveFailed := true;
+  except
+    on ETestFailure do
+      ShouldHaveFailed := false;
+  end;
+  if ShouldHaveFailed then
+    Fail('Failed to bail out on ''Cthulhu''');
+
+  W := 'Cthulhu';
+  S := #0'C'#0't'#0'h'#0'u'#0'l'#0'h'#0'u';
+  CheckUnicode(W, S, '''Cthulhu''');
+end;
+
+initialization
+  RegisterTest('RTP test framework', Suite);
 end.

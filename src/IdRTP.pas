@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdTimerQueue, SyncObjs,
-   SysUtils, Types;
+  SysUtils, Types;
 
 type
   TIdCardinalArray        = array of Cardinal;
@@ -138,7 +138,7 @@ type
   // I am a T.140 payload, as defined in RFC 2793 (and the bis draft)
   TIdRTPT140Payload = class(TIdRTPPayload)
   private
-    fBlock: String;
+    fBlock: WideString;
   protected
     function GetName: String; override;
   public
@@ -149,7 +149,7 @@ type
     procedure ReadFrom(Src: TStream); override;
     procedure PrintOn(Dest: TStream); override;
 
-    property Block: String read fBlock write fBlock;
+    property Block: WideString read fBlock write fBlock;
   end;
 
   // I represent DTMF signals and such, as defined in RFC 2833
@@ -1117,12 +1117,14 @@ function  NowAsNTP: TIdNTPTimestamp;
 function  NtoHL(Value: Cardinal): Cardinal;
 function  NtoHS(Value: Word): Cardinal;
 
+function  Eof(Src: TStream): Boolean;
 function  PeekByte(Src: TStream): Byte;
 function  PeekWord(Src: TStream): Word;
 function  ReadByte(Src: TStream): Byte;
 function  ReadCardinal(Src: TStream): Cardinal;
 procedure ReadNTPTimestamp(Src: TStream; var Timestamp: TIdNTPTimestamp);
 function  ReadRemainderOfStream(Src: TStream): String;
+function  ReadRemainderOfStreamAsWideString(Src: TStream): WIdeString;
 function  ReadString(Src: TStream; Length: Cardinal): String;
 function  ReadWord(Src: TStream): Word;
 function  RoundUpToMultipleOfFour(Input: Cardinal): Cardinal;
@@ -1131,6 +1133,7 @@ procedure WriteByte(Dest: TStream; Value: Byte);
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 procedure WriteNTPTimestamp(Dest: TStream; Value: TIdNTPTimestamp);
 procedure WriteString(Dest: TStream; Value: String);
+procedure WriteWideString(Dest: TStream; Value: WideString);
 procedure WriteWord(Dest: TStream; Value: Word);
 
 // From RFC 1521
@@ -1415,6 +1418,16 @@ begin
   Result := HtoNS(Value);
 end;
 
+function Eof(Src: TStream): Boolean;
+var
+  B: Byte;
+  N: Integer;
+begin
+  N := Src.Read(B, 1);
+  Result := N = 0;
+  Src.Seek(-1, soFromCurrent);
+end;
+
 function PeekByte(Src: TStream): Byte;
 begin
   Result := 0;
@@ -1467,6 +1480,13 @@ begin
     Read := Src.Read(Buf, BufLen);
     Result := Result + Copy(Buf, 1, Read);
   until (Read < BufLen);
+end;
+
+function ReadRemainderOfStreamAsWideString(Src: TStream): WIdeString;
+begin
+  Result := '';
+  while not Eof(Src) do
+    Result := Result + WideChar(ReadWord(Src));
 end;
 
 function ReadString(Src: TStream; Length: Cardinal): String;
@@ -1533,6 +1553,14 @@ procedure WriteString(Dest: TStream; Value: String);
 begin
   if (Value <> '') then
     Dest.Write(Value[1], Length(Value));
+end;
+
+procedure WriteWideString(Dest: TStream; Value: WideString);
+var
+  I: Integer;
+begin
+  for I := 1 to Length(Value) do
+    WriteWord(Dest, Word(Value[I]));
 end;
 
 procedure WriteWord(Dest: TStream; Value: Word);
@@ -1812,17 +1840,17 @@ end;
 
 function TIdRTPT140Payload.Length: Cardinal;
 begin
-  Result := System.Length(Self.Block);
+  Result := System.Length(Self.Block)*SizeOf(WideChar);
 end;
 
 procedure TIdRTPT140Payload.ReadFrom(Src: TStream);
 begin
-  Self.Block := ReadRemainderOfStream(Src);
+  Self.Block := ReadRemainderOfStreamAsWideString(Src);
 end;
 
 procedure TIdRTPT140Payload.PrintOn(Dest: TStream);
 begin
-  WriteString(Dest, Self.Block);
+  WriteWideString(Dest, Self.Block);
 end;
 
 //* TIdRTPT140Payload Protected methods ****************************************
