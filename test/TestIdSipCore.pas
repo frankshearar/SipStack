@@ -107,11 +107,16 @@ type
 
   TestTIdSipActions = class(TTestCaseTU)
   private
-    Actions:      TIdSipActions;
-    FoundAction:  TIdSipAction;
-    FoundSession: TIdSipSession;
-    Options:      TIdSipRequest;
+    ActionProcUsed:      String;
+    Actions:             TIdSipActions;
+    DidntFindActionName: String;
+    FoundAction:         TIdSipAction;
+    FoundActionName:     String;
+    FoundSession:        TIdSipSession;
+    Options:             TIdSipRequest;
 
+    procedure DidntFindAction(Action: TIdSipAction);
+    procedure FoundActionProc(Action: TIdSipAction);
     procedure RecordAction(Action: TIdSipAction);
     procedure RecordSession(Session: TIdSipSession;
                             Invite: TIdSipRequest);
@@ -126,6 +131,8 @@ type
     procedure TestFindActionAndPerform;
     procedure TestFindActionAndPerformNoActions;
     procedure TestFindActionAndPerformNoMatch;
+    procedure TestFindActionAndPerformOr;
+    procedure TestFindActionAndPerformOrNoMatch;
     procedure TestFindSessionAndPerform;
     procedure TestFindSessionAndPerformNoMatch;
     procedure TestFindSessionAndPerformNoSessions;
@@ -228,6 +235,7 @@ type
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
+    procedure TestMergedRequest;
     procedure TestModuleForString;
     procedure TestNotificationOfNewSession;
     procedure TestNotificationOfNewSessionRobust;
@@ -907,6 +915,49 @@ type
 
 const
   DefaultTimeout = 5000;
+  // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
+  SFTFInvite = 'INVITE sip:abc@80.168.137.82 SIP/2.0'#13#10
+             + 'Via: SIP/2.0/UDP 81.86.64.25;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-first-request;rport=5060;received=81.86.64.25'#13#10
+             + 'Via: SIP/2.0/UDP proxy1.example.com;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-proxy1-request1-fake'#13#10
+             + 'Via: SIP/2.0/UDP ua.example.com;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-ua-request-fake'#13#10
+             + 'From: sip:sc@81.86.64.25;tag=SCt-0-1105373135.56-81.86.64.25~case905'#13#10
+             + 'Call-ID: 137057836-41e2a7cf@81.86.64.25'#13#10
+             + 'Content-Length: 150'#13#10
+             + 'Max-Forwards: 70'#13#10
+             + 'To: sip:abc@80.168.137.82'#13#10
+             + 'Contact: sip:sc@81.86.64.25'#13#10
+             + 'CSeq: 1 INVITE'#13#10
+             + 'Supported:'#13#10
+             + 'Content-Type: application/sdp'#13#10
+             + #13#10
+             + 'v=0'#13#10
+             + 'o=sc 1105373135 1105373135 IN IP4 81.86.64.25'#13#10
+             + 's=Dummy on hold SDP'#13#10
+             + 'c=IN IP4 0.0.0.0'#13#10
+             + 'm=audio 65534 RTP/AVP 0'#13#10
+             + 'a=rtpmap:0 PCMU/8000'#13#10
+             + 'a=recvonly'#13#10;
+  SFTFMergedInvite = 'INVITE sip:abc@80.168.137.82 SIP/2.0'#13#10
+                   + 'Via: SIP/2.0/UDP 81.86.64.25;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-second-request;rport=5060;received=81.86.64.25'#13#10
+                   + 'Via: SIP/2.0/UDP proxy2.example.com;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-proxy2-request1-fake'#13#10
+                   + 'Via: SIP/2.0/UDP ua.example.com;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-ua-request-fake'#13#10
+                   + 'From: sip:sc@81.86.64.25;tag=SCt-0-1105373135.56-81.86.64.25~case905'#13#10
+                   + 'Call-ID: 137057836-41e2a7cf@81.86.64.25'#13#10
+                   + 'Content-Length: 150'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'To: sip:abc@80.168.137.82'#13#10
+                   + 'Contact: sip:sc@81.86.64.25'#13#10
+                   + 'CSeq: 1 INVITE'#13#10
+                   + 'Supported:'#13#10
+                   + 'Content-Type: application/sdp'#13#10
+                   + #13#10
+                   + 'v=0'#13#10
+                   + 'o=sc 1105373135 1105373135 IN IP4 81.86.64.25'#13#10
+                   + 's=Dummy on hold SDP'#13#10
+                   + 'c=IN IP4 0.0.0.0'#13#10
+                   + 'm=audio 65534 RTP/AVP 0'#13#10
+                   + 'a=rtpmap:0 PCMU/8000'#13#10
+                   + 'a=recvonly'#13#10;
 
 function Suite: ITestSuite;
 begin
@@ -1110,7 +1161,7 @@ end;
 
 function TTestCaseTU.SentResponseCount: Cardinal;
 begin
-  Result := Self.Dispatcher.Transport.SentResponseCount
+  Result := Self.Dispatcher.Transport.SentResponseCount;
 end;
 
 procedure TTestCaseTU.ReceiveAck;
@@ -1507,6 +1558,10 @@ begin
   Self.Options := TIdSipRequest.Create;
   Self.Options.Assign(Self.Invite);
   Self.Options.Method := MethodOptions;
+
+  Self.ActionProcUsed      := '';
+  Self.DidntFindActionName := 'DidntFindAction';
+  Self.FoundActionName     := 'FoundActionName';
 end;
 
 procedure TestTIdSipActions.TearDown;
@@ -1518,6 +1573,16 @@ begin
 end;
 
 //* TestTIdSipActions Private methods ******************************************
+
+procedure TestTIdSipActions.DidntFindAction(Action: TIdSipAction);
+begin
+  Self.ActionProcUsed := Self.DidntFindActionName;
+end;
+
+procedure TestTIdSipActions.FoundActionProc(Action: TIdSipAction);
+begin
+  Self.ActionProcUsed := Self.FoundActionName;
+end;
 
 procedure TestTIdSipActions.RecordAction(Action: TIdSipAction);
 begin
@@ -1658,6 +1723,51 @@ begin
     Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
 
     Check(not Assigned(Self.FoundAction), 'An action found');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformOr;
+var
+  A:     TIdSipAction;
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := A.InitialRequest.Copy;
+    Self.Actions.FindActionAndPerformOr(Event,
+                                        Self.FoundActionProc,
+                                        Self.DidntFindAction);
+
+    CheckEquals(Self.FoundActionName,
+                Self.ActionProcUsed,
+                'Wrong procedure used');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformOrNoMatch;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Options.Copy;
+    Self.Actions.FindActionAndPerformOr(Event,
+                                        Self.FoundActionProc,
+                                        Self.DidntFindAction);
+
+    CheckEquals(Self.DidntFindActionName,
+                Self.ActionProcUsed,
+                'Wrong procedure used');
   finally
     Event.Free;
   end;
@@ -2952,6 +3062,34 @@ begin
 
   Response := Self.LastSentResponse;
   CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
+end;
+
+procedure TestTIdSipUserAgent.TestMergedRequest;
+var
+  FirstInvite:  TIdSipRequest;
+  SecondInvite: TIdSipRequest;
+begin
+  FirstInvite := TIdSipRequest.ReadRequestFrom(SFTFInvite);
+  try
+    SecondInvite := TIdSipRequest.ReadRequestFrom(SFTFMergedInvite);
+    try
+      Self.ReceiveRequest(FirstInvite);
+      Self.MarkSentResponseCount;
+      Self.ReceiveRequest(SecondInvite);
+
+      CheckResponseSent('No response sent');
+
+      Check(SecondInvite.Match(Self.LastSentResponse),
+            'Response not for 2nd INVITE');
+      CheckEquals(SIPLoopDetected,
+                  Self.LastSentResponse.StatusCode,
+                  'Unexpected response');
+    finally
+      SecondInvite.Free;
+    end;
+  finally
+    FirstInvite.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestModuleForString;
