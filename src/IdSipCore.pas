@@ -2290,9 +2290,9 @@ procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 var
   Transport: String;
 begin
-  // The transport must be discovered using RFC 3263
-  // TODO: Lies. Pure hack to get X-Lite talking
+  // TODO: We must discover the transport using RFC 3263
 
+  // TODO: Lies. Pure hack to get X-Lite talking
   if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
     Transport := OutboundRequest.ToHeader.Address.Transport
   else
