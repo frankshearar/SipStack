@@ -57,7 +57,6 @@ type
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
     RejectedRequest:        TIdSipRequest;
-    RequestCount:           Cardinal;
     Response200:            TIdSipResponse;
     TranRequest:            TIdSipRequest;
     Username:               String;
@@ -99,8 +98,6 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure ReceiveUnauthorized(const AuthHeaderName: String;
                                   const Qop: String);
-    function  SentAckCount: Cardinal;
-    function  SentRequestCount: Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -995,16 +992,6 @@ begin
   finally
     Challenge.Free;
   end;
-end;
-
-function TestTIdSipTransactionDispatcher.SentAckCount: Cardinal;
-begin
-  Result := Self.MockTransport.ACKCount;
-end;
-
-function TestTIdSipTransactionDispatcher.SentRequestCount: Cardinal;
-begin
-  Result := Self.MockTransport.SentRequestCount;
 end;
 
 //* TestTIdSipTransactionDispatcher Published methods **************************
