@@ -154,7 +154,9 @@ uses
   IdSimpleParser, IdSipTransport;
 
 const
-  NoRecordFound = 'No record found: %s';
+  NoRecordFound               = 'No record found: %s';
+  NoViaHeadersMeansNoLocations = 'You cannot find locations for a response with '
+                               + 'no Via headers';
 
 //******************************************************************************
 //* TIdSipLocation                                                             *
@@ -384,8 +386,7 @@ begin
     Result.Clear;
 
     if Response.Path.IsEmpty then
-      raise ESipLocator.Create('You cannot find locations for a response with no Via headers');
-
+      raise ESipLocator.Create(NoViaHeadersMeansNoLocations);
 
     if Response.LastHop.HasRport then
       Port := Response.LastHop.RPort
