@@ -35,6 +35,7 @@ type
     procedure CheckCSeqMethod(const Request: TIdSipRequest);
     procedure CheckRequiredHeaders(const Request: TIdSipRequest);
     procedure InitialiseMessage(Msg: TIdSipMessage);
+    procedure ParseCommaSeparatedHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
     procedure ParseContactHeader(const Msg: TIdSipMessage; ContactParms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
@@ -48,6 +49,7 @@ type
     class function IsSipVersion(Version: String): Boolean;
     class function IsToken(const Token: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
+    class function IsWord(const Token: String): Boolean;
 
     function  CanonicaliseName(HeaderName: String): String;
     function  GetHeaderName(Header: String): String;
@@ -62,6 +64,12 @@ type
   EBadHeader = class(EParser);
   EBadRequest = class(EParser);
   EBadResponse = class(EParser);
+
+const
+  LegalWordChars            = Alphabet + Digits
+                            + ['-', '.', '!', '%', '*', '_', '+', '`', '''',
+                               '~', '(', ')', '<', '>', ':', '\', '"', '/', '[',
+                               ']', '?', '{', '}'];
 
 const
   BadStatusCode             = -1;
@@ -445,6 +453,20 @@ begin
   end;
 end;
 
+class function TIdSipParser.IsWord(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do begin
+      Result := Result and (Token[I] in LegalWordChars);
+
+      if not Result then Break;
+    end;
+end;
+
 function TIdSipParser.CanonicaliseName(HeaderName: String): String;
 begin
   Result := '';
@@ -653,6 +675,13 @@ begin
   Msg.SipVersion := '';
 end;
 
+
+procedure TIdSipParser.ParseCommaSeparatedHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
+begin
+  while (Parms <> '') do
+    Msg.Headers.Add(Header).Value := Fetch(Parms, ',');
+end;
+
 procedure TIdSipParser.ParseContactHeader(const Msg: TIdSipMessage; ContactParms: String);
 begin
   while (ContactParms <> '') do
@@ -662,10 +691,8 @@ end;
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
 begin
   try
-    if TIdSipHeaders.IsContact(Header) then
-      Self.ParseContactHeader(Msg, Self.GetHeaderValue(Header))
-    else if TIdSipHeaders.IsVia(Header) then
-      Self.ParseViaHeader(Msg, Self.GetHeaderValue(Header))
+    if TIdSipHeaders.IsCommaSeparatedHeader(Header) then
+      Self.ParseCommaSeparatedHeader(Msg, Self.GetHeaderName(Header), Self.GetHeaderValue(Header))
     else
       Self.AddHeader(Msg, Header);
   except

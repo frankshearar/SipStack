@@ -16,18 +16,19 @@ uses
   Spike in 'test\Spike.pas' {rnidSpike},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
   TortureTests in 'test\TortureTests.pas',
-  XmlCgi in '..\IctWebsiteCgi\src\XmlCgi.pas',{
+  XmlCgi in '..\IctWebsiteCgi\src\XmlCgi.pas',
   TestIdSdpParser in 'test\TestIdSdpParser.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
+  TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
-  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',}
+  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
-  TestIdSipTransport in 'test\TestIdSipTransport.pas'{,
-  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
+  TestIdSipTransport in 'test\TestIdSipTransport.pas',
+  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas'{,
   TestIdURI in 'test\TestIdURI.pas'};
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

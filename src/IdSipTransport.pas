@@ -3,7 +3,7 @@ unit IdSipTransport;
 interface
 
 uses
-  IdSipMessage;
+  IdSipMessage, SysUtils;
 
 type
   TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
@@ -24,22 +24,31 @@ type
 
   TIdSipMockTransport = class(TIdSipAbstractTransport)
   private
-    fACKCount: Cardinal;
+    fACKCount:  Cardinal;
+    fLastACK:   TIdSipRequest;
+    fFailWith:  ExceptClass;
     fSentCount: Cardinal;
   public
     constructor Create;
+    destructor  Destroy; override;
 
     procedure FireOnResponse(const R: TIdSipResponse);
+    procedure RaiseException(const E: ExceptClass);
     procedure ResetACKCount;
     procedure ResetSentCount;
     procedure SendACK(const R: TIdSipResponse); override;
     procedure SendRequest(const R: TIdSipRequest); override;
 
-    property ACKCount:  Cardinal read fACKCount;
-    property SentCount: Cardinal read fSentCount;
+    property ACKCount:  Cardinal      read fACKCount;
+    property FailWith:  ExceptClass   read fFailWith write fFailWith;
+    property LastACK:   TIdSipRequest read fLastACK;
+    property SentCount: Cardinal      read fSentCount;
   end;
 
 implementation
+
+uses
+  IdSipParser;
 
 //******************************************************************************
 //* TIdSipAbstractTransport                                                    *
@@ -62,11 +71,24 @@ begin
   inherited Create;
 
   Self.ResetSentCount;
+  Self.fLastACK := TIdSipRequest.Create;
+end;
+
+destructor TIdSipMockTransport.Destroy;
+begin
+  Self.fLastACK.Free;
+
+  inherited Destroy;
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
 begin
   Self.DoOnResponse(R);
+end;
+
+procedure TIdSipMockTransport.RaiseException(const E: ExceptClass);
+begin
+  raise E.Create('TIdSipMockTransport');
 end;
 
 procedure TIdSipMockTransport.ResetACKCount;
@@ -81,12 +103,23 @@ end;
 
 procedure TIdSipMockTransport.SendACK(const R: TIdSipResponse);
 begin
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipMockTransport.SendACK');
+
   Inc(Self.fACKCount);
 end;
 
 procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
 begin
-  Inc(Self.fSentCount);
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipMockTransport.SendRequest');
+
+  if (R.Method = MethodAck) then begin
+    Self.LastACK.Assign(R);
+    Inc(Self.fACKCount)
+  end
+  else
+    Inc(Self.fSentCount);
 end;
 
 end.

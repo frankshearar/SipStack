@@ -41,6 +41,7 @@ type
     procedure TestIsSipVersion;
     procedure TestIsToken;
     procedure TestIsTransport;
+    procedure TestIsWord;
     procedure TestParseAndMakeMessageEmptyString;
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
@@ -66,6 +67,7 @@ type
     procedure TestParseRequestRequestUriInAngleBrackets;
     procedure TestParseRequestWithLeadingCrLfs;
     procedure TestParseRequestWithBodyAndNoContentType;
+    procedure TestParseRequestWithMultipleRoutes;
     procedure TestParseResponse;
     procedure TestParseResponseEmptyString;
     procedure TestParseResponseFoldedHeader;
@@ -87,6 +89,7 @@ type
   end;
 
 const
+  BasicContentLengthHeader = 'Content-Length: 29'#13#10;
   BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
@@ -96,7 +99,7 @@ const
                + 'CSeq: 314159 INVITE'#13#10
                + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
                + 'Content-Type: text/plain'#13#10
-               + 'Content-Length: 29'#13#10
+               + BasicContentLengthHeader
                + #13#10
                + 'I am a message. Hear me roar!';
   BasicResponse = 'SIP/2.0 486 Busy Here'#13#10
@@ -108,7 +111,7 @@ const
                 + 'CSeq: 314159 INVITE'#13#10
                 + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
                 + 'Content-Type: text/plain'#13#10
-                + 'Content-Length: 29'#13#10
+                + BasicContentLengthHeader
                 + #13#10
                 + 'I am a message. Hear me roar!';
   EmptyRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
@@ -119,22 +122,23 @@ const
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
                + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10;
-  ExhaustiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                    + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                    + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
-                    + 'Content-Length: 29'#13#10
-                    + 'Content-Type: text/plain'#13#10
-                    + 'CSeq: 314159 INVITE'#13#10
-                    + 'Date: Thu, 1 Jan 1970 00:00:00 GMT'#13#10
-                    + 'Expires: 1000'#13#10
-                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                    + 'Max-Forwards: 70'#13#10
-                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
-                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                    + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                    + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
-                    + #13#10
-                    + 'I am a message. Hear me roar!';
+  ExtensiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                   + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                   + 'Content-Length: 29'#13#10
+                   + 'Content-Type: text/plain'#13#10
+                   + 'CSeq: 314159 INVITE'#13#10
+                   + 'Date: Thu, 1 Jan 1970 00:00:00 GMT'#13#10
+                   + 'Expires: 1000'#13#10
+                   + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'Route: localhost <sip:127.0.0.1>;lr'#13#10
+                   + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
+                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                   + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                   + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
+                   + #13#10
+                   + 'I am a message. Hear me roar!';
 
 implementation
 
@@ -722,7 +726,33 @@ end;
 
 procedure TestTIdSipParser.TestIsTransport;
 begin
-  Check(not TIdSipParser.IsTransport(''), '''''');
+  Check(not TIdSipParser.IsTransport(''),     '''''');
+  Check(not TIdSipParser.IsTransport('a'),     'a');
+  Check(not TIdSipParser.IsTransport('tcp;'), 'tcp;');
+  Check(    TIdSipParser.IsTransport('tcp'),  'tcp');
+  Check(    TIdSipParser.IsTransport('TCP'),  'TCP');
+  Check(    TIdSipParser.IsTransport('udp'),  'udp');
+  Check(    TIdSipParser.IsTransport('UDP'),  'UDP');
+  Check(    TIdSipParser.IsTransport('sctp'), 'sctp');
+  Check(    TIdSipParser.IsTransport('SCTP'), 'SCTP');
+  Check(    TIdSipParser.IsTransport('tls'),  'tls');
+  Check(    TIdSipParser.IsTransport('TLS'),  'TLS');
+end;
+
+procedure TestTIdSipParser.TestIsWord;
+var
+  C: Char;
+begin
+  Check(not TIdSipParser.IsWord(''), '''''');
+
+  for C := 'a' to 'z' do
+    Check(TIdSipParser.IsWord(C), C);
+  for C := '0' to '9' do
+    Check(TIdSipParser.IsWord(C), C);
+  for C := 'A' to 'Z' do
+    Check(TIdSipParser.IsWord(C), C);
+
+  Check(TIdSipParser.IsWord('-.!%*_+`''~()<>:\"/[]?{}'), '-.!%*_+`''~()<>:\"/[]?{}');
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyString;
@@ -808,7 +838,7 @@ procedure TestTIdSipParser.TestParseExtensiveRequest;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create(ExhaustiveRequest);
+  Str := TStringStream.Create(ExtensiveRequest);
   try
     Self.P.Source := Str;
 
@@ -876,6 +906,15 @@ begin
     CheckEquals(70,
                 (Self.Request.Headers[MaxForwardsHeader] as TIdSipMaxForwardsHeader).NumericValue,
                 'Max-Forwards');
+    CheckEquals(TIdSipRouteHeader.ClassName,
+                Self.Request.Headers[RouteHeader].ClassName,
+                'Route class');
+    CheckEquals('localhost <sip:127.0.0.1>',
+                Self.Request.Headers[RouteHeader].Value,
+                'Route value');
+    CheckEquals(';lr',
+                Self.Request.Headers[RouteHeader].ParamsAsString,
+                'Route params');
     CheckEquals(TIdSipFromToHeader.ClassName,
                 Self.Request.Headers[ToHeaderFull].ClassName,
                 'To class');
@@ -906,7 +945,6 @@ begin
     CheckEquals('I am not defined in RFC 3261',
                 Self.Request.Headers['X-Not-A-Header'].Value,
                 'X-Not-A-Header');
-    CheckEquals(13, Self.Request.Headers.Count, 'Headers.Count');
   finally
     Str.Free;
   end;
@@ -1512,6 +1550,34 @@ begin
                     'Unexpected exception');
     end;
 
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseRequestWithMultipleRoutes;
+const
+  Route = 'Route: <sip:127.0.0.1>'#13#10
+        + 'Route: wsfrank <sip:192.168.0.1>;low, <sip:192.168.0.1>'#13#10
+        + BasicContentLengthHeader;
+var
+  N:   Cardinal;
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(StringReplace(BasicRequest, BasicContentLengthHeader, Route, []));
+  try
+    Self.P.Source := Str;
+
+    Self.P.ParseRequest(Request);
+
+    N := Self.Request.Headers.Count - 1;
+    CheckEquals('<sip:127.0.0.1>',           Self.Request.Headers.Items[N - 3].Value, '1st Route');
+    CheckEquals('wsfrank <sip:192.168.0.1>', Self.Request.Headers.Items[N - 2].Value, '2nd Route');
+    CheckEquals('<sip:192.168.0.1>',         Self.Request.Headers.Items[N - 1].Value, '3rd Route');
+
+    CheckEquals(';low',
+                Self.Request.Headers.Items[N - 2].ParamsAsString,
+                '2nd Route''s params');
   finally
     Str.Free;
   end;

@@ -49,6 +49,17 @@ type
     procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
+  TestTIdSipCallIDHeader = class(TTestCase)
+  private
+    C: TIdSipCallIDHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestName;
+    procedure TestValue;
+  end;
+
   TestTIdSipContactHeader = class(TTestCase)
   private
     C: TIdSipContactHeader;
@@ -56,6 +67,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestName;
     procedure TestGetSetExpires;
     procedure TestGetSetQ;
     procedure TestValueWithExpires;
@@ -79,6 +91,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestName;
     procedure TestValueAbsoluteTime;
     procedure TestValueMalformedAbsoluteTime;
     procedure TestValueRelativeTime;
@@ -115,10 +128,33 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestName;
     procedure TestValueNormal;
     procedure TestValueNormalWithParam;
     procedure TestValueNonNumber;
     procedure TestValueTooBig;
+  end;
+
+  TestTIdSipRouteHeader = class(TTestCase)
+  private
+    R: TIdSipRouteHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestName;
+    procedure TestValue;
+  end;
+
+  TestTIdSipRecordRouteHeader = class(TTestCase)
+  private
+    R: TIdSipRecordRouteHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestName;
+    procedure TestValue;
   end;
 
   TestTIdSipViaHeader = class(TTestCase)
@@ -131,6 +167,7 @@ type
     procedure TestBranch;
     procedure TestIsEqualTo;
     procedure TestMaddr;
+    procedure TestName;
     procedure TestReceived;
     procedure TestTTL;
     procedure TestValue;
@@ -155,27 +192,43 @@ type
     procedure TestHeaders;
     procedure TestItems;
     procedure TestIsCallID;
+    procedure TestIsCommaSeparatedHeader;
     procedure TestIsContact;
     procedure TestIsContentLength;
     procedure TestIsCSeq;
     procedure TestIsFrom;
     procedure TestIsMaxForwards;
+    procedure TestIsRecordRoute;
+    procedure TestIsRoute;
     procedure TestIsTo;
     procedure TestIsVia;
     procedure TestSetMaxForwards;
     procedure TestValues;
   end;
 
-  TestTIdSipPath = class(TTestCase)
+  TestTIdSipViaPath = class(TTestCase)
   private
     Headers: TIdSipHeaders;
-    Path:    TIdSipPath;
+    Path:    TIdSipViaPath;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddAndLastHop;
     procedure TestFirstHop;
+  end;
+
+  TestTIdSipHeadersFilter = class(TTestCase)
+  private
+    Headers: TIdSipHeaders;
+    Filter:  TIdSipHeadersFilter;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAdd;
+    procedure TestCount;
+    procedure TestItems;
   end;
 
   TestTIdSipRequest = class(TExtendedTestCase)
@@ -185,6 +238,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
+    procedure TestAssignBad;
     procedure TestAsString;
     procedure TestReadBody;
   end;
@@ -196,6 +251,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
+    procedure TestAssignBad;
     procedure TestAsString;
     procedure TestReadBody;
   end;
@@ -210,15 +267,19 @@ begin
   Result := TTestSuite.Create('IdSipMessage tests');
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
+  Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
   Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
+  Result.AddTest(TestTIdSipRouteHeader.Suite);
+  Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
-  Result.AddTest(TestTIdSipPath.Suite);
+  Result.AddTest(TestTIdSipViaPath.Suite);
+  Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
 end;
@@ -643,6 +704,64 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipCallIDHeader                                                     *
+//******************************************************************************
+//* TestTIdSipCallIDHeader Public methods **************************************
+
+procedure TestTIdSipCallIDHeader.SetUp;
+begin
+  inherited SetUp;
+
+  C := TIdSipCallIDHeader.Create;
+end;
+
+procedure TestTIdSipCallIDHeader.TearDown;
+begin
+  C.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipCallIDHeader Published methods ***********************************
+
+procedure TestTIdSipCallIDHeader.TestName;
+begin
+  CheckEquals(CallIDHeaderFull, Self.C.Name, 'Name');
+
+  Self.C.Name := 'foo';
+  CheckEquals(CallIDHeaderFull, Self.C.Name, 'Name after set');
+end;
+
+procedure TestTIdSipCallIDHeader.TestValue;
+begin
+  Self.C.Value := 'fdjhasdfa';
+  CheckEquals('fdjhasdfa', Self.C.Value, 'fdjhasdfa');
+  Self.C.Value := 'fdjhasdfa@sda';
+  CheckEquals('fdjhasdfa@sda', Self.C.Value, 'fdjhasdfa@sda');
+
+  try
+    Self.C.Value := '';
+    Fail('Failed to bail out on empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'aaaaaaaaaaaaaaaa;';
+    Fail('Failed to bail out on non-word');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'aaaaaaaa@@bbbbb';
+    Fail('Failed to bail out optional non-word');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipContactHeader                                                    *
 //******************************************************************************
 //* TestTIdSipContactHeader Public methods *************************************
@@ -662,6 +781,14 @@ begin
 end;
 
 //* TestTIdSipContactHeader Published methods **********************************
+
+procedure TestTIdSipContactHeader.TestName;
+begin
+  CheckEquals(ContactHeaderFull, Self.C.Name, 'Name');
+
+  Self.C.Name := 'foo';
+  CheckEquals(ContactHeaderFull, Self.C.Name, 'Name after set');
+end;
 
 procedure TestTIdSipContactHeader.TestGetSetExpires;
 begin
@@ -858,6 +985,14 @@ end;
 
 //* TestTIdSipDateHeader Published methods *************************************
 
+procedure TestTIdSipDateHeader.TestName;
+begin
+  CheckEquals(DateHeader, Self.D.Name, 'Name');
+
+  Self.D.Name := 'foo';
+  CheckEquals(DateHeader, Self.D.Name, 'Name after set');
+end;
+
 procedure TestTIdSipDateHeader.TestValueAbsoluteTime;
 begin
   Self.D.Value := 'Fri, 18 Jul 2003 16:00:00 GMT';
@@ -1022,6 +1157,14 @@ end;
 
 //* TestTIdSipMaxForwardsHeader Published methods ******************************
 
+procedure TestTIdSipMaxForwardsHeader.TestName;
+begin
+  CheckEquals(MaxForwardsHeader, Self.M.Name, 'Name');
+
+  Self.M.Name := 'foo';
+  CheckEquals(MaxForwardsHeader, Self.M.Name, 'Name after set');
+end;
+
 procedure TestTIdSipMaxForwardsHeader.TestValueNormal;
 begin
   Self.M.Value := '42';
@@ -1059,6 +1202,114 @@ begin
   try
     Self.M.Value := '256';
     Fail('Failed to bail out on numeric value > 255 for Max-Forwards');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipRouteHeader                                                      *
+//******************************************************************************
+//* TestTIdSipRouteHeader Public methods ***************************************
+
+procedure TestTIdSipRouteHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := TIdSipRouteHeader.Create;
+end;
+
+procedure TestTIdSipRouteHeader.TearDown;
+begin
+  Self.R.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRouteHeader Published methods ************************************
+
+procedure TestTIdSipRouteHeader.TestName;
+begin
+  CheckEquals(RouteHeader, Self.R.Name, 'Name');
+
+  Self.R.Name := 'foo';
+  CheckEquals(RouteHeader, Self.R.Name, 'Name after set');
+end;
+
+procedure TestTIdSipRouteHeader.TestValue;
+begin
+  Self.R.Value := '<sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
+
+  Self.R.Value := 'localhost <sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
+
+  try
+    Self.R.Value := '';
+    Fail('Failed to bail on empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.R.Value := 'sip:127.0.0.1';
+    Fail('Failed to bail on lack of angle brackets');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipRecordRouteHeader                                                *
+//******************************************************************************
+//* TestTIdSipRecordRouteHeader Public methods *********************************
+
+procedure TestTIdSipRecordRouteHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := TIdSipRecordRouteHeader.Create;
+end;
+
+procedure TestTIdSipRecordRouteHeader.TearDown;
+begin
+  Self.R.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRecordRouteHeader Published methods ******************************
+
+procedure TestTIdSipRecordRouteHeader.TestName;
+begin
+  CheckEquals(RecordRouteHeader, Self.R.Name, 'Name');
+
+  Self.R.Name := 'foo';
+  CheckEquals(RecordRouteHeader, Self.R.Name, 'Name after set');
+end;
+
+procedure TestTIdSipRecordRouteHeader.TestValue;
+begin
+  Self.R.Value := '<sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
+
+  Self.R.Value := 'localhost <sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
+
+  try
+    Self.R.Value := '';
+    Fail('Failed to bail on empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.R.Value := '127.0.0.1';
+    Fail('Failed to bail on lack of angle brackets');
   except
     on EBadHeader do;
   end;
@@ -1173,6 +1424,14 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+procedure TestTIdSipViaHeader.TestName;
+begin
+  CheckEquals(ViaHeaderFull, Self.V.Name, 'Name');
+
+  Self.V.Name := 'foo';
+  CheckEquals(ViaHeaderFull, Self.V.Name, 'Name after set');
 end;
 
 procedure TestTIdSipViaHeader.TestReceived;
@@ -1387,13 +1646,14 @@ procedure TestTIdSipHeaders.TestAddAndCount;
 begin
   CheckEquals(0, Self.H.Count, 'Supposedly an empty set of headers');
   CheckEquals(TIdSipHeader.ClassName,
-              Self.H.Add(CallIdHeaderFull).ClassName,
+              Self.H.Add(OrganizationHeader).ClassName,
               'Incorrect return type');
   CheckEquals(1, Self.H.Count, 'Failed to add new header');
 end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
+  CheckEquals(TIdSipCallIdHeader.ClassName,      Self.H.Add(CallIDHeaderFull).ClassName,        CallIDHeaderFull);
   CheckEquals(TIdSipContactHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
   CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
   CheckEquals(TIdSipCSeqHeader.ClassName,        Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
@@ -1401,6 +1661,8 @@ begin
   CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
   CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
   CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
+  CheckEquals(TIdSipRecordRouteHeader.ClassName, Self.H.Add(RecordRouteHeader).ClassName,       RecordRouteHeader);
+  CheckEquals(TIdSipRouteHeader.ClassName,       Self.H.Add(RouteHeader).ClassName,             RouteHeader);
   CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
   CheckEquals(TIdSipViaHeader.ClassName,         Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;
@@ -1489,6 +1751,66 @@ begin
   Check(not TIdSipHeaders.IsCallID('Content-Length'),  'Content-Length');
 end;
 
+procedure TestTIdSipHeaders.TestIsCommaSeparatedHeader;
+begin
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(''),                         '''''');
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader('New-Header'),               'New-Header');
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptHeader),               AcceptHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptEncodingHeader),       AcceptEncodingHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptLanguageHeader),       AcceptLanguageHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AlertInfoHeader),            AlertInfoHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AllowHeader),                AllowHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AuthorizationHeader),        AuthorizationHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallIDHeaderFull),           CallIDHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallIDHeaderShort),          CallIDHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallInfoHeader),             CallInfoHeader);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ContactHeaderFull),          ContactHeaderFull);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ContactHeaderShort),         ContactHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentDispositionHeader),   ContentDispositionHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLanguageHeader),      ContentLanguageHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLengthHeaderFull),    ContentLengthHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLengthHeaderShort),   ContentLengthHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentTypeHeaderFull),      ContentTypeHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentTypeHeaderShort),     ContentTypeHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CSeqHeader),                 CSeqHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(DateHeader),                 DateHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ErrorInfoHeader),            ErrorInfoHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ExpiresHeader),              ExpiresHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(FromHeaderFull),             FromHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(FromHeaderShort),            FromHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(InReplyToHeader),            InReplyToHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MaxForwardsHeader),          MaxForwardsHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MIMEVersionHeader),          MIMEVersionHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MinExpiresHeader),           MinExpiresHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(OrganizationHeader),         OrganizationHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(PriorityHeader),             PriorityHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyRequireHeader),         ProxyRequireHeader);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(RecordRouteHeader),          RecordRouteHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ReplyToHeader),              ReplyToHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(RequireHeader),              RequireHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(RetryAfterHeader),           RetryAfterHeader);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(RouteHeader),                RouteHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ServerHeader),               ServerHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SubjectHeaderFull),          SubjectHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SubjectHeaderShort),         SubjectHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SupportedHeaderFull),        SupportedHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SupportedHeaderShort),       SupportedHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(TimestampHeader),            TimestampHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ToHeaderFull),               ToHeaderFull);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ToHeaderShort),              ToHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(UnsupportedHeader),          UnsupportedHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(UserAgentHeader),            UserAgentHeader);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ViaHeaderFull),              ViaHeaderFull);
+  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ViaHeaderShort),             ViaHeaderShort);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(WarningHeader),              WarningHeader);
+  Check(not TIdSipHeaders.IsCommaSeparatedHeader(WWWAuthenticateHeader),      WWWAuthenticateHeader);
+end;
+
 procedure TestTIdSipHeaders.TestIsContact;
 begin
   Check(    TIdSipHeaders.IsContact('Contact'),          'Contact');
@@ -1534,6 +1856,20 @@ begin
   Check(not TIdSipHeaders.IsMaxForwards(''),                '''''');
   Check(    TIdSipHeaders.IsMaxForwards('max-FORWARDS'),    'max-FORWARDS');
   Check(    TIdSipHeaders.IsMaxForwards(MaxForwardsHeader), 'MaxForwardsHeader constant');
+end;
+
+procedure TestTIdSipHeaders.TestIsRecordRoute;
+begin
+  Check(not TIdSipHeaders.IsRecordRoute(''),                '''''');
+  Check(    TIdSipHeaders.IsRecordRoute('record-rOuTe'),    'record-rOuTe');
+  Check(    TIdSipHeaders.IsRecordRoute(RecordRouteHeader), 'RecordRouteHeader constant');
+end;
+
+procedure TestTIdSipHeaders.TestIsRoute;
+begin
+  Check(not TIdSipHeaders.IsRoute(''),                '''''');
+  Check(    TIdSipHeaders.IsRoute('rOuTe'),    'rOuTe');
+  Check(    TIdSipHeaders.IsRoute(RouteHeader), 'RouteHeader constant');
 end;
 
 procedure TestTIdSipHeaders.TestIsTo;
@@ -1591,19 +1927,19 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipPath                                                             *
+//* TestTIdSipViaPath                                                             *
 //******************************************************************************
-//* TestTIdSipPath Public methods **********************************************
+//* TestTIdSipViaPath Public methods **********************************************
 
-procedure TestTIdSipPath.SetUp;
+procedure TestTIdSipViaPath.SetUp;
 begin
   inherited SetUp;
 
   Self.Headers := TIdSipHeaders.Create;
-  Self.Path := TIdSipPath.Create(Self.Headers);
+  Self.Path := TIdSipViaPath.Create(Self.Headers);
 end;
 
-procedure TestTIdSipPath.TearDown;
+procedure TestTIdSipViaPath.TearDown;
 begin
   Self.Path.Free;
   Self.Headers.Free;
@@ -1611,9 +1947,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipPath Published methods *******************************************
+//* TestTIdSipViaPath Published methods *******************************************
 
-procedure TestTIdSipPath.TestAddAndLastHop;
+procedure TestTIdSipViaPath.TestAddAndLastHop;
 var
   Hop: TIdSipViaHeader;
 begin
@@ -1628,13 +1964,14 @@ begin
 
   CheckEquals(1, Self.Path.Length, 'Has no hops after Add');
 
-  CheckEquals('127.0.0.1', Self.Path.LastHop.Host,       'Host');
-  CheckEquals(5060,        Self.Path.LastHop.Port,       'Port');
-  CheckEquals('SIP/2.0',   Self.Path.LastHop.SipVersion, 'SipVersion');
-  Check      (sttSCTP =    Self.Path.LastHop.Transport,  'Transport');
+  CheckEquals(ViaHeaderFull, Self.Path.LastHop.Name,       'Name');
+  CheckEquals('127.0.0.1',   Self.Path.LastHop.Host,       'Host');
+  CheckEquals(5060,          Self.Path.LastHop.Port,       'Port');
+  CheckEquals('SIP/2.0',     Self.Path.LastHop.SipVersion, 'SipVersion');
+  Check      (sttSCTP =      Self.Path.LastHop.Transport,  'Transport');
 end;
 
-procedure TestTIdSipPath.TestFirstHop;
+procedure TestTIdSipViaPath.TestFirstHop;
 var
   Hop: TIdSipViaHeader;
 begin
@@ -1667,6 +2004,73 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipHeadersFilter                                                    *
+//******************************************************************************
+//* TestTIdSipHeadersFilter Public methods *************************************
+
+procedure TestTIdSipHeadersFilter.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers := TIdSipHeaders.Create;
+
+  // Based on TestIdSipParser's BasicRequest
+  Self.Headers.Add(MaxForwardsHeader).Value       := '70';
+  Self.Headers.Add(ViaHeaderFull).Value           := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
+  Self.Headers.Add(FromHeaderFull).Value          := 'Case sip:case@fried.neurons.org;1928301774';
+  Self.Headers.Add(CallIDHeaderFull).Value        := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.Headers.Add(CSeqHeader).Value              := '314159 INVITE';
+  Self.Headers.Add(ContactHeaderFull).Value       := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Headers.Add(ContentTypeHeaderFull).Value   := 'text/plain';
+  Self.Headers.Add(ContentLengthHeaderFull).Value := '29';
+  Self.Headers.Add(RouteHeader).Value             := 'localhost <sip:127.0.0.1>';
+
+  Self.Filter := TIdSipHeadersFilter.Create(Self.Headers, RouteHeader);
+end;
+
+procedure TestTIdSipHeadersFilter.TearDown;
+begin
+  Self.Filter.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipHeadersFilter Published methods **********************************
+
+procedure TestTIdSipHeadersFilter.TestAdd;
+var
+  Route: TIdSipRouteHeader;
+begin
+  Route := TIdSipRouteHeader.Create;
+
+  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+  Self.Filter.Add(Route);
+  CheckEquals(3, Self.Filter.Count, 'Count after Add');
+end;
+
+procedure TestTIdSipHeadersFilter.TestCount;
+begin
+  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+  CheckEquals(4, Self.Filter.Count, 'Count with newly added headers');
+end;
+
+procedure TestTIdSipHeadersFilter.TestItems;
+begin
+  CheckEquals('wsfrank <sip:192.168.1.43>', Self.Filter.Items[0].Value, '1st Route');
+  CheckEquals('localhost <sip:127.0.0.1>',  Self.Filter.Items[1].Value, '2nd Route');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+  CheckEquals('<sip:127.0.0.2>',  Self.Filter.Items[2].Value, '3rd Route');
+  CheckEquals('<sip:127.0.0.3>',  Self.Filter.Items[3].Value, '4h Route');
+end;
+
+//******************************************************************************
 //* TestTIdSipRequest                                                          *
 //******************************************************************************
 //* TestTIdSipRequest Public methods *******************************************
@@ -1686,6 +2090,52 @@ begin
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
+
+procedure TestTIdSipRequest.TestAssign;
+var
+  R: TIdSipRequest;
+  I: Integer;
+begin
+  R := TIdSipRequest.Create;
+  try
+    R.SIPVersion := 'SIP/1.5';
+    R.Method := 'NewMethod';
+    R.Request := 'sip:wintermute@tessier-ashpool.co.lu';
+    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.ContentLength := 5;
+    R.Body := 'hello';
+
+    Self.Request.Assign(R);
+    CheckEquals(R.SIPVersion, Self.Request.SipVersion, 'SIP-Version');
+    CheckEquals(R.Method, Self.Request.Method, 'Method');
+    CheckEquals(R.Request, Self.Request.Request, 'Request-URI');
+    CheckEquals(R.Headers.Count, Self.Request.Headers.Count, 'Header count');
+
+    for I := 0 to R.Headers.Count - 1 do
+      CheckEquals(R.Headers.Items[0].Value,
+                  Self.Request.Headers.Items[0].Value,
+                  'Header ' + IntToStr(I));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestAssignBad;
+var
+  P: TPersistent;
+begin
+  P := TPersistent.Create;
+  try
+    try
+      Request.Assign(P);
+      Fail('Failed to bail out assigning a TObject to a TIdSipRequest');
+    except
+      on EConvertError do;
+    end;
+  finally
+    P.Free;
+  end;
+end;
 
 procedure TestTIdSipRequest.TestAsString;
 var
@@ -1785,6 +2235,52 @@ begin
 end;
 
 //* TestTIdSipResponse Published methods ***************************************
+
+procedure TestTIdSipResponse.TestAssign;
+var
+  R: TIdSipResponse;
+  I: Integer;
+begin
+  R := TIdSipResponse.Create;
+  try
+    R.SIPVersion := 'SIP/1.5';
+    R.StatusCode := 101;
+    R.StatusText := 'Hehaeha I''ll get back to you';
+    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.ContentLength := 5;
+    R.Body := 'hello';
+
+    Self.Response.Assign(R);
+    CheckEquals(R.SIPVersion, Self.Response.SipVersion, 'SIP-Version');
+    CheckEquals(R.StatusCode, Self.Response.StatusCode, 'Status-Code');
+    CheckEquals(R.StatusText, Self.Response.StatusText, 'Status-Text');
+    CheckEquals(R.Headers.Count, Self.Response.Headers.Count, 'Header count');
+
+    for I := 0 to R.Headers.Count - 1 do
+      CheckEquals(R.Headers.Items[0].Value,
+                  Self.Response.Headers.Items[0].Value,
+                  'Header ' + IntToStr(I));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestAssignBad;
+var
+  P: TPersistent;
+begin
+  P := TPersistent.Create;
+  try
+    try
+      Response.Assign(P);
+      Fail('Failed to bail out assigning a TObject to a TIdSipResponse');
+    except
+      on EConvertError do;
+    end;
+  finally
+    P.Free;
+  end;
+end;
 
 procedure TestTIdSipResponse.TestAsString;
 var
