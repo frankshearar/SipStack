@@ -876,7 +876,8 @@ type
     function  FirstLine: String; virtual; abstract;
     function  HasMalformedHeaders: Boolean;
     function  HasMalformedFirstLine: Boolean; virtual;
-    function  MatchRequest(InitialRequest: TIdSipRequest): Boolean; virtual; abstract;
+    function  MatchRequest(InitialRequest: TIdSipRequest;
+                           UseCSeqMethod: Boolean): Boolean; virtual; abstract;
     function  MissingRequiredHeaders: Boolean; virtual;
     procedure ParseCompoundHeader(const Header: String;
                                   Parms: String);
@@ -954,15 +955,18 @@ type
 
     function  CSeqMatchesMethod: Boolean;
     function  GetMaxForwards: Byte;
-    function  MatchSipRFC2543Request(InitialRequest: TIdSipRequest): Boolean;
-    function  MatchSipRFC3261Request(InitialRequest: TIdSipRequest): Boolean;
+    function  MatchSipRFC2543Request(InitialRequest: TIdSipRequest;
+                                     UseCSeqMethod: Boolean): Boolean;
+    function  MatchSipRFC3261Request(InitialRequest: TIdSipRequest;
+                                     UseCSeqMethod: Boolean): Boolean;
     procedure SetMaxForwards(Value: Byte);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
-    function  MatchRequest(InitialRequest: TIdSipRequest): Boolean; override;
+    function  MatchRequest(InitialRequest: TIdSipRequest;
+                           UseCSeqMethod: Boolean): Boolean; override;
     function  MissingRequiredHeaders: Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
@@ -992,6 +996,7 @@ type
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
+    function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  RequiresResponse: Boolean;
 
     property MaxForwards: Byte                  read GetMaxForwards write SetMaxForwards;
@@ -1009,7 +1014,8 @@ type
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
-    function  MatchRequest(InitialRequest: TIdSipRequest): Boolean; override;
+    function  MatchRequest(InitialRequest: TIdSipRequest;
+                           UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
     class function InResponseTo(Request: TIdSipRequest;
@@ -5630,7 +5636,12 @@ begin
   // If Self represents an initial request for a transaction, does Msg belong
   // to the same transaction?
 
-  Result := Msg.MatchRequest(Self);
+  Result := Msg.MatchRequest(Self, true);
+end;
+
+function TIdSipRequest.MatchCancel(Cancel: TIdSipRequest): Boolean;
+begin
+  Result := Cancel.MatchRequest(Self, false);
 end;
 
 function TIdSipRequest.RequiresResponse: Boolean;
@@ -5687,13 +5698,14 @@ begin
   Result := false;
 end;
 
-function TIdSipRequest.MatchRequest(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipRequest.MatchRequest(InitialRequest: TIdSipRequest;
+                                    UseCSeqMethod: Boolean): Boolean;
 begin
   // cf. RFC 3261 section 17.2.3
   if Self.LastHop.IsRFC3261Branch then
-    Result := Self.MatchSipRFC3261Request(InitialRequest)
+    Result := Self.MatchSipRFC3261Request(InitialRequest, UseCSeqMethod)
   else
-    Result := Self.MatchSipRFC2543Request(InitialRequest)
+    Result := Self.MatchSipRFC2543Request(InitialRequest, UseCSeqMethod);
 end;
 
 function TIdSipRequest.MissingRequiredHeaders: Boolean;
@@ -5757,7 +5769,8 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
-function TIdSipRequest.MatchSipRFC2543Request(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipRequest.MatchSipRFC2543Request(InitialRequest: TIdSipRequest;
+                                              UseCSeqMethod: Boolean): Boolean;
 begin
   // NOTE BENE:
   // This DOES NOT consistitute a full match! If Self.IsAck then we also
@@ -5769,7 +5782,6 @@ begin
          and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
          and (Self.From.Tag = InitialRequest.From.Tag)
          and (Self.CallID = InitialRequest.CallID)
-         and  Self.CSeq.Equals(InitialRequest.CSeq)
          and  Self.LastHop.Equals(InitialRequest.LastHop)
   else if Self.IsAck then
     Result := RequestUri.Equals(InitialRequest.RequestUri)
@@ -5782,16 +5794,25 @@ begin
          and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
          and (Self.From.Tag = InitialRequest.From.Tag)
          and (Self.CallID = InitialRequest.CallID)
-         and  Self.CSeq.Equals(InitialRequest.CSeq)
          and  Self.LastHop.Equals(InitialRequest.LastHop);
+
+  if not Self.IsAck then begin
+    if UseCSeqMethod then
+      Result := Result
+            and Self.CSeq.Equals(InitialRequest.CSeq)
+    else
+      Result := Result
+            and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo);
+  end;
 end;
 
-function TIdSipRequest.MatchSipRFC3261Request(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipRequest.MatchSipRFC3261Request(InitialRequest: TIdSipRequest;
+                                              UseCSeqMethod: Boolean): Boolean;
 begin
   Result := (Self.LastHop.Branch = InitialRequest.LastHop.Branch)
              and (Self.LastHop.SentBy = InitialRequest.LastHop.SentBy);
 
-  if not Self.IsCancel then begin
+  if UseCseqMethod then begin
     if Self.IsACK then
       Result := Result and InitialRequest.IsInvite
     else
@@ -6054,7 +6075,8 @@ begin
   Result := false;
 end;
 
-function TIdSipResponse.MatchRequest(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipResponse.MatchRequest(InitialRequest: TIdSipRequest;
+                                     UseCSeqMethod: Boolean): Boolean;
 begin
   // cf. RFC 3261 section 17.1.3
   Result := not Self.Path.IsEmpty

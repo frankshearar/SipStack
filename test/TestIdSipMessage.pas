@@ -28,7 +28,8 @@ type
   TIdSipTrivialMessage = class(TIdSipMessage)
   protected
     function  FirstLine: String; override;
-    function  MatchRequest(Request: TIdSipRequest): Boolean; override;
+    function  MatchRequest(Request: TIdSipRequest;
+                           UseCSeqMethod: Boolean = true): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
     function  Equals(Msg: TIdSipMessage): Boolean; override;
@@ -145,6 +146,9 @@ type
     procedure TestIsRegister;
     procedure TestIsRequest;
     procedure TestMatchRFC2543Options;
+    procedure TestMatchRFC2543Cancel;
+    procedure TestMatchCancel;
+    procedure TestMatchCancelAgainstAck;
     procedure TestNewRequestHasContentLength;
     procedure TestParse;
     procedure TestParseCompoundHeader;
@@ -370,7 +374,8 @@ begin
   Result := '';
 end;
 
-function TIdSipTrivialMessage.MatchRequest(Request: TIdSipRequest): Boolean;
+function TIdSipTrivialMessage.MatchRequest(Request: TIdSipRequest;
+                                           UseCSeqMethod: Boolean = true): Boolean;
 begin
   Result := false;
 end;
@@ -1920,10 +1925,78 @@ begin
     Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
 
     Check(Options.Match(Options),
-          'Even sipsak''s (malformed - look at the Via branch & Sip-Version!) '
-        + 'OPTIONS message should match itself!');
+          'An RFC 2543 OPTIONS message should match itself!');
   finally
     Options.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestMatchRFC2543Cancel;
+var
+  Cancel: TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Method := MethodInvite;
+    Invite.RequestUri.Uri := 'sip:franks@192.168.0.254';
+    Invite.AddHeader(ViaHeaderFull).Value  := 'SIP/2.0/UDP roke.angband.za.org:3442';
+    Invite.From.Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Invite.ToHeader.Value := '<sip:franks@192.168.0.254>';
+    Invite.CallID := '1631106896@roke.angband.za.org';
+    Invite.CSeq.Value := '1 Invite';
+    Invite.AddHeader(ContactHeaderFull).Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Invite.ContentLength := 0;
+    Invite.MaxForwards := 0;
+    Invite.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
+
+    Cancel := Invite.CreateCancel;
+    try
+      Check(Invite.MatchCancel(Cancel), 'Matching CANCEL');
+
+      Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
+      Check(not Invite.MatchCancel(Cancel), 'Non-matching CANCEL');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestMatchCancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.Request.CreateCancel;
+  try
+    Check(Self.Request.MatchCancel(Cancel), 'Matching CANCEL');
+
+    Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
+    Check(not Self.Request.MatchCancel(Cancel), 'Non-matching CANCEL');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestMatchCancelAgainstAck;
+var
+  Ack:    TIdSipRequest;
+  Cancel: TIdSipRequest;
+begin
+  Ack := Self.Request.AckFor(Self.Response);
+  try
+    Cancel := Self.Request.CreateCancel;
+    try
+      Check(Ack.MatchCancel(Cancel), '"Matching" CANCEL');
+
+      Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
+      Check(not Ack.MatchCancel(Cancel), 'Non-"matching" CANCEL');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Ack.Free;
   end;
 end;
 

@@ -316,8 +316,6 @@ type
     KnownRegistrars:      TObjectList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
-    function  AddFork(RootSession: TIdSipOutboundSession;
-                      Response: TIdSipResponse): TIdSipOutboundSession;
     function  AddInboundAction(Request: TIdSipRequest;
                                Receiver: TIdSipTransport): TIdSipAction;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
@@ -331,7 +329,6 @@ type
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
-    function  ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
     function  GetContact: TIdSipContactHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
@@ -386,7 +383,6 @@ type
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
-    procedure RemoveAction(Action: TIdSipAction);
     function  SessionCount: Integer;
     procedure TerminateAllCalls;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -506,8 +502,7 @@ type
   public
     class function Method: String; override;
 
-    function  IsOptions: Boolean; override;
-    procedure Terminate; override;
+    function IsOptions: Boolean; override;
   end;
 
   TIdSipInboundOptions = class(TIdSipOptions)
@@ -535,8 +530,7 @@ type
   public
     class function Method: String; override;
 
-    function  IsRegistration: Boolean; override;
-    procedure Terminate; override;
+    function IsRegistration: Boolean; override;
   end;
 
   TIdSipInboundRegistration = class(TIdSipRegistration)
@@ -634,7 +628,7 @@ type
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
     procedure ProcessBye(Request: TIdSipRequest);
-    procedure ProcessCancel(Request: TIdSipRequest);
+    procedure ReceiveCancel(Request: TIdSipRequest);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
     procedure TerminateOpenTransaction(Request: TIdSipRequest);
@@ -743,7 +737,6 @@ type
                    const MimeType: String);
     procedure Cancel;
     function  CanForkOn(Response: TIdSipResponse): Boolean;
-    function  Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
     function  IsInboundCall: Boolean; override;
     procedure Terminate; override;
   end;
@@ -1861,20 +1854,6 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.RemoveAction(Action: TIdSipAction);
-begin
-//  if not Action.IsTerminated then
-//    Action.Terminate;
-
-  Self.ActionLock.Acquire;
-  try
-    Self.Actions.Remove(Action);
-  finally
-    Self.ActionLock.Release;
-  end;
-  Self.NotifyOfChange;
-end;
-
 function TIdSipUserAgentCore.SessionCount: Integer;
 var
   I: Integer;
@@ -1968,9 +1947,6 @@ begin
   if Response.IsOK then begin
     Action := Self.FindAction(Response);
 
-    if not Assigned(Action) then
-      Action := Self.ForkCall(Response);
-
     if Assigned(Action) then
       Action.ReceiveResponse(Response, Receiver.IsSecure);
   end
@@ -2041,22 +2017,6 @@ function TIdSipUserAgentCore.ActionAt(Index: Integer): TIdSipAction;
 begin
   // Precondition: you've invoked Self.ActionLock.Acquire
   Result := Self.Actions[Index] as TIdSipAction;
-end;
-
-function TIdSipUserAgentCore.AddFork(RootSession: TIdSipOutboundSession;
-                                     Response: TIdSipResponse): TIdSipOutboundSession;
-begin
-  // RFC 3261, section 13.2.2.4
-
-  Self.ActionLock.Acquire;
-  try
-    Result := RootSession.Fork(Response);
-    Self.Actions.Add(Result);
-  finally
-    Self.ActionLock.Release;
-  end;
-
-  Self.NotifyOfChange;
 end;
 
 function TIdSipUserAgentCore.AddInboundAction(Request: TIdSipRequest;
@@ -2170,42 +2130,6 @@ begin
       else
         Inc(I);
     end;
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
-function TIdSipUserAgentCore.ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
-var
-  Root:    TIdSipOutboundSession;
-  I:       Integer;
-  Session: TIdSipOutboundSession;
-begin
-  // We received a second (or third, or...) 2xx in response to an INVITE.
-  // We create a new outbound session. This means we need to find the
-  // INVITE.
-
-  Result := nil;
-  Root   := nil;
-  Self.ActionLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Actions.Count) and not Assigned(Root) do begin
-      if (Self.Actions[I] is TIdSipSession) and
-        (Self.Actions[I] as TIdSipSession).IsInboundCall then Inc(I)
-      else begin
-        Session := Self.Actions[I] as TIdSipOutboundSession;
-        if Session.CanForkOn(Response) then
-          Root := Session
-        else
-          Inc(I);
-      end;
-    end;
-
-    if Assigned(Root) then begin
-      Result := Self.AddFork(Root, Response);
-    end;
-
   finally
     Self.ActionLock.Release;
   end;
@@ -2524,11 +2448,15 @@ end;
 
 function TIdSipAction.Match(Msg: TIdSipMessage): Boolean;
 begin
-  Result := Self.CurrentRequest.Match(Msg);
+  if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
+    Result := Self.CurrentRequest.MatchCancel(Msg as TIdSipRequest)
+  else
+    Result := Self.CurrentRequest.Match(Msg);
 end;
 
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
 begin
+//  if Request.IsCancel then Self.ReceiveCancel(Request);
 end;
 
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
@@ -2823,11 +2751,6 @@ begin
   Result := true;
 end;
 
-procedure TIdSipOptions.Terminate;
-begin
-  Self.UA.RemoveAction(Self);
-end;
-
 //* TIdSipOptions Protected methods ********************************************
 
 function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
@@ -2951,11 +2874,6 @@ end;
 function TIdSipRegistration.IsRegistration: Boolean;
 begin
   Result := true;
-end;
-
-procedure TIdSipRegistration.Terminate;
-begin
-  Self.UA.RemoveAction(Self);
 end;
 
 //* TIdSipRegistration Protected methods ***************************************
@@ -3554,14 +3472,18 @@ function TIdSipSession.Match(Msg: TIdSipMessage): Boolean;
 var
   DialogID: TIdSipDialogID;
 begin
-  DialogID := Self.CreateDialogIDFrom(Msg);
-  try
-   if Self.DialogEstablished then
-     Result := Self.Dialog.ID.Equals(DialogID)
-   else
-     Result := Self.CurrentRequest.Match(Msg);
-  finally
-    DialogID.Free;
+  if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
+    Result := Self.CurrentRequest.MatchCancel(Msg as TIdSipRequest)
+  else begin
+    DialogID := Self.CreateDialogIDFrom(Msg);
+    try
+     if Self.DialogEstablished then
+       Result := Self.Dialog.ID.Equals(DialogID)
+     else
+       Result := Self.CurrentRequest.Match(Msg);
+    finally
+      DialogID.Free;
+    end;
   end;
 end;
 
@@ -3590,7 +3512,7 @@ begin
     Self.ProcessBye(Request);
   end
   else if Request.IsCancel then
-    Self.ProcessCancel(Request)
+    Self.ReceiveCancel(Request)
   else if Request.IsInvite then begin
     // No dialog? For an inbound call? Then do nothing - Request represents
     // the initial request that caused the creation of this session.
@@ -3675,8 +3597,6 @@ begin
   finally
     Notification.Free;
   end;
-
-  Self.UA.RemoveAction(Self);
 end;
 
 procedure TIdSipSession.NotifyOfEstablishedSession;
@@ -3754,9 +3674,10 @@ begin
   Self.NotifyOfEndedSession(RemoteHangUp);
 end;
 
-procedure TIdSipSession.ProcessCancel(Request: TIdSipRequest);
+procedure TIdSipSession.ReceiveCancel(Request: TIdSipRequest);
 begin
   Self.NotifyOfEndedSession(RemoteCancel);
+  Self.MarkAsTerminated;
 end;
 
 procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest);
@@ -4049,11 +3970,6 @@ function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
 begin
   Result := (Self.CurrentRequest.CallID = Response.CallID)
         and (Self.CurrentRequest.From.Tag = Response.From.Tag);
-end;
-
-function TIdSipOutboundSession.Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
-begin
-  Result := TIdSipOutboundSession.Create(Self.UA, Self.CurrentRequest);
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;

@@ -137,8 +137,6 @@ type
     procedure TestDispatchToCorrectSession;
     procedure TestDispatchAckToSession;
     procedure TestDoNotDisturb;
-    procedure TestFork;
-    procedure TestForkWithProvisionalResponse;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
     procedure TestInviteExpires;
@@ -160,7 +158,6 @@ type
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
     procedure TestRejectUnsupportedSipVersion;
-    procedure TestRemoveAction;
     procedure TestRemoveObserver;
     procedure TestRemoveUserAgentListener;
     procedure TestSetContact;
@@ -382,7 +379,6 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
-    procedure TestFork;
     procedure TestHangUp;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
@@ -1861,49 +1857,6 @@ begin
               'New session created despite Do Not Disturb');
 end;
 
-procedure TestTIdSipUserAgentCore.TestFork;
-var
-  Invite:       TIdSipRequest;
-  OrigAckCount: Cardinal;
-begin
-  OrigAckCount := Self.Dispatcher.Transport.ACKCount;
-  Self.Core.Call(Self.Destination, '', '');
-
-  Invite := TIdSipRequest.Create;
-  try
-    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
-    Self.SimulateRemoteAccept(Invite);
-    Self.SimulateRemoteAccept(Invite);
-  finally
-    Invite.Free;
-  end;
-
-  CheckEquals(2,
-              Self.Core.SessionCount,
-              'A fork must create multiple dialogs, hence multiple sessions');
-  CheckEquals(2 + OrigAckCount,
-              Self.Dispatcher.Transport.AckCount,
-              'UAS MUST ACK every 2xx response to an INVITE - cf RFC 3261, '
-            + 'section 13.2.2.4');
-end;
-
-procedure TestTIdSipUserAgentCore.TestForkWithProvisionalResponse;
-var
-  OrigAckCount: Cardinal;
-begin
-  OrigAckCount := Self.Dispatcher.Transport.ACKCount;
-  Self.Core.Call(Self.Destination, '', '');
-  Self.SimulateRemoteRinging(Self.Dispatcher.Transport.LastRequest);
-  Self.SimulateRemoteRinging(Self.Dispatcher.Transport.LastRequest);
-
-  CheckEquals(1,
-              Self.Core.SessionCount,
-              'A provisional response doesn''t make a fork');
-  CheckEquals(OrigAckCount,
-              Self.Dispatcher.Transport.AckCount,
-              'UAS mustn''t ACK provisional responses');
-end;
-
 procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
 begin
   Self.Invite.Headers.Remove(Self.Invite.FirstHeader(ContentEncodingHeaderFull));
@@ -2344,23 +2297,6 @@ begin
   CheckEquals(SIPSIPVersionNotSupported,
               Response.StatusCode,
               'Status-Code');
-end;
-
-procedure TestTIdSipUserAgentCore.TestRemoveAction;
-var
-  Registration:      TIdSipOutboundRegistration;
-  RegistrationCount: Cardinal;
-begin
-  // Yes, this seems crazy. The fact that a SipRegistration
-  // gets created concerns us, not where we're sending the
-  // registration.
-  Registration := Self.Core.RegisterWith(Self.Core.Contact.Address);
-
-  RegistrationCount := Self.Core.RegistrationCount;
-  Self.Core.RemoveAction(Registration);
-  CheckEquals(RegistrationCount - 1,
-              Self.Core.RegistrationCount,
-              'Registration wasn''t removed');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRemoveObserver;
@@ -3735,9 +3671,8 @@ begin
 
   Check(Self.OnEndedSessionFired,
         'No notification of ended session');
-
-  Check(Self.Core.SessionCount < SessionCount,
-        'Session not torn down because of CANCEL');
+  Check(Self.Session.IsTerminated,
+        'Session not marked as terminated');
 end;
 
 procedure TestTIdSipInboundSession.TestForwardCall;
@@ -4398,38 +4333,6 @@ begin
   Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
   Check(Self.Dispatcher.Transport.LastRequest.ContentDisposition.IsSession,
         'Content-Disposition');
-end;
-
-procedure TestTIdSipOutboundSession.TestFork;
-var
-  Fork: TIdSipOutboundSession;
-  Ok:   TIdSipResponse;
-begin
-  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
-
-  Ok := Self.Core.CreateResponse(Self.Invite, SIPOK);
-  try
-    CheckNotEquals(Ok.ToHeader.Tag,
-                   Self.Session.Dialog.ID.RemoteTag,
-                   'Sanity check on the To tag');
-
-    Fork := Self.Session.Fork(Ok);
-    try
-      CheckEquals(Self.Session.CurrentRequest.CallID,
-                  Fork.CurrentRequest.CallID,
-                  'Call-ID');
-      CheckEquals(Self.Session.CurrentRequest.From.Tag,
-                  Fork.CurrentRequest.From.Tag,
-                  'From tag');
-      CheckEquals(Self.Session.CurrentRequest.LastHop.Branch,
-                  Fork.CurrentRequest.LastHop.Branch,
-                  'Topmost Via branch');
-    finally
-      Fork.Free;
-    end;
-  finally
-    Ok.Free;
-  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestHangUp;

@@ -84,11 +84,8 @@ type
                                    Receiver: TIdSipTransport); overload;
     procedure DeliverToTransaction(Response: TIdSipResponse;
                                    Receiver: TIdSipTransport); overload;
-    function  FindCancellingTransaction(Cancel: TIdSipRequest): TIdSipClientInviteTransaction;
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
-    procedure RejectUnmatchedCancel(Request: TIdSipRequest;
-                                    Receiver: TIdSipTransport);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
@@ -192,10 +189,6 @@ type
     procedure NotifyOfResponse(R: TIdSipResponse;
                                Receiver: TIdSipTransport);
     procedure NotifyOfTermination;
-    procedure ReceiveCancel(Cancel: TIdSipRequest;
-                            T: TIdSipTransport); virtual;
-    procedure ReceiveNonCancel(R: TIdSipRequest;
-                            T: TIdSipTransport); virtual;
     procedure SetState(Value: TIdSipTransactionState); virtual;
     procedure TryResendInitialRequest;
     procedure TrySendRequest(R: TIdSipRequest);
@@ -221,7 +214,7 @@ type
     function  Match(Msg: TIdSipMessage): Boolean;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
-                             T: TIdSipTransport); 
+                             T: TIdSipTransport); virtual;
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); virtual;
     procedure SendRequest; virtual;
@@ -295,10 +288,6 @@ type
     procedure TrySend100Response(R: TIdSipRequest);
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
-    procedure ReceiveCancel(Cancel: TIdSipRequest;
-                            T: TIdSipTransport); override;
-    procedure ReceiveNonCancel(R: TIdSipRequest;
-                               T: TIdSipTransport); override;
     procedure SetState(Value: TIdSipTransactionState); override;
     procedure TrySendResponse(R: TIdSipResponse); override;
   public
@@ -311,6 +300,8 @@ type
     procedure FireTimerI;
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
+    procedure ReceiveRequest(R: TIdSipRequest;
+                             T: TIdSipTransport); override;
     procedure SendResponse(R: TIdSipResponse); override;
   end;
 
@@ -323,8 +314,6 @@ type
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
-    procedure ReceiveNonCancel(R: TIdSipRequest;
-                               T: TIdSipTransport); override;
     procedure TrySendResponse(R: TIdSipResponse); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
@@ -334,6 +323,8 @@ type
     procedure FireTimerJ;
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
+    procedure ReceiveRequest(R: TIdSipRequest;
+                             T: TIdSipTransport); override;
     procedure SendResponse(R: TIdSipResponse); override;
   end;
 
@@ -344,22 +335,19 @@ type
 
   TIdSipClientInviteTransactionTimer = class(TObject)
   private
-    fCancelTimerInterval:  Cardinal;
-    fCancelTimerIsRunning: Boolean;
-    fTimerAInterval:       Cardinal;
-    fTimerAIsRunning:      Boolean;
-    fTimerBInterval:       Cardinal;
-    fTimerBIsRunning:      Boolean;
-    fTimerDInterval:       Cardinal;
-    fTimerDIsRunning:      Boolean;
-    Lock:                  TCriticalSection;
-    Owner:                 TIdSipClientInviteTransaction;
-    State:                 TIdSipTransactionState;
-    Timer:                 TIdTimerQueue;
+    fTimerAInterval:  Cardinal;
+    fTimerAIsRunning: Boolean;
+    fTimerBInterval:  Cardinal;
+    fTimerBIsRunning: Boolean;
+    fTimerDInterval:  Cardinal;
+    fTimerDIsRunning: Boolean;
+    Lock:             TCriticalSection;
+    Owner:            TIdSipClientInviteTransaction;
+    State:            TIdSipTransactionState;
+    Timer:            TIdTimerQueue;
 
     procedure OnException(T: TIdBaseThread;
                           E: Exception);
-    procedure OnCancelTimer(Sender: TObject);
     procedure OnTimerA(Sender: TObject);
     procedure OnTimerB(Sender: TObject);
     procedure OnTimerD(Sender: TObject);
@@ -368,17 +356,12 @@ type
                        T1: Cardinal = DefaultT1);
     destructor  Destroy; override;
 
-    function  CancelTimerInterval: Cardinal;
-    function  CancelTimerIsRunning: Boolean;
     procedure ChangeState(NewState: TIdSipTransactionState);
-    procedure FireCancelTimer;
     procedure FireTimerA;
     procedure Start;
-    procedure StartCancelTimer;
     procedure StartTimerA;
     procedure StartTimerB;
     procedure StartTimerD;
-    procedure StopCancelTimer;
     procedure StopTimerA;
     procedure StopTimerB;
     procedure StopTimerD;
@@ -392,11 +375,9 @@ type
 
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
   private
-    Cancelled: Boolean;
-    Timer:     TIdSipClientInviteTransactionTimer;
+    Timer: TIdSipClientInviteTransactionTimer;
 
     procedure ChangeToCalling;
-    procedure SendCancel;
     procedure TrySendACK(R: TIdSipResponse);
   protected
     procedure ChangeToCompleted(R: TIdSipResponse;
@@ -407,8 +388,6 @@ type
                        InitialRequest: TIdSipRequest); override;
     destructor  Destroy; override;
 
-    procedure Cancel;
-    procedure FireCancelTimer;
     procedure FireTimerA;
     procedure FireTimerB;
     procedure FireTimerD;
@@ -738,15 +717,8 @@ end;
 procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest);
 var
   Tran: TIdSipTransaction;
-  ClientInvite: TIdSipClientInviteTransaction;
 begin
-  if Request.IsCancel then begin
-    ClientInvite := Self.FindCancellingTransaction(Request);
-
-    if Assigned(ClientInvite) then
-      ClientInvite.Cancel;
-  end
-  else if Request.IsAck then begin
+  if Request.IsAck then begin
     // Since ACKs to 200s live outside of transactions, we must send the
     // ACK directly to the transport layer.
     Self.Send(Request);
@@ -928,8 +900,6 @@ begin
     if Request.IsAck then begin
       Self.NotifyListenersOfRequest(Request, Receiver);
     end
-    else if Request.IsCancel then
-      Self.RejectUnmatchedCancel(Request, Receiver)
     else begin
       Tran := Self.AddServerTransaction(Request, Receiver);
       Tran.ReceiveRequest(Request, Receiver);
@@ -947,13 +917,14 @@ begin
   if Assigned(Tran) then
     Tran.ReceiveResponse(Response, Receiver)
   else begin
+    // Sometimes responses won't match a transaction. For instance, a UA A might
+    // send an INVITE to B. B responds with a 200, which terminates that INVITE
+    // transaction. For some reason, A's ACK never reaches B, so B resends the
+    // 200. That arrives here, in this clause - even though the 200 doesn't
+    // match a transaction, we most definitely do want the Transaction-User
+    // layer to see this message!
     Self.NotifyListenersOfResponse(Response, Receiver);
   end;
-end;
-
-function TIdSipTransactionDispatcher.FindCancellingTransaction(Cancel: TIdSipRequest): TIdSipClientInviteTransaction;
-begin
-  Result := Self.FindTransaction(Cancel, true) as TIdSipClientInviteTransaction;
 end;
 
 function TIdSipTransactionDispatcher.FindTransaction(R: TIdSipMessage;
@@ -974,20 +945,6 @@ begin
        Inc(I);
   finally
     Self.TransactionLock.Release;
-  end;
-end;
-
-procedure TIdSipTransactionDispatcher.RejectUnmatchedCancel(Request: TIdSipRequest;
-                                                            Receiver: TIdSipTransport);
-var
-  NoTranResponse: TIdSipResponse;
-begin
-  NoTranResponse := TIdSipResponse.InResponseTo(Request,
-                                                SIPCallLegOrTransactionDoesNotExist);
-  try
-    Receiver.Send(NoTranResponse);
-  finally
-    NoTranResponse.Free;
   end;
 end;
 
@@ -1087,10 +1044,7 @@ end;
 procedure TIdSipTransaction.ReceiveRequest(R: TIdSipRequest;
                                            T: TIdSipTransport);
 begin
-  if R.IsCancel then
-    Self.ReceiveCancel(R, T)
-  else
-    Self.ReceiveNonCancel(R, T);
+  // By default we do nothing
 end;
 
 procedure TIdSipTransaction.ReceiveResponse(R: TIdSipResponse;
@@ -1272,25 +1226,6 @@ begin
   // WARNING - I am not sure if this is safe or even sane. We're
   // asking an object to commit suicide.
   Self.Dispatcher.RemoveTransaction(Self);
-end;
-
-procedure TIdSipTransaction.ReceiveCancel(Cancel: TIdSipRequest;
-                                          T: TIdSipTransport);
-var
-  OkResponse: TIdSipResponse;
-begin
-  OkResponse := TIdSipResponse.InResponseTo(Cancel, SIPOK);
-  try
-    Self.TrySendResponse(OkResponse);
-  finally
-    OkResponse.Free;
-  end;
-end;
-
-procedure TIdSipTransaction.ReceiveNonCancel(R: TIdSipRequest;
-                                             T: TIdSipTransport);
-begin
-  // By default do nothing
 end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
@@ -1573,47 +1508,9 @@ begin
   Result := false;
 end;
 
-procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
+procedure TIdSipServerInviteTransaction.ReceiveRequest(R: TIdSipRequest;
+                                                       T: TIdSipTransport);
 begin
-  Self.TrySendResponse(R);
-  if (Self.State = itsProceeding) then begin
-    case (R.StatusCode div 100) of
-      1:    Self.ChangeToProceeding;
-      2:    Self.ChangeToTerminated(false);
-      3..6: Self.ChangeToCompleted;
-    end;
-  end;
-end;
-
-//* TIdSipServerInviteTransaction Protected methods ***************************
-
-procedure TIdSipServerInviteTransaction.ReceiveCancel(Cancel: TIdSipRequest;
-                                                      T: TIdSipTransport);
-var
-  TerminateResponse: TIdSipResponse;
-begin
-  // First we send a 200 OK in response to the CANCEL
-  inherited ReceiveCancel(Cancel, T);
-
-  // And then we send a 487 Request Terminated in response to the INVITE
-  if (Self.State = itsProceeding) then begin
-    TerminateResponse := TIdSipResponse.InResponseTo(Self.InitialRequest,
-                                                     SIPRequestTerminated);
-    try
-      Self.SendResponse(TerminateResponse);
-    finally
-      TerminateResponse.Free;
-    end;
-  end;
-
-  Self.NotifyOfRequest(Cancel, T);
-end;
-
-procedure TIdSipServerInviteTransaction.ReceiveNonCancel(R: TIdSipRequest;
-                                                         T: TIdSipTransport);
-begin
-  inherited ReceiveNonCancel(R, T);
-
   if Self.FirstTime then begin
     Self.FirstTime := false;
 
@@ -1633,6 +1530,20 @@ begin
     end;
   end;
 end;
+
+procedure TIdSipServerInviteTransaction.SendResponse(R: TIdSipResponse);
+begin
+  Self.TrySendResponse(R);
+  if (Self.State = itsProceeding) then begin
+    case (R.StatusCode div 100) of
+      1:    Self.ChangeToProceeding;
+      2:    Self.ChangeToTerminated(false);
+      3..6: Self.ChangeToCompleted;
+    end;
+  end;
+end;
+
+//* TIdSipServerInviteTransaction Protected methods ***************************
 
 procedure TIdSipServerInviteTransaction.SetState(Value: TIdSipTransactionState);
 begin
@@ -1734,6 +1645,22 @@ begin
   Result := false;
 end;
 
+procedure TIdSipServerNonInviteTransaction.ReceiveRequest(R: TIdSipRequest;
+                                                          T: TIdSipTransport);
+begin
+  inherited ReceiveRequest(R, T);
+
+  if Self.FirstTime then begin
+    Self.FirstTime := false;
+    Self.ChangeToTrying;
+    Self.NotifyOfRequest(R, T);
+  end
+  else begin
+    if (Self.State in [itsCompleted, itsProceeding]) then
+      Self.TrySendLastResponse(R);
+  end;
+end;
+
 procedure TIdSipServerNonInviteTransaction.SendResponse(R: TIdSipResponse);
 begin
   if (Self.State in [itsTrying, itsProceeding]) then begin
@@ -1755,22 +1682,6 @@ begin
   inherited ChangeToCompleted;
 
   Self.TimerJ.Resume;
-end;
-
-procedure TIdSipServerNonInviteTransaction.ReceiveNonCancel(R: TIdSipRequest;
-                                                            T: TIdSipTransport);
-begin
-  inherited ReceiveNonCancel(R, T);
-
-  if Self.FirstTime then begin
-    Self.FirstTime := false;
-    Self.ChangeToTrying;
-    Self.NotifyOfRequest(R, T);
-  end
-  else begin
-    if (Self.State in [itsCompleted, itsProceeding]) then
-      Self.TrySendLastResponse(R);
-  end;
 end;
 
 procedure TIdSipServerNonInviteTransaction.TrySendResponse(R: TIdSipResponse);
@@ -1830,10 +1741,9 @@ begin
   Self.Timer := TIdTimerQueue.Create(false);
   Self.Timer.OnException := Self.OnException;
 
-  Self.fCancelTimerInterval := 64*T1;
-  Self.fTimerAInterval      := T1;
-  Self.fTimerBInterval      := 64*T1;
-  Self.fTimerDInterval      := 64*T1;
+  Self.fTimerAInterval := T1;
+  Self.fTimerBInterval := 64*T1;
+  Self.fTimerDInterval := 64*T1;
 end;
 
 destructor TIdSipClientInviteTransactionTimer.Destroy;
@@ -1843,16 +1753,6 @@ begin
   Self.Lock.Free;
 
   inherited Destroy;
-end;
-
-function TIdSipClientInviteTransactionTimer.CancelTimerInterval: Cardinal;
-begin
-  Result := Self.fCancelTimerInterval;
-end;
-
-function TIdSipClientInviteTransactionTimer.CancelTimerIsRunning: Boolean;
-begin
-  Result := Self.fCancelTimerIsRunning;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.ChangeState(NewState: TIdSipTransactionState);
@@ -1867,15 +1767,9 @@ begin
   case NewState of
     itsCompleted:  begin
       Self.StartTimerD;
-      Self.StopCancelTimer;
     end;
     itsTerminated: Self.StopTimerD;
   end;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.FireCancelTimer;
-begin
-  Owner.FireCancelTimer;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.FireTimerA;
@@ -1896,12 +1790,6 @@ begin
   Self.StartTimerB;
 end;
 
-procedure TIdSipClientInviteTransactionTimer.StartCancelTimer;
-begin
-  Self.Timer.AddEvent(Self.CancelTimerInterval, Self.OnCancelTimer);
-  Self.fCancelTimerIsRunning := true;
-end;
-
 procedure TIdSipClientInviteTransactionTimer.StartTimerA;
 begin
   Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
@@ -1918,14 +1806,6 @@ procedure TIdSipClientInviteTransactionTimer.StartTimerD;
 begin
   Self.Timer.AddEvent(Self.TimerDInterval, Self.OnTimerD);
   Self.fTimerDIsRunning := true;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StopCancelTimer;
-begin
-  if Self.CancelTimerIsRunning then begin
-    Self.Timer.RemoveEvent(Self.OnCancelTimer);
-    Self.fCancelTimerIsRunning := false;
-  end;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerA;
@@ -1986,12 +1866,6 @@ begin
   Self.Owner.ExceptionRaised(E);
 end;
 
-procedure TIdSipClientInviteTransactionTimer.OnCancelTimer(Sender: TObject);
-begin
-  if Self.CancelTimerIsRunning then
-    Self.FireCancelTimer;
-end;
-
 procedure TIdSipClientInviteTransactionTimer.OnTimerA(Sender: TObject);
 begin
   if Self.TimerAIsRunning then begin
@@ -2029,8 +1903,6 @@ constructor TIdSipClientInviteTransaction.Create(Dispatcher: TIdSipTransactionDi
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.Cancelled := false;
-
   Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self,
                                                           Self.Dispatcher.T1Interval);
   Self.ChangeToCalling;
@@ -2041,21 +1913,6 @@ begin
   Self.Timer.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipClientInviteTransaction.Cancel;
-begin
-  if (Self.State = itsCalling) then
-    Self.Cancelled := true
-  else if not (Self.State in [itsCompleted, itsTerminated]) then
-    Self.SendCancel;
-end;
-
-procedure TIdSipClientInviteTransaction.FireCancelTimer;
-begin
-  // Call me when you've given up waiting for a final response after sending
-  // a CANCEL
-  Self.ChangeToTerminated(false);
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;
@@ -2090,10 +1947,6 @@ end;
 procedure TIdSipClientInviteTransaction.ReceiveResponse(R: TIdSipResponse;
                                                         T: TIdSipTransport);
 begin
-  if R.IsProvisional and Self.Cancelled then begin
-    Self.SendCancel;
-  end;
-
   case Self.State of
     itsCalling: begin
       case R.StatusCode div 100 of
@@ -2161,18 +2014,6 @@ end;
 procedure TIdSipClientInviteTransaction.ChangeToCalling;
 begin
   Self.SetState(itsCalling);
-end;
-
-procedure TIdSipClientInviteTransaction.SendCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.InitialRequest.CreateCancel;
-  try
-    Self.Dispatcher.AddClientTransaction(Cancel).SendRequest;
-  finally
-    Cancel.Free;
-  end;
 end;
 
 procedure TIdSipClientInviteTransaction.SetState(Value: TIdSipTransactionState);
