@@ -66,6 +66,7 @@ type
     procedure TestAddAndCountTransport;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
+    procedure TestCancelRoutesToCorrectTransaction;
     procedure TestClearTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
@@ -174,7 +175,7 @@ type
     procedure TearDown; override;
   published
     procedure TestIsNull;
-    procedure TestReceiveCancel; virtual;
+    procedure TestReceiveRequest; virtual;
   end;
 
   TestTIdSipServerInviteTransaction = class(TTestTransaction)
@@ -774,6 +775,40 @@ begin
   CheckEquals(TranCount + 1,
               Self.D.TransactionCount,
               'Transaction wasn''t added');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestCancelRoutesToCorrectTransaction;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+  TranCount:     Integer;
+begin
+  Self.MockTransport.FireOnRequest(Self.Invite);
+
+  Cancel := Self.Invite.CreateCancel;
+  try
+    ResponseCount := Self.MockTransport.SentResponseCount;
+    TranCount     := Self.D.TransactionCount;
+
+    Self.MockTransport.FireOnRequest(Cancel);
+
+    Check(ResponseCount < Self.MockTransport.SentResponseCount,
+          'No response sent');
+    CheckEquals(SIPOK,
+                Self.MockTransport.SecondLastResponse.StatusCode,
+                'Unexpected response for CANCEL');
+
+    CheckEquals(SIPRequestTerminated,
+                Self.MockTransport.LastResponse.StatusCode,
+                'Unexpected response for INVITE');
+
+    // A CANCEL causes the server INVITE to send a final response. This
+    // Completes the transaction, but does not Terminate it.            
+    Check(TranCount = Self.D.TransactionCount,
+          'Transaction prematurely removed');
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearTransports;
@@ -1909,7 +1944,7 @@ begin
   Check(not Self.Tran.IsNull, 'IsNull');
 end;
 
-procedure TTestTransaction.TestReceiveCancel;
+procedure TTestTransaction.TestReceiveRequest;
 var
   Cancel:        TIdSipRequest;
   ResponseCount: Cardinal;
@@ -1920,12 +1955,12 @@ begin
 
   Cancel := Self.Tran.InitialRequest.CreateCancel;
   try
-    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveRequest(Cancel, Self.MockDispatcher.Transport);
 
     CheckEquals(ResponseCount + 1,
                 Self.MockDispatcher.Transport.SentResponseCount,
                 Self.Tran.ClassName
-              + ': UAS didn''t sent a response to a CANCEL');
+              + ': UAS didn''t send a response to a CANCEL');
     CheckEquals(SIPOK,
                 Self.MockDispatcher.Transport.LastResponse.StatusCode,
                 Self.Tran.ClassName + ': Wrong response sent');
@@ -2177,8 +2212,8 @@ begin
 
   Cancel := Self.Tran.InitialRequest.CreateCancel;
   try
-    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
-    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveRequest(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveRequest(Cancel, Self.MockDispatcher.Transport);
 
     CheckEquals(ResponseCount + 2,
                 Self.MockDispatcher.Transport.SentResponseCount,

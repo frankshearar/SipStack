@@ -168,6 +168,22 @@ type
     procedure TestIsTrying;
   end;
 
+  TestTIdSipResponseList = class(TTestCase)
+  private
+    List: TIdSipResponseList;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestDelete;
+    procedure TestFirst;
+    procedure TestIsEmpty;
+    procedure TestLast;
+    procedure TestListStoresCopiesNotReferences;
+    procedure TestSecondLast;
+  end;
+
 implementation
 
 uses
@@ -201,6 +217,7 @@ begin
   Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
+  Result.AddTest(TestTIdSipResponseList.Suite);
 end;
 
 //******************************************************************************
@@ -2320,6 +2337,205 @@ begin
 
   Self.Response.StatusCode := SIPTrying;
   Check(Self.Response.IsTrying, Self.Response.StatusText);
+end;
+
+//******************************************************************************
+//* TestTIdSipResponseList                                                     *
+//******************************************************************************
+//* TestTIdSipResponseList Public methods **************************************
+
+procedure TestTIdSipResponseList.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List := TIdSipResponseList.Create;
+end;
+
+procedure TestTIdSipResponseList.TearDown;
+begin
+  Self.List.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipResponseList Published methods ***********************************
+
+procedure TestTIdSipResponseList.TestAddAndCount;
+var
+  Response: TIdSipResponse;
+begin
+  CheckEquals(0, Self.List.Count, 'Empty list');
+
+  Response := TIdSipResponse.Create;
+  try
+    Self.List.Add(Response);
+    CheckEquals(1, Self.List.Count, 'One response');
+
+    Self.List.Add(Response);
+    CheckEquals(2, Self.List.Count, 'Two responses');
+
+    Self.List.Add(Response);
+    CheckEquals(3, Self.List.Count, 'Three responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestDelete;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPTrying;
+    Self.List.Add(Response);
+
+    Response.StatusCode := SIPOK;
+    Self.List.Add(Response);
+
+    Self.List.Delete(0);
+
+    CheckEquals(1,
+                Self.List.Count,
+                'Nothing deleted');
+    CheckEquals(SIPOK,
+                Self.List.First.StatusCode,
+                'Wrong response deleted');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestFirst;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPOK;
+
+    Check(nil = Self.List.First,
+          'Empty list');
+
+    Self.List.Add(Response);
+
+    CheckEquals(SIPOK,
+                Self.List.First.StatusCode,
+                'Non-empty list');
+
+    Response.StatusCode := SIPTrying;
+    Self.List.Add(Response);
+
+    CheckEquals(SIPOK,
+                Self.List.First.StatusCode,
+                'List with multiple responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestIsEmpty;
+var
+  Response: TIdSipResponse;
+begin
+  Check(Self.List.IsEmpty, 'Empty list');
+
+  Response := TIdSipResponse.Create;
+  try
+    Self.List.Add(Response);
+    Check(not Self.List.IsEmpty, 'Non-empty list');
+  finally
+    Response.Free;
+  end;
+
+  Self.List.Delete(0);
+  Check(Self.List.IsEmpty, 'Empty list after Delete');
+end;
+
+procedure TestTIdSipResponseList.TestLast;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPOK;
+
+    Check(nil = Self.List.First,
+          'Empty list');
+
+    Self.List.Add(Response);
+
+    CheckEquals(Response.StatusCode,
+                Self.List.First.StatusCode,
+                'Non-empty list');
+
+    Response.StatusCode := SIPTrying;
+
+    Self.List.Add(Response);
+
+    CheckEquals(Response.StatusCode,
+                Self.List.Last.StatusCode,
+                'List with multiple responses');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestListStoresCopiesNotReferences;
+var
+  OriginalStatusCode: Cardinal;
+  Response:           TIdSipResponse;
+begin
+  OriginalStatusCode := SIPOK;
+
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := OriginalStatusCode;
+
+    Self.List.Add(Response);
+
+    Response.StatusCode := SIPNotFound;
+
+    CheckEquals(OriginalStatusCode,
+                Self.List.First.StatusCode,
+                'List copy got mutated');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponseList.TestSecondLast;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.StatusCode := SIPTrying;
+
+    Check(nil = Self.List.SecondLast,
+          'Empty list');
+
+    Self.List.Add(Response);
+
+    Check(nil = Self.List.SecondLast,
+          'Non-empty list');
+
+    Response.StatusCode := SIPOK;
+    Self.List.Add(Response);
+
+    CheckEquals(SIPTrying,
+                Self.List.SecondLast.StatusCode,
+                'List with two responses');
+
+    Response.StatusCode := SIPMultipleChoices;
+    Self.List.Add(Response);
+
+    CheckEquals(SIPOK,
+                Self.List.SecondLast.StatusCode,
+                'List with three responses');
+  finally
+    Response.Free;
+  end;
 end;
 
 initialization

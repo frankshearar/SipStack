@@ -969,6 +969,22 @@ type
     property StatusText: String  read fStatusText write fStatusText;
   end;
 
+  TIdSipResponseList = class(TObject)
+  private
+    List: TObjectList;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Response: TIdSipResponse);
+    function  Count: Integer;
+    procedure Delete(Index: Integer);
+    function  First: TIdSipResponse;
+    function  IsEmpty: Boolean;
+    function  Last: TIdSipResponse;
+    function  SecondLast: TIdSipResponse;
+  end;
+
   TIdSipParserError = procedure(const RawMessage, Reason: String) of object;
 
   {*
@@ -5568,6 +5584,80 @@ begin
   else
     Self.StatusText := RSSIPUnknownResponseCode;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipResponseList                                                         *
+//******************************************************************************
+//* TIdSipResponseList Public methods ******************************************
+
+constructor TIdSipResponseList.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdSipResponseList.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipResponseList.Add(Response: TIdSipResponse);
+var
+  Copy: TIdSipResponse;
+begin
+  Copy := TIdSipResponse.Create;
+  try
+    Copy.Assign(Response);
+    Self.List.Add(Copy);
+  except
+    if (Self.List.IndexOf(Copy) <> -1) then
+      Self.List.Remove(Copy)
+    else
+      Copy.Free;
+  end;
+end;
+
+function TIdSipResponseList.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+procedure TIdSipResponseList.Delete(Index: Integer);
+begin
+  Self.List.Delete(Index);
+end;
+
+function TIdSipResponseList.First: TIdSipResponse;
+begin
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.List[0] as TIdSipResponse;
+end;
+
+function TIdSipResponseList.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
+function TIdSipResponseList.Last: TIdSipResponse;
+begin
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.List[Self.List.Count - 1] as TIdSipResponse;
+end;
+
+function TIdSipResponseList.SecondLast: TIdSipResponse;
+begin
+  if (Self.Count < 2) then
+    Result := nil
+  else
+    Result := Self.List[Self.List.Count - 2] as TIdSipResponse;
 end;
 
 //******************************************************************************
