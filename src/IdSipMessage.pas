@@ -255,6 +255,7 @@ type
                                   const Value: String);
     procedure SetUsername(const Value: String);
   protected
+    function  GetName: String; override;
     procedure SetValue(const Value: String); override;
   public
     class function IsNonce(const Token: String): Boolean;
@@ -281,6 +282,7 @@ type
 
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
+    function  GetName: String; override;
     procedure SetValue(const Value: String); override;
   public
     function Equals(Header: TIdSipHeader): Boolean; override;
@@ -559,6 +561,14 @@ type
     property Agent: String   read fAgent write fAgent;
     property Code:  Cardinal read fCode write fCode;
     property Text:  String   read fText write fText;
+  end;
+
+  TIdSipChallengeHeader = class(TIdSipHeader)
+  end;
+
+  TIdSipWWWAuthenticateHeader = class(TIdSipHeader)
+  protected
+    function GetName: String; override;
   end;
 
   TIdSipHeaderMap = class(TObject)
@@ -2378,6 +2388,11 @@ end;
 
 //* TIdSipAuthorizationHeader Protected methods ********************************
 
+function TIdSipAuthorizationHeader.GetName: String;
+begin
+  Result := AuthorizationHeader;
+end;
+
 procedure TIdSipAuthorizationHeader.SetValue(const Value: String);
 var
   S: String;
@@ -2583,6 +2598,11 @@ begin
 end;
 
 //* TIdSipCallIdHeader Protected methods ***************************************
+
+function TIdSipCallIdHeader.GetName: String;
+begin
+  Result := CallIDHeaderFull;
+end;
 
 procedure TIdSipCallIdHeader.SetValue(const Value: String);
 var
@@ -3624,6 +3644,16 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipWWWAuthenticateHeader                                                *
+//******************************************************************************
+//* TIdSipWWWAuthenticateHeader Protected methods ******************************
+
+function TIdSipWWWAuthenticateHeader.GetName: String;
+begin
+  Result := WWWAuthenticateHeader;
+end;
+
+//******************************************************************************
 //* TIdSipHeaderMap                                                            *
 //******************************************************************************
 //* TIdSipHeaderMap Public methods *********************************************
@@ -3802,6 +3832,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,          TIdSipContactHeader));
@@ -3833,6 +3864,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,              TIdSipViaHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,             TIdSipViaHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,              TIdSipWarningHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WWWAuthenticateHeader,      TIdSipWWWAuthenticateHeader));
   end;
 
   Result := GIdSipHeadersMap;

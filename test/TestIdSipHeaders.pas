@@ -181,122 +181,132 @@ type
     procedure TestValue; override;
   end;
 
-  TestTIdSipDateHeader = class(TTestCase)
+  TestTIdSipDateHeader = class(THeaderTestCase)
   private
     D: TIdSipDateHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestName;
     procedure TestGetValue;
-    procedure TestValueAbsoluteTime;
+    procedure TestValue; override;
     procedure TestValueMalformedAbsoluteTime;
     procedure TestValueRelativeTime;
     procedure TestValueZeroTime;
   end;
 
-  TestTIdSipFromToHeader = class(TTestCase)
+  TestTIdSipFromToHeader = class(THeaderTestCase)
   private
     F: TIdSipFromToHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestHasTag;
     procedure TestIsEqualDifferentURI;
     procedure TestIsEqualSameURINoParams;
     procedure TestIsEqualSameURIWithParams;
+    procedure TestValue; override;
     procedure TestValueWithTag;
     procedure TestValueResettingTag;
     procedure TestGetSetTag;
   end;
 
-  TestTIdSipNumericHeader = class(TTestCase)
+  TestTIdSipNumericHeader = class(THeaderTestCase)
   private
     N: TIdSipNumericHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueWithMultipleTokens;
     procedure TestValueWithNegativeNumber;
     procedure TestValueWithString;
   end;
 
-  TestTIdSipMaxForwardsHeader = class(TTestCase)
+  TestTIdSipMaxForwardsHeader = class(THeaderTestCase)
   private
     M: TIdSipMaxForwardsHeader;
+  protected
+   function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestName;
-    procedure TestValueNormal;
-    procedure TestValueNormalWithParam;
+    procedure TestValue; override;
     procedure TestValueNonNumber;
     procedure TestValueTooBig;
+    procedure TestValueWithParam;
   end;
 
-  TestTIdSipRouteHeader = class(TTestCase)
+  TestTIdSipRouteHeader = class(THeaderTestCase)
   private
     R: TIdSipRouteHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestIsLooseRoutable;
     procedure TestName;
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueWithParamsAndHeaderParams;
   end;
 
-  TestTIdSipRecordRouteHeader = class(TTestCase)
+  TestTIdSipRecordRouteHeader = class(THeaderTestCase)
   private
     R: TIdSipRecordRouteHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestName;
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueWithParamsAndHeaderParams;
   end;
 
-  TestTIdSipTimestampHeader = class(TTestCase)
+  TestTIdSipTimestampHeader = class(THeaderTestCase)
   private
     T: TIdSipTimestampHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestName;
     procedure TestNormalizeLWS;
     procedure TestReadNumber;
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueMalformed;
     procedure TestValueWithDelay;
   end;
 
-  TestTIdSipUriHeader = class(TTestCase)
+  TestTIdSipUriHeader = class(THeaderTestCase)
   private
     U: TIdSipUriHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueWithParams;
     procedure TestValueWithUriParams;
   end;
 
-  TestTIdSipViaHeader = class(TTestCase)
+  TestTIdSipViaHeader = class(THeaderTestCase)
   private
     V: TIdSipViaHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAssign;
     procedure TestAssignFromBadlyFormedVia;
@@ -312,23 +322,24 @@ type
     procedure TestName;
     procedure TestReceived;
     procedure TestTTL;
-    procedure TestValue;
+    procedure TestValue; override;
     procedure TestValueWithBranch;
     procedure TestValueWithMaddr;
     procedure TestValueWithReceived;
     procedure TestValueWithTTL;
   end;
 
-  TestTIdSipWarningHeader = class(TTestCase)
+  TestTIdSipWarningHeader = class(THeaderTestCase)
   private
     W: TIdSipWarningHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestGetValue;
     procedure TestName;
-    procedure TestSetValue;
+    procedure TestValue; override;
     procedure TestSetValueMalformed;
   end;
 
@@ -344,6 +355,15 @@ type
     procedure TestGetValue;
     procedure TestSetValue;
     procedure TestValueMalformed;
+  end;
+
+  TestTIdSipWWWAuthenticateHeader = class(THeaderTestCase)
+  private
+     W: TIdSipWWWAuthenticateHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
   end;
 
   TestTIdSipHeadersFilter = class(TTestCase)
@@ -2117,14 +2137,14 @@ procedure TestTIdSipDateHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.D := TIdSipDateHeader.Create;
+  Self.D := Self.Header as TIdSipDateHeader;
 end;
 
-procedure TestTIdSipDateHeader.TearDown;
-begin
-  Self.D.Free;
+//* TestTIdSipDateHeader Protected methods *************************************
 
-  inherited TearDown;
+function TestTIdSipDateHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipDateHeader;
 end;
 
 //* TestTIdSipDateHeader Published methods *************************************
@@ -2148,7 +2168,7 @@ begin
               'Value must derive from the Time property');
 end;
 
-procedure TestTIdSipDateHeader.TestValueAbsoluteTime;
+procedure TestTIdSipDateHeader.TestValue;
 begin
   Self.D.Value := 'Fri, 18 Jul 2003 16:00:00 GMT';
 
@@ -2193,15 +2213,16 @@ procedure TestTIdSipFromToHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.F := TIdSipFromToHeader.Create;
+  Self.F := Self.Header as TIdSipFromToHeader;
 end;
 
-procedure TestTIdSipFromToHeader.TearDown;
+//* TestTIdSipFromToHeader Protected methods ***********************************
+
+function TestTIdSipFromToHeader.HeaderType: TIdSipHeaderClass;
 begin
-  Self.F.Free;
-
-  inherited TearDown;
+  Result := TIdSipFromToHeader;
 end;
+
 
 //* TestTIdSipFromToHeader Published methods ***********************************
 
@@ -2283,6 +2304,17 @@ begin
   end;
 end;
 
+procedure TestTIdSipFromToHeader.TestValue;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  CheckEquals('Case',
+              Self.F.DisplayName,
+              'DisplayName');
+  CheckEquals('sip:case@fried.neurons.org',
+              Self.F.Address.Uri,
+              'Address');
+end;
+
 procedure TestTIdSipFromToHeader.TestValueWithTag;
 begin
   Self.F.Value := 'Case <sip:case@fried.neurons.org>';
@@ -2336,14 +2368,14 @@ procedure TestTIdSipNumericHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.N := TIdSipNumericHeader.Create;
+  Self.N := Self.Header as TIdSipNumericHeader;
 end;
 
-procedure TestTIdSipNumericHeader.TearDown;
-begin
-  Self.N.Free;
+//* TestTIdSipNumericHeader Protected methods **********************************
 
-  inherited TearDown;
+function TestTIdSipNumericHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipNumericHeader;
 end;
 
 //* TestTIdSipNumericHeader Published methods **********************************
@@ -2397,14 +2429,14 @@ procedure TestTIdSipMaxForwardsHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.M := TIdSipMaxForwardsHeader.Create;
+  Self.M := Self.Header as TIdSipMaxForwardsHeader;
 end;
 
-procedure TestTIdSipMaxForwardsHeader.TearDown;
-begin
-  Self.M.Free;
+//* TestTIdSipMaxForwardsHeader Protected methods ******************************
 
-  inherited TearDown;
+function TestTIdSipMaxForwardsHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipMaxForwardsHeader;
 end;
 
 //* TestTIdSipMaxForwardsHeader Published methods ******************************
@@ -2417,7 +2449,7 @@ begin
   CheckEquals(MaxForwardsHeader, Self.M.Name, 'Name after set');
 end;
 
-procedure TestTIdSipMaxForwardsHeader.TestValueNormal;
+procedure TestTIdSipMaxForwardsHeader.TestValue;
 begin
   Self.M.Value := '42';
   CheckEquals(42, Self.M.NumericValue, 'NumericValue, 42');
@@ -2427,16 +2459,6 @@ begin
 
   Self.M.Value := '255';
   CheckEquals(255, Self.M.NumericValue, 'NumericValue, 255');
-end;
-
-procedure TestTIdSipMaxForwardsHeader.TestValueNormalWithParam;
-begin
-  try
-    Self.M.Value := '13;tag=f00';
-    Fail('Failed to bail out on non-numeric value for Max-Forwards (no params allowed)');
-  except
-    on EBadHeader do;
-  end;
 end;
 
 procedure TestTIdSipMaxForwardsHeader.TestValueNonNumber;
@@ -2459,6 +2481,16 @@ begin
   end;
 end;
 
+procedure TestTIdSipMaxForwardsHeader.TestValueWithParam;
+begin
+  try
+    Self.M.Value := '13;tag=f00';
+    Fail('Failed to bail out on non-numeric value for Max-Forwards (no params allowed)');
+  except
+    on EBadHeader do;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipRouteHeader                                                      *
 //******************************************************************************
@@ -2468,14 +2500,14 @@ procedure TestTIdSipRouteHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.R := TIdSipRouteHeader.Create;
+  Self.R := Self.Header as TIdSipRouteHeader;
 end;
 
-procedure TestTIdSipRouteHeader.TearDown;
-begin
-  Self.R.Free;
+//* TestTIdSipRouteHeader Protected methods ************************************
 
-  inherited TearDown;
+function TestTIdSipRouteHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipRouteHeader;
 end;
 
 //* TestTIdSipRouteHeader Published methods ************************************
@@ -2552,14 +2584,14 @@ procedure TestTIdSipRecordRouteHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.R := TIdSipRecordRouteHeader.Create;
+  Self.R := Self.Header as TIdSipRecordRouteHeader;
 end;
 
-procedure TestTIdSipRecordRouteHeader.TearDown;
-begin
-  Self.R.Free;
+//* TestTIdSipRecordRouteHeader Protected methods ******************************
 
-  inherited TearDown;
+function TestTIdSipRecordRouteHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipRecordRouteHeader;
 end;
 
 //* TestTIdSipRecordRouteHeader Published methods ******************************
@@ -2620,11 +2652,11 @@ begin
   Self.T := TIdSipTimestampHeader.Create;
 end;
 
-procedure TestTIdSipTimestampHeader.TearDown;
-begin
-  Self.T.Free;
+//* TestTIdSipTimestampHeader Protected methods ********************************
 
-  inherited TearDown;
+function TestTIdSipTimestampHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipTimestampHeader;
 end;
 
 //* TestTIdSipTimestampHeader Published methods ********************************
@@ -2785,14 +2817,14 @@ procedure TestTIdSipUriHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.U := TIdSipUriHeader.Create;
+  Self.U := Self.Header as TIdSipUriHeader;
 end;
 
-procedure TestTIdSipUriHeader.TearDown;
-begin
-  Self.U.Free;
+//* TestTIdSipUriHeader Protected methods **************************************
 
-  inherited TearDown;
+function TestTIdSipUriHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipUriHeader;
 end;
 
 //* TestTIdSipUriHeader Published methods **************************************
@@ -2854,11 +2886,11 @@ begin
   Self.V := TIdSipViaHeader.Create;
 end;
 
-procedure TestTIdSipViaHeader.TearDown;
-begin
-  Self.V.Free;
+//* TestTIdSipViaHeader Protected methods **************************************
 
-  inherited TearDown;
+function TestTIdSipViaHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipViaHeader;
 end;
 
 //* TestTIdSipViaHeader Published methods **************************************
@@ -3251,14 +3283,14 @@ procedure TestTIdSipWarningHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.W := TIdSipWarningHeader.Create;
+  Self.W := Self.Header as TIdSipWarningHeader;
 end;
 
-procedure TestTIdSipWarningHeader.TearDown;
-begin
-  Self.W.Free;
+//* TestTIdSipWarningHeader Protected methods **********************************
 
-  inherited TearDown;
+function TestTIdSipWarningHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipWarningHeader;
 end;
 
 //* TestTIdSipWarningHeader Published methods **********************************
@@ -3282,7 +3314,7 @@ begin
   CheckEquals(WarningHeader, Self.W.Name, 'Name after set');
 end;
 
-procedure TestTIdSipWarningHeader.TestSetValue;
+procedure TestTIdSipWarningHeader.TestValue;
 begin
   Self.W.Value := '301 wsfrank "I dont know what message goes here"';
   CheckEquals(301,       Self.W.Code, 'Code');
@@ -3450,6 +3482,25 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipWWWAuthenticateHeader                                            *
+//******************************************************************************
+//* TestTIdSipWWWAuthenticateHeader Public methods *****************************
+
+procedure TestTIdSipWWWAuthenticateHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := Self.Header as TIdSipWWWAuthenticateHeader;
+end;
+
+//* TestTIdSipWWWAuthenticateHeader Protected methods **************************
+
+function TestTIdSipWWWAuthenticateHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipWWWAuthenticateHeader;
 end;
 
 //******************************************************************************
@@ -3853,7 +3904,7 @@ begin
   CheckType(TIdSipUriHeader,                    Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AllowHeader),                AllowHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(AuthorizationHeader),        AuthorizationHeader);
+  CheckType(TIdSipAuthorizationHeader,          Self.H.Add(AuthorizationHeader),        AuthorizationHeader);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderFull),           CallIDHeaderFull);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderShort),          CallIDHeaderShort);
   CheckType(TIdSipHeader,                       Self.H.Add(CallInfoHeader),             CallInfoHeader);
@@ -3900,7 +3951,7 @@ begin
   CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderFull),              ViaHeaderFull);
   CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderShort),             ViaHeaderShort);
   CheckType(TIdSipWarningHeader,                Self.H.Add(WarningHeader),              WarningHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
+  CheckType(TIdSipWWWAuthenticateHeader,        Self.H.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
 procedure TestTIdSipHeaders.TestAsString;
@@ -4585,6 +4636,7 @@ begin
 
     NewHeader := TIdSipCallIdHeader.Create;
     try
+      NewHeader.Value := '1'; // otherwise you have an invalid Call-ID
       Cnts.Add(NewHeader);
       CheckEquals(1, Cnts.Count, 'Added a non-contact');
     finally
