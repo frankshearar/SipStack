@@ -313,8 +313,6 @@ begin
   finally
     Self.Canvas.Brush.Color := OriginalBrushColor;
   end;
-//  Self.Canvas.Rectangle(BarBaseX, Y,
-//                        BarBaseX + BarWidth, Y + Height);
 
   Inc(Y, Height + Self.LineSpacing);
 end;
@@ -326,6 +324,8 @@ var
   Start:  TPoint;
   TextHeight: Integer;
 begin
+  // Draw a vertical line for the current entry X pixels from the left of the
+  // panel.
   Origin.X := 0;
   Origin.Y := 0;
 
@@ -348,6 +348,8 @@ function TIdHistogramPanel.GetMaxNameWidth: Integer;
 var
   I: Integer;
 begin
+  // How much horizontal space does the widest name in the histogram take up?
+
   Result := 0;
   for I := 0 to Self.Data.Count - 1 do
     Result := Max(Result, Self.Canvas.TextWidth(Self.Data.Entries[I].Name));
