@@ -55,6 +55,7 @@ type
     procedure SendResponse(R: TIdSipResponse); override;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
+    class function DefaultPort: Cardinal; override;
     class function IsSecure: Boolean; override;
     class function MockedClass: TIdSipTransportClass; virtual;
     class function SrvPrefix: String; override;
@@ -143,6 +144,11 @@ var
 class function TIdSipMockTransport.MockedClass: TIdSipTransportClass;
 begin
   raise Exception.Create(Self.ClassName + ' must override TIdSipMockTransport.MockedClass');
+end;
+
+class function TIdSipMockTransport.DefaultPort: Cardinal;
+begin
+  Result := Self.MockedClass.DefaultPort;
 end;
 
 class function TIdSipMockTransport.IsSecure: Boolean;
