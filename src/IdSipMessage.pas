@@ -654,6 +654,7 @@ type
     function  GetTTL: Byte;
     procedure SetBranch(const Value: String);
     procedure SetMaddr(const Value: String);
+    procedure SetPort(Value: Cardinal);
     procedure SetReceived(const Value: String);
     procedure SetRport(Value: Cardinal);
     procedure SetTTL(Value: Byte);
@@ -675,7 +676,7 @@ type
     property Branch:     String              read GetBranch write SetBranch;
     property SentBy:     String              read fSentBy write fSentBy;
     property Maddr:      String              read GetMaddr write SetMaddr;
-    property Port:       Cardinal            read fPort write fPort;
+    property Port:       Cardinal            read fPort write SetPort;
     property Received:   String              read GetReceived write SetReceived;
     property Rport:      Cardinal            read GetRport write SetRport;
     property SipVersion: String              read fSipVersion write fSipVersion;
@@ -4474,8 +4475,6 @@ var
 begin
   inherited Parse(Value);
 
-  Self.PortIsSpecified := false;
-
   Self.AssertBranchWellFormed;
   Self.AssertReceivedWellFormed;
   Self.AssertMaddrWellFormed;
@@ -4498,8 +4497,10 @@ begin
   Token := Trim(Fetch(S, ';'));
   Self.SentBy := Fetch(Token, ':');
 
-  if (Token = '') then
-    Self.Port := Self.DefaultPortForTransport(Self.Transport)
+  if (Token = '') then begin
+    Self.Port := Self.DefaultPortForTransport(Self.Transport);
+    Self.PortIsSpecified := false;
+  end
   else begin
     try
       Self.Port := StrToInt(Token);
@@ -4601,6 +4602,12 @@ begin
   Self.Params[MaddrParam] := Value;
 
   Self.AssertMaddrWellFormed;
+end;
+
+procedure TIdSipViaHeader.SetPort(Value: Cardinal);
+begin
+  Self.fPort           := Value;
+  Self.PortIsSpecified := true;
 end;
 
 procedure TIdSipViaHeader.SetReceived(const Value: String);
