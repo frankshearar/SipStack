@@ -6113,8 +6113,14 @@ end;
 
 function TIdSipRequest.MissingRequiredHeaders: Boolean;
 begin
-  Result := inherited MissingRequiredHeaders
-         or not Self.HasHeader(MaxForwardsHeader);
+  Result := inherited MissingRequiredHeaders;
+
+
+  if not Self.HasHeader(MaxForwardsHeader) then begin
+    Result := true;
+    Self.MarkAsInvalid(MissingMaxForwards);
+    Exit;
+  end;
 end;
 
 procedure TIdSipRequest.ParseStartLine(Parser: TIdSipParser);
@@ -6142,6 +6148,7 @@ begin
 
     URI := Tokens[1];
 
+    // cf RFC 3261 section 7.1 
     if (URI <> '') and (URI[1] = '<') and (URI[Length(URI)] = '>') then
       Self.FailParse(RequestUriNoAngleBrackets);
 

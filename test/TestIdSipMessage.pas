@@ -144,9 +144,10 @@ type
     procedure TestIsCancel;
     procedure TestIsInvite;
     procedure TestIsMalformedCSeqMethod;
-    procedure TestIsMalformedSipVersion;
     procedure TestIsMalformedMethod;
+    procedure TestIsMalformedMissingMaxForwards;
     procedure TestIsMalformedMissingVia;
+    procedure TestIsMalformedSipVersion;
     procedure TestIsOptions;
     procedure TestIsRegister;
     procedure TestIsRequest;
@@ -1978,6 +1979,45 @@ begin
               'ParseFailReason');
 end;
 
+procedure TestTIdSipRequest.TestIsMalformedMethod;
+var
+  ExpectedReason: String;
+begin
+  Self.Request.ClearHeaders;
+  Self.AddRequiredHeaders(Self.Request);
+  Self.Request.Method := 'Bad"Method';
+
+  ExpectedReason := Format(MalformedToken, [MethodToken, Self.Request.Method]);
+
+  Check(Self.Request.IsMalformed, 'Bad Method');
+  CheckEquals(ExpectedReason,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedMissingMaxForwards;
+begin
+  Self.AddRequiredHeaders(Self.Request);
+  Self.Request.RemoveAllHeadersNamed(MaxForwardsHeader);
+
+  Check(Self.Request.IsMalformed, 'Missing Max-Forwards header');
+  CheckEquals(MissingMaxForwards,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedMissingVia;
+begin
+  Self.AddRequiredHeaders(Self.Request);
+  Self.Request.RemoveAllHeadersNamed(ViaHeaderFull);
+
+  Check(Self.Request.IsMalformed, 'Missing Via header');
+
+  CheckEquals(MissingVia,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
+end;
+
 procedure TestTIdSipRequest.TestIsMalformedSipVersion;
 const
   MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
@@ -2007,30 +2047,6 @@ begin
   finally
     Msg.Free;
   end;
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedMethod;
-var
-  ExpectedReason: String;
-begin
-  Self.Request.ClearHeaders;
-  Self.AddRequiredHeaders(Self.Request);
-  Self.Request.Method := 'Bad"Method';
-
-  ExpectedReason := Format(MalformedToken, [MethodToken, Self.Request.Method]);
-
-  Check(Self.Request.IsMalformed, 'Bad Method');
-  CheckEquals(ExpectedReason,
-              Self.Request.ParseFailReason,
-              'ParseFailReason');
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedMissingVia;
-begin
-  Self.AddRequiredHeaders(Self.Msg);
-  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
-
-  Check(Self.Msg.IsMalformed, 'Missing Via header');
 end;
 
 procedure TestTIdSipRequest.TestIsOptions;
