@@ -122,9 +122,6 @@ type
     FoundSession:        TIdSipSession;
     Options:             TIdSipRequest;
 
-    procedure DidntFindAction(Action: TIdSipAction);
-    procedure FoundActionProc(Action: TIdSipAction);
-    procedure RecordAction(Action: TIdSipAction);
     procedure RecordSession(Session: TIdSipSession;
                             Invite: TIdSipRequest);
   public
@@ -135,16 +132,11 @@ type
     procedure TestAddActionNotifiesObservers;
     procedure TestAddObserver;
     procedure TestCleanOutTerminatedActions;
-    procedure TestFindActionAndPerform;
     procedure TestFindActionAndPerformBlock;
     procedure TestFindActionAndPerformBlockNoActions;
     procedure TestFindActionAndPerformBlockNoMatch;
-    procedure TestFindActionAndPerformNoActions;
-    procedure TestFindActionAndPerformNoMatch;
-    procedure TestFindActionAndPerformOr;
     procedure TestFindActionAndPerformOrBlock;
     procedure TestFindActionAndPerformOrBlockNoMatch;
-    procedure TestFindActionAndPerformOrNoMatch;
     procedure TestFindSessionAndPerform;
     procedure TestFindSessionAndPerformNoMatch;
     procedure TestFindSessionAndPerformNoSessions;
@@ -1587,21 +1579,6 @@ end;
 
 //* TestTIdSipActions Private methods ******************************************
 
-procedure TestTIdSipActions.DidntFindAction(Action: TIdSipAction);
-begin
-  Self.ActionProcUsed := Self.DidntFindActionName;
-end;
-
-procedure TestTIdSipActions.FoundActionProc(Action: TIdSipAction);
-begin
-  Self.ActionProcUsed := Self.FoundActionName;
-end;
-
-procedure TestTIdSipActions.RecordAction(Action: TIdSipAction);
-begin
-  Self.FoundAction := Action;
-end;
-
 procedure TestTIdSipActions.RecordSession(Session: TIdSipSession;
                                           Invite: TIdSipRequest);
 begin
@@ -1689,19 +1666,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipActions.TestFindActionAndPerform;
-var
-  A: TIdSipAction;
-begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
-
-  Self.Actions.FindActionAndPerform(A.InitialRequest, Self.RecordAction);
-
-  Check(Self.FoundAction = A, 'Wrong action found');
-end;
-
 procedure TestTIdSipActions.TestFindActionAndPerformBlock;
 var
   A:      TIdSipAction;
@@ -1749,39 +1713,6 @@ begin
   finally
     Finder.Free;
   end;
-end;
-
-procedure TestTIdSipActions.TestFindActionAndPerformNoActions;
-begin
-  Self.Actions.FindActionAndPerform(Self.Options, Self.RecordAction);
-
-  Check(not Assigned(Self.FoundAction), 'An action found in an empty list');
-end;
-
-procedure TestTIdSipActions.TestFindActionAndPerformNoMatch;
-begin
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-
-  Self.Actions.FindActionAndPerform(Self.Options, Self.RecordAction);
-
-  Check(not Assigned(Self.FoundAction), 'An action found');
-end;
-
-procedure TestTIdSipActions.TestFindActionAndPerformOr;
-var
-  A: TIdSipAction;
-begin
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
-
-  Self.Actions.FindActionAndPerformOr(A.InitialRequest,
-                                      Self.FoundActionProc,
-                                      Self.DidntFindAction);
-
-  CheckEquals(Self.FoundActionName,
-              Self.ActionProcUsed,
-              'Wrong procedure used');
 end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformOrBlock;
@@ -1835,19 +1766,6 @@ begin
   finally
     Finder.Free;
   end;
-end;
-
-procedure TestTIdSipActions.TestFindActionAndPerformOrNoMatch;
-begin
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-
-  Self.Actions.FindActionAndPerformOr(Self.Options,
-                                      Self.FoundActionProc,
-                                      Self.DidntFindAction);
-
-  CheckEquals(Self.DidntFindActionName,
-              Self.ActionProcUsed,
-              'Wrong procedure used');
 end;
 
 procedure TestTIdSipActions.TestFindSessionAndPerform;

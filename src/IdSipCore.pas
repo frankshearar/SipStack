@@ -296,7 +296,6 @@ type
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
   end;
 
-  TIdSipActionProc = procedure(Action: TIdSipAction) of object;
   TIdSipSessionProc = procedure(Session: TIdSipSession;
                                 Invite: TIdSipRequest) of object;
 
@@ -323,10 +322,9 @@ type
     Actions:    TObjectList;
     Observed:   TIdObservable;
 
-    function  ActionAt(Index: Integer): TIdSipAction;
-    function  FindAction(Msg: TIdSipMessage): TIdSipAction;
-    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
-    procedure NullProc(Action: TIdSipAction);
+    function ActionAt(Index: Integer): TIdSipAction;
+    function FindAction(Msg: TIdSipMessage): TIdSipAction;
+    function FindSession(Msg: TIdSipMessage): TIdSipSession;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -341,15 +339,10 @@ type
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
     procedure FindActionAndPerform(Msg: TIdSipMessage;
-                                   Proc: TIdSipActionProc); overload;
-    procedure FindActionAndPerform(Msg: TIdSipMessage;
-                                   Block: TIdSipActionClosure); overload;
-    procedure FindActionAndPerformOr(Msg: TIdSipMessage;
-                                     FoundProc: TIdSipActionProc;
-                                     NotFoundProc: TIdSipActionProc); overload;
+                                   Block: TIdSipActionClosure);
     procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
-                                     NotFoundBlock: TIdSipActionClosure); overload;
+                                     NotFoundBlock: TIdSipActionClosure);
     procedure FindSessionAndPerform(Msg: TIdSipMessage;
                                     Proc: TIdSipSessionProc);
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
@@ -2048,12 +2041,6 @@ begin
 end;
 
 procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
-                                             Proc: TIdSipActionProc);
-begin
-  Self.FindActionAndPerformOr(Msg, Proc, Self.NullProc);
-end;
-
-procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
                                              Block: TIdSipActionClosure);
 var
   NullBlock: TIdSipActionClosure;
@@ -2064,27 +2051,6 @@ begin
   finally
     NullBlock.Free;
   end;
-end;
-
-procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
-                                               FoundProc: TIdSipActionProc;
-                                               NotFoundProc: TIdSipActionProc);
-var
-  Action: TIdSipAction;
-begin
-  Self.ActionLock.Acquire;
-  try
-    Action := Self.FindAction(Msg);
-
-    if Assigned(Action) then
-      FoundProc(Action)
-    else
-      NotFoundProc(Action);
-  finally
-    Self.ActionLock.Release;
-  end;
-
-  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
@@ -2252,10 +2218,6 @@ begin
   finally
     Self.ActionLock.Release;
   end;
-end;
-
-procedure TIdSipActions.NullProc(Action: TIdSipAction);
-begin
 end;
 
 //******************************************************************************
