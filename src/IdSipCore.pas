@@ -46,6 +46,7 @@ uses
 
 type
   TIdSipAction = class;
+  TIdSipActionClass = class of TIdSipAction;
 
   // I provide a protocol for generic Actions.
   //
@@ -321,9 +322,10 @@ type
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
+    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
     function  AddOutboundOptions: TIdSipOutboundOptions;
-    function  AddOutboundSession: TIdSipOutboundSession;
     function  AddOutboundRegistration: TIdSipOutboundRegistration;
+    function  AddOutboundSession: TIdSipOutboundSession;
     function  CallIDFor(Registrar: TIdSipUri): String;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
@@ -506,8 +508,6 @@ type
     property IsTerminated:   Boolean       read fIsTerminated;
     property Username:       String        read GetUsername write SetUsername;
   end;
-
-  TIdSipActionClass = class of TIdSipAction;
 
   TIdSipOptions = class(TIdSipAction)
   protected
@@ -2122,11 +2122,11 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
+function TIdSipUserAgentCore.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
 begin
   Self.ActionLock.Acquire;
   try
-    Result := TIdSipOutboundOptions.Create(Self);
+    Result := ActionType.Create(Self);
     try
       Self.Actions.Add(Result);
     except
@@ -2144,56 +2144,22 @@ begin
   end;
 
   Self.NotifyOfChange;
+end;
+
+function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
+begin
+  Result := Self.AddOutboundAction(TIdSipOutboundOptions) as TIdSipOutboundOptions;
 end;
 
 function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Result := TIdSipOutboundSession.Create(Self);
-    try
-      Self.Actions.Add(Result);
-    except
-      if (Self.Actions.IndexOf(Result) <> -1) then
-        Self.Actions.Remove(Result)
-      else
-        Result.Free;
-
-      Result := nil;
-
-      raise;
-    end;
-  finally
-    Self.ActionLock.Release;
-  end;
-
-  Self.NotifyOfChange;
+  Result := Self.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
 end;
 
 function TIdSipUserAgentCore.AddOutboundRegistration: TIdSipOutboundRegistration;
 begin
-  Self.ActionLock.Acquire;
-  try
-    Result := TIdSipOutboundRegistration.Create(Self);
-    try
-      Self.Actions.Add(Result);
-    except
-      if (Self.Actions.IndexOf(Result) <> -1) then
-        Self.Actions.Remove(Result)
-      else
-        Result.Free;
-
-      Result := nil;
-
-      raise;
-    end;
-  finally
-    Self.ActionLock.Release;
-  end;
-
-  Self.NotifyOfChange;
+  Result := Self.AddOutboundAction(TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
 end;
-
 
 function TIdSipUserAgentCore.CallIDFor(Registrar: TIdSipUri): String;
 begin
