@@ -2563,6 +2563,7 @@ end;
 function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
 begin
   Result := Self.AddOutboundUnregister;
+  Result.Registrar := Registrar;
 end;
 
 function TIdSipAbstractUserAgent.Username: String;

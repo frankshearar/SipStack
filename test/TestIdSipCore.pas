@@ -5724,7 +5724,6 @@ begin
 
   Reg := Result as TIdSipOutboundUnregister;
   Reg.AddListener(Self);
-  Reg.Registrar := Self.Registrar.From.Address;
   Result.Send;
 end;
 
