@@ -10,17 +10,22 @@ type
   private
     fReceiveRequestCalled: Boolean;
     fReceiveResponseCalled: Boolean;
+  protected
+    procedure ActOnRequest(Request: TIdSipRequest;
+                           Transaction: TIdSipTransaction;
+                           Receiver: TIdSipTransport); override;
+    procedure ActOnResponse(Response: TIdSipResponse;
+                            Transaction: TIdSipTransaction;
+                            Receiver: TIdSipTransport); override;
+    procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
+                            Request: TIdSipRequest;
+                            Transaction: TIdSipTransaction); override;
+    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
+    function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; override;
   public
     function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
-    function  ReceiveRequest(Request: TIdSipRequest;
-                             Transaction: TIdSipTransaction;
-                             Transport: TIdSipTransport): Boolean; override;
-    function  ReceiveResponse(Response: TIdSipResponse;
-                              Transaction: TIdSipTransaction;
-                              Transport: TIdSipTransport): Boolean; override;
-
     procedure Reset;
 
     property ReceiveRequestCalled:  Boolean read fReceiveRequestCalled;
@@ -31,7 +36,7 @@ type
   private
     fResponseResent: Boolean;
   public
-    constructor Create(UA: TIdSipUserAgentCore);
+    constructor Create(UA: TIdSipUserAgentCore); override;
 
     procedure ResendLastResponse; override;
 
@@ -63,26 +68,42 @@ begin
   Result := nil;
 end;
 
-function TIdSipMockCore.ReceiveRequest(Request: TIdSipRequest;
-                                       Transaction: TIdSipTransaction;
-                                       Transport: TIdSipTransport): Boolean;
-begin
-  fReceiveRequestCalled := true;
-  Result := true;
-end;
-
-function TIdSipMockCore.ReceiveResponse(Response: TIdSipResponse;
-                                        Transaction: TIdSipTransaction;
-                                        Transport: TIdSipTransport): Boolean;
-begin
-  fReceiveResponseCalled := true;
-  Result := true;
-end;
-
 procedure TIdSipMockCore.Reset;
 begin
   fReceiveRequestCalled  := true;
   fReceiveResponseCalled := true;
+end;
+
+//* TIdSipMockCore Protected methods *******************************************
+
+procedure TIdSipMockCore.ActOnRequest(Request: TIdSipRequest;
+                                      Transaction: TIdSipTransaction;
+                                      Receiver: TIdSipTransport);
+begin
+  fReceiveRequestCalled := true;
+end;
+
+procedure TIdSipMockCore.ActOnResponse(Response: TIdSipResponse;
+                                      Transaction: TIdSipTransaction;
+                                      Receiver: TIdSipTransport);
+begin
+  fReceiveResponseCalled := true;
+end;
+
+procedure TIdSipMockCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
+                                       Request: TIdSipRequest;
+                                       Transaction: TIdSipTransaction);
+begin
+end;
+
+function TIdSipMockCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := uarAccept;
+end;
+
+function TIdSipMockCore.WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction;
+begin
+  Result := uarAccept;
 end;
 
 //******************************************************************************

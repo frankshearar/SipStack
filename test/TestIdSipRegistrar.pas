@@ -264,7 +264,9 @@ end;
 
 procedure TestTIdSipRegistrar.TestComplicatedRegistration;
 var
-  Bindings: TIdSipContacts;
+  Bindings:   TIdSipContacts;
+  OldContact: String;
+  NewContact: String;
 begin
   // This plays with a mis-ordered request.
   // We register 'sip:wintermute@talking-head.tessier-ashpool.co.luna' with CSeq 999
@@ -273,21 +275,24 @@ begin
   // We expect to see only the talking-head-2. (The remove-all is out of
   // order only with respect to the talking-head-2 URI.
 
-  Self.Request.FirstContact.Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+  OldContact := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+  NewContact := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna';
+
+  Self.Request.FirstContact.Value := OldContact;
   Self.Request.CSeq.SequenceNo    := 999;
   Self.SimulateRemoteRequest;
-  Self.CheckServerReturnedOK('Step 1: registering <sip:wintermute@talking-head.tessier-ashpool.co.luna>');
+  Self.CheckServerReturnedOK('Step 1: registering <' + OldContact + '>');
 
-  Self.Request.FirstContact.Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna';
+  Self.Request.FirstContact.Value := NewContact;
   Self.Request.CSeq.SequenceNo    := 1001;
   Self.Request.LastHop.Branch     := Self.Request.LastHop.Branch + '1';
   Self.SimulateRemoteRequest;
-  Self.CheckServerReturnedOK('Step 2: registering <sip:wintermute@talking-head-2.tessier-ashpool.co.luna>');
+  Self.CheckServerReturnedOK('Step 2: registering <' + NewContact + '>');
 
   Self.Request.FirstContact.IsWildCard := true;
-  Self.Request.FirstContact.Expires    := 0;        
-  Self.Request.CSeq.SequenceNo    := 1000;
-  Self.Request.LastHop.Branch     := Self.Request.LastHop.Branch + '1';
+  Self.Request.FirstContact.Expires    := 0;
+  Self.Request.CSeq.SequenceNo         := 1000;
+  Self.Request.LastHop.Branch          := Self.Request.LastHop.Branch + '1';
   Self.SimulateRemoteRequest;
   Self.CheckServerReturnedOK('Step 3: unregistering everything, out-of-order');
 
@@ -297,7 +302,7 @@ begin
     Bindings.First;
     Check(not Bindings.IsEmpty, 'All bindings were removed');
     Bindings.CurrentContact.RemoveExpires;
-    CheckEquals('sip:wintermute@talking-head-2.tessier-ashpool.co.luna',
+    CheckEquals(NewContact,
                 Bindings.CurrentContact.Address.Uri,
                 'Wrong binding removed');
   finally

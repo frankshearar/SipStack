@@ -90,8 +90,6 @@ type
     fBindingDB:         TIdSipAbstractBindingDatabase;
     fMinimumExpiryTime: Cardinal; // in seconds
 
-    procedure Accept(Request: TIdSipRequest;
-                     Transaction: TIdSipTransaction);
     function  GetDefaultExpiryTime: Cardinal;
     procedure RejectExpireTooBrief(Request: TIdSipRequest;
                                    Transaction: TIdSipTransaction);
@@ -99,21 +97,23 @@ type
                                   Transaction: TIdSipTransaction);
     procedure RejectForbidden(Request: TIdSipRequest;
                               Transaction: TIdSipTransaction);
-    procedure RejectNonRegister(Request: TIdSipRequest;
-                                Transaction: TIdSipTransaction);
     procedure RejectNotFound(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction);
+    procedure RejectUnauthorized(Request: TIdSipRequest;
+                                 Transaction: TIdSipTransaction);
     procedure SetDefaultExpiryTime(Value: Cardinal);
+  protected
+    procedure ActOnRequest(Request: TIdSipRequest;
+                           Transaction: TIdSipTransaction;
+                           Receiver: TIdSipTransport); override;
+    procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
+                            Request: TIdSipRequest;
+                            Transaction: TIdSipTransaction); override;
+    function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create; override;
 
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
-    function  ReceiveRequest(Request: TIdSipRequest;
-                             Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport): Boolean; override;
-    function  ReceiveResponse(Response: TIdSipResponse;
-                              Transaction: TIdSipTransaction;
-                              Receiver: TIdSipTransport): Boolean; override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property DefaultExpiryTime: Cardinal                      read GetDefaultExpiryTime write SetDefaultExpiryTime;
@@ -293,81 +293,13 @@ function TIdSipRegistrar.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
 begin
   raise Exception.Create('Registrars may not create in-dialog requests');
 end;
-
+(*
 function TIdSipRegistrar.ReceiveRequest(Request: TIdSipRequest;
                                         Transaction: TIdSipTransaction;
                                         Receiver: TIdSipTransport): Boolean;
 begin
-//      1. The registrar inspects the Request-URI to determine whether it
-//         has access to bindings for the domain identified in the
-//         Request-URI.  If not, and if the server also acts as a proxy
-//         server, the server SHOULD forward the request to the addressed
-//         domain, following the general behavior for proxying messages
-//         described in Section 16.
-//      2. To guarantee that the registrar supports any necessary
-//         extensions, the registrar MUST process the Require header field
-//         values as described for UASs in Section 8.2.2.
-  Result := inherited ReceiveRequest(Request, Transaction, Receiver);
-
-  if not Result then Exit;
-
-  // This check should always pass (that is, be redundant) since a Registrar's
-  // sole entry in AllowedMethods is 'REGISTER'.
   if Request.IsRegister then begin
-//      3. A registrar SHOULD authenticate the UAC.  Mechanisms for the
-//         authentication of SIP user agents are described in Section 22.
-//         Registration behavior in no way overrides the generic
-//         authentication framework for SIP.  If no authentication
-//         mechanism is available, the registrar MAY take the From address
-//         as the asserted identity of the originator of the request.
-{
-    if not Self.Request.HasAuthenticationInfo
-    or not Self.BindingDB.IsAuthenticated(Request) then begin
-      Self.RejectUnauthorized(Request, Transaction);
-      Exit;
-    end;
-}
-//      4. The registrar SHOULD determine if the authenticated user is
-//         authorized to modify registrations for this address-of-record.
-//         For example, a registrar might consult an authorization
-//         database that maps user names to a list of addresses-of-record
-//         for which that user has authorization to modify bindings.  If
-//         the authenticated user is not authorized to modify bindings,
-//         the registrar MUST return a 403 (Forbidden) and skip the
-//         remaining steps.
-
-    if not Self.BindingDB.IsAuthorized(Request.From) then begin
-      Self.RejectForbidden(Request, Transaction);
-      Exit;
-    end;
-
-//      5. The registrar extracts the address-of-record from the To header
-//         field of the request.  If the address-of-record is not valid
-//         for the domain in the Request-URI, the registrar MUST send a
-//         404 (Not Found) response and skip the remaining steps.  The URI
-//         MUST then be converted to a canonical form.  To do that, all
-//         URI parameters MUST be removed (including the user-param), and
-//         any escaped characters MUST be converted to their unescaped
-//         form.  The result serves as an index into the list of bindings.
-    if not Self.BindingDB.IsValid(Request) then begin
-      Self.RejectNotFound(Request, Transaction);
-      Exit;
-    end;
-
     if Request.HasHeader(ContactHeaderFull) then begin
-//      6. The registrar checks whether the request contains the Contact
-//         header field.  If not, it skips to the last step.  If the
-//         Contact header field is present, the registrar checks if there
-//         is one Contact field value that contains the special value "*"
-//         and an Expires field.  If the request has additional Contact
-//         fields or an expiration time other than zero, the request is
-//         invalid, and the server MUST return a 400 (Invalid Request) and
-//         skip the remaining steps.  If not, the registrar checks whether
-//         the Call-ID agrees with the value stored for each binding.  If
-//         not, it MUST remove the binding.  If it does agree, it MUST
-//         remove the binding only if the CSeq in the request is higher
-//         than the value stored for that binding.  Otherwise, the update
-//         MUST be aborted and the request fails.
       if Request.FirstContact.IsWildCard then begin
         if (Request.ContactCount > 1) then begin
           Self.ReturnResponse(Request, SIPBadRequest, Transaction);
@@ -409,24 +341,23 @@ begin
     Self.RejectNonRegister(Request, Transaction);
   end;
 end;
+*)
 
-function TIdSipRegistrar.ReceiveResponse(Response: TIdSipResponse;
-                                          Transaction: TIdSipTransaction;
-                                          Receiver: TIdSipTransport): Boolean;
-begin
-  Result := inherited ReceiveResponse(Response, Transaction, Receiver);
-  // We don't expect to receive responses, so we just drop them on the floor.
-end;
+//* TIdSipRegistrar Protected methods ******************************************
 
-//* TIdSipRegistrar Private methods ********************************************
-
-procedure TIdSipRegistrar.Accept(Request: TIdSipRequest;
-                                 Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.ActOnRequest(Request: TIdSipRequest;
+                                       Transaction: TIdSipTransaction;
+                                       Receiver: TIdSipTransport);
 var
   Bindings: TIdSipContacts;
   Date:     TIdSipDateHeader;
   Response: TIdSipResponse;
 begin
+  if not Self.BindingDB.AddBindings(Request) then begin
+    Self.RejectFailedRequest(Request, Transaction);
+    Exit;
+  end;
+
   Bindings := TIdSipContacts.Create;
   try
     if Self.BindingDB.BindingsFor(Request,
@@ -455,6 +386,60 @@ begin
     Bindings.Free;
   end;
 end;
+
+procedure TIdSipRegistrar.RejectRequest(Reaction: TIdSipUserAgentReaction;
+                                        Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction);
+begin
+  inherited RejectRequest(Reaction, Request, Transaction);
+
+  case Reaction of
+    uarBadRequest:
+      Self.ReturnResponse(Request, SIPBadRequest, Transaction);
+    uarExpireTooBrief:
+      Self.RejectExpireTooBrief(Request, Transaction);
+    uarForbidden:
+      Self.RejectForbidden(Request, Transaction);
+    uarNotFound:
+      Self.RejectNotFound(Request, Transaction);
+    uarUnauthorized:
+      Self.RejectUnauthorized(Request, Transaction);
+  end;
+end;
+
+function TIdSipRegistrar.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
+begin
+  Result := inherited WillAcceptRequest(Request);
+
+  if (Result = uarAccept) then begin
+{
+    if not Request.HasAuthenticationInfo
+    or not Self.BindingDB.IsAuthenticated(Request) then
+      Result := uarUnauthorized
+}
+    if not Self.BindingDB.IsAuthorized(Request.From) then
+      Result := uarForbidden
+    else if not Self.BindingDB.IsValid(Request) then
+      Result := uarNotFound
+    else if Request.HasHeader(ContactHeaderFull) then begin
+      if Request.FirstContact.IsWildCard then begin
+        if (Request.ContactCount > 1) then
+          Result := uarBadRequest
+        else begin
+          if Request.FirstContact.WillExpire
+            and (Request.FirstContact.Expires = 0) then
+            Result := uarAccept
+          else
+            Result := uarBadRequest;
+        end;
+      end
+      else if Request.HasExpiry and (Request.QuickestExpiry < Self.MinimumExpiryTime) then
+        Result := uarExpireTooBrief
+    end;
+  end;
+end;
+
+//* TIdSipRegistrar Private methods ********************************************
 
 function TIdSipRegistrar.GetDefaultExpiryTime: Cardinal;
 begin
@@ -487,16 +472,16 @@ begin
   Self.ReturnResponse(Request, SIPForbidden, Transaction);
 end;
 
-procedure TIdSipRegistrar.RejectNonRegister(Request: TIdSipRequest;
-                                            Transaction: TIdSipTransaction);
-begin
-  Self.ReturnResponse(Request, SIPMethodNotAllowed, Transaction);
-end;
-
 procedure TIdSipRegistrar.RejectNotFound(Request: TIdSipRequest;
                                          Transaction: TIdSipTransaction);
 begin
   Self.ReturnResponse(Request, SIPNotFound, Transaction);
+end;
+
+procedure TIdSipRegistrar.RejectUnauthorized(Request: TIdSipRequest;
+                                             Transaction: TIdSipTransaction);
+begin
+  raise Exception.Create('TIdSipRegistrar.RejectUnauthorized not yet implemented');
 end;
 
 procedure TIdSipRegistrar.SetDefaultExpiryTime(Value: Cardinal);

@@ -70,6 +70,7 @@ type
     RemoteTarget:        TIdSipURI;
     RemoteUri:           TIdSipURI;
     RouteSet:            TIdSipHeaders;
+    SessionEstablished:  Boolean;
 
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
@@ -139,7 +140,20 @@ type
     procedure TestHangUpAllCalls;
   end;
 
-  TestTIdSipSession = class(TTestCaseTU,
+  TestTIdSipAction = class(TTestCaseTU);
+{
+  private
+    Action: TIdSipAction;
+  protected
+    function ActionClass: TIdSipActionClass; virtual; abstract;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  procedure
+    procedure TestReceiveResponseBadExtension;
+  end;
+}
+  TestTIdSipSession = class(TestTIdSipAction,
                             IIdRTPDataListener,
                             IIdSipSessionListener,
                             IIdSipTransportSendingListener,
@@ -657,6 +671,7 @@ begin
   end;
 
   Self.OnInboundCallFired := false;
+  Self.SessionEstablished := false;
 end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
@@ -720,6 +735,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.OnEstablishedSession(Session: TIdSipSession);
 begin
+  Self.SessionEstablished := true;
 end;
 
 procedure TestTIdSipUserAgentCore.OnInboundCall(Session: TIdSipSession);
@@ -1364,10 +1380,9 @@ procedure TestTIdSipUserAgentCore.TestLoopDetection;
 var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
-  Tran:          TIdSipTransaction;
 begin
   // cf. RFC 3261, section 8.2.2.2
-  Tran := Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
+  Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
 
   // wipe out the tag & give a different branch
   Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;
@@ -1375,10 +1390,7 @@ begin
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Check(not Self.Core.ReceiveRequest(Self.Invite,
-                                     Tran,
-                                     Self.Dispatch.Transport),
-        'Request was accepted');
+  Self.SimulateRemoteInvite;
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
@@ -1453,7 +1465,6 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
@@ -1507,18 +1518,16 @@ var
   Response: TIdSipResponse;
   Transaction: TIdSipTransaction;
 begin
-  Transaction := Self.Dispatch.AddClientTransaction(Self.Invite);
+  Self.Core.Call(Self.Destination, '', '');
 
   Response := TIdSipResponse.InResponseTo(Self.Invite,
                                           SIPOK,
                                           Self.Core.Contact);
   try
     Response.AddHeader(Response.Path.LastHop);
-    Check(not Self.Core.ReceiveResponse(Response,
-                                        Transaction,
-                                        Self.Dispatch.Transport),
-          'Multiple-Via Response not dropped');;
-
+    Self.Dispatch.Transport.FireOnResponse(Response);
+    Check(not Self.SessionEstablished,
+          'Multiple-Via Response not dropped');
   finally
     Response.Free;
   end;
