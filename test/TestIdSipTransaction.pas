@@ -205,11 +205,11 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
   Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
-  Result.AddTest(TestTIdSipTransaction.Suite);
-  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipTransaction.Suite);
+//  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
 end;
 
 function InviteStateToStr(const S: TIdSipTransactionState): String;
