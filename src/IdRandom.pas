@@ -73,7 +73,7 @@ end;
 
 function TIdRandomNumber.NextDouble: Double;
 begin
-  // Return a random double in the range [0, 1].
+  // Return a random double in the range 0 <= Result <= 1.
   Result := Self.NextCardinal / High(Cardinal);
 end;
 
