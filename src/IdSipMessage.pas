@@ -911,6 +911,8 @@ type
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
     function  Copy: TIdSipMessage;
+    procedure CopyHeaders(Src: TIdSipMessage;
+                          const HeaderName: String);
     function  FirstContact: TIdSipContactHeader;
     function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
@@ -4959,6 +4961,20 @@ function TIdSipMessage.Copy: TIdSipMessage;
 begin
   Result := TIdSipMessageClass(Self.ClassType).Create;
   Result.Assign(Self);
+end;
+
+procedure TIdSipMessage.CopyHeaders(Src: TIdSipMessage;
+                                    const HeaderName: String);
+var
+  Filter: TIdSipHeadersFilter;
+begin
+  Filter := TIdSipHeadersFilter.Create(Src.Headers,
+                                       HeaderName);
+  try
+    Self.AddHeaders(Filter);
+  finally
+    Filter.Free;
+  end;
 end;
 
 function TIdSipMessage.FirstContact: TIdSipContactHeader;

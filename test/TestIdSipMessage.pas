@@ -56,6 +56,7 @@ type
     procedure TestAssignCopiesBody;
     procedure TestClearHeaders;
     procedure TestContactCount;
+    procedure TestCopyHeaders;
     procedure TestFirstContact;
     procedure TestFirstExpires;
     procedure TestFirstHeader;
@@ -563,6 +564,41 @@ begin
 
   Self.Msg.AddHeader(ContactHeaderFull);
   CheckEquals(2, Self.Msg.ContactCount, '2 Contacts + Via');
+end;
+
+procedure TestTIdSipMessage.TestCopyHeaders;
+var
+  Expected: TIdSipHeadersFilter;
+  NewMsg:   TIdSipMessage;
+  Received: TIdSipHeadersFilter;
+begin
+  NewMsg := Self.Msg.Copy;
+  try
+    Self.Msg.AddHeader(WarningHeader).Value := '399 proxy.tessier-ashpool.co.luna 1234::1';
+    Self.Msg.AddHeader(WarningHeader).Value := '399 gw1.leo-ix.net 5678::1';
+    Self.Msg.AddHeader(WarningHeader).Value := '399 gw2.leo-ix.net 9abc::1';
+    Self.Msg.AddHeader(WarningHeader).Value := '399 gw.fried.neurons.org def0::1';
+
+    NewMsg.CopyHeaders(Self.Msg, WarningHeader);
+
+    Expected := TIdSipHeadersFilter.Create(Self.Msg.Headers,
+                                           WarningHeader);
+    try
+      Received := TIdSipHeadersFilter.Create(NewMsg.Headers,
+                                             WarningHeader);
+      try
+        CheckEquals(Expected,
+                    Received,
+                    'Copy Warning headers');
+      finally
+        Received.Free;
+      end;
+    finally
+      Expected.Free;
+    end;
+  finally
+    NewMsg.Free;
+  end;
 end;
 
 procedure TestTIdSipMessage.TestFirstContact;
