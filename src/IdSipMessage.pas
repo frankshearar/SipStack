@@ -928,6 +928,7 @@ type
     function  Description: String;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
+    function  HasWWWAuthenticate: Boolean;
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
     function  IsProvisional: Boolean;
@@ -5314,6 +5315,11 @@ begin
   end
   else
     Result := false;
+end;
+
+function TIdSipResponse.HasWWWAuthenticate: Boolean;
+begin
+  Result := Self.HasHeader(WWWAuthenticateHeader);
 end;
 
 function TIdSipResponse.IsFinal: Boolean;

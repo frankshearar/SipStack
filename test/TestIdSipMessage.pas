@@ -138,6 +138,7 @@ type
     procedure TestEqualsDifferentStatusText;
     procedure TestEqualsRequest;
     procedure TestEqualsTrivial;
+    procedure TestHasWWWAuthenticate;
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
@@ -1954,6 +1955,20 @@ begin
   finally
     R1.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestHasWWWAuthenticate;
+begin
+  Check(not Self.Response.HasHeader(WWWAuthenticateHeader),
+        'Sanity check');
+
+  Check(not Self.Response.HasWWWAuthenticate,
+        'New response');
+
+
+  Self.Response.AddHeader(WWWAuthenticateHeader);
+  Check(Self.Response.HasWWWAuthenticate,
+        'Lies! There is too a WWW-Authenticate header!');
 end;
 
 procedure TestTIdSipResponse.TestIsFinal;
