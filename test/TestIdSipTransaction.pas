@@ -175,7 +175,7 @@ type
     procedure TearDown; override;
   published
     procedure TestIsNull;
-    procedure TestReceiveRequest; virtual;
+    procedure TestReceiveCancel; virtual;
   end;
 
   TestTIdSipServerInviteTransaction = class(TTestTransaction)
@@ -1944,7 +1944,7 @@ begin
   Check(not Self.Tran.IsNull, 'IsNull');
 end;
 
-procedure TTestTransaction.TestReceiveRequest;
+procedure TTestTransaction.TestReceiveCancel;
 var
   Cancel:        TIdSipRequest;
   ResponseCount: Cardinal;
@@ -2152,7 +2152,7 @@ begin
 
   Cancel := Self.Tran.InitialRequest.CreateCancel;
   try
-    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveRequest(Cancel, Self.MockDispatcher.Transport);
 
     CheckEquals(ResponseCount +2,
                 Self.MockDispatcher.Transport.SentResponseCount,
@@ -2184,7 +2184,7 @@ begin
 
   Cancel := Self.Tran.InitialRequest.CreateCancel;
   try
-    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveRequest(Cancel, Self.MockDispatcher.Transport);
 
     CheckEquals(ResponseCount + 1,
                 Self.MockDispatcher.Transport.SentResponseCount,
