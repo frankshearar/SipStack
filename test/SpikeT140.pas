@@ -3,8 +3,8 @@ unit SpikeT140;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdRTPBase, IdRTP, IdRTPClient,
-  IdRTPServer, IdSocketHandle, IdUDPClient, IdUDPServer, StdCtrls, SyncObjs;
+  Classes, Controls, ExtCtrls, Forms, IdRTP, IdRTPClient, IdRTPServer,
+  IdSocketHandle, IdUDPClient, IdUDPServer, StdCtrls, SyncObjs;
 
 type
   TIdSpikeT140 = class(TForm)

@@ -3,8 +3,8 @@ unit IdSdpParser;
 interface
 
 uses
-  Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdSimpleParser,
-  IdURI;
+  Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdRTP,
+  IdSimpleParser, IdURI;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -33,7 +33,7 @@ type
     property Name:  String read fName write fName;
     property Value: String read fValue write SetValue;
   end;
-{
+
   TIdSdpRTPMapAttribute = class(TIdSdpAttribute)
   private
     fPayloadType: TIdRTPPayloadType;
@@ -44,8 +44,8 @@ type
 
     property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
     property Encoding:    TIdRTPEncoding    read fEncoding;
-  end;
-}
+  end;  
+
   TIdSdpBandwidth = class(TIdPrintable)
   private
     fBandwidth:     Cardinal;
@@ -296,6 +296,7 @@ type
     procedure GetRtpMapAttributes(Atts: TIdSdpAttributes);
     function  HasConnection: Boolean;
     function  HasKey: Boolean;
+    procedure InitializeProfile(Profile: TIdRTPProfile);
     procedure PrintOn(Dest: TStream);
 
     property Attributes:        TIdSdpAttributes        read GetAttributes;
@@ -377,8 +378,6 @@ const
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
   IllegalByteStringChars = [#0, #10, #13];
-
-  AudioVisualProfile = 'RTP/AVP'; // defined in RFC 3551
   SessionHeaderOrder = 'vosiuepcbtka';
   MediaHeaderOrder   = 'micbka';
   RTPMapAttribute    = 'rtpmap';
@@ -590,6 +589,23 @@ end;
 procedure TIdSdpAttribute.SetValue(const Value: String);
 begin
   fValue := Value;
+end;
+
+//******************************************************************************
+//* TIdSdpRTPMapAttribute                                                      *
+//******************************************************************************
+//* TIdSdpRTPMapAttribute Public methods ***************************************
+
+constructor TIdSdpRTPMapAttribute.Create;
+begin
+  Self.fEncoding := TIdRTPNullEncoding.Create;
+end;
+
+destructor TIdSdpRTPMapAttribute.Destroy;
+begin
+  Self.Encoding.Free;
+
+  inherited Destroy;
 end;
 
 //******************************************************************************
@@ -1073,6 +1089,22 @@ end;
 function TIdSdpPayload.HasKey: Boolean;
 begin
   Result := Assigned(fKey);
+end;
+
+procedure TIdSdpPayload.InitializeProfile(Profile: TIdRTPProfile);
+var
+  I:       Integer;
+  RTPMaps: TIdSdpAttributes;
+begin
+  RTPMaps := TIdSdpAttributes.Create;
+  try
+    Self.GetRtpMapAttributes(RTPMaps);
+
+    for I := 0 to RTPMaps.Count - 1 do begin
+    end;
+  finally
+    RTPMaps.Free;
+  end;
 end;
 
 procedure TIdSdpPayload.PrintOn(Dest: TStream);

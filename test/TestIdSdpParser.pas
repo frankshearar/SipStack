@@ -307,6 +307,8 @@ type
     procedure TearDown; override;
   published
     procedure TestGetRtpMapAttributes;
+    procedure TestInitializeOnEmptySdpPayload;
+    procedure TestInitializeOnSingleMediaSdp;
     procedure TestPrintOnBasic;
     procedure TestPrintOnWithAttributes;
     procedure TestPrintOnWithBandwidth;
@@ -331,7 +333,7 @@ const
 implementation
 
 uses
-  IdSimpleParser, SysUtils;
+  IdRTP, IdSimpleParser, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -3248,6 +3250,61 @@ begin
     end;
   finally
     S.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestInitializeOnEmptySdpPayload;
+var
+  PT:      TIdRTPPayloadType;
+  Profile: TIdRTPProfile;
+begin
+  Profile := TIdRTPProfile.Create;
+  try
+    Self.Payload.InitializeProfile(Profile);
+
+    for PT := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do
+      CheckEquals(TIdRTPNullEncoding.ClassName,
+                  Profile.EncodingFor(PT).ClassName,
+                  'Encoding for payload type ' + IntToStr(PT));
+  finally
+    Profile.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestInitializeOnSingleMediaSdp;
+var
+  P:       TIdSdpParser;
+  Profile: TIdRTPProfile;
+  PT:      TIdRTPPayloadType;
+  S:       TStringStream;
+begin
+{
+  S := TStringStream.Create('v=0'#13#10
+                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                          + 's=Minimum Session Info'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10
+                          + 'm=text 11000 RTP/AVP 98'#13#10
+                          + 'a=rtpmap:98 t140/1000');
+}
+  Profile := TIdRTPProfile.Create;
+  try
+    Self.Payload.InitializeProfile(Profile);
+
+    for PT := Low(TIdRTPPayloadType) to 97 do
+      CheckEquals(TIdRTPNullEncoding.ClassName,
+                  Profile.EncodingFor(PT).ClassName,
+                  'Encoding for payload type ' + IntToStr(PT));
+
+    CheckNotEquals(TIdRTPNullEncoding.ClassName,
+                   Profile.EncodingFor(98).ClassName,
+                   'Encoding for payload type 98');
+
+    for PT := 99 to High(TIdRTPPayloadType) do
+      CheckEquals(TIdRTPNullEncoding.ClassName,
+                  Profile.EncodingFor(PT).ClassName,
+                  'Encoding for payload type ' + IntToStr(PT));
+  finally
+    Profile.Free;
   end;
 end;
 

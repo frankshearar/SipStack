@@ -3,7 +3,7 @@ unit IdRTPClient;
 interface
 
 uses
-  Classes, IdUDPClient, IdRTPBase, IdRTP;
+  Classes, IdUDPClient, IdRTP;
 
 type
   TIdRTPClient = class(TIdUDPClient)

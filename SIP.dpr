@@ -5,7 +5,6 @@ uses
   GuiTestRunner,
   TextTestRunner,
   IdRTP in 'src\IdRTP.pas',
-  IdRTPBase in 'src\IdRTPBase.pas',
   IdRTPClient in 'src\IdRTPClient.pas',
   IdRTPPCM in 'src\IdRTPPCM.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
@@ -53,8 +52,7 @@ uses
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
-  TestIdUri in 'test\TestIdUri.pas',
-  TestIdRTPBase in 'test\TestIdRTPBase.pas';
+  TestIdUri in 'test\TestIdUri.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}
