@@ -41,7 +41,7 @@ uses
   Classes, Contnrs, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
   IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
-  IdSipTransport, SyncObjs;
+  IdSipTransport, IdThread, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -462,26 +462,21 @@ type
   // to an INVITE until it receives an ACK. Thus I provide an exponential
   // back-off timer starting with an interval of T1 milliseconds and capping
   // the interval at T2 milliseconds.
-  TIdSipSessionTimer = class(TObject)
+  TIdSipSessionTimer = class(TIdThread)
   private
-    Lock:    TCriticalSection;
-    T1:      Cardinal;
-    T2:      Cardinal;
-    Session: TIdSipInboundSession;
-    Timer:   TIdSipTimer;
-
-    procedure OnTimer(Sender: TObject);
+    InitialInterval: Cardinal;
+    MaximumInterval: Cardinal;
+    Session:         TIdSipInboundSession;
+    WaitEvent:       TEvent;
+  protected
+    procedure Run; override;
   public
     constructor Create(Session: TIdSipInboundSession;
                        T1: Cardinal;
-                       T2: Cardinal);
+                       T2: Cardinal); reintroduce;
     destructor  Destroy; override;
 
-    procedure Fire;
-    procedure Start;
-    procedure Stop;
-
-    function Interval: Cardinal;
+    procedure Terminate; override;
   end;
 
   TIdSipSessionMethod = class(TIdMethod)
@@ -497,7 +492,7 @@ type
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Reason:  String        read fReason write fReason;
+    property Reason: String read fReason write fReason;
   end;
 
   TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
@@ -577,6 +572,7 @@ type
   private
     LastResponse: TIdSipResponse;
     OkTimer:      TIdSipSessionTimer;
+    TimerLock:    TCriticalSection;
 
     function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     procedure SendSimpleResponse(StatusCode: Cardinal);
@@ -1473,7 +1469,7 @@ end;
 procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.From.Assign(Value);
-  
+
   if Self.From.IsMalformed then
     raise EBadHeader.Create(Self.From.Name);
 end;
@@ -2255,7 +2251,7 @@ begin
        + 'Contact');
 
   Self.Contact.Assign(Value);
-  
+
   if Self.Contact.IsMalformed then
     raise EBadHeader.Create(Self.Contact.Name);
 end;
@@ -2609,66 +2605,53 @@ constructor TIdSipSessionTimer.Create(Session: TIdSipInboundSession;
                                       T1: Cardinal;
                                       T2: Cardinal);
 begin
-  inherited Create;
+  inherited Create(true);
 
-  Self.Lock := TCriticalSection.Create;
+  Self.Session         := Session;
+  Self.FreeOnTerminate := true;
+  Self.InitialInterval := T1;
+  Self.MaximumInterval := T2;
+  Self.WaitEvent       := TSimpleEvent.Create;
 
-  Self.Session := Session;
-  Self.T1      := T1;
-  Self.T2      := T2;
-
-  Self.Timer := TIdSipTimer.Create;
-  Self.Timer.Interval := Self.T1;
-  Self.Timer.OnTimer  := Self.OnTimer;
+  Self.Start;
 end;
 
 destructor TIdSipSessionTimer.Destroy;
 begin
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
-
-  Self.Lock.Free;
+  Self.WaitEvent.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipSessionTimer.Fire;
+procedure TIdSipSessionTimer.Terminate;
 begin
-  Self.Lock.Acquire;
-  try
-    Self.Timer.Interval := Min(2*Self.Timer.Interval, Self.T2);
-  finally
-    Self.Lock.Release;
+  inherited Terminate;
+
+  Self.WaitEvent.SetEvent;
+end;
+
+//* TIdSipSessionTimer Protected methods ***************************************
+
+procedure TIdSipSessionTimer.Run;
+var
+  Interval:  Cardinal;
+  TotalWait: Cardinal;
+begin
+  Interval  := Self.InitialInterval;
+  TotalWait := 0;
+  while not Self.Terminated and (TotalWait < 64*Self.InitialInterval) do begin
+    Self.WaitEvent.WaitFor(Interval);
+
+    if not Self.Terminated then
+      Self.Session.ResendLastResponse;
+
+    Interval := Min(Interval, Self.MaximumInterval);
   end;
 
-  Self.Session.ResendLastResponse;
-end;
-
-procedure TIdSipSessionTimer.Start;
-begin
-  Self.Timer.Start;
-end;
-
-procedure TIdSipSessionTimer.Stop;
-begin
-  Self.Timer.Stop;
-end;
-
-function TIdSipSessionTimer.Interval: Cardinal;
-begin
-  Self.Lock.Acquire;
-  try
-    Result := Self.Timer.Interval;
-  finally
-    Self.Lock.Release;
+  if not Self.Terminated then begin
+    Self.Session.Terminate;
+    Self.Terminate;
   end;
-end;
-
-//* TIdSipSessionTimer Private methods *****************************************
-
-procedure TIdSipSessionTimer.OnTimer(Sender: TObject);
-begin
-  Self.Fire;
 end;
 
 //******************************************************************************
@@ -3012,20 +2995,27 @@ constructor TIdSipInboundSession.Create(UA: TIdSipUserAgentCore;
 begin
   inherited Create(UA);
 
+  Self.TimerLock := TCriticalSection.Create;
+
   Self.CurrentRequest.Assign(Invite);
 
   Self.UsingSecureTransport := UsingSecureTransport;
-
-  Self.OkTimer := TIdSipSessionTimer.Create(Self, DefaultT1, DefaultT2);
 
   Self.Ring;
 end;
 
 destructor TIdSipInboundSession.Destroy;
 begin
-  Self.OkTimer.Free;
+  Self.TimerLock.Acquire;
+  try
+    if Assigned(Self.OkTimer) then
+      Self.OkTimer.Terminate;
+  finally
+    Self.TimerLock.Release;
+  end;
 
   Self.LastResponse.Free;
+  Self.TimerLock.Free;
 
   inherited Destroy;
 end;
@@ -3057,7 +3047,13 @@ begin
       Self.DialogLock.Release;
     end;
     Self.SendResponse(OkResponse);
-    Self.OkTimer.Start;
+
+    Self.TimerLock.Acquire;
+    try
+      Self.OkTimer := TIdSipSessionTimer.Create(Self, DefaultT1, DefaultT2);
+    finally
+      Self.TimerLock.Release;
+    end;
   finally
     OkResponse.Free;
   end;
@@ -3091,8 +3087,15 @@ begin
   if Request.IsAck then begin
     Self.fReceivedAck := true;
 
-    if Assigned(Self.OkTimer) then
-      Self.OkTimer.Stop;
+    Self.TimerLock.Acquire;
+    try
+      if Assigned(Self.OkTimer) then begin
+        Self.OkTimer.Terminate;
+        Self.OkTimer := nil;
+      end;
+    finally
+      Self.TimerLock.Release;
+    end;
   end
   else
     inherited ReceiveRequest(Request);
