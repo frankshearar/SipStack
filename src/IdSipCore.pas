@@ -528,7 +528,7 @@ function TIdSipUserAgentCore.CreateInvite(const Dest: TIdSipToHeader;
                                           const Body: String;
                                           const MimeType: String): TIdSipRequest;
 begin
-  Result := CreateRequest(Dest);
+  Result := Self.CreateRequest(Dest);
   try
     Result.Method := MethodInvite;
 
@@ -567,7 +567,7 @@ begin
     Result.MaxForwards := Result.DefaultMaxForwards;
     Result.ToHeader    := Dest;
 
-    // Lies. Pure hack to get X-Lite talking
+    // TODO: Lies. Pure hack to get X-Lite talking
     if (Pos(TransportParam, Dest.AsString) > 0) then
       Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
     else
