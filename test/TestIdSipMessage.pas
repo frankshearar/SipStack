@@ -140,9 +140,11 @@ type
     procedure TestEqualsTrivial;
     procedure TestFirstProxyAuthenticate;
     procedure TestFirstUnsupported;
+    procedure TestFirstWarning;
     procedure TestFirstWWWAuthenticate;
     procedure TestHasAuthenticationInfo;
     procedure TestHasProxyAuthenticate;
+    procedure TestHasWarning;
     procedure TestHasWWWAuthenticate;
     procedure TestInResponseToRecordRoute;
     procedure TestInResponseToSipsRecordRoute;
@@ -1993,6 +1995,21 @@ begin
   Check(U = Self.Response.FirstUnsupported, 'Wrong Unsupported');
 end;
 
+procedure TestTIdSipResponse.TestFirstWarning;
+var
+  W: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstWarning, 'Warning not present');
+  CheckEquals(1, Self.Response.HeaderCount, 'Warning not auto-added');
+
+  W := Self.Response.FirstHeader(WarningHeader);
+  Self.Response.AddHeader(WarningHeader);
+
+  Check(W = Self.Response.FirstWarning, 'Wrong Warning');
+end;
+
 procedure TestTIdSipResponse.TestFirstWWWAuthenticate;
 var
   P: TIdSipHeader;
@@ -2038,6 +2055,20 @@ begin
   Self.Response.AddHeader(ProxyAuthenticateHeader);
   Check(Self.Response.HasProxyAuthenticate,
         'Lies! There is too a Proxy-Authenticate header!');
+end;
+
+procedure TestTIdSipResponse.TestHasWarning;
+begin
+  Check(not Self.Response.HasHeader(WarningHeader),
+        'Sanity check');
+
+  Check(not Self.Response.HasWarning,
+        'New response');
+
+
+  Self.Response.AddHeader(WarningHeader);
+  Check(Self.Response.HasWarning,
+        'Lies! There is too a Warning header!');
 end;
 
 procedure TestTIdSipResponse.TestHasWWWAuthenticate;

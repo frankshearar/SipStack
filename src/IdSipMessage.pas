@@ -940,10 +940,12 @@ type
     function  Description: String;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
+    function  FirstWarning: TIdSipWarningHeader;
     function  FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  HasAuthenticationInfo: Boolean;
     function  HasProxyAuthenticate: Boolean;
+    function  HasWarning: Boolean;
     function  HasWWWAuthenticate: Boolean;
     function  IsAuthenticationChallenge: Boolean;
     function  IsFinal: Boolean;
@@ -5382,6 +5384,11 @@ begin
   Result := Self.FirstHeader(UnsupportedHeader) as TIdSipCommaSeparatedHeader;
 end;
 
+function TIdSipResponse.FirstWarning: TIdSipWarningHeader;
+begin
+  Result := Self.FirstHeader(WarningHeader) as TIdSipWarningHeader;
+end;
+
 function TIdSipResponse.FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
 begin
   Result := Self.FirstHeader(WWWAuthenticateHeader) as TIdSipWWWAuthenticateHeader;
@@ -5411,6 +5418,11 @@ end;
 function TIdSipResponse.HasProxyAuthenticate: Boolean;
 begin
   Result := Self.HasHeader(ProxyAuthenticateHeader);
+end;
+
+function TIdSipResponse.HasWarning: Boolean;
+begin
+  Result := Self.HasHeader(WarningHeader);
 end;
 
 function TIdSipResponse.HasWWWAuthenticate: Boolean;
