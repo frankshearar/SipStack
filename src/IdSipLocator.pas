@@ -84,6 +84,7 @@ type
   end;
 
   TIdDomainNameRecords = class;
+  TIdSrvRecords = class;
 
   TIdSipLocations = class(TIdBaseList)
   private
@@ -92,6 +93,7 @@ type
     procedure AddLocationsFromNames(const Transport: String;
                                     Port: Cardinal;
                                     Names: TIdDomainNameRecords);
+    procedure AddLocationsFromSRVs(SRV: TIdSrvRecords);
     procedure AddLocation(const Transport: String;
                           const Address: String;
                           Port: Cardinal);
@@ -103,15 +105,12 @@ type
   TIdNaptrRecord = class;
   TIdNaptrRecords = class;
   TIdSrvRecord = class;
-  TIdSrvRecords = class;
 
   // Given a SIP or SIPS URI, I return (using FindServersFor) a set of tuples of
   // the form (transport, IP address, port) that you can use to send a SIP
   // message.
   TIdSipAbstractLocator = class(TObject)
   private
-    procedure AddLocationsFrom(Srv: TIdSrvRecords;
-                               Result: TIdSipLocations);
     procedure AddNameRecordsTo(Locations: TIdSipLocations;
                                const Transport: String;
                                NameRecords: TIdDomainNameRecords;
@@ -504,6 +503,17 @@ begin
     Self.AddLocation(Transport, Names[I].IPAddress, Port);
 end;
 
+procedure TIdSipLocations.AddLocationsFromSRVs(SRV: TIdSrvRecords);
+var
+  I, J: Integer;
+begin
+  for I := 0 to Srv.Count - 1 do
+    for J := 0 to Srv[I].NameRecords.Count - 1 do
+      Self.AddLocation(Srv[I].SipTransport,
+                       Srv[I].NameRecords[J].IPAddress,
+                       Srv[I].Port);
+end;
+
 procedure TIdSipLocations.AddLocation(const Transport: String;
                                       const Address: String;
                                       Port: Cardinal);
@@ -584,7 +594,7 @@ begin
         else
           Self.ResolveSRV(Naptr[0].Value, Srv);
 
-        Self.AddLocationsFrom(SRV, Result);
+        Result.AddLocationsFromSRVs(SRV);
       finally
         ARecords.Free;
       end;
@@ -813,18 +823,6 @@ begin
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
-
-procedure TIdSipAbstractLocator.AddLocationsFrom(Srv: TIdSrvRecords;
-                                                 Result: TIdSipLocations);
-var
-  I, J: Integer;
-begin
-  for I := 0 to Srv.Count - 1 do
-    for J := 0 to Srv[I].NameRecords.Count - 1 do
-      Result.AddLocation(Srv[I].SipTransport,
-                         Srv[I].NameRecords[J].IPAddress,
-                         Srv[I].Port);
-end;
 
 procedure TIdSipAbstractLocator.AddNameRecordsTo(Locations: TIdSipLocations;
                                                  const Transport: String;
