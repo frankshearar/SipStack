@@ -1503,8 +1503,8 @@ const
 implementation
 
 uses
-  IdGlobal, IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdRandom,
-  IdSdp, IdStack, SysUtils, IdUDPServer;
+  IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdRandom, IdSdp, IdStack,
+  Math, SysUtils, IdUDPServer;
 
 const
   BusyHere                       = 'Incoming call rejected - busy here';

@@ -145,7 +145,7 @@ type
 implementation
 
 uses
-  IdGlobal, IdSimpleParser, IdSipTransport, SysUtils;
+  IdSimpleParser, IdSipTransport, SysUtils;
 
 const
   NoRecordFound = 'No record found: %s';

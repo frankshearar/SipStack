@@ -88,7 +88,14 @@ const
   MarkChars       = ['-', '_', '.', '!', '~', '*', '''', '(', ')'];
   UnreservedChars = Alphabet + Digits + MarkChars;
 
+const
+  FetchDefaultDelete = true;
+  FetchDefaultDelimiter = ' '; // Do not localise
+
 function EncodeNonLineUnprintableChars(S: String): String;
+function Fetch(var Source: String;
+               const Delimiter: String = FetchDefaultDelimiter;
+               Delete: Boolean = FetchDefaultDelete): String;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
 function WithoutFirstAndLastChars(const S: String): String;
@@ -116,6 +123,13 @@ begin
       Result := Result + S[I]
     else
       Result := Result + '#' + IntToHex(Ord(S[I]), 2);
+end;
+
+function Fetch(var Source: String;
+               const Delimiter: String = FetchDefaultDelimiter;
+               Delete: Boolean = FetchDefaultDelete): String;
+begin
+  Result := IdGlobal.Fetch(Source, Delimiter, Delete);
 end;
 
 function HexDigitToInt(Digit: Char): Cardinal;
@@ -382,7 +396,7 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
 
     if (Chunk = '') then Exit;
 
-    while (Chunk <> '') and (IndyPos(IPv6Delim, Chunk) > 0) do begin
+    while (Chunk <> '') and (Pos(IPv6Delim, Chunk) > 0) do begin
       W := Fetch(Chunk, IPv6Delim);
 
       if (Length(W) > 4) or not TIdSimpleParser.IsHexNumber(W) then
@@ -393,7 +407,7 @@ class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
       Inc(I);
     end;
 
-    if AllowTrailingIPv4 and (IndyPos(IPv4Delim, Chunk) > 0) then begin
+    if AllowTrailingIPv4 and (Pos(IPv4Delim, Chunk) > 0) then begin
       if (Chunk <> '') then begin
         Address[I] := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
                     or StrToInt(Fetch(Chunk, IPv4Delim));
@@ -443,7 +457,7 @@ begin
     // We parse the chunks - since SecondChunk could well be empty, we
     // conditionally allow FirstChunk to contain a trailing IPv4 address.
     // SecondChunk can always contain a trailing IPv4 address.
-    ParseChunk(FirstChunk, FirstAddy, FirstChunkSize, IndyPos(IPv4Delim, FirstChunk) > 0);
+    ParseChunk(FirstChunk, FirstAddy, FirstChunkSize, Pos(IPv4Delim, FirstChunk) > 0);
     ParseChunk(SecondChunk, SecondAddy, SecondChunkSize, true);
 
     // And finally we copy the two chunks into the answer.

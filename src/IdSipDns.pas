@@ -217,7 +217,7 @@ function SrvSort(Item1, Item2: Pointer): Integer;
 implementation
 
 uses
-  IdGlobal, IdSipMessage, SysUtils;
+  IdSimpleParser, IdSipMessage, SysUtils;
 
 //******************************************************************************
 //* Unit functions & procedures                                                *

@@ -1280,7 +1280,7 @@ const
 implementation
 
 uses
-  DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom, IdUnicode;
+  DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom, IdUnicode, Math;
 
 const
   JanOne1900           = 2;

@@ -748,7 +748,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdGlobal, IdSocketHandle, SysUtils;
+  IdSocketHandle, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -2545,7 +2545,7 @@ begin
   Result := true;
 
   S := Header;
-  if (IndyPos('<', S) > 0) then begin
+  if (Pos('<', S) > 0) then begin
     Token := Fetch(S, '<');
     for I := 1 to Length(Token) do
       Result := Result and (Token[I] in EmailSafeChars);
@@ -2555,7 +2555,7 @@ begin
 
     Result := Result and (S = '');
   end else begin
-    if (IndyPos('(', S) > 0) then begin
+    if (Pos('(', S) > 0) then begin
       Token := Trim(Fetch(S, '('));
       Result := Result and Self.IsPhone(Token);
       Fetch(S, ')');
@@ -2655,7 +2655,7 @@ begin
     LastHeader  := Self.LastMediaHeader;
   end;
 
-  if (IndyPos(LastHeader, HeaderOrder) > IndyPos(CurrentHeader, HeaderOrder)) then
+  if (Pos(LastHeader, HeaderOrder) > Pos(CurrentHeader, HeaderOrder)) then
     raise EParserError.Create(Format(BadHeaderOrder, [CurrentHeader, LastHeader]));
 end;
 
@@ -2782,7 +2782,7 @@ begin
                                      [RSSDPConnectionName,
                                       Name + '=' + OriginalValue]));
 
-  Multicast := IndyPos('/', Value) > 0;
+  Multicast := Pos('/', Value) > 0;
 
   if Multicast then begin
     Addr := Fetch(Value, '/');
@@ -2888,7 +2888,7 @@ begin
   Self.ParseHeader(Name, Value);
   OriginalValue := Value;
 
-  if (IndyPos(':', Value) > 0) then
+  if (Pos(':', Value) > 0) then
     Token := Fetch(Value, ':')
   else begin
     Token := Value;
@@ -2946,7 +2946,7 @@ begin
     NewMediaDesc.MediaType := StrToMediaType(Token);
 
     Token := Fetch(Value, ' ');
-    if (IndyPos('/', Token) > 0) then begin
+    if (Pos('/', Token) > 0) then begin
       Count := Token;
       Token := Fetch(Count, '/');
     end;
