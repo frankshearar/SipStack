@@ -31,8 +31,8 @@ type
     fConnection: TIdTCPConnection;
     fRequest:    TIdSipRequest;
   public
-    constructor Create(const Connection:    TIdTCPConnection;
-                       const CopyOfRequest: TIdSipRequest);
+    constructor Create(Connection:    TIdTCPConnection;
+                       CopyOfRequest: TIdSipRequest);
     destructor  Destroy; override;
 
     property Connection: TIdTCPConnection read fConnection;
@@ -46,12 +46,12 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    procedure Add(const Connection: TIdTCPConnection;
-                  const Request:    TIdSipRequest);
-    function  ConnectionFor(const Request: TIdSipRequest): TIdTCPConnection; overload;
-    function  ConnectionFor(const Response: TIdSipResponse): TIdTCPConnection; overload;
+    procedure Add(Connection: TIdTCPConnection;
+                  Request:    TIdSipRequest);
+    function  ConnectionFor(Request: TIdSipRequest): TIdTCPConnection; overload;
+    function  ConnectionFor(Response: TIdSipResponse): TIdTCPConnection; overload;
     function  Count: Integer;
-    procedure Remove(const Connection: TIdTCPConnection);
+    procedure Remove(Connection: TIdTCPConnection);
   end;
 
   TIdSipConnectionTableLock = class(TObject)
@@ -78,12 +78,12 @@ type
     ListenerLock:       TCriticalSection;
     Listeners:          TList;
 
-    procedure AddConnection(const Connection: TIdTCPConnection;
-                            const Request: TIdSipRequest);
-    procedure NotifyListeners(const Request: TIdSipRequest;
-                              const ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyListeners(const Response: TIdSipResponse;
-                              const ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure AddConnection(Connection: TIdTCPConnection;
+                            Request: TIdSipRequest);
+    procedure NotifyListeners(Request: TIdSipRequest;
+                              ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure NotifyListeners(Response: TIdSipResponse;
+                              ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
@@ -94,7 +94,7 @@ type
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         Reason: String;
                                         Parser: TIdSipParser);
-    procedure SendResponseTo(const Response: TIdSipResponse;
+    procedure SendResponseTo(Response: TIdSipResponse;
                              Dest: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
                            AMessage: TIdSipMessage);
@@ -110,7 +110,7 @@ type
     function  DefaultTimeout: Cardinal; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
-    procedure SendResponse(const Response: TIdSipResponse);
+    procedure SendResponse(Response: TIdSipResponse);
   published
     property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
     property DefaultPort default IdPORT_SIP;
@@ -129,8 +129,8 @@ uses
 //******************************************************************************
 //* TIdSipConnectionTableEntry Public methods **********************************
 
-constructor TIdSipConnectionTableEntry.Create(const Connection:    TIdTCPConnection;
-                                              const CopyOfRequest: TIdSipRequest);
+constructor TIdSipConnectionTableEntry.Create(Connection:    TIdTCPConnection;
+                                              CopyOfRequest: TIdSipRequest);
 begin
   inherited Create;
 
@@ -165,13 +165,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipConnectionTable.Add(const Connection: TIdTCPConnection;
-                                    const Request:    TIdSipRequest);
+procedure TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
+                                    Request:    TIdSipRequest);
 begin
   Self.List.Add(TIdSipConnectionTableEntry.Create(Connection, Request));
 end;
 
-function TIdSipConnectionTable.ConnectionFor(const Request: TIdSipRequest): TIdTCPConnection;
+function TIdSipConnectionTable.ConnectionFor(Request: TIdSipRequest): TIdTCPConnection;
 var
   Count: Integer;
   I:     Integer;
@@ -188,7 +188,7 @@ begin
     Result := (Self.List[I] as TIdSipConnectionTableEntry).Connection;
 end;
 
-function TIdSipConnectionTable.ConnectionFor(const Response: TIdSipResponse): TIdTCPConnection;
+function TIdSipConnectionTable.ConnectionFor(Response: TIdSipResponse): TIdTCPConnection;
 var
   Count: Integer;
   I:     Integer;
@@ -210,7 +210,7 @@ begin
   Result := Self.List.Count;
 end;
 
-procedure TIdSipConnectionTable.Remove(const Connection: TIdTCPConnection);
+procedure TIdSipConnectionTable.Remove(Connection: TIdTCPConnection);
 var
   Count: Integer;
   I: Integer;
@@ -317,7 +317,7 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.SendResponse(const Response: TIdSipResponse);
+procedure TIdSipTcpServer.SendResponse(Response: TIdSipResponse);
 var
   Connection:  TIdTCPConnection;
   Table:       TIdSipConnectionTable;
@@ -422,8 +422,8 @@ end;
 
 //* TIdSipTcpServer Private methods ********************************************
 
-procedure TIdSipTcpServer.AddConnection(const Connection: TIdTCPConnection;
-                                        const Request: TIdSipRequest);
+procedure TIdSipTcpServer.AddConnection(Connection: TIdTCPConnection;
+                                        Request: TIdSipRequest);
 var
   Table:  TIdSipConnectionTable;
 begin
@@ -435,8 +435,8 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.NotifyListeners(const Request: TIdSipRequest;
-                                          const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTcpServer.NotifyListeners(Request: TIdSipRequest;
+                                          ReceivedFrom: TIdSipConnectionBindings);
 var
   I: Integer;
 begin
@@ -450,8 +450,8 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.NotifyListeners(const Response: TIdSipResponse;
-                                          const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTcpServer.NotifyListeners(Response: TIdSipResponse;
+                                          ReceivedFrom: TIdSipConnectionBindings);
 var
   I: Integer;
 begin
@@ -556,8 +556,8 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.SendResponseTo(const Response: TIdSipResponse;
-                                               Dest: TIdSipConnectionBindings);
+procedure TIdSipTcpServer.SendResponseTo(Response: TIdSipResponse;
+                                         Dest: TIdSipConnectionBindings);
 var
   Client: TIdSipTcpClient;
 begin
