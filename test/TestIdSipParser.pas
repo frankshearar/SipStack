@@ -25,6 +25,19 @@ type
     procedure TestParamCount;
     procedure TestParamsAsString;
     procedure TestValue;
+    procedure TestValueParameterClearing;
+    procedure TestValueWithNewParams;
+  end;
+
+  TestTIdSipViaHeader = class(TTestCase)
+  private
+    V: TIdSipViaHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestIsEqualTo;
+    procedure TestValue;
   end;
 
   TestTIdSipHeaders = class(TTestCase)
@@ -46,13 +59,8 @@ type
     procedure TestIsContentLength;
     procedure TestIsMaxForwards;
     procedure TestIsTo;
-    procedure TestIsVia;    
+    procedure TestIsVia;
     procedure TestValues;
-  end;
-
-  TestTIdSipViaHeader = class(TTestCase)
-  published
-    procedure TestIsEqualTo;
   end;
 
   TestTIdSipPath = class(TTestCase)
@@ -341,6 +349,122 @@ begin
 
   H.Params['ttl'] := 'eheh';
   CheckEquals('Fighters', H.Value, 'Value-ful header with multiple params');
+
+  H.Value := 'Fluffy';
+  CheckEquals(0, H.ParamCount, 'Didn''t clear out old params');
+end;
+
+procedure TestTIdSipHeader.TestValueParameterClearing;
+begin
+  H.Value := 'Fighters;branch=haha';
+  H.Value := 'Fighters';
+  CheckEquals('', H.ParamsAsString, 'Parameters not cleared');
+end;
+
+procedure TestTIdSipHeader.TestValueWithNewParams;
+begin
+  H.Value := 'Fighters;branch=haha';
+  H.Value := 'Fighters;tickle=feather';
+  CheckEquals(';tickle=feather', H.ParamsAsString, 'Parameters not cleared');
+end;
+
+//******************************************************************************
+//* TestTIdSipViaHeader                                                        *
+//******************************************************************************
+
+procedure TestTIdSipViaHeader.SetUp;
+begin
+  inherited SetUp;
+
+  V := TIdSipViaHeader.Create;
+end;
+
+procedure TestTIdSipViaHeader.TearDown;
+begin
+  V.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipViaHeader Published methods **************************************
+
+procedure TestTIdSipViaHeader.TestIsEqualTo;
+var
+  Hop2: TIdSipViaHeader;
+begin
+  Hop2 := TIdSipViaHeader.Create;
+  try
+    V.Host       := '127.0.0.1';
+    V.Port       := 5060;
+    V.SipVersion := 'SIP/2.0';
+    V.Transport  := sttSCTP;
+
+    Hop2.Host       := '127.0.0.1';
+    Hop2.Port       := 5060;
+    Hop2.SipVersion := 'SIP/2.0';
+    Hop2.Transport  := sttSCTP;
+
+    Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2)');
+    Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V)');
+
+    V.Host := '127.0.0.2';
+    Check(not V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host');
+    Check(not Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); Host');
+    V.Host := '127.0.0.1';
+    Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host reset');
+    Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); Host reset');
+
+    V.Port := 111;
+    Check(not V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Port');
+    Check(not Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); Port');
+    V.Port := 5060;
+    Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Port reset');
+    Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); Port reset');
+
+    V.SipVersion := 'xxx';
+    Check(not V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); SipVersion');
+    Check(not Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); SipVersion');
+    V.SipVersion := 'SIP/2.0';
+    Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); SipVersion reset');
+    Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); SipVersion reset');
+
+    V.Transport := sttTCP;
+    Check(not V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Transport');
+    Check(not Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V); Transport');
+  finally
+    Hop2.Free;
+  end;
+end;
+
+procedure TestTIdSipViaHeader.TestValue;
+begin
+  V.Value := 'SIP/1.5/UDP 127.0.0.1;tag=heehee';
+  CheckEquals('127.0.0.1',   V.Host,           '1: Host');
+  CheckEquals(';tag=heehee', V.ParamsAsString, '1: Parameters');
+  CheckEquals(IdPORT_SIP,    V.Port,           '1: Port');
+  CheckEquals('SIP/1.5',     V.SipVersion,     '1: SipVersion');
+  Check      (sttUDP =       V.Transport,      '1: Transport');
+
+  V.Value := 'SIP/1.5/TLS 127.0.0.1';
+  CheckEquals('127.0.0.1',     V.Host,           '2: Host');
+  CheckEquals('',              V.ParamsAsString, '2: Parameters');
+  CheckEquals(IdPORT_SIP_TLS,  V.Port,           '2: Port');
+  CheckEquals('SIP/1.5',       V.SipVersion,     '2: SipVersion');
+  Check      (sttTLS =         V.Transport,      '2: Transport');
+
+  V.Value := 'SIP/1.5/UDP 127.0.0.1:666;tag=heehee';
+  CheckEquals('127.0.0.1',   V.Host,           '3: Host');
+  CheckEquals(';tag=heehee', V.ParamsAsString, '3: Parameters');
+  CheckEquals(666,           V.Port,           '3: Port');
+  CheckEquals('SIP/1.5',     V.SipVersion,     '3: SipVersion');
+  Check      (sttUDP =       V.Transport,      '3: Transport');
+
+  V.Value := 'SIP/1.5/TLS 127.0.0.1:666;haha=heehee';
+  CheckEquals('127.0.0.1',     V.Host,           '4: Host');
+  CheckEquals(';haha=heehee',  V.ParamsAsString, '4: Parameters');
+  CheckEquals(666,             V.Port,           '4: Port');
+  CheckEquals('SIP/1.5',       V.SipVersion,     '4: SipVersion');
+  Check      (sttTLS =         V.Transport,      '4: Transport');
 end;
 
 //******************************************************************************
@@ -529,64 +653,6 @@ begin
   CheckEquals('Content-Type',
               H.Headers['Content-Type'].Value,
               'New header value not set');
-end;
-
-//******************************************************************************
-//* TestTIdSipViaHeader                                                        *
-//******************************************************************************
-//* TestTIdSipViaHeader Published methods **************************************
-
-procedure TestTIdSipViaHeader.TestIsEqualTo;
-var
-  Hop1, Hop2: TIdSipViaHeader;
-begin
-  Hop1 := TIdSipViaHeader.Create;
-  try
-    Hop2 := TIdSipViaHeader.Create;
-    try
-      Hop1.Host       := '127.0.0.1';
-      Hop1.Port       := 5060;
-      Hop1.SipVersion := 'SIP/2.0';
-      Hop1.Transport  := sttSCTP;
-
-      Hop2.Host       := '127.0.0.1';
-      Hop2.Port       := 5060;
-      Hop2.SipVersion := 'SIP/2.0';
-      Hop2.Transport  := sttSCTP;
-
-      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2)');
-      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1)');
-
-      Hop1.Host := '127.0.0.2';
-      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Host');
-      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Host');
-      Hop1.Host := '127.0.0.1';
-      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Host reset');
-      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Host reset');
-
-      Hop1.Port := 111;
-      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Port');
-      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Port');
-      Hop1.Port := 5060;
-      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Port reset');
-      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Port reset');
-
-      Hop1.SipVersion := 'xxx';
-      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); SipVersion');
-      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); SipVersion');
-      Hop1.SipVersion := 'SIP/2.0';
-      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); SipVersion reset');
-      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); SipVersion reset');
-
-      Hop1.Transport := sttTCP;
-      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Transport');
-      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Transport');
-    finally
-      Hop2.Free;
-    end;
-  finally
-    Hop1.Free;
-  end;
 end;
 
 //******************************************************************************

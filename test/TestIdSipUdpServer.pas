@@ -13,6 +13,7 @@ type
 
     procedure CheckRequest(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure CheckTortureTest21(Sender: TObject; const Response: TIdSipResponse);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -21,6 +22,7 @@ type
     procedure TestMalformedResponse;
     procedure TestRequest;
     procedure TestResponse;
+    procedure TestTortureTest21;
   end;
 
 const
@@ -29,7 +31,7 @@ const
 implementation
 
 uses
-  SyncObjs, TestFramework;
+  SyncObjs, TestFramework, TortureTests;
 
 function Suite: ITestSuite;
 begin
@@ -152,6 +154,22 @@ begin
   end;
 end;
 
+procedure TestTIdSipUdpServer.CheckTortureTest21(Sender: TObject; const Response: TIdSipResponse);
+begin
+  try
+    CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                       Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 //* TestTIdSipUdpServer Published methods ***************************************
 
 procedure TestTIdSipUdpServer.TestMalformedRequest;
@@ -244,6 +262,19 @@ begin
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestTortureTest21;
+begin
+  // http://www.ietf.org/internet-drafts/draft-ietf-sipping-torture-tests-00.txt section 2.21
+  //   This INVITE is illegal because the Request-URI has been enclosed
+  //   within in "<>".
+  //   An intelligent server may be able to deal with this and fix up
+  //   athe Request-URI if acting as a Proxy. If not it should respond 400
+  //   with an appropriate reason phrase.
+  Server.OnResponse := Self.CheckTortureTest21;
+
+  Self.Client.Send(TortureTest21);
 end;
 
 initialization

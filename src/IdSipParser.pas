@@ -47,6 +47,8 @@ type
     fName:    String;
 
     procedure SetAddress(const Value: TIdURI);
+  protected
+    procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -508,6 +510,8 @@ var
   ParamValue: String;
   S:          String;
 begin
+  Self.Parameters.Clear;
+
   S := Value;
 
   if (Pos(';', S) = 0) then begin
@@ -587,6 +591,13 @@ begin
   fAddress.Free;
 
   inherited Destroy;
+end;
+
+//* TIdSipAddressHeader Protected methods **************************************
+
+procedure TIdSipAddressHeader.SetValue(const Value: String);
+begin
+  inherited SetValue(Value);
 end;
 
 //* TIdSipAddressHeader Private methods ****************************************

@@ -17,6 +17,8 @@ type
                                     AMessage: TIdSipMessage);
     procedure CheckMethodEvent(AThread: TIdPeerThread;
                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest21(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -25,6 +27,7 @@ type
     procedure TestMalformedRequest;
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
+    procedure TestTortureTest21;
   end;
 
 const
@@ -33,7 +36,7 @@ const
 implementation
 
 uses
-  Classes, TestFramework;
+  Classes, TestFramework, TortureTests;
 
 function Suite: ITestSuite;
 begin
@@ -113,6 +116,27 @@ begin
     CheckEquals(8, Request.Headers.Count, 'Header count');
 
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest21(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                       Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -242,6 +266,14 @@ begin
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest21;
+begin
+  Server.OnMethod := Self.CheckTortureTest21;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest21);
 end;
 
 initialization
