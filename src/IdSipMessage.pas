@@ -4880,7 +4880,7 @@ begin
     SIPBadExtension:                     Self.StatusText := RSSIPBadExtension;
     SIPExtensionRequired:                Self.StatusText := RSSIPExtensionRequired;
     SIPIntervalTooBrief:                 Self.StatusText := RSSIPIntervalTooBrief;
-    SIPTemporarilyNotAvailable:          Self.StatusText := RSSIPTemporarilyNotAvailable;
+    SIPTemporarilyUnavailable:           Self.StatusText := RSSIPTemporarilyUnavailable;
     SIPCallLegOrTransactionDoesNotExist: Self.StatusText := RSSIPCallLegOrTransactionDoesNotExist;
     SIPLoopDetected:                     Self.StatusText := RSSIPLoopDetected;
     SIPTooManyHops:                      Self.StatusText := RSSIPTooManyHops;

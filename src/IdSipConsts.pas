@@ -134,7 +134,7 @@ const
   RSSIPBadExtension                     = 'Bad Extension';
   RSSIPExtensionRequired                = 'Extension Required';
   RSSIPIntervalTooBrief                 = 'Interval Too Brief';
-  RSSIPTemporarilyNotAvailable          = 'Temporarily not available';
+  RSSIPTemporarilyUnavailable           = 'Temporarily unavailable';
   RSSIPCallLegOrTransactionDoesNotExist = 'Call Leg/Transaction Does Not Exist';
   RSSIPLoopDetected                     = 'Loop Detected';
   RSSIPTooManyHops                      = 'Too Many Hops';
@@ -197,7 +197,7 @@ const
   SIPBadExtension                     = 420;
   SIPExtensionRequired                = 421;
   SIPIntervalTooBrief                 = 423;
-  SIPTemporarilyNotAvailable          = 480;
+  SIPTemporarilyUnavailable           = 480;
   SIPCallLegOrTransactionDoesNotExist = 481;
   SIPLoopDetected                     = 482;
   SIPTooManyHops                      = 483;
