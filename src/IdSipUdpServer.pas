@@ -6,6 +6,11 @@ uses
   Classes, IdSipParser, IdSocketHandle, IdUDPServer, IdSipTcpServer;
 
 type
+  TPeerInfo = record
+    PeerIP: string;
+    PeerPort: Integer;
+  end;
+
   TIdSipRequestEvent = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
   TIdSipResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
 
@@ -16,6 +21,10 @@ type
     Parser:      TIdSipParser;
     procedure DoOnRequest(const Request: TIdSipRequest);
     procedure DoOnResponse(const Response: TIdSipResponse);
+
+    procedure SendBadRequestResponse(PeerInfo: TPeerInfo;
+                                     const Reason: String;
+                                     Parser: TIdSipParser);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
   public
@@ -53,28 +62,31 @@ end;
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
-  Message: TIdSipMessage;
+  Msg:      TIdSipMessage;
+  PeerInfo: TPeerInfo;
 begin
   inherited DoUDPRead(AData, ABinding);
+
+  PeerInfo.PeerIP   := ABinding.PeerIP;
+  PeerInfo.PeerPort := ABinding.PeerPort;
 
   Self.Parser.Source := AData;
 
   // what happens if the message is malformed?!
   try
-    Message := Self.Parser.ParseAndMakeMessage;
+    Msg := Self.Parser.ParseAndMakeMessage;
     try
-      Message.ReadBody(Self.Parser.Source);
-      if (Message is TIdSipRequest) then
-        Self.DoOnRequest(Message as TIdSipRequest)
+      Msg.ReadBody(Self.Parser.Source);
+      if (Msg is TIdSipRequest) then
+        Self.DoOnRequest(Msg as TIdSipRequest)
       else
-        Self.DoOnResponse(Message as TIdSipResponse);
+        Self.DoOnResponse(Msg as TIdSipResponse);
     finally
-      Message.Free;
+      Msg.Free;
     end;
   except
-    on EBadRequest do begin
-//      ABinding.PeerIP
-//      ABinding.PeerPort
+    on E: EBadRequest do begin
+      Self.SendBadRequestResponse(PeerInfo, E.Message, Parser);
     end;
   end;
 end;
@@ -93,6 +105,18 @@ begin
     Self.OnResponse(Self, Response);
 end;
 
-//* TestFoo Published methods ***************************************************
+procedure TIdSipUdpServer.SendBadRequestResponse(PeerInfo: TPeerInfo;
+                                                 const Reason: String;
+                                                 Parser: TIdSipParser);
+var
+  Msg: TIdSipMessage;
+begin
+  Msg := Parser.MakeBadRequestResponse(Reason);
+  try
+    Self.Send(PeerInfo.PeerIP, PeerInfo.PeerPort, Msg.AsString);
+  finally
+    Msg.Free;
+  end;
+end;
 
 end.

@@ -31,6 +31,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestMalformedRequest;
     procedure TestRequest;
     procedure TestResponse;
   end;
@@ -179,6 +180,44 @@ begin
 end;
 
 //* TestTIdSipUdpServer Published methods ***************************************
+
+procedure TestTIdSipUdpServer.TestMalformedRequest;
+var
+  Expected: TStrings;
+  Received: TStrings;
+  Msg:      TIdSipMessage;
+  P:        TIdSipParser;
+begin
+  // note the semicolon in the SIP-version
+  Client.Send('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10
+            + #13#10);
+
+  Expected := TStringList.Create;
+  try
+    P := TIdSipParser.Create;
+    try
+      Msg := P.MakeBadRequestResponse(Format(InvalidSipVersion, ['SIP/;2.0']));
+      try
+        Expected.Text := Msg.AsString;
+      finally
+        Msg.Free;
+      end;
+    finally
+      P.Free;
+    end;
+
+    Received := TStringList.Create;
+    try
+      Received.Text := Client.ReceiveString(5000);
+
+      CheckEquals(Expected, Received, 'Malformed request');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
 
 procedure TestTIdSipUdpServer.TestRequest;
 begin

@@ -397,6 +397,7 @@ procedure TestTIdSipParser.TestIsSipVersion;
 begin
   Check(not P.IsSipVersion(''),         '''''');
   Check(    P.IsSipVersion('SIP/2.0'),  'SIP/2.0');
+  Check(    P.IsSipVersion('sip/2.0'),  'sip/2.0');
   Check(    P.IsSipVersion(SIPVersion), 'SIPVersion constant');
   Check(not P.IsSipVersion('SIP/X.Y'),  'SIP/X.Y');
 end;

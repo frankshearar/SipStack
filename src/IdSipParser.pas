@@ -432,7 +432,7 @@ var
   Token: String;
 begin
   Token := Fetch(Version, '/');
-  Result := Token = SipName;
+  Result := Self.IsEqual(Token, SipName);
 
   if (Result) then begin
     Token := Fetch(Version, '.');
