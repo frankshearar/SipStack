@@ -84,9 +84,9 @@ type
     function  EventAt(Index: Integer): TIdWait;
     procedure InternalRemove(Event: Pointer);
     function  ShortestWait: Cardinal;
-    procedure TriggerEarliestEvent;
   protected
     function  IndexOfEvent(Event: Pointer): Integer;
+    procedure TriggerEarliestEvent; virtual;
 
     property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
     property EventList:       TObjectList      read fEventList;
@@ -128,6 +128,8 @@ type
                        CreateSuspended: Boolean = True); reintroduce;
   end;
 
+  // I provide a thread in which to execute my events. Obviously, all
+  // TNotifyEvents and such execute in BlockRunner's context.
   TIdThreadedTimerQueue = class(TIdTimerQueue)
   private
     BlockRunner: TIdBlockRunnerThread;
@@ -138,6 +140,8 @@ type
     procedure Terminate; override;
   end;
 
+  // I provide debugging facilities for you to plug in to things that use
+  // TimerQueues.
   TIdDebugTimerQueue = class(TIdTimerQueue)
   private
     function HasScheduledEvent(Event: Pointer): Boolean;
@@ -148,6 +152,7 @@ type
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
     procedure Terminate; override;
+    procedure TriggerEarliestEvent; override;
     procedure UnlockTimer;
   end;
 
@@ -361,6 +366,25 @@ begin
   end;
 end;
 
+procedure TIdTimerQueue.TriggerEarliestEvent;
+var
+  NextEvent: TIdWait;
+begin
+  Self.Lock.Acquire;
+  try
+    NextEvent := Self.EarliestEvent;
+    if Assigned(NextEvent) and NextEvent.Due then begin
+      NextEvent.Trigger;
+
+      Self.EventList.Remove(NextEvent);
+    end;
+
+    Self.WaitEvent.ResetEvent;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
 //* TIdTimerQueue Private methods **********************************************
 
 procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
@@ -444,25 +468,6 @@ begin
       Result := NextEvent.TimeToWait
     else
       Result := DefaultSleepTime;
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-procedure TIdTimerQueue.TriggerEarliestEvent;
-var
-  NextEvent: TIdWait;
-begin
-  Self.Lock.Acquire;
-  try
-    NextEvent := Self.EarliestEvent;
-    if Assigned(NextEvent) and NextEvent.Due then begin
-      NextEvent.Trigger;
-
-      Self.EventList.Remove(NextEvent);
-    end;
-
-    Self.WaitEvent.ResetEvent;
   finally
     Self.Lock.Release;
   end;
@@ -567,6 +572,27 @@ begin
   inherited Terminate;
 
   Self.Free;
+end;
+
+procedure TIdDebugTimerQueue.TriggerEarliestEvent;
+var
+  NextEvent: TIdWait;
+begin
+  // We fire the next event regardless of whether it's due or not.
+
+  Self.Lock.Acquire;
+  try
+    NextEvent := Self.EarliestEvent;
+    if Assigned(NextEvent) then begin
+      NextEvent.Trigger;
+
+      Self.EventList.Remove(NextEvent);
+    end;
+
+    Self.WaitEvent.ResetEvent;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TIdDebugTimerQueue.UnlockTimer;

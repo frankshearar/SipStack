@@ -92,9 +92,12 @@ type
 
   TestTIdDebugTimerQueue = class(TTestCase)
   private
-    Timer:     TIdDebugTimerQueue;
-    WaitEvent: TEvent;
+    OnSecondTimerFired: Boolean;
+    OnTimerFired:       Boolean;
+    Timer:              TIdDebugTimerQueue;
+    WaitEvent:          TEvent;
 
+    procedure OnSecondTimer(Sender: TObject);
     procedure OnTimer(Sender: TObject);
   public
     procedure SetUp; override;
@@ -105,6 +108,7 @@ type
     procedure TestDebugWaitTime;
     procedure TestEventAt;
     procedure TestScheduledEvent;
+    procedure TestTriggerEarliestEvent;
   end;
 
 const
@@ -625,6 +629,9 @@ begin
 
   Self.WaitEvent := TSimpleEvent.Create;
   Self.Timer     := TIdDebugTimerQueue.Create(false);
+
+  Self.OnSecondTimerFired := false;
+  Self.OnTimerFired := false;
 end;
 
 procedure TestTIdDebugTimerQueue.TearDown;
@@ -637,9 +644,14 @@ end;
 
 //* TestTIdDebugTimerQueue Private methods *************************************
 
+procedure TestTIdDebugTimerQueue.OnSecondTimer(Sender: TObject);
+begin
+  Self.OnSecondTimerFired := true;
+end;
+
 procedure TestTIdDebugTimerQueue.OnTimer(Sender: TObject);
 begin
-  // Do nothing.
+  Self.OnTimerFired := true;
 end;
 
 //* TestTIdDebugTimerQueue Published methods ***********************************
@@ -737,6 +749,21 @@ begin
 
   Check(Self.Timer.ScheduledEvent(Self.WaitEvent),
         'TEvent scheduled');
+end;
+
+procedure TestTIdDebugTimerQueue.TestTriggerEarliestEvent;
+begin
+  Self.Timer.AddEvent(1000, Self.OnTimer);
+  Self.Timer.AddEvent(2000, Self.OnSecondTimer);
+
+  Self.Timer.TriggerEarliestEvent;
+
+  Check(Self.OnTimerFired, 'TNotifyEvent not triggered');
+  Check(not Self.OnSecondTimerFired, 'Second event triggered');
+
+  Self.Timer.TriggerEarliestEvent;
+
+  Check(Self.OnSecondTimerFired, 'Second event not triggered');
 end;
 
 initialization
