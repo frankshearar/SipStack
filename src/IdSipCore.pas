@@ -427,6 +427,7 @@ type
     procedure MarkAsTerminated; virtual;
     function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
+    procedure NotifyOfRedirect(Response: TIdSipResponse);
     function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; virtual;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean; virtual;
     function  ReceiveOKResponse(Response: TIdSipResponse;
@@ -2445,6 +2446,21 @@ procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
 begin
 end;
 
+procedure TIdSipAction.NotifyOfRedirect(Response: TIdSipResponse);
+var
+  Notification: TIdSipActionRedirectMethod;
+begin
+  Notification := TIdSipActionRedirectMethod.Create;
+  try
+    Notification.Action   := Self;
+    Notification.Response := Response;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
 begin
   // We received a 401 Unauthorized or 407 Proxy Authentication Required response
@@ -2485,6 +2501,8 @@ function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
 var
   ReInvite: TIdSipRequest;
 begin
+  Self.NotifyOfRedirect(Response);
+
   Result := false;
   if Response.HasHeader(ContactHeaderFull) then begin
     ReInvite := TIdSipRequest.Create;
