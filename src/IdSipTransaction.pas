@@ -1225,7 +1225,7 @@ end;
 
 procedure TIdSipTransaction.ExceptionRaised(E: Exception);
 begin
-  Self.NotifyOfFailure(Format(ExceptionRaised,
+  Self.NotifyOfFailure(Format(IdSipTransaction.ExceptionRaised,
                               [Self.ClassName, E.ClassName, E.Message]));
 end;
 
