@@ -1538,7 +1538,6 @@ begin
   Result := '';
   I := 1;
   while (I <= Length(W)) do begin
-    CodePoint := 0;
     if not IsHighSurrogate(Ord(W[I])) then begin
       CodePoint := Ord(W[I]);
     end
