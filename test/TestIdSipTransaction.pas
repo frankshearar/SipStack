@@ -130,6 +130,8 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+    procedure TestIsNull;
   end;
 
   TestTIdSipServerInviteTransaction = class(TTestTransaction)
@@ -1316,6 +1318,13 @@ procedure TTestTransaction.Terminated(Sender: TIdSipTransaction);
 begin
   Self.TransactionTerminated := true;
   Self.ThreadEvent.SetEvent;
+end;
+
+//* TTestTransaction Published methods *****************************************
+
+procedure TTestTransaction.TestIsNull;
+begin
+  Check(not Self.Tran.IsNull, 'IsNull');
 end;
 
 //******************************************************************************

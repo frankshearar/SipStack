@@ -1212,7 +1212,7 @@ begin
   // Except for 2xx's on a client INVITE. And these no longer belong to
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately. Hence the unusual clause below.
-  if Response.IsOK and not Assigned(Transaction) then begin
+  if Response.IsOK and Transaction.IsNull then begin
     Session := Self.FindSession(Response);
     if Assigned(Session) then
       Session.OnReceiveResponse(Response, Transaction, Receiver);
