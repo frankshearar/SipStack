@@ -185,7 +185,6 @@ begin
   Self.WaitForTimeout('No event = timeout');
 end;
 
-
 initialization
   RegisterTest('SIP Timer class', Suite);
 end.
