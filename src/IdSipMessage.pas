@@ -6503,7 +6503,7 @@ begin
     SIPRinging:                          Self.StatusText := RSSIPRinging;
     SIPCallIsBeingForwarded:             Self.StatusText := RSSIPCallIsBeingForwarded;
     SIPQueued:                           Self.StatusText := RSSIPQueued;
-    SIPSessionProgess:                   Self.StatusText := RSSIPSessionProgess;
+    SIPSessionProgress:                  Self.StatusText := RSSIPSessionProgress;
     SIPOK:                               Self.StatusText := RSSIPOK;
     SIPMultipleChoices:                  Self.StatusText := RSSIPMultipleChoices;
     SIPMovedPermanently:                 Self.StatusText := RSSIPMovedPermanently;

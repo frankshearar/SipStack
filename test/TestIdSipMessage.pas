@@ -243,7 +243,7 @@ const
   AllMethods: array[1..7] of String = (MethodAck, MethodBye, MethodCancel,
       MethodInvite, MethodOptions, MethodParam, MethodRegister);
   AllResponses: array[1..50] of Cardinal = (SIPTrying, SIPRinging,
-      SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgess, SIPOK,
+      SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgress, SIPOK,
       SIPMultipleChoices, SIPMovedPermanently, SIPMovedTemporarily,
       SIPUseProxy, SIPAlternativeService, SIPBadRequest, SIPUnauthorized,
       SIPPaymentRequired, SIPForbidden, SIPNotFound, SIPMethodNotAllowed,

@@ -138,7 +138,7 @@ const
   RSSIPRinging                          = 'Ringing';
   RSSIPCallIsBeingForwarded             = 'Call Is Being Forwarded';
   RSSIPQueued                           = 'Queued';
-  RSSIPSessionProgess                   = 'Session Progress';
+  RSSIPSessionProgress                  = 'Session Progress';
   RSSIPOK                               = 'OK';
   RSSIPMultipleChoices                  = 'Multiple Choices';
   RSSIPMovedPermanently                 = 'Moved Permanently';
@@ -201,7 +201,7 @@ const
   SIPRinging                          = 180;
   SIPCallIsBeingForwarded             = 181;
   SIPQueued                           = 182;
-  SIPSessionProgess                   = 183;
+  SIPSessionProgress                  = 183;
   SIPOK                               = 200;
   SIPMultipleChoices                  = 300;
   SIPMovedPermanently                 = 301;
