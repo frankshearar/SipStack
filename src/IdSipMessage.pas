@@ -2303,6 +2303,8 @@ end;
 
 function TIdSipUri.DefaultTransport: String;
 begin
+  // TODO: Make this configurable, across all instances.
+
   if Self.IsSecure then
     Result := TransportParamTLS
   else
