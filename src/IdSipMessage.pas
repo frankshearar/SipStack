@@ -722,6 +722,7 @@ type
     function  AsString: String;
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
+    function  Copy: TIdSipMessage;
     function  FirstContact: TIdSipContactHeader;
     function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
@@ -4131,6 +4132,12 @@ begin
   end;
 end;
 
+function TIdSipMessage.Copy: TIdSipMessage;
+begin
+  Result := TIdSipMessageClass(Self.ClassType).Create;
+  Result.Assign(Self);
+end;
+
 function TIdSipMessage.FirstContact: TIdSipContactHeader;
 begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
@@ -4218,7 +4225,7 @@ begin
       Read := Src.Read(Buf, Min(BufLen, BytesToRead));
       Dec(BytesToRead, Read);
 
-      Self.Body := Self.Body + Copy(Buf, 1, Read);
+      Self.Body := Self.Body + System.Copy(Buf, 1, Read);
     until (Read < BufLen) or (BytesToRead <= 0);
   end;
 end;
@@ -4391,6 +4398,7 @@ begin
   fRoute       := TIdSipRoutePath.Create(Self.Headers);
 
   Self.ContentLength := 0;
+  Self.MaxForwards   := Self.DefaultMaxForwards;
 end;
 
 destructor TIdSipRequest.Destroy;

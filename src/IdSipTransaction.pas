@@ -23,6 +23,7 @@ type
 
   TIdSipTransaction = class;
   TIdSipTransactionClass = class of TIdSipTransaction;
+  TIdSipClientInviteTransaction = class;
 
   // OnTerminated signals to the Listener that Transaction has terminated,
   // and the Listener must remove any references to Transaction - after this
@@ -45,11 +46,13 @@ type
   // match any current transactions.
   IIdSipUnhandledMessageListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                        Transaction: TIdSipTransaction;
                                         Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                         Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport);
   end;
 
@@ -77,6 +80,7 @@ type
                                    Receiver: TIdSipTransport); overload;
     procedure DeliverToTransaction(Response: TIdSipResponse;
                                    Receiver: TIdSipTransport); overload;
+    function  FindCancellingTransaction(Cancel: TIdSipRequest): TIdSipClientInviteTransaction;
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
     procedure RejectUnmatchedCancel(Request: TIdSipRequest;
@@ -85,11 +89,13 @@ type
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
+    procedure NotifyListenersOfRequest(Request: TIdSipRequest;
+                                       Receiver: TIdSipTransport);
+    procedure NotifyListenersOfResponse(Response: TIdSipResponse;
+                                        Receiver: TIdSipTransport);
     procedure NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
-                                                Transaction: TIdSipTransaction;
                                                 Receiver: TIdSipTransport);
     procedure NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
-                                                 Transaction: TIdSipTransaction;
                                                  Receiver: TIdSipTransport);
 
     // IIdSipTransactionListener
@@ -126,6 +132,8 @@ type
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
     procedure Send(Msg: TIdSipMessage); virtual;
+    procedure SendRequest(Request: TIdSipRequest); virtual;
+    procedure SendResponse(Response: TIdSipResponse); virtual;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
@@ -333,7 +341,6 @@ type
     function IsClient: Boolean; override;
   end;
 
-  TIdSipClientInviteTransaction = class;
   TIdSipClientInviteTransactionTimer = class(TObject)
   private
     fTimerAInterval:  Cardinal;
@@ -547,6 +554,7 @@ begin
   try
     try
       Result := TIdSipTransaction.CreateClientTransactionType(Self, InitialRequest);
+      Result.AddTransactionListener(Self);
       Self.Transactions.Add(Result);
     except
       if (Self.Transactions.IndexOf(Result) <> -1) then
@@ -570,6 +578,7 @@ begin
   try
     try
       Result := TIdSipTransaction.CreateServerTransactionType(Self, InitialRequest);
+      Result.AddTransactionListener(Self);
       Self.Transactions.Add(Result);
     except
       if (Self.Transactions.IndexOf(Result) <> -1) then
@@ -660,6 +669,35 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest);
+var
+  Tran: TIdSipTransaction;
+  ClientInvite: TIdSipClientInviteTransaction;
+begin
+  if Request.IsCancel then begin
+    ClientInvite := Self.FindCancellingTransaction(Request);
+
+    if Assigned(ClientInvite) then
+      ClientInvite.Cancel;
+  end
+  else begin
+    Tran := Self.FindTransaction(Request, true);
+
+    if Assigned(Tran) then
+      Tran.SendRequest;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.FindTransaction(Response, false);
+
+  if Assigned(Tran) then
+    Tran.SendResponse(Response);
+end;
+
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
 begin
   Self.TransactionLock.Acquire;
@@ -714,8 +752,37 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
+                                                               Receiver: TIdSipTransport);
+var
+  I: Integer;
+begin
+  Self.MsgListenerLock.Acquire;
+  try
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveRequest(Request,
+                                                                            Receiver);
+  finally
+    Self.MsgListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.NotifyListenersOfResponse(Response: TIdSipResponse;
+                                                                Receiver: TIdSipTransport);
+var
+  I: Integer;
+begin
+  Self.MsgListenerLock.Acquire;
+  try
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveResponse(Response,
+                                                                             Receiver);
+  finally
+    Self.MsgListenerLock.Release;
+  end;
+end;
+
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
-                                                                        Transaction: TIdSipTransaction;
                                                                         Receiver: TIdSipTransport);
 var
   I: Integer;
@@ -724,7 +791,6 @@ begin
   try
     for I := 0 to Self.MsgListeners.Count - 1 do
       IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledRequest(Request,
-                                                                                     Transaction,
                                                                                      Receiver);
   finally
     Self.MsgListenerLock.Release;
@@ -732,7 +798,6 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
-                                                                         Transaction: TIdSipTransaction;
                                                                          Receiver: TIdSipTransport);
 var
   I: Integer;
@@ -741,7 +806,6 @@ begin
   try
     for I := 0 to Self.MsgListeners.Count - 1 do
       IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledResponse(Response,
-                                                                                      Transaction,
                                                                                       Receiver);
   finally
     Self.MsgListenerLock.Release;
@@ -757,12 +821,14 @@ procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Transaction: TIdSipTransaction;
                                                        Receiver: TIdSipTransport);
 begin
+  Self.NotifyListenersOfRequest(Request, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
 begin
+  Self.NotifyListenersOfResponse(Response, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
@@ -796,8 +862,7 @@ end;
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Request: TIdSipRequest;
                                                            Receiver: TIdSipTransport);
 var
-  NullTran: TIdSipTransaction;
-  Tran:     TIdSipTransaction;
+  Tran: TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Request, false);
 
@@ -805,19 +870,14 @@ begin
     Tran.ReceiveRequest(Request, Receiver)
   else begin
     if Request.IsAck then begin
-      NullTran := TIdSipNullTransaction.Create(Self, Request);
-      try
-        Self.NotifyListenersOfUnhandledRequest(Request, NullTran, Receiver);
-      finally
-        NullTran.Free;
-      end;
+      Self.NotifyListenersOfUnhandledRequest(Request, Receiver);
     end
     else if Request.IsCancel then
       Self.RejectUnmatchedCancel(Request, Receiver)
     else begin
-      Tran := Self.AddServerTransaction(Request, Receiver);
+      Self.AddServerTransaction(Request, Receiver);
 
-      Self.NotifyListenersOfUnhandledRequest(Request, Tran, Receiver);
+      Self.NotifyListenersOfUnhandledRequest(Request, Receiver);
     end;
   end;
 end;
@@ -825,21 +885,20 @@ end;
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Response: TIdSipResponse;
                                                            Receiver: TIdSipTransport);
 var
-  NullTran: TIdSipTransaction;
-  Tran:     TIdSipTransaction;
+  Tran: TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Response, true);
 
   if Assigned(Tran) then
     Tran.ReceiveResponse(Response, Receiver)
   else begin
-    NullTran := TIdSipNullTransaction.Create(Self, nil);
-    try
-      Self.NotifyListenersOfUnhandledResponse(Response, NullTran, Receiver);
-    finally
-      NullTran.Free;
-    end;
+    Self.NotifyListenersOfUnhandledResponse(Response, Receiver);
   end;
+end;
+
+function TIdSipTransactionDispatcher.FindCancellingTransaction(Cancel: TIdSipRequest): TIdSipClientInviteTransaction;
+begin
+  Result := Self.FindTransaction(Cancel, true) as TIdSipClientInviteTransaction;
 end;
 
 function TIdSipTransactionDispatcher.FindTransaction(R: TIdSipMessage;
@@ -981,7 +1040,7 @@ var
 begin
   OkResponse := TIdSipResponse.InResponseTo(Cancel, SIPOK);
   try
-    T.Send(OkResponse);
+    Self.TrySendResponse(OkResponse);
   finally
     OkResponse.Free;
   end;
@@ -1456,8 +1515,10 @@ procedure TIdSipServerInviteTransaction.ReceiveCancel(Cancel: TIdSipRequest;
 var
   TerminateResponse: TIdSipResponse;
 begin
+  // First we send a 200 OK in response to the CANCEL
   inherited ReceiveCancel(Cancel, T);
 
+  // And then we send a 487 Request Terminated in response to the INVITE
   if (Self.State = itsProceeding) then begin
     TerminateResponse := TIdSipResponse.InResponseTo(Self.InitialRequest,
                                                      SIPRequestTerminated);
@@ -1586,7 +1647,8 @@ end;
 
 destructor TIdSipServerNonInviteTransaction.Destroy;
 begin
-  Self.TimerJ.TerminateAndWaitFor;
+  if Assigned(Self.TimerJ) then
+    Self.TimerJ.TerminateAndWaitFor;
   Self.TimerJ.Free;
 
   inherited Destroy;

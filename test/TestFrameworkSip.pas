@@ -190,18 +190,25 @@ type
   TIdSipTestUnhandledMessageListener = class(TIdInterfacedObject,
                                              IIdSipUnhandledMessageListener)
   private
+    fReceivedRequest:           Boolean;
+    fReceivedResponse:          Boolean;
     fReceivedUnhandledRequest:  Boolean;
     fReceivedUnhandledResponse: Boolean;
 
+
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                        Transaction: TIdSipTransaction;
                                         Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                         Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport);
   public
     constructor Create;
 
+    property ReceivedRequest:           Boolean read fReceivedRequest;
+    property ReceivedResponse:          Boolean read fReceivedResponse;
     property ReceivedUnhandledRequest:  Boolean read fReceivedUnhandledRequest;
     property ReceivedUnhandledResponse: Boolean read fReceivedUnhandledResponse;
   end;
@@ -583,21 +590,33 @@ constructor TIdSipTestUnhandledMessageListener.Create;
 begin
   inherited Create;
 
+  fReceivedRequest           := false;
+  fReceivedResponse          := false;
   fReceivedUnhandledRequest  := false;
   fReceivedUnhandledResponse := false;
 end;
 
 //* TIdSipTestUnhandledMessageListener Private methods *************************
 
+procedure TIdSipTestUnhandledMessageListener.OnReceiveRequest(Request: TIdSipRequest;
+                                                              Receiver: TIdSipTransport);
+begin
+  fReceivedRequest := true;
+end;
+
+procedure TIdSipTestUnhandledMessageListener.OnReceiveResponse(Response: TIdSipResponse;
+                                                               Receiver: TIdSipTransport);
+begin
+  fReceivedResponse := true;
+end;
+
 procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                                                       Transaction: TIdSipTransaction;
                                                                        Receiver: TIdSipTransport);
 begin
   fReceivedUnhandledRequest := true;
 end;
 
 procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                                                        Transaction: TIdSipTransaction;
                                                                         Receiver: TIdSipTransport);
 begin
   fReceivedUnhandledResponse := true;

@@ -12,18 +12,15 @@ type
     fReceiveResponseCalled: Boolean;
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Transaction: TIdSipTransaction;
                            Receiver: TIdSipTransport); override;
     procedure ActOnResponse(Response: TIdSipResponse;
-                            Transaction: TIdSipTransaction;
                             Receiver: TIdSipTransport); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest;
-                            Transaction: TIdSipTransaction); override;
+                            Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; override;
   public
-    function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; override;
+    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     procedure Reset;
@@ -39,8 +36,7 @@ type
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Invite: TIdSipRequest;
-                       InitialTransaction: TIdSipTransaction;
-                       Receiver: TIdSipTransport); override;
+                       UsingSecureTransport: Boolean); override;
 
     function  IsInboundCall: Boolean; override;
     procedure ResendLastResponse; override;
@@ -56,7 +52,7 @@ implementation
 //******************************************************************************
 //* TIdSipMockCore Public methods **********************************************
 
-function TIdSipMockCore.CreateRequest(Dest: TIdSipToHeader): TIdSipRequest;
+function TIdSipMockCore.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
 var
   UA: TIdSipUserAgentCore;
 begin
@@ -83,22 +79,19 @@ end;
 //* TIdSipMockCore Protected methods *******************************************
 
 procedure TIdSipMockCore.ActOnRequest(Request: TIdSipRequest;
-                                      Transaction: TIdSipTransaction;
                                       Receiver: TIdSipTransport);
 begin
   fReceiveRequestCalled := true;
 end;
 
 procedure TIdSipMockCore.ActOnResponse(Response: TIdSipResponse;
-                                      Transaction: TIdSipTransaction;
                                       Receiver: TIdSipTransport);
 begin
   fReceiveResponseCalled := true;
 end;
 
 procedure TIdSipMockCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
-                                       Request: TIdSipRequest;
-                                       Transaction: TIdSipTransaction);
+                                       Request: TIdSipRequest);
 begin
 end;
 
@@ -119,10 +112,9 @@ end;
 
 constructor TIdSipMockSession.Create(UA: TIdSipUserAgentCore;
                                      Invite: TIdSipRequest;
-                                     InitialTransaction: TIdSipTransaction;
-                                     Receiver: TIdSipTransport);
+                                     UsingSecureTransport: Boolean);
 begin
-  inherited Create(UA, Invite, InitialTransaction, Receiver);
+  inherited Create(UA, Invite, UsingSecureTransport);
 
   Self.fResponseResent := false;
   Self.SetIsInboundCall(false);

@@ -3,7 +3,7 @@ unit IdSipDialog;
 interface
 
 uses
-  Contnrs, IdSipDialogID, IdSipMessage, IdSipTransport, SyncObjs;
+  Contnrs, IdSipDialogID, IdSipMessage, SyncObjs;
 
 type
   TIdSipDialog = class;
@@ -54,10 +54,10 @@ type
   public
     class function CreateInboundDialog(Request: TIdSipRequest;
                                        Response: TIdSipResponse;
-                                       Transport: TIdSipTransport): TIdSipDialog;
+                                       UsingSecureTransport: Boolean): TIdSipDialog;
     class function CreateOutboundDialog(Request: TIdSipRequest;
                                         Response: TIdSipResponse;
-                                        Transport: TIdSipTransport): TIdSipDialog;
+                                        UsingSecureTransport: Boolean): TIdSipDialog;
 
     constructor Create(DialogID: TIdSipDialogID;
                        LocalSequenceNo: Cardinal;
@@ -136,7 +136,7 @@ uses
 
 class function TIdSipDialog.CreateInboundDialog(Request: TIdSipRequest;
                                                 Response: TIdSipResponse;
-                                                Transport: TIdSipTransport): TIdSipDialog;
+                                                UsingSecureTransport: Boolean): TIdSipDialog;
 var
   ID: TIdSipDialogID;
 begin
@@ -151,7 +151,7 @@ begin
                                     Request.ToHeader.Address,
                                     Request.From.Address,
                                     Request.FirstContact.Address,
-                                    Transport.IsSecure and (Request.HasSipsUri),
+                                    UsingSecureTransport and (Request.HasSipsUri),
                                     Request.Route);
     finally
       ID.Free;
@@ -165,7 +165,7 @@ end;
 
 class function TIdSipDialog.CreateOutboundDialog(Request: TIdSipRequest;
                                                  Response: TIdSipResponse;
-                                                 Transport: TIdSipTransport): TIdSipDialog;
+                                                 UsingSecureTransport: Boolean): TIdSipDialog;
 var
   ID: TIdSipDialogID;
 begin
@@ -179,7 +179,7 @@ begin
                                   Request.From.Address,
                                   Request.ToHeader.Address,
                                   Response.FirstContact.Address,
-                                  Transport.IsSecure and Request.FirstContact.HasSipsUri,
+                                  UsingSecureTransport and Request.FirstContact.HasSipsUri,
                                   Request.Route);
   finally
     ID.Free;
@@ -261,7 +261,6 @@ var
 begin
   Result := TIdSipRequest.Create;
 
-  Result.MaxForwards      := Result.DefaultMaxForwards;
   Result.ToHeader.Address := Self.RemoteURI;
   Result.ToHeader.Tag     := Self.ID.RemoteTag;
   Result.From.Address     := Self.LocalURI;

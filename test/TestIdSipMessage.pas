@@ -82,6 +82,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
+    procedure TestCopy;
     procedure TestCreateCancel;
     procedure TestCreateCancelANonInviteRequest;
     procedure TestCreateCancelWithProxyRequire;
@@ -122,6 +123,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestCopy;
     procedure TestFirstUnsupported;
     procedure TestInResponseToRecordRoute;
     procedure TestInResponseToSipsRecordRoute;
@@ -1032,6 +1034,25 @@ begin
   Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
 end;
 
+procedure TestTIdSipRequest.TestCopy;
+var
+  Cancel: TIdSipRequest;
+  Copy:   TIdSipMessage;
+begin
+  Cancel := Self.Request.CreateCancel;
+  try
+    Copy := Cancel.Copy;
+    try
+      Check(Copy.Equals(Cancel), 'Copy = Cancel');
+      Check(Cancel.Equals(Copy), 'Cancel = Copy');
+    finally
+      Copy.Free;
+    end;
+  finally
+    Cancel.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestCreateCancel;
 var
   Cancel: TIdSipRequest;
@@ -1630,6 +1651,19 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestCopy;
+var
+  Copy: TIdSipMessage;
+begin
+  Copy := Self.Response.Copy;
+  try
+    Check(Copy.Equals(Self.Response), 'Copy = Self.Response');
+    Check(Self.Response.Equals(Copy), 'Self.Response = Copy');
+  finally
+    Copy.Free;
   end;
 end;
 

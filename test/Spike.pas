@@ -251,7 +251,7 @@ var
 begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
-{
+
   if (GStack.LocalAddress <> LocalHostName) then begin
     Binding      := Result.Bindings.Add;
     Binding.IP   := GStack.LocalAddress;
@@ -259,7 +259,6 @@ begin
     Result.HostName := Binding.IP;
   end
   else
-}
     Result.HostName := LocalHostName;
 
   Binding      := Result.Bindings.Add;

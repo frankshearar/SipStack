@@ -91,24 +91,17 @@ type
     fMinimumExpiryTime: Cardinal; // in seconds
 
     function  GetDefaultExpiryTime: Cardinal;
-    procedure RejectExpireTooBrief(Request: TIdSipRequest;
-                                   Transaction: TIdSipTransaction);
-    procedure RejectFailedRequest(Request: TIdSipRequest;
-                                  Transaction: TIdSipTransaction);
-    procedure RejectForbidden(Request: TIdSipRequest;
-                              Transaction: TIdSipTransaction);
-    procedure RejectNotFound(Request: TIdSipRequest;
-                             Transaction: TIdSipTransaction);
-    procedure RejectUnauthorized(Request: TIdSipRequest;
-                                 Transaction: TIdSipTransaction);
+    procedure RejectExpireTooBrief(Request: TIdSipRequest);
+    procedure RejectFailedRequest(Request: TIdSipRequest);
+    procedure RejectForbidden(Request: TIdSipRequest);
+    procedure RejectNotFound(Request: TIdSipRequest);
+    procedure RejectUnauthorized(Request: TIdSipRequest);
     procedure SetDefaultExpiryTime(Value: Cardinal);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
-                           Transaction: TIdSipTransaction;
                            Receiver: TIdSipTransport); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
-                            Request: TIdSipRequest;
-                            Transaction: TIdSipTransaction); override;
+                            Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create; override;
@@ -346,7 +339,6 @@ end;
 //* TIdSipRegistrar Protected methods ******************************************
 
 procedure TIdSipRegistrar.ActOnRequest(Request: TIdSipRequest;
-                                       Transaction: TIdSipTransaction;
                                        Receiver: TIdSipTransport);
 var
   Bindings: TIdSipContacts;
@@ -358,14 +350,14 @@ begin
     and (Request.QuickestExpiry = 0) then begin
 
     if not Self.BindingDB.RemoveAllBindings(Request) then
-      Self.RejectFailedRequest(Request, Transaction)
+      Self.RejectFailedRequest(Request)
     else
-      Self.ReturnResponse(Request, SIPOK, Transaction);
+      Self.ReturnResponse(Request, SIPOK);
     Exit;
   end;
 
   if not Self.BindingDB.AddBindings(Request) then begin
-    Self.RejectFailedRequest(Request, Transaction);
+    Self.RejectFailedRequest(Request);
     Exit;
   end;
 
@@ -385,13 +377,13 @@ begin
           Date.Free;
         end;
 
-        Transaction.SendResponse(Response);
+        Self.Dispatcher.SendResponse(Response);
       finally
         Response.Free;
       end;
     end
     else begin
-      Self.RejectFailedRequest(Request, Transaction);
+      Self.RejectFailedRequest(Request);
     end;
   finally
     Bindings.Free;
@@ -399,22 +391,21 @@ begin
 end;
 
 procedure TIdSipRegistrar.RejectRequest(Reaction: TIdSipUserAgentReaction;
-                                        Request: TIdSipRequest;
-                                        Transaction: TIdSipTransaction);
+                                        Request: TIdSipRequest);
 begin
-  inherited RejectRequest(Reaction, Request, Transaction);
+  inherited RejectRequest(Reaction, Request);
 
   case Reaction of
     uarBadRequest:
-      Self.ReturnResponse(Request, SIPBadRequest, Transaction);
+      Self.ReturnResponse(Request, SIPBadRequest);
     uarExpireTooBrief:
-      Self.RejectExpireTooBrief(Request, Transaction);
+      Self.RejectExpireTooBrief(Request);
     uarForbidden:
-      Self.RejectForbidden(Request, Transaction);
+      Self.RejectForbidden(Request);
     uarNotFound:
-      Self.RejectNotFound(Request, Transaction);
+      Self.RejectNotFound(Request);
     uarUnauthorized:
-      Self.RejectUnauthorized(Request, Transaction);
+      Self.RejectUnauthorized(Request);
   end;
 end;
 
@@ -464,41 +455,45 @@ begin
   Result := Self.BindingDB.DefaultExpiryTime;
 end;
 
-procedure TIdSipRegistrar.RejectExpireTooBrief(Request: TIdSipRequest;
-                                               Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.RejectExpireTooBrief(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
   Response := Self.CreateResponse(Request, SIPIntervalTooBrief);
   try
     Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.MinimumExpiryTime);
-    Transaction.SendResponse(Response);
+    Self.Dispatcher.SendResponse(Response);
   finally
     Response.Free;
   end;
 end;
 
-procedure TIdSipRegistrar.RejectFailedRequest(Request: TIdSipRequest;
-                                              Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.RejectFailedRequest(Request: TIdSipRequest);
 begin
-  Self.ReturnResponse(Request, SIPInternalServerError, Transaction);
+  Self.ReturnResponse(Request, SIPInternalServerError);
 end;
 
-procedure TIdSipRegistrar.RejectForbidden(Request: TIdSipRequest;
-                                          Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.RejectForbidden(Request: TIdSipRequest);
 begin
-  Self.ReturnResponse(Request, SIPForbidden, Transaction);
+  Self.ReturnResponse(Request, SIPForbidden);
 end;
 
-procedure TIdSipRegistrar.RejectNotFound(Request: TIdSipRequest;
-                                         Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.RejectNotFound(Request: TIdSipRequest);
 begin
-  Self.ReturnResponse(Request, SIPNotFound, Transaction);
+  Self.ReturnResponse(Request, SIPNotFound);
 end;
 
-procedure TIdSipRegistrar.RejectUnauthorized(Request: TIdSipRequest;
-                                             Transaction: TIdSipTransaction);
+procedure TIdSipRegistrar.RejectUnauthorized(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
 begin
+  Response := Self.CreateResponse(Request, SIPInternalServerError);
+  try
+    Response.StatusText := 'TIdSipRegistrar.RejectUnauthorized not yet implemented';
+    Self.Dispatcher.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
   raise Exception.Create('TIdSipRegistrar.RejectUnauthorized not yet implemented');
 end;
 
