@@ -460,7 +460,7 @@ type
   TActionMethodTestCase = class(TTestCase)
   private
     Response: TIdSipResponse;
-    UA: TIdSipUserAgentCore;
+    UA:       TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -486,15 +486,7 @@ type
     procedure Run;
   end;
 
-  TOptionsMethodTestCase = class(TTestCase)
-  private
-    UA: TIdSipUserAgentCore;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  end;
-
-  TestTIdSipOptionsFailureMethod = class(TOptionsMethodTestCase)
+  TestTIdSipOptionsFailureMethod = class(TActionMethodTestCase)
   private
     Method: TIdSipOptionsFailureMethod;
   public
@@ -504,7 +496,7 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipOptionsSuccessMethod = class(TOptionsMethodTestCase)
+  TestTIdSipOptionsSuccessMethod = class(TActionMethodTestCase)
   private
     Method: TIdSipOptionsSuccessMethod;
   public
@@ -514,11 +506,10 @@ type
     procedure TestRun;
   end;
 
-  TestRegistrationMethod = class(TTestCase)
+  TestRegistrationMethod = class(TActionMethodTestCase)
   protected
     Bindings: TIdSipContacts;
     Reg:      TIdSipOutboundRegistration;
-    UA:       TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -556,13 +547,11 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUserAgentInboundCallMethod = class(TTestCase)
+  TestTIdSipUserAgentInboundCallMethod = class(TActionMethodTestCase)
   private
-    Dispatcher: TIdSipMockTransactionDispatcher;
-    Method:     TIdSipUserAgentInboundCallMethod;
-    Request:    TIdSipRequest;
-    Session:    TIdSipInboundSession;
-    UA:         TIdSipUserAgentCore;
+    Method:  TIdSipUserAgentInboundCallMethod;
+    Request: TIdSipRequest;
+    Session: TIdSipInboundSession;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -5345,27 +5334,6 @@ begin
 end;
 
 //******************************************************************************
-//* TOptionsMethodTestCase                                                     *
-//******************************************************************************
-//* TOptionsMethodTestCase Public methods **************************************
-
-procedure TOptionsMethodTestCase.SetUp;
-begin
-  inherited SetUp;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-end;
-
-procedure TOptionsMethodTestCase.TearDown;
-begin
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
-
-  inherited TearDown;
-end;
-
-//******************************************************************************
 //* TestTIdSipOptionsFailureMethod                                             *
 //******************************************************************************
 //* TestTIdSipOptionsFailureMethod Public methods ******************************
@@ -5380,7 +5348,9 @@ begin
 
   Nowhere := TIdSipAddressHeader.Create;
   try
-    Self.Method.Options := Self.UA.QueryOptions(Nowhere);
+    Self.Method.Options  := Self.UA.QueryOptions(Nowhere);
+    Self.Method.Reason   := 'none';
+    Self.Method.Response := Self.Response;
   finally
     Nowhere.Free;
   end;
@@ -5431,7 +5401,8 @@ begin
 
   Nowhere := TIdSipAddressHeader.Create;
   try
-    Self.Method.Options := Self.UA.QueryOptions(Nowhere);
+    Self.Method.Options  := Self.UA.QueryOptions(Nowhere);
+    Self.Method.Response := Self.Response;
   finally
     Nowhere.Free;
   end;
@@ -5475,9 +5446,6 @@ var
 begin
   inherited SetUp;
 
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
   Registrar := TIdSipUri.Create;
   try
     Reg := Self.UA.RegisterWith(Registrar);
@@ -5491,8 +5459,6 @@ end;
 procedure TestRegistrationMethod.TearDown;
 begin
   Self.Bindings.Free;
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
 
   inherited TearDown;
 end;
@@ -5639,12 +5605,6 @@ begin
 
   Self.Request := TIdSipTestResources.CreateBasicRequest;
 
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.UA      := TIdSipUserAgentCore.Create;
-
-  Self.UA.Dispatcher := Self.Dispatcher;
-
   Self.Session := TIdSipInboundSession.Create(Self.UA,
                                               Self.Request,
                                               false);
@@ -5656,8 +5616,6 @@ procedure TestTIdSipUserAgentInboundCallMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Session.Free;
-  Self.UA.Free;
-  Self.Dispatcher.Free;
   Self.Request.Free;
 
   inherited TearDown;
