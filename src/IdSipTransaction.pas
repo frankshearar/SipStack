@@ -373,7 +373,7 @@ type
 
   TIdSipClientNonInviteTransaction = class(TIdSipClientTransaction)
   private
-    TimerEInterval: Cardinal;
+    fTimerEInterval: Cardinal;
 
     procedure RecalculateTimerE;
     procedure ScheduleTimerE;
@@ -394,6 +394,7 @@ type
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); override;
     procedure SendRequest(Dest: TIdSipLocation); override;
+    function  TimerEInterval: Cardinal;
     function  TimerFInterval: Cardinal;
     function  TimerKInterval: Cardinal;
   end;
@@ -2034,7 +2035,7 @@ constructor TIdSipClientNonInviteTransaction.Create(Dispatcher: TIdSipTransactio
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.TimerEInterval := Self.Dispatcher.T1Interval;
+  Self.fTimerEInterval := Self.Dispatcher.T1Interval;
 
   Self.ChangeToTrying;
 end;
@@ -2095,6 +2096,12 @@ begin
   end;
 end;
 
+function TIdSipClientNonInviteTransaction.TimerEInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := Self.fTimerEInterval;
+end;
+
 function TIdSipClientNonInviteTransaction.TimerFInterval: Cardinal;
 begin
   // Result in milliseconds
@@ -2120,6 +2127,8 @@ procedure TIdSipClientNonInviteTransaction.ChangeToTrying;
 begin
   Self.SetState(itsTrying);
 
+  if not Self.Dispatcher.WillUseReliableTranport(Self.InitialRequest) then
+    Self.ScheduleTimerE;
   Self.ScheduleTimerF;
 end;
 
@@ -2129,12 +2138,12 @@ procedure TIdSipClientNonInviteTransaction.RecalculateTimerE;
 begin
   if (Self.State = itsTrying) then begin
     if (Self.TimerEInterval < Self.Dispatcher.T2Interval) then
-      Self.TimerEInterval := 2 * Self.TimerEInterval
+      Self.fTimerEInterval := 2 * Self.TimerEInterval
     else
-      Self.TimerEInterval := Self.Dispatcher.T2Interval;
+      Self.fTimerEInterval := Self.Dispatcher.T2Interval;
   end
   else if (Self.State = itsProceeding) then
-    Self.TimerEInterval := Self.Dispatcher.T2Interval;
+    Self.fTimerEInterval := Self.Dispatcher.T2Interval;
 end;
 
 procedure TIdSipClientNonInviteTransaction.ScheduleTimerE;

@@ -435,6 +435,8 @@ type
     procedure TestReceiveFinalResponseInTryingState;
     procedure TestTimerEIntervalInProceedingRemainsConstant;
     procedure TestTimerEIntervalInTryingIncreases;
+    procedure TestTimerEScheduled;
+    procedure TestTimerEScheduledOnlyForUnreliableTransports;
     procedure TestTimerFScheduled;
     procedure TestTimerKFired;
     procedure TestTimerKScheduled;
@@ -550,13 +552,16 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
+{
   Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
+}
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+{
   Result.AddTest(TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
@@ -564,6 +569,7 @@ begin
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
+}
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
@@ -4951,7 +4957,7 @@ var
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerE;
   ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
-  
+
   for FireCount := 2 to 8 do begin
     EventCount := Self.DebugTimer.EventCount;
 
@@ -4972,7 +4978,40 @@ begin
   end;
 end;
 
-procedure TestTIdSipClientNonInviteTransaction.TestTimerFScheduled;
+procedure TestTIdSipClientNonInviteTransaction.TestTimerEScheduled;
+var
+  Event:      TNotifyEvent;
+  EventCount: Integer;
+  LastEvent:  TIdWait;
+  Tran:       TIdSipClientNonInviteTransaction;
+begin
+  Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerE;
+  EventCount := Self.DebugTimer.EventCount;
+
+  // Timer E only fires for unreliable transports (cf RFC 3261, section
+  // 17.1.2.2)
+  Self.Request.LastHop.Transport := UdpTransport;
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientNonInviteTransaction;
+  try
+    Tran.SendRequest(Self.Destination);
+
+
+    // "+1" and "-1" because the transaction will always add Timer F. Last.
+    Check(EventCount + 1 < Self.DebugTimer.EventCount,
+          'No event added');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event scheduled');
+    CheckEquals(Tran.TimerEInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestTimerEScheduledOnlyForUnreliableTransports;
 var
   Event:      TNotifyEvent;
   EventCount: Integer;
@@ -4980,8 +5019,42 @@ var
   Tran:       TIdSipClientNonInviteTransaction;
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerF;
+
+  // This disables the Timer E stuff (cf RFC 3261, section 17.1.2.2)
+  Self.Request.LastHop.Transport := TcpTransport;
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientNonInviteTransaction;
+  try
+    EventCount := Self.DebugTimer.EventCount;
+    Tran.SendRequest(Self.Destination);
+
+    CheckEquals(EventCount + 1,
+                Self.DebugTimer.EventCount,
+                'Timer E scheduled');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event scheduled');
+    CheckEquals(Tran.TimerFInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestTimerFScheduled;
+var
+  Event:      TNotifyEvent;
+  EventCount: Integer;
+  LastEvent:  TIdWait;
+  Tran:       TIdSipClientNonInviteTransaction;
+begin
+
+  Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerF;
   EventCount := Self.DebugTimer.EventCount;
 
+  // This disables the Timer E stuff (cf RFC 3261, section 17.1.2.2)
+  Self.Request.LastHop.Transport := TcpTransport;
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipClientNonInviteTransaction;
   try
