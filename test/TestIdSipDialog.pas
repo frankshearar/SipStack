@@ -34,6 +34,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure Test200After180DoesntRecomputeRouteSet;
     procedure TestCreateAck;
     procedure TestCreateFromAnotherDialog;
     procedure TestCreateInboundDialog;
@@ -157,6 +158,53 @@ begin
 end;
 
 //* TestTIdSipDialog Published methods *****************************************
+
+procedure TestTIdSipDialog.Test200After180DoesntRecomputeRouteSet;
+var
+  RouteSet180: TIdSipRecordRoutePath;
+  RouteSet200: TIdSipRecordRoutePath;
+  OutDlg: TIdSipDialog;
+begin
+  RouteSet180 := TIdSipRecordRoutePath.Create;
+  try
+    RouteSet200 := TIdSipRecordRoutePath.Create;
+    try
+      RouteSet180.Add(RecordRouteHeader).Value := '<sip:127.0.0.180>';
+      RouteSet180.Add(RecordRouteHeader).Value := '<sip:127.0.1.180>';
+      RouteSet200.Add(RecordRouteHeader).Value := '<sip:127.0.0.200>';
+
+      Self.Res.RecordRoute.Clear;
+      Self.Res.RecordRoute.AddInReverseOrder(RouteSet180);
+
+      OutDlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
+      try
+        Self.Res.RecordRoute.Clear;
+        Self.Res.RecordRoute.AddInReverseOrder(RouteSet200);
+
+        OutDlg.HandleMessage(Self.Res);
+
+        OutDlg.RouteSet.First;
+        RouteSet180.First;
+        while OutDlg.RouteSet.HasNext do begin
+          Check(RouteSet180.HasNext, 'Not enough URIs in the dialog''s route set');
+
+          CheckEquals(RouteSet180.CurrentHeader.Value,
+                      OutDlg.RouteSet.CurrentHeader.Value,
+                      '200 OK''s route set overwrote the dialog routeset');
+
+          RouteSet180.Next;
+          OutDlg.RouteSet.Next;
+        end;
+      finally
+        OutDlg.Free;
+      end;
+    finally
+      RouteSet200.Free;
+    end;
+  finally
+    RouteSet180.Free;
+  end;
+end;
 
 procedure TestTIdSipDialog.TestCreateAck;
 var
