@@ -6,6 +6,8 @@ uses
   Classes, IdThread;
 
 type
+  // I represent a recurring timer. Use me whenever you want an event to be
+  // triggered over and over at a (more or less) constant interval.
   TIdSipTimer = class(TIdThread)
   private
     CoarseTiming: Boolean;

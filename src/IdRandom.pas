@@ -5,13 +5,14 @@ interface
 type
   TIdRandomNumber = class(TObject)
   public
-    class function Next: Cardinal; overload; virtual;
-    class function Next(Max: Cardinal): Cardinal; overload;
+    class function NextCardinal: Cardinal; overload; virtual;
+    class function NextDouble: Double; virtual;
+    class function NextCardinal(Max: Cardinal): Cardinal; overload;
   end;
 
 implementation
 
-class function TIdRandomNumber.Next: Cardinal;
+class function TIdRandomNumber.NextCardinal: Cardinal;
 begin
   // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
   // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
@@ -20,10 +21,19 @@ begin
   Result := Random(MaxInt);
 end;
 
-class function TIdRandomNumber.Next(Max: Cardinal): Cardinal;
+class function TIdRandomNumber.NextDouble: Double;
+var
+  Numerator: Cardinal;
+begin
+  // Return a random double in the range [0, 1].
+  Numerator := Self.NextCardinal;
+  Result := Self.NextCardinal / High(Numerator);
+end;
+
+class function TIdRandomNumber.NextCardinal(Max: Cardinal): Cardinal;
 begin
   repeat
-    Result := Self.Next;
+    Result := Self.NextCardinal;
   until Result <= Max;
 
   Assert(Result <= Max, 'Result > Max');

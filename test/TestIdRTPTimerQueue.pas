@@ -29,11 +29,13 @@ type
     ExceptionMessage: String;
     ExceptionType:    ExceptClass;
     Lock:             TCriticalSection;
+    Notified:         Boolean;
     OrderOfFire:      String;
     Queue:            TIdRTPTimerQueue;
     T1:               TThreadEvent;
     T2:               TThreadEvent;
 
+    procedure CheckNotifyEvent(Sender: TObject);
     procedure OnEventOneSet(Sender: TObject);
     procedure OnEventTwoSet(Sender: TObject);
     procedure WaitFor(Event: TEvent);
@@ -46,6 +48,7 @@ type
   published
     procedure TestEarliestEvent;
     procedure TestBefore;
+    procedure TestNotifyEvent;
     procedure TestOneEvent;
     procedure TestTwoEvents;
     procedure TestTwoOutOfOrderEvents;
@@ -102,6 +105,7 @@ begin
 
   Self.ExceptionType    := Exception;
   Self.ExceptionMessage := 'The event waited for was never fired';
+  Self.Notified         := false;
   Self.OrderOfFire      := '';
 
   Self.EventOne := TSimpleEvent.Create;
@@ -131,6 +135,11 @@ begin
 end;
 
 //* TestTIdRTPTimerQueue Private methods ***************************************
+
+procedure TestTIdRTPTimerQueue.CheckNotifyEvent(Sender: TObject);
+begin
+  Self.Notified := true;
+end;
 
 procedure TestTIdRTPTimerQueue.OnEventOneSet(Sender: TObject);
 begin
@@ -176,7 +185,7 @@ end;
 
 procedure TestTIdRTPTimerQueue.WaitForTimeout(Event: TEvent);
 begin
-  if (wrTimeout <> Self.EventOne.WaitFor(LongTimeout)) then
+  if (wrTimeout <> Event.WaitFor(LongTimeout)) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
@@ -190,22 +199,22 @@ begin
   try
     EventFour := TSimpleEvent.Create;
     try
-    Check(Self.Queue.EarliestEvent = nil, 'Empty list');
-    Self.Queue.AddEvent(100, Self.EventOne);
-    Check(Self.Queue.EarliestEvent.Event = Self.EventOne,
-          'One item');
+      Check(Self.Queue.EarliestEvent = nil, 'Empty list');
+      Self.Queue.AddEvent(100, Self.EventOne);
+      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventOne,
+            'One item');
 
-    Self.Queue.AddEvent(50, Self.EventTwo);
-    Check(Self.Queue.EarliestEvent.Event = Self.EventTwo,
-          'An earlier item added');
+      Self.Queue.AddEvent(50, Self.EventTwo);
+      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventTwo,
+            'An earlier item added');
 
-    Self.Queue.AddEvent(150, EventThree);
-    Check(Self.Queue.EarliestEvent.Event = Self.EventTwo,
-          'A later item added');
+      Self.Queue.AddEvent(150, EventThree);
+      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventTwo,
+            'A later item added');
 
-   Self.Queue.AddEvent($ffffff00, EventFour);
-    Check(Self.Queue.EarliestEvent.Event = EventFour,
-          'A really early item added');
+      Self.Queue.AddEvent($ffffff00, EventFour);
+      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = EventFour,
+            'A really early item added');
     finally
       EventFour.Free;
     end;
@@ -237,6 +246,21 @@ begin
         'High(Cardinal) - 10, 10');
   Check(not Self.Queue.Before(10, High(Cardinal) - 10),
         '10, High(Cardinal) - 10');
+end;
+
+procedure TestTIdRTPTimerQueue.TestNotifyEvent;
+begin
+  Self.Queue.AddEvent(DefaultTimeout, Self.CheckNotifyEvent);
+  Self.Queue.AddEvent(DefaultTimeout*2, Self.EventOne);
+
+  Self.ExceptionMessage := 'Event didn''t fire';
+  Self.Queue.Start;
+  try
+    Self.WaitFor(Self.EventOne);
+    Check(Self.Notified, 'TNotifyEvent didn''t fire');
+  finally
+    Self.Queue.Stop;
+  end;
 end;
 
 procedure TestTIdRTPTimerQueue.TestOneEvent;

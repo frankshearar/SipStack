@@ -376,7 +376,7 @@ begin
       TE.Event := Event;
       TE.Duration := 100;
       TE.PrintOn(S);
-      Self.Media.ServerFor(Self.Media.BasePort).SendData(TE);
+      Self.Media.ServerFor(Self.Media.BasePort).Session.SendData(TE);
     finally
       TE.Free;
     end;

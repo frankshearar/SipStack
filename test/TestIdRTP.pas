@@ -9,6 +9,7 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestAddModulo;
+    procedure TestAddModuloWord;
     procedure TestDateTimeToNTPFractionsOfASecond;
     procedure TestDateTimeToNTPSeconds;
     procedure TestDateTimeToNTPTimestampExceptionalCases;
@@ -21,6 +22,9 @@ type
     procedure TestMultiplyCardinal;
     procedure TestNtoHL;
     procedure TestNtoHS;
+    procedure TestPeekByte;
+    procedure TestPeekWord;
+    procedure TestReadByte;
     procedure TestReadCardinal;
     procedure TestReadRemainderOfStream;
     procedure TestReadRemainderOfStreamLong;
@@ -95,6 +99,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestLength;
     procedure TestPrintOn;
     procedure TestReadFrom;
   end;
@@ -198,12 +203,19 @@ type
   private
     AVP:    TIdAudioVisualProfile;
     Packet: TIdRTPPacket;
+    T140PT: TIdRTPPayloadType;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestIsRTCP;
     procedure TestIsRTP;
+    procedure TestIsValidBogusVersion;
+    procedure TestIsValidKnownPayloadType;
+    procedure TestIsValidProfileDoesntAllowHeaderExtensions;
+    procedure TestIsValidRealVersion;
+    procedure TestIsValidSenderOrReceiverReport;
+    procedure TestIsValidUnknownPayloadType;
     procedure TestPrintOn;
     procedure TestReadFromContributingSourceIdentifiers;
     procedure TestReadFromCsrcCount;
@@ -215,13 +227,21 @@ type
     procedure TestReadFromSynchronizationSourceIdentifier;
     procedure TestReadFromTimestamp;
     procedure TestReadFromVersion;
+    procedure TestReadFromWithPadding;
     procedure TestReadFromPrintOnInverse;
     procedure TestRealLength;
+    procedure TestT140Payload;
   end;
 
   TestTIdRTCPPacket = class(TTestCase)
   published
     procedure TestRTCPType;
+    procedure TestIsValidVersionNumber;
+  end;
+
+  TestTIdSrcDescChunkItem = class(TTestCase)
+  published
+    procedure TestItemType;
   end;
 
   TSrcDescChunkItemTestCase = class(TTestCase)
@@ -301,6 +321,10 @@ type
     procedure TestPrintOnEmpty;
     procedure TestPrintOnNoPrefix;
     procedure TestPrintOnNoData;
+    procedure TestReadFromNoPrefixNoData;
+    procedure TestReadFromNoPrefixWithData;
+    procedure TestReadFromPrefixNoData;
+    procedure TestReadFromPrefixWithData;
     procedure TestRealLength;
     procedure TestSetData;
   end;
@@ -323,32 +347,64 @@ type
   protected
     Packet: TIdRTCPPacket;
 
-    function PacketType: TIdRTCPPacketClass; virtual; abstract;
+    function PacketType: Byte; virtual; abstract;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsBye; virtual;
+    procedure TestIsReceiverReport; virtual;
+    procedure TestIsSenderReport; virtual;
     procedure TestIsRTCP;
     procedure TestIsRTP;
+    procedure TestPacketType;
     procedure TestPrintOnHasPadding;
     procedure TestPrintOnPacketType;
     procedure TestPrintOnSyncSrcId;
     procedure TestPrintOnVersion;
     procedure TestPrintOnWithPadding;
+    procedure TestReadFromHasPadding;
+    procedure TestReadFromLength;
+    procedure TestReadFromPacketType;
+    procedure TestReadFromVersion;
   end;
 
-  TestTIdRTCPSenderReportPacket = class(TRTCPPacketTestCase)
+  TestTIdRTCPReceiverReport = class(TRTCPPacketTestCase)
   private
-    SenderReport: TIdRTCPSenderReportPacket;
+    ReceiverReport: TIdRTCPReceiverReport;
+
+    function  MultipleReportBlockReceiverReport: String;
+    procedure ReadFromSampleReceiverReport;
+  protected
+    function PacketType: Byte; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestGetAllSrcIDs;
+    procedure TestIsReceiverReport; override;
+    procedure TestPrintOnSyncSrcId;
+    procedure TestPrintOnReceptionReportCount;
+    procedure TestPrintOnReportBlocks;
+    procedure TestRealLength;
+    procedure TestReadFromReceptionReportCount;
+    procedure TestReadFromReport;
+    procedure TestReadFromReports;
+    procedure TestReportAt;
+  end;
+
+  TestTIdRTCPSenderReport = class(TRTCPPacketTestCase)
+  private
+    SenderReport: TIdRTCPSenderReport;
 
     function  MultipleReportBlockSenderReport: String;
     procedure ReadFromSampleSenderReport;
   protected
-    function PacketType: TIdRTCPPacketClass; override;
+    function PacketType: Byte; override;
   public
     procedure SetUp; override;
   published
-    procedure TestPacketType;
+    procedure TestGetAllSrcIDs;
+    procedure TestIsSenderReport; override;
     procedure TestPrintOnSyncSrcId;
     procedure TestPrintOnNTPTimestamp;
     procedure TestPrintOnOctetCount;
@@ -357,83 +413,96 @@ type
     procedure TestPrintOnReportBlocks;
     procedure TestPrintOnRTPTimestamp;
     procedure TestPrintOnWord;
-    procedure TestReadFromLength;
     procedure TestReadFromNTPTimestamp;
     procedure TestReadFromOctetCount;
     procedure TestReadFromPacketCount;
-    procedure TestReadFromPadding;
     procedure TestReadFromReceptionReportCount;
     procedure TestReadFromReport;
     procedure TestReadFromReports;
     procedure TestReadFromRTPTimestamp;
     procedure TestReadFromSyncSrcID;
-    procedure TestReadFromVersion;
+    procedure TestReadFromTruncatedStream;
     procedure TestRealLength;
     procedure TestReportAt;
   end;
 
-  TestTIdRTCPSourceDescriptionPacket = class(TRTCPPacketTestCase)
+  TestTIdRTCPSourceDescription = class(TRTCPPacketTestCase)
   private
-    SrcDesc: TIdRTCPSourceDescriptionPacket;
+    SrcDesc: TIdRTCPSourceDescription;
   protected
-    function PacketType: TIdRTCPPacketClass; override;
+    function PacketType: Byte; override;
   public
     procedure SetUp; override;
   published
     procedure TestAddChunkAndChunkCount;
-    procedure TestPacketType;
+    procedure TestGetAllSrcIDs;
     procedure TestPrintOn;
     procedure TestPrintOnLength;
-    procedure TestReadFromPacketType;
+    procedure TestReadFromWithSingleCname;
   end;
 
-  TestTIdRTCPByePacket = class(TRTCPPacketTestCase)
+  TestTIdRTCPBye = class(TRTCPPacketTestCase)
   private
-    Bye: TIdRTCPByePacket;
+    Bye: TIdRTCPBye;
   protected
-    function PacketType: TIdRTCPPacketClass; override;
+    function PacketType: Byte; override;
   public
     procedure SetUp; override;
   published
-    procedure TestPacketType;
+    procedure TestGetAllSrcIDs;
+    procedure TestIsBye; override;
     procedure TestPrintOnLength;
     procedure TestPrintOnMultipleSources;
     procedure TestPrintOnReason;
     procedure TestPrintOnSyncSrcId;
     procedure TestReadFrom;
-    procedure TestReadFromHasPadding;
-    procedure TestReadFromLength;
-    procedure TestReadFromPacketType;
     procedure TestReadFromReason;
     procedure TestReadFromReasonLength;
     procedure TestReadFromSourceCount;
     procedure TestReadFromSources;
-    procedure TestReadFromVersion;
     procedure TestRealLength;
   end;
 
-  TestTIdRTCPApplicationDefinedPacket = class(TRTCPPacketTestCase)
+  TestTIdRTCPApplicationDefined = class(TRTCPPacketTestCase)
   private
-    AppDef: TIdRTCPApplicationDefinedPacket;
+    AppDef: TIdRTCPApplicationDefined;
   protected
-    function PacketType: TIdRTCPPacketClass; override;
+    function PacketType: Byte; override;
   public
     procedure SetUp; override;
   published
-    procedure TestPacketType;
     procedure TestPrintOnData;
+    procedure TestPrintOnEmptyData;
     procedure TestPrintOnLength;
     procedure TestPrintOnName;
     procedure TestReadFromData;
-    procedure TestReadFromHasPadding;
-    procedure TestReadFromLength;
     procedure TestReadFromName;
-    procedure TestReadFromPacketType;
     procedure TestReadFromSyncSrcId;
-    procedure TestReadFromVersion;
     procedure TestRealLength;
     procedure TestSetData;
     procedure TestSetName;
+  end;
+
+  TestTIdCompoundRTCPPacket = class(TTestCase)
+  private
+    Packet: TIdCompoundRTCPPacket;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAdd;
+    procedure TestFirstPacket;
+    procedure TestHasBye;
+    procedure TestIsRTCP;
+    procedure TestIsRTP;
+    procedure TestIsValidFirstPacketAnAppDef;
+    procedure TestIsValidFirstPacketAnRR;
+    procedure TestIsValidFirstPacketAnSDES;
+    procedure TestIsValidFirstPacketAnSR;
+    procedure TestIsValidPacketFirstPacketPadded;
+    procedure TestPrintOn;
+    procedure TestReadFrom;
+    procedure TestReadFromEmptyStream;
   end;
 
   TestTIdRTPPacketBuffer = class(TTestCase)
@@ -451,33 +520,59 @@ type
     procedure TestWellOrderedStream;
   end;
 
+  TIdMockEncoding = class(TIdRTPEncoding)
+  public
+    function PayloadType: TIdRTPPayloadClass; override;
+  end;
+
+  TIdMockPayload = class(TIdRTPPayload)
+  private
+    fHasKnownLength: Boolean;
+    fLength:         Cardinal;
+  public
+    function  HasKnownLength: Boolean; override;
+    function  Length: Cardinal; override;
+    procedure SetHasKnownLength(const Yes: Boolean);
+    procedure SetLength(const Length: Cardinal);
+  end;
+
+  TIdMockProfile = class(TIdAudioVisualProfile)
+  private
+    fAllowExtension: Boolean;
+  public
+    function  AllowsHeaderExtensions: Boolean; override;
+    procedure SetAllowExtension(const Allow: Boolean);
+  end;
+
 // Most of the values are thumb-sucked.
 // We calculate Length by hand, and RFC3550 gives us the value for packet type
 const
-  SampleReportBlock  = #$DE#$AD#$BE#$EF  // SSRC_1
-                     + #$0F#$00#$FE#$ED  // Fraction lost, Cumulative packet loss
-                     + #$10#$11#$12#$13  // highest received sequence no
-                     + #$00#$FE#$DF#$ED  // interarrival jitter
-                     + #$EA#$7E#$A7#$EA  // last SR
-                     + #$00#$00#$FF#$EF; // delay since last SR
-  SampleSenderReport = #$81#$C8#$00#$0C  // version, padding, packet type length
-                     + #$DE#$CA#$FB#$AD  // SSRC
-                     + #$A1#$A2#$A3#$A4  // NTP timestamp
-                     + #$A5#$A6#$A7#$A8  // NTP timestamp
-                     + #$A9#$AA#$AB#$AC  // RTP timestamp
-                     + #$00#$00#$0F#$ED  // sender's packet count
-                     + #$00#$00#$F0#$0D  // sender's octet count
-                     + SampleReportBlock;
+  SampleReportBlock    = #$DE#$AD#$BE#$EF  // SSRC_1
+                       + #$0F#$00#$FE#$ED  // Fraction lost, Cumulative packet loss
+                       + #$10#$11#$12#$13  // highest received sequence no
+                       + #$00#$FE#$DF#$ED  // interarrival jitter
+                       + #$EA#$7E#$A7#$EA  // last SR
+                       + #$00#$00#$FF#$EF; // delay since last SR
+  SampleReceiverReport = #$81#$C9#$00#$0C  // version, padding, packet type length
+                       + #$DE#$CA#$FB#$AD  // SSRC
+                       + SampleReportBlock;
+  SampleSenderReport   = #$81#$C8#$00#$0C  // version, padding, packet type length
+                       + #$DE#$CA#$FB#$AD  // SSRC
+                       + #$A1#$A2#$A3#$A4  // NTP timestamp
+                       + #$A5#$A6#$A7#$A8  // NTP timestamp
+                       + #$A9#$AA#$AB#$AC  // RTP timestamp
+                       + #$00#$00#$0F#$ED  // sender's packet count
+                       + #$00#$00#$F0#$0D  // sender's octet count
+                       + SampleReportBlock;
 
 implementation
 
 uses
-  Classes, DateUtils, IdRtpServer, SysUtils;
+  Classes, DateUtils, IdRtpServer, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
-
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
@@ -491,6 +586,8 @@ begin
   Result.AddTest(TestTIdRTCPReportBlock.Suite);
   Result.AddTest(TestTIdRTPBasePacket.Suite);
   Result.AddTest(TestTIdRTPPacket.Suite);
+  Result.AddTest(TestTIdRTCPPacket.Suite);
+  Result.AddTest(TestTIdSrcDescChunkItem.Suite);
   Result.AddTest(TestTIdSDESCanonicalName.Suite);
   Result.AddTest(TestTIdSDESUserName.Suite);
   Result.AddTest(TestTIdSDESEmail.Suite);
@@ -500,10 +597,12 @@ begin
   Result.AddTest(TestTIdSDESNote.Suite);
   Result.AddTest(TestTIdSDESPriv.Suite);
   Result.AddTest(TestTIdRTCPSrcDescChunk.Suite);
-  Result.AddTest(TestTIdRTCPSenderReportPacket.Suite);
-  Result.AddTest(TestTIdRTCPSourceDescriptionPacket.Suite);
-  Result.AddTest(TestTIdRTCPByePacket.Suite);
-  Result.AddTest(TestTIdRTCPApplicationDefinedPacket.Suite);
+  Result.AddTest(TestTIdRTCPReceiverReport.Suite);
+  Result.AddTest(TestTIdRTCPSenderReport.Suite);
+  Result.AddTest(TestTIdRTCPSourceDescription.Suite);
+  Result.AddTest(TestTIdRTCPBye.Suite);
+  Result.AddTest(TestTIdRTCPApplicationDefined.Suite);
+  Result.AddTest(TestTIdCompoundRTCPPacket.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
 end;
 
@@ -536,6 +635,20 @@ begin
   CheckEquals(1,
               AddModulo($ffffffff, 1, $ffffffff),
               'AddModulo($ffffffff, 1, $ffffffff)');
+end;
+
+procedure TestFunctions.TestAddModuloWord;
+begin
+  CheckEquals(8,  AddModuloWord(7, 1),   'AddModuloWord(7, 1)');
+  CheckEquals(18, AddModuloWord(7, 11),  'AddModuloWord(7, 11)');
+
+  CheckEquals(0,
+              AddModuloWord($fffe, 1),
+              'AddModuloWord($fffe, 1)');
+
+  CheckEquals(1,
+              AddModuloWord($ffff, 1),
+              'AddModuloWord($ffff, 1)');
 end;
 
 procedure TestFunctions.TestDateTimeToNTPFractionsOfASecond;
@@ -740,15 +853,108 @@ begin
   end;
 end;
 
+procedure TestFunctions.TestPeekByte;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$11);
+  try
+    CheckEquals($11,
+                PeekByte(S),
+                'Byte incorrectly peeked');
+    CheckEquals($11,
+                ReadByte(S),
+                'Peek read from the stream, not just peeked');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create('');
+  try
+    CheckEquals(0, PeekByte(S), 'Peeking on a truncated stream');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestPeekWord;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$11#$22);
+  try
+    CheckEquals($1122,
+                PeekWord(S),
+                'Word incorrectly peeked');
+    CheckEquals($1122,
+                ReadWord(S),
+                'Peek read from the stream, not just peeked');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$11);
+  try
+    CheckEquals($0000,
+                PeekWord(S),
+                'Word incorrectly peeked');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create('');
+  try
+    CheckEquals(0, PeekByte(S), 'Peeking on a truncated stream');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestReadByte;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$11);
+  try
+    CheckEquals($11, ReadByte(S), 'Byte incorrectly read');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create('');
+  try
+    try
+      ReadByte(S);
+      Fail('Failed to bail out on truncated stream');
+    except
+      on EStreamTooShort do;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestFunctions.TestReadCardinal;
 var
   S: TStringStream;
-  C: Cardinal;
 begin
   S := TStringStream.Create(#$11#$22#$33#$44);
   try
-    C := ReadCardinal(S);
-    CheckEquals($11223344, C, 'Cardinal incorrectly read - check byte order');
+    CheckEquals($11223344,
+                ReadCardinal(S),
+                'Cardinal incorrectly read - check byte order');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$00#$00#$00);
+  try
+    try
+      ReadCardinal(S);
+      Fail('Failed to bail out on truncated stream');
+    except
+      on EStreamTooShort do;
+    end;
   finally
     S.Free;
   end;
@@ -811,17 +1017,18 @@ end;
 
 procedure TestFunctions.TestReadString;
 var
-  S:   String;
   Src: TStringStream;
 begin
   Src := TStringStream.Create('onetwothree');
   try
-    S := ReadString(Src, 3);
-    CheckEquals('one', S, 'First read');
-    S := ReadString(Src, 3);
-    CheckEquals('two', S, 'Second read');
-    S := ReadString(Src, 1000);
-    CheckEquals('three', S, 'Third read');
+    CheckEquals('one', ReadString(Src, 3), 'First read');
+    CheckEquals('two', ReadString(Src, 3), 'Second read');
+
+    try
+      ReadString(Src, 1000);
+    except
+      on EStreamTooShort do;
+    end;
   finally
     Src.Free;
   end;
@@ -830,12 +1037,24 @@ end;
 procedure TestFunctions.TestReadWord;
 var
   S: TStringStream;
-  W: Word;
 begin
   S := TStringStream.Create(#$11#$22);
   try
-    W := ReadWord(S);
-    CheckEquals($1122, W, 'Word incorrectly read - check byte order');
+    CheckEquals($1122,
+                ReadWord(S),
+                'Word incorrectly read - check byte order');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$00);
+  try
+    try
+      ReadWord(S);
+      Fail('Failed to bail out on truncated stream');
+    except
+      on EStreamTooShort do;
+    end;
   finally
     S.Free;
   end;
@@ -1231,18 +1450,31 @@ end;
 
 //* TestTIdT140Payload Published methods ***************************************
 
+procedure TestTIdT140Payload.TestLength;
+var
+  S: String;
+begin
+  Self.Packet.Block := '';
+  CheckEquals(0, Self.Packet.Length, 'Length of empty string');
+
+  S := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+  Self.Packet.Block := S;
+  CheckEquals(Length(S), Self.Packet.Length, 'Length');
+end;
+
 procedure TestTIdT140Payload.TestPrintOn;
 var
-  S: TStringStream;
+  Data: String;
+  S:    TStringStream;
 begin
+  Data := 'fooing the bar';
   S := TStringStream.Create('');
   try
-    Self.Packet.BlockCount := $BEEF;
-    Self.Packet.Block      := 'fooing the bar';
+    Self.Packet.Block := Data;
 
     Self.Packet.PrintOn(S);
 
-    CheckEquals(#$BE#$EF'fooing the bar',
+    CheckEquals(Data,
                 S.DataString,
                 'PrintOn');
   finally
@@ -1252,14 +1484,17 @@ end;
 
 procedure TestTIdT140Payload.TestReadFrom;
 var
-  S: TStringStream;
+  Data: String;
+  S:    TStringStream;
 begin
-  S := TStringStream.Create(#$BE#$EF'fooing the bar');
+  Data := 'fooing the bar';
+  S := TStringStream.Create(Data);
   try
     Self.Packet.ReadFrom(S);
 
-    CheckEquals($BEEF,            Self.Packet.BlockCount, 'BlockCount');
-    CheckEquals('fooing the bar', Self.Packet.Block,      'Block');
+    CheckEquals(Data,
+                Self.Packet.Block,
+                'Block');
   finally
     S.Free;
   end;
@@ -1447,7 +1682,7 @@ procedure TestTIdTelephoneEventPayload.TestReadFromEvent;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(#$BE#$EF);
+  S := TStringStream.Create(#$BE#$EF#$00#$00);
   try
     Self.Packet.ReadFrom(S);
     CheckEquals($BE, Self.Packet.Event, 'Event');
@@ -1460,7 +1695,7 @@ procedure TestTIdTelephoneEventPayload.TestReadFromIsEnd;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(#$00#$80);
+  S := TStringStream.Create(#$00#$80#$00#$00);
   try
     Self.Packet.ReadFrom(S);
     Check(Self.Packet.IsEnd, 'IsEnd not set');
@@ -1468,7 +1703,7 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(#$00#$00);
+  S := TStringStream.Create(#$00#$00#$00#$00);
   try
     Self.Packet.ReadFrom(S);
     Check(not Self.Packet.IsEnd, 'IsEnd set');
@@ -1481,7 +1716,7 @@ procedure TestTIdTelephoneEventPayload.TestReadFromReservedBit;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(#$00#$40);
+  S := TStringStream.Create(#$00#$40#$00#$00);
   try
     Self.Packet.ReadFrom(S);
     Check(Self.Packet.ReservedBit, 'ReservedBit not set');
@@ -1489,7 +1724,7 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(#$00#$00);
+  S := TStringStream.Create(#$00#$00#$00#$00);
   try
     Self.Packet.ReadFrom(S);
     Check(not Self.Packet.ReservedBit, 'ReservedBit set');
@@ -1504,7 +1739,7 @@ var
   V: TIdTelephoneEventVolume;
 begin
   for V := Low(TIdTelephoneEventVolume) to High(TIdTelephoneEventVolume) do begin
-    S := TStringStream.Create(#$00 + Chr($C0 or V));
+    S := TStringStream.Create(#$00 + Chr($C0 or V) + #$00#$00);
     try
       Self.Packet.ReadFrom(S);
       CheckEquals(V,
@@ -2043,7 +2278,7 @@ var
   Data: TStringStream;
   Pkt:  TIdRTPBasePacket;
 begin
-  Data := TStringStream.Create('');
+  Data := TStringStream.Create(#$00#$00);
   try
     Pkt := TIdRTPBasePacket.CreateFrom(Data, Self.Profile);
     try
@@ -2153,10 +2388,22 @@ end;
 //* TestTIdRTPPacket Public methods ********************************************
 
 procedure TestTIdRTPPacket.SetUp;
+var
+  Encoding: TIdT140Encoding;
 begin
   inherited SetUp;
 
   Self.AVP := TIdAudioVisualProfile.Create;
+
+  Self.T140PT := 96;
+
+  Encoding := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  try
+    Self.AVP.AddEncoding(Encoding, Self.T140PT);
+  finally
+    Encoding.Free;
+  end;
+
   Self.Packet := TIdRTPPacket.Create(Self.AVP);
 end;
 
@@ -2180,6 +2427,121 @@ begin
   Check(Self.Packet.IsRTP, 'IsRTP');
 end;
 
+procedure TestTIdRTPPacket.TestIsValidBogusVersion;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$40#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(not Self.Packet.IsValid, 'Bogus version (RFC 1889)');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestIsValidKnownPayloadType;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Chr(RFC3550Version shl 6) + #$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.IsValid, 'Known payload type (PCM Mu-law; 8000 KHz)');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestIsValidProfileDoesntAllowHeaderExtensions;
+var
+  N: TIdMockProfile;
+  P: TIdRTPPacket;
+  S: TStringStream;
+begin
+  N := TIdMockProfile.Create;
+  try
+    N.SetAllowExtension(false);
+
+    S := TStringStream.Create(Chr((RFC3550Version shl 6) or $10) + #$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00); // profile-specific word + extension length
+    try
+      P := TIdRTPPacket.Create(N);
+      try
+        P.ReadFrom(S);
+        Check(not P.IsValid, 'Profile forbids header extensions');
+      finally
+        P.Free;
+      end;
+    finally
+      S.Free;
+    end;
+  finally
+    N.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestIsValidRealVersion;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Chr(RFC3550Version shl 6) + #$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.IsValid, 'RFC 3550 version');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestIsValidSenderOrReceiverReport;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Chr(RFC3550Version shl 6) + Chr(RTCPSenderReport) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.IsValid, 'Sender report');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(Chr(RFC3550Version shl 6) + Chr(RTCPReceiverReport) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.IsValid, 'Receiver report');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestIsValidUnknownPayloadType;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Chr(RFC3550Version shl 6) + Chr(Self.AVP.FirstFreePayloadType) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(not Self.Packet.IsValid, 'Unknown payload type');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdRTPPacket.TestPrintOn;
 var
   P:   TIdRTPPacket;
@@ -2193,6 +2555,7 @@ begin
   Self.Packet.CsrcIDs[0]   := $CAFEBABE;
   Self.Packet.CsrcIDs[1]   := $DEADBEEF;
   Self.Packet.IsMarker     := true;
+  Self.Packet.Length       := 32;
   Self.Packet.PayloadType  := $0D;
   Self.Packet.SequenceNo   := $0102;
   Self.Packet.Timestamp    := $0A0B0C0D;
@@ -2263,12 +2626,19 @@ end;
 
 procedure TestTIdRTPPacket.TestReadFromCsrcCount;
 var
-  I: Integer;
-  P: TIdRTPPacket;
-  S: TStream;
+  I, J:   Integer;
+  P:      TIdRTPPacket;
+  Packet: String;
+  S:      TStream;
 begin
   for I := Low(TIdRTPCsrcCount) to High(TIdRTPCsrcCount) do begin
-    S := TStringStream.Create(Chr(I));
+    Packet := Chr($c0 or I) + #$00#$00#$00
+            + #$00#$00#$00#$00 // timestamp
+            + #$00#$00#$00#$00; // SSRC
+    for J := Low(TIdRTPCsrcCount) to I - 1 do
+      Packet := Packet + #$00#$00#$00#$00;
+
+    S := TStringStream.Create(Packet);
     try
       P := TIdRTPPacket.Create(Self.AVP);
       try
@@ -2288,7 +2658,7 @@ var
   P: TIdRTPPacket;
   S: TStream;
 begin
-  S := TStringStream.Create(#$10#$00#$00#$00
+  S := TStringStream.Create(#$10#$00#$00#$04
                           + #$00#$00#$00#$00
                           + #$00#$00#$00#$00
                           + #$00#$00#$00#$00); // header extension
@@ -2304,7 +2674,10 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(#$00);
+  S := TStringStream.Create(#$00#$00#$00#$04
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     P := TIdRTPPacket.Create(Self.AVP);
     try
@@ -2323,7 +2696,9 @@ var
   P: TIdRTPPacket;
   S: TStream;
 begin
-  S := TStringStream.Create(#$20);
+  S := TStringStream.Create(#$E0#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     P := TIdRTPPacket.Create(Self.AVP);
     try
@@ -2336,7 +2711,9 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(#$00);
+  S := TStringStream.Create(#$C0#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     P := TIdRTPPacket.Create(Self.AVP);
     try
@@ -2355,7 +2732,9 @@ var
   P: TIdRTPPacket;
   S: TStream;
 begin
-  S := TStringStream.Create(#$00#$80);
+  S := TStringStream.Create(#$00#$80#$00#$02
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     P := TIdRTPPacket.Create(Self.AVP);
     try
@@ -2368,7 +2747,9 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(#$00#$00);
+  S := TStringStream.Create(#$00#$00#$00#$02
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     P := TIdRTPPacket.Create(Self.AVP);
     try
@@ -2389,7 +2770,9 @@ var
   S: TStream;
 begin
   for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
-    S := TStringStream.Create(#$00 + Chr(I));
+    S := TStringStream.Create(#$00 + Chr(I) + #$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00);
     try
       P := TIdRTPPacket.Create(Self.AVP);
       try
@@ -2411,7 +2794,9 @@ var
   S: TStringStream;
 begin
   for I := Low(TIdRTPSequenceNo) to High(TIdRTPSequenceNo) do begin
-    S := TStringStream.Create(#$00#$00 + EncodeAsString(I));
+    S := TStringStream.Create(#$00#$00 + EncodeAsString(I)
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00);
     try
       P := TIdRTPPacket.Create(Self.AVP);
       try
@@ -2466,7 +2851,8 @@ begin
   for I := 1 to 1000 do begin
     Timestamp := Abs(Random(High(Integer)));
     S := TStringStream.Create(#$00#$00#$00#$00
-                            + EncodeAsString(Timestamp));
+                            + EncodeAsString(Timestamp)
+                            + #$00#$00#$00#$00);
     try
       P := TIdRTPPacket.Create(Self.AVP);
       try
@@ -2490,7 +2876,9 @@ var
   S: TStream;
 begin
   for I := Low(TIdRTPVersion) to High(TIdRTPVersion) do begin
-    S := TStringStream.Create(Chr(I shl 6));
+    S := TStringStream.Create(Chr(I shl 6) + #$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00);
     try
       P := TIdRTPPacket.Create(Self.AVP);
       try
@@ -2502,6 +2890,35 @@ begin
     finally
       S.Free;
     end;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestReadFromWithPadding;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Chr((RFC3550Version shl 6) or $20) + Chr(Self.T140PT) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + 'This'
+                          + ' is '
+                          + 'blac'
+                          + 'k su'
+                          + 'nshi'
+                          + 'ne' + #$00#$00 // padding starts here
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$0E); // 14 octets
+  try
+    Self.Packet.ReadFrom(S);
+    CheckEquals(TIdT140Payload.ClassName,
+                Self.Packet.Payload.ClassName,
+                'Payload type');
+    CheckEquals('This is black sunshine',
+                (Self.Packet.Payload as TIdT140Payload).Block,
+                'T140block');
+  finally
+    S.Free;
   end;
 end;
 
@@ -2548,6 +2965,39 @@ begin
               Self.Packet.RealLength, 'RealLength with a header extension');
 end;
 
+procedure TestTIdRTPPacket.TestT140Payload;
+var
+  Data:     String;
+  Expected: TIdT140Payload;
+  S:        TStringStream;
+begin
+  Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  try
+    Expected.Block := Data;
+
+    S := TStringStream.Create('');
+    try
+      Expected.PrintOn(S);
+      S.Seek(0, soFromBeginning);
+
+      Self.Packet.PayloadType := Self.T140PT;
+      Self.Packet.ReadPayload(S);
+
+      CheckEquals(Expected.ClassName,
+                  Self.Packet.Payload.ClassName,
+                  'Payload type');
+      CheckEquals(Expected.Block,
+                  (Self.Packet.Payload as TIdT140Payload).Block,
+                  'Payload data');
+    finally
+      S.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdRTCPPacket                                                          *
 //******************************************************************************
@@ -2557,19 +3007,19 @@ procedure TestTIdRTCPPacket.TestRTCPType;
 var
   I: Byte;
 begin
-  CheckEquals(TIdRTCPSenderReportPacket.ClassName,
+  CheckEquals(TIdRTCPSenderReport.ClassName,
               TIdRTCPPacket.RTCPType(RTCPSenderReport).ClassName,
               'Sender Report');
-  CheckEquals(TIdRTCPReceiverReportPacket.ClassName,
+  CheckEquals(TIdRTCPReceiverReport.ClassName,
               TIdRTCPPacket.RTCPType(RTCPReceiverReport).ClassName,
               'Receiver Report');
-  CheckEquals(TIdRTCPSourceDescriptionPacket.ClassName,
+  CheckEquals(TIdRTCPSourceDescription.ClassName,
               TIdRTCPPacket.RTCPType(RTCPSourceDescription).ClassName,
               'Source Description');
-  CheckEquals(TIdRTCPByePacket.ClassName,
+  CheckEquals(TIdRTCPBye.ClassName,
               TIdRTCPPacket.RTCPType(RTCPGoodbye).ClassName,
               'Goodbye');
-  CheckEquals(TIdRTCPApplicationDefinedPacket.ClassName,
+  CheckEquals(TIdRTCPApplicationDefined.ClassName,
               TIdRTCPPacket.RTCPType(RTCPApplicationDefined).ClassName,
               'Application Defined');
 
@@ -2578,6 +3028,61 @@ begin
 
   for I := RTCPApplicationDefined + 1 to High(Byte) do
     Check(nil = TIdRTCPPacket.RTCPType(I), 'Packet Type ' + IntToStr(I));
+end;
+
+procedure TestTIdRTCPPacket.TestIsValidVersionNumber;
+var
+  P: TIdRTCPBye;
+begin
+  P := TIdRTCPBye.Create;
+  try
+    P.Version := RFC3550Version - 1;
+    Check(not P.IsValid, 'Bad version number');
+    P.Version := RFC3550Version;
+    Check(P.IsValid, 'RFC 3550 version number');
+  finally
+    P.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSrcDescChunkItem                                                    *
+//******************************************************************************
+//* TestTIdSrcDescChunkItem Public methods *************************************
+
+procedure TestTIdSrcDescChunkItem.TestItemType;
+begin
+  CheckEquals(TIdSDESCanonicalName.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESCName).ClassName,
+              'SDESCName');
+  CheckEquals(TIdSDESUserName.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESName).ClassName,
+              'SDESName');
+  CheckEquals(TIdSDESEmail.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESEmail).ClassName,
+              'SDESEmail');
+  CheckEquals(TIdSDESPhone.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESPhone).ClassName,
+              'SDESPhone');
+  CheckEquals(TIdSDESLocation.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESLoc).ClassName,
+              'SDESLoc');
+  CheckEquals(TIdSDESTool.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESTool).ClassName,
+              'SDESTool');
+  CheckEquals(TIdSDESNote.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESNote).ClassName,
+              'SDESNote');
+  CheckEquals(TIdSDESPriv.ClassName,
+              TIdSrcDescChunkItem.ItemType(SDESPriv).ClassName,
+              'SDESPriv');
+
+  try
+    TIdSrcDescChunkItem.ItemType(0);
+    Fail('Failed to bail out with unknown SDES');
+  except
+    on EUnknownSDES do;
+  end;
 end;
 
 //******************************************************************************
@@ -2607,7 +3112,7 @@ var
 begin
   S := TStringStream.Create('');
   try
-    Self.Item.Data := 'In R''lyeh dead Cthulhu lies dreaming';
+    Self.Item.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
     Self.Item.PrintOn(S);
 
@@ -2631,7 +3136,7 @@ var
   Name: String;
   S: TStringStream;
 begin
-  Name := 'In R''lyeh dead Cthulhu lies dreaming';
+  Name := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
   S := TStringStream.Create(Chr(Self.Item.ID) + Chr(Length(Name))
                           + Name
@@ -2648,7 +3153,7 @@ procedure TSrcDescChunkItemTestCase.TestRealLength;
 begin
   CheckEquals(2, Self.Item.RealLength, 'Empty data');
 
-  Self.Item.Data := 'In R''lyeh dead Cthulhu lies dreaming';
+  Self.Item.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
   CheckEquals(2 + Length(Self.Item.Data),
               Self.Item.RealLength,
               'Real data');
@@ -2872,6 +3377,84 @@ begin
   Self.CheckPrintOn('foo', '');
 end;
 
+procedure TestTIdSDESPriv.TestReadFromNoPrefixNoData;
+var
+  S: TStringStream;
+begin
+  // The length must still be positive since the prefix length takes up one
+  // byte.
+  S := TStringStream.Create(Chr(SDESPriv) + #$01#$00);
+  try
+    Self.Item.ReadFrom(S);
+    CheckEquals('', Self.Item.Prefix, 'Prefix');
+    CheckEquals('', Self.Item.Data,   'Data');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSDESPriv.TestReadFromNoPrefixWithData;
+var
+  Data: String;
+  Len:  Byte;
+  S:    TStringStream;
+begin
+  Data := 'nyarlathotep';
+  Len  := Length(Data) + Sizeof(Byte);
+
+  S := TStringStream.Create(Chr(SDESPriv) + Chr(Len) + #$00 + Data);
+  try
+    Self.Item.ReadFrom(S);
+    CheckEquals('', Self.Item.Prefix, 'Prefix');
+    CheckEquals(Data, Self.Item.Data, 'Data');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSDESPriv.TestReadFromPrefixNoData;
+var
+  Len:    Byte;
+  Prefix: String;
+  S:      TStringStream;
+begin
+  Prefix := 'nyarlathotep';
+  Len    := Length(Prefix);
+
+  S := TStringStream.Create(Chr(SDESPriv) + Chr(Len + 1) + Chr(Len) + Prefix);
+  try
+    Self.Item.ReadFrom(S);
+    CheckEquals(Prefix, Self.Item.Prefix, 'Prefix');
+    CheckEquals('',     Self.Item.Data,   'Data');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSDESPriv.TestReadFromPrefixWithData;
+var
+  Data:      String;
+  DataLen:   Byte;
+  Prefix:    String;
+  PrefixLen: Byte;
+  S:         TStringStream;
+begin
+  Prefix    := 'Ia!';
+  PrefixLen := Length(Prefix);
+  Data      := 'Shub-Niggurath!';
+  DataLen   := Length(Data) + Length(Prefix) + SizeOf(PrefixLen);
+
+  S := TStringStream.Create(Chr(SDESPriv) + Chr(DataLen) + Chr(PrefixLen)
+                          + Prefix + Data);
+  try
+    Self.Item.ReadFrom(S);
+    CheckEquals(Prefix, Self.Item.Prefix, 'Prefix');
+    CheckEquals(Data,   Self.Item.Data,   'Data');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSDESPriv.TestRealLength;
 begin
   CheckEquals(3, Self.Item.RealLength, '"Empty" PRIV');
@@ -2954,7 +3537,7 @@ var
   Offset: Cardinal;
   S:      TStringStream;
 begin
-  Name := 'In R''lyeh dead Cthulhu lies dreaming';
+  Name := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
   Self.Chunk.SyncSrcID := $deadbeef;
   Self.Chunk.AddCanonicalName(Name);
@@ -3117,7 +3700,7 @@ procedure TRTCPPacketTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Packet := Self.PacketType.Create;
+  Self.Packet := TIdRTCPPacket.RTCPType(Self.PacketType).Create;
 end;
 
 procedure TRTCPPacketTestCase.TearDown;
@@ -3129,6 +3712,24 @@ end;
 
 //* TRTCPPacketTestCase Published methods **************************************
 
+procedure TRTCPPacketTestCase.TestIsBye;
+begin
+  Check(not Self.Packet.IsBye,
+        Self.Packet.ClassName  + ' marked as being a bye');
+end;
+
+procedure TRTCPPacketTestCase.TestIsReceiverReport;
+begin
+  Check(not Self.Packet.IsReceiverReport,
+        Self.Packet.ClassName  + ' marked as being a receiver report');
+end;
+
+procedure TRTCPPacketTestCase.TestIsSenderReport;
+begin
+  Check(not Self.Packet.IsSenderReport,
+        Self.Packet.ClassName  + ' marked as being a sender report');
+end;
+
 procedure TRTCPPacketTestCase.TestIsRTCP;
 begin
   Check(Self.Packet.IsRTCP, 'IsRTCP');
@@ -3137,6 +3738,13 @@ end;
 procedure TRTCPPacketTestCase.TestIsRTP;
 begin
   Check(not Self.Packet.IsRTP, 'IsRTP');
+end;
+
+procedure TRTCPPacketTestCase.TestPacketType;
+begin
+  CheckEquals(Self.PacketType,
+              Self.Packet.PacketType,
+              'PacketType');
 end;
 
 procedure TRTCPPacketTestCase.TestPrintOnHasPadding;
@@ -3245,35 +3853,414 @@ begin
   end;
 end;
 
-//******************************************************************************
-//* TestTIdRTCPSenderReportPacket                                              *
-//******************************************************************************
-//* TestTIdRTCPSenderReportPacket Public methods *******************************
+procedure TRTCPPacketTestCase.TestReadFromHasPadding;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00 + Chr(Self.PacketType)+ #$00#$06
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
 
-procedure TestTIdRTCPSenderReportPacket.SetUp;
+    Check(not Self.Packet.HasPadding, 'HasPadding set');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$20 + Chr(Self.PacketType)+ #$00#$06
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+
+    Check(Self.Packet.HasPadding, 'HasPadding not set');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TRTCPPacketTestCase.TestReadFromLength;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00 + Chr(Self.PacketType) + #$00#$06
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+
+    CheckEquals(IntToHex($0006, 4),
+                IntToHex(Self.Packet.Length, 4),
+                'Length');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TRTCPPacketTestCase.TestReadFromPacketType;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00 + Chr(Self.PacketType)+ #$00#$06
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+
+    CheckEquals(Self.PacketType,
+                Self.Packet.PacketType,
+                'PacketType');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TRTCPPacketTestCase.TestReadFromVersion;
+var
+  I: TIdRTPVersion;
+  S: TStream;
+begin
+  for I := Low(TIdRTPVersion) to High(TIdRTPVersion) do begin
+    S := TStringStream.Create(Chr(I shl 6) + Chr(Self.PacketType)+ #$00#$06
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00
+                            + #$00#$00#$00#$00);
+    try
+      Self.Packet.ReadFrom(S);
+      CheckEquals(I, Self.Packet.Version, 'Version ' + IntToStr(I));
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTCPReceiverReport                                                  *
+//******************************************************************************
+//* TestTIdRTCPReceiverReport Public methods ***********************************
+
+procedure TestTIdRTCPReceiverReport.SetUp;
 begin
   inherited SetUp;
 
-  Self.SenderReport := Self.Packet as TIdRTCPSenderReportPacket;
+  Self.ReceiverReport := Self.Packet as TIdRTCPReceiverReport;
 end;
 
-//* TestTIdRTCPSenderReportPacket Protected methods ****************************
+//* TestTIdRTCPReceiverReport Protected methods ********************************
 
-function TestTIdRTCPSenderReportPacket.PacketType: TIdRTCPPacketClass;
+function TestTIdRTCPReceiverReport.PacketType: Byte;
 begin
-  Result := TIdRTCPSenderReportPacket;
+  Result := RTCPReceiverReport;
 end;
 
-//* TestTIdRTCPSenderReportPacket Private methods ******************************
+//* TestTIdRTCPReceiverReport Private methods ********************************
 
-function TestTIdRTCPSenderReportPacket.MultipleReportBlockSenderReport: String;
+function TestTIdRTCPReceiverReport.MultipleReportBlockReceiverReport: String;
+begin
+  Result     := SampleReceiverReport + SampleReportBlock;
+  Result[1]  := Chr($82); // 2 reports
+  Result[40] := Chr(Ord(Result[40]) + 1); // Cumulative packet loss of 2nd report
+end;
+
+procedure TestTIdRTCPReceiverReport.ReadFromSampleReceiverReport;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(SampleReceiverReport);
+  try
+    Self.ReceiverReport.ReadFrom(S);
+  finally
+    S.Free;
+  end;
+end;
+
+//* TestTIdRTCPReceiverReport Published methods ********************************
+
+procedure TestTIdRTCPReceiverReport.TestGetAllSrcIDs;
+var
+  I, J: Integer;
+  IDs:  TCardinalDynArray;
+begin
+  Self.ReceiverReport.ReceptionReportCount := 3;
+  Self.ReceiverReport.Reports[0].SyncSrcID := $decafbad;
+  Self.ReceiverReport.Reports[1].SyncSrcID := $deadbeef;
+  Self.ReceiverReport.Reports[2].SyncSrcID := $f00dd00d;
+
+  IDs := Self.ReceiverReport.GetAllSrcIDs;
+  CheckEquals(Self.ReceiverReport.ReceptionReportCount + 1,
+              Length(IDs),
+              'Number of IDs');
+
+  CheckEquals(IntToHex(Self.ReceiverReport.SyncSrcID, 8),
+              IntToHex(IDs[Low(IDs)], 8),
+              'Source ID the First');
+
+  J := 0;
+  for I := Low(IDs) + 1 to High(IDs) do begin
+    CheckEquals(IntToHex(Self.ReceiverReport.Reports[J].SyncSrcID, 8),
+                IntToHex(IDs[I], 8),
+                'Source ID ' + IntToStr(I));
+    Inc(J);
+  end;
+end;
+
+procedure TestTIdRTCPReceiverReport.TestIsReceiverReport;
+begin
+  Check(Self.Packet.IsReceiverReport,
+        Self.Packet.ClassName  + ' marked as being a receiver report');
+end;
+
+procedure TestTIdRTCPReceiverReport.TestPrintOnSyncSrcId;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.ReceiverReport.SyncSrcID := $decafbad;
+    Self.ReceiverReport.PrintOn(S);
+
+    Check(Length(S.DataString) > 7, 'Too little output');
+    CheckEquals($de, Ord(S.DataString[5]), 'LSB');
+    CheckEquals($ca, Ord(S.DataString[6]), 'LSB + 1');
+    CheckEquals($fb, Ord(S.DataString[7]), 'MSB - 1');
+    CheckEquals($ad, Ord(S.DataString[8]), 'MSB');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPReceiverReport.TestPrintOnReceptionReportCount;
+var
+  I: TIdFiveBitInt;
+  S: TStringStream;
+begin
+  for I := Low(TIdFiveBitInt) to High(TIdFiveBitInt) do begin
+    S := TStringStream.Create('');
+    try
+      Self.ReceiverReport.ReceptionReportCount := I;
+      Self.ReceiverReport.PrintOn(S);
+
+      Check(Length(S.DataString) > 0, 'Too little output, ' + IntToStr(I));
+      CheckEquals($80 or I, Ord(S.DataString[1]), 'RC, ' + IntToStr(I));
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+procedure TestTIdRTCPReceiverReport.TestPrintOnReportBlocks;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.ReceiverReport.ReceptionReportCount          := 1;
+    Self.ReceiverReport.Reports[0].SyncSrcID          := $deadbeef;
+    Self.ReceiverReport.Reports[0].FractionLost       := $0f;
+    Self.ReceiverReport.Reports[0].CumulativeLoss     := $feed;
+    Self.ReceiverReport.Reports[0].HighestSeqNo       := $10111213;
+    Self.ReceiverReport.Reports[0].InterArrivalJitter := $00fedfed;
+    Self.ReceiverReport.Reports[0].LastSenderReport   := $ea7ea7ea;
+    Self.ReceiverReport.Reports[0].DelaySinceLastSR   := $0000ffef;
+
+    Self.ReceiverReport.PrintOn(S);
+    Check(Length(S.DataString) > 31, 'Too little output');
+    CheckEquals($de, Ord(S.DataString[9]), 'SSRC MSB');
+    CheckEquals($ad, Ord(S.DataString[10]), 'SSRC MSB - 1');
+    CheckEquals($be, Ord(S.DataString[11]), 'SSRC LSB + 1');
+    CheckEquals($ef, Ord(S.DataString[12]), 'SSRC LSB');
+    CheckEquals($0f, Ord(S.DataString[13]), 'Fraction lost');
+    CheckEquals($00, Ord(S.DataString[14]), 'Cumulative loss MSB');
+    CheckEquals($fe, Ord(S.DataString[15]), 'Cumulative loss MSB - 1');
+    CheckEquals($ed, Ord(S.DataString[16]), 'Cumulative loss LSB');
+    CheckEquals($10, Ord(S.DataString[17]), 'Highest sequence no MSB');
+    CheckEquals($11, Ord(S.DataString[18]), 'Highest sequence no MSB - 1');
+    CheckEquals($12, Ord(S.DataString[19]), 'Highest sequence no LSB + 1');
+    CheckEquals($13, Ord(S.DataString[20]), 'Highest sequence no LSB');
+    CheckEquals($00, Ord(S.DataString[21]), 'Interarrival jitter MSB');
+    CheckEquals($fe, Ord(S.DataString[22]), 'Interarrival jitter MSB - 1');
+    CheckEquals($df, Ord(S.DataString[23]), 'Interarrival jitter LSB + 1');
+    CheckEquals($ed, Ord(S.DataString[24]), 'Interarrival jitter LSB');
+    CheckEquals($ea, Ord(S.DataString[25]), 'Last SR MSB');
+    CheckEquals($7e, Ord(S.DataString[26]), 'Last SR MSB - 1');
+    CheckEquals($a7, Ord(S.DataString[27]), 'Last SR LSB + 1');
+    CheckEquals($ea, Ord(S.DataString[28]), 'Last SR LSB');
+    CheckEquals($00, Ord(S.DataString[29]), 'Delay since last SR MSB');
+    CheckEquals($00, Ord(S.DataString[30]), 'Delay since last SR MSB - 1');
+    CheckEquals($ff, Ord(S.DataString[31]), 'Delay since last SR LSB + 1');
+    CheckEquals($ef, Ord(S.DataString[32]), 'Delay since last SR LSB');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPReceiverReport.TestRealLength;
+const
+  MinimumLength     = 2*4;
+  ReportBlockLength = 6*4;
+begin
+  CheckEquals(MinimumLength,
+              Self.ReceiverReport.RealLength,
+              'Minimum RealLength');
+
+  Self.ReceiverReport.ReceptionReportCount := 1;
+  CheckEquals(MinimumLength + ReportBlockLength,
+              Self.ReceiverReport.RealLength,
+              'RealLength with one report block');
+
+  Self.ReceiverReport.ReceptionReportCount := 5;
+  CheckEquals(MinimumLength + 5*ReportBlockLength,
+              Self.ReceiverReport.RealLength,
+              'RealLength with five report blocks');
+
+  Self.ReceiverReport.Extension := '12345';
+  CheckEquals(MinimumLength + 5*ReportBlockLength + 5,
+              Self.ReceiverReport.RealLength,
+              'RealLength with five report blocks and a 5-octet extension');
+end;
+
+procedure TestTIdRTCPReceiverReport.TestReadFromReceptionReportCount;
+begin
+  Self.ReadFromSampleReceiverReport;
+  CheckEquals(1,
+              Self.ReceiverReport.ReceptionReportCount,
+              'Reception report count');
+end;
+
+procedure TestTIdRTCPReceiverReport.TestReadFromReport;
+var
+  Report: TIdRTCPReportBlock;
+begin
+  Self.ReadFromSampleReceiverReport;
+
+  Report := Self.ReceiverReport.Reports[0];
+
+  CheckEquals(IntToHex($deadbeef, 8),
+              IntToHex(Report.SyncSrcID, 8),
+              'SSRC_1');
+  CheckEquals($0f,
+              Report.FractionLost,
+              'Fraction lost');
+  CheckEquals($feed,
+              Report.CumulativeLoss,
+              'Cumulative packet loss');
+  CheckEquals(IntToHex($10111213, 8),
+              IntToHex(Report.HighestSeqNo, 8),
+              'Highest received sequence no');
+  CheckEquals(IntToHex($00fedfed, 8),
+              IntToHex(Report.InterArrivalJitter, 8),
+              'Interarrival jitter');
+  CheckEquals(IntToHex($ea7ea7ea, 8),
+              IntToHex(Report.LastSenderReport, 8),
+              'Last SR');
+  CheckEquals(IntToHex($0000ffef, 8),
+              IntToHex(Report.DelaySinceLastSR, 8),
+              'Delay since last SR');
+end;
+
+procedure TestTIdRTCPReceiverReport.TestReadFromReports;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Self.MultipleReportBlockReceiverReport);
+  try
+    Self.ReceiverReport.ReadFrom(S);
+    CheckEquals(2,
+                Self.ReceiverReport.ReceptionReportCount,
+                'Reception report count');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPReceiverReport.TestReportAt;
+var
+  I: Integer;
+  S: TStringStream;
+begin
+  try
+    Self.ReceiverReport.Reports[0];
+    Fail('Failed to raise error accessing first element of an empty list');
+  except
+    on EListError do;
+  end;
+
+  try
+    Self.ReceiverReport.Reports[-1];
+    Fail('Failed to raise error on bad index');
+  except
+    on EListError do;
+  end;
+
+  S := TStringStream.Create(Self.MultipleReportBlockReceiverReport);
+  try
+    Self.ReceiverReport.ReadFrom(S);
+  finally
+    S.Free;
+  end;
+
+  for I := 0 to 1 do
+    CheckEquals($feed + I,
+                Self.ReceiverReport.Reports[I].CumulativeLoss,
+                'Wrong report off index ' + IntToStr(I));
+
+  try
+    Self.ReceiverReport.Reports[3];
+    Fail('Failed to raise error accessing out-of-range index');
+  except
+    on EListError do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTCPSenderReport                                                    *
+//******************************************************************************
+//* TestTIdRTCPSenderReport Public methods *************************************
+
+procedure TestTIdRTCPSenderReport.SetUp;
+begin
+  inherited SetUp;
+
+  Self.SenderReport := Self.Packet as TIdRTCPSenderReport;
+end;
+
+//* TestTIdRTCPSenderReport Protected methods **********************************
+
+function TestTIdRTCPSenderReport.PacketType: Byte;
+begin
+  Result := RTCPSenderReport;
+end;
+
+//* TestTIdRTCPSenderReport Private methods ******************************
+
+function TestTIdRTCPSenderReport.MultipleReportBlockSenderReport: String;
 begin
   Result     := SampleSenderReport + SampleReportBlock;
   Result[1]  := Chr($82); // 2 reports
   Result[60] := Chr(Ord(Result[60]) + 1); // Cumulative packet loss of 2nd report
 end;
 
-procedure TestTIdRTCPSenderReportPacket.ReadFromSampleSenderReport;
+procedure TestTIdRTCPSenderReport.ReadFromSampleSenderReport;
 var
   S: TStringStream;
 begin
@@ -3285,14 +4272,43 @@ begin
   end;
 end;
 
-//* TestTIdRTCPSenderReportPacket Published methods ****************************
+//* TestTIdRTCPSenderReport Published methods **********************************
 
-procedure TestTIdRTCPSenderReportPacket.TestPacketType;
+procedure TestTIdRTCPSenderReport.TestGetAllSrcIDs;
+var
+  I, J: Integer;
+  IDs:  TCardinalDynArray;
 begin
-  CheckEquals(RTCPSenderReport, Self.Packet.PacketType, 'PacketType');
+  Self.SenderReport.ReceptionReportCount := 3;
+  Self.SenderReport.Reports[0].SyncSrcID := $decafbad;
+  Self.SenderReport.Reports[1].SyncSrcID := $deadbeef;
+  Self.SenderReport.Reports[2].SyncSrcID := $f00dd00d;
+
+  IDs := Self.SenderReport.GetAllSrcIDs;
+  CheckEquals(Self.SenderReport.ReceptionReportCount + 1,
+              Length(IDs),
+              'Number of IDs');
+
+  CheckEquals(IntToHex(Self.SenderReport.SyncSrcID, 8),
+              IntToHex(IDs[Low(IDs)], 8),
+              'Source ID the First');
+
+  J := 0;
+  for I := Low(IDs) + 1 to High(IDs) do begin
+    CheckEquals(IntToHex(Self.SenderReport.Reports[J].SyncSrcID, 8),
+                IntToHex(IDs[I], 8),
+                'Source ID ' + IntToStr(I));
+    Inc(J);
+  end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnSyncSrcId;
+procedure TestTIdRTCPSenderReport.TestIsSenderReport;
+begin
+  Check(Self.Packet.IsSenderReport,
+        Self.Packet.ClassName  + ' marked as being a sender report');
+end;
+
+procedure TestTIdRTCPSenderReport.TestPrintOnSyncSrcId;
 var
   S: TStringStream;
 begin
@@ -3311,7 +4327,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnNTPTimestamp;
+procedure TestTIdRTCPSenderReport.TestPrintOnNTPTimestamp;
 var
   S: TStringStream;
   T: TIdNTPTimestamp;
@@ -3339,7 +4355,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnOctetCount;
+procedure TestTIdRTCPSenderReport.TestPrintOnOctetCount;
 var
   S: TStringStream;
 begin
@@ -3358,7 +4374,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnPacketCount;
+procedure TestTIdRTCPSenderReport.TestPrintOnPacketCount;
 var
   S: TStringStream;
 begin
@@ -3377,7 +4393,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnReceptionReportCount;
+procedure TestTIdRTCPSenderReport.TestPrintOnReceptionReportCount;
 var
   I: TIdFiveBitInt;
   S: TStringStream;
@@ -3396,20 +4412,20 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnReportBlocks;
+procedure TestTIdRTCPSenderReport.TestPrintOnReportBlocks;
 var
   S: TStringStream;
 begin
   S := TStringStream.Create('');
   try
-    Self.SenderReport.ReceptionReportCount           := 1;
-    Self.SenderReport.ReportAt(0).SyncSrcID          := $deadbeef;
-    Self.SenderReport.ReportAt(0).FractionLost       := $0f;
-    Self.SenderReport.ReportAt(0).CumulativeLoss     := $feed;
-    Self.SenderReport.ReportAt(0).HighestSeqNo       := $10111213;
-    Self.SenderReport.ReportAt(0).InterArrivalJitter := $00fedfed;
-    Self.SenderReport.ReportAt(0).LastSenderReport   := $ea7ea7ea;
-    Self.SenderReport.ReportAt(0).DelaySinceLastSR   := $0000ffef;
+    Self.SenderReport.ReceptionReportCount          := 1;
+    Self.SenderReport.Reports[0].SyncSrcID          := $deadbeef;
+    Self.SenderReport.Reports[0].FractionLost       := $0f;
+    Self.SenderReport.Reports[0].CumulativeLoss     := $feed;
+    Self.SenderReport.Reports[0].HighestSeqNo       := $10111213;
+    Self.SenderReport.Reports[0].InterArrivalJitter := $00fedfed;
+    Self.SenderReport.Reports[0].LastSenderReport   := $ea7ea7ea;
+    Self.SenderReport.Reports[0].DelaySinceLastSR   := $0000ffef;
 
     Self.SenderReport.PrintOn(S);
     Check(Length(S.DataString) > 51, 'Too little output');
@@ -3442,7 +4458,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnRTPTimestamp;
+procedure TestTIdRTCPSenderReport.TestPrintOnRTPTimestamp;
 var
   S: TStringStream;
 begin
@@ -3461,7 +4477,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnWord;
+procedure TestTIdRTCPSenderReport.TestPrintOnWord;
 var
   S: TStringStream;
 begin
@@ -3478,13 +4494,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromLength;
-begin
-  Self.ReadFromSampleSenderReport;
-  CheckEquals(12, Self.SenderReport.Length, 'Length');
-end;
-
-procedure TestTIdRTCPSenderReportPacket.TestReadFromNTPTimestamp;
+procedure TestTIdRTCPSenderReport.TestReadFromNTPTimestamp;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(IntToHex($a1a2a3a4, 8),
@@ -3495,7 +4505,7 @@ begin
               'NTP timestamp, Integer');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromOctetCount;
+procedure TestTIdRTCPSenderReport.TestReadFromOctetCount;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(IntToHex($0000f00d, 8),
@@ -3503,7 +4513,7 @@ begin
               'Octet count');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromPacketCount;
+procedure TestTIdRTCPSenderReport.TestReadFromPacketCount;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(IntToHex($00000fed, 8),
@@ -3511,26 +4521,7 @@ begin
               'Packet count');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromPadding;
-var
-  PaddedStr: String;
-  S:         TStringStream;
-begin
-  Self.ReadFromSampleSenderReport;
-  Check(not Self.SenderReport.HasPadding, 'No padding');
-
-  PaddedStr := SampleSenderReport;
-  PaddedStr[1] := Chr($20 or Ord(PaddedStr[1]));
-  S := TStringStream.Create(PaddedStr);
-  try
-    Self.SenderReport.ReadFrom(S);
-    Check(Self.SenderReport.HasPadding, 'Has padding');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPSenderReportPacket.TestReadFromReceptionReportCount;
+procedure TestTIdRTCPSenderReport.TestReadFromReceptionReportCount;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(1,
@@ -3538,34 +4529,38 @@ begin
               'Reception report count');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromReport;
+procedure TestTIdRTCPSenderReport.TestReadFromReport;
+var
+  Report: TIdRTCPReportBlock;
 begin
   Self.ReadFromSampleSenderReport;
 
+  Report := Self.SenderReport.Reports[0];
+
   CheckEquals(IntToHex($deadbeef, 8),
-              IntToHex(Self.SenderReport.ReportAt(0).SyncSrcID, 8),
+              IntToHex(Report.SyncSrcID, 8),
               'SSRC_1');
   CheckEquals($0f,
-              Self.SenderReport.ReportAt(0).FractionLost,
+              Report.FractionLost,
               'Fraction lost');
   CheckEquals($feed,
-              Self.SenderReport.ReportAt(0).CumulativeLoss,
+              Report.CumulativeLoss,
               'Cumulative packet loss');
   CheckEquals(IntToHex($10111213, 8),
-              IntToHex(Self.SenderReport.ReportAt(0).HighestSeqNo, 8),
+              IntToHex(Report.HighestSeqNo, 8),
               'Highest received sequence no');
   CheckEquals(IntToHex($00fedfed, 8),
-              IntToHex(Self.SenderReport.ReportAt(0).InterArrivalJitter, 8),
+              IntToHex(Report.InterArrivalJitter, 8),
               'Interarrival jitter');
   CheckEquals(IntToHex($ea7ea7ea, 8),
-              IntToHex(Self.SenderReport.ReportAt(0).LastSenderReport, 8),
+              IntToHex(Report.LastSenderReport, 8),
               'Last SR');
   CheckEquals(IntToHex($0000ffef, 8),
-              IntToHex(Self.SenderReport.ReportAt(0).DelaySinceLastSR, 8),
+              IntToHex(Report.DelaySinceLastSR, 8),
               'Delay since last SR');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromReports;
+procedure TestTIdRTCPSenderReport.TestReadFromReports;
 var
   S: TStringStream;
 begin
@@ -3580,7 +4575,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromRTPTimestamp;
+procedure TestTIdRTCPSenderReport.TestReadFromRTPTimestamp;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(IntToHex($a9aaabac, 8),
@@ -3588,7 +4583,7 @@ begin
               'RTP timestamp');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromSyncSrcID;
+procedure TestTIdRTCPSenderReport.TestReadFromSyncSrcID;
 begin
   Self.ReadFromSampleSenderReport;
   CheckEquals(IntToHex($decafbad, 8),
@@ -3596,13 +4591,28 @@ begin
               'SSRC');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReadFromVersion;
+procedure TestTIdRTCPSenderReport.TestReadFromTruncatedStream;
+var
+  Report: String;
+  S: TStringStream;
 begin
-  Self.ReadFromSampleSenderReport;
-  CheckEquals(RFC3550Version, Self.SenderReport.Version, 'Version');
+  Report := Self.MultipleReportBlockSenderReport;
+  Report := Copy(Report, 1, Length(Report) - 5);
+
+  S := TStringStream.Create(Report);
+  try
+    try
+      Self.SenderReport.ReadFrom(S);
+      Fail('Failed to raise exception from truncated stream');
+    except
+      on EStreamTooShort do;
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestRealLength;
+procedure TestTIdRTCPSenderReport.TestRealLength;
 const
   MinimumLength     = 7*4;
   ReportBlockLength = 6*4;
@@ -3627,20 +4637,20 @@ begin
               'RealLength with five report blocks and a 5-octet extension');
 end;
 
-procedure TestTIdRTCPSenderReportPacket.TestReportAt;
+procedure TestTIdRTCPSenderReport.TestReportAt;
 var
   I: Integer;
   S: TStringStream;
 begin
   try
-    Self.SenderReport.ReportAt(0);
+    Self.SenderReport.Reports[0];
     Fail('Failed to raise error accessing first element of an empty list');
   except
     on EListError do;
   end;
 
   try
-    Self.SenderReport.ReportAt(-1);
+    Self.SenderReport.Reports[-1];
     Fail('Failed to raise error on bad index');
   except
     on EListError do;
@@ -3655,11 +4665,11 @@ begin
 
   for I := 0 to 1 do
     CheckEquals($feed + I,
-                Self.SenderReport.ReportAt(I).CumulativeLoss,
+                Self.SenderReport.Reports[I].CumulativeLoss,
                 'Wrong report off index ' + IntToStr(I));
 
   try
-    Self.SenderReport.ReportAt(3);
+    Self.SenderReport.Reports[3];
     Fail('Failed to raise error accessing out-of-range index');
   except
     on EListError do;
@@ -3667,41 +4677,57 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTCPSourceDescriptionPacket                                         *
+//* TestTIdRTCPSourceDescription                                               *
 //******************************************************************************
-//* TestTIdRTCPSourceDescriptionPacket Public methods **************************
+//* TestTIdRTCPSourceDescription Public methods ********************************
 
-procedure TestTIdRTCPSourceDescriptionPacket.SetUp;
+procedure TestTIdRTCPSourceDescription.SetUp;
 begin
   inherited SetUp;
 
-  Self.SrcDesc := Self.Packet as TIdRTCPSourceDescriptionPacket;
+  Self.SrcDesc := Self.Packet as TIdRTCPSourceDescription;
 end;
 
-//* TestTIdRTCPSourceDescriptionPacket Protected methods ***********************
+//* TestTIdRTCPSourceDescription Protected methods *****************************
 
-function TestTIdRTCPSourceDescriptionPacket.PacketType: TIdRTCPPacketClass;
+function TestTIdRTCPSourceDescription.PacketType: Byte;
 begin
-  Result := TIdRTCPSourceDescriptionPacket;
+  Result := RTCPSourceDescription;
 end;
 
-//* TestTIdRTCPSourceDescriptionPacket Published methods ***********************
+//* TestTIdRTCPSourceDescription Published methods *****************************
 
-procedure TestTIdRTCPSourceDescriptionPacket.TestAddChunkAndChunkCount;
+procedure TestTIdRTCPSourceDescription.TestAddChunkAndChunkCount;
 begin
   CheckEquals(0, Self.SrcDesc.ChunkCount, 'Empty list');
   CheckNotNull(Self.SrcDesc.AddChunk, 'AddChunk');
   CheckEquals(1, Self.SrcDesc.ChunkCount, 'Chunk not added');
 end;
 
-procedure TestTIdRTCPSourceDescriptionPacket.TestPacketType;
+procedure TestTIdRTCPSourceDescription.TestGetAllSrcIDs;
+var
+  I, J: Integer;
+  IDs:  TCardinalDynArray;
 begin
-  CheckEquals(RTCPSourceDescription,
-              Self.Packet.PacketType,
-              'PacketType');
+  Self.SrcDesc.AddChunk.SyncSrcID := $decafbad;
+  Self.SrcDesc.AddChunk.SyncSrcID := $deadbeef;
+  Self.SrcDesc.AddChunk.SyncSrcID := $f00dd00d;
+
+  IDs := Self.SrcDesc.GetAllSrcIDs;
+  CheckEquals(Self.SrcDesc.ChunkCount,
+              Length(IDs),
+              'Number of IDs');
+
+  J := 0;
+  for I := Low(IDs) to High(IDs) do begin
+    CheckEquals(IntToHex(Self.SrcDesc.Chunks[J].SyncSrcID, 8),
+                IntToHex(IDs[I], 8),
+                'Source ID ' + IntToStr(I));
+    Inc(J);
+  end;
 end;
 
-procedure TestTIdRTCPSourceDescriptionPacket.TestPrintOn;
+procedure TestTIdRTCPSourceDescription.TestPrintOn;
 var
   Chunk: TIdRTCPSrcDescChunk;
   Name:  String;
@@ -3741,7 +4767,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSourceDescriptionPacket.TestPrintOnLength;
+procedure TestTIdRTCPSourceDescription.TestPrintOnLength;
 var
   S: TStringStream;
 begin
@@ -3758,49 +4784,93 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPSourceDescriptionPacket.TestReadFromPacketType;
+procedure TestTIdRTCPSourceDescription.TestReadFromWithSingleCname;
 var
   S: TStringStream;
 begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPSourceDescription));
+  S := TStringStream.Create(#$c1 + Chr(Self.PacketType) + #$00#$04
+                          + #$de#$ca#$fb#$ad
+                          + #$01#$08'Az'
+                          + 'atho'
+                          + 'th'#$00#$00);
   try
-    Self.Packet.ReadFrom(S);
+    Self.SrcDesc.ReadFrom(S);
 
-    CheckEquals(RTCPSourceDescription,
-                Self.SrcDesc.PacketType,
-                'PacketType');
+    CheckEquals(1,
+                Self.SrcDesc.ChunkCount,
+                'Chunk count');
+    CheckEquals(1,
+                Self.SrcDesc.Chunks[0].ItemCount,
+                'Chunk item count');
+    CheckEquals(IntToHex($decafbad, 8),
+                IntToHex(Self.SrcDesc.Chunks[0].SyncSrcID, 8),
+                'Chunk item SSRC');
+    CheckEquals(1,
+                Self.SrcDesc.Chunks[0].ItemCount,
+                'Chunk item count');
+     CheckEquals(SDESCName,
+                 Self.SrcDesc.Chunks[0].Items[0].ID,
+                 'Chunk item id');
+    CheckEquals('Azathoth',
+                (Self.SrcDesc.Chunks[0].Items[0] as TIdSDESCanonicalName).Data,
+                'CNAME');
   finally
     S.Free;
   end;
 end;
 
 //******************************************************************************
-//* TestTIdRTCPByePacket                                                       *
+//* TestTIdRTCPBye                                                             *
 //******************************************************************************
-//* TestTIdRTCPByePacket Public methods ****************************************
+//* TestTIdRTCPBye Public methods **********************************************
 
-procedure TestTIdRTCPByePacket.SetUp;
+procedure TestTIdRTCPBye.SetUp;
 begin
   inherited SetUp;
 
-  Self.Bye := Self.Packet as TIdRTCPByePacket;
+  Self.Bye := Self.Packet as TIdRTCPBye;
 end;
 
-//* TestTIdRTCPByePacket Protected methods *************************************
+//* TestTIdRTCPBye Protected methods *******************************************
 
-function TestTIdRTCPByePacket.PacketType: TIdRTCPPacketClass;
+function TestTIdRTCPBye.PacketType: Byte;
 begin
-  Result := TIdRTCPByePacket;
+  Result := RTCPGoodBye;
 end;
 
-//* TestTIdRTCPByePacket Published methods *************************************
+//* TestTIdRTCPBye Published methods *******************************************
 
-procedure TestTIdRTCPByePacket.TestPacketType;
+procedure TestTIdRTCPBye.TestGetAllSrcIDs;
+var
+  I, J: Integer;
+  IDs:  TCardinalDynArray;
 begin
-  CheckEquals(RTCPGoodbye, Self.Packet.PacketType, 'PacketType');
+  Self.Bye.SourceCount := 3;
+  Self.Bye.Sources[0] := $decafbad;
+  Self.Bye.Sources[1] := $deadbeef;
+  Self.Bye.Sources[2] := $f00dd00d;
+
+  IDs := Self.Bye.GetAllSrcIDs;
+  CheckEquals(Self.Bye.SourceCount,
+              Length(IDs),
+              'Number of IDs');
+
+  J := 0;
+  for I := Low(IDs) to High(IDs) do begin
+    CheckEquals(IntToHex(Self.Bye.Sources[J], 8),
+                IntToHex(IDs[I], 8),
+                'Source ID ' + IntToStr(I));
+    Inc(J);
+  end;
 end;
 
-procedure TestTIdRTCPByePacket.TestPrintOnLength;
+procedure TestTIdRTCPBye.TestIsBye;
+begin
+  Check(Self.Packet.IsBye,
+        Self.Packet.ClassName  + ' not marked as being a bye');
+end;
+
+procedure TestTIdRTCPBye.TestPrintOnLength;
 var
   S: TStringStream;
 begin
@@ -3817,7 +4887,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestPrintOnMultipleSources;
+procedure TestTIdRTCPBye.TestPrintOnMultipleSources;
 var
   S: TStringStream;
 begin
@@ -3842,7 +4912,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestPrintOnReason;
+procedure TestTIdRTCPBye.TestPrintOnReason;
 var
   S: TStringStream;
 begin
@@ -3870,7 +4940,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestPrintOnSyncSrcId;
+procedure TestTIdRTCPBye.TestPrintOnSyncSrcId;
 var
   S: TStringStream;
 begin
@@ -3889,11 +4959,13 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFrom;
+procedure TestTIdRTCPBye.TestReadFrom;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(#$80 + Chr(RTCPGoodbye));
+  S := TStringStream.Create(#$80 + Chr(RTCPGoodbye) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
   try
     Self.Bye.ReadFrom(S);
 
@@ -3903,72 +4975,30 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFromHasPadding;
+procedure TestTIdRTCPBye.TestReadFromReason;
 var
-  S: TStringStream;
+  PacketWordLength: Word;
+  Reason:           String;
+  ReasonLength:     Word;
+  S:                TStringStream;
+  TrailingGarbage:  String;
 begin
-  S := TStringStream.Create(#$00 + Chr(RTCPGoodbye));
-  try
-    Self.Bye.ReadFrom(S);
+  // 1 word for header
+  // 1 word for single SSRC
+  // 6 words for 22 + 1 octets (ReasonLength + Reason + zero padding)
+  // -1 for size indication
+  PacketWordLength := 7;
 
-    Check(not Self.Bye.HasPadding, 'HasPadding set');
-  finally
-    S.Free;
-  end;
-
-  S := TStringStream.Create(#$20 + Chr(RTCPGoodbye));
-  try
-    Self.Bye.ReadFrom(S);
-
-    Check(Self.Bye.HasPadding, 'HasPadding not set');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPByePacket.TestReadFromLength;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create(#$00 + Chr(RTCPGoodbye) + #$DE#$AD);
-  try
-    Self.Bye.ReadFrom(S);
-
-    CheckEquals($DEAD, Self.Bye.Length, 'Length');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPByePacket.TestReadFromPacketType;
-var
-  S: TStringStream;
-begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPGoodbye));
-  try
-    Self.Packet.ReadFrom(S);
-
-    CheckEquals(RTCPGoodbye,
-                Self.Bye.PacketType,
-                'PacketType');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPByePacket.TestReadFromReason;
-var
-  Reason:       String;
-  ReasonLength: Word;
-  S:            TStringStream;
-begin
-  Reason := 'I''m already dead';
+  // This needs 1 byte of zero padding
+  Reason := 'Burn an X in your head';
   ReasonLength := Length(Reason);
+  TrailingGarbage := 'xxxx';
 
-  S  := TStringStream.Create(#$01 + Chr(RTCPGoodbye) + #$00#$00
+  S  := TStringStream.Create(#$01 + Chr(RTCPGoodbye) + EncodeAsString(PacketWordLength)
                            + #$CA#$FE#$BA#$BE
-                           + Chr(ReasonLength shr 8) + Chr(ReasonLength and $FF)
-                           + Reason);
+                           + Chr(ReasonLength)
+                           + Reason + #$00 // zero pad to 32-bit boundary
+                           + TrailingGarbage);
   try
     Self.Bye.ReadFrom(S);
 
@@ -3978,12 +5008,16 @@ begin
     CheckEquals(Reason,
                 Self.Bye.Reason,
                 'Reason');
+
+    CheckEquals(TrailingGarbage,
+                ReadRemainderOfStream(S),
+                'Bye consumed the trailing garbage');
   finally
     S.Free;
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFromReasonLength;
+procedure TestTIdRTCPBye.TestReadFromReasonLength;
 var
   S: TStringStream;
 begin
@@ -4002,13 +5036,20 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFromSourceCount;
+procedure TestTIdRTCPBye.TestReadFromSourceCount;
 var
   I: TIdRTCPSourceCount;
+  J: Integer;
+  Packet: String;
   S: TStringStream;
 begin
   for I := Low(TIdRTCPSourceCount) to High(TIdRTCPSourceCount) do begin
-    S  := TStringStream.Create(Chr(I) + Chr(RTCPGoodbye));
+    Packet := Chr(I) + Chr(RTCPGoodbye) + #$00 + Chr(I);
+
+    for J := Low(TIdRTCPSourceCount) to I - 1 do
+      Packet := Packet + #$00#$00#$00#$00;
+
+    S  := TStringStream.Create(Packet);
     try
       Self.Bye.ReadFrom(S);
 
@@ -4019,7 +5060,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFromSources;
+procedure TestTIdRTCPBye.TestReadFromSources;
 var
   I:      TIdRTCPSourceCount;
   IDs:    TIdCardinalArray;
@@ -4029,7 +5070,7 @@ var
 begin
   for I := Low(TIdRTCPSourceCount) to High(TIdRTCPSourceCount) do begin
     SetLength(IDs, I);
-    Packet := Chr(I) + Chr(RTCPGoodBye) + #$00#$00;
+    Packet := Chr($c0 or I) + Chr(RTCPGoodBye) + #$00 + Chr(I);
 
     for J := 0 to I - 1 do begin
       IDs[J] := Random(High(Integer));
@@ -4051,23 +5092,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPByePacket.TestReadFromVersion;
-var
-  I: TIdRTPVersion;
-  S: TStream;
-begin
-  for I := Low(TIdRTPVersion) to High(TIdRTPVersion) do begin
-    S := TStringStream.Create(Chr(I shl 6) + Chr(RTCPGoodbye));
-    try
-      Self.Bye.ReadFrom(S);
-      CheckEquals(I, Self.Bye.Version, 'Version ' + IntToStr(I));
-    finally
-      S.Free;
-    end;
-  end;
-end;
-
-procedure TestTIdRTCPByePacket.TestRealLength;
+procedure TestTIdRTCPBye.TestRealLength;
 var
   I: Integer;
 begin
@@ -4086,32 +5111,27 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTCPApplicationDefinedPacket                                        *
+//* TestTIdRTCPApplicationDefined                                              *
 //******************************************************************************
-//* TestTIdRTCPApplicationDefinedPacket Public methods *************************
+//* TestTIdRTCPApplicationDefined Public methods *******************************
 
-procedure TestTIdRTCPApplicationDefinedPacket.SetUp;
+procedure TestTIdRTCPApplicationDefined.SetUp;
 begin
   inherited SetUp;
 
-  Self.AppDef := Self.Packet as TIdRTCPApplicationDefinedPacket;
+  Self.AppDef := Self.Packet as TIdRTCPApplicationDefined;
 end;
 
-//* TestTIdRTCPApplicationDefinedPacket Protected methods **********************
+//* TestTIdRTCPApplicationDefined Protected methods ****************************
 
-function TestTIdRTCPApplicationDefinedPacket.PacketType: TIdRTCPPacketClass;
+function TestTIdRTCPApplicationDefined.PacketType: Byte;
 begin
-  Result := TIdRTCPApplicationDefinedPacket;
+  Result := RTCPApplicationDefined;
 end;
 
-//* TestTIdRTCPApplicationDefinedPacket Published methods **********************
+//* TestTIdRTCPApplicationDefined Published methods ****************************
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestPacketType;
-begin
-  CheckEquals(RTCPApplicationDefined, Self.Packet.PacketType, 'PacketType');
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestPrintOnData;
+procedure TestTIdRTCPApplicationDefined.TestPrintOnData;
 var
   S: TStringStream;
 begin
@@ -4130,7 +5150,23 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestPrintOnLength;
+procedure TestTIdRTCPApplicationDefined.TestPrintOnEmptyData;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.AppDef.PrintOn(S);
+
+    CheckEquals(12, Length(S.DataString), 'Too little output');
+    CheckEquals(0, Ord(S.DataString[3]), 'Length MSB');
+    CheckEquals(2, Ord(S.DataString[4]), 'Length LSB');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPApplicationDefined.TestPrintOnLength;
 var
   S: TStringStream;
 begin
@@ -4147,15 +5183,42 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestPrintOnName;
-begin
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromData;
+procedure TestTIdRTCPApplicationDefined.TestPrintOnName;
 var
   S: TStringStream;
 begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$28
+  S  := TStringStream.Create('');
+  try
+    Self.AppDef.Name := 'grue';
+    Self.AppDef.PrintOn(S);
+
+    Check(Length(S.DataString) > 11, 'Too little output');
+    CheckEquals(Self.AppDef.Name,
+                Copy(S.DataString, 9, 4),
+                'Name');
+  finally
+    S.Free;
+  end;
+
+  S  := TStringStream.Create('');
+  try
+    Self.AppDef.Name := 'x';
+    Self.AppDef.PrintOn(S);
+
+    Check(Length(S.DataString) > 11, 'Too little output');
+    CheckEquals(Self.AppDef.Name + #$00#$00#$00,
+                Copy(S.DataString, 9, 4),
+                'Name');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPApplicationDefined.TestReadFromData;
+var
+  S: TStringStream;
+begin
+  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$09
                            + #$de#$ca#$fb#$ad
                            + 'dead'
                            + 'toom'
@@ -4166,7 +5229,7 @@ begin
                            + 'brot'
                            + 'h'#0#0#0);
   try
-    Self.Packet.ReadFrom(S);
+    Self.AppDef.ReadFrom(S);
 
     CheckEquals('toomanycooksspoilthebroth'#0#0#0, Self.AppDef.Data, 'Data');
   finally
@@ -4174,50 +5237,11 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromHasPadding;
+procedure TestTIdRTCPApplicationDefined.TestReadFromName;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined));
-  try
-    Self.AppDef.ReadFrom(S);
-
-    Check(not Self.AppDef.HasPadding, 'HasPadding set');
-  finally
-    S.Free;
-  end;
-
-  S := TStringStream.Create(#$20 + Chr(RTCPApplicationDefined));
-  try
-    Self.AppDef.ReadFrom(S);
-
-    Check(Self.AppDef.HasPadding, 'HasPadding not set');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromLength;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$DE#$AD);
-  try
-    Self.AppDef.ReadFrom(S);
-
-    CheckEquals(IntToHex($dead, 4),
-                IntToHex(Self.AppDef.Length, 4),
-                'Length');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromName;
-var
-  S: TStringStream;
-begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$0C
+  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$02
                            + #$de#$ca#$fb#$ad
                            + 'dead');
   try
@@ -4231,27 +5255,11 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromPacketType;
+procedure TestTIdRTCPApplicationDefined.TestReadFromSyncSrcId;
 var
   S: TStringStream;
 begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined));
-  try
-    Self.Packet.ReadFrom(S);
-
-    CheckEquals(RTCPApplicationDefined,
-                Self.AppDef.PacketType,
-                'PacketType');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromSyncSrcId;
-var
-  S: TStringStream;
-begin
-  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$0C
+  S  := TStringStream.Create(#$00 + Chr(RTCPApplicationDefined) + #$00#$02
                            + #$de#$ca#$fb#$ad
                            + #$00#$00#$00#$00);
   try
@@ -4265,75 +5273,253 @@ begin
   end;
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromVersion;
-var
-  I: TIdRTPVersion;
-  S: TStream;
-begin
-  for I := Low(TIdRTPVersion) to High(TIdRTPVersion) do begin
-    S := TStringStream.Create(Chr(I shl 6) + Chr(RTCPApplicationDefined));
-    try
-      Self.AppDef.ReadFrom(S);
-      CheckEquals(I, Self.AppDef.Version, 'Version ' + IntToStr(I));
-    finally
-      S.Free;
-    end;
-  end;
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestRealLength;
+procedure TestTIdRTCPApplicationDefined.TestRealLength;
 begin
   // Name is ALWAYS present, and always has a multiple of 4 octets
   CheckEquals(8 + 4, Self.AppDef.RealLength, 'Minimum');
 
   Self.AppDef.Name := 'foo';
   Self.AppDef.Data := '';
-  CheckEquals(8 + Length(Self.AppDef.Name),
+  CheckEquals(8 + 4,
               Self.AppDef.RealLength,
               'RealLength with Name and no Data');
 
   Self.AppDef.Name := '';
   Self.AppDef.Data := 'bar';
-  CheckEquals(12 + Length(Self.AppDef.Data),
+  CheckEquals(8 + 4 + Length(Self.AppDef.Data),
               Self.AppDef.RealLength,
               'RealLength with Data and no Name; only of course we always have '
             + 'a Name');
 
   Self.AppDef.Name := 'foobaring';
   Self.AppDef.Data := 'bar';
-  CheckEquals(8 + Length(Self.AppDef.Name) + Length(Self.AppDef.Data),
+  CheckEquals(8 + 4 + Length(Self.AppDef.Data),
               Self.AppDef.RealLength,
               'RealLength with Name and Data');
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestSetData;
+procedure TestTIdRTCPApplicationDefined.TestSetData;
 begin
   Self.AppDef.Data := '';
   CheckEquals('', Self.AppDef.Data, 'No data');
 
   Self.AppDef.Data := '1';
-  CheckEquals('1'#0#0#0, Self.AppDef.Data, '1 byte');
+  CheckEquals('1'#$00#$00#$00, Self.AppDef.Data, '1 byte');
 
   Self.AppDef.Data := '1234';
   CheckEquals('1234', Self.AppDef.Data, '4 bytes');
 
   Self.AppDef.Data := '123456';
-  CheckEquals('123456'#0#0, Self.AppDef.Data, '6 bytes');
+  CheckEquals('123456'#$00#$00, Self.AppDef.Data, '6 bytes');
 end;
 
-procedure TestTIdRTCPApplicationDefinedPacket.TestSetName;
+procedure TestTIdRTCPApplicationDefined.TestSetName;
 begin
   Self.AppDef.Name := '12345678';
   CheckEquals('1234', Self.AppDef.Name, 'Long name');
 
   Self.AppDef.Name := '12';
-  CheckEquals('12'#0#0, Self.AppDef.Name, 'Short name');
+  CheckEquals('12', Self.AppDef.Name, 'Short name');
 
   Self.AppDef.Name := '1234';
   CheckEquals('1234', Self.AppDef.Name, 'Just Right name');
 
   Self.AppDef.Name := '';
-  CheckEquals(#0#0#0#0, Self.AppDef.Name, 'Null name');
+  CheckEquals('', Self.AppDef.Name, 'Null name');
+end;
+
+//******************************************************************************
+//* TestTIdCompoundRTCPPacket                                                  *
+//******************************************************************************
+//* TestTIdCompoundRTCPPacket Public methods ***********************************
+
+procedure TestTIdCompoundRTCPPacket.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Packet := TIdCompoundRTCPPacket.Create;
+end;
+
+procedure TestTIdCompoundRTCPPacket.TearDown;
+begin
+  Self.Packet.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdCompoundRTCPPacket Published methods ********************************
+
+procedure TestTIdCompoundRTCPPacket.TestAdd;
+begin
+  CheckEquals(0, Self.Packet.PacketCount, 'Empty packet');
+  Self.Packet.AddApplicationDefined;
+  CheckEquals(1, Self.Packet.PacketCount, 'APPDEF');
+  Self.Packet.AddBye;
+  CheckEquals(2, Self.Packet.PacketCount, 'APPDEF + BYE');
+  Self.Packet.AddReceiverReport;
+  CheckEquals(3, Self.Packet.PacketCount, 'APPDEF + BYE + RR');
+  Self.Packet.AddSenderReport;
+  CheckEquals(4, Self.Packet.PacketCount, 'APPDEF + BYE + RR + SR');
+  Self.Packet.AddSourceDescription;
+  CheckEquals(5, Self.Packet.PacketCount, 'APPDEF + BYE + RR + SR + SDES');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestFirstPacket;
+var
+  RR: TIdRTCPReceiverReport;
+begin
+  Check(Self.Packet.FirstPacket = nil,
+        'FirstPacket didn''t return nil on an empty compound packet');
+  RR := Self.Packet.AddReceiverReport;
+  Check(RR = Self.Packet.FirstPacket, 'FirstPacket returned unknown packet');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestHasBye;
+begin
+  Check(not Self.Packet.HasBye, 'Empty packet');
+  Self.Packet.AddSenderReport;
+  Check(not Self.Packet.HasBye, 'One SR');
+  Self.Packet.AddBye;
+  Check(Self.Packet.HasBye, 'One SR, one BYE');  
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsRTCP;
+begin
+  Check(Self.Packet.IsRTCP, 'IsRTCP');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsRTP;
+begin
+  Check(not Self.Packet.IsRTP, 'IsRTP');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsValidFirstPacketAnAppDef;
+begin
+  Self.Packet.AddApplicationDefined;
+  Check(not Self.Packet.IsValid, 'First report an APPDEF');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsValidFirstPacketAnRR;
+begin
+  Self.Packet.AddReceiverReport;
+  Check(Self.Packet.IsValid, 'First report an RR');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsValidFirstPacketAnSDES;
+begin
+  Self.Packet.AddSourceDescription;
+  Check(not Self.Packet.IsValid, 'First report an SDES');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsValidFirstPacketAnSR;
+begin
+  Self.Packet.AddSenderReport;
+  Check(Self.Packet.IsValid, 'First report an SR');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsValidPacketFirstPacketPadded;
+var
+  PaddedReport: String;
+  S:            TStringStream;
+begin
+  PaddedReport := SampleReceiverReport;
+  PaddedReport[1] := Chr(Ord(PaddedReport[1]) or $20);
+  S := TStringStream.Create(PaddedReport);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.FirstPacket.HasPadding,
+          'Padding bit not set');
+    Check(not Self.Packet.IsValid,
+          'First packet shouldn''t have padding');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestPrintOn;
+var
+  Expected: TStringStream;
+  Received: TStringStream;
+  SDES:     TIdRTCPSourceDescription;
+  SR:       TIdRTCPSenderReport;
+begin
+  Expected := TStringStream.Create('');
+  try
+    Received := TStringStream.Create('');
+    try
+      SR := TIdRTCPSenderReport.Create;
+      try
+        SDES := TIdRTCPSourceDescription.Create;
+        try
+          SR.PrintOn(Expected);
+          SDES.PrintOn(Expected);
+        finally
+          SDES.Free;
+        end;
+      finally
+        SR.Free;
+      end;
+
+      Self.Packet.AddSenderReport;
+      Self.Packet.AddSourceDescription;
+
+      Self.Packet.PrintOn(Received);
+
+      CheckEquals(Expected.DataString, Received.DataString, 'SR+SDES PrintOn');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestReadFrom;
+var
+  SDES: TIdRTCPSourceDescription;
+  Src:  TStringStream;
+  SR:   TIdRTCPSenderReport;
+begin
+  Src := TStringStream.Create('');
+  try
+    SR := TIdRTCPSenderReport.Create;
+    try
+      SDES := TIdRTCPSourceDescription.Create;
+      try
+        SR.PrintOn(Src);
+        SDES.PrintOn(Src);
+      finally
+        SDES.Free;
+      end;
+    finally
+      SR.Free;
+    end;
+    Src.Seek(0, soFromBeginning);
+
+    Self.Packet.ReadFrom(Src);
+    CheckEquals(2, Self.Packet.PacketCount, 'PacketCount');
+    CheckEquals(RTCPSenderReport,
+                Self.Packet.PacketAt(0).PacketType,
+                'SR packet type');
+    CheckEquals(RTCPSourceDescription,
+                Self.Packet.PacketAt(1).PacketType,
+                'SDES packet type');
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestReadFromEmptyStream;
+var
+  Src: TStringStream;
+begin
+  Src := TStringStream.Create('');
+  try
+    Self.Packet.ReadFrom(Src);
+    CheckEquals(0, Self.Packet.PacketCount, 'Empty stream');
+  finally
+    Src.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -4412,6 +5598,56 @@ begin
     CheckEquals(I, Self.Q.Last.Timestamp, 'Last #' + IntToStr(I));
     Self.Q.RemoveLast;
   end;
+end;
+
+//******************************************************************************
+//* TIdMockEncoding                                                            *
+//******************************************************************************
+//* TIdMockEncoding Public methods *********************************************
+
+function TIdMockEncoding.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdMockPayload;
+end;
+
+//******************************************************************************
+//* TIdMockPayload                                                             *
+//******************************************************************************
+//* TIdMockPayload Public methods **********************************************
+
+function TIdMockPayload.HasKnownLength: Boolean;
+begin
+  Result := fHasKnownLength;
+end;
+
+function TIdMockPayload.Length: Cardinal;
+begin
+  Result := fLength;
+end;
+
+procedure TIdMockPayload.SetHasKnownLength(const Yes: Boolean);
+begin
+  fHasKnownLength := Yes;
+end;
+
+procedure TIdMockPayload.SetLength(const Length: Cardinal);
+begin
+  fLength := Length;
+end;
+
+//******************************************************************************
+//* TIdMockProfile                                                             *
+//******************************************************************************
+//* TIdMockProfile Public methods **********************************************
+
+function TIdMockProfile.AllowsHeaderExtensions: Boolean;
+begin
+  Result := fAllowExtension;
+end;
+
+procedure TIdMockProfile.SetAllowExtension(const Allow: Boolean);
+begin
+  fAllowExtension := Allow;
 end;
 
 initialization

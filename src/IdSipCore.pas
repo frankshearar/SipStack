@@ -349,7 +349,7 @@ end;
 
 function TIdSipAbstractCore.NextCallID: String;
 begin
-  Result := IntToHex(TIdRandomNumber.Next, 8) + '@' + Self.HostName;
+  Result := IntToHex(TIdRandomNumber.NextCardinal, 8) + '@' + Self.HostName;
 end;
 
 //* TIdSipAbstractCore Private methods *****************************************
@@ -868,7 +868,7 @@ end;
 
 function TIdSipUserAgentCore.NextInitialSequenceNo: Cardinal;
 begin
-  Result := TIdRandomNumber.Next($80000000 - 1);
+  Result := TIdRandomNumber.NextCardinal($80000000 - 1);
 end;
 
 function TIdSipUserAgentCore.NextTag: String;
@@ -876,8 +876,8 @@ begin
   // TODO
   // This is a CRAP way to generate a tag.
   // cf. RFC 3261 section 19.3
-  Result := IntToHex(TIdRandomNumber.Next, 8)
-          + IntToHex(TIdRandomNumber.Next, 8);
+  Result := IntToHex(TIdRandomNumber.NextCardinal, 8)
+          + IntToHex(TIdRandomNumber.NextCardinal, 8);
 end;
 
 procedure TIdSipUserAgentCore.RejectRequest(const Request: TIdSipRequest;

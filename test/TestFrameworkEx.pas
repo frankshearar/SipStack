@@ -10,11 +10,17 @@ type
   protected
     ExceptionType:    ExceptClass;
     ExceptionMessage: String;
+    fDefaultTimeout:  Cardinal;
     ThreadEvent:      TEvent;
+
+    procedure WaitForSignaled; overload;
+    procedure WaitForSignaled(Event: TEvent); overload;
   public
     procedure CheckEquals(Expected, Received: TStrings; Msg: String); overload;
     procedure SetUp; override;
     procedure TearDown; override;
+
+    property DefaultTimeout: Cardinal read fDefaultTimeout write fDefaultTimeout;
   end;
 
 implementation
@@ -47,6 +53,7 @@ procedure TThreadingTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.DefaultTimeout   := 5000;
   Self.ExceptionType    := Exception;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.ThreadEvent      := TEvent.Create(nil, true, false, 'ThreadEvent');
@@ -57,6 +64,21 @@ begin
   Self.ThreadEvent.Free;
 
   inherited TearDown;
+end;
+
+//* TThreadingTestCase Protected methods ***************************************
+
+procedure TThreadingTestCase.WaitForSignaled;
+begin
+  Self.WaitForSignaled(Self.ThreadEvent);
+end;
+
+procedure TThreadingTestCase.WaitForSignaled(Event: TEvent);
+begin
+  if (wrSignaled <> Event.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+  Event.ResetEvent;
 end;
 
 end.
