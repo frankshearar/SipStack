@@ -788,12 +788,14 @@ type
   protected
     FullyEstablished: Boolean;
     ModifyAttempt:    TIdSipInvite;
+    ModifyLock:       TCriticalSection;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
+    function  ModificationInProgress: Boolean;
     procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
@@ -4372,6 +4374,7 @@ begin
   inherited Create(UA);
 
   Self.DialogLock := TCriticalSection.Create;
+  Self.ModifyLock := TCriticalSection.Create;
 
   Self.fReceivedAck     := false;
   Self.FullyEstablished := false;
@@ -4379,6 +4382,8 @@ end;
 
 destructor TIdSipSession.Destroy;
 begin
+  Self.ModifyLock.Free;
+
   Self.DialogLock.Acquire;
   try
     Self.fDialog.Free;
@@ -4456,18 +4461,23 @@ var
 begin
   if not Self.FullyEstablished then Exit;
 
-  if not Assigned(Self.ModifyAttempt) then begin
-    ReInvite := Self.UA.AddOutboundInvite;
+  Self.ModifyLock.Acquire;
+  try
+    if not Self.ModificationInProgress then begin
+      ReInvite := Self.UA.AddOutboundInvite;
 
-    ReInvite.AddListener(Self);
-    ReInvite.ReInvite(Self.InitialRequest,
-                      Self.Dialog,
-                      Offer,
-                      ContentType);
+      ReInvite.AddListener(Self);
+      ReInvite.ReInvite(Self.InitialRequest,
+                        Self.Dialog,
+                        Offer,
+                        ContentType);
 
-    Self.ModifyAttempt := ReInvite;
-  end
-  else; //?? Google for "Open Issue #139" 
+      Self.ModifyAttempt := ReInvite;
+    end
+    else; //?? Google for "Open Issue #139"
+  finally
+    Self.ModifyLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.ReceiveRequest(Request: TIdSipRequest);
@@ -4507,6 +4517,11 @@ end;
 function TIdSipSession.GetInvite: TIdSipRequest;
 begin
   Result := Self.InitialRequest;
+end;
+
+function TIdSipSession.ModificationInProgress: Boolean;
+begin
+  Result := Assigned(Self.ModifyAttempt);
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession(const Reason: String);
@@ -4656,17 +4671,22 @@ begin
         Self.RejectPrematureInvite(Invite);
         Exit;
       end;
-     // if we've not sent a final response, reject with 500 + Retry-After
+      // if we've not sent a final response, reject with 500 + Retry-After
 
-      if not Assigned(Self.ModifyAttempt) then begin
-        Modify := Self.UA.AddInboundInvite(Invite);
-        Self.ModifyAttempt := Modify;
-        Modify := Self.UA.AddInboundInvite(Invite);
-        Modify.AddListener(Self);
-        Self.NotifyOfModifySession(Modify);
-      end
-      else
-        Self.RejectReInvite(Invite);
+      Self.ModifyLock.Acquire;
+      try
+        if not Self.ModificationInProgress then begin
+          Modify := Self.UA.AddInboundInvite(Invite);
+          Self.ModifyAttempt := Modify;
+          Modify := Self.UA.AddInboundInvite(Invite);
+          Modify.AddListener(Self);
+          Self.NotifyOfModifySession(Modify);
+        end
+        else
+          Self.RejectReInvite(Invite);
+      finally
+        Self.ModifyLock.Release;
+      end;
     end;
   finally
     Self.DialogLock.Release;
@@ -4980,8 +5000,13 @@ var
 begin
   // If the response matches the reinvite, DON'T match the response.
   // Otherwise, check against the dialog.
-  MatchesReInvite := Assigned(Self.ModifyAttempt)
-                 and Self.ModifyAttempt.Match(Msg);
+  Self.ModifyLock.Acquire;
+  try
+    MatchesReInvite := Self.ModificationInProgress
+                   and Self.ModifyAttempt.Match(Msg);
+  finally
+    Self.ModifyLock.Release;
+  end;
 
   if MatchesReInvite then
     Result := false
