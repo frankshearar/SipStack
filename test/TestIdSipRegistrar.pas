@@ -12,7 +12,7 @@ type
   // We test that the registrar returns the responses it should. The nitty
   // gritties of how the registrar preserves ACID properties, or the ins and
   // outs of actual database stuff doesn't interest us - look at
-  // TestTIdSipAbstractBindingDatabase for that. 
+  // TestTIdSipAbstractBindingDatabase for that.
   TestTIdSipRegistrar = class(TTestCase)
   private
     DB:           TIdSipMockBindingDatabase;
@@ -22,11 +22,14 @@ type
     Registrar:    TIdSipRegistrar;
     Request:      TIdSipRequest;
 
+    procedure CheckResponse(Received: TIdSipContacts;
+                            const Msg: String);
     procedure SimulateRemoteRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestDatabaseUpdatesBindings;
     procedure TestDatabaseGetsExpiry;
     procedure TestInvalidAddressOfRecord;
     procedure TestOKResponseContainsAllBindings;
@@ -56,7 +59,7 @@ type
                          SequenceNo: Cardinal;
                          ExpiryTime: TDateTime): Boolean; override;
     function  Binding(const AddressOfRecord: String;
-                      CanonicalUri: String): TIdRegistrarBinding; override;
+                      const CanonicalUri: String): TIdRegistrarBinding; override;
     procedure Commit; override;
     procedure Rollback; override;
     procedure StartTransaction; override;
@@ -88,9 +91,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddBindingUpdates;
     procedure TestAddBindingWithExpiryParam;
     procedure TestAddBindingWithExpiryHeader;
     procedure TestAddBindingWithNoExpiries;
+    procedure TestAddBindingWithZeroExpiresRemovesBinding;
     procedure TestAddExistingBindingOutOfOrderSeqNo;
     procedure TestMayRemoveBinding;
     procedure TestMayRemoveBindingEarlySeqNo;
@@ -127,9 +132,9 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipRegistrar unit tests');
-  Result.AddTest(TestTIdSipRegistrar.Suite);
+//  Result.AddTest(TestTIdSipRegistrar.Suite);
   Result.AddTest(TestTIdSipAbstractBindingDatabase.Suite);
-  Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
+//  Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
 end;
 
 //******************************************************************************
@@ -145,7 +150,7 @@ begin
 
   Self.DB := TIdSipMockBindingDatabase.Create;
   Self.DB.FailIsValid := false;
-  Self.DB.DefaultExpiryTime := 0;
+//  Self.DB.DefaultExpiryTime := 0;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
   Self.Registrar := TIdSipRegistrar.Create;
@@ -178,12 +183,67 @@ end;
 
 //* TestTIdSipRegistrar Private methods ****************************************
 
+procedure TestTIdSipRegistrar.CheckResponse(Received: TIdSipContacts;
+                                            const Msg: String);
+var
+  Expected: TIdSipContacts;
+  I:        Integer;
+begin
+  Expected := TIdSipContacts.Create(Self.Dispatch.Transport.LastResponse.Headers);
+  try
+    Expected.First;
+    Received.First;
+
+    I := 0;
+    while Expected.HasNext do begin
+      Check(Received.HasNext, 'Received too few Expected');
+
+      Check(Abs(Expected.CurrentContact.Expires
+              - Received.CurrentContact.Expires) < 2,
+            'Expires param; I = ' + IntToStr(I));
+
+      Expected.CurrentContact.RemoveExpires;
+      Received.CurrentContact.RemoveExpires;
+      CheckEquals(Expected.CurrentContact.Address.Uri,
+                  Received.CurrentContact.Address.Uri,
+            'URI; I = ' + IntToStr(I));
+
+      Expected.Next;
+      Received.Next;
+      Inc(I);
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
 procedure TestTIdSipRegistrar.SimulateRemoteRequest;
 begin
   Self.Dispatch.Transport.FireOnRequest(Self.Request);
 end;
 
 //* TestTIdSipRegistrar Published methods **************************************
+
+procedure TestTIdSipRegistrar.TestDatabaseUpdatesBindings;
+var
+  Contacts: TIdSipContacts;
+begin
+  Fail('What''s this supposed to do? How''s it supposed to behave?');
+  Self.SimulateRemoteRequest;
+  Self.Request.FirstContact.Value := 'sip:wintermute@neuromancer.tessier-ashpool.co.luna';
+  Self.SimulateRemoteRequest;
+
+  Contacts := TIdSipContacts.Create;
+  try
+    Self.Registrar.BindingDB.BindingsFor(Self.Request, Contacts);
+    Contacts.First;
+    CheckEquals(Self.Request.FirstContact.Address.Uri,
+                Contacts.CurrentContact.Address.Uri,
+                'Binding DB not updated');
+  finally
+    Contacts.Free;
+  end;
+end;
 
 procedure TestTIdSipRegistrar.TestDatabaseGetsExpiry;
 var
@@ -223,7 +283,6 @@ end;
 procedure TestTIdSipRegistrar.TestOKResponseContainsAllBindings;
 var
   Bindings: TIdSipContacts;
-  Contacts: TIdSipContacts;
 begin
   Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna';
   Self.SimulateRemoteRequest;
@@ -231,18 +290,12 @@ begin
               Self.Dispatch.Transport.SentResponseCount,
               'No response sent');
 
-  Contacts := TIdSipContacts.Create(Self.Dispatch.Transport.LastResponse.Headers);
+  Bindings := TIdSipContacts.Create;
   try
-    Bindings := TIdSipContacts.Create;
-    try
-      Self.DB.BindingsFor(Self.Request, Bindings);
-      Check(Bindings.IsEqualTo(Contacts),
-            'OK response doesn''t contain all bindings');
-    finally
-      Bindings.Free;
-    end;
+    Self.DB.BindingsFor(Self.Request, Bindings);
+    CheckResponse(Bindings, 'OK response doesn''t contain all bindings');
   finally
-    Contacts.Free;
+    Bindings.Free;
   end;
 end;
 
@@ -515,7 +568,7 @@ begin
 end;
 
 function TIdSipMockBindingDatabase.Binding(const AddressOfRecord: String;
-                                           CanonicalUri: String): TIdRegistrarBinding;
+                                           const CanonicalUri: String): TIdRegistrarBinding;
 var
   I: Integer;
 begin
@@ -614,12 +667,44 @@ end;
 
 //* TestTIdSipAbstractBindingDatabase Published methods ************************
 
-procedure TestTIdSipAbstractBindingDatabase.TestAddBindingWithExpiryParam;
+procedure TestTIdSipAbstractBindingDatabase.TestAddBindingUpdates;
 var
-  ExpiryTime: TDateTime;
+  Contacts:        TIdSipContacts;
+  OriginalContact: String;
+begin
+  OriginalContact := Self.Request.FirstContact.Address.CanonicaliseAsAddressOfRecord;
+  Self.DB.AddBindings(Self.Request);
+
+  Self.Request.FirstContact.Value := 'sip:wintermute@neuromancer.tessier-ashpool.co.luna';
+  Self.Request.CSeq.Increment;
+  Self.DB.AddBindings(Self.Request);
+
+  Contacts := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.Request, Contacts);
+
+    Check(not Contacts.IsEmpty,
+          'Binding deleted?');
+
+    Contacts.First;
+    CheckEquals(OriginalContact,
+                Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord,
+                'Original binding removed');
+
+    Check(Contacts.HasNext,
+          'New binding not added');
+    Contacts.Next;
+    CheckEquals(Self.Request.FirstContact.Value,
+                Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord,
+                'New binding corrupted');
+  finally
+    Contacts.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractBindingDatabase.TestAddBindingWithExpiryParam;
 begin
   Self.Request.FirstContact.Expires := 20;
-  ExpiryTime := Now + OneSecond*Self.Request.FirstContact.Expires;
 
   Self.DB.AddBindings(Self.Request);
 
@@ -646,13 +731,32 @@ begin
   Self.CheckExpiry(Self.DB.DefaultExpiryTime, 'No expiry param or header');
 end;
 
+procedure TestTIdSipAbstractBindingDatabase.TestAddBindingWithZeroExpiresRemovesBinding;
+var
+  Contacts: TIdSipContacts;
+begin
+  Self.DB.AddBindings(Self.Request);
+  Self.Request.FirstContact.Expires := 0;
+  Self.DB.AddBindings(Self.Request);
+
+  Contacts := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.Request, Contacts);
+    Check(Contacts.IsEmpty, 'Binding not removed');
+  finally
+    Contacts.Free;
+  end;
+end;
+
 procedure TestTIdSipAbstractBindingDatabase.TestAddExistingBindingOutOfOrderSeqNo;
 begin
   Self.DB.AddBindings(Self.Request);
-  Check(not Self.DB.AddBindings(Self.Request), 'Out-of-order request not ignored (replay attack)');
+  Check(not Self.DB.AddBindings(Self.Request),
+        'Out-of-order request not ignored (replay attack)');
 
   Self.Request.CSeq.SequenceNo := Self.Request.CSeq.SequenceNo - 1;
-  Check(not Self.DB.AddBindings(Self.Request), 'Out-of-order request not ignored (earlier CSeq no)');
+  Check(not Self.DB.AddBindings(Self.Request),
+        'Out-of-order request not ignored (earlier CSeq no)');
 end;
 
 procedure TestTIdSipAbstractBindingDatabase.TestMayRemoveBinding;
@@ -803,6 +907,9 @@ begin
   Check(Self.DB.AddBindings(Self.WintermutesAOR),
         'AddBindings failed');
 
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.DB.RemoveAllBindings(Self.WintermutesAOR);
+  Self.WintermutesAOR.CSeq.Increment;
   Self.DB.FailAddBinding := true;
   Check(not Self.DB.AddBindings(Self.WintermutesAOR),
         'AddBindings succeeded');

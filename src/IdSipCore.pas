@@ -167,6 +167,7 @@ type
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
     fContact:            TIdSipContactHeader;
+    KnownRegistrars:     TStrings;
     ObserverLock:        TCriticalSection;
     Observers:           TList;
     SessionListenerLock: TCriticalSection;
@@ -177,12 +178,16 @@ type
     function  AddInboundSession(Invite: TIdSipRequest;
                                 Transaction: TIdSipTransaction;
                                 Receiver: TIdSipTransport): TIdSipSession;
+    procedure AddKnownRegistrar(Registrar: TIdSipUri;
+                                const CallID: String);
     function  AddOutboundSession: TIdSipSession;
+    function  CallIDFor(Registrar: TIdSipUri): String;
     function  DefaultFrom: String;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
     function  FindSession(const Msg: TIdSipMessage): TIdSipSession;
     function  GetContact: TIdSipContactHeader;
+    function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     procedure NotifyOfNewSession(Session: TIdSipSession);
     procedure NotifyOfChange;
     procedure ProcessAck(Ack: TIdSipRequest;
@@ -822,6 +827,8 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
+  Self.KnownRegistrars := TStringList.Create;
+
   Self.ObserverLock        := TCriticalSection.Create;
   Self.Observers           := TList.Create;
   Self.SessionListenerLock := TCriticalSection.Create;
@@ -856,6 +863,7 @@ begin
   Self.SessionListenerLock.Free;
   Self.Observers.Free;
   Self.ObserverLock.Free;
+  Self.KnownRegistrars.Free;
 
   inherited Destroy;
 end;
@@ -928,11 +936,14 @@ end;
 
 function TIdSipUserAgentCore.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
 begin
+
   Result := Self.CreateRequest(Registrar);
   try
+    Self.AddKnownRegistrar(Registrar.Address, Result.CallID);
+      
     Result.Method := MethodRegister;
-    Result.RequestUri.Username := '';
-    Result.RequestUri.Password := '';
+    Result.RequestUri.EraseUserInfo;
+    Result.CallID := Self.CallIDFor(Registrar.Address);
 
     Result.ToHeader.Value := Self.Contact.Value;
     Result.From.Value     := Self.Contact.Value;
@@ -1199,6 +1210,13 @@ begin
   end;
 end;
 
+procedure TIdSipUserAgentCore.AddKnownRegistrar(Registrar: TIdSipUri;
+                                                const CallID: String);
+begin
+  if not Self.KnowsRegistrar(Registrar) then
+    Self.KnownRegistrars.Values[Registrar.Uri] := CallID;
+end;
+
 function TIdSipUserAgentCore.AddOutboundSession: TIdSipSession;
 begin
   Result := TIdSipSession.Create(Self);
@@ -1216,6 +1234,11 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipUserAgentCore.CallIDFor(Registrar: TIdSipUri): String;
+begin
+  Result := Self.KnownRegistrars.Values[Registrar.Uri];
 end;
 
 function TIdSipUserAgentCore.DefaultFrom: String;
@@ -1273,6 +1296,11 @@ begin
     fContact := TIdSipContactHeader.Create;
 
   Result := fContact;
+end;
+
+function TIdSipUserAgentCore.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+begin
+  Result := Self.KnownRegistrars.IndexOfName(Registrar.Uri) <> -1;
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfNewSession(Session: TIdSipSession);

@@ -113,6 +113,7 @@ type
     procedure TestName;
     procedure TestGetSetExpires;
     procedure TestGetSetQ;
+    procedure TestRemoveExpires;
     procedure TestValue; override;
     procedure TestValueWithExpires;
     procedure TestValueWithQ;
@@ -142,6 +143,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIncrement;
     procedure TestValue; override;
   end;
 
@@ -1395,6 +1397,16 @@ begin
   CheckEquals(666, Self.C.Q, '666');
 end;
 
+procedure TestTIdSipContactHeader.TestRemoveExpires;
+begin
+  Self.C.RemoveExpires;
+  Check(not Self.C.WillExpire, 'No expires param');
+
+  Self.C.Expires := 0;
+  Self.C.RemoveExpires;
+  Check(not Self.C.WillExpire, 'Expires param');
+end;
+
 procedure TestTIdSipContactHeader.TestValue;
 begin
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna';
@@ -1614,6 +1626,23 @@ begin
 end;
 
 //* TestTIdSipCSeqHeader Published methods *************************************
+
+procedure TestTIdSipCSeqHeader.TestIncrement;
+var
+  I: Integer;
+begin
+  Self.C.SequenceNo := 1;
+  for I := Self.C.SequenceNo + 1 to Self.C.SequenceNo + 10 do begin
+    Self.C.Increment;
+    CheckEquals(I,
+                Self.C.SequenceNo,
+                'SequenceNo not incremented, I = ' + IntToStr(I));
+  end;
+
+  Self.C.SequenceNo := High(Self.C.SequenceNo);
+  Self.C.Increment;
+  CheckEquals(0, Self.C.SequenceNo, 'SequenceNo rollover');
+end;
 
 procedure TestTIdSipCSeqHeader.TestValue;
 begin

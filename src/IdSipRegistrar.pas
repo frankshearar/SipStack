@@ -22,10 +22,10 @@ type
                        SequenceNo: Cardinal;
                        AbsoluteTimeout: TDateTime);
 
-    property CallID:     String    read fCallID;
-    property SequenceNo: Cardinal  read fSequenceNo;
-    property Uri:        String    read fUri;
-    property ValidUntil: TDateTime read fValidUntil;
+    property CallID:     String    read fCallID write fCallID;
+    property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
+    property Uri:        String    read fUri write fUri;
+    property ValidUntil: TDateTime read fValidUntil write fValidUntil;
   end;
 
   // I provide a database that matches a SIP Address-of-record (a SIP or SIPS
@@ -49,7 +49,7 @@ type
                          SequenceNo: Cardinal;
                          ExpiryTime: TDateTime): Boolean; virtual; abstract;
     function  Binding(const AddressOfRecord: String;
-                      CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
+                      const CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
     procedure Commit; virtual; abstract;
     procedure Rollback; virtual; abstract;
     procedure StartTransaction; virtual; abstract;
@@ -150,6 +150,7 @@ var
   AddressOfRecord: String;
   Binding:         TIdRegistrarBinding;
   Contacts:        TIdSipContacts;
+  Expiry:          Cardinal;
 begin
   AddressOfRecord := Request.RequestUri.CanonicaliseAsAddressOfRecord;
 
@@ -162,17 +163,25 @@ begin
       while Contacts.HasNext do begin
         Binding := Self.Binding(AddressOfRecord,
                                 Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord);
-                                
-        if Assigned(Binding) then
-          Result := Result and Self.MayRemoveBinding(Request,
-                                                     Contacts.CurrentContact)
-        else
+        Expiry := Self.CorrectExpiry(Request,
+                                     Contacts.CurrentContact);
+
+        if Assigned(Binding) then begin
+          Result := Result
+                and Self.MayRemoveBinding(Request,
+                                          Contacts.CurrentContact);
+          if Result and (Expiry = 0) then begin
+            Result := Result and Self.RemoveBinding(Request,
+                                                    Contacts.CurrentContact);
+          end;
+        end
+        else begin
           Result := Result and Self.AddBinding(AddressOfRecord,
                                                Contacts.CurrentContact.Address,
                                                Request.CallID,
                                                Request.CSeq.SequenceNo,
-                                               Self.CorrectExpiry(Request,
-                                                                  Contacts.CurrentContact));
+                                               Expiry);
+        end;
 
         Contacts.Next;
       end;

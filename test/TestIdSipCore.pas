@@ -93,6 +93,7 @@ type
     procedure TestCreateInvite;
     procedure TestCreateInviteWithBody;
     procedure TestCreateRegister;
+    procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateRequest;
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
@@ -905,6 +906,41 @@ begin
     CheckEquals(Register.ToHeader.Value,
                 Register.From.Value,
                 'From');
+  finally
+    Register.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateRegisterReusesCallIDForSameRegistrar;
+var
+  FirstCallID:  String;
+  Register:     TIdSipRequest;
+  SecondCallID: String;
+begin
+  Register := Self.Core.CreateRegister(Self.Destination);
+  try
+    FirstCallID := Register.CallID;
+  finally
+    Register.Free;
+  end;
+
+  Register := Self.Core.CreateRegister(Self.Destination);
+  try
+    SecondCallID := Register.CallID;
+  finally
+    Register.Free;
+  end;
+
+  CheckEquals(FirstCallID,
+              SecondCallID,
+              'Call-ID SHOULD be the same for same registrar');
+
+  Self.Destination.Address.Uri := 'sip:enki.org';
+  Register := Self.Core.CreateRegister(Self.Destination);
+  try
+    CheckNotEquals(FirstCallID,
+                   Register.CallID,
+                   'Call-ID SHOULD be different for new registrar');
   finally
     Register.Free;
   end;

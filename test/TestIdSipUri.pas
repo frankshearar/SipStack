@@ -55,6 +55,7 @@ type
     procedure TestEqualsSecureTransportVersusSips;
     procedure TestEqualsUsernameDiffers;
     procedure TestEqualsUsernameParameter;
+    procedure TestEraseUserInfo;
     procedure TestGetSetMaddr;
     procedure TestGetSetMethod;
     procedure TestGetSetTransport;
@@ -193,7 +194,7 @@ begin
   Self.Uri.AddParameter('foo', 'bar');
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna;foo=bar',
-              Uri.AsString,
+              Self.Uri.AsString,
               'AsString');
   CheckEquals(Self.Uri.AsString,
               Self.Uri.Uri,
@@ -285,15 +286,15 @@ end;
 
 procedure TestTIdSipUri.TestBasicSetUri;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
-  CheckEquals('sip',                     Uri.Scheme,        'Scheme');
-  CheckEquals('wintermute',              Uri.Username,      'User');
-  CheckEquals('tessier-ashpool.co.luna', Uri.Host,          'Host');
-  CheckEquals(IdPORT_SIP,                Uri.Port,          'Port');
-  CheckEquals(0,                         Uri.ParamCount,    'Parameters');
-  CheckEquals('',                        Uri.Password,      'Password');
-  CheckEquals(0,                         Uri.Headers.Count, 'Headers');
+  CheckEquals('sip',                     Self.Uri.Scheme,        'Scheme');
+  CheckEquals('wintermute',              Self.Uri.Username,      'User');
+  CheckEquals('tessier-ashpool.co.luna', Self.Uri.Host,          'Host');
+  CheckEquals(IdPORT_SIP,                Self.Uri.Port,          'Port');
+  CheckEquals(0,                         Self.Uri.ParamCount,    'Parameters');
+  CheckEquals('',                        Self.Uri.Password,      'Password');
+  CheckEquals(0,                         Self.Uri.Headers.Count, 'Headers');
 end;
 
 procedure TestTIdSipUri.TestCanonicaliseAsAddressOfRecord;
@@ -642,112 +643,123 @@ begin
   Check(not Self.EqualityB.Equals(Self.EqualityA), 'B <> A, Username parameter');
 end;
 
+procedure TestTIdSipUri.TestEraseUserInfo;
+begin
+  Self.Uri.Username := 'hiro';
+  Self.Uri.Password := 'protagonist';
+
+  Self.Uri.EraseUserInfo;
+
+  CheckEquals('', Self.Uri.Username, 'Username not erased');
+  CheckEquals('', Self.Uri.Password, 'Password not erased');
+end;
+
 procedure TestTIdSipUri.TestGetSetMaddr;
 begin
-  Uri.AddParameter(MaddrParam, '127.0.0.1');
-  CheckEquals('127.0.0.1', Uri.Maddr, 'Get Maddr');
+  Self.Uri.AddParameter(MaddrParam, '127.0.0.1');
+  CheckEquals('127.0.0.1', Self.Uri.Maddr, 'Get Maddr');
 
-  Uri.Maddr := '0.0.0.0';
-  CheckEquals('0.0.0.0', Uri.ParamValue(MaddrParam), 'Set Maddr');
+  Self.Uri.Maddr := '0.0.0.0';
+  CheckEquals('0.0.0.0', Self.Uri.ParamValue(MaddrParam), 'Set Maddr');
 end;
 
 procedure TestTIdSipUri.TestGetSetMethod;
 begin
-  Uri.AddParameter(MethodParam, MethodInvite);
-  CheckEquals(MethodInvite, Uri.Method, 'Get Method');
+  Self.Uri.AddParameter(MethodParam, MethodInvite);
+  CheckEquals(MethodInvite, Self.Uri.Method, 'Get Method');
 
-  Uri.Method := MethodRegister;
-  CheckEquals(MethodRegister, Uri.ParamValue(MethodParam), 'Set Method');
+  Self.Uri.Method := MethodRegister;
+  CheckEquals(MethodRegister, Self.Uri.ParamValue(MethodParam), 'Set Method');
 end;
 
 procedure TestTIdSipUri.TestGetSetTransport;
 begin
-  Uri.AddParameter(TransportParam, TransportParamTCP);
+  Self.Uri.AddParameter(TransportParam, TransportParamTCP);
   CheckEquals(TransportParamTCP,
-              Uri.Transport,
+              Self.Uri.Transport,
               'Get Transport');
 
-  Uri.Transport := TransportParamSCTP;
+  Self.Uri.Transport := TransportParamSCTP;
   CheckEquals(TransportParamSCTP,
-              Uri.ParamValue(TransportParam),
+              Self.Uri.ParamValue(TransportParam),
               'Set Transport');
 end;
 
 procedure TestTIdSipUri.TestGetSetTTL;
 begin
-  Uri.AddParameter(TTLParam, '42');
-  CheckEquals(42, Uri.TTL, 'Get TTL');
+  Self.Uri.AddParameter(TTLParam, '42');
+  CheckEquals(42, Self.Uri.TTL, 'Get TTL');
 
-  Uri.TTL := 13;
-  CheckEquals('13', Uri.ParamValue(TTLParam), 'Set TTL');
+  Self.Uri.TTL := 13;
+  CheckEquals('13', Self.Uri.ParamValue(TTLParam), 'Set TTL');
 end;
 
 procedure TestTIdSipUri.TestGetSetUserParam;
 begin
-  Uri.AddParameter(UserParam, UserParamPhone);
-  CheckEquals(UserParamPhone, Uri.UserParameter, 'Get User');
+  Self.Uri.AddParameter(UserParam, UserParamPhone);
+  CheckEquals(UserParamPhone, Self.Uri.UserParameter, 'Get User');
 
-  Uri.UserParameter := UserParamIp;
-  CheckEquals(UserParamIp, Uri.ParamValue(UserParam), 'Set User');
+  Self.Uri.UserParameter := UserParamIp;
+  CheckEquals(UserParamIp, Self.Uri.ParamValue(UserParam), 'Set User');
 end;
 
 procedure TestTIdSipUri.TestHasHeaders;
 begin
-  Check(not Uri.HasHeaders, 'No headers');
+  Check(not Self.Uri.HasHeaders, 'No headers');
 
-  Uri.Headers.Add(RouteHeader);
+  Self.Uri.Headers.Add(RouteHeader);
   Check(Uri.HasHeaders, 'One header');
 end;
 
 procedure TestTIdSipUri.TestHasParameter;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  Check(not Uri.HasParameter('foo'), 'no parameters');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.HasParameter('foo'), 'no parameters');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo';
   Check(Uri.HasParameter('foo'), 'valueless parameter');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar';
   Check(Uri.HasParameter('foo'), 'valued parameter');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;foo=bar;lr';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;foo=bar;lr';
   Check(Uri.HasParameter('foo'), 'parameter amongst others');
 end;
 
 procedure TestTIdSipUri.TestHasValidSyntax;
 begin
-  Uri.Uri := ':wintermute@tessier-ashpool.co.luna';
-  Check(not Uri.HasValidSyntax, 'Missing scheme');
+  Self.Uri.Uri := ':wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.HasValidSyntax, 'Missing scheme');
 
-  Uri.Uri := 'sipx:a';
-  Check(not Uri.HasValidSyntax, 'Invalid scheme');
+  Self.Uri.Uri := 'sipx:a';
+  Check(not Self.Uri.HasValidSyntax, 'Invalid scheme');
 
-  Uri.Uri := 'sip:';
-  Check(not Uri.HasValidSyntax, 'Missing host');
+  Self.Uri.Uri := 'sip:';
+  Check(not Self.Uri.HasValidSyntax, 'Missing host');
 
-  Uri.Uri := 'sip:host';
+  Self.Uri.Uri := 'sip:host';
   Check(Uri.HasValidSyntax, 'Very simple but valid SIP URI');
 
-  Uri.Uri := 'sip:1host';
-  Check(not Uri.HasValidSyntax, 'Invalid host info');
+  Self.Uri.Uri := 'sip:1host';
+  Check(not Self.Uri.HasValidSyntax, 'Invalid host info');
 
-  Uri.Uri := 'sip:<@host';
-  Check(not Uri.HasValidSyntax, 'Invalid user info');
+  Self.Uri.Uri := 'sip:<@host';
+  Check(not Self.Uri.HasValidSyntax, 'Invalid user info');
 
-  Uri.Uri := 'sip:case:%1@host';
-  Check(not Uri.HasValidSyntax, 'Invalid password info');
+  Self.Uri.Uri := 'sip:case:%1@host';
+  Check(not Self.Uri.HasValidSyntax, 'Invalid password info');
 
-  Uri.Uri := 'sip:case@friedneurons.org;f%%=tls';
-  Check(not Uri.HasValidSyntax,
+  Self.Uri.Uri := 'sip:case@friedneurons.org;f%%=tls';
+  Check(not Self.Uri.HasValidSyntax,
         'Malformed parameter name');
 end;
 
 procedure TestTIdSipUri.TestIsLooseRoutable;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  Check(not Uri.IsLooseRoutable, 'Non-loose-routable SIP URI marked as loose routable');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.IsLooseRoutable, 'Non-loose-routable SIP URI marked as loose routable');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
   Check(Uri.IsLooseRoutable, 'Loose routable URI not marked as loose routable');
 end;
 
@@ -823,231 +835,231 @@ end;
 
 procedure TestTIdSipUri.TestIsSecure;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  Check(not Uri.IsSecure, 'SIP URI marked as secure');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.IsSecure, 'SIP URI marked as secure');
 
-  Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
   Check(Uri.IsSecure, 'SIPS URI not marked as secure');
 end;
 
 procedure TestTIdSipUri.TestMaddr;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;user=ip;method=INVITE;ttl=2;maddr=127.0.0.255;lr';
-  CheckEquals('127.0.0.255', Uri.Maddr, 'maddr');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;user=ip;method=INVITE;ttl=2;maddr=127.0.0.255;lr';
+  CheckEquals('127.0.0.255', Self.Uri.Maddr, 'maddr');
 end;
 
 procedure TestTIdSipUri.TestPortIsSpecified;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  Check(not Uri.PortIsSpecified, 'No port specified (default)');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.PortIsSpecified, 'No port specified (default)');
 
-  Uri.Port := Uri.DefaultPort;
+  Self.Uri.Port := Self.Uri.DefaultPort;
   Check(Uri.PortIsSpecified, 'Port set to default value');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:5060';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:5060';
 
   Check(Uri.PortIsSpecified, 'Port specified');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:5060';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:5060';
   Check(Uri.PortIsSpecified, 'Port specified');
 end;
 
 procedure TestTIdSipUri.TestPortWithSipScheme;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  CheckEquals(IdPORT_SIP, Uri.Port, 'SIP URI default port');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  CheckEquals(IdPORT_SIP, Self.Uri.Port, 'SIP URI default port');
 end;
 
 procedure TestTIdSipUri.TestPortWithSipsScheme;
 begin
-  Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
-  CheckEquals(IdPORT_SIPS, Uri.Port, 'SIPS URI default port');
+  Self.Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
+  CheckEquals(IdPORT_SIPS, Self.Uri.Port, 'SIPS URI default port');
 end;
 
 procedure TestTIdSipUri.TestRemoveParameter;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;security=on;transport=tcp';
-  Uri.RemoveParameter('foo');
-  CheckEquals(2, Uri.ParamCount, 'Wrong parameter was removed (removing foo)');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;security=on;transport=tcp';
+  Self.Uri.RemoveParameter('foo');
+  CheckEquals(2, Self.Uri.ParamCount, 'Wrong parameter was removed (removing foo)');
 
-  Uri.RemoveParameter('security');
+  Self.Uri.RemoveParameter('security');
   Check(Uri.HasParameter('transport'),
         'transport parameter was removed, not security');
-  Check(not Uri.HasParameter('security'),
+  Check(not Self.Uri.HasParameter('security'),
         'security parameter was not removed');
 
-  Uri.RemoveParameter('transport');
-  Check(not Uri.HasParameter('transport'),
+  Self.Uri.RemoveParameter('transport');
+  Check(not Self.Uri.HasParameter('transport'),
         'transport parameter was not removed');
 end;
 
 procedure TestTIdSipUri.TestSetUriBasicUri;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
-  CheckEquals('sip',                     Uri.Scheme,     'Scheme');
-  CheckEquals('wintermute',              Uri.Username,   'User');
-  CheckEquals('tessier-ashpool.co.luna', Uri.Host,       'Host');
-  CheckEquals(0,                         Uri.ParamCount, 'Parameter count');
+  CheckEquals('sip',                     Self.Uri.Scheme,     'Scheme');
+  CheckEquals('wintermute',              Self.Uri.Username,   'User');
+  CheckEquals('tessier-ashpool.co.luna', Self.Uri.Host,       'Host');
+  CheckEquals(0,                         Self.Uri.ParamCount, 'Parameter count');
 end;
 
 procedure TestTIdSipUri.TestSetUriMultipleHeaders;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna'
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna'
            + '?Route=%3Csip:127.0.0.1%3E&Route=%3Csip:127.0.0.2%3E';
 
-  CheckEquals(2,                 Uri.Headers.Count,          'Header count');
-  CheckEquals('Route',           Uri.Headers.Items[0].Name,  'Header 1 name');
-  CheckEquals('<sip:127.0.0.1>', Uri.Headers.Items[0].Value, 'Header 1 value');
+  CheckEquals(2,                 Self.Uri.Headers.Count,          'Header count');
+  CheckEquals('Route',           Self.Uri.Headers.Items[0].Name,  'Header 1 name');
+  CheckEquals('<sip:127.0.0.1>', Self.Uri.Headers.Items[0].Value, 'Header 1 value');
   CheckEquals(TIdSipRouteHeader.ClassName,
-              Uri.Headers.Items[0].ClassName,
+              Self.Uri.Headers.Items[0].ClassName,
               'Header 1 class type');
-  CheckEquals('Route',           Uri.Headers.Items[1].Name,  'Header 2 name');
-  CheckEquals('<sip:127.0.0.2>', Uri.Headers.Items[1].Value, 'Header 2 value');
+  CheckEquals('Route',           Self.Uri.Headers.Items[1].Name,  'Header 2 name');
+  CheckEquals('<sip:127.0.0.2>', Self.Uri.Headers.Items[1].Value, 'Header 2 value');
   CheckEquals(TIdSipRouteHeader.ClassName,
-              Uri.Headers.Items[1].ClassName,
+              Self.Uri.Headers.Items[1].ClassName,
               'Header 2 class type');
 end;
 
 procedure TestTIdSipUri.TestSetUriMultipleParameters;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar;baz=quaax';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar;baz=quaax';
 
-  CheckEquals(2,       Uri.ParamCount,    'Parameter count');
-  CheckEquals('foo',   Uri.ParamName(0),  'Parameter 1 name');
-  CheckEquals('baz',   Uri.ParamName(1),  'Parameter 2 name');
-  CheckEquals('bar',   Uri.ParamValue(0), 'Parameter 1 value');
-  CheckEquals('quaax', Uri.ParamValue(1), 'Parameter 2 value');
+  CheckEquals(2,       Self.Uri.ParamCount,    'Parameter count');
+  CheckEquals('foo',   Self.Uri.ParamName(0),  'Parameter 1 name');
+  CheckEquals('baz',   Self.Uri.ParamName(1),  'Parameter 2 name');
+  CheckEquals('bar',   Self.Uri.ParamValue(0), 'Parameter 1 value');
+  CheckEquals('quaax', Self.Uri.ParamValue(1), 'Parameter 2 value');
 end;
 
 procedure TestTIdSipUri.TestSetUriOneHeader;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna?Route=%3Csip:127.0.0.1%3E';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna?Route=%3Csip:127.0.0.1%3E';
 
-  CheckEquals(1,                 Uri.Headers.Count,          'Header count');
-  CheckEquals('Route',           Uri.Headers.Items[0].Name,  'Header name');
-  CheckEquals('<sip:127.0.0.1>', Uri.Headers.Items[0].Value, 'Header value');
+  CheckEquals(1,                 Self.Uri.Headers.Count,          'Header count');
+  CheckEquals('Route',           Self.Uri.Headers.Items[0].Name,  'Header name');
+  CheckEquals('<sip:127.0.0.1>', Self.Uri.Headers.Items[0].Value, 'Header value');
   CheckEquals(TIdSipRouteHeader.ClassName,
-              Uri.Headers.Items[0].ClassName,
+              Self.Uri.Headers.Items[0].ClassName,
               'Header class type');
 end;
 
 procedure TestTIdSipUri.TestSetUriOneParameter;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar';
 
-  CheckEquals(1,     Uri.ParamCount,    'Parameter count');
-  CheckEquals('foo', Uri.ParamName(0),  'Parameter name');
-  CheckEquals('bar', Uri.ParamValue(0), 'Parameter value');
+  CheckEquals(1,     Self.Uri.ParamCount,    'Parameter count');
+  CheckEquals('foo', Self.Uri.ParamName(0),  'Parameter name');
+  CheckEquals('bar', Self.Uri.ParamValue(0), 'Parameter value');
 end;
 
 procedure TestTIdSipUri.TestSetUriTortureParameters;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr;foo=bar;baz=qu%61ax';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr;foo=bar;baz=qu%61ax';
 
-  CheckEquals(3,       Uri.ParamCount,    'Parameter count');
-  CheckEquals('lr',    Uri.ParamName(0),  'Parameter 1 name');
-  CheckEquals('',      Uri.ParamValue(0), 'Parameter 1 value');
-  CheckEquals('foo',   Uri.ParamName(1),  'Parameter 2 name');
-  CheckEquals('bar',   Uri.ParamValue(1), 'Parameter 2 value');
-  CheckEquals('baz',   Uri.ParamName(2),  'Parameter 3 name');
-  CheckEquals('quaax', Uri.ParamValue(2), 'Parameter 3 value');
+  CheckEquals(3,       Self.Uri.ParamCount,    'Parameter count');
+  CheckEquals('lr',    Self.Uri.ParamName(0),  'Parameter 1 name');
+  CheckEquals('',      Self.Uri.ParamValue(0), 'Parameter 1 value');
+  CheckEquals('foo',   Self.Uri.ParamName(1),  'Parameter 2 name');
+  CheckEquals('bar',   Self.Uri.ParamValue(1), 'Parameter 2 value');
+  CheckEquals('baz',   Self.Uri.ParamName(2),  'Parameter 3 name');
+  CheckEquals('quaax', Self.Uri.ParamValue(2), 'Parameter 3 value');
 end;
 
 procedure TestTIdSipUri.TestSetUriUserHasEscapedChars;
 begin
-  Uri.Uri := 'sip:sip%3Auser%40example.com@company.com;other-param=summit';
+  Self.Uri.Uri := 'sip:sip%3Auser%40example.com@company.com;other-param=summit';
 
-  CheckEquals('sip:user@example.com', Uri.Username, 'Username');
+  CheckEquals('sip:user@example.com', Self.Uri.Username, 'Username');
 end;
 
 procedure TestTIdSipUri.TestSetUriValuelessParameter;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
 
-  CheckEquals(1,    Uri.ParamCount,    'Parameter count');
-  CheckEquals('lr', Uri.ParamName(0),  'Parameter name');
-  CheckEquals('',   Uri.ParamValue(0), 'Parameter value');
+  CheckEquals(1,    Self.Uri.ParamCount,    'Parameter count');
+  CheckEquals('lr', Self.Uri.ParamName(0),  'Parameter name');
+  CheckEquals('',   Self.Uri.ParamValue(0), 'Parameter value');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithEscapedCharacters;
 begin
-  Uri.Uri := 'sip:%77intermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:%77intermute@tessier-ashpool.co.luna';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
-              Uri.Uri,
+              Self.Uri.Uri,
               '(Needlessly) escaped characters in username');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithNoUser;
 begin
-  Uri.Uri := 'sip:tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:tessier-ashpool.co.luna';
 
-  CheckEquals('tessier-ashpool.co.luna', Uri.Host,     'Host');
-  CheckEquals('',                        Uri.Username, 'User');
+  CheckEquals('tessier-ashpool.co.luna', Self.Uri.Host,     'Host');
+  CheckEquals('',                        Self.Uri.Username, 'User');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithPassword;
 begin
-  Uri.Uri := 'sip:wintermute:foo@tessier-ashpool.co.lu';
+  Self.Uri.Uri := 'sip:wintermute:foo@tessier-ashpool.co.lu';
 
-  CheckEquals('foo', Uri.Password, 'Password');
+  CheckEquals('foo', Self.Uri.Password, 'Password');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithPort;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:100';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:100';
 
-  CheckEquals(100, Uri.Port, 'Port');
+  CheckEquals(100, Self.Uri.Port, 'Port');
 end;
 
 procedure TestTIdSipUri.TestSetUriClearsOldValues;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
   CheckEquals(Uri.DefaultTransport,
-              Uri.Transport,
+              Self.Uri.Transport,
               'Transport not cleared after SetUri');
 end;
 
 procedure TestTIdSipUri.TestTransport;
 begin
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
-  CheckEquals('udp', Uri.Transport, 'Default transport');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  CheckEquals('udp', Self.Uri.Transport, 'Default transport');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
-  CheckEquals('udp', Uri.Transport, 'UDP specified');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
+  CheckEquals('udp', Self.Uri.Transport, 'UDP specified');
 
-  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
-  CheckEquals('tcp', Uri.Transport, 'TCP specified');
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
+  CheckEquals('tcp', Self.Uri.Transport, 'TCP specified');
 end;
 
 procedure TestTIdSipUri.TestUserIsIP;
 begin
-  Check(not Uri.UserIsIP, 'no user parameter');
+  Check(not Self.Uri.UserIsIP, 'no user parameter');
 
-  Uri.UserParameter := UserParamPhone;
-  Check(not Uri.UserIsIP, UserParamPhone);
+  Self.Uri.UserParameter := UserParamPhone;
+  Check(not Self.Uri.UserIsIP, UserParamPhone);
 
-  Uri.UserParameter := UserParamIp;
+  Self.Uri.UserParameter := UserParamIp;
   Check(Uri.UserIsIP, UserParamIp);
 
-  Uri.UserParameter := Uppercase(UserParamIp);
+  Self.Uri.UserParameter := Uppercase(UserParamIp);
   Check(Uri.UserIsIP, Uppercase(UserParamIp));
 end;
 
 procedure TestTIdSipUri.TestUserIsPhone;
 begin
-  Check(not Uri.UserIsPhoneNumber, 'no user parameter');
+  Check(not Self.Uri.UserIsPhoneNumber, 'no user parameter');
 
-  Uri.UserParameter := UserParamIp;
-  Check(not Uri.UserIsPhoneNumber, UserParamIp);
+  Self.Uri.UserParameter := UserParamIp;
+  Check(not Self.Uri.UserIsPhoneNumber, UserParamIp);
 
-  Uri.UserParameter := UserParamPhone;
+  Self.Uri.UserParameter := UserParamPhone;
   Check(Uri.UserIsPhoneNumber, UserParamPhone);
 
-  Uri.UserParameter := Uppercase(UserParamPhone);
+  Self.Uri.UserParameter := Uppercase(UserParamPhone);
   Check(Uri.UserIsPhoneNumber, Uppercase(UserParamPhone));
 end;
 {

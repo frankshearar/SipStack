@@ -90,6 +90,7 @@ type
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(Uri: TIdSipUri): Boolean;
+    procedure EraseUserInfo;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
     function  HasParameter(const Name: String): Boolean;
@@ -267,7 +268,8 @@ type
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
   public
-    function WillExpire: Boolean;
+    procedure RemoveExpires;
+    function  WillExpire: Boolean;
 
     property Expires:    Cardinal     read GetExpires write SetExpires;
     property IsWildCard: Boolean      read fIsWildCard write fIsWildCard;
@@ -294,6 +296,8 @@ type
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
+    procedure Increment;
+
     property Method:     String   read fMethod     write fMethod;
     property SequenceNo: Cardinal read fSequenceNo write fSequenceNo;
   end;
@@ -1002,6 +1006,12 @@ begin
         and (Self.Password = Uri.Password)
         and Self.EqualParameters(Uri)
         and Self.Headers.IsEqualTo(Uri.Headers);
+end;
+
+procedure TIdSipUri.EraseUserInfo;
+begin
+  Self.Username := '';
+  Self.Password := '';
 end;
 
 function TIdSipUri.HasValidSyntax: Boolean;
@@ -2015,6 +2025,12 @@ end;
 //******************************************************************************
 //* TIdSipContactHeader Public methods *****************************************
 
+procedure TIdSipContactHeader.RemoveExpires;
+begin
+  if Self.HasParam(ExpiresParam) then
+    Self.Parameters.Delete(Self.Parameters.IndexOfName(ExpiresParam));
+end;
+
 function TIdSipContactHeader.WillExpire: Boolean;
 begin
   Result := Self.HasParam(ExpiresParam);
@@ -2098,6 +2114,16 @@ end;
 //******************************************************************************
 //* TIdSipCSeqHeader                                                           *
 //******************************************************************************
+//* TIdSipCSeqHeader Public methods ********************************************
+
+procedure TIdSipCSeqHeader.Increment;
+begin
+  if (Self.SequenceNo < High(Self.SequenceNo)) then
+    Self.SequenceNo := Self.SequenceNo + 1
+  else
+    Self.SequenceNo := 0;
+end;
+
 //* TIdSipCSeqHeader Protected methods *****************************************
 
 function TIdSipCSeqHeader.GetName: String;
