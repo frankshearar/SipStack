@@ -57,7 +57,7 @@ type
     procedure ReceiveRinging(Invite: TIdSipRequest);
     procedure ReceiveTrying(Invite: TIdSipRequest);
     procedure ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
-    procedure ReceiveUnauthorized;
+    procedure ReceiveUnauthorized(const AuthHeaderName: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -228,14 +228,15 @@ type
     Password:     String;
     Username:     String;
 
-    procedure CheckAdditionalAuthentication(ReAttempt: TIdSipRequest); virtual;
-    procedure CheckAdditionalProxyAuthentication(ReAttempt: TIdSipRequest); virtual;
+    procedure CheckAdditionalAuthentication(ReAttempt: TIdSipRequest;
+                                            const AuthHeaderName: String); virtual;
+    procedure CheckAuthentication(const AuthenticationHeaderName: String;
+                                  const AuthorizationHeaderName: String);
     function  CreateAction: TIdSipAction; virtual; abstract;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String); virtual;
-    procedure ReceiveProxyUnauthorized;
     procedure ReceiveBadExtensionResponse;
   public
     procedure SetUp; override;
@@ -315,8 +316,8 @@ type
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
-    procedure CheckAdditionalAuthentication(ReAttempt: TIdSipRequest); override;
-    procedure CheckAdditionalProxyAuthentication(ReAttempt: TIdSipRequest); override;
+    procedure CheckAdditionalAuthentication(ReAttempt: TIdSipRequest;
+                                            const AuthHeaderName: String); override;
     function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
@@ -574,7 +575,6 @@ type
     procedure ReceiveForbidden;
     procedure ReceiveMovedTemporarily(const Contact: String);
     procedure ReceiveOKWithRecordRoute;
-    procedure ReceiveProxyUnauthorized;
   protected
     SDP: String;
 
@@ -1182,18 +1182,21 @@ begin
   end;
 end;
 
-procedure TTestCaseTU.ReceiveUnauthorized;
+procedure TTestCaseTU.ReceiveUnauthorized(const AuthHeaderName: String);
 var
+  Auth:      TIdSipAuthenticateHeader;
   Challenge: TIdSipResponse;
 begin
   Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
                                            SIPUnauthorized);
   try
-    Challenge.AddHeader(WWWAuthenticateHeader);
-    Challenge.FirstWWWAuthenticate.AuthorizationScheme := DigestAuthorizationScheme;
-    Challenge.FirstWWWAuthenticate.Realm := 'SFTF';
-    Challenge.FirstWWWAuthenticate.Nonce := '5369704365727434313433';
+    Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
+    Auth.AuthorizationScheme := DigestAuthorizationScheme;
+    Auth.Realm := 'SFTF';
+    Auth.Nonce := '5369704365727434313433';
+
     Challenge.AddHeader(AuthenticationInfoHeader);
+
     Self.ReceiveResponse(Challenge);
   finally
     Challenge.Free;
@@ -3202,10 +3205,6 @@ begin
 end;
 
 procedure TestTIdSipAction.TestAuthentication;
-var
-  InitialRequest: TIdSipRequest;
-  SequenceNo:     Cardinal;
-  ReAttempt:      TIdSipRequest;
 begin
   // It only makes sense to check for authentication on outbound actions.
   // Half our actions are inbound, and half outbound. Our strategy is thus to
@@ -3215,45 +3214,12 @@ begin
   // pick up the test in just those actions that need it. The other option is
   // to duplicate the code in those test cases that require it!
 
-  Self.CreateAction;
-
-  InitialRequest := TIdSipRequest.Create;
-  try
-    InitialRequest.Assign(Self.LastSentRequest);
-    Self.MarkSentRequestCount;
-    SequenceNo   := InitialRequest.CSeq.SequenceNo;
-
-    Self.ReceiveUnauthorized;
-    CheckRequestSent(Self.ClassName + ': no re-issue of '
-                   + InitialRequest.Method + ' request');
-
-    ReAttempt := Self.LastSentRequest;
-    CheckEquals(SequenceNo + 1,
-                ReAttempt.CSeq.SequenceNo,
-                Self.ClassName + ': Re-' + InitialRequest.Method + ' CSeq sequence number');
-    CheckEquals(InitialRequest.Method,
-                ReAttempt.Method,
-                Self.ClassName + ': Method of new attempt');
-    CheckEquals(InitialRequest.RequestUri.Uri,
-                ReAttempt.RequestUri.Uri,
-                Self.ClassName + ': Re-' + InitialRequest.Method + ' Request-URI');
-    Check(ReAttempt.HasAuthorization,
-          Self.ClassName + ': No Authorization header in re-' + InitialRequest.Method);
-    CheckNotEquals('',
-                   ReAttempt.FirstAuthorization.AuthorizationScheme,
-                   'No authorization scheme set');
-  finally
-    InitialRequest.Free;
-  end;
+  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader);
 end;
 
 procedure TestTIdSipAction.TestProxyAuthentication;
-var
-  InitialRequest: TIdSipRequest;
-  SequenceNo:     Cardinal;
-  ReAttempt:      TIdSipRequest;
 begin
-  // It only makes sense to check for proxy authentication on outbound actions.
+  // It only makes sense to check for authentication on outbound actions.
   // Half our actions are inbound, and half outbound. Our strategy is thus to
   // avoid code duplication by keeping the code here, in the base test class.
   // Outbound actions then make this procedure published by overriding this
@@ -3261,6 +3227,23 @@ begin
   // pick up the test in just those actions that need it. The other option is
   // to duplicate the code in those test cases that require it!
 
+  Self.CheckAuthentication(ProxyAuthenticateHeader, ProxyAuthorizationHeader);
+end;
+
+//* TestTIdSipAction Protected methods *****************************************
+
+procedure TestTIdSipAction.CheckAdditionalAuthentication(ReAttempt: TIdSipRequest;
+                                                         const AuthHeaderName: String);
+begin
+end;
+
+procedure TestTIdSipAction.CheckAuthentication(const AuthenticationHeaderName: String;
+                                               const AuthorizationHeaderName: String);
+var
+  InitialRequest: TIdSipRequest;
+  SequenceNo:     Cardinal;
+  ReAttempt:      TIdSipRequest;
+begin
   Self.CreateAction;
 
   InitialRequest := TIdSipRequest.Create;
@@ -3269,7 +3252,7 @@ begin
     Self.MarkSentRequestCount;
     SequenceNo   := InitialRequest.CSeq.SequenceNo;
 
-    Self.ReceiveProxyUnauthorized;
+    Self.ReceiveUnauthorized(AuthenticationHeaderName);
     CheckRequestSent(Self.ClassName + ': no re-issue of '
                    + InitialRequest.Method + ' request');
 
@@ -3283,26 +3266,16 @@ begin
     CheckEquals(InitialRequest.RequestUri.Uri,
                 ReAttempt.RequestUri.Uri,
                 Self.ClassName + ': Re-' + InitialRequest.Method + ' Request-URI');
-    Check(ReAttempt.HasProxyAuthorization,
-          Self.ClassName + ': No Proxy-Authorization header in re-' + InitialRequest.Method);
+    Check(ReAttempt.HasHeader(AuthorizationHeaderName),
+          Self.ClassName + ': No ' + AuthorizationHeaderName + ' header in re-' + InitialRequest.Method);
     CheckNotEquals('',
-                   ReAttempt.FirstProxyAuthorization.AuthorizationScheme,
+                   (ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader).AuthorizationScheme,
                    'No authorization scheme set');
 
-    Self.CheckAdditionalProxyAuthentication(ReAttempt);
+    Self.CheckAdditionalAuthentication(ReAttempt, AuthorizationHeaderName);
   finally
     InitialRequest.Free;
   end;
-end;
-
-//* TestTIdSipAction Protected methods *****************************************
-
-procedure TestTIdSipAction.CheckAdditionalAuthentication(ReAttempt: TIdSipRequest);
-begin
-end;
-
-procedure TestTIdSipAction.CheckAdditionalProxyAuthentication(ReAttempt: TIdSipRequest);
-begin
 end;
 
 procedure TestTIdSipAction.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -3314,23 +3287,6 @@ begin
 
   Password := Self.Password;
   Username := Self.Username;
-end;
-
-procedure TestTIdSipAction.ReceiveProxyUnauthorized;
-var
-  Challenge: TIdSipResponse;
-begin
-  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                           SIPProxyAuthenticationRequired);
-  try
-    Challenge.AddHeader(ProxyAuthenticateHeader);
-    Challenge.FirstProxyAuthenticate.AuthorizationScheme := DigestAuthorizationScheme;
-    Challenge.FirstProxyAuthenticate.Realm := 'SFTF';
-    Challenge.FirstProxyAuthenticate.Nonce := '5369704365727434313433';
-    Self.ReceiveResponse(Challenge);
-  finally
-    Challenge.Free;
-  end;
 end;
 
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
@@ -4553,12 +4509,8 @@ end;
 
 //* TestTIdSipOutboundInvite Protected methods *********************************
 
-procedure TestTIdSipOutboundInvite.CheckAdditionalAuthentication(ReAttempt: TIdSipRequest);
-begin
-  Self.CheckAdditionalProxyAuthentication(ReAttempt);
-end;
-
-procedure TestTIdSipOutboundInvite.CheckAdditionalProxyAuthentication(ReAttempt: TIdSipRequest);
+procedure TestTIdSipOutboundInvite.CheckAdditionalAuthentication(ReAttempt: TIdSipRequest;
+                                                                 const AuthHeaderName: String);
 var
   Ack: TIdSipRequest;
 begin
@@ -4568,10 +4520,10 @@ begin
   CheckAckSent('No ACK sent');
 
   Ack := Self.LastSentACK;
-  Check(Ack.HasProxyAuthorization,
-        'No Proxy-Authorization header in ACK');
-  CheckEquals(ReAttempt.FirstProxyAuthorization.Value,
-              Ack.FirstProxyAuthorization.Value,
+  Check(Ack.HasHeader(AuthHeaderName),
+        'No ' + AuthHeaderName + ' header in ACK');
+  CheckEquals(ReAttempt.FirstHeader(AuthHeaderName).Value,
+              Ack.FirstHeader(AuthHeaderName).Value,
               'ACK  must use same credentials as re-INVITE');
 end;
 
@@ -5680,7 +5632,7 @@ end;
 procedure TestTIdSipOutboundRegistration.TestReceiveUnauthorized;
 begin
   Self.CreateAction;
-  Self.ReceiveProxyUnauthorized;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader);
   Check(Self.Challenged,
         'No authentication challenge for REGISTER');
 end;
@@ -6499,21 +6451,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.ReceiveProxyUnauthorized;
-var
-  Challenge: TIdSipResponse;
-begin
-  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                           SIPProxyAuthenticationRequired);
-  try
-    Challenge.AddHeader(ProxyAuthenticateHeader);
-    Challenge.AddHeader(AuthenticationInfoHeader);
-    Self.ReceiveResponse(Challenge);
-  finally
-    Challenge.Free;
-  end;
-end;
-
 //* TestTIdSipOutboundSession Published methods ********************************
 
 procedure TestTIdSipOutboundSession.TestAck;
@@ -6574,7 +6511,7 @@ var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
 begin
-  Self.ReceiveUnauthorized;
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader);
 
   Invite := TIdSipRequest.Create;
   try
@@ -6598,7 +6535,7 @@ var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
 begin
-  Self.ReceiveProxyUnauthorized;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader);
 
   Invite := TIdSipRequest.Create;
   try
@@ -6837,7 +6774,7 @@ begin
   try
     Self.MarkSentRequestCount;
 
-    Self.ReceiveUnauthorized;
+    Self.ReceiveUnauthorized(WWWAuthenticateHeader);
     Invite.Assign(Self.LastSentRequest);
     CheckRequestSent('No resend of INVITE with Authorization');
     Check(Invite.HasAuthorization,
@@ -7188,7 +7125,7 @@ begin
   Self.MarkSentRequestCount;
   SequenceNo   := Self.LastSentRequest.CSeq.SequenceNo;
 
-  Self.ReceiveProxyUnauthorized;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader);
   CheckRequestSent('no re-issue of request');
 
   ReInvite := Self.LastSentRequest;
@@ -7197,7 +7134,7 @@ begin
               'Re-INVITE CSeq sequence number');
 
   Self.MarkSentRequestCount;
-  Self.ReceiveProxyUnauthorized;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader);
   CheckRequestSent('no re-issue of request');
   ReInvite := Self.LastSentRequest;
   CheckEquals(SequenceNo + 2,
@@ -7222,7 +7159,7 @@ begin
   Self.MarkSentRequestCount;
   SequenceNo   := Self.LastSentRequest.CSeq.SequenceNo;
 
-  Self.ReceiveProxyUnauthorized;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader);
   CheckRequestSent('no re-issue of request');
 
   ReInvite := Self.LastSentRequest;
