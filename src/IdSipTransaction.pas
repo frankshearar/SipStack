@@ -12,7 +12,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdInterfacedObject, IdSipMessage, IdNotification, IdSipTimer,
+  Contnrs, IdInterfacedObject, IdNotification,  IdSipMessage, IdSipTimer,
   IdSipTransport, IdThread, IdTimerQueue, SyncObjs, SysUtils;
 
 const

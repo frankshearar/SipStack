@@ -12,7 +12,7 @@ unit TestFrameworkRtp;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdObservable, IdRTP, IdSipCore,
+  Classes, Contnrs, IdInterfacedObject, IdNotification, IdObservable, IdRTP, IdSipCore,
   IdSocketHandle, SyncObjs, SysUtils, TestFrameworkEx;
 
 type

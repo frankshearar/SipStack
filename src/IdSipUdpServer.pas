@@ -12,7 +12,7 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdNotification, IdSipTcpClient,
+  Classes, IdNotification, IdSipConsts, IdSipMessage, IdSipTcpClient,
   IdSipTcpServer, IdSocketHandle, IdUDPServer, SysUtils;
 
 type

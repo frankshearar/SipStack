@@ -12,9 +12,9 @@ unit IdSipTransport;
 interface
 
 uses
-  Contnrs, IdException, IdInterfacedObject, IdSipMessage,
-  IdNotification, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer,
-  IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
+  Contnrs, IdException, IdInterfacedObject, IdNotification, IdSipMessage,
+  IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
+  IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;

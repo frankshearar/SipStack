@@ -12,7 +12,7 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, Contnrs, IdSipConsts, IdSipMessage, IdNotification,
+  Classes, Contnrs, IdNotification, IdSipConsts, IdSipMessage, 
   IdSipTcpClient, IdSipTimer, IdTCPConnection, IdTCPServer, IdThread,
   SyncObjs, SysUtils;
 

@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress,
-  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdNotification,
+  IdInterfacedObject, IdNotification, IdRTP, IdRTPServer, IdSimpleParser, 
   IdSocketHandle, IdUDPServer, SyncObjs;
 
 type

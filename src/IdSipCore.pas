@@ -34,8 +34,8 @@ interface
 
 uses
   Classes, Contnrs, IdSipDialog, IdSipDialogID, IdException,
-  IdInterfacedObject, IdObservable, IdSipAuthentication, IdSipMessage,
-  IdNotification, IdSipRegistration, IdSipTimer, IdSipTransaction,
+  IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
+  IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
   IdSipTransport, SyncObjs;
 
 type
