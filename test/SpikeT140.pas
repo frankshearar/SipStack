@@ -75,7 +75,6 @@ begin
   Self.Session := Self.Server.Session;
 
   Self.Client := TIdRTPServer.Create(nil);
-  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
   Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
   Self.Client.OnRTPRead   := Self.ReadRTP;
   Self.Client.OnUDPRead   := Self.CountUDP;
@@ -97,6 +96,7 @@ end;
 
 destructor TIdSpikeT140.Destroy;
 begin
+  Self.Timer1.Enabled := false;
   Self.Lock.Free;
 
   Self.Client.Active := false;
@@ -104,7 +104,6 @@ begin
 
   Self.T140.Free;
   Self.Client.Free;
-  Self.Session.Free;
   Self.Server.Free;
   Self.Profile.Free;
 
