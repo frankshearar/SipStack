@@ -175,9 +175,9 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); override;
     function  ServerType: TIdSipTcpServerClass; override;
   public
-    function  DefaultPort: Cardinal; override;
-    function  GetTransportType: TIdSipTransportType; override;
-    function  IsSecure: Boolean; override;
+    function DefaultPort: Cardinal; override;
+    function GetTransportType: TIdSipTransportType; override;
+    function IsSecure: Boolean; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName read GetRootCertificate write SetRootCertificate;
