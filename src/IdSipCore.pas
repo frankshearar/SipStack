@@ -230,7 +230,7 @@ type
     procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
-                            Data: TObject);
+                            Request: TIdSipMessage);
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse);
 
@@ -1248,12 +1248,12 @@ end;
 
 procedure TIdSipAbstractCore.ScheduleEvent(Event: TNotifyEvent;
                                            WaitTime: Cardinal;
-                                           Data: TObject);
+                                           Request: TIdSipMessage);
 begin
   Self.TimerLock.Acquire;
   try
     if Assigned(Self.Timer) then
-      Self.Timer.AddEvent(WaitTime, Event, Data);
+      Self.Timer.AddEvent(WaitTime, Event, Request);
   finally
     Self.TimerLock.Release;
   end;
@@ -2179,7 +2179,7 @@ var
   ExpiredInvite: TIdSipRequest;
   Action:        TIdSipInboundInvite;
 begin
-  ExpiredInvite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  ExpiredInvite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -2202,7 +2202,7 @@ var
   Action: TIdSipInboundInvite;
   Invite: TIdSipRequest;
 begin
-  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -2225,7 +2225,7 @@ var
   Session: TIdSipSession;
   Invite:  TIdSipRequest;
 begin
-  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -2249,7 +2249,7 @@ var
   Action: TIdSipInboundInvite;
   Invite: TIdSipRequest;
 begin
-  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -2272,7 +2272,7 @@ var
   Action: TIdSipOutboundInvite;
   Invite: TIdSipRequest;
 begin
-  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
