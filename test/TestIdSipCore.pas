@@ -689,8 +689,8 @@ type
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
     procedure TestRedirectWithMultipleContacts;
-    procedure TestTerminateUnestablishedSession;
     procedure TestTerminateEstablishedSession;
+    procedure TestTerminateUnestablishedSession;
   end;
 
   TActionMethodTestCase = class(TTestCase)
@@ -8012,6 +8012,25 @@ begin
               'Session didn''t attempt to contact all Contacts');
 end;
 
+procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
+var
+  SessionCount: Integer;
+begin
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Self.MarkSentRequestCount;
+  SessionCount := Self.Core.SessionCount;
+  Self.Session.Terminate;
+
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodBye,
+              Self.LastSentRequest.Method,
+              'Session didn''t terminate with a BYE');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
+end;
+
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
 var
   Invite:            TIdSipRequest;
@@ -8056,25 +8075,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
-var
-  SessionCount: Integer;
-begin
-  Self.ReceiveOk(Self.LastSentRequest);
-
-  Self.MarkSentRequestCount;
-  SessionCount := Self.Core.SessionCount;
-  Self.Session.Terminate;
-
-  CheckRequestSent('No request sent');
-  CheckEquals(MethodBye,
-              Self.LastSentRequest.Method,
-              'Session didn''t terminate with a BYE');
-
-  Check(Self.Core.SessionCount < SessionCount,
-        'Session not marked as terminated');
 end;
 
 //******************************************************************************
