@@ -30,6 +30,8 @@ type
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateRemoteOk(Invite: TIdSipRequest): TIdSipResponse;
     procedure SimulateAck;
+    procedure SimulateAckFor(Request: TIdSipRequest;
+                             Response: TIdSipResponse);
     procedure SimulateRemoteBye(LocalDialog: TIdSipDialog);
     procedure SimulateRemoteCancel;
     procedure SimulateRemoteInvite;
@@ -198,6 +200,7 @@ type
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteOK;
+    procedure SimulateRemoteOKFor(Request: TIdSipRequest);
   public
     procedure SetUp; override;
 
@@ -220,10 +223,15 @@ type
     Failed:       Boolean;
     InviteAction: TIdSipInboundInvite;
 
+    procedure CheckAck(InviteAction: TIdSipInboundInvite);
+    procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
+    procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
+                        Ack: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
   published
     procedure TestAccept;
     procedure TestCancelAfterAccept;
@@ -232,6 +240,10 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestMatchAck;
+    procedure TestMatchAckToReInvite;
+    procedure TestMatchAckToReInviteWithDifferentCSeq;
+    procedure TestMatchAckWithDifferentCSeq;
     procedure TestMethod;
     procedure TestRedirectCall;
     procedure TestRedirectCallPermanent;
@@ -254,6 +266,7 @@ type
     ToHeaderTag:              String;
 
     procedure CheckReceiveFailed(StatusCode: Cardinal);
+    function  CreateArbitraryDialog: TIdSipDialog;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TidSipDialog);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -274,6 +287,8 @@ type
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
+    procedure TestInviteThenReInvite;
+    procedure TestInviteTwice;
     procedure TestIsInvite; override;
     procedure TestMethod;
     procedure TestProxyAuthentication; override;
@@ -282,6 +297,8 @@ type
     procedure TestReceiveRequestFailed;
     procedure TestReceiveServerFailed;
     procedure TestRedirectedInvite;
+    procedure TestReInviteThenInvite;
+    procedure TestReInviteTwice;
     procedure TestRemoveListener;
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
@@ -378,6 +395,9 @@ type
     OnModifySessionFired:      Boolean;
     SimpleSdp:                 TIdSdpPayload;
 
+    procedure CheckResendWaitTime(Milliseconds: Cardinal;
+                                  const Msg: String); virtual;
+    function  CreateAndEstablishSession: TIdSipSession;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateSimpleSdp: TIdSdpPayload;
@@ -393,6 +413,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAckToInDialogInviteMatchesInvite;
     procedure TestInboundModify;
     procedure TestIsSession; override;
     procedure TestMatchBye;
@@ -402,9 +423,12 @@ type
     procedure TestMatchResponseToInitialRequest;
     procedure TestModify;
     procedure TestModifyBeforeFullyEstablished;
-//    procedure TestModifyGlare;
+    procedure TestModifyDuringModification;
+    procedure TestModifyGlareInbound;
+    procedure TestModifyGlareOutbound;
     procedure TestModifyRejectedWithTimeout;
-    procedure TestOnlyOneInboundModifyAtaTime;
+    procedure TestRejectInviteWhenInboundModificationInProgress;
+    procedure TestRejectInviteWhenOutboundModificationInProgress;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -425,6 +449,8 @@ type
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
   protected
+    procedure CheckResendWaitTime(Milliseconds: Cardinal;
+                                  const Msg: String); override;
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
     procedure OnEndedSession(Session: TIdSipSession;
@@ -472,6 +498,8 @@ type
   protected
     SDP: String;
 
+    procedure CheckResendWaitTime(Milliseconds: Cardinal;
+                                  const Msg: String); override;
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
     procedure PerformAction(Action: TIdSipAction); override;
@@ -885,6 +913,19 @@ begin
   Ack := T.LastRequest.AckFor(T.LastResponse);
   try
     T.FireOnRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TTestCaseTU.SimulateAckFor(Request: TIdSipRequest;
+                                     Response: TIdSipResponse);
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Request.AckFor(Response);
+  try
+    Self.Dispatcher.Transport.FireOnRequest(Ack);
   finally
     Ack.Free;
   end;
@@ -2885,6 +2926,20 @@ begin
   Self.SimulateRemoteResponse(SIPOK);
 end;
 
+procedure TestTIdSipAction.SimulateRemoteOKFor(Request: TIdSipRequest);
+var
+  Ok: TIdSipResponse;
+begin
+  Ok := TIdSipResponse.InResponseTo(Request, SIPOK);
+  try
+    Ok.ToHeader.Tag := Self.Core.NextTag;
+
+    Self.SimulateRemoteResponse(Ok);
+  finally
+    Ok.Free;
+  end;
+end;
+
 //* TestTIdSipAction Published methods *****************************************
 
 procedure TestTIdSipAction.TestIsInvite;
@@ -2997,6 +3052,22 @@ begin
 end;
 
 //* TestTIdSipSession Protected methods ****************************************
+
+procedure TestTIdSipSession.CheckResendWaitTime(Milliseconds: Cardinal;
+                                                const Msg: String);
+begin
+  Check(Milliseconds mod 10 = 0, Msg);
+end;
+
+function TestTIdSipSession.CreateAndEstablishSession: TIdSipSession;
+var
+  NewSession: TIdSipSession;
+begin
+  NewSession := Self.CreateAction as TIdSipSession;
+  Self.EstablishSession(NewSession);
+
+  Result := NewSession;
+end;
 
 function TestTIdSipSession.CreateMultiStreamSdp: TIdSdpPayload;
 var
@@ -3119,6 +3190,30 @@ end;
 
 //* TestTIdSipSession Published methods ****************************************
 
+procedure TestTIdSipSession.TestAckToInDialogInviteMatchesInvite;
+var
+  Ack:     TIdSipRequest;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAndEstablishSession;
+  Self.SimulateRemoteReInvite(Session);
+
+  Check(Assigned(Self.InboundModify),
+        Session.ClassName + ': OnModifySession didn''t fire');
+
+  Self.InboundModify.Accept('', '');
+
+  Ack := Self.InboundModify.InitialRequest.AckFor(Self.Dispatcher.Transport.LastResponse);
+  try
+    Check(not Session.Match(Ack),
+          Session.ClassName + ': ACK mustn''t match the Session');
+    Check(Self.InboundModify.Match(Ack),
+          Session.ClassName + ': ACK doesn''t match the InboundModify');
+  finally
+    Ack.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestInboundModify;
 var
   Session: TIdSipSession;
@@ -3234,31 +3329,89 @@ end;
 
 procedure TestTIdSipSession.TestModifyBeforeFullyEstablished;
 var
-  RequestCount: Cardinal;
-  Session:      TIdSipSession;
+  Session: TIdSipSession;
 begin
   Session := Self.CreateAction as TIdSipSession;
 
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  Session.Modify('', '');
-  CheckEquals(RequestCount,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'INVITE sent before session established');
+  try
+    Session.Modify('', '');
+    Fail('Failed to bail out starting a modify before session''s established');
+  except
+     on EIdSipTransactionUser do;
+  end;
 end;
-{
-procedure TestTIdSipSession.TestModifyGlare;
+
+procedure TestTIdSipSession.TestModifyDuringModification;
 var
   Session: TIdSipSession;
 begin
-  // Google for "open issue 139";
-  // cf. http://www.ietf.org/proceedings/01dec/slides/sip-4/sld017.htm
-
-  Session := Self.CreateAction as TIdSipSession;
+  Session := Self.CreateAndEstablishSession;
   Session.Modify('', '');
-  Self.SimulateRemoteReInvite(Session);
-  Fail('finish this');
+
+  try
+    Session.Modify('', '');
+    Fail('Failed to bail out starting a new modify while one''s in progress');
+  except
+    on EIdSipTransactionUser do;
+  end;
 end;
-}
+
+procedure TestTIdSipSession.TestModifyGlareInbound;
+var
+  ResponseCount: Cardinal;
+  Session:       TIdSipSession;
+begin
+  // Essentially, we and Remote send INVITEs simultaneously
+
+  Session := Self.CreateAndEstablishSession;
+  Session.Modify('', '');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteReInvite(Session);
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        Session.ClassName + ': No response sent');
+  CheckEquals(SIPRequestPending,
+              Dispatcher.Transport.LastResponse.StatusCode,
+              Session.ClassName + ': Unexpected response');
+end;
+
+procedure TestTIdSipSession.TestModifyGlareOutbound;
+var
+  DebugTimer:    TIdDebugTimerQueue;
+  Event:         TNotifyEvent;
+  EventCount:    Integer;
+  LatestEvent:   TIdWait;
+  Session:       TIdSipSession;
+begin
+  // Essentially, we and Remote send INVITEs simultaneously
+
+  Event := Self.Core.OnResendReInvite;
+  DebugTimer := TIdDebugTimerQueue.Create(false);
+  try
+    Self.Core.Timer := DebugTimer;
+
+    Session := Self.CreateAndEstablishSession;
+
+    Session.Modify('', '');
+
+    EventCount := DebugTimer.EventCount;
+    Self.SimulateRemoteResponse(SIPRequestPending);
+
+    Check(EventCount < DebugTimer.EventCount,
+          Session.ClassName + ': no timer added');
+
+    LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+    Check(LatestEvent.MatchEvent(@Event),
+          Session.ClassName + ': Wrong notify event');
+    Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
+                             Session.ClassName + ': Bad wait time (was '
+                           + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
+  finally
+    Self.Core.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
 procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
 var
   ClassName:    String;
@@ -3304,13 +3457,13 @@ begin
         Session.ClassName + ': OnModifiedSession didn''t fire');
 end;
 
-procedure TestTIdSipSession.TestOnlyOneInboundModifyAtaTime;
+procedure TestTIdSipSession.TestRejectInviteWhenInboundModificationInProgress;
 var
   FirstInvite:   TIdSipRequest;
   ResponseCount: Cardinal;
   Session:       TIdSipSession;
 begin
-  //          <established session>
+  //           <established session>
   //  <---           INVITE 1           ---
   //  <---           INVITE 2           ---
   //   ---  491 Request Pending (for 2) --->
@@ -3340,6 +3493,8 @@ begin
     Check(Self.Invite.Match(Self.Dispatcher.Transport.LastResponse),
           Session.ClassName + ': Response doesn''t match 2nd INVITE');
     Self.SimulateAck;
+    Check(Session.ModificationInProgress,
+          Session.ClassName + ': Modification should still be ongoing');
 
     ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
     Self.InboundModify.Accept('', '');
@@ -3351,7 +3506,50 @@ begin
                 Session.ClassName + ': Unexpected response to 1st INVITE');
     Check(FirstInvite.Match(Self.Dispatcher.Transport.LastResponse),
           Session.ClassName + ': Response doesn''t match 1st INVITE');
+    Self.SimulateAckFor(Self.InboundModify.InitialRequest,
+                        Self.Dispatcher.Transport.LastResponse);
+    Check(not Session.ModificationInProgress,
+          Session.ClassName + ': Modification should have finished');
+  finally
+    FirstInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestRejectInviteWhenOutboundModificationInProgress;
+var
+  AckCount:      Cardinal;
+  FirstInvite:   TIdSipRequest;
+  ResponseCount: Cardinal;
+  Session:       TIdSipSession;
+begin
+  //          <established session>
+  //   ---           INVITE 1           --->
+  //  <---           INVITE 2           ---
+  //   ---  491 Request Pending (for 2) --->
+  //  <---         ACK (for 2)          ---
+  //  <---        200 OK (for 1)        ---
+  //   ---        ACK (for 1)           --->
+
+  FirstInvite := TIdSipRequest.Create;
+  try
+    Session := Self.CreateAndEstablishSession;
+
+    Session.Modify('', '');
+    FirstInvite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+    Self.SimulateRemoteReInvite(Session);
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          Session.ClassName + ': No 491 response sent');
+    CheckEquals(SIPRequestPending,
+                Self.Dispatcher.Transport.LastResponse.StatusCode,
+                Session.ClassName + ': Unexpected response');
     Self.SimulateAck;
+
+    AckCount := Self.Dispatcher.Transport.ACKCount;
+    Self.SimulateRemoteOKFor(FirstInvite);
+    Check(AckCount < Self.Dispatcher.Transport.ACKCount,
+          Session.ClassName + ': No ACK sent');
   finally
     FirstInvite.Free;
   end;
@@ -3391,10 +3589,68 @@ end;
 
 //* TestTIdSipInboundInvite Private methods ************************************
 
+procedure TestTIdSipInboundInvite.CheckAck(InviteAction: TIdSipInboundInvite);
+var
+  Ack:          TIdSipRequest;
+  RemoteDialog: TIdSipDialog;
+begin
+  InviteAction.Accept('', '');
+
+  RemoteDialog := TIdSipDialog.CreateOutboundDialog(InviteAction.InitialRequest,
+                                                    Self.Dispatcher.Transport.LastResponse,
+                                                    false);
+  try
+    RemoteDialog.ReceiveRequest(InviteAction.InitialRequest);
+    RemoteDialog.ReceiveResponse(Self.Dispatcher.Transport.LastResponse);
+
+    Ack := Self.Core.CreateAck(RemoteDialog);
+    try
+      Check(InviteAction.Match(Ack),
+            'ACK must match the InviteAction');
+    finally
+      Ack.Free;
+    end;
+  finally
+    RemoteDialog.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
+var
+  Ack:          TIdSipRequest;
+  RemoteDialog: TIdSipDialog;
+begin
+  InviteAction.Accept('', '');
+
+  RemoteDialog := TIdSipDialog.CreateOutboundDialog(InviteAction.InitialRequest,
+                                                    Self.Dispatcher.Transport.LastResponse,
+                                                    false);
+  try
+    RemoteDialog.ReceiveRequest(InviteAction.InitialRequest);
+    RemoteDialog.ReceiveResponse(Self.Dispatcher.Transport.LastResponse);
+
+    Ack := Self.Core.CreateAck(RemoteDialog);
+    try
+      Ack.CSeq.Increment;
+      Check(not InviteAction.Match(Ack),
+            'ACK must not match the InviteAction');
+    finally
+      Ack.Free;
+    end;
+  finally
+    RemoteDialog.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundInvite.OnFailure(InviteAgent: TIdSipInboundInvite);
 begin
   Self.Failed := true;
 end;
+
+procedure TestTIdSipInboundInvite.OnSuccess(InviteAgent: TIdSipInboundInvite;
+                                            Ack: TIdSipRequest);
+begin
+end;                                            
 
 //* TestTIdSipInboundInvite Published methods **********************************
 
@@ -3552,6 +3808,50 @@ begin
   finally
     Action.Free;
   end;
+end;
+
+procedure TestTIdSipInboundInvite.TestMatchAck;
+begin
+  Self.InviteAction.Accept('', '');
+
+  Self.CheckAck(Self.InviteAction);
+end;
+
+procedure TestTIdSipInboundInvite.TestMatchAckToReInvite;
+var
+  Action: TIdSipInboundInvite;
+begin
+  // We want an in-dialog action
+  Self.Invite.ToHeader.Tag := Self.Core.NextTag;
+
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Action.Accept('', '');
+
+    Self.CheckAck(Action);
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestMatchAckToReInviteWithDifferentCSeq;
+var
+  Action: TIdSipInboundInvite;
+begin
+  // We want an in-dialog action
+  Self.Invite.ToHeader.Tag := Self.Core.NextTag;
+
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Self.CheckAckWithDifferentCSeq(Action);
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestMatchAckWithDifferentCSeq;
+begin
+  Self.CheckAckWithDifferentCSeq(Self.InviteAction);
 end;
 
 procedure TestTIdSipInboundInvite.TestMethod;
@@ -3853,6 +4153,18 @@ begin
       + IntToStr(StatusCode) + ' response');
 end;
 
+function TestTIdSipOutboundInvite.CreateArbitraryDialog: TIdSipDialog;
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
+  try
+    Result := TIdSipDialog.CreateInboundDialog(Self.Invite, Response, false);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundInvite.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                                        NewDialog: TidSipDialog);
 begin
@@ -4076,6 +4388,42 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestInviteThenReInvite;
+var
+  Dialog: TIdSipDialog;
+  Invite: TIdSipOutboundInvite;
+begin
+  Invite := Self.Core.AddOutboundInvite;
+  Invite.Invite(Self.Destination, '', '');
+
+  Dialog := Self.CreateArbitraryDialog;
+  try
+    try
+      Invite.ReInvite(Self.Invite, Dialog, false, '', '');
+      Fail('Failed to bail out calling ReInvite after Invite');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    Dialog.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundInvite.TestInviteTwice;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  Invite := Self.Core.AddOutboundInvite;
+  Invite.Invite(Self.Destination, '', '');
+
+  try
+    Invite.Invite(Self.Destination, '', '');
+    Fail('Failed to bail out calling Invite a 2nd time');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
 procedure TestTIdSipOutboundInvite.TestIsInvite;
 begin
   Check(Self.CreateAction.IsInvite, 'INVITE action not marked as such');
@@ -4201,6 +4549,50 @@ begin
           'New INVITE mustn''t have a To tag');
   finally
     OriginalInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundInvite.TestReInviteThenInvite;
+var
+  Dialog: TIdSipDialog;
+  Invite: TIdSipOutboundInvite;
+begin
+  Invite := Self.Core.AddOutboundInvite;
+
+  Dialog := Self.CreateArbitraryDialog;
+  try
+    Invite.ReInvite(Self.Invite, Dialog, false, '', '');
+
+    try
+      Invite.Invite(Self.Destination, '', '');
+      Fail('Failed to bail out calling Invite after ReInvite');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    Dialog.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundInvite.TestReInviteTwice;
+var
+  Dialog: TIdSipDialog;
+  Invite: TIdSipOutboundInvite;
+begin
+  Invite := Self.Core.AddOutboundInvite;
+
+  Dialog := Self.CreateArbitraryDialog;
+  try
+    Invite.ReInvite(Self.Invite, Dialog, false, '', '');
+
+    try
+      Invite.ReInvite(Self.Invite, Dialog, false, '', '');
+      Fail('Failed to bail out calling ReInvite a 2nd time');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    Dialog.Free;
   end;
 end;
 
@@ -5036,6 +5428,14 @@ end;
 
 //* TestTIdSipInboundSession Protected methods *********************************
 
+procedure TestTIdSipInboundSession.CheckResendWaitTime(Milliseconds: Cardinal;
+                                                       const Msg: String);
+begin
+  Check(Milliseconds <= 2000, Msg);
+
+  inherited CheckResendWaitTime(Milliseconds, Msg);
+end;
+
 function TestTIdSipInboundSession.CreateAction: TIdSipAction;
 begin
   Self.Invite.LastHop.Branch := Self.Core.NextBranch;
@@ -5538,6 +5938,14 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Protectedivate methods ***************************
+
+procedure TestTIdSipOutboundSession.CheckResendWaitTime(Milliseconds: Cardinal;
+                                                       const Msg: String);
+begin
+  Check((2100 <= Milliseconds) and (Milliseconds <= 4000), Msg);
+
+  inherited CheckResendWaitTime(Milliseconds, Msg);
+end;
 
 function TestTIdSipOutboundSession.CreateAction: TIdSipAction;
 begin

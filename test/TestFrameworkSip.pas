@@ -146,15 +146,21 @@ type
   TIdSipTestInboundInviteListener = class(TIDSipTestActionListener,
                                           IIdSipInboundInviteListener)
   private
+    fAckParam:          TIdSipRequest;
     fFailed:            Boolean;
     fInviteAgentParam:  TIdSipInboundInvite;
+    fSucceeded:         Boolean;
 
     procedure OnFailure(InviteAgent: TIdSipInboundInvite);
+    procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
+                        Ack: TIdSipRequest);
   public
     constructor Create; override;
 
+    property AckParam:         TIdSipRequest       read fAckParam;
     property Failed:           Boolean             read fFailed;
     property InviteAgentParam: TIdSipInboundInvite read fInviteAgentParam;
+    property Succeeded:        Boolean             read fSucceeded;
   end;
 
 
@@ -724,18 +730,27 @@ constructor TIdSipTestInboundInviteListener.Create;
 begin
   inherited Create;
 
+  Self.fAckParam         := nil;
   Self.fFailed           := false;
   Self.fInviteAgentParam := nil;
+  Self.fSucceeded        := false;
 end;
 
 //* TIdSipTestInboundInviteListener Private methods ****************************
 
 procedure TIdSipTestInboundInviteListener.OnFailure(InviteAgent: TIdSipInboundInvite);
 begin
-  Self.fFailed      := true;
-  fInviteAgentParam := InviteAgent;
+  Self.fFailed           := true;
+  Self.fInviteAgentParam := InviteAgent;
 end;
 
+procedure TIdSipTestInboundInviteListener.OnSuccess(InviteAgent: TIdSipInboundInvite;
+                                                    Ack: TIdSipRequest);
+begin
+  Self.fAckParam         := Ack;
+  Self.fInviteAgentParam := InviteAgent;
+  Self.fSucceeded        := true;  
+end;
 
 //******************************************************************************
 //* TIdSipTestInviteListener                                                   *
