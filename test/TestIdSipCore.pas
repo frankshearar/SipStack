@@ -2116,8 +2116,6 @@ procedure TestTIdSipSession.TestAcceptCallRespectsContentType;
 var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
-  S:             TStringStream;
-  SDP:           TIdSdpPayload;
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.SimulateRemoteInvite;
