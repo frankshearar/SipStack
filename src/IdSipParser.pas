@@ -3,7 +3,7 @@ unit IdSipParser;
 interface
 
 uses
-  Classes, Contnrs, IdGlobal, IdURI, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdURI, SysUtils;
 
 const
   SIPVersion = 'SIP/2.0';
@@ -18,10 +18,11 @@ type
     fValue: String;
 
     function  GetParam(const Name: String): String;
+    function  GetParameters: TStrings;
     procedure SetParam(const Name, Value: String);
     procedure SetParameters(const Value: TStrings);
 
-    property Parameters: TStrings read fParams write SetParameters;
+    property Parameters: TStrings read GetParameters write SetParameters;
   protected
     function  GetValue: String; virtual;
     procedure SetValue(const Value: String); virtual;
@@ -81,17 +82,20 @@ type
   private
     fIsRelativeTime: Boolean;
     fRelativeTime:   Cardinal;
-    fAbsoluteTime:   TDateTime;
+    fAbsoluteTime:   TIdDateTimeStamp;
 
+    function  GetAbsoluteTime: TIdDateTimeStamp;
     procedure SetAbsoluteTime(Value: String);
     procedure SetRelativeTime(const Value: String);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
-    property IsRelativeTime: Boolean   read fIsRelativeTime write fIsRelativeTime;
-    property RelativeTime:   Cardinal  read fRelativeTime write fRelativeTime;
-    property AbsoluteTime:   TDateTime read fAbsoluteTime write fAbsoluteTime;
+    destructor Destroy; override;
+
+    property IsRelativeTime: Boolean          read fIsRelativeTime write fIsRelativeTime;
+    property RelativeTime:   Cardinal         read fRelativeTime write fRelativeTime;
+    property AbsoluteTime:   TIdDateTimeStamp read GetAbsoluteTime;
   end;
 
   TIdSipNumericHeader = class(TIdSipHeader)
@@ -102,6 +106,11 @@ type
     procedure SetValue(const Value: String); override;
   public
     property NumericValue: Cardinal read fNumericValue write fNumericValue;
+  end;
+
+  TIdSipMaxForwardsHeader = class(TIdSipNumericHeader)
+  protected
+    procedure SetValue(const Value: String); override;
   end;
 
   TIdSipViaHeader = class(TIdSipHeader)
@@ -329,6 +338,7 @@ const
   ContentTypeHeaderShort   = 'c';
   CSeqHeader               = 'CSeq';
   DefaultMaxForwards       = 70;
+  DateHeader               = 'Date';
   ExpiresHeader            = 'Expires';
   FromHeaderFull           = 'From';
   FromHeaderShort          = 'f';
@@ -458,13 +468,14 @@ const
   SIPNotAcceptableGlobal              = 606;
 
 function IsEqual(const S1, S2: String): Boolean;
+function ShortMonthToInt(const Month: String): Integer;
 function StrToTransport(const S: String): TIdSipTransportType;
 function TransportToStr(const T: TIdSipTransportType): String;
 
 implementation
 
 uses
-  StrUtils;
+  DateUtils, StrUtils;
 
 // class variables
 var
@@ -477,6 +488,21 @@ var
 function IsEqual(const S1, S2: String): Boolean;
 begin
   Result := Lowercase(S1) = Lowercase(S2);
+end;
+
+function ShortMonthToInt(const Month: String): Integer;
+var
+  Found: Boolean;
+begin
+  Found := false;
+  for Result := Low(ShortMonthNames) to High(ShortMonthNames) do
+    if IsEqual(ShortMonthNames[Result], Month) then begin
+      Found := true;
+      Break;
+    end;
+
+  if not Found then
+    raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
 end;
 
 function StrToTransport(const S: String): TIdSipTransportType;
@@ -507,9 +533,6 @@ end;
 
 constructor TIdSipHeader.Create;
 begin
-  inherited Create;
-
-  fParams := TStringList.Create;
 end;
 
 destructor TIdSipHeader.Destroy;
@@ -567,7 +590,10 @@ end;
 
 function TIdSipHeader.ParamCount: Integer;
 begin
-  Result := Self.Parameters.Count;
+  if not Assigned(fParams) then
+    Result := 0
+  else
+    Result := Self.Parameters.Count;
 end;
 
 function TIdSipHeader.ParamsAsString: String;
@@ -575,7 +601,7 @@ var
   I: Integer;
 begin
   Result := '';
-  for I := 0 to Self.Parameters.Count - 1 do
+  for I := 0 to Self.ParamCount - 1 do
     Result := Result + ';' + Self.Parameters[I];
 end;
 
@@ -629,6 +655,14 @@ begin
   Result := Self.Parameters[I];
   Fetch(Result, '=');
   Result := Trim(Result);
+end;
+
+function TIdSipHeader.GetParameters: TStrings;
+begin
+  if not Assigned(fParams) then
+    fParams := TStringList.Create;
+
+  Result := fParams;
 end;
 
 procedure TIdSipHeader.SetParam(const Name, Value: String);
@@ -863,6 +897,15 @@ end;
 //******************************************************************************
 //* TIdSipDateHeader                                                           *
 //******************************************************************************
+//* TIdSipDateHeader Public methods ********************************************
+
+destructor TIdSipDateHeader.Destroy;
+begin
+  fAbsoluteTime.Free;
+
+  inherited Destroy;
+end;
+
 //* TIdSipDateHeader Protected methods *****************************************
 
 function TIdSipDateHeader.GetValue: String;
@@ -882,11 +925,23 @@ end;
 
 //* TIdSipDateHeader Private methods *******************************************
 
+function TIdSipDateHeader.GetAbsoluteTime: TIdDateTimeStamp;
+begin
+  if not Assigned(fAbsoluteTime) then
+    fAbsoluteTime := TIdDateTimeStamp.Create(nil);
+
+  Result := fAbsoluteTime;
+end;
+
 procedure TIdSipDateHeader.SetAbsoluteTime(Value: String);
 begin
   fIsRelativeTime := false;
 
-  
+  Self.AbsoluteTime.SetFromRFC822(Value);
+
+  // this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
+  if (Self.AbsoluteTime.AsTDateTime = 0) then
+    raise EBadHeader.Create(Self.Name);
 end;
 
 procedure TIdSipDateHeader.SetRelativeTime(const Value: String);
@@ -901,7 +956,7 @@ begin
     raise EBadHeader.Create(Self.Name);
 
   fRelativeTime := N;
-  fAbsoluteTime := 0;
+  Self.AbsoluteTime.SetFromTDateTime(0);
 end;
 
 //******************************************************************************
@@ -920,6 +975,24 @@ begin
     raise EBadHeader.Create(Self.Name);
 
   fNumericValue := StrToInt(Value);
+
+  inherited SetValue(Value);
+end;
+
+//******************************************************************************
+//* TIdSipMaxForwardsHeader                                                    *
+//******************************************************************************
+//* TIdSipMaxForwardsHeader Protected methods **********************************
+
+procedure TIdSipMaxForwardsHeader.SetValue(const Value: String);
+var
+  N: Cardinal;
+  E: Integer;
+begin
+  Val(Value, N, E);
+
+  if (E <> 0) or (N > 255) then
+    raise EBadHeader.Create(Self.Name);
 
   inherited SetValue(Value);
 end;
@@ -1143,10 +1216,11 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,  TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort, TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,         TIdSipCSeqHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,      TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,         TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,      TIdSipDateHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,     TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,    TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,  TIdSipNumericHeader));    
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,  TIdSipMaxForwardsHeader));    
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,       TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,      TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,      TIdSipViaHeader));
@@ -1769,9 +1843,7 @@ var
   N: Integer;
 begin
   try
-    if TIdSipHeaders.IsCallID(Header) then
-      Msg.CallID := Self.GetHeaderValue(Header)
-    else if TIdSipHeaders.IsContact(Header) then
+    if TIdSipHeaders.IsContact(Header) then
       Self.ParseContactHeader(Msg, Self.GetHeaderValue(Header))
     else if TIdSipHeaders.IsContentLength(Header) then
       Msg.ContentLength := Self.GetHeaderNumberValue(Msg, Header)

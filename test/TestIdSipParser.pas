@@ -9,6 +9,7 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestIsEqual;
+    procedure TestShortMonthToInt;
     procedure TestStrToTransport;
     procedure TestTransportToStr;
   end;
@@ -89,6 +90,19 @@ type
     procedure TestValueWithMultipleTokens;
     procedure TestValueWithNegativeNumber;
     procedure TestValueWithString;
+  end;
+
+  TestTIdSipMaxForwardsHeader = class(TTestCase)
+  private
+    M: TIdSipMaxForwardsHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestValueNormal;
+    procedure TestValueNormalWithParam;
+    procedure TestValueNonNumber;
+    procedure TestValueTooBig;
   end;
 
   TestTIdSipViaHeader = class(TTestCase)
@@ -260,6 +274,7 @@ begin
   Result.AddTest(TestTIdSipAddressHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
+  Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
@@ -280,6 +295,33 @@ begin
   Check(not IsEqual(' ', ''),        ''' '' & ''''');
   Check(    IsEqual('abcd', 'AbCd'), '''abcd'', ''AbCd''');
   Check(not IsEqual('absd', 'Abcd'), '''absd'', ''Abcd''');
+end;
+
+procedure TestFunctions.TestShortMonthToInt;
+begin
+  CheckEquals(1, ShortMonthToInt('JAN'), 'JAN');
+  CheckEquals(1, ShortMonthToInt('jan'), 'jan');
+
+  CheckEquals(1,  ShortMonthToInt('Jan'), 'Jan');
+  CheckEquals(2,  ShortMonthToInt('Feb'), 'Feb');
+  CheckEquals(3,  ShortMonthToInt('Mar'), 'Mar');
+  CheckEquals(4,  ShortMonthToInt('Apr'), 'Apr');
+  CheckEquals(5,  ShortMonthToInt('May'), 'May');
+  CheckEquals(6,  ShortMonthToInt('Jun'), 'Jun');
+  CheckEquals(7,  ShortMonthToInt('Jul'), 'Jul');
+  CheckEquals(8,  ShortMonthToInt('Aug'), 'Aug');
+  CheckEquals(9,  ShortMonthToInt('Sep'), 'Sep');
+  CheckEquals(10, ShortMonthToInt('Oct'), 'Oct');
+  CheckEquals(11, ShortMonthToInt('Nov'), 'Nov');
+  CheckEquals(12, ShortMonthToInt('Dec'), 'Dec');
+
+  try
+    ShortMonthToInt('xxx');
+    Fail('Failed to bail out on malformed short month name');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''xxx'' to type Integer', E.Message, 'Unexpected error');
+  end;
 end;
 
 procedure TestFunctions.TestStrToTransport;
@@ -797,7 +839,7 @@ begin
   CheckEquals(0, Self.D.RelativeTime,       'RelativeTime');
 
   CheckEquals('2003/07/18 16:00:00',
-              FormatDateTime('yyyy/mm/dd hh:mm:ss', Self.D.AbsoluteTime),
+              FormatDateTime('yyyy/mm/dd hh:mm:ss', Self.D.AbsoluteTime.AsTDateTime),
               'AbsoluteTime');
 end;
 
@@ -814,9 +856,9 @@ end;
 procedure TestTIdSipDateHeader.TestValueRelativeTime;
 begin
   Self.D.Value := '1';
-  Check      (   Self.D.IsRelativeTime,          'IsRelativeTime');
-  CheckEquals(1, Self.D.RelativeTime,            'RelativeTime');
-  CheckEquals(0, Self.D.AbsoluteTime, OneSecond, 'AbsoluteTime');
+  Check      (   Self.D.IsRelativeTime,                      'IsRelativeTime');
+  CheckEquals(1, Self.D.RelativeTime,                        'RelativeTime');
+  CheckEquals(0, Self.D.AbsoluteTime.AsTDateTime, OneSecond, 'AbsoluteTime');
 end;
 
 //******************************************************************************
@@ -875,6 +917,70 @@ begin
   try
     Self.N.Value := 'one';
     Fail('Failed to bail out with string value');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipMaxForwardsHeader                                                *
+//******************************************************************************
+//* TestTIdSipMaxForwardsHeader Public methods *********************************
+
+procedure TestTIdSipMaxForwardsHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.M := TIdSipMaxForwardsHeader.Create;
+end;
+
+procedure TestTIdSipMaxForwardsHeader.TearDown;
+begin
+  Self.M.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipMaxForwardsHeader Published methods ******************************
+
+procedure TestTIdSipMaxForwardsHeader.TestValueNormal;
+begin
+  Self.M.Value := '42';
+  CheckEquals(42, Self.M.NumericValue, 'NumericValue, 42');
+
+
+  Self.M.Value := '0';
+  CheckEquals(0, Self.M.NumericValue, 'NumericValue, 0');
+
+  Self.M.Value := '255';
+  CheckEquals(255, Self.M.NumericValue, 'NumericValue, 255');
+end;
+
+procedure TestTIdSipMaxForwardsHeader.TestValueNormalWithParam;
+begin
+  try
+    Self.M.Value := '13;tag=f00';
+    Fail('Failed to bail out on non-numeric value for Max-Forwards (no params allowed)');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipMaxForwardsHeader.TestValueNonNumber;
+begin
+  try
+    Self.M.Value := 'alpha';
+    Fail('Failed to bail out on non-numeric value for Max-Forwards');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipMaxForwardsHeader.TestValueTooBig;
+begin
+  try
+    Self.M.Value := '256';
+    Fail('Failed to bail out on numeric value > 255 for Max-Forwards');
   except
     on EBadHeader do;
   end;
@@ -1019,14 +1125,15 @@ end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
-  CheckEquals(TIdSipAddressHeader.ClassName, Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
-  CheckEquals(TIdSipHeader.ClassName,        Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
-  CheckEquals(TIdSipCSeqHeader.ClassName,    Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
-  CheckEquals(TIdSipNumericHeader.ClassName, Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
-  CheckEquals(TIdSipAddressHeader.ClassName, Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
-  CheckEquals(TIdSipNumericHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
-  CheckEquals(TIdSipAddressHeader.ClassName, Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
-  CheckEquals(TIdSipViaHeader.ClassName,     Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
+  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
+  CheckEquals(TIdSipHeader.ClassName,            Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
+  CheckEquals(TIdSipCSeqHeader.ClassName,        Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
+  CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(DateHeader).ClassName,              DateHeader);
+  CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
+  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
+  CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
+  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
+  CheckEquals(TIdSipViaHeader.ClassName,         Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;
 
 procedure TestTIdSipHeaders.TestAsString;
