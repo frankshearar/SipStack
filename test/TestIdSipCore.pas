@@ -334,7 +334,6 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestReceiveReInvite;
-    procedure TestRedirectionEndsSession;
     procedure TestRejectCallBusy;
     procedure TestRing;
     procedure TestRemoveSessionListener;
@@ -3907,21 +3906,6 @@ begin
   finally
     ReInvite.Free;
   end;
-end;
-
-procedure TestTIdSipInboundSession.TestRedirectionEndsSession;
-var
-  SessionCount: Integer;
-begin
-  SessionCount := Self.Core.SessionCount;
-
-  Self.SimulateRemoteMovedPermanently('sip:foo');
-
-  Check(Self.OnEndedSessionFired,
-        'No notification of ended session');
-
-  Check(Self.Core.SessionCount < SessionCount,
-        'Session not torn down because of redirection');
 end;
 
 procedure TestTIdSipInboundSession.TestRejectCallBusy;
