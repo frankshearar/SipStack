@@ -795,6 +795,10 @@ begin
   Challenge := Self.MockTransport.LastResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
   Auth      := ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader;
 
+  CheckNotEquals(InitialAttempt.LastHop.Branch,
+                 ReAttempt.LastHop.Branch,
+                 'The new transaction used the old transaction''s branch');
+
   CheckEquals(InitialAttempt.CSeq.SequenceNo + 1,
               ReAttempt.CSeq.SequenceNo,
               MsgPrefix + ' Re-' + InitialAttempt.Method + ' CSeq sequence number');

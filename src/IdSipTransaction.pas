@@ -501,6 +501,7 @@ const
   CantFindTransport     = 'The dispatcher cannot find a %s transport for a '
                         + 'message';
   ExceptionRaised       = '%s raised an %s: %s';
+  MustGenerateNewBranch = 'You must generate a new transaction branch.'
   MustHaveAuthorization = 'You must supply an Authorization or '
                         + 'Proxy-Authorization header';
   OnlyRemoveTranWhenTerminated
@@ -1146,7 +1147,12 @@ begin
     ReAttempt.Assign(Transaction.InitialRequest);
     Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
 
+    // Note that whichever listener generated ReAttempt's contents generated a
+    // new (and hence unique) branch. Thus we can safely add a new transaction.
     if TryAgain then begin
+      Assert(ReAttempt.LastHop.Branch <> Transaction.InitialRequest,
+             MustGenerateNewBranch);
+
       NewAttempt := Self.AddClientTransaction(ReAttempt);
       NewAttempt.SendRequest;
     end;
