@@ -210,6 +210,8 @@ procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);
 begin
   inherited SendRequest(R);
 
+  Self.Log(R.AsString, dirOut);
+
   if R.IsAck then
     Self.LastACK.Assign(R);
 
@@ -228,12 +230,11 @@ begin
 
   if Self.LocalEchoMessages then
     Self.NotifyTransportListeners(R);
-
-  Self.Log(R.AsString, dirOut);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
+  Self.Log(R.AsString, dirOut);
   Self.fResponses.AddCopy(R);
 
   if Assigned(Self.FailWith) then
@@ -247,9 +248,9 @@ begin
   if Self.LocalEchoMessages then
     Self.NotifyTransportListeners(R);
 
+  // We call inherited at the end because we want to update our state first,
+  // so listeners get a true idea of, for instance, SentResponseCount.
   inherited SendResponse(R);
-
-  Self.Log(R.AsString, dirOut);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
