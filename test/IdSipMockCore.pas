@@ -11,15 +11,15 @@ type
     fReceiveRequestCalled: Boolean;
     fReceiveResponseCalled: Boolean;
   public
-    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
-    function  CreateResponse(const Request:      TIdSipRequest;
-                             const ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure ReceiveRequest(const Request: TIdSipRequest;
-                             const Transaction: TIdSipTransaction;
-                             const Transport: TIdSipTransport); override;
-    procedure ReceiveResponse(const Response: TIdSipResponse;
-                              const Transaction: TIdSipTransaction;
-                              const Transport: TIdSipTransport); override;
+    function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; override;
+    function  CreateResponse(Request: TIdSipRequest;
+                             ResponseCode: Cardinal): TIdSipResponse; override;
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             Transaction: TIdSipTransaction;
+                             Transport: TIdSipTransport); override;
+    procedure ReceiveResponse(Response: TIdSipResponse;
+                              Transaction: TIdSipTransaction;
+                              Transport: TIdSipTransport); override;
 
     procedure Reset;
 
@@ -45,7 +45,7 @@ implementation
 //******************************************************************************
 //* TIdSipMockCore Public methods **********************************************
 
-function TIdSipMockCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
+function TIdSipMockCore.CreateRequest(Dest: TIdSipToHeader): TIdSipRequest;
 var
   UA: TIdSipUserAgentCore;
 begin
@@ -57,22 +57,22 @@ begin
   end;
 end;
 
-function TIdSipMockCore.CreateResponse(const Request:      TIdSipRequest;
-                                       const ResponseCode: Cardinal): TIdSipResponse;
+function TIdSipMockCore.CreateResponse(Request: TIdSipRequest;
+                                       ResponseCode: Cardinal): TIdSipResponse;
 begin
   Result := nil;
 end;
 
-procedure TIdSipMockCore.ReceiveRequest(const Request: TIdSipRequest;
-                                        const Transaction: TIdSipTransaction;
-                                        const Transport: TIdSipTransport);
+procedure TIdSipMockCore.ReceiveRequest(Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction;
+                                        Transport: TIdSipTransport);
 begin
   fReceiveRequestCalled := true;
 end;
 
-procedure TIdSipMockCore.ReceiveResponse(const Response: TIdSipResponse;
-                                         const Transaction: TIdSipTransaction;
-                                         const Transport: TIdSipTransport);
+procedure TIdSipMockCore.ReceiveResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Transport: TIdSipTransport);
 begin
   fReceiveResponseCalled := true;
 end;
