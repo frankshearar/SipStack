@@ -1105,9 +1105,7 @@ type
   EStreamTooShort = class(Exception);
   EUnknownSDES = class(Exception);
 
-// Math and conversion functions
-function  AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
-function  AddModuloWord(Addend, Augend: Word): Word;
+// Vonversion functions  
 function  DateTimeToNTPFractionsOfASecond(DT: TDateTime): Cardinal;
 function  DateTimeToNTPSeconds(DT: TDateTime): Cardinal;
 function  DateTimeToNTPTimestamp(DT: TDateTime): TIdNTPTimestamp;
@@ -1308,16 +1306,6 @@ const
 //******************************************************************************
 //* Unit public functions & procedures                                         *
 //******************************************************************************
-
-function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
-begin
-  Result := (Int64(Addend) + Augend) mod Radix
-end;
-
-function AddModuloWord(Addend, Augend: Word): Word;
-begin
-  Result := AddModulo(Addend, Augend, High(Addend));
-end;
 
 function DateTimeToNTPFractionsOfASecond(DT: TDateTime): Cardinal;
 var

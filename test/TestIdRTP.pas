@@ -29,8 +29,6 @@ type
 
   TestFunctions = class(TTestRTP)
   published
-    procedure TestAddModulo;
-    procedure TestAddModuloWord;
     procedure TestDateTimeToNTPFractionsOfASecond;
     procedure TestDateTimeToNTPSeconds;
     procedure TestDateTimeToNTPTimestampExceptionalCases;
@@ -817,7 +815,7 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRtpServer, SysUtils, Types;
+  Classes, DateUtils, IdRtpServer, IdTimerQueue, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin
@@ -1105,36 +1103,6 @@ end;
 //* TestFunctions                                                              *
 //******************************************************************************
 //* TestFunctions Published methods ********************************************
-
-procedure TestFunctions.TestAddModulo;
-begin
-  CheckEquals(8, AddModulo(7, 1, 10),   'AddModulo(7, 1, 10)');
-  CheckEquals(8, AddModulo(7, 11, 10),  'AddModulo(7, 11, 10)');
-  CheckEquals(8, AddModulo(7, 101, 10), 'AddModulo(7, 101, 10)');
-  CheckEquals(0, AddModulo(7, 1, 8),    'AddModulo(7, 1, 8)');
-
-  CheckEquals(0,
-              AddModulo($fffffffe, 1, $ffffffff),
-              'AddModulo($fffffffe, 1, $ffffffff)');
-
-  CheckEquals(1,
-              AddModulo($ffffffff, 1, $ffffffff),
-              'AddModulo($ffffffff, 1, $ffffffff)');
-end;
-
-procedure TestFunctions.TestAddModuloWord;
-begin
-  CheckEquals(8,  AddModuloWord(7, 1),   'AddModuloWord(7, 1)');
-  CheckEquals(18, AddModuloWord(7, 11),  'AddModuloWord(7, 11)');
-
-  CheckEquals(0,
-              AddModuloWord($fffe, 1),
-              'AddModuloWord($fffe, 1)');
-
-  CheckEquals(1,
-              AddModuloWord($ffff, 1),
-              'AddModuloWord($ffff, 1)');
-end;
 
 procedure TestFunctions.TestDateTimeToNTPFractionsOfASecond;
 var

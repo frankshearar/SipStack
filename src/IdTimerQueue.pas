@@ -85,13 +85,31 @@ type
     procedure Terminate; override;
   end;
 
+// Math and conversion functions
+function  AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
+function  AddModuloWord(Addend, Augend: Word): Word;
+
 implementation
 
 uses
-  IdGlobal, IdRTP, SysUtils;
+  IdGlobal, SysUtils;
 
 const
   DefaultSleepTime = 10000;
+
+//******************************************************************************
+//* Unit public functions & procedures                                         *
+//******************************************************************************
+
+function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
+begin
+  Result := (Int64(Addend) + Augend) mod Radix
+end;
+
+function AddModuloWord(Addend, Augend: Word): Word;
+begin
+  Result := AddModulo(Addend, Augend, High(Addend));
+end;
 
 //******************************************************************************
 //* TIdWait                                                                    *
@@ -150,6 +168,8 @@ end;
 
 constructor TIdTimerQueue.Create(ACreateSuspended: Boolean = True);
 begin
+  inherited Create(false);
+
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
   Self.EventList := TObjectList.Create(true);
@@ -158,7 +178,8 @@ begin
 
   Self.FreeOnTerminate := true;
 
-  inherited Create(ACreateSuspended);
+  if not ACreateSuspended then
+    Self.Resume;
 end;
 
 destructor TIdTimerQueue.Destroy;
