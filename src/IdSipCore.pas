@@ -204,6 +204,7 @@ type
     procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
     function  AllowedContentTypes: String;
+    function  AllowedExtensions: String;
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
@@ -748,6 +749,11 @@ begin
   Result := Self.AllowedContentTypeList.CommaText;
 end;
 
+function TIdSipAbstractUserAgent.AllowedExtensions: String;
+begin
+  Result := '';
+end;
+
 function TIdSipAbstractUserAgent.AllowedLanguages: String;
 begin
   Result := Self.AllowedLanguageList.CommaText;
@@ -768,7 +774,6 @@ var
   Transport: String;
 begin
   Result := TIdSipRequest.Create;
-//  Result := Dest.Address.CreateRequest;
   try
     Result.RequestUri := Dest.Address;
 
@@ -1031,8 +1036,6 @@ var
 begin
   Response := Self.CreateResponse(Request, SIPSIPVersionNotSupported);
   try
-    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
-
     Transaction.SendResponse(Response);
   finally
     Response.Free;
@@ -1182,6 +1185,12 @@ begin
       Result.ContentDisposition.Value := DispositionSession;
       Result.ContentType              := MimeType;
     end;
+
+    Result.AddHeader(AllowHeader).Value := Self.AllowedMethods;
+    // TODO: We need to add a proper extension support thing, as well as do a
+    // proper payload processor capable of handling multiple content types
+    Result.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
+    Result.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
   except
     FreeAndNil(Result);
 

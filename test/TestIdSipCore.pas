@@ -78,6 +78,9 @@ type
     Session:            TIdSipSession;
     SessionEstablished: Boolean;
 
+    procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
+                                         Header: TIdSipHeader;
+                                         const Msg: String);
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
     procedure OnChanged(Observed: TObject);
@@ -785,6 +788,32 @@ end;
 
 //* TestTIdSipUserAgentCore Private methods ************************************
 
+procedure TestTIdSipUserAgentCore.CheckCommaSeparatedHeaders(const ExpectedValues: String;
+                                                             Header: TIdSipHeader;
+                                                             const Msg: String);
+var
+  Hdr:    TIdSipCommaSeparatedHeader;
+  I:      Integer;
+  Values: TStringList;
+begin
+  CheckEquals(TIdSipCommaSeparatedHeader.ClassName,
+              Header.ClassName,
+              Msg + ': Unexpected header type in CheckCommaSeparatedHeaders');
+
+  Hdr := Header as TIdSipCommaSeparatedHeader;
+  Values := TStringList.Create;
+  try
+    Values.CommaText := ExpectedValues;
+
+    for I := 0 to Values.Count - 1 do
+      CheckEquals(Values[I],
+                  Hdr.Values[I],
+                  Msg + ': ' + IntToStr(I + 1) + 'th value');
+  finally
+    Values.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgentCore.CheckCreateRequest(Dest: TIdSipToHeader;
                                                      Request: TIdSipRequest);
 var
@@ -994,8 +1023,8 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestCreateInvite;
 var
-  Request: TIdSipRequest;
   Dest:    TIdSipToHeader;
+  Request: TIdSipRequest;
 begin
   Dest := TIdSipToHeader.Create;
   try
@@ -1012,6 +1041,16 @@ begin
       Check(Request.HasHeader(CSeqHeader), 'No CSeq header');
       Check(not Request.HasHeader(ContentDispositionHeader),
             'Needless Content-Disposition header');
+
+      Check(Request.HasHeader(AllowHeader), 'No Allow header');
+      CheckCommaSeparatedHeaders(Self.Core.AllowedMethods,
+                                 Request.FirstHeader(AllowHeader),
+                                 'Allow header');
+
+      Check(Request.HasHeader(SupportedHeaderFull), 'No Supported header');
+      CheckEquals(Self.Core.AllowedExtensions,
+                  Request.FirstHeader(SupportedHeaderFull).Value,
+                  'Supported header value');
     finally
       Request.Free;
     end;
@@ -1753,9 +1792,6 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestRejectUnsupportedMethod;
 var
-  Allow:         TIdSipCommaSeparatedHeader;
-  I:             Integer;
-  Methods:       TStrings;
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
@@ -1773,16 +1809,9 @@ begin
   Check(Response.HasHeader(AllowHeader),
         'Allow header is mandatory. cf. RFC 3261 section 8.2.1');
 
-  Allow := Response.FirstHeader(AllowHeader) as TIdSipCommaSeparatedHeader;
-  Methods := TStringList.Create;
-  try
-    Methods.CommaText := Self.Core.AllowedMethods;
-
-    for I := 0 to Methods.Count - 1 do
-      CheckEquals(Methods[I], Allow.Values[I], IntToStr(I + 1) + 'th value');
-  finally
-    Methods.Free;
-  end;
+  CheckCommaSeparatedHeaders(Self.Core.AllowedMethods,
+                             Response.FirstHeader(AllowHeader),
+                             'Allow header');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRejectUnsupportedSipVersion;
