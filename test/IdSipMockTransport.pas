@@ -122,21 +122,35 @@ begin
 end;
 
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
+var
+  CopyOfMessage: TIdSipRequest;
 begin
   Self.Log(R.AsString, dirIn);
 
   Self.fRequests.AddCopy(R);
 
-  Self.NotifyTransportListeners(R);
+  CopyOfMessage := R.Copy as TIdSipRequest;
+  try
+    Self.NotifyTransportListeners(CopyOfMessage);
+  finally
+    CopyOfMessage.Free;
+  end;
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
+var
+  CopyOfMessage: TIdSipResponse;
 begin
   Self.Log(R.AsString, dirIn);
 
   Self.fResponses.AddCopy(R);
 
-  Self.NotifyTransportListeners(R);
+  CopyOfMessage := R.Copy as TIdSipResponse;
+  try
+    Self.NotifyTransportListeners(CopyOfMessage);
+  finally
+    CopyOfMessage.Free;
+  end;
 end;
 
 function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
