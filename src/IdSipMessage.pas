@@ -538,6 +538,8 @@ type
     function  KnownResponse(const Name: String): Boolean; override;
     procedure Parse(const Value: String); override;
   public
+    function HasNextNonce: Boolean;
+
     property NextNonce:      String read GetNextNonce write SetNextNonce;
     property ResponseDigest: String read GetResponseDigest write SetResponseDigest;
   end;
@@ -3879,6 +3881,13 @@ end;
 //******************************************************************************
 //* TIdSipAuthenticationInfoHeader                                             *
 //******************************************************************************
+//* TIdSipAuthenticationInfoHeader Public methods ******************************
+
+function TIdSipAuthenticationInfoHeader.HasNextNonce: Boolean;
+begin
+  Result := Self.DigestResponseValue(NextNonceParam) <> '';
+end;
+
 //* TIdSipAuthenticationInfoHeader Protected methods ***************************
 
 procedure TIdSipAuthenticationInfoHeader.CheckDigestResponses(Responses: TStrings);

@@ -299,6 +299,7 @@ type
     procedure SetUp; override;
   published
     procedure TestCNonce;
+    procedure TestHasNextNonce;
     procedure TestName;
     procedure TestNextNonce;
     procedure TestResponseDigest;
@@ -2869,6 +2870,20 @@ begin
   CheckEquals(Value,
               Self.A.CNonce,
               Self.ClassName + ' CNonce');
+end;
+
+procedure TestTIdSipAuthenticationInfoHeader.TestHasNextNonce;
+begin
+  Check(not Self.A.HasNextNonce,
+        'NextNonce present in empty header');
+
+  Self.A.NextNonce := 'f00f00';
+  Check(Self.A.HasNextNonce,
+        'No NextNonce when there should be');
+
+  Self.A.NextNonce := '';
+  Check(not Self.A.HasNextNonce,
+        'NextNonce when it was removed');
 end;
 
 procedure TestTIdSipAuthenticationInfoHeader.TestName;
