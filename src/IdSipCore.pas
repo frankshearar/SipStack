@@ -2179,8 +2179,8 @@ end;
 
 function TIdSipUserAgentCore.FindAction(Msg: TIdSipMessage): TIdSipAction;
 var
-  I:      Integer;
   Action: TIdSipAction;
+  I:      Integer;
 begin
   Result := nil;
 
