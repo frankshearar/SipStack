@@ -447,6 +447,7 @@ type
     procedure TestModifyGlareInbound;
     procedure TestModifyGlareOutbound;
     procedure TestModifyRejectedWithTimeout;
+    procedure TestModifyWaitTime;
     procedure TestRejectInviteWhenInboundModificationInProgress;
     procedure TestRejectInviteWhenOutboundModificationInProgress;
   end;
@@ -3500,6 +3501,19 @@ begin
               ClassName + ': Unexpected request sent');
   Check(Self.Core.SessionCount < SessionCount,
         ClassName + ': Session not terminated');
+end;
+
+procedure TestTIdSipSession.TestModifyWaitTime;
+var
+  I:       Integer;
+  Session: TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  // The modify wait time is random; this test does not guarantee that the wait
+  // time is always correct!
+  for I := 1 to 100 do
+    CheckResendWaitTime(Session.ModifyWaitTime, Session.ClassName);
 end;
 
 procedure TestTIdSipSession.TestModify;

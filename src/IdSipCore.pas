@@ -795,6 +795,7 @@ type
     procedure RejectPrematureInvite(Invite: TIdSipRequest);
     procedure RejectReInvite(Invite: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
+    procedure RescheduleModify(InviteAgent: TIdSipInvite);
   protected
     FullyEstablished: Boolean;
     ModifyAttempt:    TIdSipInvite;
@@ -846,6 +847,7 @@ type
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModificationInProgress: Boolean;
     function  Modify(const Offer, ContentType: String): TIdSipOutboundInvite;
+    function  ModifyWaitTime: Cardinal; virtual;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
@@ -872,6 +874,7 @@ type
 
     function  AcceptCall(const Offer, ContentType: String): String;
     function  IsInboundCall: Boolean; override;
+    function  ModifyWaitTime: Cardinal; override;
     procedure RedirectCall(NewDestination: TIdSipAddressHeader);
     procedure RejectCallBusy;
     procedure Ring;
@@ -922,6 +925,7 @@ type
     function  CanForkOn(Response: TIdSipResponse): Boolean;
     function  IsInboundCall: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
+    function  ModifyWaitTime: Cardinal; override;
     procedure Terminate; override;
   end;
 
@@ -3709,33 +3713,17 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
-var
-  WaitTime: Cardinal;
 begin
+  Result := inherited ReceiveFailureResponse(Response);
+
   Self.ReceivedFinalResponse := true;
-
-  if (Response.StatusCode = SIPRequestPending) then begin
-    if Self.InOutboundSession then
-      // 2.1s <= WaitTime <= 4s, in 10ms units
-      WaitTime := GRandomNumber.NextCardinal(190)*10 + 2100
-    else
-      // 0s <= WaitTime <= 2s, in 10ms units
-      WaitTime := GRandomNumber.NextCardinal(20)*10;
-
-    Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
-                          WaitTime,
-                          Self.InitialRequest.Copy);
-    Result := false;
-  end
-  else
-    Result := inherited ReceiveFailureResponse(Response);
 end;
 
 function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
 begin
-  Self.ReceivedFinalResponse := true;
-
   Result := inherited ReceiveGlobalFailureResponse(Response);
+
+  Self.ReceivedFinalResponse := true;  
 end;
 
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
@@ -4621,6 +4609,13 @@ begin
   end;
 end;
 
+function TIdSipSession.ModifyWaitTime: Cardinal;
+begin
+  // The amount of time, in milliseconds, to wait before re-attempting a modify
+  // that glared. See RFC 3261, cf section 14.1
+  Result := 0;
+end;
+
 procedure TIdSipSession.ReceiveRequest(Request: TIdSipRequest);
 begin
   if Self.IsTerminated then begin
@@ -4733,21 +4728,34 @@ procedure TIdSipSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
                                   Response: TIdSipResponse;
                                   const Reason: String);
 begin
-  if (InviteAgent = Self.ModifyAttempt) then begin
-    Self.ModifyAttempt := nil;
-    case Response.StatusCode of
-      SIPRequestTimeout,
-      SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
+  Self.ModifyLock.Acquire;
+  try
+    if (Response.StatusCode = SIPRequestPending) then
+      Self.RescheduleModify(InviteAgent);
+
+    if (InviteAgent = Self.ModifyAttempt) then begin
+      Self.ModifyAttempt := nil;
+      case Response.StatusCode of
+        SIPRequestTimeout,
+        SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
+      end;
     end;
+  finally
+    Self.ModifyLock.Release;
   end;
 end;
 
 procedure TIdSipSession.OnFailure(InviteAgent: TIdSipInboundInvite);
 begin
-  if (InviteAgent = Self.ModifyAttempt) then
-    Self.ModifyAttempt := nil;
+  Self.ModifyLock.Acquire;
+  try
+    if (InviteAgent = Self.ModifyAttempt) then
+      Self.ModifyAttempt := nil;
 
-  Self.Terminate;
+    Self.Terminate;
+  finally
+    Self.ModifyLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.OnRedirect(InviteAgent: TIdSipOutboundInvite;
@@ -4935,6 +4943,15 @@ begin
   end;
 end;
 
+procedure TIdSipSession.RescheduleModify(InviteAgent: TIdSipInvite);
+begin
+  // Precondition: You've acquired ModifyLock.
+
+  Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
+                        Self.ModifyWaitTime,
+                        InviteAgent.InitialRequest.Copy);
+end;
+
 //******************************************************************************
 //* TIdSipInboundSession                                                       *
 //******************************************************************************
@@ -4963,6 +4980,12 @@ end;
 function TIdSipInboundSession.IsInboundCall: Boolean;
 begin
   Result := true;
+end;
+
+function TIdSipInboundSession.ModifyWaitTime: Cardinal;
+begin
+  // 0s <= WaitTime <= 2s, in 10ms units
+  Result := GRandomNumber.NextCardinal(20)*10;
 end;
 
 procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
@@ -5170,6 +5193,12 @@ begin
       DialogID.Free;
     end;
   end;
+end;
+
+function TIdSipOutboundSession.ModifyWaitTime: Cardinal;
+begin
+  // 2.1s <= WaitTime <= 4s, in 10ms units
+  Result := GRandomNumber.NextCardinal(190)*10 + 2100
 end;
 
 procedure TIdSipOutboundSession.Terminate;
