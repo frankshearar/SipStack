@@ -72,8 +72,10 @@ type
 
   TestTIdSipTransaction = class(TTestCase)
   private
-    Dispatch: TIdSipTransactionDispatcher;
-    Request:  TIdSipRequest;
+    Dispatch:        TIdSipMockTransactionDispatcher;
+    ReceivedRequest: TIdSipRequest;
+    Request:         TIdSipRequest;
+    Response:        TIdSipResponse;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -82,6 +84,24 @@ type
     procedure TestAllListenersNotified;
     procedure TestGetClientTransactionType;
     procedure TestGetServerTransactionType;
+    procedure TestMatchCancel;
+    procedure TestMatchCancelDifferentViaBranch;
+    procedure TestMatchInviteClient;
+    procedure TestMatchInviteClientDifferentCSeqMethod;
+    procedure TestMatchInviteClientDifferentViaBranch;
+    procedure TestMatchInviteClientAckWithInvite;
+    procedure TestMatchInviteServer;
+    procedure TestMatchNonInviteClient;
+    procedure TestMatchNonInviteServer;
+    procedure TestMatchSip1Ack;
+    procedure TestMatchSip1Invite;
+    procedure TestMatchSip1InviteDifferentCallID;
+    procedure TestMatchSip1InviteDifferentCSeq;
+    procedure TestMatchSip1InviteDifferentFromTag;
+    procedure TestMatchSip1InviteDifferentRequestUri;
+    procedure TestMatchSip1InviteDifferentToTag;
+    procedure TestMatchSip1InviteDifferentViaBranch;
+    procedure TestMatchSip1InviteDifferentViaSentBy;
     procedure TestRemoveTransactionListener;
   end;
 
@@ -978,12 +998,16 @@ procedure TestTIdSipTransaction.SetUp;
 begin
   inherited SetUp;
 
-  Self.Dispatch       := TIdSipMockTransactionDispatcher.Create;
-  Self.Request := TIdSipRequest.Create;
+  Self.Dispatch        := TIdSipMockTransactionDispatcher.Create;
+  Self.Request         := TIdSipTestResources.CreateBasicRequest;
+  Self.ReceivedRequest := TIdSipTestResources.CreateBasicRequest;
+  Self.Response        := TIdSipTestResources.CreateBasicResponse;
 end;
 
 procedure TestTIdSipTransaction.TearDown;
 begin
+  Self.Response.Free;
+  Self.ReceivedRequest.Free;
   Self.Request.Free;
   Self.Dispatch.Free;
 
@@ -1146,6 +1170,301 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransaction.TestMatchCancel;
+var
+  Cancel: TIdSipRequest;
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Cancel := Self.Request.CreateCancel;
+  try
+    Check(Tran.Match(Cancel), 'INVITE doesn''t match its CANCEL');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipTransaction.TestMatchCancelDifferentViaBranch;
+var
+  Cancel: TIdSipRequest;
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Cancel := Self.Request.CreateCancel;
+  try
+    Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
+    Check(not Tran.Match(Cancel), 'CANCEL matches a non-associated INVITE');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipTransaction.TestMatchInviteClient;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Check(Tran.Match(Self.Response),
+        'Identical headers');
+
+  Self.Response.AddHeader(ContentLanguageHeader).Value := 'es';
+  Check(Tran.Match(Self.Response),
+        'Identical headers + irrelevant headers');
+
+  Self.Response.ToHeader.Tag := '1';
+  Check(Tran.Match(Self.Response),
+        'Different From tag');
+  Self.Response.From.Assign(Self.Request.From);
+
+  Self.Response.ToHeader.Tag := '1';
+  Check(Tran.Match(Self.Response),
+        'Different To tag');
+end;
+
+procedure TestTIdSipTransaction.TestMatchInviteClientDifferentCSeqMethod;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.Response.CSeq.Method := MethodCancel;
+
+  Check(not Tran.Match(Self.Response),
+        'Different CSeq method');
+end;
+
+procedure TestTIdSipTransaction.TestMatchInviteClientDifferentViaBranch;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.Response.LastHop.Branch := BranchMagicCookie + 'foo';
+
+  Check(not Tran.Match(Self.Response),
+        'Different Via branch');
+end;
+
+procedure TestTIdSipTransaction.TestMatchInviteClientAckWithInvite;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.Response.CSeq.Method := MethodAck;
+  Check(Tran.Match(Self.Response),
+        'ACK match against INVITE');
+end;
+
+procedure TestTIdSipTransaction.TestMatchInviteServer;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.Dispatch.AddServerTransaction(Self.Request,
+                                             Self.Dispatch.Transport);
+
+  Check(Tran.Match(Self.Request),
+        'Identical INVITE request');
+
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
+  Check(not Tran.Match(Self.ReceivedRequest),
+        'Different sent-by');
+  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
+
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
+  Check(not Tran.Match(Self.ReceivedRequest),
+        'Different branch');
+
+  Self.ReceivedRequest.LastHop.Branch := Self.Request.LastHop.Branch;
+  Self.ReceivedRequest.Method := MethodAck;
+  Check(Tran.Match(Self.ReceivedRequest), 'ACK');
+
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
+  Check(not Tran.Match(Self.ReceivedRequest),
+        'ACK but different sent-by');
+  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
+
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
+  Check(not Tran.Match(Self.ReceivedRequest),
+        'ACK but different branch');
+end;
+
+procedure TestTIdSipTransaction.TestMatchNonInviteClient;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Response.CSeq.Method := MethodRegister;
+  Self.Request.Method       := MethodRegister;
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Check(Self.Request.Match(Self.Response),
+        'Identical headers');
+
+  Self.Response.ContentLanguage := 'es';
+  Check(Tran.Match(Self.Response),
+        'Identical headers + irrelevant headers');
+
+  Self.Response.From.Tag := '1';
+  Check(Tran.Match(Self.Response),
+        'Different From tag');
+  Self.Response.From := Self.Request.From;
+
+  Self.Response.ToHeader.Tag := '1';
+  Check(Tran.Match(Self.Response),
+        'Different To tag');
+
+  Self.Response.CSeq.Method := MethodOptions;
+  Check(not Tran.Match(Self.Response),
+        'Different method');
+end;
+
+procedure TestTIdSipTransaction.TestMatchNonInviteServer;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.ReceivedRequest.Method := MethodRegister;
+  Self.Request.Method         := MethodRegister;
+
+  Tran := Self.Dispatch.AddServerTransaction(Self.Request,
+                                             Self.Dispatch.Transport);
+
+  Check(Tran.Match(Self.ReceivedRequest),
+        'Identical REGISTER request');
+
+  Self.ReceivedRequest.Method := MethodOptions;
+  Check(not Tran.Match(Self.ReceivedRequest),
+        'Different method');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1Ack;
+var
+  Ack:  TIdSipRequest;
+  Tran: TIdSipTransaction;
+  R:    TIdSipResponse;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddServerTransaction(Self.Request,
+                                             Self.Dispatch.Transport);
+
+  // SIP/1.0 matching depends on the last response the server sent.
+  // And remember, a 200 OK in response to an INVITE will TERMINATE THE
+  // TRANSACTION!
+  R := TIdSipResponse.InResponseTo(Self.Request, SIPBusyHere);
+  try
+    Tran.SendResponse(R);
+
+    Ack := Self.Request.AckFor(R);
+    try
+      Check(Tran.Match(Ack), 'ACK');
+    finally
+      Ack.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1Invite;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddServerTransaction(Self.Request,
+                                             Self.Dispatch.Transport);
+
+  Check(Tran.Match(Self.Request), 'Identical INVITE');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentCallID;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.CallID := '1' + Self.Request.CallID;
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing Call-ID');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentCSeq;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.CSeq.Increment;
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing CSeq');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentFromTag;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.From.Tag := Self.Request.From.Tag + '1';
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing From tag');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentRequestUri;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.RequestUri.Host := Self.Request.RequestUri.Host + '1';
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing Request-URI');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentToTag;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing To tag');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentViaBranch;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.LastHop.Branch := Self.Request.LastHop.Branch + '1';
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing top Via branch');
+end;
+
+procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentViaSentBy;
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+
+  Tran := Self.Dispatch.AddClientTransaction(Self.Request);
+
+  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy + '1';
+  Check(not Tran.Match(Self.ReceivedRequest), 'Differing top Via');
+end;
+
 procedure TestTIdSipTransaction.TestRemoveTransactionListener;
 var
   Listener: TIdSipTestTransactionListener;
@@ -1163,7 +1482,7 @@ begin
 
         Response.StatusCode := SIPTrying;
         Tran.ReceiveResponse(Response, nil);
-        
+
         Check(not Listener.ReceivedResponse, 'Listener wasn''t removed');
       finally
         Response.Free;

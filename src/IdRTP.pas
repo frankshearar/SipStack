@@ -44,13 +44,15 @@ type
     function  DefaultSamplingRate: Cardinal; virtual;
     function  GetName: String; virtual;
     function  GetStartTime: TDateTime; virtual;
-    procedure SetStartTime(const Value: TDateTime); virtual;
+    procedure SetStartTime(Value: TDateTime); virtual;
   public
     class function CreateFrom(Payload: TIdRTPPayload;
                               Src: TStream): TIdRTPPayload;
     class function CreatePayload(Name: String): TIdRTPPayload;
     class function CreateNullPayload: TIdRTPPayload;
-    class function EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String; overload;
+    class function EncodingName(const Name: String;
+                                ClockRate: Cardinal;
+                                const Parameters: String = ''): String; overload;
 
     constructor Create(EncodingName: String); overload; virtual;
 
@@ -79,7 +81,7 @@ type
   protected
     function  GetName: String; override;
     function  GetStartTime: TDateTime; override;
-    procedure SetStartTime(const Value: TDateTime); override;
+    procedure SetStartTime(Value: TDateTime); override;
   public
     function IsNull: Boolean; override;
   end;
@@ -90,7 +92,7 @@ type
   protected
     function  GetName: String; override;
     function  GetStartTime: TDateTime; override;
-    procedure SetStartTime(const Value: TDateTime); override;
+    procedure SetStartTime(Value: TDateTime); override;
   public
     function IsReserved: Boolean; override;
   end;
@@ -176,15 +178,15 @@ type
     NullEncoding:     TIdRTPPayload;
     ReservedEncoding: TIdRTPPayload;
 
-    function  IndexOfEncoding(const Encoding: TIdRTPPayload): Integer; overload;
+    function  IndexOfEncoding(Encoding: TIdRTPPayload): Integer; overload;
     function  IndexOfEncoding(const EncodingName: String): Integer; overload;
     procedure Initialize;
-    procedure RemoveEncoding(const PayloadType: TIdRTPPayloadType);
+    procedure RemoveEncoding(PayloadType: TIdRTPPayloadType);
   protected
     procedure AddEncodingAsReference(Encoding: TIdRTPPayload;
                                      PayloadType: TIdRTPPayloadType);
 
-    procedure ReservePayloadType(const PayloadType: TIdRTPPayloadType);
+    procedure ReservePayloadType(PayloadType: TIdRTPPayloadType);
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -203,12 +205,12 @@ type
     function  EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPPayload; overload;
     function  EncodingFor(EncodingName: String): TIdRTPPayload; overload;
     function  FirstFreePayloadType: TIdRTPPayloadType;
-    function  HasEncoding(const Encoding: TIdRTPPayload): Boolean;
+    function  HasEncoding(Encoding: TIdRTPPayload): Boolean;
     function  HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
     function  IsFull: Boolean;
-    function  IsRTCPPayloadType(const PayloadType: Byte): Boolean;
+    function  IsRTCPPayloadType(PayloadType: Byte): Boolean;
     function  PayloadTypeFor(Encoding: TIdRTPPayload): TIdRTPPayloadType; overload;
-    function  PayloadTypeFor(EncodingName: String): TIdRTPPayloadType; overload;
+    function  PayloadTypeFor(const EncodingName: String): TIdRTPPayloadType; overload;
     function  StreamContainsEncoding(Src: TStream): TIdRTPPayload;
     function  StreamContainsPayloadType(Src: TStream): TIdRTPPayloadType;
     function  TransportDesc: String; virtual;
@@ -237,8 +239,9 @@ type
 
     function  GetData(Index: Word): Cardinal;
     function  GetLength: Word;
-    procedure SetData(Index: Word; const Value: Cardinal);
-    procedure SetLength(const Value: Word);
+    procedure SetData(Index: Word;
+                      Value: Cardinal);
+    procedure SetLength(Value: Word);
   public
     function  OctetCount: Cardinal;
     procedure ReadFrom(Src: TStream);
@@ -287,7 +290,7 @@ type
   protected
     function  GetSyncSrcID: Cardinal; virtual;
     procedure PrintPadding(Dest: TStream);
-    procedure SetSyncSrcID(const Value: Cardinal); virtual;
+    procedure SetSyncSrcID(Value: Cardinal); virtual;
   public
     constructor Create;
 
@@ -328,10 +331,11 @@ type
     function  GetCsrcID(Index: TIdRTPCsrcCount): Cardinal;
     procedure ReadPayloadAndPadding(Src: TStream;
                                     Profile: TIdRTPProfile);
-    procedure ReplacePayload(const Payload: TIdRTPPayload);
-    procedure SetCsrcCount(const Value: TIdRTPCsrcCount);
-    procedure SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
-    procedure SetPayload(const Value: TIdRTPPayload);
+    procedure ReplacePayload(Payload: TIdRTPPayload);
+    procedure SetCsrcCount(Value: TIdRTPCsrcCount);
+    procedure SetCsrcID(Index: TIdRTPCsrcCount;
+                        Value: Cardinal);
+    procedure SetPayload(Value: TIdRTPPayload);
   public
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
@@ -345,8 +349,10 @@ type
     procedure PrepareForTransmission(Session: TIdRTPSession); override;
     procedure PrintOn(Dest: TStream); override;
     procedure ReadFrom(Src: TStream); override;
-    procedure ReadPayload(Src: TStream; Profile: TIdRTPProfile); overload;
-    procedure ReadPayload(Src: String; Profile: TIdRTPProfile); overload;
+    procedure ReadPayload(Src: TStream;
+                          Profile: TIdRTPProfile); overload;
+    procedure ReadPayload(Src: String;
+                          Profile: TIdRTPProfile); overload;
     procedure ReadPayload(Data: TIdRTPPayload); overload;
     function  RealLength: Word; override;
 
@@ -368,10 +374,10 @@ type
   // RFC 3550 section 6.
   TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
-    procedure AssertPacketType(const PT: Byte);
+    procedure AssertPacketType(PT: Byte);
     function  GetPacketType: Cardinal; virtual; abstract;
   public
-    class function RTCPType(const PacketType: Byte): TIdRTCPPacketClass;
+    class function RTCPType(PacketType: Byte): TIdRTCPPacketClass;
 
     constructor Create; virtual;
 
@@ -403,7 +409,7 @@ type
     procedure ReInitialiseReportBlocks;
     procedure ReadAllReportBlocks(Src: TStream);
     function  ReportByteLength: Word;
-    procedure SetReceptionReportCount(const Value: TIdRTCPReceptionCount);
+    procedure SetReceptionReportCount(Value: TIdRTCPReceptionCount);
   protected
     function  FixedHeaderByteLength: Word; virtual;
     function  GetPacketType: Cardinal; override;
@@ -560,7 +566,7 @@ type
   protected
     function  GetPacketType: Cardinal; override;
     function  GetSyncSrcID: Cardinal; override;
-    procedure SetSyncSrcID(const Value: Cardinal); override;
+    procedure SetSyncSrcID(Value: Cardinal); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -590,13 +596,13 @@ type
     procedure ReadReasonPadding(Src: TStream);
     procedure SetReason(const Value: String);
     procedure SetSource(Index: TIdRTCPSourceCount;
-                        const Value: Cardinal);
-    procedure SetSourceCount(const Value: TIdRTCPSourceCount);
+                        Value: Cardinal);
+    procedure SetSourceCount(Value: TIdRTCPSourceCount);
     function  StreamHasReason: Boolean;
   protected
     function  GetPacketType: Cardinal; override;
     function  GetSyncSrcID: Cardinal; override;
-    procedure SetSyncSrcID(const Value: Cardinal); override;
+    procedure SetSyncSrcID(Value: Cardinal); override;
   public
     constructor Create; override;
 
@@ -943,7 +949,7 @@ type
     procedure ResetSentOctetCount;
     procedure ResetSentPacketCount;
     procedure SendDataToTable(Data: TIdRTPPayload; Table: TIdRTPMemberTable);
-    procedure SetSyncSrcId(const Value: Cardinal);
+    procedure SetSyncSrcId(Value: Cardinal);
     procedure TransmissionTimeExpire(Sender: TObject);
   public
     constructor Create(Agent: IIdAbstractRTPPeer);
@@ -959,10 +965,11 @@ type
     function  IsMember(SSRC: Cardinal): Boolean;
     function  IsSender: Boolean; overload;
     function  IsSender(SSRC: Cardinal): Boolean; overload;
-    procedure LeaveSession(Reason: String = '');
+    procedure LeaveSession(const Reason: String = '');
     function  LockMembers: TIdRTPMemberTable;
     function  Member(SSRC: Cardinal): TIdRTPMember; overload;
-    function  Member(Host: String; Port: Cardinal): TIdRTPMember; overload;
+    function  Member(const Host: String;
+                     Port: Cardinal): TIdRTPMember; overload;
     function  MemberCount: Cardinal;
     function  NewSSRC: Cardinal;
     function  NextSequenceNo: TIdRTPSequenceNo;
@@ -1499,7 +1506,9 @@ begin
   Result := Self.CreatePayload(NullEncodingName + '/0');
 end;
 
-class function TIdRTPPayload.EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String;
+class function TIdRTPPayload.EncodingName(const Name: String;
+                                          ClockRate: Cardinal;
+                                          const Parameters: String = ''): String;
 begin
   Result := Name + '/' + IntToStr(ClockRate);
 
@@ -1602,7 +1611,7 @@ begin
   Result := fStartTime;
 end;
 
-procedure TIdRTPPayload.SetStartTime(const Value: TDateTime);
+procedure TIdRTPPayload.SetStartTime(Value: TDateTime);
 begin
   fStartTime := Value;
 end;
@@ -1629,7 +1638,7 @@ begin
   Result := Now;
 end;
 
-procedure TIdNullPayload.SetStartTime(const Value: TDateTime);
+procedure TIdNullPayload.SetStartTime(Value: TDateTime);
 begin
 end;
 
@@ -1655,7 +1664,7 @@ begin
   Result := Now;
 end;
 
-procedure TIdRTPReservedPayload.SetStartTime(const Value: TDateTime);
+procedure TIdRTPReservedPayload.SetStartTime(Value: TDateTime);
 begin
 end;
 
@@ -1923,7 +1932,7 @@ begin
   Result := TIdRTPPayloadType(I);
 end;
 
-function TIdRTPProfile.HasEncoding(const Encoding: TIdRTPPayload): Boolean;
+function TIdRTPProfile.HasEncoding(Encoding: TIdRTPPayload): Boolean;
 begin
   Result := not Encoding.IsNull and (Self.IndexOfEncoding(Encoding) <> -1);
 end;
@@ -1945,7 +1954,7 @@ begin
   end;
 end;
 
-function TIdRTPProfile.IsRTCPPayloadType(const PayloadType: Byte): Boolean;
+function TIdRTPProfile.IsRTCPPayloadType(PayloadType: Byte): Boolean;
 begin
   Result := (PayloadType >= RTCPSenderReport)
         and (PayloadType <= RTCPApplicationDefined);
@@ -1963,7 +1972,7 @@ begin
     Result := TIdRTPPayloadType(Index);
 end;
 
-function TIdRTPProfile.PayloadTypeFor(EncodingName: String): TIdRTPPayloadType;
+function TIdRTPProfile.PayloadTypeFor(const EncodingName: String): TIdRTPPayloadType;
 var
   Index: Integer;
 begin
@@ -2002,7 +2011,7 @@ begin
     Self.Encodings[PayloadType] := Encoding;
 end;
 
-procedure TIdRTPProfile.ReservePayloadType(const PayloadType: TIdRTPPayloadType);
+procedure TIdRTPProfile.ReservePayloadType(PayloadType: TIdRTPPayloadType);
 begin
   if    (Self.Encodings[PayloadType] <> Self.NullEncoding)
     and (Self.Encodings[PayloadType] <> Self.ReservedEncoding) then
@@ -2013,7 +2022,7 @@ end;
 
 //* TIdRTPProfile Private methods **********************************************
 
-function TIdRTPProfile.IndexOfEncoding(const Encoding: TIdRTPPayload): Integer;
+function TIdRTPProfile.IndexOfEncoding(Encoding: TIdRTPPayload): Integer;
 begin
   Result := 0;
 
@@ -2045,7 +2054,7 @@ begin
     Self.Encodings[I] := Self.NullEncoding;
 end;
 
-procedure TIdRTPProfile.RemoveEncoding(const PayloadType: TIdRTPPayloadType);
+procedure TIdRTPProfile.RemoveEncoding(PayloadType: TIdRTPPayloadType);
 begin
   if    (Self.Encodings[PayloadType] <> Self.NullEncoding)
     and (Self.Encodings[PayloadType] <> Self.ReservedEncoding) then begin
@@ -2171,12 +2180,13 @@ begin
   Result := System.Length(fData);
 end;
 
-procedure TIdRTPHeaderExtension.SetData(Index: Word; const Value: Cardinal);
+procedure TIdRTPHeaderExtension.SetData(Index: Word;
+                                        Value: Cardinal);
 begin
   fData[Index] := Value;
 end;
 
-procedure TIdRTPHeaderExtension.SetLength(const Value: Word);
+procedure TIdRTPHeaderExtension.SetLength(Value: Word);
 begin
   System.SetLength(fData, Value);
 end;
@@ -2292,7 +2302,7 @@ begin
   WriteByte(Dest, PadLength);
 end;
 
-procedure TIdRTPBasePacket.SetSyncSrcID(const Value: Cardinal);
+procedure TIdRTPBasePacket.SetSyncSrcID(Value: Cardinal);
 begin
   fSyncSrcID := Value;
 end;
@@ -2523,26 +2533,27 @@ begin
   end;
 end;
 
-procedure TIdRTPPacket.ReplacePayload(const Payload: TIdRTPPayload);
+procedure TIdRTPPacket.ReplacePayload(Payload: TIdRTPPayload);
 begin
   fPayload.Free;
 
   fPayload := Payload.Clone;
 end;
 
-procedure TIdRTPPacket.SetCsrcCount(const Value: TIdRTPCsrcCount);
+procedure TIdRTPPacket.SetCsrcCount(Value: TIdRTPCsrcCount);
 begin
   fCsrcCount := Value;
 
   SetLength(fCsrcIDs, Value);
 end;
 
-procedure TIdRTPPacket.SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
+procedure TIdRTPPacket.SetCsrcID(Index: TIdRTPCsrcCount;
+                                 Value: Cardinal);
 begin
   fCsrcIDs[Index] := Value;
 end;
 
-procedure TIdRTPPacket.SetPayload(const Value: TIdRTPPayload);
+procedure TIdRTPPacket.SetPayload(Value: TIdRTPPayload);
 begin
   // Make sure you set Self.PayloadType! Otherwise you'll run into problems
   // because the payload type doesn't match the type of the payload! 
@@ -2554,7 +2565,7 @@ end;
 //******************************************************************************
 //* TIdRTCPPacket Public methods ***********************************************
 
-class function TIdRTCPPacket.RTCPType(const PacketType: Byte): TIdRTCPPacketClass;
+class function TIdRTCPPacket.RTCPType(PacketType: Byte): TIdRTCPPacketClass;
 begin
   case PacketType of
     RTCPSenderReport:       Result := TIdRTCPSenderReport;
@@ -2616,7 +2627,7 @@ end;
 
 //* TIdRTCPPacket Protected methods ********************************************
 
-procedure TIdRTCPPacket.AssertPacketType(const PT: Byte);
+procedure TIdRTCPPacket.AssertPacketType(PT: Byte);
 begin
   Assert(PT = Self.GetPacketType,
          Self.ClassName + ' packet type');
@@ -2757,7 +2768,7 @@ begin
     fReceptionReports[I] := TIdRTCPReportBlock.Create;
 end;
 
-procedure TIdRTCPReceiverReport.SetReceptionReportCount(const Value: TIdRTCPReceptionCount);
+procedure TIdRTCPReceiverReport.SetReceptionReportCount(Value: TIdRTCPReceptionCount);
 begin
   Self.ClearReportBlocks;
   SetLength(fReceptionReports, Value);
@@ -3274,7 +3285,7 @@ begin
     Result := Self.Chunks[0].SyncSrcID;
 end;
 
-procedure TIdRTCPSourceDescription.SetSyncSrcID(const Value: Cardinal);
+procedure TIdRTCPSourceDescription.SetSyncSrcID(Value: Cardinal);
 begin
   if (Self.ChunkCount = 0) then
     Self.AddChunk;
@@ -3393,7 +3404,7 @@ begin
   Result := Self.Sources[0];
 end;
 
-procedure TIdRTCPBye.SetSyncSrcID(const Value: Cardinal);
+procedure TIdRTCPBye.SetSyncSrcID(Value: Cardinal);
 begin
   Self.Sources[0] := Value;
 end;
@@ -3429,13 +3440,13 @@ begin
 end;
 
 procedure TIdRTCPBye.SetSource(Index: TIdRTCPSourceCount;
-                                     const Value: Cardinal);
+                               Value: Cardinal);
 begin
   Self.SourceCount := Max(Self.SourceCount, Index + 1);
   fSources[Index] := Value;
 end;
 
-procedure TIdRTCPBye.SetSourceCount(const Value: TIdRTCPSourceCount);
+procedure TIdRTCPBye.SetSourceCount(Value: TIdRTCPSourceCount);
 begin
   SetLength(fSources, Value);
 end;
@@ -4530,7 +4541,12 @@ begin
   Self.Timer.Free;
   Self.TransmissionLock.Free;
 
-  Self.Members.Free;
+  Self.MemberLock.Acquire;
+  try
+    Self.Members.Free;
+  finally
+    Self.MemberLock.Release;
+  end;
   Self.MemberLock.Free;
   Self.Agent := nil;
 
@@ -4649,7 +4665,7 @@ begin
   end;
 end;
 
-procedure TIdRTPSession.LeaveSession(Reason: String = '');
+procedure TIdRTPSession.LeaveSession(const Reason: String = '');
 var
   Bye: TIdRTCPBye;
 begin
@@ -4682,7 +4698,8 @@ begin
   end;
 end;
 
-function TIdRTPSession.Member(Host: String; Port: Cardinal): TIdRTPMember;
+function TIdRTPSession.Member(const Host: String;
+                              Port: Cardinal): TIdRTPMember;
 var
   Members: TIdRTPMemberTable;
 begin
@@ -5167,7 +5184,7 @@ begin
   end;
 end;
 
-procedure TIdRTPSession.SetSyncSrcId(const Value: Cardinal);
+procedure TIdRTPSession.SetSyncSrcId(Value: Cardinal);
 begin
   Self.fSyncSrcID := Value;
   Self.ResetSentOctetCount;

@@ -1,6 +1,6 @@
 object rnidSpike: TrnidSpike
-  Left = 57
-  Top = 182
+  Left = 277
+  Top = 188
   Width = 928
   Height = 480
   Caption = 'rnidSpike'
@@ -12,6 +12,7 @@ object rnidSpike: TrnidSpike
   Font.Style = []
   OldCreateOrder = False
   OnKeyPress = FormKeyPress
+  OnResize = FormResize
   PixelsPerInch = 96
   TextHeight = 13
   object Splitter1: TSplitter
@@ -30,21 +31,13 @@ object rnidSpike: TrnidSpike
     Align = alRight
     BevelOuter = bvNone
     TabOrder = 0
-    object Splitter2: TSplitter
+    object InputSplitter: TSplitter
       Left = 0
       Top = 169
       Width = 368
       Height = 5
       Cursor = crVSplit
       Align = alTop
-    end
-    object OutputText: TMemo
-      Left = 0
-      Top = 174
-      Width = 368
-      Height = 279
-      Align = alClient
-      TabOrder = 0
     end
     object UpperInput: TPanel
       Left = 0
@@ -53,7 +46,7 @@ object rnidSpike: TrnidSpike
       Height = 169
       Align = alTop
       BevelOuter = bvNone
-      TabOrder = 1
+      TabOrder = 0
       object Splitter3: TSplitter
         Left = 0
         Top = 0
@@ -71,6 +64,32 @@ object rnidSpike: TrnidSpike
         Align = alClient
         TabOrder = 0
         OnKeyPress = InputTextKeyPress
+      end
+    end
+    object LowerInput: TPanel
+      Left = 0
+      Top = 174
+      Width = 368
+      Height = 279
+      Align = alClient
+      BevelOuter = bvNone
+      TabOrder = 1
+      object Splitter4: TSplitter
+        Left = 0
+        Top = 0
+        Width = 5
+        Height = 279
+        Cursor = crHSplit
+        Color = clBtnFace
+        ParentColor = False
+      end
+      object OutputText: TMemo
+        Left = 5
+        Top = 0
+        Width = 363
+        Height = 279
+        Align = alClient
+        TabOrder = 0
       end
     end
   end

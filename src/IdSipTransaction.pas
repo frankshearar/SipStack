@@ -145,12 +145,13 @@ type
   // of a call stack after which nothing happens except stack clearup. So if
   // Foo calls Bar which calls Baz which calls ChangeToTerminated then
   // ChangeToTerminated is the last line of Baz, and Baz is the last line of
-  // Bar, and Bar is the last line of Foo.                
+  // Bar, and Bar is the last line of Foo.
   TIdSipTransaction = class(TIdInterfacedObject)
   private
     fInitialRequest:  TIdSipRequest;
     fState:           TIdSipTransactionState;
     fDispatcher:      TIdSipTransactionDispatcher;
+    fLastResponse:    TIdSipResponse;
     TranListenerLock: TCriticalSection;
     TranListeners:    TList;
   protected
@@ -213,6 +214,7 @@ type
     procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
 
     property InitialRequest: TIdSipRequest          read fInitialRequest;
+    property LastResponse:   TIdSipResponse         read fLastResponse;
     property State:          TIdSipTransactionState read fState;
   end;
 
@@ -222,7 +224,6 @@ type
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
-    destructor Destroy; override;
 
     function  IsClient: Boolean; override;
   end;
@@ -885,6 +886,7 @@ begin
 
   Self.fInitialRequest  := TIdSipRequest.Create;
   Self.InitialRequest.Assign(InitialRequest);
+  Self.fLastResponse := TIdSipResponse.Create;
 
   Self.TranListenerLock := TCriticalSection.Create;
   Self.TranListeners    := TList.Create;
@@ -896,6 +898,7 @@ destructor TIdSipTransaction.Destroy;
 begin
   Self.TranListeners.Free;
   Self.TranListenerLock.Free;
+  Self.LastResponse.Free;
   Self.InitialRequest.Free;
 
   inherited Create;
@@ -925,6 +928,10 @@ end;
 function TIdSipTransaction.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := Self.InitialRequest.Match(Msg);
+
+  if not Msg.LastHop.IsRFC3261Branch and Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
+    Result := Result
+          and (Msg.ToHeader.Tag = Self.LastResponse.ToHeader.Tag)
 end;
 
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -951,6 +958,7 @@ end;
 
 procedure TIdSipTransaction.SendResponse(R: TIdSipResponse);
 begin
+  Self.LastResponse.Assign(R);
 end;
 
 procedure TIdSipTransaction.RemoveTransactionListener(const Listener: IIdSipTransactionListener);
@@ -1175,14 +1183,7 @@ constructor TIdSipServerTransaction.Create(Dispatcher: TIdSipTransactionDispatch
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.LastResponseSent := TIdSipResponse.Create;
-end;
-
-destructor TIdSipServerTransaction.Destroy;
-begin
-  Self.LastResponseSent.Free;
-
-  inherited Destroy;
+  Self.LastResponseSent := Self.LastResponse;
 end;
 
 function TIdSipServerTransaction.IsClient: Boolean;

@@ -34,8 +34,7 @@ type
     TargetUri: TEdit;
     Invite: TButton;
     Bye: TButton;
-    OutputText: TMemo;
-    Splitter2: TSplitter;
+    InputSplitter: TSplitter;
     UpperInput: TPanel;
     Splitter3: TSplitter;
     InputText: TMemo;
@@ -43,6 +42,9 @@ type
     BasePort: TEdit;
     Register: TButton;
     RegistrarUri: TEdit;
+    LowerInput: TPanel;
+    Splitter4: TSplitter;
+    OutputText: TMemo;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -51,23 +53,25 @@ type
     procedure InputTextKeyPress(Sender: TObject; var Key: Char);
     procedure BasePortChange(Sender: TObject);
     procedure RegisterClick(Sender: TObject);
+    procedure FormResize(Sender: TObject);
   private
-    CounterLock:  TCriticalSection;
-    Lock:         TCriticalSection;
-    TextLock:     TCriticalSection;
+    CounterLock:    TCriticalSection;
+    Lock:           TCriticalSection;
+    TextLock:       TCriticalSection;
 
-    AudioPlayer:  TAudioData;
-    DataStore:    TStream;
-    Dispatch:     TIdSipTransactionDispatcher;
-    DTMFPanel:    TIdDTMFPanel;
-    Media:        TIdSdpPayloadProcessor;
-    RTPByteCount: Integer;
-    RunningPort:  Cardinal;
-    SendBuffer:   String;
-    StopEvent:    TEvent;
-    Transports:   TObjectList;
-    UA:           TIdSipUserAgentCore;
-    UDPByteCount: Integer;
+    AudioPlayer:    TAudioData;
+    DataStore:      TStream;
+    Dispatch:       TIdSipTransactionDispatcher;
+    LowerDTMFPanel: TIdDTMFPanel;
+    Media:          TIdSdpPayloadProcessor;
+    RTPByteCount:   Integer;
+    RunningPort:    Cardinal;
+    SendBuffer:     String;
+    StopEvent:      TEvent;
+    Transports:     TObjectList;
+    UA:             TIdSipUserAgentCore;
+    UDPByteCount:   Integer;
+    UpperDTMFPanel: TIdDTMFPanel;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     procedure LogMessage(Msg: TIdSipMessage);
@@ -193,11 +197,17 @@ begin
   Self.Transports := TObjectList.Create(true);
   Self.RunningPort := IdPORT_SIP;
 
-  Self.DTMFPanel := TIdDTMFPanel.Create(nil);
-  Self.DTMFPanel.Align  := alLeft;
-  Self.DTMFPanel.Left   := -1;
-  Self.DTMFPanel.Parent := Self.UpperInput;
-  Self.DTMFPanel.Top    := 0;
+  Self.UpperDTMFPanel := TIdDTMFPanel.Create(nil);
+  Self.UpperDTMFPanel.Align  := alLeft;
+  Self.UpperDTMFPanel.Left   := -1;
+  Self.UpperDTMFPanel.Parent := Self.UpperInput;
+  Self.UpperDTMFPanel.Top    := 0;
+
+  Self.LowerDTMFPanel := TIdDTMFPanel.Create(nil);
+  Self.LowerDTMFPanel.Align  := alLeft;
+  Self.LowerDTMFPanel.Left   := -1;
+  Self.LowerDTMFPanel.Parent := Self.LowerInput;
+  Self.LowerDTMFPanel.Top    := 0;
 
   Self.Lock        := TCriticalSection.Create;
   Self.CounterLock := TCriticalSection.Create;
@@ -271,12 +281,13 @@ begin
 
   // If no data at all has arrived we stall here.
   Self.AudioPlayer.Stop;
-  Self.StopEvent.WaitFor(10000);
+  Self.StopEvent.WaitFor(1000);
   Self.AudioPlayer.Free;
 
   Self.DataStore.Free;
   Self.StopEvent.Free;
-  Self.DTMFPanel.Free;
+  Self.LowerDTMFPanel.Free;
+  Self.UpperDTMFPanel.Free;
 
   Self.Transports.Free;
 
@@ -343,6 +354,7 @@ begin
     Self.Lock.Release;
   end;
   Self.StopReadingData;
+  Session.PayloadProcessor.RemoveDataListener(Self.UpperDTMFPanel);
 end;
 
 procedure TrnidSpike.OnException(E: Exception;
@@ -370,6 +382,8 @@ begin
 
   Session.AddSessionListener(Self);
   Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
+
+  Session.PayloadProcessor.AddDataListener(Self.UpperDTMFPanel);
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -862,6 +876,11 @@ begin
   finally
     Registrar.Free;
   end;
+end;
+
+procedure TrnidSpike.FormResize(Sender: TObject);
+begin
+  Self.UpperInput.Height := (Self.ClientHeight - Self.InputSplitter.Height) div 2;
 end;
 
 end.

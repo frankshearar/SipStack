@@ -19,6 +19,11 @@ type
                                  const Reason: String);
   end;
 
+  // Use me, TIdSipConnectionTableEntry and TIdSipConnectionTable to keep track
+  // of currently open connections. Section 18 of RFC 3261 requires that we
+  // send re-issues of requests/responses down the same connection, and also
+  // that we send responses down the same connection that we received a request
+  // from (provided that connection hasn't since been torn down, of course). 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
   private
     fConnection: TIdTCPConnection;
@@ -28,8 +33,8 @@ type
 
   // I relate a request with a TCP connection. I store a COPY of a request
   // while storing a REFERENCE to a connection. Transports construct requests
-  // and so are responsible for destroying them, and I need to remember these
-  // requests.
+  // and so bear responsibility for destroying them, and I need to remember
+  //these requests.
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;

@@ -671,6 +671,7 @@ type
 
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
+    function  GetContentLanguage: String;
     function  GetContentLength: Cardinal;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
@@ -682,6 +683,7 @@ type
     procedure SetCallID(const Value: String);
     procedure SetContacts(Value: TIdSipContacts);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
+    procedure SetContentLanguage(const Value: String);
     procedure SetContentLength(Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(Value: TIdSipCSeqHeader);
@@ -727,6 +729,7 @@ type
     property CallID:             String                         read GetCallID write SetCallID;
     property Contacts:           TIdSipContacts                 read fContacts write SetContacts;
     property ContentDisposition: TIdSipContentDispositionHeader read GetContentDisposition write SetContentDisposition;
+    property ContentLanguage:    String                         read GetContentLanguage write SetContentLanguage;
     property ContentLength:      Cardinal                       read GetContentLength write SetContentLength;
     property ContentType:        String                         read GetContentType write SetContentType;
     property CSeq:               TIdSipCSeqHeader               read GetCSeq write SetCSeq;
@@ -4220,6 +4223,11 @@ begin
   Result := Self.FirstHeader(ContentDispositionHeader) as TIdSipContentDispositionHeader;
 end;
 
+function TIdSipMessage.GetContentLanguage: String;
+begin
+  Result := Self.FirstHeader(ContentLanguageHeader).Value;
+end;
+
 function TIdSipMessage.GetContentLength: Cardinal;
 begin
   Result := StrToInt(Self.FirstHeader(ContentLengthHeaderFull).Value);
@@ -4309,6 +4317,11 @@ end;
 procedure TIdSipMessage.SetContentDisposition(Value: TIdSipContentDispositionHeader);
 begin
   Self.ContentDisposition.Assign(Value);
+end;
+
+procedure TIdSipMessage.SetContentLanguage(const Value: String);
+begin
+  Self.FirstHeader(ContentLanguageHeader).Value := Value;
 end;
 
 procedure TIdSipMessage.SetContentLength(Value: Cardinal);
@@ -4570,15 +4583,17 @@ end;
 
 function TIdSipRequest.MatchSip1Request(InitialRequest: TIdSipRequest): Boolean;
 begin
-  // This stack does not support SIP/1.0
-  Result := false;
-{
+  // NOTE BENE:
+  // This DOES NOT consistitute a full match! If Self.IsAck then we also
+  // need to check the To tag against the response the server sent. We
+  // cannot do that here, which means that only a(n INVITE) transaction can
+  // do the full match.                                                                   
   if Self.IsInvite then
-    Result := RequestUri.Equals(InitialRequest.RequestUri)
+    Result := Self.RequestUri.Equals(InitialRequest.RequestUri)
          and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
          and (Self.From.Tag = InitialRequest.From.Tag)
          and (Self.CallID = InitialRequest.CallID)
-         and (Self.CSeq = InitialRequest.CSeq)
+         and  Self.CSeq.IsEqualTo(InitialRequest.CSeq)
          and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
   else if Self.IsAck then
     Result := RequestUri.Equals(InitialRequest.RequestUri)
@@ -4588,7 +4603,6 @@ begin
          and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
   else
     Result := false;
-}
 end;
 
 function TIdSipRequest.MatchSip2Request(InitialRequest: TIdSipRequest): Boolean;

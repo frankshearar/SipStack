@@ -30,7 +30,7 @@ uses
 type
   TIdSipRegistration = class;
   TIdSipSession = class;
-  TIdSipSessionEvent = procedure(const Session: TIdSipSession) of object;
+  TIdSipSessionEvent = procedure(Session: TIdSipSession) of object;
 
   // I watch other objects for changes. When they change (in their arbitrary
   // fashion) they tell me, and I update my own state accordingly.

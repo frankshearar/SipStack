@@ -25,7 +25,7 @@ type
     function  GetLastRTCP: TIdRTCPPacket;
     function  GetRTCPCount: Cardinal;
     function  GetSecondLastRTCP: TIdRTCPPacket;
-    procedure SetProfile(const Value: TIdRTPProfile);
+    procedure SetProfile(Value: TIdRTPProfile);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -55,7 +55,7 @@ type
     function  HasKnownLength: Boolean; override;
     function  Length: Cardinal; override;
     procedure SetHasKnownLength(const Yes: Boolean);
-    procedure SetLength(const Length: Cardinal);
+    procedure SetLength(Length: Cardinal);
   end;
 
   TIdMockProfile = class(TIdAudioVisualProfile)
@@ -63,7 +63,7 @@ type
     fAllowExtension: Boolean;
   public
     function  AllowsHeaderExtensions: Boolean; override;
-    procedure SetAllowExtension(const Allow: Boolean);
+    procedure SetAllowExtension(Allow: Boolean);
   end;
 
   TIdRTPTestRTPListener = class(TIdInterfacedObject,
@@ -219,7 +219,7 @@ begin
     Result := Self.RTCPBuffer[Self.RTCPCount - 2] as TIdRTCPPacket;
 end;
 
-procedure TIdMockRTPPeer.SetProfile(const Value: TIdRTPProfile);
+procedure TIdMockRTPPeer.SetProfile(Value: TIdRTPProfile);
 begin
   Self.fLastRTP := TIdRTPPacket.Create(Value);
   Self.fProfile := Value;
@@ -245,7 +245,7 @@ begin
   fHasKnownLength := Yes;
 end;
 
-procedure TIdMockPayload.SetLength(const Length: Cardinal);
+procedure TIdMockPayload.SetLength(Length: Cardinal);
 begin
   fLength := Length;
 end;
@@ -260,7 +260,7 @@ begin
   Result := fAllowExtension;
 end;
 
-procedure TIdMockProfile.SetAllowExtension(const Allow: Boolean);
+procedure TIdMockProfile.SetAllowExtension(Allow: Boolean);
 begin
   fAllowExtension := Allow;
 end;

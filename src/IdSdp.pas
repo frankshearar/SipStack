@@ -48,7 +48,7 @@ type
     fPayloadType: TIdRTPPayloadType;
     fEncoding:    TIdRTPPayload;
 
-    procedure SetEncoding(const Value: TIdRTPPayload);
+    procedure SetEncoding(Value: TIdRTPPayload);
   protected
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
@@ -422,7 +422,8 @@ type
     class function IsKeyData(const Token: String): Boolean;
     class function IsKeyType(const Token: String): Boolean;
     class function IsMediaType(const Token: String): Boolean;
-    class function IsMulticastAddress(IpVersion: TIdIPVersion; const Token: String): Boolean;
+    class function IsMulticastAddress(IpVersion: TIdIPVersion;
+                                      const Token: String): Boolean;
     class function IsNetType(const Token: String): Boolean;
     class function IsPhone(const Token: String): Boolean;
     class function IsPhoneNumber(const Header: String): Boolean;
@@ -434,6 +435,9 @@ type
     procedure Parse(Payload: TIdSdpPayload);
   end;
 
+  // I represent an RTP peer that filters. In other words, I only notify
+  // my listeners if I receive RTP packets of the packet type given in
+  // my LocalDescription.
   TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
                              IIdRTPListener)
   private
@@ -596,10 +600,10 @@ const
   RSSDPMediaTypeControl      = 'control';
   RSSDPMediaTypeText         = 'text';
 
-function AddressTypeToStr(const Version: TIdIPVersion): String;
-function BandwidthTypeToStr(const BwType: TIdSdpBandwidthType): String;
-function KeyTypeToStr(const KeyType: TIdSdpKeyType): String;
-function MediaTypeToStr(const MediaType: TIdSdpMediaType): String;
+function AddressTypeToStr(Version: TIdIPVersion): String;
+function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
+function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
+function MediaTypeToStr(MediaType: TIdSdpMediaType): String;
 function StrToAddressType(const S: String): TIdIPVersion;
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
 function StrToKeyType(const S: String): TIdSDPKeyType;
@@ -618,7 +622,7 @@ const
 //* Unit public functions and procedures                                       *
 //******************************************************************************
 
-function AddressTypeToStr(const Version: TIdIPVersion): String;
+function AddressTypeToStr(Version: TIdIPVersion): String;
 begin
   case Version of
     Id_IPv4: Result := Id_SDP_IP4;
@@ -631,7 +635,7 @@ begin
   end;
 end;
 
-function BandwidthTypeToStr(const BwType: TIdSdpBandwidthType): String;
+function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
 begin
   case BwType of
     btConferenceTotal:     Result := Id_SDP_ConferenceTotal;
@@ -646,7 +650,7 @@ begin
   end;
 end;
 
-function KeyTypeToStr(const KeyType: TIdSdpKeyType): String;
+function KeyTypeToStr(KeyType: TIdSdpKeyType): String;
 begin
   case KeyType of
     ktClear:  Result := Id_SDP_Clear;
@@ -661,7 +665,7 @@ begin
   end;
 end;
 
-function MediaTypeToStr(const MediaType: TIdSdpMediaType): String;
+function MediaTypeToStr(MediaType: TIdSdpMediaType): String;
 begin
   case MediaType of
     mtAudio:       Result := RSSDPMediaTypeAudio;
@@ -847,7 +851,7 @@ end;
 
 //* TIdSdpRTPMapAttribute Private methods **************************************
 
-procedure TIdSdpRTPMapAttribute.SetEncoding(const Value: TIdRTPPayload);
+procedure TIdSdpRTPMapAttribute.SetEncoding(Value: TIdRTPPayload);
 begin
   Self.Encoding.Free;
   Self.fEncoding := Value;
@@ -1861,7 +1865,8 @@ begin
   end;
 end;
 
-class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion; const Token: String): Boolean;
+class function TIdSdpParser.IsMulticastAddress(IpVersion: TIdIPVersion;
+                                               const Token: String): Boolean;
 var
   Address: String;
   N:       String;

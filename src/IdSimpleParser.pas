@@ -20,7 +20,7 @@ type
                                    N: Cardinal = 1): String;
     class procedure IncIPv6Address(var Address: TIdIPv6AddressRec;
                                    N: Cardinal = 1);
-    class function  IPv6AddressToStr(const Address: TIdIPv6AddressRec): String;
+    class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
     class function  IsIPAddress(IpVersion: TIdIPVersion;
                                 const Token: String): Boolean;
     class function  IsIPv4Address(const Token: String): Boolean;
@@ -226,7 +226,7 @@ begin
     Address[7] := Carry - 1;
 end;
 
-class function TIdIPAddressParser.IPv6AddressToStr(const Address: TIdIPv6AddressRec): String;
+class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
   function StripLeadingZeroes(Digits: String): String;
   var
     I: Integer;

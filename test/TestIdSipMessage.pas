@@ -55,6 +55,7 @@ type
     procedure TestRemoveHeaders;
     procedure TestSetCallID;
     procedure TestSetContacts;
+    procedure TestSetContentLanguage;
     procedure TestSetContentLength;
     procedure TestSetContentType;
     procedure TestSetCSeq;
@@ -67,9 +68,8 @@ type
 
   TestTIdSipRequest = class(TTestCaseSip)
   private
-    ReceivedRequest: TIdSipRequest;
-    Request:         TIdSipRequest;
-    Response:        TIdSipResponse;
+    Request:  TIdSipRequest;
+    Response: TIdSipResponse;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -102,26 +102,6 @@ type
     procedure TestIsInvite;
     procedure TestIsRegister;
     procedure TestIsRequest;
-    procedure TestMatchCancel;
-    procedure TestMatchCancelDifferentViaBranch;
-    procedure TestMatchInviteClient;
-    procedure TestMatchInviteClientAckWithInvite;
-    procedure TestMatchInviteClientDifferentCSeqMethod;
-    procedure TestMatchInviteClientDifferentViaBranch;
-    procedure TestMatchInviteServer;
-    procedure TestMatchNonInviteClient;
-    procedure TestMatchNonInviteServer;
-{  This stack does not support SIP/1.0    
-    procedure TestMatchSip1Ack;
-    procedure TestMatchSip1Invite;
-    procedure TestMatchSip1InviteDifferentCallID;
-    procedure TestMatchSip1InviteDifferentCSeq;
-    procedure TestMatchSip1InviteDifferentFromTag;
-    procedure TestMatchSip1InviteDifferentRequestUri;
-    procedure TestMatchSip1InviteDifferentToTag;
-    procedure TestMatchSip1InviteDifferentViaBranch;
-    procedure TestMatchSip1InviteDifferentViaSentBy;
-}
     procedure TestNewRequestHasContentLength;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
@@ -190,7 +170,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
-
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
@@ -700,6 +679,14 @@ begin
   end;
 end;
 
+procedure TestTIdSipMessage.TestSetContentLanguage;
+begin
+  Self.Msg.ContentLanguage := 'es';
+
+  Self.Msg.ContentLanguage := 'en';
+  CheckEquals('en', Self.Msg.ContentLanguage, 'Content-Language not set');
+end;
+
 procedure TestTIdSipMessage.TestSetContentLength;
 begin
   Self.Msg.ContentLength := 999;
@@ -836,15 +823,13 @@ procedure TestTIdSipRequest.SetUp;
 begin
   inherited SetUp;
 
-  Self.Request         := TIdSipTestResources.CreateBasicRequest;
-  Self.ReceivedRequest := TIdSipTestResources.CreateBasicRequest;
-  Self.Response        := TIdSipTestResources.CreateBasicResponse;
+  Self.Request  := TIdSipTestResources.CreateBasicRequest;
+  Self.Response := TIdSipTestResources.CreateBasicResponse;
 end;
 
 procedure TestTIdSipRequest.TearDown;
 begin
   Self.Response.Free;
-  Self.ReceivedRequest.Free;
   Self.Request.Free;
 
   inherited TearDown;
@@ -1191,9 +1176,16 @@ begin
 end;
 
 procedure TestTIdSipRequest.TestIsEqualToComplexMessages;
+var
+  R: TIdSipRequest;
 begin
-  Check(Self.Request.IsEqualTo(Self.ReceivedRequest), 'Request = ReceivedRequest');
-  Check(Self.ReceivedRequest.IsEqualTo(Self.Request), 'ReceivedRequest = Request');
+  R := TIdSipTestResources.CreateBasicRequest;
+  try
+    Check(Self.Request.IsEqualTo(R), 'Request = R');
+    Check(R.IsEqualTo(Self.Request), 'R = Request');
+  finally
+    R.Free
+  end;
 end;
 
 procedure TestTIdSipRequest.TestIsEqualToDifferentHeaders;
@@ -1383,272 +1375,6 @@ begin
   Check(Self.Request.IsRequest, 'IsRequest');
 end;
 
-procedure TestTIdSipRequest.TestMatchCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.Request.CreateCancel;
-  try
-    Check(Self.Request.Match(Cancel), 'INVITE doesn''t match its CANCEL');
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchCancelDifferentViaBranch;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.Request.CreateCancel;
-  try
-    Cancel.LastHop.Branch := Cancel.LastHop.Branch + '1';
-    Check(not Self.Request.Match(Cancel), 'CANCEL doesn''t match its INVITE');
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchInviteClient;
-begin
-  Check(Self.Request.Match(Self.Response),
-        'Identical headers');
-
-  Self.Response.AddHeader(ContentLanguageHeader).Value := 'es';
-  Check(Self.Request.Match(Self.Response),
-        'Identical headers + irrelevant headers');
-
-  Self.Response.ToHeader.Tag := '1';
-  Check(Self.Request.Match(Self.Response),
-        'Different From tag');
-  Self.Response.From.Assign(Self.Request.From);
-
-  Self.Response.ToHeader.Tag := '1';
-  Check(Self.Request.Match(Self.Response),
-        'Different To tag');
-end;
-
-procedure TestTIdSipRequest.TestMatchInviteClientAckWithInvite;
-begin
-  Self.Response.CSeq.Method := MethodAck;
-  Check(Self.Request.Match(Self.Response),
-        'ACK match against INVITE');
-end;
-
-procedure TestTIdSipRequest.TestMatchInviteClientDifferentCSeqMethod;
-begin
-  Self.Response.CSeq.Method := MethodCancel;
-
-  Check(not Self.Request.Match(Self.Response),
-        'Different CSeq method');
-end;
-
-procedure TestTIdSipRequest.TestMatchInviteClientDifferentViaBranch;
-begin
-  Self.Response.LastHop.Branch := BranchMagicCookie + 'foo';
-
-  Check(not Self.Request.Match(Self.Response),
-        'Different Via branch');
-end;
-
-procedure TestTIdSipRequest.TestMatchInviteServer;
-begin
-  Check(Self.Request.Match(Self.Request),
-        'Identical INVITE request');
-
-  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
-  Check(not Self.Request.Match(Self.ReceivedRequest),
-        'Different sent-by');
-  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
-
-  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
-  Check(not Self.Request.Match(Self.ReceivedRequest),
-        'Different branch');
-
-  Self.ReceivedRequest.LastHop.Branch := Self.Request.LastHop.Branch;
-  Self.ReceivedRequest.Method := MethodAck;
-  Check(Self.Request.Match(Self.ReceivedRequest), 'ACK');
-
-  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
-  Check(not Self.Request.Match(Self.ReceivedRequest),
-        'ACK but different sent-by');
-  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
-
-  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
-  Check(not Self.Request.Match(Self.ReceivedRequest),
-        'ACK but different branch');
-end;
-
-procedure TestTIdSipRequest.TestMatchNonInviteClient;
-begin
-  Self.Response.CSeq.Method := MethodRegister;
-  Self.Request.Method       := MethodRegister;
-
-  Check(Self.Request.Match(Self.Response),
-        'Identical headers');
-
-  Self.Response.AddHeader(ContentLanguageHeader).Value := 'es';
-  Check(Self.Request.Match(Self.Response),
-        'Identical headers + irrelevant headers');
-
-  Self.Response.From.Tag := '1';
-  Check(Self.Request.Match(Self.Response),
-        'Different From tag');
-  Self.Response.FirstHeader(FromHeaderFull).Assign(Self.Request.FirstHeader(FromHeaderFull));
-
-  Self.Response.ToHeader.Tag := '1';
-  Check(Self.Request.Match(Self.Response),
-        'Different To tag');
-
-  Self.Response.CSeq.Method := MethodOptions;
-  Check(not Self.Request.Match(Self.Response),
-        'Different method');
-end;
-
-procedure TestTIdSipRequest.TestMatchNonInviteServer;
-begin
-  Self.ReceivedRequest.Method := MethodRegister;
-  Self.Request.Method         := MethodRegister;
-
-  Check(Self.Request.Match(Self.ReceivedRequest),
-        'Identical REGISTER request');
-
-  Self.ReceivedRequest.Method := MethodOptions;
-  Check(not Self.Request.Match(Self.ReceivedRequest),
-        'Different method');
-end;
-{
-procedure TestTIdSipRequest.TestMatchSip1Ack;
-var
-  Ack: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  Ack := Self.Request.AckFor(Self.Response);
-  try
-    Check(Self.Request.Match(Ack), 'ACK');
-  finally
-    Ack.Free;
-  end;
-end;  
-
-procedure TestTIdSipRequest.TestMatchSip1Invite;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-  Check(Self.Request.Match(Self.Request), 'Identical INVITE');
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentCallID;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.CallID := '1' + R.CallID;
-    Check(not Self.Request.Match(R), 'Differing Call-ID');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentCSeq;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.CSeq.Increment;
-    Check(not Self.Request.Match(R), 'Differing CSeq');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentFromTag;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.From.Tag := R.From.Tag + '1';
-    Check(not Self.Request.Match(R), 'Differing From tag');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentRequestUri;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.RequestUri.Host := R.RequestUri.Host + '1';
-    Check(not Self.Request.Match(R), 'Differing Request-URI');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentToTag;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.ToHeader.Tag := R.ToHeader.Tag + '1';
-    Check(not Self.Request.Match(R), 'Differing To tag');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentViaBranch;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.LastHop.Branch := R.LastHop.Branch + '1';
-    Check(not Self.Request.Match(R), 'Differing top Via branch');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestMatchSip1InviteDifferentViaSentBy;
-var
-  R: TIdSipRequest;
-begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
-
-  R := TIdSipRequest.Create;
-  try
-    R.Assign(Self.Request);
-    R.LastHop.SentBy := R.LastHop.SentBy + '1';
-    Check(not Self.Request.Match(R), 'Differing top Via');
-  finally
-    R.Free;
-  end;
-end;
-}
 procedure TestTIdSipRequest.TestNewRequestHasContentLength;
 var
   R: TIdSipRequest;
