@@ -63,6 +63,18 @@ type
     property ReceivedResponse: Boolean read fReceivedResponse;
   end;
 
+  TIdSipTestObserver = class(TIdInterfacedObject,
+                             IIdObserver)
+  private
+    fChanged: Boolean;
+
+    procedure OnChanged(Observed: TObject);
+  public
+    constructor Create;
+
+    property Changed: Boolean read fChanged;
+  end;
+
   TIdSipTestOptionsListener = class(TIdInterfacedObject,
                                     IIdSipOptionsListener)
   private
@@ -405,6 +417,29 @@ procedure TIdSipTestMessageListener.OnReceiveResponse(Response: TIdSipResponse;
 begin
   Self.fReceivedResponse := true;
 end;
+
+//******************************************************************************
+//* TIdSipTestObserver                                                         *
+//******************************************************************************
+//* TIdSipTestObserver Public methods ******************************************
+
+  TIdSipTestObserver = class(TIdInterfacedObject,
+                             IIdObserver)
+  private
+    fChanged: Boolean;
+
+//* TIdSipTestObserver Private methods *****************************************
+
+procedure TIdSipTestObserver.OnChanged(Observed: TObject);
+begin
+  Self.fChanged := true;
+end;
+
+constructor TIdSipTestObserver.Create;
+begin
+end;
+
+  fChanged: Boolean read fChanged;
 
 //******************************************************************************
 //* TIdSipTestOptionsListener                                                  *

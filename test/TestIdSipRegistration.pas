@@ -19,6 +19,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddBindingNotifiesObservers;
     procedure TestAddBindingUpdates;
     procedure TestAddBindingWithExpiryParam;
     procedure TestAddBindingWithExpiryHeader;
@@ -30,6 +31,7 @@ type
     procedure TestNotOutOfOrderEarlySeqNo;
     procedure TestNotOutOfOrderDifferentCallID;
     procedure TestRemoveAllBindings;
+    procedure TestRemoveAllBindingsNotifiesListeners;
   end;
 
   TestTIdSipMockBindingDatabase = class(TTestCase)
@@ -59,7 +61,7 @@ type
 implementation
 
 uses
-  DateUtils, IdSipConsts, SysUtils;
+  DateUtils, IdSipConsts, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -125,6 +127,28 @@ begin
 end;
 
 //* TestTIdSipAbstractBindingDatabase Published methods ************************
+
+procedure TestTIdSipAbstractBindingDatabase.TestAddBindingNotifiesObservers;
+var
+  L1, L2: TIdSipTestObserver;
+begin
+  L1 := TIdSipTestObserver.Create;
+  try
+    L2 := TIdSipTestObserver.Create;
+    try
+      Self.DB.AddObserver(L1);
+      Self.DB.AddObserver(L2);
+      Self.DB.AddBindings(Self.Request);
+
+      Check(L1.Changed, 'First listener not notified');
+      Check(L2.Changed, 'Second listener not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
 
 procedure TestTIdSipAbstractBindingDatabase.TestAddBindingUpdates;
 var
@@ -288,6 +312,38 @@ begin
     end;
   finally
     OriginalRequest.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractBindingDatabase.TestRemoveAllBindingsNotifiesListeners;
+var
+  Bindings:        TIdSipContacts;
+  L1, L2:          TIdSipTestObserver;
+  OriginalRequest: TIdSipRequest;
+begin
+  Self.DB.AddBindings(Self.Request);
+
+  Self.Request.CSeq.Increment;
+  Self.Request.FirstContact.Expires := 0;
+  Self.Request.FirstContact.IsWildCard := true;
+
+  L1 := TIdSipTestObserver.Create;
+  try
+    L2 := TIdSipTestObserver.Create;
+    try
+      Self.DB.AddObserver(L1);
+      Self.DB.AddObserver(L2);
+
+      Check(Self.DB.RemoveAllBindings(Self.Request),
+            'Notification of failure');
+
+      Check(L1.Changed, 'First listener not notified');
+      Check(L2.Changed, 'Second listener not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
   end;
 end;
 
