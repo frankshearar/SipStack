@@ -63,6 +63,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddRemoveCount;
+    procedure TestAddNil;
     procedure TestAssign;
     procedure TestAssignNonList;
     procedure TestNotify;
@@ -179,6 +180,20 @@ begin
     end;
   finally
     O1.Free;
+  end;
+end;
+
+procedure TestTIdNotificationList.TestAddNil;
+var
+  BarCaller: TIdCallBar;
+begin
+  Self.List.AddListener(nil);
+
+  BarCaller := TIdCallBar.Create;
+  try
+    Self.List.Notify(BarCaller);
+  finally
+    BarCaller.Free;
   end;
 end;
 

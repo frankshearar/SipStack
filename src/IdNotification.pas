@@ -137,6 +137,8 @@ end;
 
 procedure TIdNotificationList.AddListener(const L: IInterface);
 begin
+  if not Assigned(L) then Exit;
+
   Self.Lock.Acquire;
   try
     Self.List.Add(Pointer(L));
