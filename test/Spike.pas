@@ -83,7 +83,7 @@ type
                              const Reason: String);
     procedure OnException(E: Exception;
                           const Reason: String);
-    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -102,7 +102,7 @@ type
                             Transport: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Transport: TIdSipTransport);
-    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
@@ -336,7 +336,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipRegistration;
+procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts;
                                const Reason: String);
 begin
@@ -436,7 +436,7 @@ begin
   Self.LogMessage(Response, false);
 end;
 
-procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipRegistration;
+procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts);
 begin
 end;

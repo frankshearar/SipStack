@@ -87,10 +87,10 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
                                         var Password: String);
-    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
-    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
 
     property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
@@ -429,14 +429,14 @@ begin
   Password := Self.Password;
 end;
 
-procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipRegistration;
+procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                                    CurrentBindings: TIdSipContacts;
                                                    const Reason: String);
 begin
   Self.fFailure := true;
 end;
 
-procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipRegistration;
+procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                                                    CurrentBindings: TIdSipContacts);
 begin
   Self.fSuccess := true;

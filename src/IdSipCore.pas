@@ -30,7 +30,7 @@ uses
 
 type
   TIdSipAction = class;
-  TIdSipRegistration = class;
+  TIdSipOutboundRegistration = class;
   TIdSipSession = class;
   TIdSipSessionEvent = procedure(Session: TIdSipSession) of object;
 
@@ -65,10 +65,10 @@ type
   // of your references to it.
   IIdSipRegistrationListener = interface(IIdSipActionListener)
     ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
-    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
-    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
   end;
 
@@ -246,7 +246,7 @@ type
 
   // I keep track of information a User Agent needs when making a REGISTER to
   // a particular registrar.
-  TIdSipRegistrationInfo = class(TObject)
+  TIdSipOutboundRegistrationInfo = class(TObject)
   private
     fCallID:     String;
     fRegistrar:  TIdSipUri;
@@ -288,12 +288,12 @@ type
     function  AddFork(RootSession: TIdSipOutboundSession;
                       Response: TIdSipResponse): TIdSipOutboundSession;
     function  AddInboundSession(Invite: TIdSipRequest;
-                                Receiver: TIdSipTransport): TIdSipInboundSession;
+                                UsingSecureTransport: Boolean): TIdSipInboundSession;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
     function  AddOutboundSession: TIdSipOutboundSession;
-    function  AddRegistration: TIdSipRegistration;
+    function  AddRegistration: TIdSipOutboundRegistration;
     function  CallIDFor(Registrar: TIdSipUri): String;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
@@ -310,8 +310,8 @@ type
     procedure OnInboundSessionExpire(Sender: TObject);
     procedure ProcessAck(Ack: TIdSipRequest);
     procedure ProcessInvite(Invite: TIdSipRequest;
-                            Receiver: TIdSipTransport);
-    function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+                            UsingSecureTransport: Boolean);
+    function  RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
     procedure RejectDoNotDisturb(Request: TIdSipRequest;
                                  const Reason: String);
     procedure SendByeToAppropriateSession(Bye: TIdSipRequest);
@@ -353,15 +353,15 @@ type
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
-    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipRegistration;
-    function  RegisterWith(Registrar: TIdSipUri): TIdSipRegistration;
+    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure RemoveAction(Action: TIdSipAction);
     procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
     procedure HangUpAllCalls;
-    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  Username: String;
 
     property Contact:             TIdSipContactHeader read GetContact write SetContact;
@@ -383,6 +383,13 @@ type
     fIsTerminated:   Boolean;
     UA:              TIdSipUserAgentCore;
 
+    procedure Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
+    procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
+    procedure AuthorizeAgainstUser(Challenge: TIdSipResponse);
+    function  DigestFor(const Realm: String;
+                        const Password: String): String;
+    function  GetUsername: String;
+    procedure SetUsername(const Value: String);
   protected
     ListenerLock: TCriticalSection;
     Listeners:    TList;
@@ -420,9 +427,22 @@ type
 
     property CurrentRequest: TIdSipRequest read fCurrentRequest;
     property IsTerminated:   Boolean       read fIsTerminated;
+    property Username:       String        read GetUsername write SetUsername;
   end;
 
   TIdSipActionClass = class of TIdSipAction;
+
+  // When a User Agent cannot match a message against an Action, it uses me to
+  // react appropriately. Thus, I drop unmatched responses, I drop unmatched
+  // ACKs, I create new inbound Sessions on unmatched INVITEs, etc.
+
+  // I am also an experiment, above all.
+  TIdSipNullAction = class(TIdSipAction)
+  protected
+    function ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                        UsingSecureTransport: Boolean): Boolean; override;
+  end;
 
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
   // to an INVITE until it receives an ACK. Thus I provide an exponential
@@ -533,17 +553,13 @@ type
   private
     InCall: Boolean;
 
-    procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
-    procedure AuthorizeAgainstUser(Challenge: TIdSipResponse);
     function  CreateOutboundDialog(Response: TIdSipResponse;
                                    UsingSecureTransport: Boolean): TIdSipDialog;
     procedure Initialize;
-    procedure ReissueInviteWithAuthorization(Challenge: TIdSipResponse);
     procedure SendAck(Final: TIdSipResponse);
     procedure SendCancel;
     procedure TerminateAfterSendingCancel;
   protected
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): Boolean; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
@@ -573,7 +589,7 @@ type
   // It makes no sense to access me once my Transaction has terminated. In
   // other words once you've received notification of my success or failure,
   // erase your references to me.
-  TIdSipRegistration = class(TIdSipAction)
+  TIdSipOutboundRegistration = class(TIdSipAction)
   private
     Bindings: TIdSipContacts;
 
@@ -615,8 +631,8 @@ const
 implementation
 
 uses
-  IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID, IdRandom, IdStack,
-  SysUtils, IdUDPServer;
+  IdGlobal, IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipDialogID,
+  IdRandom, IdStack, SysUtils, IdUDPServer;
 
 const
   BusyHere        = 'Incoming call rejected - busy here';
@@ -1174,18 +1190,18 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRegistrationInfo                                                     *
+//* TIdSipOutboundRegistrationInfo                                                     *
 //******************************************************************************
-//* TIdSipRegistrationInfo Public methods **************************************
+//* TIdSipOutboundRegistrationInfo Public methods **************************************
 
-constructor TIdSipRegistrationInfo.Create;
+constructor TIdSipOutboundRegistrationInfo.Create;
 begin
   inherited Create;
 
   Self.fRegistrar := TIdSipUri.Create;
 end;
 
-destructor TIdSipRegistrationInfo.Destroy;
+destructor TIdSipOutboundRegistrationInfo.Destroy;
 begin
   Self.Registrar.Free;
 
@@ -1365,14 +1381,14 @@ begin
   Self.PrepareResponse(Result, Request);
 end;
 
-function TIdSipUserAgentCore.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipRegistration;
+function TIdSipUserAgentCore.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
   Result := Self.AddRegistration;
 
   Result.RegisterWith(Registrar, Self.Contact);
 end;
 
-function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipRegistration;
+function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
   Result := Self.AddRegistration;
 
@@ -1473,7 +1489,7 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
+function TIdSipUserAgentCore.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
   Result := Self.AddRegistration;
 
@@ -1494,7 +1510,7 @@ begin
 
   // Processing the request - 8.2.5
   if Request.IsInvite then
-    Self.ProcessInvite(Request, Receiver)
+    Self.ProcessInvite(Request, Receiver.IsSecure)
   else if Request.IsAck then
     Self.ProcessAck(Request)
   else if Request.IsBye then
@@ -1615,9 +1631,9 @@ begin
 end;                  
 
 function TIdSipUserAgentCore.AddInboundSession(Invite: TIdSipRequest;
-                                               Receiver: TIdSipTransport): TIdSipInboundSession;
+                                               UsingSecureTransport: Boolean): TIdSipInboundSession;
 begin
-  Result := TIdSipInboundSession.Create(Self, Invite, Receiver.IsSecure);
+  Result := TIdSipInboundSession.Create(Self, Invite, UsingSecureTransport);
   try
     Self.ActionLock.Acquire;
     try
@@ -1645,10 +1661,10 @@ procedure TIdSipUserAgentCore.AddKnownRegistrar(Registrar: TIdSipUri;
                                                 const CallID: String;
                                                 SequenceNo: Cardinal);
 var
-  NewReg: TIdSipRegistrationInfo;
+  NewReg: TIdSipOutboundRegistrationInfo;
 begin
   if not Self.KnowsRegistrar(Registrar) then begin
-    NewReg := TIdSipRegistrationInfo.Create;
+    NewReg := TIdSipOutboundRegistrationInfo.Create;
     Self.KnownRegistrars.Add(NewReg);
 
     NewReg.CallID        := CallID;
@@ -1676,9 +1692,9 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddRegistration: TIdSipRegistration;
+function TIdSipUserAgentCore.AddRegistration: TIdSipOutboundRegistration;
 begin
-  Result := TIdSipRegistration.Create(Self);
+  Result := TIdSipOutboundRegistration.Create(Self);
   try
     Self.ActionLock.Acquire;
     try
@@ -1798,7 +1814,7 @@ end;
 
 function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
 var
-  RegInfo: TIdSipRegistrationInfo;
+  RegInfo: TIdSipOutboundRegistrationInfo;
 begin
   Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
 
@@ -1878,7 +1894,7 @@ begin
 end;
 
 procedure TIdSipUserAgentCore.ProcessInvite(Invite: TIdSipRequest;
-                                            Receiver: TIdSipTransport);
+                                            UsingSecureTransport: Boolean);
 var
   Session: TIdSipAction;
 begin
@@ -1897,12 +1913,12 @@ begin
   if Assigned(Session) then
     Session.ReceiveRequest(Invite)
   else
-    Self.AddInboundSession(Invite, Receiver);
+    Self.AddInboundSession(Invite, UsingSecureTransport);
 end;
 
-function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
 begin
-  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
+  Result := Self.KnownRegistrars[Index] as TIdSipOutboundRegistrationInfo;
 end;
 
 procedure TIdSipUserAgentCore.RejectDoNotDisturb(Request: TIdSipRequest;
@@ -2135,7 +2151,20 @@ end;
 
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
 begin
-  Result := false;
+  // We received a 401 Unauthorized or 407 Proxy Authentication Required response
+  // so we need to re-issue the INVITE with the necessary authorization details.
+  case Response.StatusCode of
+    SIPUnauthorized: begin
+      Self.AuthorizeAgainstUser(Response);
+      Result := true;
+    end;
+    SIPProxyAuthenticationRequired: begin
+      Self.AuthorizeAgainstProxy(Response);
+      Result := true;
+    end;
+  else
+    Result := false;
+  end;
 end;
 
 function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
@@ -2179,6 +2208,95 @@ end;
 function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean;
 begin
   Result := false;
+end;
+
+//* TIdSipAction Private methods ***********************************************
+
+procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
+var
+  AuthHeader: TIdSipAuthorizationHeader;
+  Password:   String;
+  ReInvite:   TIdSipRequest;
+begin
+  Password := Self.NotifyOfAuthenticationChallenge(Challenge);
+
+  ReInvite := Self.UA.CreateInvite(Challenge.ToHeader,
+                                   Self.CurrentRequest.Body,
+                                   Self.CurrentRequest.ContentType);
+  try
+    ReInvite.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
+
+    if AgainstProxy then begin
+      AuthHeader := ReInvite.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader;
+      AuthHeader.Response := Self.DigestFor(Challenge.FirstProxyAuthenticate.Realm,
+                                            Password);
+    end
+    else begin
+      AuthHeader := ReInvite.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader;
+      AuthHeader.Response := Self.DigestFor(Challenge.FirstWWWAuthenticate.Realm,
+                                            Password);
+    end;
+
+    AuthHeader.Realm := Challenge.FirstProxyAuthenticate.Realm;
+    AuthHeader.Username := Self.Username;
+
+    Self.CurrentRequest.Assign(ReInvite);
+    Self.UA.SendRequest(ReInvite);
+  finally
+    ReInvite.Free;
+  end;
+end;
+
+procedure TIdSipAction.AuthorizeAgainstProxy(Challenge: TIdSipResponse);
+begin
+  Self.Authorize(Challenge, true);
+end;
+
+procedure TIdSipAction.AuthorizeAgainstUser(Challenge: TIdSipResponse);
+begin
+  Self.Authorize(Challenge, false);
+end;
+
+function TIdSipAction.DigestFor(const Realm: String;
+                                const Password: String): String;
+var
+  MD5: TIdHashMessageDigest5;
+begin
+  MD5 := TIdHashMessageDigest5.Create;
+  try
+    Result := Lowercase(MD5.AsHex(MD5.HashValue(Self.Username + ':' +
+                                                Realm + ':' +
+                                                Password)));
+  finally
+    MD5.Free;
+  end;
+end;
+
+function TIdSipAction.GetUsername: String;
+begin
+  Result := Self.UA.Username;
+end;
+
+procedure TIdSipAction.SetUsername(const Value: String);
+begin
+  Self.UA.From.DisplayName := Value;
+end;
+
+//******************************************************************************
+//* TIdSipNullAction
+//******************************************************************************
+//* TIdSipNullAction Public methods ********************************************
+//* TIdSipNullAction Protected methods *****************************************
+
+function TIdSipNullAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipNullAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                     UsingSecureTransport: Boolean): Boolean;
+begin
+  Result := true;
 end;
 
 //******************************************************************************
@@ -2815,16 +2933,6 @@ end;
 
 //* TIdSipOutboundSession Protected methods ************************************
 
-function TIdSipOutboundSession.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
-begin
-  Result := false;
-  if Response.IsAuthenticationChallenge then begin
-    Self.ReissueInviteWithAuthorization(Response);
-
-    Result := true;
-  end;
-end;
-
 function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
 begin
@@ -2893,28 +3001,6 @@ end;
 
 //* TIdSipOutboundSession Private methods **************************************
 
-procedure TIdSipOutboundSession.AuthorizeAgainstProxy(Challenge: TIdSipResponse);
-var
-  ReInvite: TIdSipRequest;
-begin
-  ReInvite := Self.UA.CreateInvite(Challenge.ToHeader,
-                                   Self.CurrentRequest.Body,
-                                   Self.CurrentRequest.ContentType);
-  try
-    ReInvite.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
-    ReInvite.AddHeader(ProxyAuthorizationHeader);
-
-    Self.CurrentRequest.Assign(ReInvite);
-    Self.UA.SendRequest(ReInvite);
-  finally
-    ReInvite.Free;
-  end;
-end;
-
-procedure TIdSipOutboundSession.AuthorizeAgainstUser(Challenge: TIdSipResponse);
-begin
-end;
-
 function TIdSipOutboundSession.CreateOutboundDialog(Response: TIdSipResponse;
                                                     UsingSecureTransport: Boolean): TIdSipDialog;
 begin
@@ -2930,16 +3016,6 @@ end;
 procedure TIdSipOutboundSession.Initialize;
 begin
   Self.InCall := false;
-end;
-
-procedure TIdSipOutboundSession.ReissueInviteWithAuthorization(Challenge: TIdSipResponse);
-begin
-  // We received a 401 Unauthorized or 407 Proxy Authentication Required response
-  // so we need to re-issue the INVITE with the necessary authorization details.
-  case Challenge.StatusCode of
-    SIPUnauthorized:                Self.AuthorizeAgainstUser(Challenge);
-    SIPProxyAuthenticationRequired: Self.AuthorizeAgainstProxy(Challenge);
-  end;
 end;
 
 procedure TIdSipOutboundSession.SendAck(Final: TIdSipResponse);
@@ -2970,28 +3046,28 @@ procedure TIdSipOutboundSession.TerminateAfterSendingCancel;
 begin
   Self.MarkAsTerminated;
   Self.NotifyOfEndedSession(LocalCancel);
-end;  
+end;
 
 //******************************************************************************
-//* TIdSipRegistration                                                         *
+//* TIdSipOutboundRegistration                                                 *
 //******************************************************************************
-//* TIdSipRegistration Public methods ******************************************
+//* TIdSipOutboundRegistration Public methods **********************************
 
-constructor TIdSipRegistration.Create(UA: TIdSipUserAgentCore);
+constructor TIdSipOutboundRegistration.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create(UA);
 
   Self.Bindings := TIdSipContacts.Create;
 end;
 
-destructor TIdSipRegistration.Destroy;
+destructor TIdSipOutboundRegistration.Destroy;
 begin
   Self.Bindings.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipRegistration.AddListener(const Listener: IIdSipRegistrationListener);
+procedure TIdSipOutboundRegistration.AddListener(const Listener: IIdSipRegistrationListener);
 begin
   Self.ListenerLock.Acquire;
   try
@@ -3001,7 +3077,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.FindCurrentBindings(Registrar: TIdSipUri);
+procedure TIdSipOutboundRegistration.FindCurrentBindings(Registrar: TIdSipUri);
 var
   BlankBindings: TIdSipContacts;
 begin
@@ -3013,17 +3089,17 @@ begin
   end;
 end;
 
-function TIdSipRegistration.IsRegistration: Boolean;
+function TIdSipOutboundRegistration.IsRegistration: Boolean;
 begin
   Result := true;
 end;
 
-function TIdSipRegistration.Match(Msg: TIdSipMessage): Boolean;
+function TIdSipOutboundRegistration.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := Self.CurrentRequest.Match(Msg);
 end;
 
-procedure TIdSipRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
 var
   Request: TIdSipRequest;
 begin
@@ -3038,7 +3114,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
 var
   Binding: TIdSipContacts;
 begin
@@ -3052,7 +3128,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
+procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
 begin
   Self.ListenerLock.Acquire;
   try
@@ -3062,12 +3138,12 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.Terminate;
+procedure TIdSipOutboundRegistration.Terminate;
 begin
   Self.UA.RemoveAction(Self);
 end;
 
-procedure TIdSipRegistration.Unregister(Registrar: TIdSipUri);
+procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
 var
   RemovalBindings: TIdSipContacts;
   Request:         TIdSipRequest;
@@ -3093,14 +3169,14 @@ begin
   end;
 end;
 
-//* TIdSipRegistration Protected methods ***************************************
+//* TIdSipOutboundRegistration Protected methods *******************************
 
-procedure TIdSipRegistration.ActionSucceeded(Response: TIdSipResponse);
+procedure TIdSipOutboundRegistration.ActionSucceeded(Response: TIdSipResponse);
 begin
   Self.NotifyOfSuccess(Response);
 end;
 
-procedure TIdSipRegistration.NotifyOfFailure(Response: TIdSipResponse);
+procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
 var
   Copy:            TList;
   CurrentBindings: TIdSipContacts;
@@ -3126,27 +3202,31 @@ begin
   Self.Terminate;
 end;
 
-function TIdSipRegistration.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
 begin
-  Result := true;
-  case Response.StatusCode of
-    SIPUnauthorized,
-    SIPProxyAuthenticationRequired:
-      Self.NotifyOfAuthenticationChallenge(Response);
-    SIPIntervalTooBrief: Self.ReissueRequest(Self.CurrentRequest.RequestUri,
-                                             Response.FirstMinExpires.NumericValue);
-    SIPBadExtension: begin
-      Result := Self.CurrentRequest.HasHeader(RequireHeader);
-      if Result then
-        Self.RetryWithoutExtensions(Self.CurrentRequest.RequestUri,
-                                    Response);
+  Result := not inherited ReceiveFailureResponse(Response);
+  
+  if Result then begin
+    case Response.StatusCode of
+      SIPIntervalTooBrief: begin
+        Self.ReissueRequest(Self.CurrentRequest.RequestUri,
+                            Response.FirstMinExpires.NumericValue);
+        Result := true;
+      end;
+
+      SIPBadExtension: begin
+        Result := Self.CurrentRequest.HasHeader(RequireHeader);
+        if Result then
+          Self.RetryWithoutExtensions(Self.CurrentRequest.RequestUri,
+                                      Response);
+      end;
+    else
+      Result := false;
     end;
-  else
-    Result := false;
   end;
 end;
 
-function TIdSipRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
+function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                        UsingSecureTransport: Boolean): Boolean;
 begin
   Result := false;
@@ -3158,9 +3238,9 @@ begin
   end;
 end;
 
-//* TIdSipRegistration Private methods *****************************************
+//* TIdSipOutboundRegistration Private methods *********************************
 
-function TIdSipRegistration.CreateRegister(Registrar: TIdSipUri;
+function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
                                            Bindings: TIdSipContacts): TIdSipRequest;
 var
   OldContacts: TIdSipContacts;
@@ -3187,7 +3267,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.NotifyOfSuccess(Response: TIdSipResponse);
+procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
   Copy:            TList;
   CurrentBindings: TIdSipContacts;
@@ -3211,7 +3291,7 @@ begin
   Self.Terminate;
 end;
 
-procedure TIdSipRegistration.ReissueRequest(Registrar: TIdSipUri;
+procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
                                             MinimumExpiry: Cardinal);
 var
   Bindings: TIdSipContacts;
@@ -3241,7 +3321,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
+procedure TIdSipOutboundRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
                                                     Response: TIdSipResponse);
 var
   Bindings: TIdSipContacts;
@@ -3271,7 +3351,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.Send(Request: TIdSipRequest);
+procedure TIdSipOutboundRegistration.Send(Request: TIdSipRequest);
 begin
   Self.CurrentRequest.Assign(Request);
 

@@ -34,7 +34,7 @@ type
                                         var Password: String);
     procedure OnException(E: Exception;
                           const Reason: String);
-    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+    procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -47,7 +47,7 @@ type
                             Transport: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Transport: TIdSipTransport);
-    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+    procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure RefreshContacts(Bindings: TIdSipContacts);
   public
@@ -159,7 +159,7 @@ begin
                    + ' because: ''' + Reason + ''' ----');
 end;
 
-procedure TrnidSpikeRegister.OnFailure(RegisterAgent: TIdSipRegistration;
+procedure TrnidSpikeRegister.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts;
                                const Reason: String);
 begin
@@ -200,7 +200,7 @@ begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpikeRegister.OnSuccess(RegisterAgent: TIdSipRegistration;
+procedure TrnidSpikeRegister.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts);
 begin
   Self.Log.Lines.Add('---- Registration action succeeded ----');
