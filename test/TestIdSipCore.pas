@@ -18,18 +18,6 @@ uses
   TestFrameworkEx, TestFrameworkSip;
 
 type
-  TestTIdSipAbstractCore = class(TTestCase)
-  private
-    Core: TIdSipAbstractCore;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestNextCallID;
-    procedure TestNextTag;
-    procedure TestNotifyOfChange;
-  end;
-
   TTestCaseTU = class(TTestCaseSip)
   private
     procedure RemoveBody(Msg: TIdSipMessage);
@@ -54,7 +42,14 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipAbstractUserAgent = class(TTestCaseTU)
+  TestTIdSipAbstractCore = class(TTestCaseTU)
+  published
+    procedure TestNextCallID;
+    procedure TestNextTag;
+    procedure TestNotifyOfChange;
+  end;
+
+  TestTIdSipAbstractUserAgent = class(TestTIdSipAbstractCore)
   published
     procedure TestAddAllowedContentType;
     procedure TestAddAllowedContentTypeMalformed;
@@ -627,7 +622,7 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, 
+  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer,
   SysUtils, TestIdObservable, TestMessages;
 
 type
@@ -675,98 +670,6 @@ procedure TIdSipCoreWithExposedNotify.TriggerNotify;
 begin
   Self.NotifyOfChange;
 end;
-
-//******************************************************************************
-//* TestTIdSipAbstractCore                                                     *
-//******************************************************************************
-//* TestTIdSipAbstractCore Public methods **************************************
-
-// Self.Core is an (almost) abstract base class. We want to test the (static)
-// methods that are not abstract, and we want to do this without the compiler
-// moaning about something we know to be safe.
-{$WARNINGS OFF}
-procedure TestTIdSipAbstractCore.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Core := TIdSipAbstractCore.Create;
-end;
-{$WARNINGS ON}
-
-procedure TestTIdSipAbstractCore.TearDown;
-begin
-  Self.Core.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipAbstractCore Published methods ***********************************
-
-procedure TestTIdSipAbstractCore.TestNextCallID;
-var
-  CallID: String;
-begin
-  CallID := Self.Core.NextCallID;
-
-  Fetch(CallID, '@');
-
-  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
-end;
-
-procedure TestTIdSipAbstractCore.TestNextTag;
-var
-  I:    Integer;
-  Tags: TStringList;
-begin
-  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
-
-  Tags := TStringList.Create;
-  try
-    for I := 1 to 100 do
-      Tags.Add(Self.Core.NextTag);
-
-    // Find duplicates
-    Tags.Sort;
-    CheckNotEquals('', Tags[0], 'No null tags may be generated');
-
-    for I := 1 to Tags.Count - 1 do begin
-      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
-                                + IntToStr(I) + ')');
-
-      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
-    end;
-  finally
-  end;
-end;
-
-// Self.Core is an (almost) abstract base class. We want to test the (static)
-// methods that are not abstract, and we want to do this without the compiler
-// moaning about something we know to be safe.
-{$WARNINGS OFF}
-procedure TestTIdSipAbstractCore.TestNotifyOfChange;
-var
-  C: TIdSipCoreWithExposedNotify;
-  O: TIdObserverListener;
-begin
-  C := TIdSipCoreWithExposedNotify.Create;
-  try
-    O := TIdObserverListener.Create;
-    try
-      C.AddObserver(O);
-      C.TriggerNotify;
-      Check(O.Changed,
-            'Observer not notified');
-      Check(O.Data = C,
-           'Core didn''t return itself as parameter in the notify');
-
-    finally
-      O.Free;
-    end;
-  finally
-    C.Free;
-  end;
-end;
-{$WARNINGS ON}
 
 //******************************************************************************
 //* TTestCaseTU                                                                *
@@ -928,6 +831,72 @@ begin
                                + ' <' + Msg.ToHeader.Address.URI + '>';
   Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
   Msg.ContentLength := 0;
+end;
+
+//******************************************************************************
+//* TestTIdSipAbstractCore                                                     *
+//******************************************************************************
+//* TestTIdSipAbstractCore Published methods ***********************************
+
+procedure TestTIdSipAbstractCore.TestNextCallID;
+var
+  CallID: String;
+begin
+  CallID := Self.Core.NextCallID;
+
+  Fetch(CallID, '@');
+
+  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
+end;
+
+procedure TestTIdSipAbstractCore.TestNextTag;
+var
+  I:    Integer;
+  Tags: TStringList;
+begin
+  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
+
+  Tags := TStringList.Create;
+  try
+    for I := 1 to 100 do
+      Tags.Add(Self.Core.NextTag);
+
+    // Find duplicates
+    Tags.Sort;
+    CheckNotEquals('', Tags[0], 'No null tags may be generated');
+
+    for I := 1 to Tags.Count - 1 do begin
+      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
+                                + IntToStr(I) + ')');
+
+      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
+    end;
+  finally
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestNotifyOfChange;
+var
+  C: TIdSipCoreWithExposedNotify;
+  O: TIdObserverListener;
+begin
+  C := TIdSipCoreWithExposedNotify.Create;
+  try
+    O := TIdObserverListener.Create;
+    try
+      C.AddObserver(O);
+      C.TriggerNotify;
+      Check(O.Changed,
+            'Observer not notified');
+      Check(O.Data = C,
+           'Core didn''t return itself as parameter in the notify');
+
+    finally
+      O.Free;
+    end;
+  finally
+    C.Free;
+  end;
 end;
 
 //******************************************************************************
