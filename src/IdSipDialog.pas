@@ -3,7 +3,7 @@ unit IdSipDialog;
 interface
 
 uses
-  Contnrs, IdURI, IdSipDialogID, IdSipMessage, IdSipHeaders, SyncObjs;
+  Contnrs, IdSipDialogID, IdSipMessage, IdSipHeaders, SyncObjs;
 
 type
   TIdSipDialog = class;
