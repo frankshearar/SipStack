@@ -233,11 +233,14 @@ end;
 
 procedure TrnidSpikeRegister.QueryClick(Sender: TObject);
 var
+  Q:            TIdSipOutboundRegistrationQuery;
   RegistrarUri: TIdSipUri;
 begin
   RegistrarUri := TIdSipUri.Create(Self.Registrar.Text);
   try
-    Self.UA.CurrentRegistrationWith(RegistrarUri).AddListener(Self);
+    Q := Self.UA.CurrentRegistrationWith(RegistrarUri);
+    Q.AddListener(Self);
+    Q.Send;
   finally
     RegistrarUri.Free;
   end;
@@ -245,11 +248,14 @@ end;
 
 procedure TrnidSpikeRegister.RegisterClick(Sender: TObject);
 var
+  Reg:          TIdSipOutboundRegister;
   RegistrarUri: TIdSipUri;
 begin
   RegistrarUri := TIdSipUri.Create(Self.Registrar.Text);
   try
-    Self.UA.RegisterWith(RegistrarUri).AddListener(Self);
+    Reg := Self.UA.RegisterWith(RegistrarUri);
+    Reg.AddListener(Self);
+    Reg.Send;
   finally
     RegistrarUri.Free;
   end;
@@ -257,11 +263,14 @@ end;
 
 procedure TrnidSpikeRegister.UnregisterClick(Sender: TObject);
 var
+  Unreg:        TIdSipOutboundUnregister;
   RegistrarUri: TIdSipUri;
 begin
   RegistrarUri := TIdSipUri.Create(Self.Registrar.Text);
   try
-    Self.UA.UnregisterFrom(RegistrarUri).AddListener(Self);
+    Unreg := Self.UA.UnregisterFrom(RegistrarUri);
+    Unreg.AddListener(Self);
+    Unreg.Send;
   finally
     RegistrarUri.Free;
   end;

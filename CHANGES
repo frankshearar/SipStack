@@ -1,5 +1,7 @@
 v0.3 (2004.12.14)
 
+* Transaction User Actions look Commands (see the Gang of Four's
+  Design Patterns book).
 * Transaction User objects (i.e., Actions) and Transactions no longer
   use their own threads for timing events - they use their
   UserAgentCore or Dispatcher to schedule events.

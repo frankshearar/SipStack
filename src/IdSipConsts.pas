@@ -51,6 +51,7 @@ const
   DomainParam                = 'domain';
   DurationParam              = 'duration';
   ErrorInfoHeader            = 'Error-Info';
+  ExpireNow                  = 0;
   ExpiresHeader              = 'Expires';
   ExpiresParam               = 'expires';
   FromHeaderFull             = 'From';

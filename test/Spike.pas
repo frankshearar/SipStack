@@ -613,6 +613,7 @@ begin
                             SdpMimeType);
 
     Session.AddSessionListener(Self);
+    Session.Send;
   finally
     Target.Free;
   end;
@@ -687,11 +688,14 @@ end;
 
 procedure TrnidSpike.RegisterClick(Sender: TObject);
 var
+  Reg:       TIdSipOutboundRegister;
   Registrar: TIdSipUri;
 begin
   Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
-    Self.UA.RegisterWith(Registrar).AddListener(Self);
+    Reg := Self.UA.RegisterWith(Registrar);
+    Reg.AddListener(Self);
+    Reg.Send;
   finally
     Registrar.Free;
   end;
@@ -705,10 +709,13 @@ end;
 procedure TrnidSpike.UnregisterClick(Sender: TObject);
 var
   Registrar: TIdSipUri;
+  Unreg:     TIdSipOutboundUnregister;
 begin
   Registrar := TIdSipUri.Create(Self.TargetUri.Text);
   try
-    Self.UA.UnregisterFrom(Registrar).AddListener(Self);
+    Unreg := Self.UA.UnregisterFrom(Registrar);
+    Unreg.AddListener(Self);
+    Unreg.Send;
   finally
     Registrar.Free;
   end;
@@ -717,11 +724,14 @@ end;
 procedure TrnidSpike.OptionsClick(Sender: TObject);
 var
   Dest: TIdSipAddressHeader;
+  Q:    TIdSipOutboundOptions;
 begin
   Dest := TIdSipAddressHeader.Create;
   try
     Dest.Value := Self.TargetUri.Text;
-    Self.UA.QueryOptions(Dest).AddListener(Self);
+    Q := Self.UA.QueryOptions(Dest);
+    Q.AddListener(Self);
+    Q.Send;
   finally
     Dest.Free;
   end;

@@ -230,7 +230,6 @@ type
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String); virtual;
-    procedure PerformAction(Action: TIdSipAction); virtual;
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateBadExtensionResponse;
   public
@@ -310,8 +309,7 @@ type
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
-    function  CreateAction: TIdSipAction; override;
-    procedure PerformAction(Action: TIdSipAction); override;
+    function CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -320,7 +318,6 @@ type
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
-    procedure TestInviteThenReInvite;
     procedure TestInviteTwice;
     procedure TestIsInbound;
     procedure TestIsInvite; override;
@@ -330,13 +327,29 @@ type
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
     procedure TestReceiveServerFailed;
-    procedure TestRedirectedInvite;
-    procedure TestReInviteThenInvite;
-    procedure TestReInviteTwice;
     procedure TestRemoveListener;
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
     procedure TestTransactionCompleted;
+  end;
+
+  TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestRedirectedInvite;
+  end;
+
+  TestTIdSipOutboundReInvite = class(TestTIdSipOutboundInvite)
+  private
+    Dialog: TIdSipDialog;
+  protected
+    function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestReInviteTwice;
   end;
 
   TestTIdSipInboundOptions = class(TestTIdSipAction)
@@ -351,14 +364,22 @@ type
     procedure TestOptionsWhenDoNotDisturb;
   end;
 
-  TestTIdSipOutboundOptions = class(TestTIdSipAction)
+  TestTIdSipOutboundOptions = class(TestTIdSipAction,
+                                    IIdSipOptionsListener)
+  private
+    ReceivedResponse: Boolean;
+
+    procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                         Response: TIdSipResponse);
   protected
     function CreateAction: TIdSipAction; override;
-    procedure PerformAction(Action: TIdSipAction); override;
+  public
+    procedure SetUp; override;
   published
     procedure TestAddListener;
     procedure TestIsOptions; override;
     procedure TestProxyAuthentication; override;
+    procedure TestReceiveResponse;
     procedure TestRemoveListener;
   end;
 
@@ -378,12 +399,11 @@ type
   TestTIdSipOutboundRegistration = class(TestTIdSipRegistration,
                                          IIdSipRegistrationListener)
   private
-    Contacts:    TIdSipContacts;
-    MinExpires:  Cardinal;
-    Reg:         TIdSipOutboundRegistration;
-    Registrar:   TIdSipAbstractUserAgent;
-    Request:     TIdSipRequest;
-    Succeeded:   Boolean;
+    Contacts:   TIdSipContacts;
+    MinExpires: Cardinal;
+    Registrar:  TIdSipAbstractUserAgent;
+    Request:    TIdSipRequest;
+    Succeeded:  Boolean;
 
     function  DigestForName(const Password: String): String;
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
@@ -393,9 +413,6 @@ type
                         CurrentBindings: TIdSipContacts);
     procedure SimulateRemoteIntervalTooBrief;
     procedure SimulateRemoteRejectProxyAuthenticationRequired;
-  protected
-    function  CreateAction: TIdSipAction; override;
-    procedure PerformAction(Action: TIdSipAction); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -403,19 +420,37 @@ type
     procedure TestAddListener;
     procedure TestCheckFirstListenerSetsPassword;
     procedure TestMethod;
-    procedure TestRegister;
-    procedure TestFindCurrentBindings;
     procedure TestProxyAuthentication; override;
     procedure TestReceiveFail;
     procedure TestReceiveIntervalTooBrief;
-    procedure TestReceiveIntervalTooBriefForOneContact;
     procedure TestReceiveMovedPermanently;
     procedure TestReceiveOK;
     procedure TestReceiveUnauthorized;
     procedure TestRemoveListener;
     procedure TestSequenceNumberIncrements;
-    procedure TestUnregister;
     procedure TestUsername;
+  end;
+
+  TestTIdSipOutboundRegister = class(TestTIdSipOutboundRegistration)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestReceiveIntervalTooBriefForOneContact;
+    procedure TestRegister;
+  end;
+
+  TestTIdSipOutboundRegistrationQuery = class(TestTIdSipOutboundRegistration)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestFindCurrentBindings;
+  end;
+
+  TestTIdSipOutboundUnregister = class(TestTIdSipOutboundRegistration)
+  protected
+    function CreateAction: TIdSipAction; override;
+  published
+    procedure TestUnregister;
   end;
 
   TestTIdSipSession = class(TestTIdSipAction,
@@ -537,7 +572,6 @@ type
                                   const Msg: String); override;
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
-    procedure PerformAction(Action: TIdSipAction); override;
   public
     procedure SetUp; override;
   published
@@ -546,7 +580,6 @@ type
     procedure TestAckWithAuthorization;
     procedure TestAckWithProxyAuthorization;
     procedure TestCall;
-    procedure TestCallTwice;
     procedure TestCallRemoteRefusal;
     procedure TestCallNetworkFailure;
     procedure TestCallSecure;
@@ -811,10 +844,13 @@ begin
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
+  Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
-  Result.AddTest(TestTIdSipOutboundRegistration.Suite);
+  Result.AddTest(TestTIdSipOutboundRegister.Suite);
+  Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
+  Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestProxyAuthentication.Suite);
@@ -1817,7 +1853,7 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy := true;
 
-  Self.Core.Call(Self.Destination, '', '');
+  Self.Core.Call(Self.Destination, '', '').Send;
 
   Invite := Self.LastSentRequest;
   Check(Invite.HasHeader(RouteHeader),
@@ -2470,6 +2506,7 @@ var
   Session: TIdSipSession;
 begin
   Session := Self.Core.Call(Self.Destination, '', '');
+  Session.Send;
 
   Self.SimulateTrying(Self.LastSentRequest);
   Check(not Session.DialogEstablished,
@@ -2988,7 +3025,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;
 begin
-  Self.Core.Call(Self.Destination, '', '');
+  Self.Core.Call(Self.Destination, '', '').Send;
   Self.SimulateTrying(Self.LastSentRequest);
   Self.SimulateRinging(Self.LastSentRequest);
 
@@ -3035,7 +3072,7 @@ begin
   for Trans := Low(TIdSipTransportType) to High(TIdSipTransportType) do begin
     Self.Dispatcher.Transport.TransportType := Trans;
     Self.Destination.Address.Transport := TransportToStr(Trans);
-    Self.Core.Call(Self.Destination, '', '');
+    Self.Core.Call(Self.Destination, '', '').Send;
 
     CheckEquals(TransportToStr(Trans),
                 TransportToStr(Self.LastSentRequest.LastHop.Transport),
@@ -3062,7 +3099,6 @@ end;
 
 procedure TestTIdSipAction.TestProxyAuthentication;
 var
-  Action:         TIdSipAction;
   InitialRequest: TIdSipRequest;
   SequenceNo:     Cardinal;
   ReAttempt:      TIdSipRequest;
@@ -3075,8 +3111,7 @@ begin
   // pick up the test in just those actions that need it. The other option is
   // to duplicate the code in those test cases that require it!
 
-  Action := Self.CreateAction;
-  Self.PerformAction(Action);
+  Self.CreateAction;
 
   InitialRequest := TIdSipRequest.Create;
   try
@@ -3116,12 +3151,6 @@ begin
 
   Password := Self.Password;
   Username := Self.Username;
-end;
-
-procedure TestTIdSipAction.PerformAction(Action: TIdSipAction);
-begin
-  raise Exception.Create(Self.ClassName
-                       + ': Don''t call this from inbound action tests');
 end;
 
 procedure TestTIdSipAction.SimulateRejectProxyUnauthorized;
@@ -4360,18 +4389,16 @@ end;
 
 function TestTIdSipOutboundInvite.CreateAction: TIdSipAction;
 var
-  Invite: TIdSipOutboundInvite;
+  Invite: TIdSipOutboundInitialInvite;
 begin
-  Result := Self.Core.AddOutboundInvite;
+  Result := Self.Core.AddOutboundInitialInvite;
 
-  Invite := Result as TIdSipOutboundInvite;
-  Invite.Invite(Self.Destination, '', '');
+  Invite := Result as TIdSipOutboundInitialInvite;
+  Invite.Destination := Self.Destination;
+  Invite.MimeType    := '';
+  Invite.Offer       := '';
   Invite.AddListener(Self);
-end;
-
-procedure TestTIdSipOutboundInvite.PerformAction(Action: TIdSipAction);
-begin
-  (Action as TIdSipOutboundInvite).Invite(Self.Destination, '', '');
+  Invite.Send;
 end;
 
 //* TestTIdSipOutboundInvite Private methods ***********************************
@@ -4619,36 +4646,14 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundInvite.TestInviteThenReInvite;
-var
-  Dialog: TIdSipDialog;
-  Invite: TIdSipOutboundInvite;
-begin
-  Invite := Self.Core.AddOutboundInvite;
-  Invite.Invite(Self.Destination, '', '');
-
-  Dialog := Self.CreateArbitraryDialog;
-  try
-    try
-      Invite.ReInvite(Self.Invite, Dialog, false, '', '');
-      Fail('Failed to bail out calling ReInvite after Invite');
-    except
-      on EIdSipTransactionUser do;
-    end;
-  finally
-    Dialog.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundInvite.TestInviteTwice;
 var
-  Invite: TIdSipOutboundInvite;
+  Invite: TIdSipAction;
 begin
-  Invite := Self.Core.AddOutboundInvite;
-  Invite.Invite(Self.Destination, '', '');
+  Invite := Self.CreateAction;
 
   try
-    Invite.Invite(Self.Destination, '', '');
+    Invite.Send;
     Fail('Failed to bail out calling Invite a 2nd time');
   except
     on EIdSipTransactionUser do;
@@ -4659,7 +4664,7 @@ procedure TestTIdSipOutboundInvite.TestIsInbound;
 var
   Invite: TIdSipOutboundInvite;
 begin
-  Invite := Self.Core.AddOutboundInvite;
+  Invite := Self.CreateAction as TIdSipOutboundInvite;
 
   Check(not Invite.IsInbound,
         Invite.ClassName + ' marked as inbound');
@@ -4680,14 +4685,17 @@ end;
 procedure TestTIdSipOutboundInvite.TestProxyAuthentication;
 var
   Ack:           TIdSipRequest;
-  Invite:        TIdSipOutboundInvite;
+  Invite:        TIdSipOutboundInitialInvite;
   InitialInvite: TIdSipRequest;
   SequenceNo:    Cardinal;
   ReInvite:      TIdSipRequest;
 begin
-  Invite := Self.Core.AddOutboundInvite;
+  Invite := Self.Core.AddOutboundInitialInvite;
   Invite.AddListener(Self);
-  Invite.Invite(Self.Destination, '', '');
+  Invite.Destination := Self.Destination;
+  Invite.MimeType    := '';
+  Invite.Offer       := '';
+  Invite.Send;
 
   InitialInvite := TIdSipRequest.Create;
   try
@@ -4776,81 +4784,6 @@ begin
     Self.CheckReceiveFailed(StatusCode);
 end;
 
-procedure TestTIdSipOutboundInvite.TestRedirectedInvite;
-var
-  Invite:         TIdSipOutboundInvite;
-  NewInvite:      TIdSipRequest;
-  OriginalInvite: TIdSipRequest;
-begin
-  OriginalInvite := Self.Core.CreateInvite(Self.Destination, '', '');
-  try
-    Invite := Self.Core.AddOutboundInvite;
-    Self.MarkSentRequestCount;
-
-    Invite.RedirectedInvite(Self.Destination,
-                            OriginalInvite);
-
-    CheckRequestSent('No INVITE sent');
-
-    NewInvite := Invite.InitialRequest;
-
-    CheckEquals(OriginalInvite.CallID,
-                NewInvite.CallID,
-                'Call-ID mismatch between original and new INVITEs');
-    CheckEquals(OriginalInvite.From.Tag,
-                NewInvite.From.Tag,
-                'From tag mismatch between original and new INVITEs');
-    Check(not NewInvite.ToHeader.HasTag,
-          'New INVITE mustn''t have a To tag');
-  finally
-    OriginalInvite.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundInvite.TestReInviteThenInvite;
-var
-  Dialog: TIdSipDialog;
-  Invite: TIdSipOutboundInvite;
-begin
-  Invite := Self.Core.AddOutboundInvite;
-
-  Dialog := Self.CreateArbitraryDialog;
-  try
-    Invite.ReInvite(Self.Invite, Dialog, false, '', '');
-
-    try
-      Invite.Invite(Self.Destination, '', '');
-      Fail('Failed to bail out calling Invite after ReInvite');
-    except
-      on EIdSipTransactionUser do;
-    end;
-  finally
-    Dialog.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundInvite.TestReInviteTwice;
-var
-  Dialog: TIdSipDialog;
-  Invite: TIdSipOutboundInvite;
-begin
-  Invite := Self.Core.AddOutboundInvite;
-
-  Dialog := Self.CreateArbitraryDialog;
-  try
-    Invite.ReInvite(Self.Invite, Dialog, false, '', '');
-
-    try
-      Invite.ReInvite(Self.Invite, Dialog, false, '', '');
-      Fail('Failed to bail out calling ReInvite a 2nd time');
-    except
-      on EIdSipTransactionUser do;
-    end;
-  finally
-    Dialog.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundInvite.TestRemoveListener;
 var
   L1, L2: TIdSipTestInviteListener;
@@ -4915,6 +4848,116 @@ begin
   Invite := Self.CreateAction as TIdSipOutboundInvite;
   Invite.TransactionCompleted;
   Check(Invite.IsTerminated, 'Outbound INVITE not marked as terminated');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundRedirectedInvite                                         *
+//******************************************************************************
+//* TestTIdSipOutboundRedirectedInvite Protected methods ***********************
+
+function TestTIdSipOutboundRedirectedInvite.CreateAction: TIdSipAction;
+var
+  Invite: TIdSipOutboundRedirectedInvite;
+begin
+  Result := Self.Core.AddOutboundRedirectedInvite;
+
+  Invite := Result as TIdSipOutboundRedirectedInvite;
+  Invite.Contact        := Self.Destination;
+  Invite.OriginalInvite := Self.Invite;
+  Invite.AddListener(Self);
+  Invite.Send;
+end;
+
+//* TestTIdSipOutboundRedirectedInvite Published methods ***********************
+
+procedure TestTIdSipOutboundRedirectedInvite.TestRedirectedInvite;
+var
+  Invite:         TIdSipOutboundRedirectedInvite;
+  NewInvite:      TIdSipRequest;
+  OriginalInvite: TIdSipRequest;
+begin
+  OriginalInvite := Self.Core.CreateInvite(Self.Destination, '', '');
+  try
+    Invite := Self.Core.AddOutboundRedirectedInvite;
+    Self.MarkSentRequestCount;
+
+    Invite.Contact := Self.Destination;
+    Invite.OriginalInvite := OriginalInvite;
+    Invite.Send;
+
+    CheckRequestSent('No INVITE sent');
+
+    NewInvite := Invite.InitialRequest;
+
+    CheckEquals(OriginalInvite.CallID,
+                NewInvite.CallID,
+                'Call-ID mismatch between original and new INVITEs');
+    CheckEquals(OriginalInvite.From.Tag,
+                NewInvite.From.Tag,
+                'From tag mismatch between original and new INVITEs');
+    Check(not NewInvite.ToHeader.HasTag,
+          'New INVITE mustn''t have a To tag');
+  finally
+    OriginalInvite.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundReInvite                                                 *
+//******************************************************************************
+//* TestTIdSipOutboundReInvite Public methods **********************************
+
+procedure TestTIdSipOutboundReInvite.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Dialog := Self.CreateArbitraryDialog;
+end;
+
+procedure TestTIdSipOutboundReInvite.TearDown;
+begin
+  Self.Dialog.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipOutboundReInvite Protected methods *******************************
+
+function TestTIdSipOutboundReInvite.CreateAction: TIdSipAction;
+var
+  Invite: TIdSipOutboundReInvite;
+begin
+  Result := Self.Core.AddOutboundReInvite;
+
+  Invite := Result as TIdSipOutboundReInvite;
+  Invite.Dialog := Self.Dialog;
+  Invite.OriginalInvite := Self.Invite;
+  Invite.AddListener(Self);
+  Invite.Send;
+end;
+
+//* TestTIdSipOutboundReInvite Published methods *******************************
+
+procedure TestTIdSipOutboundReInvite.TestReInviteTwice;
+var
+  Invite: TIdSipOutboundReInvite;
+begin
+  Invite := TIdSipOutboundReInvite.Create(Self.Core);
+  try
+    Invite.OriginalInvite    := Self.Invite;
+    Invite.Dialog            := Dialog;
+    Invite.InOutboundSession := false;
+    Invite.Send;
+
+    try
+      Invite.Send;
+      Fail('Failed to bail out calling ReInvite a 2nd time');
+    except
+      on EIdSipTransactionUser do;
+    end;
+  finally
+    Invite.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -5068,12 +5111,42 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundOptions Public methods ***********************************
 
+procedure TestTIdSipOutboundOptions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ReceivedResponse := false;
+end;
+
+//* TestTIdSipOutboundOptions Protected methods ********************************
+
+function TestTIdSipOutboundOptions.CreateAction: TIdSipAction;
+var
+  Options: TIdSipOutboundOptions;
+begin
+  Options := Self.Core.QueryOptions(Self.Core.From);
+  Options.AddListener(Self);
+  Options.Send;
+  Result := Options;
+end;
+
+//* TestTIdSipOutboundOptions Private methods **********************************
+
+procedure TestTIdSipOutboundOptions.OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                                               Response: TIdSipResponse);
+begin
+  Self.ReceivedResponse := true;
+end;
+
+//* TestTIdSipOutboundOptions Published methods ********************************
+
 procedure TestTIdSipOutboundOptions.TestAddListener;
 var
   L1, L2:  TIdSipTestOptionsListener;
   Options: TIdSipOutboundOptions;
 begin
   Options := Self.Core.QueryOptions(Self.Core.From);
+  Options.Send;
 
   L1 := TIdSipTestOptionsListener.Create;
   try
@@ -5109,12 +5182,26 @@ begin
   inherited TestProxyAuthentication;
 end;
 
+procedure TestTIdSipOutboundOptions.TestReceiveResponse;
+var
+  StatusCode: Cardinal;
+begin
+  for StatusCode := SIPOKResponseClass to SIPGlobalFailureResponseClass do begin
+    Self.ReceivedResponse := false;
+    Self.CreateAction;
+    Self.SimulateResponse(StatusCode * 100);
+    Check(Self.ReceivedResponse,
+          'Listeners not notified of response ' + IntToStr(StatusCode * 100));
+  end;
+end;
+
 procedure TestTIdSipOutboundOptions.TestRemoveListener;
 var
   L1, L2:  TIdSipTestOptionsListener;
   Options: TIdSipOutboundOptions;
 begin
   Options := Self.Core.QueryOptions(Self.Core.From);
+  Options.Send;
 
   L1 := TIdSipTestOptionsListener.Create;
   try
@@ -5136,18 +5223,6 @@ begin
   finally
     L1.Free;
   end;
-end;
-
-//* TestTIdSipOutboundOptions Protected methods ********************************
-
-function TestTIdSipOutboundOptions.CreateAction: TIdSipAction;
-begin
-  Result := Self.Core.QueryOptions(Self.Core.From);
-end;
-
-procedure TestTIdSipOutboundOptions.PerformAction(Action: TIdSipAction);
-begin
-  (Action as TIdSipOutboundOptions).QueryOptions(Self.Destination);
 end;
 
 //******************************************************************************
@@ -5233,10 +5308,8 @@ const
 begin
   inherited SetUp;
 
-  Self.Registrar := TIdSipAbstractUserAgent.Create;
+  Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
-  Self.Registrar.RemoveModule(TIdSipInviteModule);
-  Self.Registrar.AddModule(TIdSipRegisterModule);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
@@ -5251,9 +5324,6 @@ begin
 
   Self.Contacts := TIdSipContacts.Create(Self.Request.Headers);
 
-  Self.Reg := Self.Core.RegisterWith(Self.Registrar.From.Address);
-  Self.Reg.AddListener(Self);
-
   Self.Succeeded  := false;
   Self.MinExpires := TwoHours;
 end;
@@ -5265,20 +5335,6 @@ begin
   Self.Registrar.Free;
 
   inherited TearDown;
-end;
-
-//*  TestTIdSipOutboundRegistration Protected methods **************************
-
-function TestTIdSipOutboundRegistration.CreateAction: TIdSipAction;
-begin
-  Result := Self.Core.RegisterWith(Self.Registrar.From.Address);
-  (Result as TIdSipOutboundRegistration).AddListener(Self);
-end;
-
-procedure TestTIdSipOutboundRegistration.PerformAction(Action: TIdSipAction);
-begin
-  (Action as TIdSipOutboundRegistration).RegisterWith(Self.Destination.Address,
-                                                      Self.Contacts);
 end;
 
 //*  TestTIdSipOutboundRegistration Private methods ****************************
@@ -5348,7 +5404,7 @@ var
   L1, L2:       TIdSipTestRegistrationListener;
   Registration: TIdSipOutboundRegistration;
 begin
-  Registration := Self.Core.RegisterWith(Self.Registrar.From.Address);
+  Registration := Self.CreateAction as TIdSipOutboundRegistration;
 
   L1 := TIdSipTestRegistrationListener.Create;
   try
@@ -5373,7 +5429,7 @@ procedure TestTIdSipOutboundRegistration.TestCheckFirstListenerSetsPassword;
 var
   L1:           TIdSipTestRegistrationListener;
   L2:           TIdSipTestRegistrationListener;
-  Registration: TIdSipOutboundRegistration;
+  Registration: TIdSipOutboundRegister;
   Request:      TIdSipRequest;
 begin
   Registration := Self.Core.RegisterWith(Self.Registrar.From.Address);
@@ -5387,6 +5443,8 @@ begin
 
       L1.Password := 'L1';
       L2.Password := 'L2';
+
+      Registration.Send;
 
       Self.MarkSentRequestCount;
       Self.SimulateRemoteRejectProxyAuthenticationRequired;
@@ -5415,36 +5473,6 @@ begin
               'Outbound registration; Method');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestRegister;
-var
-  Request: TIdSipRequest;
-begin
-  Self.MarkSentRequestCount;
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
-  CheckRequestSent('No request sent');
-
-  Request := Self.LastSentRequest;
-  CheckEquals(Self.Registrar.From.Address.Uri,
-              Request.RequestUri.Uri,
-              'Request-URI');
-  CheckEquals(MethodRegister, Request.Method, 'Method');
-  Check(Request.Contacts.Equals(Self.Contacts),
-        'Bindings');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestFindCurrentBindings;
-var
-  Request: TIdSipRequest;
-begin
-  Self.MarkSentRequestCount;
-  Self.Reg.FindCurrentBindings(Self.Registrar.From.Address);
-  CheckRequestSent('No request sent');
-
-  Request := Self.LastSentRequest;
-  Check(Request.Contacts.IsEmpty,
-        'Contact headers present');
-end;
-
 procedure TestTIdSipOutboundRegistration.TestProxyAuthentication;
 begin
   inherited TestProxyAuthentication;
@@ -5452,6 +5480,7 @@ end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveFail;
 begin
+  Self.CreateAction;
   Self.SimulateResponse(SIPInternalServerError);
   Check(Self.ActionFailed, 'Registration succeeded');
 end;
@@ -5462,7 +5491,7 @@ const
 begin
   Self.Contacts.First;
   Self.Contacts.CurrentContact.Expires := OneHour;
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
+  Self.CreateAction;
 
   Self.MarkSentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
@@ -5478,7 +5507,106 @@ begin
   Check(Self.Succeeded, '(Re-)Registration failed');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveIntervalTooBriefForOneContact;
+procedure TestTIdSipOutboundRegistration.TestReceiveMovedPermanently;
+begin
+  Self.CreateAction;
+  Self.MarkSentRequestCount;
+  Self.SimulateMovedPermanently('sip:case@fried.neurons.org');
+  CheckRequestSent('No request re-issued for REGISTER');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveOK;
+begin
+  Self.CreateAction;
+  Self.SimulateOk(Self.LastSentRequest);
+  Check(Self.Succeeded, 'Registration failed');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestReceiveUnauthorized;
+begin
+  Self.CreateAction;
+  Self.SimulateRejectProxyUnauthorized;
+  Check(Self.Challenged,
+        'No authentication challenge for REGISTER');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestRemoveListener;
+var
+  L1, L2:       TIdSipTestRegistrationListener;
+  Registration: TIdSipOutboundRegistration;
+begin
+  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+  L1 := TIdSipTestRegistrationListener.Create;
+  try
+    L2 := TIdSipTestRegistrationListener.Create;
+    try
+      Registration.AddListener(L1);
+      Registration.AddListener(L2);
+      Registration.RemoveListener(L2);
+
+      Self.SimulateOk(Self.LastSentRequest);
+
+      Check(L1.Success,
+            'First listener not notified');
+      Check(not L2.Success,
+            'Second listener erroneously notified, ergo not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestSequenceNumberIncrements;
+var
+  SeqNo: Cardinal;
+begin
+  Self.CreateAction;
+  SeqNo := Self.LastSentRequest.CSeq.SequenceNo;
+  Self.CreateAction;
+  Check(SeqNo + 1 = Self.LastSentRequest.CSeq.SequenceNo,
+        'CSeq sequence number didn''t increment');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestUsername;
+var
+  Registration: TIdSipOutboundRegistration;
+begin
+  Registration := Self.CreateAction as TIdSipOutboundRegistration;
+
+  Self.Core.From.DisplayName := 'foo';
+  CheckEquals(Self.Core.Username,
+              Registration.Username,
+              'Username "foo"');
+
+  Self.Core.From.DisplayName := 'bar';
+  CheckEquals(Self.Core.Username,
+              Registration.Username,
+              'Username "bar"');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundRegister                                                 *
+//******************************************************************************
+//* TestTIdSipOutboundRegister Protected methods *******************************
+
+function TestTIdSipOutboundRegister.CreateAction: TIdSipAction;
+var
+  Reg: TIdSipOutboundRegister;
+begin
+  Result := Self.Core.RegisterWith(Self.Registrar.From.Address);
+
+  Reg := Result as TIdSipOutboundRegister;
+  Reg.AddListener(Self);
+  Reg.Bindings  := Self.Contacts;
+  Reg.Registrar := Self.Registrar.From.Address;
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundRegister Published methods *******************************
+
+procedure TestTIdSipOutboundRegister.TestReceiveIntervalTooBriefForOneContact;
 const
   OneHour = 3600;
 var
@@ -5498,7 +5626,7 @@ begin
   Self.Contacts.CurrentContact.Expires := OneHour;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna;expires='
                                               + IntToStr(SecondContactExpires);
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
+  Self.CreateAction;
 
   Self.MarkSentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
@@ -5534,72 +5662,80 @@ begin
   Check(Self.Succeeded, '(Re-)Registration failed');
 end;
 
-procedure TestTIdSipOutboundRegistration.TestReceiveMovedPermanently;
-begin
-  Self.MarkSentRequestCount;
-  Self.SimulateMovedPermanently('sip:case@fried.neurons.org');
-  CheckRequestSent('No request re-issued for REGISTER');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestReceiveOK;
-begin
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
-  Self.SimulateOk(Self.LastSentRequest);
-  Check(Self.Succeeded, 'Registration failed');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestReceiveUnauthorized;
-begin
-  Self.SimulateRejectProxyUnauthorized;
-  Check(Self.Challenged,
-        'No authentication challenge for REGISTER');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestRemoveListener;
-var
-  L1, L2:       TIdSipTestRegistrationListener;
-  Registration: TIdSipOutboundRegistration;
-begin
-  Registration := Self.Core.RegisterWith(Self.Registrar.From.Address);
-  L1 := TIdSipTestRegistrationListener.Create;
-  try
-    L2 := TIdSipTestRegistrationListener.Create;
-    try
-      Registration.AddListener(L1);
-      Registration.AddListener(L2);
-      Registration.RemoveListener(L2);
-
-      Self.SimulateOk(Self.LastSentRequest);
-
-      Check(L1.Success,
-            'First listener not notified');
-      Check(not L2.Success,
-            'Second listener erroneously notified, ergo not removed');
-    finally
-      L2.Free
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
-procedure TestTIdSipOutboundRegistration.TestSequenceNumberIncrements;
-var
-  SeqNo: Cardinal;
-begin
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
-  SeqNo := Self.LastSentRequest.CSeq.SequenceNo;
-  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
-  Check(SeqNo + 1 = Self.LastSentRequest.CSeq.SequenceNo,
-        'CSeq sequence number didn''t increment');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestUnregister;
+procedure TestTIdSipOutboundRegister.TestRegister;
 var
   Request: TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
-  Self.Reg.Unregister(Self.Registrar.From.Address);
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Request := Self.LastSentRequest;
+  CheckEquals(Self.Registrar.From.Address.Uri,
+              Request.RequestUri.Uri,
+              'Request-URI');
+  CheckEquals(MethodRegister, Request.Method, 'Method');
+  Check(Request.Contacts.Equals(Self.Contacts),
+        'Bindings');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundRegistrationQuery                                        *
+//******************************************************************************
+//* TestTIdSipOutboundRegistrationQuery Protected methods **********************
+
+function TestTIdSipOutboundRegistrationQuery.CreateAction: TIdSipAction;
+var
+  Reg: TIdSipOutboundRegistrationQuery;
+begin
+  Result := Self.Core.CurrentRegistrationWith(Self.Registrar.From.Address);
+
+  Reg := Result as TIdSipOutboundRegistrationQuery;
+  Reg.AddListener(Self);
+  Reg.Registrar := Self.Registrar.From.Address;
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundRegistrationQuery Published methods **********************
+
+procedure TestTIdSipOutboundRegistrationQuery.TestFindCurrentBindings;
+var
+  Request: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Request := Self.LastSentRequest;
+  Check(Request.Contacts.IsEmpty,
+        'Contact headers present');
+end;
+
+//******************************************************************************
+//* TestTIdSipOutboundUnregister                                               *
+//******************************************************************************
+//* TestTIdSipOutboundUnregister Protected methods *****************************
+
+function TestTIdSipOutboundUnregister.CreateAction: TIdSipAction;
+var
+  Reg: TIdSipOutboundUnregister;
+begin
+  Result := Self.Core.UnregisterFrom(Self.Registrar.From.Address);
+
+  Reg := Result as TIdSipOutboundUnregister;
+  Reg.AddListener(Self);
+  Reg.Registrar := Self.Registrar.From.Address;
+  Result.Send;
+end;
+
+//* TestTIdSipOutboundUnregister Published methods *****************************
+
+procedure TestTIdSipOutboundUnregister.TestUnregister;
+var
+  Request: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
   CheckRequestSent('No request sent');
 
   Request := Self.LastSentRequest;
@@ -5613,23 +5749,6 @@ begin
         'First Contact');
   CheckEquals(0, Request.QuickestExpiry,
              'Request expiry');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestUsername;
-var
-  Reg: TIdSipOutboundRegistration;
-begin
-  Reg := Self.Core.RegisterWith(Self.Registrar.From.Address);
-
-  Self.Core.From.DisplayName := 'foo';
-  CheckEquals(Self.Core.Username,
-              Reg.Username,
-              'Username "foo"');
-
-  Self.Core.From.DisplayName := 'bar';
-  CheckEquals(Self.Core.Username,
-              Reg.Username,
-              'Username "bar"');
 end;
 
 //******************************************************************************
@@ -6145,19 +6264,19 @@ begin
 end;
 
 function TestTIdSipOutboundSession.CreateAction: TIdSipAction;
+var
+  Session: TIdSipOutboundSession;
 begin
-  Result := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
-  (Result as TIdSipSession).AddSessionListener(Self);
+  Session := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
+  Session.AddSessionListener(Self);
+  Session.Send;
+
+  Result := Session;
 end;
 
 procedure TestTIdSipOutboundSession.EstablishSession(Session: TIdSipSession);
 begin
   Self.SimulateOk(Self.LastSentRequest);
-end;
-
-procedure TestTIdSipOutboundSession.PerformAction(Action: TIdSipAction);
-begin
-  (Action as TIdSipOutboundSession).Call(Self.Destination, '', '');
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
@@ -6368,7 +6487,7 @@ begin
   SessCount    := Self.Core.SessionCount;
   TranCount    := Self.Dispatcher.TransactionCount;
 
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.CreateAction as TIdSipSession;
 
   CheckRequestSent('no INVITE sent');
   Invite := Self.LastSentRequest;
@@ -6417,26 +6536,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.TestCallTwice;
-var
-  SessCount: Integer;
-  Session:   TIdSipOutboundSession;
-  TranCount: Integer;
-begin
-  SessCount := Self.Core.SessionCount;
-  TranCount := Self.Dispatcher.TransactionCount;
-
-  Session := Self.Core.Call(Self.Destination, '', '');
-  Session.Call(Self.Destination, '', '');
-
-  CheckEquals(SessCount + 1,
-              Self.Core.SessionCount,
-              'The TU layer created a second session');
-  CheckEquals(TranCount + 1,
-              Self.Dispatcher.TransactionCount,
-              'Session created a second transaction');
-end;
-
 procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
 begin
   Self.SimulateForbidden;
@@ -6451,7 +6550,7 @@ begin
   SessionCount := Self.Core.SessionCount;
   Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
 
-  Self.Core.Call(Self.Destination, '', '');
+  Self.CreateAction;
 
   CheckEquals(SessionCount,
               Self.Core.SessionCount,
@@ -6466,7 +6565,7 @@ begin
   Self.Dispatcher.Transport.TransportType := sttTLS;
 
   Self.Destination.Address.Scheme := SipsScheme;
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.CreateAction as TIdSipSession;
 
   Response := Self.Core.CreateResponse(Self.LastSentRequest,
                                        SIPRinging);
@@ -6489,7 +6588,7 @@ begin
   Self.Dispatcher.Transport.TransportType := sttTCP;
   Self.Destination.Address.Scheme := SipsScheme;
 
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.CreateAction as TIdSipSession;
 
   CheckRequestSent('INVITE wasn''t sent');
   SentInvite := Self.LastSentRequest;
@@ -6506,7 +6605,7 @@ var
 begin
   Self.Dispatcher.Transport.TransportType := sttTCP;
 
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.CreateAction as TIdSipSession;
 
   Response := Self.Core.CreateResponse(Self.LastSentRequest,
                                        SipRinging);
@@ -6523,7 +6622,6 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCallWithOffer;
 begin
-  Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
   Check(Self.LastSentRequest.ContentDisposition.IsSession,
         'Content-Disposition');
 end;
@@ -6620,7 +6718,7 @@ var
 begin
   Self.MarkSentRequestCount;
 
-  Session := Self.Core.Call(Self.Destination, '', '');
+  Session := Self.CreateAction as TIdSipSession;
   Check(not Session.DialogEstablished, 'Brand new session');
 
   CheckRequestSent('The INVITE wasn''t sent');
@@ -6775,10 +6873,10 @@ var
 begin
   // Of course this works. That's because the transaction sends the ACK for a
   // non-2xx final response.
-  for I := 3 to 6 do begin
+  for I := SIPRedirectionResponseClass to SIPGlobalFailureResponseClass do begin
     Self.MarkSentAckCount;
 
-    Self.Core.Call(Self.Destination, '', '');
+    Self.CreateAction;
 
     Self.SimulateResponse(I*100);
     CheckAckSent('Session didn''t send an ACK to a final response, '
@@ -6904,9 +7002,14 @@ end;
 //* TestProxyAuthentication Protected methods **********************************
 
 function TestProxyAuthentication.CreateAction: TIdSipAction;
+var
+  Session: TIdSipOutboundSession;
 begin
-  Result := Self.Core.Call(Self.Destination, '', '');
-  (Result as TIdSipSession).AddSessionListener(Self);
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Session.AddSessionListener(Self);
+  Session.Send;
+
+  Result := Session;
 end;
 
 procedure TestProxyAuthentication.EstablishSession(Session: TIdSipSession);
@@ -7277,7 +7380,7 @@ begin
 
   Nowhere := TIdSipAddressHeader.Create;
   try
-    Self.Method.Invite   := Self.UA.AddOutboundInvite;
+    Self.Method.Invite   := Self.UA.AddOutboundInitialInvite;
     Self.Method.Reason   := 'none';
     Self.Method.Response := Self.Response;
   finally

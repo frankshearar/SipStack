@@ -318,7 +318,13 @@ type
   TIdSipInboundRegistration = class;
   TIdSipMessageModule = class;
   TIdSipMessageModuleClass = class of TIdSipMessageModule;
+  TIdSipOutboundInitialInvite = class;
+  TIdSipOutboundRedirectedInvite = class;
+  TIdSipOutboundRegister = class;
+  TIdSipOutboundRegistrationQuery = class;
+  TIdSipOutboundReInvite = class;
   TIdSipOutboundSession = class;
+  TIdSipOutboundUnregister = class;
 
   // I (usually) represent a human being in the SIP network. I:
   // * inform any listeners when new sessions become established, modified or
@@ -343,7 +349,6 @@ type
     // Pull into UserAgent:
     KnownRegistrars: TIdSipRegistrations;
 
-    function  AddOutboundOptions: TIdSipOutboundOptions;
     function  ConvertToHeader(ValueList: TStrings): String;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
@@ -361,7 +366,6 @@ type
     procedure SetFrom(Value: TIdSipFromHeader);
 
     // Pull these into UserAgent proper:
-    function  AddOutboundRegistration: TIdSipOutboundRegistration;
     procedure InboundSessionExpire(Action: TIdSipAction);
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure ResendOk(Action: TIdSipAction);
@@ -398,6 +402,7 @@ type
     procedure AddAllowedScheme(const Scheme: String);
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+    function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
     function  AllowedExtensions: String;
@@ -430,7 +435,12 @@ type
 
     // Move to UserAgent:
     function  AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
-    function  AddOutboundInvite: TIdSipOutboundInvite;
+    function  AddOutboundInitialInvite: TIdSipOutboundInitialInvite;
+    function  AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
+    function  AddOutboundRegister: TIdSipOutboundRegister;
+    function  AddOutboundRegistrationQuery: TIdSipOutboundRegistrationQuery;
+    function  AddOutboundReInvite: TIdSipOutboundReInvite;
+    function  AddOutboundUnregister: TIdSipOutboundUnregister;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
@@ -440,16 +450,16 @@ type
     function  CreateReInvite(Dialog: TIdSipDialog;
                              const Body: String;
                              const MimeType: String): TIdSipRequest;
-    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
     function  InviteCount: Integer;
     procedure OnInboundSessionExpire(Event: TObject);
     procedure OnResendOk(Event: TObject);
     procedure OnResendReInvite(Event: TObject);
     procedure OnSessionProgress(Event: TObject);
     procedure OnTransactionComplete(Event: TObject);
-    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
     procedure TerminateAllCalls;
-    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
 
     property Contact:  TIdSipContactHeader read GetContact write SetContact;
     property From:     TIdSipFromHeader    read GetFrom write SetFrom;
@@ -580,6 +590,7 @@ type
     fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
     NonceCount:      Cardinal;
+    SentRequest:     Boolean;
     UA:              TIdSipAbstractUserAgent;
 
     function  AddAuthorizationHeader(ReAttempt: TIdSipRequest;
@@ -633,6 +644,7 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               UsingSecureTransport: Boolean); virtual;
+    procedure Send; virtual;
     procedure Terminate; virtual;
 
     property InitialRequest: TIdSipRequest read fInitialRequest;
@@ -712,11 +724,12 @@ type
     CancelRequest:                  TIdSipRequest;
     DialogEstablished:              Boolean;
     fDialog:                        TIdSipDialog;
-    InOutboundSession:              Boolean;
+    fInOutboundSession:             Boolean;
+    fMimeType:                      String;
+    fOffer:                         String;
     ReceivedFinalResponse:          Boolean;
     HasReceivedProvisionalResponse: Boolean;
     SentCancel:                     Boolean;
-    SentRequest:                    Boolean;
 
     procedure NotifyOfDialogEstablished(Response: TIdSipResponse;
                                         UsingSecureTransport: Boolean);
@@ -742,23 +755,61 @@ type
 
     procedure AddListener(const Listener: IIdSipInviteListener);
     procedure Cancel;
-    procedure Invite(Destination: TIdSipAddressHeader;
-                     const Offer: String;
-                     const MimeType: String);
-    procedure RedirectedInvite(Destination: TIdSipAddressHeader;
-                               OriginalInvite: TIdSipRequest);
-    procedure ReInvite(OriginalInvite: TIdSipRequest;
-                       Dialog: TIdSipDialog;
-                       InOutboundSession: Boolean;
-                       const Offer: String;
-                       const MimeType: String);
     procedure RemoveListener(const Listener: IIdSipInviteListener);
     procedure SendAck(Dialog: TIdSipDialog;
                       FinalResponse: TIdSipResponse);
     procedure TransactionCompleted;
     procedure Terminate; override;
 
-    property Dialog: TIdSipDialog read fDialog write fDialog;
+    property Dialog:            TIdSipDialog read fDialog write fDialog;
+    property InOutboundSession: Boolean      read fInOutboundSession write fInOutboundSession;
+    property Offer:             String       read fOffer write fOffer;
+    property MimeType:          String       read fMimeType write fMimeType;
+  end;
+
+  TIdSipOutboundInitialInvite = class(TIdSipOutboundInvite)
+  private
+    fDestination: TIdSipAddressHeader;
+
+    procedure SetDestination(Value: TIdSipAddressHeader);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property Destination: TIdSipAddressHeader read fDestination write SetDestination;
+  end;
+
+  TIdSipOutboundRedirectedInvite = class(TIdSipOutboundInvite)
+  private
+    fContact:    TIdSipAddressHeader;
+    fOriginalInvite: TIdSipRequest;
+
+    procedure SetContact(Value: TIdSipAddressHeader);
+    procedure SetOriginalInvite(Value: TIdSipRequest);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property Contact:    TIdSipAddressHeader read fContact write SetContact;
+    property OriginalInvite: TIdSipRequest   read fOriginalInvite write SetOriginalInvite;
+  end;
+
+  TIdSipOutboundReInvite = class(TIdSipOutboundInvite)
+  private
+    fOriginalInvite: TIdSipRequest;
+
+    procedure SetOriginalInvite(Value: TIdSipRequest);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property OriginalInvite: TIdSipRequest read fOriginalInvite write SetOriginalInvite;
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -780,14 +831,22 @@ type
 
   TIdSipOutboundOptions = class(TIdSipOptions)
   private
+    fServer: TIdSipAddressHeader;
+
     procedure NotifyOfResponse(Response: TIdSipResponse);
+    procedure SetServer(Value: TIdSipAddressHeader);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
   public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
     procedure AddListener(const Listener: IIdSipOptionsListener);
-    procedure QueryOptions(Server: TIdSipAddressHeader);
     procedure RemoveListener(const Listener: IIdSipOptionsListener);
+    procedure Send; override;
+
+    property Server: TIdSipAddressHeader read fServer write SetServer;
   end;
 
   TIdSipRegistration = class(TIdSipAction)
@@ -827,32 +886,71 @@ type
   // erase your references to me.
   TIdSipOutboundRegistration = class(TIdSipRegistration)
   private
-    Bindings: TIdSipContacts;
+    fRegistrar: TIdSipUri;
 
-    function  CreateRegister(Registrar: TIdSipUri;
-                             Bindings: TIdSipContacts): TIdSipRequest;
     procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure ReissueRequest(Registrar: TIdSipUri;
                              MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
                                      Response: TIdSipResponse);
+    procedure SetRegistrar(Value: TIdSipUri);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest; virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; override;
-    procedure SendRequest(Request: TIdSipRequest); override;
+    procedure SendRequest(Request: TIdSipRequest); overload; override;
+    procedure SendRequestWith(Bindings: TIdSipContacts);
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
-    procedure FindCurrentBindings(Registrar: TIdSipUri);
     procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
     procedure Unregister(Registrar: TIdSipUri);
+
+    property Registrar: TIdSipUri read fRegistrar write SetRegistrar;
+  end;
+
+  TIdSipOutboundRegistrationQuery = class(TIdSipOutboundRegistration)
+  public
+    procedure Send; override;
+  end;
+
+  TIdSipOutboundRegister = class(TIdSipOutboundRegistration)
+  private
+    fBindings:  TIdSipContacts;
+
+    procedure SetBindings(Value: TIdSipContacts);
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property Bindings: TIdSipContacts read fBindings write SetBindings;
+  end;
+
+  TIdSipOutboundUnRegister = class(TIdSipOutboundRegistration)
+  private
+    fContact: TIdSipUri;
+
+    procedure SetContact(Value: TIdSipUri);
+  protected
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest; override;
+  public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+    destructor  Destroy; override;
+
+    procedure Send; override;
+
+    property Contact: TIdSipUri read fContact write SetContact;
   end;
 
   // I am a SIP session. As such, I represent both what my dialog represents
@@ -976,8 +1074,10 @@ type
   // pointer style) should you keep a reference to the Dialog property.
   TIdSipOutboundSession = class(TIdSipSession)
   private
-    InCall:               Boolean;
-    InitialInvite:        TIdSipOutboundInvite;
+    fDestination:         TIdSipAddressHeader;
+    fInitialOffer:        String;
+    fMimeType:            String;
+    InitialInvite:        TIdSipOutboundInitialInvite;
     TargetUriSet:         TIdSipContacts;
     RedirectedInvites:    TObjectList;
     RedirectedInviteLock: TCriticalSection;
@@ -986,6 +1086,7 @@ type
                              Contact: TIdSipContactHeader);
     function  NoMoreRedirectedInvites: Boolean;
     procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
+    procedure SetDestination(Value: TIdSipAddressHeader);
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -1002,15 +1103,17 @@ type
     constructor Create(UA: TIdSipAbstractUserAgent); overload; override;
     destructor  Destroy; override;
 
-    procedure Call(Dest: TIdSipAddressHeader;
-                   const InitialOffer: String;
-                   const MimeType: String);
     procedure Cancel;
     function  CanForkOn(Response: TIdSipResponse): Boolean;
     function  IsInboundCall: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
+    procedure Send; override;
     procedure Terminate; override;
+
+    property Destination:  TIdSipAddressHeader read fDestination write SetDestination;
+    property InitialOffer: String              read fInitialOffer write fInitialOffer;
+    property MimeType:     String              read fMimeType write fMimeType;
   end;
 
   TIdActionMethod = class(TIdMethod)
@@ -1213,7 +1316,7 @@ const
   CallRedirected                 = 'Incoming call redirected';
   CannotModifyBeforeEstablished  = 'Cannot modify a session before it''s fully established';
   CannotModifyDuringModification = 'Cannot modify a session while a modification is in progress';
-  InviteInProgress               = 'An INVITE is already in progress';
+  MethodInProgress               = 'A(n) %s is already in progress';
   InviteTimeout                  = 'Incoming call timed out';
   LocalCancel                    = 'Local end cancelled call';
   LocalHangUp                    = 'Local end hung up';
@@ -2066,11 +2169,45 @@ begin
   Self.NotifyOfChange;
 end;
 
-function TIdSipAbstractUserAgent.AddOutboundInvite: TIdSipOutboundInvite;
+function TIdSipAbstractUserAgent.AddOutboundOptions: TIdSipOutboundOptions;
+begin
+  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundOptions) as TIdSipOutboundOptions;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundInitialInvite: TIdSipOutboundInitialInvite;
 begin
   // Do not call this directly. Modules call this method.
 
-  Result := Self.AddOutboundAction(TIdSipOutboundInvite) as TIdSipOutboundInvite;
+  Result := Self.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
+begin
+  // Do not call this diRedirectedctly. Modules call this method.
+
+  Result := Self.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundRegister: TIdSipOutboundRegister;
+begin
+  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundRegister) as TIdSipOutboundRegister;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundRegistrationQuery: TIdSipOutboundRegistrationQuery;
+begin
+  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundReInvite: TIdSipOutboundReInvite;
+begin
+  // Do not call this directly. Modules call this method.
+
+  Result := Self.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
+end;
+
+function TIdSipAbstractUserAgent.AddOutboundUnregister: TIdSipOutboundUnregister;
+begin
+  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
 end;
 
 function TIdSipAbstractUserAgent.AllowedContentTypes: String;
@@ -2251,11 +2388,9 @@ begin
   Self.PrepareResponse(Result, Request);
 end;
 
-function TIdSipAbstractUserAgent.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+function TIdSipAbstractUserAgent.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
 begin
-  Result := Self.AddOutboundRegistration;
-
-  Result.RegisterWith(Registrar, Self.Contact);
+  Result := Self.AddOutboundRegistrationQuery;
 end;
 
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
@@ -2372,15 +2507,14 @@ end;
 function TIdSipAbstractUserAgent.QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
 begin
   Result := Self.AddOutboundOptions;
-
-  Result.QueryOptions(Server);
+  Result.Server := Server;
 end;
 
-function TIdSipAbstractUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+function TIdSipAbstractUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
 begin
-  Result := Self.AddOutboundRegistration;
-
-  Result.RegisterWith(Registrar, Self.Contact);
+  Result := Self.AddOutboundRegister;
+  Result.Bindings.Add(Self.Contact);
+  Result.Registrar := Registrar;
 end;
 
 function TIdSipAbstractUserAgent.RegistrationCount: Integer;
@@ -2426,11 +2560,9 @@ begin
   Self.Actions.TerminateAllSessions;
 end;
 
-function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
 begin
-  Result := Self.AddOutboundRegistration;
-
-  Result.Unregister(Registrar);
+  Result := Self.AddOutboundUnregister;
 end;
 
 function TIdSipAbstractUserAgent.Username: String;
@@ -2621,16 +2753,6 @@ begin
 end;
 
 //* TIdSipAbstractUserAgent Private methods ************************************
-
-function TIdSipAbstractUserAgent.AddOutboundOptions: TIdSipOutboundOptions;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundOptions) as TIdSipOutboundOptions;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundRegistration: TIdSipOutboundRegistration;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
-end;
 
 function TIdSipAbstractUserAgent.ConvertToHeader(ValueList: TStrings): String;
 begin
@@ -2883,7 +3005,9 @@ function TIdSipUserAgent.Call(Dest: TIdSipAddressHeader;
                               const MimeType: String): TIdSipOutboundSession;
 begin
   Result := Self.AddOutboundSession;
-  Result.Call(Dest, InitialOffer, MimeType);
+  Result.Destination  := Dest;
+  Result.InitialOffer := InitialOffer;
+  Result.MimeType     := MimeType;
 end;
 
 function TIdSipUserAgent.SessionCount: Integer;
@@ -3154,6 +3278,7 @@ begin
   Self.fIsTerminated   := false;
   Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
+  Self.SentRequest     := false;
 end;
 
 destructor TIdSipAction.Destroy;
@@ -3241,6 +3366,12 @@ begin
   end
   else
     Self.NotifyOfFailure(Response);
+end;
+
+procedure TIdSipAction.Send;
+begin
+  if Self.SentRequest then
+    raise EIdSipTransactionUser.Create(Format(MethodInProgress, [Self.Method]));
 end;
 
 procedure TIdSipAction.Terminate;
@@ -3393,6 +3524,8 @@ end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
 begin
+  Self.SentRequest := true;
+  
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
@@ -3844,7 +3977,6 @@ begin
   Self.HasReceivedProvisionalResponse := false;
   Self.ReceivedFinalResponse          := false;
   Self.SentCancel                     := false;
-  Self.SentRequest                    := false;
 end;
 
 destructor TIdSipOutboundInvite.Destroy;
@@ -3867,63 +3999,6 @@ begin
 
   if Self.HasReceivedProvisionalResponse then
     Self.SendCancel;
-end;
-
-procedure TIdSipOutboundInvite.Invite(Destination: TIdSipAddressHeader;
-                                      const Offer: String;
-                                      const MimeType: String);
-var
-  Invite: TIdSipRequest;
-begin
-  if Self.SentRequest then
-    raise EIdSipTransactionUser.Create(InviteInProgress);
-
-  Invite := Self.UA.CreateInvite(Destination, Offer, MimeType);
-  try
-    Self.InitialRequest.Assign(Invite);
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
-end;
-
-procedure TIdSipOutboundInvite.RedirectedInvite(Destination: TIdSipAddressHeader;
-                                                OriginalInvite: TIdSipRequest);
-begin
-  // Use this method in the context of a redirect to an INVITE.
-  // cf RFC 3261,  section 8.1.3.4
-
-  Self.InitialRequest.Assign(OriginalInvite);
-  Self.InitialRequest.LastHop.Branch := Self.UA.NextBranch;
-  Self.InitialRequest.RequestUri := Destination.Address;
-  Self.SendRequest(Self.InitialRequest);
-end;
-
-procedure TIdSipOutboundInvite.ReInvite(OriginalInvite: TIdSipRequest;
-                                        Dialog: TIdSipDialog;
-                                        InOutboundSession: Boolean;
-                                        const Offer: String;
-                                        const MimeType: String);
-var
-  Invite: TIdSipRequest;
-begin
-  if Self.SentRequest then
-    raise EIdSipTransactionUser.Create(InviteInProgress);
-
-  Self.InOutboundSession := InOutboundSession;
-
-  Invite := Self.UA.CreateReInvite(Dialog, Offer, MimeType);
-  try
-    // Re-INVITEs use the same credentials as the original INVITE that
-    // established the dialog.
-    Invite.CopyHeaders(OriginalInvite, AuthorizationHeader);
-    Invite.CopyHeaders(OriginalInvite, ProxyAuthorizationHeader);
-
-    Self.InitialRequest.Assign(Invite);
-    Self.SendRequest(Invite);
-  finally
-    Invite.Free;
-  end;
 end;
 
 procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
@@ -4062,8 +4137,6 @@ end;
 
 procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
 begin
-  Self.SentRequest := true;
-
   Self.UA.ScheduleEvent(Self.UA.OnTransactionComplete,
                         64*DefaultT1,
                         Request.Copy);
@@ -4141,6 +4214,139 @@ begin
   Self.SentCancel := true;
   Self.CancelRequest := Self.InitialRequest.CreateCancel;
   Self.SendRequest(Self.CancelRequest);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundInitialInvite                                                *
+//******************************************************************************
+//* TIdSipOutboundInitialInvite Public methods *********************************
+
+constructor TIdSipOutboundInitialInvite.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fDestination := TIdSipAddressHeader.Create;
+end;
+
+destructor TIdSipOutboundInitialInvite.Destroy;
+begin
+  Self.fDestination.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundInitialInvite.Send;
+var
+  Invite: TIdSipRequest;
+begin
+  inherited Send;
+
+  Invite := Self.UA.CreateInvite(Self.Destination, Self.Offer, Self.MimeType);
+  try
+    Self.InitialRequest.Assign(Invite);
+    Self.SendRequest(Invite);
+  finally
+    Invite.Free;
+  end;
+end;
+
+//* TIdSipOutboundInitialInvite Protected methods ******************************
+
+procedure TIdSipOutboundInitialInvite.SetDestination(Value: TIdSipAddressHeader);
+begin
+  Self.fDestination.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRedirectedInvite                                             *
+//******************************************************************************
+//* TIdSipOutboundRedirectedInvite Public methods ******************************
+
+constructor TIdSipOutboundRedirectedInvite.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fContact        := TIdSipAddressHeader.Create;
+  Self.fOriginalInvite := TIdSipRequest.Create;
+end;
+
+destructor TIdSipOutboundRedirectedInvite.Destroy;
+begin
+  Self.fOriginalInvite.Free;
+  Self.fContact.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundRedirectedInvite.Send;
+begin
+  // Use this method in the context of a redirect to an INVITE.
+  // cf RFC 3261,  section 8.1.3.4
+
+  inherited Send;
+
+  Self.InitialRequest.Assign(OriginalInvite);
+  Self.InitialRequest.LastHop.Branch := Self.UA.NextBranch;
+  Self.InitialRequest.RequestUri := Self.Contact.Address;
+  Self.SendRequest(Self.InitialRequest);
+end;
+
+//* TIdSipOutboundRedirectedInvite Private methods *****************************
+
+procedure TIdSipOutboundRedirectedInvite.SetContact(Value: TIdSipAddressHeader);
+begin
+  Self.fContact.Assign(Value);
+end;
+
+procedure TIdSipOutboundRedirectedInvite.SetOriginalInvite(Value: TIdSipRequest);
+begin
+  Self.OriginalInvite.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundReInvite                                                     *
+//******************************************************************************
+//* TIdSipOutboundReInvite Public methods **************************************
+
+constructor TIdSipOutboundReInvite.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fOriginalInvite := TIdSipRequest.Create;
+end;
+
+destructor TIdSipOutboundReInvite.Destroy;
+begin
+  Self.fOriginalInvite.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundReInvite.Send;
+var
+  Invite: TIdSipRequest;
+begin
+  inherited Send;
+
+  Invite := Self.UA.CreateReInvite(Self.Dialog, Self.Offer, Self.MimeType);
+  try
+    // Re-INVITEs use the same credentials as the original INVITE that
+    // established the dialog.
+    Invite.CopyHeaders(Self.OriginalInvite, AuthorizationHeader);
+    Invite.CopyHeaders(Self.OriginalInvite, ProxyAuthorizationHeader);
+
+    Self.InitialRequest.Assign(Invite);
+    Self.SendRequest(Invite);
+  finally
+    Invite.Free;
+  end;
+end;
+
+//* TIdSipOutboundReInvite Private methods *************************************
+
+procedure TIdSipOutboundReInvite.SetOriginalInvite(Value: TIdSipRequest);
+begin
+  Self.fOriginalInvite.Assign(Value);
 end;
 
 //******************************************************************************
@@ -4224,27 +4430,43 @@ end;
 //******************************************************************************
 //* TIdSipOutboundOptions Public methods ***************************************
 
+constructor TIdSipOutboundOptions.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fServer := TIdSipAddressHeader.Create;
+end;
+
+destructor TIdSipOutboundOptions.Destroy;
+begin
+  Self.fServer.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
 begin
   Self.Listeners.AddListener(Listener);
 end;
 
-procedure TIdSipOutboundOptions.QueryOptions(Server: TIdSipAddressHeader);
+procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipOutboundOptions.Send;
 var
   Options: TIdSipRequest;
 begin
-  Options := Self.UA.CreateOptions(Server);
+  inherited Send;
+
+  Options := Self.UA.CreateOptions(Self.Server);
   try
     Self.InitialRequest.Assign(Options);
     Self.SendRequest(Options);
   finally
     Options.Free;
   end;
-end;
-
-procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
-begin
-  Self.Listeners.RemoveListener(Listener);
 end;
 
 //* TIdSipOutboundOptions Protected methods ************************************
@@ -4276,6 +4498,11 @@ begin
   end;
 
   Self.Terminate;
+end;
+
+procedure TIdSipOutboundOptions.SetServer(Value: TIdSipAddressHeader);
+begin
+  Self.fServer.Assign(Value);
 end;
 
 //******************************************************************************
@@ -4486,12 +4713,12 @@ constructor TIdSipOutboundRegistration.Create(UA: TIdSipAbstractUserAgent);
 begin
   inherited Create(UA);
 
-  Self.Bindings := TIdSipContacts.Create;
+  Self.fRegistrar := TIdSipUri.Create('');
 end;
 
 destructor TIdSipOutboundRegistration.Destroy;
 begin
-  Self.Bindings.Free;
+  Self.fRegistrar.Free;
 
   inherited Destroy;
 end;
@@ -4501,27 +4728,12 @@ begin
   Self.Listeners.AddListener(Listener);
 end;
 
-procedure TIdSipOutboundRegistration.FindCurrentBindings(Registrar: TIdSipUri);
-var
-  BlankBindings: TIdSipContacts;
-begin
-  BlankBindings := TIdSipContacts.Create;
-  try
-    Self.RegisterWith(Registrar, BlankBindings);
-  finally
-    BlankBindings.Free;
-  end;
-end;
-
 procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
 var
   Request: TIdSipRequest;
 begin
   Request := Self.CreateRegister(Registrar, Bindings);
   try
-    Self.Bindings.Clear;
-    Self.Bindings.Add(Bindings);
-
     Self.SendRequest(Request);
   finally
     Request.Free;
@@ -4554,12 +4766,11 @@ var
 begin
   RemovalBindings := TIdSipContacts.Create;
   try
-    Self.Bindings.Clear;
-    Self.Bindings.Add(ContactHeaderFull);
-    Self.Bindings.First;
-    Self.Bindings.CurrentContact.IsWildCard := true;
+    RemovalBindings.Add(ContactHeaderFull);
+    RemovalBindings.First;
+    RemovalBindings.CurrentContact.IsWildCard := true;
 
-    Request := Self.CreateRegister(Registrar, Bindings);
+    Request := Self.CreateRegister(Registrar, RemovalBindings);
     try
       Request.FirstExpires.NumericValue := 0;
 
@@ -4577,6 +4788,27 @@ end;
 procedure TIdSipOutboundRegistration.ActionSucceeded(Response: TIdSipResponse);
 begin
   Self.NotifyOfSuccess(Response);
+end;
+
+function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
+                                                   Bindings: TIdSipContacts): TIdSipRequest;
+var
+  ToHeader: TIdSipToHeader;
+begin
+  ToHeader := TIdSipToHeader.Create;
+  try
+    ToHeader.Address := Registrar;
+
+    Result := Self.UA.CreateRegister(ToHeader);
+
+    // Bindings explicitly carries all Contact information. Thus we must remove
+    // any Contact information already in Result.
+    Result.Headers.RemoveAll(ContactHeaderFull);
+
+    Result.AddHeaders(Bindings);
+  finally
+    ToHeader.Free;
+  end;
 end;
 
 procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
@@ -4629,11 +4861,15 @@ end;
 
 function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                                UsingSecureTransport: Boolean): Boolean;
+var
+  NewAttempt: TIdSipOutboundRegister;
 begin
   Result := false;
 
   if Response.HasHeader(ContactHeaderFull) then begin
-    Self.UA.RegisterWith(Response.FirstContact.Address);
+    NewAttempt := Self.UA.RegisterWith(Response.FirstContact.Address);
+    NewAttempt.AddListeners(Self.Listeners);
+    NewAttempt.Send;
 
     Result := true;
   end;
@@ -4646,28 +4882,19 @@ begin
   inherited SendRequest(Request);
 end;
 
-//* TIdSipOutboundRegistration Private methods *********************************
-
-function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
-                                                   Bindings: TIdSipContacts): TIdSipRequest;
+procedure TIdSipOutboundRegistration.SendRequestWith(Bindings: TIdSipContacts);
 var
-  ToHeader: TIdSipToHeader;
+  Request: TIdSipRequest;
 begin
-  ToHeader := TIdSipToHeader.Create;
+  Request := Self.CreateRegister(Self.Registrar, Bindings);
   try
-    ToHeader.Address := Registrar;
-
-    Result := Self.UA.CreateRegister(ToHeader);
-
-    // Bindings explicitly carries all Contact information. Thus we must remove
-    // any Contact information already in Result.
-    Result.Headers.RemoveAll(ContactHeaderFull);
-
-    Result.AddHeaders(Bindings);
+    Self.SendRequest(Request);
   finally
-    ToHeader.Free;
+    Request.Free;
   end;
 end;
+
+//* TIdSipOutboundRegistration Private methods *********************************
 
 procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
@@ -4696,29 +4923,35 @@ procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
                                                     MinimumExpiry: Cardinal);
 var
   Bindings: TIdSipContacts;
+  OriginalBindings: TIdSipContacts;
   Request: TIdSipRequest;
 begin
   // We received a 423 Interval Too Brief from the registrar. Therefore we
   // make a new REGISTER request with the registrar's minimum expiry.
-  Request := Self.CreateRegister(Registrar, Self.Bindings);
+  OriginalBindings := TIdSipContacts.Create(Self.InitialRequest.Headers);
   try
-    Bindings := TIdSipContacts.Create(Request.Headers);
+    Request := Self.CreateRegister(Registrar, OriginalBindings);
     try
-      Bindings.First;
-      while Bindings.HasNext do begin
-        if Bindings.CurrentContact.WillExpire then
-          Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
-                                                 MinimumExpiry);
-        Bindings.Next;
+      Bindings := TIdSipContacts.Create(Request.Headers);
+      try
+        Bindings.First;
+        while Bindings.HasNext do begin
+          if Bindings.CurrentContact.WillExpire then
+            Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
+                                                   MinimumExpiry);
+          Bindings.Next;
+        end;
+      finally
+        Bindings.Free;
       end;
-    finally
-      Bindings.Free;
-    end;
 
-    Request.FirstExpires.NumericValue := MinimumExpiry;
-    Self.SendRequest(Request);
+      Request.FirstExpires.NumericValue := MinimumExpiry;
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
   finally
-    Request.Free;
+    OriginalBindings.Free;
   end;
 end;
 
@@ -4750,6 +4983,118 @@ begin
   finally
     Bindings.Free;
   end;
+end;
+
+procedure TIdSipOutboundRegistration.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.fRegistrar.Uri := Value.Uri;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegistrationQuery                                            *
+//******************************************************************************
+//* TIdSipOutboundRegistrationQuery Public methods *****************************
+
+procedure TIdSipOutboundRegistrationQuery.Send;
+var
+  BlankBindings: TIdSipContacts;
+begin
+  inherited Send;
+
+  BlankBindings := TIdSipContacts.Create;
+  try
+    Self.SendRequestWith(BlankBindings);
+  finally
+    BlankBindings.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegister                                                     *
+//******************************************************************************
+//* TIdSipOutboundRegister Public methods **************************************
+
+constructor TIdSipOutboundRegister.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fBindings  := TIdSipContacts.Create;
+end;
+
+destructor TIdSipOutboundRegister.Destroy;
+begin
+  Self.fBindings.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundRegister.Send;
+begin
+  inherited Send;
+
+  Self.SendRequestWith(Self.Bindings);
+end;
+
+//* TIdSipOutboundRegister Private methods *************************************
+
+procedure TIdSipOutboundRegister.SetBindings(Value: TIdSipContacts);
+begin
+  Self.fBindings.Clear;
+  Self.fBindings.Add(Value);
+end;
+
+//******************************************************************************
+//* TIdSipOutboundUnRegister                                                   *
+//******************************************************************************
+//* TIdSipOutboundUnRegister Public methods ************************************
+
+constructor TIdSipOutboundUnRegister.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.fContact := TIdSipUri.Create('');
+end;
+
+destructor TIdSipOutboundUnRegister.Destroy;
+begin
+  Self.fContact.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundUnRegister.Send;
+var
+  BindingsRemoval: TIdSipContacts;
+begin
+  inherited Send;
+
+  BindingsRemoval := TIdSipContacts.Create;
+  try
+    BindingsRemoval.Add(ContactHeaderFull);
+    BindingsRemoval.First;
+    BindingsRemoval.CurrentContact.Value := ContactWildCard;
+
+    Self.SendRequestWith(BindingsRemoval);
+  finally
+    BindingsRemoval.Free;
+  end;
+end;
+
+//* TIdSipOutboundUnRegister Protected methods *********************************
+
+function TIdSipOutboundUnRegister.CreateRegister(Registrar: TIdSipUri;
+                                                 Bindings: TIdSipContacts): TIdSipRequest;
+begin
+  Result := inherited CreateRegister(Registrar, Bindings);
+
+  Result.FirstExpires.NumericValue := ExpireNow;
+end;
+
+//* TIdSipOutboundUnRegister Private methods ***********************************
+
+procedure TIdSipOutboundUnRegister.SetContact(Value: TIdSipUri);
+begin
+  Self.fContact.Uri := Value.Uri;
 end;
 
 //******************************************************************************
@@ -4856,6 +5201,8 @@ begin
 end;
 
 function TIdSipSession.Modify(const Offer, ContentType: String): TIdSipOutboundInvite;
+var
+  ReInvite: TIdSipOutboundReInvite;
 begin
   Result := nil;
 
@@ -4867,15 +5214,17 @@ begin
     if Self.ModificationInProgress then
       raise EIdSipTransactionUser.Create(CannotModifyDuringModification);
 
-    Result := Self.UA.AddOutboundInvite;
+    ReInvite := Self.UA.AddOutboundReInvite;
+    ReInvite.MimeType          := ContentType;
+    ReInvite.Dialog            := Self.Dialog;
+    ReInvite.InOutboundSession := Self.IsOutboundCall;
+    ReInvite.Offer             := Offer;
+    ReInvite.OriginalInvite    := Self.InitialRequest;
+    ReInvite.AddListener(Self);
+    ReInvite.Send;
 
-    Result.AddListener(Self);
-    Result.ReInvite(Self.InitialRequest,
-                    Self.Dialog,
-                    Self.IsOutboundCall,
-                    Offer,
-                    ContentType);
-    Self.ModifyAttempt := Result;
+    Self.ModifyAttempt := ReInvite;
+    Result := ReInvite;
   finally
     Self.ModifyLock.Release;
   end;
@@ -5403,11 +5752,11 @@ constructor TIdSipOutboundSession.Create(UA: TIdSipAbstractUserAgent);
 begin
   inherited Create(UA);
 
-  Self.InCall := false;
+  Self.fDestination := TIdSipAddressHeader.Create;
 
   Self.TargetUriSet := TIdSipContacts.Create;
 
-  Self.InitialInvite := Self.UA.AddOutboundInvite;
+  Self.InitialInvite := Self.UA.Actions.AddOutboundAction(Self.UA, TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
   Self.InitialInvite.AddListener(Self);
 
   // The UA manages the lifetimes of all outbound INVITEs!
@@ -5426,19 +5775,9 @@ begin
   Self.RedirectedInviteLock.Free;
 
   Self.TargetUriSet.Free;
+  Self.fDestination.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipOutboundSession.Call(Dest: TIdSipAddressHeader;
-                                     const InitialOffer: String;
-                                     const MimeType: String);
-begin
-  if not Self.InCall then begin
-    Self.InCall := true;
-
-    Self.InitialInvite.Invite(Dest, InitialOffer, MimeType);
-  end;
 end;
 
 procedure TIdSipOutboundSession.Cancel;
@@ -5492,6 +5831,16 @@ function TIdSipOutboundSession.ModifyWaitTime: Cardinal;
 begin
   // 2.1s <= WaitTime <= 4s, in 10ms units
   Result := GRandomNumber.NextCardinal(190)*10 + 2100
+end;
+
+procedure TIdSipOutboundSession.Send;
+begin
+  inherited Send;
+
+  Self.InitialInvite.Destination := Self.Destination;
+  Self.InitialInvite.Offer       := Self.InitialOffer;
+  Self.InitialInvite.MimeType    := Self.MimeType;
+  Self.InitialInvite.Send;
 end;
 
 procedure TIdSipOutboundSession.Terminate;
@@ -5660,12 +6009,13 @@ end;
 procedure TIdSipOutboundSession.AddNewRedirect(OriginalInvite: TIdSipRequest;
                                                Contact: TIdSipContactHeader);
 var
-  Redirect: TIdSipOutboundInvite;
+  Redirect: TIdSipOutboundRedirectedInvite;
 begin
-  Redirect := Self.UA.AddOutboundInvite;
+  Redirect := Self.UA.AddOutboundRedirectedInvite;
+  Redirect.Contact := Contact;
+  Redirect.OriginalInvite := OriginalInvite;
   Redirect.AddListener(Self);
-  Redirect.RedirectedInvite(Contact,
-                            OriginalInvite);
+  Redirect.Send;
 end;
 
 function TIdSipOutboundSession.NoMoreRedirectedInvites: Boolean;
@@ -5686,6 +6036,11 @@ begin
   finally
     Self.RedirectedInviteLock.Release;
   end;
+end;
+
+procedure TIdSipOutboundSession.SetDestination(Value: TIdSipAddressHeader);
+begin
+  Self.fDestination.Assign(Value);
 end;
 
 //******************************************************************************

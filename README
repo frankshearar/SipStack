@@ -35,6 +35,5 @@ Known bugs:
   know if this is a bug in Indy's code or if I'm doing something
   subtly wrong in my code.
 * TLS tests fail because of something to do with the certificates.
-* There's a race condition for inbound sessions with glare.
 
 Frank Shearar, 2004/12/14
