@@ -14,8 +14,8 @@ interface
 uses
   Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSocketHandle, SyncObjs,
-  TestFramework, TestFrameworkEx, TestFrameworkSip;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, SyncObjs, TestFramework,
+  TestFrameworkEx, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)

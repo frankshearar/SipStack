@@ -12,8 +12,7 @@ unit IdRTPDiagnostics;
 interface
 
 uses
-  Classes, Contnrs, ExtCtrls, Graphics, IdObservable, IdRTP, IdSocketHandle,
-  SyncObjs;
+  Classes, Contnrs, ExtCtrls, Graphics, IdObservable, IdRTP, SyncObjs;
 
 type
   TIdHistogramEntry = class(TObject)

@@ -17,8 +17,7 @@ interface
 
 uses
   Classes, Contnrs, IdAssignedNumbers, IdEmailAddress, IdInterfacedObject,
-  IdNotification, IdRTP, IdRTPServer, IdSimpleParser, IdSocketHandle,
-  IdUDPServer, SyncObjs;
+  IdNotification, IdRTP, IdRTPServer, IdSimpleParser, IdUDPServer, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -748,7 +747,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdGlobal, SysUtils;
+  IdGlobal, IdSocketHandle, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';

@@ -12,8 +12,7 @@ unit IdDTMFPanel;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdSdp, IdSocketHandle,
-  IdTimerQueue, StdCtrls;
+  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdSdp, IdTimerQueue, StdCtrls;
 
 type
   TIdColourButton = class(TPanel)

@@ -12,8 +12,8 @@ unit IdRTP;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdNotification, IdSocketHandle,
-  IdTimerQueue, SyncObjs, SysUtils, Types;
+  Classes, Contnrs, IdInterfacedObject, IdNotification, IdTimerQueue, SyncObjs,
+   SysUtils, Types;
 
 type
   TIdCardinalArray        = array of Cardinal;

@@ -12,8 +12,8 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle, IdUDPServer, SyncObjs,
-  TestFramework, TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdUDPServer, SyncObjs, TestFramework,
+  TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
@@ -559,7 +559,7 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdStack, SysUtils;
+  IdSimpleParser, IdSocketHandle, IdStack, SysUtils;
 
 function Suite: ITestSuite;
 begin

@@ -12,7 +12,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdGlobal, IdRTP, IdSocketHandle, TestFramework, TestFrameworkRtp;
+  IdGlobal, IdRTP, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)

@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdObservable, IdRTP, IdSipCore,
-  IdSocketHandle, SyncObjs, SysUtils, TestFrameworkEx;
+  SyncObjs, SysUtils, TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)

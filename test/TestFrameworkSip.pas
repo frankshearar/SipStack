@@ -14,7 +14,7 @@ interface
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipMessage,
   IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  IdSocketHandle, SysUtils, TestFrameworkEx;
+  SysUtils, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
