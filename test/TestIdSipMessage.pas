@@ -1458,33 +1458,13 @@ end;
 
 procedure TestTIdSipRequest.TestAsString;
 var
-  Expected: TStringList;
-  Received: TStringList;
-  Req:      TIdSipRequest;
+  Req: TIdSipRequest;
 begin
-  Expected := TStringList.Create;
+  Req := TIdSipMessage.ReadRequestFrom(Self.Request.AsString);
   try
-    Expected.Text := BasicRequest;
-    Expected.Sort;
-
-    Received := TStringList.Create;
-    try
-      Received.Text := Self.Request.AsString;
-
-      Req := TIdSipMessage.ReadRequestFrom(Self.Request.AsString);
-      try
-        Check(not Req.IsMalformed, 'Sanity check AsString');
-      finally
-        Req.Free;
-      end;
-
-      Received.Sort;
-      CheckEquals(Expected, Received, 'AsString');
-    finally
-      Received.Free;
-    end;
+    Check(Req.Equals(Self.Request), 'AsString');
   finally
-    Expected.Free;
+    Req.Free;
   end;
 end;
 
