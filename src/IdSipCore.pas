@@ -1909,24 +1909,13 @@ end;
 
 procedure TIdSipUserAgentCore.TerminateAllCalls;
 var
-  CopyOfSessions: TObjectList;
-  I:              Integer;
+  I: Integer;
 begin
-  // We copy the sessions because when they terminate we lose our reference
-  // to them and we remove them from Self.Actions
   Self.ActionLock.Acquire;
   try
-    CopyOfSessions := TObjectList.Create(false);
-    try
-      for I := 0 to Self.Actions.Count - 1 do
-        if Self.ActionAt(I).IsSession and not Self.ActionAt(I).IsTerminated then
-          CopyOfSessions.Add(Self.ActionAt(I));
-
-      for I := 0 to CopyOfSessions.Count - 1 do
-        (CopyOfSessions[I] as TIdSipAction).Terminate;
-    finally
-      CopyOfSessions.Free;
-    end;
+    for I := 0 to Self.Actions.Count - 1 do
+      if not Self.ActionAt(I).IsTerminated then
+        Self.ActionAt(I).Terminate;
   finally
     Self.ActionLock.Release;
   end;
