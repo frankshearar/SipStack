@@ -334,18 +334,6 @@ type
   TIdSipSessionProc = procedure(Session: TIdSipSession;
                                 Invite: TIdSipRequest) of object;
 
-  TIdSipMessageWait = class(TIdNotifyEventWait)
-  private
-    fMessage: TIdSipMessage;
-
-    procedure SetMessage(Value: TIdSipMessage);
-  public
-    constructor Create; virtual;
-    destructor  Destroy; override;
-
-    property Message: TIdSipMessage read fMessage write SetMessage;
-  end;
-
   // I maintain a list of Actions. You may query me for various statistics, as
   // well as do things to particular actions.
   // The FindFooAndPerform methods require some explanation. The Event
@@ -1984,32 +1972,6 @@ end;
 function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
 begin
   Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
-end;
-
-//******************************************************************************
-//* TIdSipMessageWait                                                          *
-//******************************************************************************
-//* TIdSipMessageWait Public methods *******************************************
-
-constructor TIdSipMessageWait.Create;
-begin
-  inherited Create;
-
-  Self.fMessage := TIdSipRequest.Create;
-end;
-
-destructor TIdSipMessageWait.Destroy;
-begin
-  Self.Message.Free;
-
-  inherited Destroy;
-end;
-
-//* TIdSipMessageWait Private methods ******************************************
-
-procedure TIdSipMessageWait.SetMessage(Value: TIdSipMessage);
-begin
-  Self.Message.Assign(Value);
 end;
 
 //******************************************************************************

@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdDateTimeStamp, IdInterfacedObject,
-  IdSimpleParser, IdSipConsts, SyncObjs, SysUtils;
+  IdSimpleParser, IdSipConsts, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -1317,6 +1317,18 @@ type
 
     function GetHeaderName(Header: String): String;
     function GetHeaderValue(Header: String): String;
+  end;
+
+  TIdSipMessageWait = class(TIdNotifyEventWait)
+  private
+    fMessage: TIdSipMessage;
+
+    procedure SetMessage(Value: TIdSipMessage);
+  public
+    constructor Create; virtual;
+    destructor  Destroy; override;
+
+    property Message: TIdSipMessage read fMessage write SetMessage;
   end;
 
   EBadHeader = class(EParserError);
@@ -7827,6 +7839,32 @@ begin
     Fetch(Result, ':');
     Result := Trim(Result);
   end;
+end;
+
+//******************************************************************************
+//* TIdSipMessageWait                                                          *
+//******************************************************************************
+//* TIdSipMessageWait Public methods *******************************************
+
+constructor TIdSipMessageWait.Create;
+begin
+  inherited Create;
+
+  Self.fMessage := TIdSipRequest.Create;
+end;
+
+destructor TIdSipMessageWait.Destroy;
+begin
+  Self.Message.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipMessageWait Private methods ******************************************
+
+procedure TIdSipMessageWait.SetMessage(Value: TIdSipMessage);
+begin
+  Self.Message.Assign(Value);
 end;
 
 //******************************************************************************
