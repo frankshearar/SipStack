@@ -23,8 +23,11 @@ type
     function NextDouble: Double; virtual;
     function NextCardinal(Max: Cardinal): Cardinal; overload;
     function NextHexString: String;
+    function NextHighestPowerOf2(N: Cardinal): Cardinal;
+    function NextRandomBits(NumBits: Cardinal): Cardinal;
     function NextSipUserAgentBranch: String; virtual; abstract;
     function NextSipUserAgentTag: String; virtual; abstract;
+    function NumBitsNeeded(N: Cardinal): Cardinal;
   end;
 
   // I do NOT supply you with cryptographically adequate random numbers!
@@ -50,7 +53,7 @@ var
 implementation
 
 uses
-  IdSipConsts, SysUtils;
+  IdRTP, IdSipConsts, Math, SysUtils;
 
 //******************************************************************************
 //* TIdRandomNumber                                                            *
@@ -64,11 +67,7 @@ end;
 
 function TIdRandomNumber.NextCardinal: Cardinal;
 begin
-  // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
-  // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
-  // Cryptography". If peer review shows it to be decent, that is. Or we trust
-  // Schneier & Ferguson blindly.
-  Result := Random(MaxInt);
+  Result := Self.NextRandomBits(Self.NumBitsNeeded(High(Cardinal)));
 end;
 
 function TIdRandomNumber.NextDouble: Double;
@@ -78,9 +77,12 @@ begin
 end;
 
 function TIdRandomNumber.NextCardinal(Max: Cardinal): Cardinal;
+var
+  NumBits: Byte;
 begin
+  NumBits := Self.NextHighestPowerOf2(Max);
   repeat
-    Result := Self.NextCardinal;
+    Result := Self.NextRandomBits(NumBits);
   until Result <= Max;
 
   Assert(Result <= Max, 'Result > Max');
@@ -90,6 +92,33 @@ function TIdRandomNumber.NextHexString: String;
 begin
   // Generate a hex-string representing a random 32-bit number.
   Result := IntToHex(Self.NextCardinal, Sizeof(Cardinal)*2);
+end;
+
+function TIdRandomNumber.NextHighestPowerOf2(N: Cardinal): Cardinal;
+begin
+  Result := 1;
+
+  while (Result < N) do
+    Result := MultiplyCardinal(Result, 2);
+end;
+
+function TIdRandomNumber.NextRandomBits(NumBits: Cardinal): Cardinal;
+begin
+  // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
+  // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
+  // Cryptography". If peer review shows it to be decent, that is. Or we trust
+  // Schneier & Ferguson blindly.
+
+  Result := Random(Self.NextHighestPowerOf2(NumBits));
+end;
+
+function TIdRandomNumber.NumBitsNeeded(N: Cardinal): Cardinal;
+begin
+  Result := 1;
+  while (N > 1) do begin
+    N := N div 2;
+    Inc(Result);
+  end;
 end;
 
 //******************************************************************************
