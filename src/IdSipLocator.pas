@@ -297,6 +297,7 @@ const
   NaptrDeliverTo          = 'D2';
   NaptrServiceMiddleToken = NaptrDelimiter + NaptrDeliverTo;
 
+  NaptrDefaultFlags      = 's';
   NaptrNullFlag          = '';
   NaptrSipService        = 'SIP';
   NaptrSipsService       = 'SIPS';
