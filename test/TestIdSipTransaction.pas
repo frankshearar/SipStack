@@ -4915,7 +4915,7 @@ procedure TTransactionDispatcherListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipNullTransport.Create;
+  Self.Receiver := TIdSipMockTransport.Create;
 end;
 
 procedure TTransactionDispatcherListenerMethodTestCase.TearDown;

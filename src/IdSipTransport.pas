@@ -12,8 +12,8 @@ unit IdSipTransport;
 interface
 
 uses
-  Contnrs, IdException, IdInterfacedObject, IdNotification, IdSipMessage,
-  IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
+  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification,
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
   IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
 
 type
@@ -59,6 +59,7 @@ type
     TransportListeners:        TIdNotificationList;
     TransportSendingListeners: TIdNotificationList;
 
+    class function TransportRegistry: TStrings;
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); virtual; abstract;
@@ -93,7 +94,10 @@ type
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
-    class function TransportFor(const Transport: String): TIdSipTransportClass;
+    class function  TransportFor(const Transport: String): TIdSipTransportClass;
+    class procedure RegisterTransport(const Name: String;
+                                      const TransportType: TIdSipTransportClass);
+    class procedure UnregisterTransport(const Name: String);
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -218,21 +222,6 @@ type
     procedure Stop; override;
   end;
 
-  // I provide a transport that does nothing.
-  TIdSipNullTransport = class(TIdSipTransport)
-  private
-    FakeBindings: TIdSocketHandles;
-  protected
-    function  GetBindings: TIdSocketHandles; override;
-    function  GetPort: Cardinal; override;
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    function GetTransportType: String; override;
-    function IsNull: Boolean; override;
-  end;
-
   TIdSipTransportExceptionMethod = class(TIdNotification)
   private
     fException: Exception;
@@ -322,21 +311,40 @@ implementation
 uses
   IdSipConsts, IdTCPServer;
 
+var
+  GTransportTypes: TStrings;
+
 //******************************************************************************
 //* TIdSipTransport                                                            *
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
 class function TIdSipTransport.TransportFor(const Transport: String): TIdSipTransportClass;
+var
+  Index: Integer;
 begin
-  // TODO change this to look up in a registry
-       if (Transport = NullTransport) then Result := TIdSipNullTransport
-  else if (Transport = SctpTransport) then Result := TIdSipSCTPTransport
-  else if (Transport = TcpTransport)  then Result := TIdSipTCPTransport
-  else if (Transport = TlsTransport)  then Result := TIdSipTLSTransport
-  else if (Transport = UdpTransport)  then Result := TIdSipUDPTransport
+  Index := Self.TransportRegistry.IndexOf(Transport);
+
+  if (Index <> -1) then
+    Result := TIdSipTransportClass(Self.TransportRegistry.Objects[Index])
   else
     raise EUnknownTransport.Create('TIdSipTransport.TransportFor: ' + Transport);
+end;
+
+class procedure TIdSipTransport.RegisterTransport(const Name: String;
+                                                  const TransportType: TIdSipTransportClass);
+begin
+  if (Self.TransportRegistry.IndexOf(Name) = -1) then
+    Self.TransportRegistry.AddObject(Name, TObject(TransportType));
+end;
+
+class procedure TIdSipTransport.UnregisterTransport(const Name: String);
+var
+  Index: Integer;
+begin
+  Index := Self.TransportRegistry.IndexOf(Name);
+  if (Index <> -1) then
+    Self.TransportRegistry.Delete(Index);
 end;
 
 constructor TIdSipTransport.Create;
@@ -655,6 +663,11 @@ begin
 end;
 
 //* TIdSipTransport Private methods ********************************************
+
+class function TIdSipTransport.TransportRegistry: TStrings;
+begin
+  Result := GTransportTypes;
+end;
 
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
 begin
@@ -1079,47 +1092,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipNullTransport                                                        *
-//******************************************************************************
-//* TIdSipNullTransport Public methods *****************************************
-
-constructor TIdSipNullTransport.Create;
-begin
-  inherited Create;
-
-  Self.FakeBindings := TIdSocketHandles.Create(nil);
-end;
-
-destructor TIdSipNullTransport.Destroy;
-begin
-  Self.FakeBindings.Free;
-
-  inherited Destroy;
-end;
-
-function TIdSipNullTransport.GetTransportType: String;
-begin
-  Result := NullTransport;
-end;
-
-function TIdSipNullTransport.IsNull: Boolean;
-begin
-  Result := true;
-end;
-
-//* TIdSipNullTransport Protected methods **************************************
-
-function TIdSipNullTransport.GetBindings: TIdSocketHandles;
-begin
-  Result := Self.FakeBindings;
-end;
-
-function TIdSipNullTransport.GetPort: Cardinal;
-begin
-  Result := 0;
-end;
-
-//******************************************************************************
 //* TIdSipTransportExceptionMethod                                             *
 //******************************************************************************
 //* TIdSipTransportExceptionMethod Public methods ******************************
@@ -1200,4 +1172,13 @@ begin
   Self.fTransport  := Transport;
 end;
 
+initialization
+  GTransportTypes := TStringList.Create;
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSCTPTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport,  TIdSipTCPTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport,  TIdSipTLSTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport,  TIdSipUDPTransport);
+finalization
+  GTransportTypes.Free;
 end.

@@ -160,6 +160,7 @@ type
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
+    procedure TestRegisterTransport;
     procedure TestSendRequest;
     procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
@@ -263,13 +264,6 @@ type
   end;
 }
 
-  TestTIdSipNullTransport = class(TestTIdSipTransport)
-  protected
-    function TransportType: TIdSipTransportClass; override;
-  published
-    procedure TestIsNull; override;
-  end;
-
   TestTIdSipMockTransport = class(TestTIdSipTransport)
   protected
     function TransportType: TIdSipTransportClass; override;
@@ -366,7 +360,6 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
-//  Result.AddTest(TestTIdSipNullTransport.Suite);
 //  Result.AddTest(TestTIdSipMockTransport.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
@@ -599,7 +592,7 @@ begin
 
   Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
-  Self.LastSentResponse := TIdSipResponse.Create;  
+  Self.LastSentResponse := TIdSipResponse.Create;
 
   Self.HighPortTransport := Self.TransportType.Create;
   Self.ConfigureTransport(Self.HighPortTransport,
@@ -1135,6 +1128,34 @@ begin
   Self.HighPortTransport.Send(Self.Request);
 
   Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestRegisterTransport;
+const
+  Foo = 'foo';
+  TransportType: TIdSipTransportClass = TIdSipUDPTransport;
+begin
+  try
+    TIdSipTransport.TransportFor(Foo);
+    Fail('Didn''t blow up on an unknown transport ' + Foo);
+  except
+    on EUnknownTransport do;
+  end;
+
+  TIdSipTransport.RegisterTransport(Foo, TransportType);
+  try
+    Check(TransportType = TIdSipTransport.TransportFor(Foo),
+          Foo + ' transport type not registered');
+  finally
+    TIdSipTransport.UnregisterTransport(Foo);
+  end;
+
+  try
+    TIdSipTransport.TransportFor(Foo);
+    Fail('Didn''t unregister transport ' + Foo);
+  except
+    on EUnknownTransport do;
+  end;
 end;
 
 procedure TestTIdSipTransport.TestSendRequest;
@@ -1881,24 +1902,6 @@ begin
   Check(not Self.Transport.IsSecure, 'SCTP transport marked as secure');
 end;
 }
-
-//******************************************************************************
-//* TestTIdSipNullTransport                                                    *
-//******************************************************************************
-//* TestTIdSipNullTransport Protected methods **********************************
-
-function TestTIdSipNullTransport.TransportType: TIdSipTransportClass;
-begin
-  Result := TIdSipNullTransport;
-end;
-
-//* TestTIdSipNullTransport Published methods **********************************
-
-procedure TestTIdSipNullTransport.TestIsNull;
-begin
-  Check(Self.HighPortTransport.IsNull, 'Null transport marked as non-null');
-end;
-
 //******************************************************************************
 //* TestTIdSipMockTransport                                                    *
 //******************************************************************************
@@ -1918,7 +1921,7 @@ procedure TTransportMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Transport := TIdSipNullTransport.Create;
+  Self.Transport := TIdSipMockTransport.Create;
 end;
 
 procedure TTransportMethodTestCase.TearDown;
