@@ -453,7 +453,7 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
-  TIdSipActionAuthenticationChallengeMethod = class(TIdMethod)
+  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdMethod)
   private
     fAction:        TIdSipAction;
     fFirstPassword: String;
@@ -754,7 +754,7 @@ type
     property Response: TIdSipResponse        read fResponse write fResponse;
   end;
 
-  TIdSipOptionsListenerFailureMethod = class(TIdSipOptionsMethod)
+  TIdSipOptionsFailureMethod = class(TIdSipOptionsMethod)
   private
     fReason: String;
   public
@@ -763,12 +763,12 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipOptionsListenerSuccessMethod = class(TIdSipOptionsMethod)
+  TIdSipOptionsSuccessMethod = class(TIdSipOptionsMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TIdSipRegistrationListenerFailedMethod = class(TIdSipRegistrationMethod)
+  TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
   private
     fReason: String;
   public
@@ -777,12 +777,12 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipRegistrationListenerSucceededMethod = class(TIdSipRegistrationMethod)
+  TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TIdSipUserAgentListenerDroppedUnmatchedResponseMethod = class(TIdMethod)
+  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
     fResponse: TIdSipResponse;
@@ -793,7 +793,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
-  TIdSipUserAgentListenerInboundCallMethod = class(TIdMethod)
+  TIdSipUserAgentInboundCallMethod = class(TIdMethod)
   private
     fSession: TIdSipInboundSession;
   public
@@ -2183,9 +2183,9 @@ end;
 
 procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
-  Notification: TIdSipUserAgentListenerInboundCallMethod;
+  Notification: TIdSipUserAgentInboundCallMethod;
 begin
-  Notification := TIdSipUserAgentListenerInboundCallMethod.Create;
+  Notification := TIdSipUserAgentInboundCallMethod.Create;
   try
     Notification.Session := Session;
 
@@ -2198,9 +2198,9 @@ end;
 procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;
                                                       Receiver: TIdSipTransport);
 var
-  Notification: TIdSipUserAgentListenerDroppedUnmatchedResponseMethod;
+  Notification: TIdSipUserAgentDroppedUnmatchedResponseMethod;
 begin
-  Notification := TIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Create;
+  Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Response := Response;
@@ -2392,13 +2392,13 @@ end;
 
 function TIdSipAction.NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
 var
-  Notification: TIdSipActionAuthenticationChallengeMethod;
+  Notification: TIdSipActionListenerAuthenticationChallengeMethod;
 begin
   // We present the authentication challenge to all listeners but only accept
   // the first listener's password. The responsibility of listener order rests
   // firmly on your own shoulders.
 
-  Notification := TIdSipActionAuthenticationChallengeMethod.Create;
+  Notification := TIdSipActionListenerAuthenticationChallengeMethod.Create;
   try
     Notification.Action   := Self;
     Notification.Response := Response;
@@ -2596,11 +2596,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionAuthenticationChallengeMethod                                  *
+//* TIdSipActionListenerAuthenticationChallengeMethod                          *
 //******************************************************************************
-//* TIdSipActionAuthenticationChallengeMethod Public methods *******************
+//* TIdSipActionListenerAuthenticationChallengeMethod Public methods ***********
 
-procedure TIdSipActionAuthenticationChallengeMethod.Run(const Subject: IInterface);
+procedure TIdSipActionListenerAuthenticationChallengeMethod.Run(const Subject: IInterface);
 var
   DiscardedPassword: String;
   Listener:          IIdSipActionListener;
@@ -3531,11 +3531,11 @@ end;
 procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipOptionsListenerSuccessMethod;
+  Notification:    TIdSipOptionsSuccessMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipOptionsListenerSuccessMethod.Create;
+    Notification := TIdSipOptionsSuccessMethod.Create;
     try
       Notification.Options  := Self;
       Notification.Response := Response;
@@ -3855,11 +3855,11 @@ end;
 procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationListenerFailedMethod;
+  Notification:    TIdSipRegistrationFailedMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipRegistrationListenerFailedMethod.Create;
+    Notification := TIdSipRegistrationFailedMethod.Create;
     try
       Notification.CurrentBindings := CurrentBindings;
       Notification.Reason          := Response.Description;
@@ -3951,11 +3951,11 @@ end;
 procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationListenerSucceededMethod;
+  Notification:    TIdSipRegistrationSucceededMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipRegistrationListenerSucceededMethod.Create;
+    Notification := TIdSipRegistrationSucceededMethod.Create;
     try
       Notification.CurrentBindings := CurrentBindings;
       Notification.Registration    := Self;
@@ -4032,11 +4032,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOptionsListenerFailureMethod                                         *
+//* TIdSipOptionsFailureMethod                                                 *
 //******************************************************************************
-//* TIdSipOptionsListenerFailureMethod Public methods **************************
+//* TIdSipOptionsFailureMethod Public methods **********************************
 
-procedure TIdSipOptionsListenerFailureMethod.Run(const Subject: IInterface);
+procedure TIdSipOptionsFailureMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipOptionsListener).OnFailure(Self.Options,
                                                Self.Response,
@@ -4044,22 +4044,22 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOptionsListenerSuccessMethod                                         *
+//* TIdSipOptionsSuccessMethod                                                 *
 //******************************************************************************
-//* TIdSipOptionsListenerSuccessMethod Public methods **************************
+//* TIdSipOptionsSuccessMethod Public methods **********************************
 
-procedure TIdSipOptionsListenerSuccessMethod.Run(const Subject: IInterface);
+procedure TIdSipOptionsSuccessMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipOptionsListener).OnSuccess(Self.Options,
                                                Self.Response);
 end;
 
 //******************************************************************************
-//* TIdSipRegistrationListenerFailedMethod                                     *
+//* TIdSipRegistrationFailedMethod                                             *
 //******************************************************************************
-//* TIdSipRegistrationListenerFailedMethod Public methods **********************
+//* TIdSipRegistrationFailedMethod Public methods ******************************
 
-procedure TIdSipRegistrationListenerFailedMethod.Run(const Subject: IInterface);
+procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
                                                     Self.CurrentBindings,
@@ -4067,33 +4067,33 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRegistrationListenerSucceededMethod                                  *
+//* TIdSipRegistrationSucceededMethod                                          *
 //******************************************************************************
-//* TIdSipRegistrationListenerSucceededMethod Public methods *******************
+//* TIdSipRegistrationSucceededMethod Public methods ***************************
 
-procedure TIdSipRegistrationListenerSucceededMethod.Run(const Subject: IInterface);
+procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
                                                     Self.CurrentBindings);
 end;
 
 //******************************************************************************
-//* TIdSipUserAgentListenerDroppedUnmatchedResponseMethod                      *
+//* TIdSipUserAgentDroppedUnmatchedResponseMethod                              *
 //******************************************************************************
-//* TIdSipUserAgentListenerDroppedUnmatchedResponseMethod Public methods *******
+//* TIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***************
 
-procedure TIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedResponse(Self.Response,
                                                                   Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipUserAgentListenerInboundCallMethod                                   *
+//* TIdSipUserAgentInboundCallMethod                                           *
 //******************************************************************************
-//* TIdSipUserAgentListenerInboundCallMethod Public methods ********************
+//* TIdSipUserAgentInboundCallMethod Public methods ****************************
 
-procedure TIdSipUserAgentListenerInboundCallMethod.Run(const Subject: IInterface);
+procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
 end;

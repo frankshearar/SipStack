@@ -233,10 +233,10 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipTransportListenerExceptionMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportExceptionMethod = class(TTransportMethodTestCase)
   private
     Exception: Exception;
-    Method:    TIdSipTransportListenerExceptionMethod;
+    Method:    TIdSipTransportExceptionMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -244,9 +244,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportListenerReceiveRequestMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportReceiveRequestMethod = class(TTransportMethodTestCase)
   private
-    Method:  TIdSipTransportListenerReceiveRequestMethod;
+    Method:  TIdSipTransportReceiveRequestMethod;
     Request: TIdSipRequest;
   public
     procedure SetUp; override;
@@ -255,9 +255,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportListenerReceiveResponseMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportReceiveResponseMethod = class(TTransportMethodTestCase)
   private
-    Method:   TIdSipTransportListenerReceiveResponseMethod;
+    Method:   TIdSipTransportReceiveResponseMethod;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -266,9 +266,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportListenerRejectedMessageMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportRejectedMessageMethod = class(TTransportMethodTestCase)
   private
-    Method: TIdSipTransportListenerRejectedMessageMethod;
+    Method: TIdSipTransportRejectedMessageMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -276,9 +276,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportSendingListenerRequestMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportSendingRequestMethod = class(TTransportMethodTestCase)
   private
-    Method:  TIdSipTransportSendingListenerRequestMethod;
+    Method:  TIdSipTransportSendingRequestMethod;
     Request: TIdSipRequest;
   public
     procedure SetUp; override;
@@ -287,9 +287,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipTransportSendingListenerResponseMethod = class(TTransportMethodTestCase)
+  TestTIdSipTransportSendingResponseMethod = class(TTransportMethodTestCase)
   private
-    Method:  TIdSipTransportSendingListenerResponseMethod;
+    Method:  TIdSipTransportSendingResponseMethod;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -312,12 +312,12 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
-  Result.AddTest(TestTIdSipTransportListenerExceptionMethod.Suite);
-  Result.AddTest(TestTIdSipTransportListenerReceiveRequestMethod.Suite);
-  Result.AddTest(TestTIdSipTransportListenerReceiveResponseMethod.Suite);
-  Result.AddTest(TestTIdSipTransportListenerRejectedMessageMethod.Suite);
-  Result.AddTest(TestTIdSipTransportSendingListenerRequestMethod.Suite);
-  Result.AddTest(TestTIdSipTransportSendingListenerResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
+  Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransportReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransportRejectedMessageMethod.Suite);
+  Result.AddTest(TestTIdSipTransportSendingRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransportSendingResponseMethod.Suite);
 end;
 
 //******************************************************************************
@@ -1560,22 +1560,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportListenerExceptionMethod                                 *
+//* TestTIdSipTransportExceptionMethod                                         *
 //******************************************************************************
-//* TestTIdSipTransportListenerExceptionMethod Public methods ******************
+//* TestTIdSipTransportExceptionMethod Public methods **************************
 
-procedure TestTIdSipTransportListenerExceptionMethod.SetUp;
+procedure TestTIdSipTransportExceptionMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Exception := EUnknownTransport.Create('');
 
-  Self.Method := TIdSipTransportListenerExceptionMethod.Create;
+  Self.Method := TIdSipTransportExceptionMethod.Create;
   Self.Method.Exception := Self.Exception;
   Self.Method.Reason    := 'Bar';
 end;
 
-procedure TestTIdSipTransportListenerExceptionMethod.TearDown;
+procedure TestTIdSipTransportExceptionMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Exception.Free;
@@ -1583,9 +1583,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportListenerExceptionMethod Published methods ***************
+//* TestTIdSipTransportExceptionMethod Published methods ***********************
 
-procedure TestTIdSipTransportListenerExceptionMethod.TestRun;
+procedure TestTIdSipTransportExceptionMethod.TestRun;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -1605,22 +1605,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportListenerReceiveRequestMethod                            *
+//* TestTIdSipTransportReceiveRequestMethod                                    *
 //******************************************************************************
-//* TestTIdSipTransportListenerReceiveRequestMethod Public methods *************
+//* TestTIdSipTransportReceiveRequestMethod Public methods *********************
 
-procedure TestTIdSipTransportListenerReceiveRequestMethod.SetUp;
+procedure TestTIdSipTransportReceiveRequestMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Request := TIdSipRequest.Create;
 
-  Self.Method := TIdSipTransportListenerReceiveRequestMethod.Create;
+  Self.Method := TIdSipTransportReceiveRequestMethod.Create;
   Self.Method.Receiver := Self.Transport;
   Self.Method.Request  := Self.Request;
 end;
 
-procedure TestTIdSipTransportListenerReceiveRequestMethod.TearDown;
+procedure TestTIdSipTransportReceiveRequestMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Request.Free;
@@ -1628,9 +1628,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportListenerReceiveRequestMethod Published methods **********
+//* TestTIdSipTransportReceiveRequestMethod Published methods ******************
 
-procedure TestTIdSipTransportListenerReceiveRequestMethod.TestRun;
+procedure TestTIdSipTransportReceiveRequestMethod.TestRun;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -1649,22 +1649,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportListenerReceiveResponseMethod                           *
+//* TestTIdSipTransportReceiveResponseMethod                                   *
 //******************************************************************************
-//* TestTIdSipTransportListenerReceiveResponseMethod Public methods ************
+//* TestTIdSipTransportReceiveResponseMethod Public methods ********************
 
-procedure TestTIdSipTransportListenerReceiveResponseMethod.SetUp;
+procedure TestTIdSipTransportReceiveResponseMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipTransportListenerReceiveResponseMethod.Create;
+  Self.Method := TIdSipTransportReceiveResponseMethod.Create;
   Self.Method.Receiver := Self.Transport;
   Self.Method.Response := Self.Response;
 end;
 
-procedure TestTIdSipTransportListenerReceiveResponseMethod.TearDown;
+procedure TestTIdSipTransportReceiveResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -1672,9 +1672,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportListenerReceiveResponseMethod Published methods *********
+//* TestTIdSipTransportReceiveResponseMethod Published methods *****************
 
-procedure TestTIdSipTransportListenerReceiveResponseMethod.TestRun;
+procedure TestTIdSipTransportReceiveResponseMethod.TestRun;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -1693,29 +1693,29 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportListenerRejectedMessageMethod                           *
+//* TestTIdSipTransportRejectedMessageMethod                                   *
 //******************************************************************************
-//* TestTIdSipTransportListenerRejectedMessageMethod Public methods ************
+//* TestTIdSipTransportRejectedMessageMethod Public methods ********************
 
-procedure TestTIdSipTransportListenerRejectedMessageMethod.SetUp;
+procedure TestTIdSipTransportRejectedMessageMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipTransportListenerRejectedMessageMethod.Create;
+  Self.Method := TIdSipTransportRejectedMessageMethod.Create;
   Self.Method.Msg    := 'Foo';
   Self.Method.Reason := 'Bar';
 end;
 
-procedure TestTIdSipTransportListenerRejectedMessageMethod.TearDown;
+procedure TestTIdSipTransportRejectedMessageMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportListenerRejectedMessageMethod Published methods *********
+//* TestTIdSipTransportRejectedMessageMethod Published methods *****************
 
-procedure TestTIdSipTransportListenerRejectedMessageMethod.TestRun;
+procedure TestTIdSipTransportRejectedMessageMethod.TestRun;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -1736,22 +1736,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportSendingListenerRequestMethod                            *
+//* TestTIdSipTransportSendingRequestMethod                                    *
 //******************************************************************************
-//* TestTIdSipTransportSendingListenerRequestMethod Public methods *************
+//* TestTIdSipTransportSendingRequestMethod Public methods *********************
 
-procedure TestTIdSipTransportSendingListenerRequestMethod.SetUp;
+procedure TestTIdSipTransportSendingRequestMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Request := TIdSipRequest.Create;
 
-  Self.Method := TIdSipTransportSendingListenerRequestMethod.Create;
+  Self.Method := TIdSipTransportSendingRequestMethod.Create;
   Self.Method.Request := Self.Request;
   Self.Method.Sender  := Self.Transport;
 end;
 
-procedure TestTIdSipTransportSendingListenerRequestMethod.TearDown;
+procedure TestTIdSipTransportSendingRequestMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Request.Free;
@@ -1759,9 +1759,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportSendingListenerRequestMethod Published methods **********
+//* TestTIdSipTransportSendingRequestMethod Published methods ******************
 
-procedure TestTIdSipTransportSendingListenerRequestMethod.TestRun;
+procedure TestTIdSipTransportSendingRequestMethod.TestRun;
 var
   Listener: TIdSipTestTransportSendingListener;
 begin
@@ -1780,22 +1780,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTransportSendingListenerResponseMethod                           *
+//* TestTIdSipTransportSendingResponseMethod                                   *
 //******************************************************************************
-//* TestTIdSipTransportSendingListenerResponseMethod Public methods ************
+//* TestTIdSipTransportSendingResponseMethod Public methods ********************
 
-procedure TestTIdSipTransportSendingListenerResponseMethod.SetUp;
+procedure TestTIdSipTransportSendingResponseMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipTransportSendingListenerResponseMethod.Create;
+  Self.Method := TIdSipTransportSendingResponseMethod.Create;
   Self.Method.Response := Self.Response;
   Self.Method.Sender   := Self.Transport;
 end;
 
-procedure TestTIdSipTransportSendingListenerResponseMethod.TearDown;
+procedure TestTIdSipTransportSendingResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -1803,9 +1803,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportSendingListenerResponseMethod Published methods *********
+//* TestTIdSipTransportSendingResponseMethod Published methods *****************
 
-procedure TestTIdSipTransportSendingListenerResponseMethod.TestRun;
+procedure TestTIdSipTransportSendingResponseMethod.TestRun;
 var
   Listener: TIdSipTestTransportSendingListener;
 begin

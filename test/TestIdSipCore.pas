@@ -342,9 +342,9 @@ type
     procedure TestSuccessfulAuthentication;
   end;
 
-  TestTIdSipActionAuthenticationChallengeMethod = class(TTestCase)
+  TestTIdSipActionListenerAuthenticationChallengeMethod = class(TTestCase)
   private
-    Method:   TIdSipActionAuthenticationChallengeMethod;
+    Method:   TIdSipActionListenerAuthenticationChallengeMethod;
     Response: TIdSipResponse;
     UA:       TIdSipUserAgentCore;
   public
@@ -479,9 +479,9 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipOptionsListenerFailureMethod = class(TOptionsMethodTestCase)
+  TestTIdSipOptionsFailureMethod = class(TOptionsMethodTestCase)
   private
-    Method: TIdSipOptionsListenerFailureMethod;
+    Method: TIdSipOptionsFailureMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -489,9 +489,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipOptionsListenerSuccessMethod = class(TOptionsMethodTestCase)
+  TestTIdSipOptionsSuccessMethod = class(TOptionsMethodTestCase)
   private
-    Method: TIdSipOptionsListenerSuccessMethod;
+    Method: TIdSipOptionsSuccessMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -509,9 +509,9 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipRegistrationListenerFailedMethod = class(TestRegistrationMethod)
+  TestTIdSipRegistrationFailedMethod = class(TestRegistrationMethod)
   private
-    Method: TIdSipRegistrationListenerFailedMethod;
+    Method: TIdSipRegistrationFailedMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -519,9 +519,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipRegistrationListenerSucceededMethod = class(TestRegistrationMethod)
+  TestTIdSipRegistrationSucceededMethod = class(TestRegistrationMethod)
   private
-    Method: TIdSipRegistrationListenerSucceededMethod;
+    Method: TIdSipRegistrationSucceededMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -529,9 +529,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod = class(TTestCase)
+  TestTIdSipUserAgentDroppedUnmatchedResponseMethod = class(TTestCase)
   private
-    Method:   TIdSipUserAgentListenerDroppedUnmatchedResponseMethod;
+    Method:   TIdSipUserAgentDroppedUnmatchedResponseMethod;
     Receiver: TIdSipTransport;
     Response: TIdSipResponse;
   public
@@ -541,9 +541,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUserAgentListenerInboundCallMethod = class(TTestCase)
+  TestTIdSipUserAgentInboundCallMethod = class(TTestCase)
   private
-    Method:  TIdSipUserAgentListenerInboundCallMethod;
+    Method:  TIdSipUserAgentInboundCallMethod;
     Request: TIdSipRequest;
     Session: TIdSipInboundSession;
     UA:      TIdSipUserAgentCore;
@@ -579,19 +579,19 @@ begin
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestProxyAuthentication.Suite);
-  Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
+  Result.AddTest(TestTIdSipActionListenerAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
   Result.AddTest(TestBugHunt.Suite);
-  Result.AddTest(TestTIdSipOptionsListenerFailureMethod.Suite);
-  Result.AddTest(TestTIdSipOptionsListenerSuccessMethod.Suite);
-  Result.AddTest(TestTIdSipRegistrationListenerFailedMethod.Suite);
-  Result.AddTest(TestTIdSipRegistrationListenerSucceededMethod.Suite);
-  Result.AddTest(TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Suite);
-  Result.AddTest(TestTIdSipUserAgentListenerInboundCallMethod.Suite);
+  Result.AddTest(TestTIdSipOptionsFailureMethod.Suite);
+  Result.AddTest(TestTIdSipOptionsSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
+  Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
 end;
 
 //******************************************************************************
@@ -3985,11 +3985,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod                              *
+//* TestTIdSipActionListenerAuthenticationChallengeMethod                              *
 //******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
+//* TestTIdSipActionListenerAuthenticationChallengeMethod Public methods ***************
 
-procedure TestTIdSipActionAuthenticationChallengeMethod.SetUp;
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
@@ -4000,7 +4000,7 @@ begin
 
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
+  Self.Method := TIdSipActionListenerAuthenticationChallengeMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
   try
@@ -4012,7 +4012,7 @@ begin
   Self.Method.Response := Self.Response;
 end;
 
-procedure TestTIdSipActionAuthenticationChallengeMethod.TearDown;
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -4021,9 +4021,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipActionAuthenticationChallengeMethod Published methods ************
+//* TestTIdSipActionListenerAuthenticationChallengeMethod Published methods ************
 
-procedure TestTIdSipActionAuthenticationChallengeMethod.Run;
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.Run;
 var
   L1, L2: TIdSipTestRegistrationListener;
 begin
@@ -5064,17 +5064,17 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipOptionsListenerFailureMethod                                     *
+//* TestTIdSipOptionsFailureMethod                                             *
 //******************************************************************************
-//* TestTIdSipOptionsListenerFailureMethod Public methods **********************
+//* TestTIdSipOptionsFailureMethod Public methods ******************************
 
-procedure TestTIdSipOptionsListenerFailureMethod.SetUp;
+procedure TestTIdSipOptionsFailureMethod.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipOptionsListenerFailureMethod.Create;
+  Self.Method := TIdSipOptionsFailureMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
   try
@@ -5084,16 +5084,16 @@ begin
   end;
 end;
 
-procedure TestTIdSipOptionsListenerFailureMethod.TearDown;
+procedure TestTIdSipOptionsFailureMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipOptionsListenerFailureMethod Published methods *******************
+//* TestTIdSipOptionsFailureMethod Published methods ***************************
 
-procedure TestTIdSipOptionsListenerFailureMethod.TestRun;
+procedure TestTIdSipOptionsFailureMethod.TestRun;
 var
   Listener: TIdSipTestOptionsListener;
 begin
@@ -5115,17 +5115,17 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipOptionsListenerSuccessMethod                                     *
+//* TestTIdSipOptionsSuccessMethod                                             *
 //******************************************************************************
-//* TestTIdSipOptionsListenerSuccessMethod Public methods **********************
+//* TestTIdSipOptionsSuccessMethod Public methods ******************************
 
-procedure TestTIdSipOptionsListenerSuccessMethod.SetUp;
+procedure TestTIdSipOptionsSuccessMethod.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipOptionsListenerSuccessMethod.Create;
+  Self.Method := TIdSipOptionsSuccessMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
   try
@@ -5135,16 +5135,16 @@ begin
   end;
 end;
 
-procedure TestTIdSipOptionsListenerSuccessMethod.TearDown;
+procedure TestTIdSipOptionsSuccessMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipOptionsListenerSuccessMethod Published methods *******************
+//* TestTIdSipOptionsSuccessMethod Published methods ***************************
 
-procedure TestTIdSipOptionsListenerSuccessMethod.TestRun;
+procedure TestTIdSipOptionsSuccessMethod.TestRun;
 var
   Listener: TIdSipTestOptionsListener;
 begin
@@ -5196,30 +5196,30 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipRegistrationListenerFailedMethod                                 *
+//* TestTIdSipRegistrationFailedMethod                                         *
 //******************************************************************************
-//* TestTIdSipRegistrationListenerFailedMethod Public methods ******************
+//* TestTIdSipRegistrationFailedMethod Public methods **************************
 
-procedure TestTIdSipRegistrationListenerFailedMethod.SetUp;
+procedure TestTIdSipRegistrationFailedMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipRegistrationListenerFailedMethod.Create;
+  Self.Method := TIdSipRegistrationFailedMethod.Create;
   Self.Method.CurrentBindings := Self.Bindings;
   Self.Method.Reason          := 'No good reason';
   Self.Method.Registration    := Self.Reg;
 end;
 
-procedure TestTIdSipRegistrationListenerFailedMethod.TearDown;
+procedure TestTIdSipRegistrationFailedMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipRegistrationListenerFailedMethod Published methods ***************
+//* TestTIdSipRegistrationFailedMethod Published methods ***********************
 
-procedure TestTIdSipRegistrationListenerFailedMethod.TestRun;
+procedure TestTIdSipRegistrationFailedMethod.TestRun;
 var
   L: TIdSipTestRegistrationListener;
 begin
@@ -5240,29 +5240,29 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipRegistrationListenerSucceededMethod                              *
+//* TestTIdSipRegistrationSucceededMethod                                      *
 //******************************************************************************
-//* TestTIdSipRegistrationListenerSucceededMethod Public methods ***************
+//* TestTIdSipRegistrationSucceededMethod Public methods ***********************
 
-procedure TestTIdSipRegistrationListenerSucceededMethod.SetUp;
+procedure TestTIdSipRegistrationSucceededMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipRegistrationListenerSucceededMethod.Create;
+  Self.Method := TIdSipRegistrationSucceededMethod.Create;
   Self.Method.CurrentBindings := Self.Bindings;
   Self.Method.Registration    := Self.Reg;
 end;
 
-procedure TestTIdSipRegistrationListenerSucceededMethod.TearDown;
+procedure TestTIdSipRegistrationSucceededMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipRegistrationListenerSucceededMethod Published methods ************
+//* TestTIdSipRegistrationSucceededMethod Published methods ********************
 
-procedure TestTIdSipRegistrationListenerSucceededMethod.TestRun;
+procedure TestTIdSipRegistrationSucceededMethod.TestRun;
 var
   L: TIdSipTestRegistrationListener;
 begin
@@ -5281,23 +5281,23 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod                  *
+//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod                          *
 //******************************************************************************
-//* TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod Public methods ***
+//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***********
 
-procedure TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod.SetUp;
+procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Receiver := TIdSipMockTransport.Create(0);
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Create;
+  Self.Method := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   Self.Method.Receiver := Self.Receiver;
   Self.Method.Response := Self.Response;
 end;
 
-procedure TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod.TearDown;
+procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -5306,9 +5306,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod Published methods
+//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod Published methods ********
 
-procedure TestTIdSipUserAgentListenerDroppedUnmatchedResponseMethod.TestRun;
+procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.TestRun;
 var
   L: TIdSipTestUserAgentListener;
 begin
@@ -5327,11 +5327,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUserAgentListenerInboundCallMethod                               *
+//* TestTIdSipUserAgentInboundCallMethod                                       *
 //******************************************************************************
-//* TestTIdSipUserAgentListenerInboundCallMethod Public methods ****************
+//* TestTIdSipUserAgentInboundCallMethod Public methods ************************
 
-procedure TestTIdSipUserAgentListenerInboundCallMethod.SetUp;
+procedure TestTIdSipUserAgentInboundCallMethod.SetUp;
 begin
   inherited SetUp;
 
@@ -5341,11 +5341,11 @@ begin
   Self.Session := TIdSipInboundSession.Create(Self.UA,
                                               Self.Request,
                                               false);
-  Self.Method := TIdSipUserAgentListenerInboundCallMethod.Create;
+  Self.Method := TIdSipUserAgentInboundCallMethod.Create;
   Self.Method.Session := Self.Session;
 end;
 
-procedure TestTIdSipUserAgentListenerInboundCallMethod.TearDown;
+procedure TestTIdSipUserAgentInboundCallMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Session.Free;
@@ -5355,9 +5355,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUserAgentListenerInboundCallMethod Published methods *************
+//* TestTIdSipUserAgentInboundCallMethod Published methods *********************
 
-procedure TestTIdSipUserAgentListenerInboundCallMethod.TestRun;
+procedure TestTIdSipUserAgentInboundCallMethod.TestRun;
 var
   L: TIdSipTestUserAgentListener;
 begin
