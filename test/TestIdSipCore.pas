@@ -4317,6 +4317,11 @@ begin
   CheckEquals(Self.Core.AllowedExtensions,
               Response.FirstHeader(SupportedHeaderFull).FullValue,
               'Supported header value');
+
+  Check(Response.HasHeader(ContactHeaderFull),
+        'No Contact header');
+  Check(Self.Core.Contact.Equals(Response.FirstContact),
+        'Contact header value');
 end;
 
 procedure TestTIdSipInboundOptions.TestOptionsWhenDoNotDisturb;

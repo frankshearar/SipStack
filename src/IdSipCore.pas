@@ -305,9 +305,9 @@ type
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
-    function  AddOptions: TIdSipOutboundOptions;
+    function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AddOutboundSession: TIdSipOutboundSession;
-    function  AddRegistration: TIdSipOutboundRegistration;
+    function  AddOutboundRegistration: TIdSipOutboundRegistration;
     function  CallIDFor(Registrar: TIdSipUri): String;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
@@ -1134,8 +1134,8 @@ begin
   // The transport must be discovered using RFC 3263
   // TODO: Lies. Pure hack to get X-Lite talking
 
-  if (Pos(TransportParam, OutboundRequest.RequestUri.AsString) > 0) then
-    Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
+  if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
+    Transport := OutboundRequest.ToHeader.Address.Transport
   else
     Transport := TransportParamTCP;
 
@@ -1515,7 +1515,7 @@ end;
 
 function TIdSipUserAgentCore.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
-  Result := Self.AddRegistration;
+  Result := Self.AddOutboundRegistration;
 
   Result.RegisterWith(Registrar, Self.Contact);
 end;
@@ -1564,14 +1564,14 @@ end;
 
 function TIdSipUserAgentCore.QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
 begin
-  Result := Self.AddOptions;
+  Result := Self.AddOutboundOptions;
 
   Result.QueryOptions(Server);
 end;
 
 function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
-  Result := Self.AddRegistration;
+  Result := Self.AddOutboundRegistration;
 
   Result.RegisterWith(Registrar, Self.Contact);
 end;
@@ -1637,7 +1637,7 @@ end;
 
 function TIdSipUserAgentCore.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
-  Result := Self.AddRegistration;
+  Result := Self.AddOutboundRegistration;
 
   Result.Unregister(Registrar);
 end;
@@ -1868,7 +1868,7 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddOptions: TIdSipOutboundOptions;
+function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
 begin
   Result := TIdSipOutboundOptions.Create(Self);
   try
@@ -1905,7 +1905,7 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddRegistration: TIdSipOutboundRegistration;
+function TIdSipUserAgentCore.AddOutboundRegistration: TIdSipOutboundRegistration;
 begin
   Result := TIdSipOutboundRegistration.Create(Self);
   try
@@ -2795,6 +2795,9 @@ var
 begin
   Bye := Self.UA.CreateBye(Self.Dialog);
   try
+    // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
+    Bye.LastHop.Transport := Self.CurrentRequest.LastHop.Transport;
+
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
     Self.SendRequest(Bye);
@@ -3350,6 +3353,7 @@ begin
     Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
     Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
     Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
+    Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
 
     Self.SendResponse(Response);
   finally
