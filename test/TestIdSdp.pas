@@ -555,9 +555,9 @@ type
 
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
-                 + 'o=local 2890844526 2890842807 IN IP4 127.0.0.1'#13#10
+                 + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
                  + 's=Minimum Session Info';
-  DefaultConnection = 'c=IN IP4 127.0.0.1'#13#10;
+  DefaultConnection = 'c=IN IP4 224.2.17.12/127'#13#10;
 
   MinimumPayload = MinimumPayloadSansConnection + #13#10
                  + DefaultConnection;
@@ -1039,7 +1039,7 @@ begin
   CheckEquals(TIdRTPT140Payload.ClassName,
               Self.A.Encoding.ClassName,
               'Encoding');
-  CheckEquals(T140Encoding,
+  CheckEquals(T140EncodingName,
               Self.A.Encoding.Name,
               'Encoding name');
   CheckEquals(T140ClockRate,
@@ -5988,7 +5988,7 @@ var
   RemoteServer: TIdRTPServer;
   T140Payload:  TIdRTPT140Payload;
 begin
-  Self.Proc.Profile.AddEncoding(T140Encoding,
+  Self.Proc.Profile.AddEncoding(T140EncodingName,
                                 T140ClockRate,
                                 '',
                                 96);
@@ -6056,7 +6056,7 @@ begin
   T140PT := 96;
 
   Self.AVP := TIdRTPProfile.Create;
-  Self.AVP.AddEncoding(T140Encoding, T140ClockRate, '', T140PT);
+  Self.AVP.AddEncoding(T140EncodingName, T140ClockRate, '', T140PT);
 
   Self.Media     := TIdSDPMediaStream.Create(Self.AVP);
   Self.RTCPEvent := TSimpleEvent.Create;
@@ -6581,7 +6581,7 @@ end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersLocalRtpMaps;
 const
-  EncodingName   = T140Encoding + '/1000';
+  EncodingName   = T140EncodingName + '/1000';
   PayloadType    = 96;
   TEEncodingName = TelephoneEventEncoding;
   TEPayloadType  = 97;
@@ -6612,7 +6612,7 @@ end;
 
 procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersRemoteRtpMaps;
 const
-  EncodingName   = T140Encoding + '/1000';
+  EncodingName   = T140EncodingName + '/1000';
   PayloadType    = 96;
   TEEncodingName = TelephoneEventEncoding;
   TEPayloadType  = 97;

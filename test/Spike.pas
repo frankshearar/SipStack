@@ -207,6 +207,7 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.RunningPort := 25060;
   Self.CreateUi;
 
   TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTcpTransport);
@@ -252,7 +253,6 @@ begin
   Self.UA.Proxy.Uri     := Self.TargetUri.Text + ';lr';
 
   Self.fPayloadProcessor := TIdSDPMultimediaSession.Create(Self.RTPProfile);
-  Self.RunningPort := (Self.Transports[0] as TIdSipTransport).Port;
 end;
 
 destructor TrnidSpike.Destroy;

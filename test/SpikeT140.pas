@@ -90,7 +90,7 @@ begin
   Self.Client.Profile     := Self.Profile;
   Self.Client.Active      := true;
 
-  Self.T140   := TIdRTPT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
+  Self.T140   := TIdRTPT140Payload.Create(T140Encoding);
   Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
   Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
   Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);

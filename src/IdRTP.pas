@@ -1238,16 +1238,17 @@ const
   RedundancyEncoding          = 'RED'; // same as in RFC 2198
   RedundancyEncodingParameter = RedundancyEncoding;
   T140ClockRate               = 1000;
-  T140Encoding                = 'T140';
+  T140EncodingName            = 'T140';
   T140LostChar                = #$ff#$fd;
-  InterleavedT140MimeType     = AudioMediaType + '/' + T140Encoding;
+  InterleavedT140MimeType     = AudioMediaType + '/' + T140EncodingName;
   RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncoding;
-  T140MimeType                = TextMediaType + '/' + T140Encoding;
+  T140MimeType                = TextMediaType + '/' + T140EncodingName;
   T140RecommendedBufferTime   = 300;
   T140ByteOrderMark           = WideChar($feff);
   T140Escape                  = WideChar($001b);
   T140StartOfString           = WideChar($0098);
   T140StringTerminator        = WideChar($009C);
+  T140Encoding                = T140EncodingName + '/1000';
 
 // From RFC 2833
 const
@@ -1604,7 +1605,7 @@ begin
     raise EBadEncodingName.Create(Name);
   ClockRate    := StrToInt(Clock);
 
-  if (Lowercase(EncodingName) = Lowercase(T140Encoding)) then
+  if (Lowercase(EncodingName) = Lowercase(T140EncodingName)) then
     Result := TIdRTPT140Payload.Create
   else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncodingName)) then
     Result := TIdRTPTelephoneEventPayload.Create
@@ -1860,7 +1861,7 @@ end;
 
 function TIdRTPT140Payload.GetName: String;
 begin
-  Result := T140Encoding;
+  Result := T140EncodingName;
 end;
 
 //******************************************************************************
