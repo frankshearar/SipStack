@@ -160,6 +160,7 @@ type
     ActionFailed: Boolean;
 
     function  CreateAction: TIdSipAction; virtual; abstract;
+    procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteMovedPermanently(const SipUrl: String);
     procedure SimulateRemoteOK;
@@ -262,7 +263,6 @@ type
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure SimulateForbidden;
-    procedure SimulateRejectProxyUnauthorized(Session: TIdSipSession);
     procedure SimulateRejectUnauthorized(Session: TIdSipSession);
     procedure SimulateRemoteReInvite(Session: TIdSipSession);
   protected
@@ -351,6 +351,7 @@ type
   published
     procedure TestAddListener;
     procedure TestIsOptions; override;
+    procedure TestProxyAuthentication;
     procedure TestRemoveListener;
   end;
 
@@ -399,6 +400,7 @@ type
     procedure TestMethod;
     procedure TestRegister;
     procedure TestFindCurrentBindings;
+    procedure TestProxyAuthentication;
     procedure TestReceiveFail;
     procedure TestReceiveIntervalTooBrief;
     procedure TestReceiveIntervalTooBriefForOneContact;
@@ -2262,6 +2264,21 @@ end;
 
 //* TestTIdSipAction Protected methods *****************************************
 
+procedure TestTIdSipAction.SimulateRejectProxyUnauthorized;
+var
+  Challenge: TIdSipResponse;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                           SIPProxyAuthenticationRequired);
+  try
+    Challenge.AddHeader(WWWAuthenticateHeader);
+    Challenge.AddHeader(AuthenticationInfoHeader);
+    Self.Dispatcher.Transport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
 procedure TestTIdSipAction.SimulateRemoteBadExtensionResponse;
 begin
   Self.SimulateRemoteResponse(SIPBadExtension);
@@ -3019,21 +3036,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.SimulateRejectProxyUnauthorized(Session: TIdSipSession);
-var
-  Challenge: TIdSipResponse;
-begin
-  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
-                                           SIPProxyAuthenticationRequired);
-  try
-    Challenge.AddHeader(WWWAuthenticateHeader);
-    Challenge.AddHeader(AuthenticationInfoHeader);
-    Self.Dispatcher.Transport.FireOnResponse(Challenge);
-  finally
-    Challenge.Free;
-  end;
-end;
-
 procedure TestTIdSipOutboundSession.SimulateRejectUnauthorized(Session: TIdSipSession);
 var
   Challenge: TIdSipResponse;
@@ -3343,7 +3345,7 @@ begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
 
-  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  Self.SimulateRejectProxyUnauthorized;
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
         'no re-issue of request');
 
@@ -3351,6 +3353,9 @@ begin
   CheckEquals(SequenceNo + 1,
               ReInvite.CSeq.SequenceNo,
               'Re-INVITE CSeq sequence number');
+  CheckEquals(MethodInvite,
+              ReInvite.Method,
+              'Method of new attempt');
 
   Check(ReInvite.HasProxyAuthorization, 'No Proxy-Authorization header');
 end;
@@ -3364,7 +3369,7 @@ begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
 
-  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  Self.SimulateRejectProxyUnauthorized;
   CheckEquals(RequestCount + 1,
               Self.Dispatcher.Transport.SentRequestCount,
               'no re-issue of request');
@@ -3374,7 +3379,7 @@ begin
               ReInvite.CSeq.SequenceNo,
               'Re-INVITE CSeq sequence number');
 
-  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  Self.SimulateRejectProxyUnauthorized;
   CheckEquals(RequestCount + 2,
               Self.Dispatcher.Transport.SentRequestCount,
               'no re-issue of request');
@@ -3874,9 +3879,36 @@ begin
         Action.ClassName + ' marked as an Options');
 end;
 
+procedure TestTIdSipOutboundOptions.TestProxyAuthentication;
+var
+  Options:      TIdSipOutboundOptions;
+  SequenceNo:   Cardinal;
+  ReOptions:    TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  Options := Self.Core.QueryOptions(Self.Core.From);
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Options.CurrentRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReOptions := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReOptions.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+  CheckEquals(MethodOptions,
+              ReOptions.Method,
+              'Method of new attempt');
+
+  Check(ReOptions.HasProxyAuthorization, 'No Proxy-Authorization header');
+end;
+
 procedure TestTIdSipOutboundOptions.TestRemoveListener;
 var
-  L1, L2:       TIdSipTestOptionsListener;
+  L1, L2:  TIdSipTestOptionsListener;
   Options: TIdSipOutboundOptions;
 begin
   Options := Self.Core.QueryOptions(Self.Core.From);
@@ -4194,6 +4226,30 @@ begin
   Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.Contacts.IsEmpty,
         'Contact headers present');
+end;
+
+procedure TestTIdSipOutboundRegistration.TestProxyAuthentication;
+var
+  SequenceNo:   Cardinal;
+  ReReg:        TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Reg.CurrentRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReReg := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReReg.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+  CheckEquals(MethodRegister,
+              ReReg.Method,
+              'Method of new attempt');
+
+  Check(ReReg.HasProxyAuthorization, 'No Proxy-Authorization header');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveFail;

@@ -415,6 +415,7 @@ type
     procedure CopyList(Source: TList;
                        Lock: TCriticalSection;
                        Copy: TList);
+    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
     function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
@@ -506,6 +507,7 @@ type
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure AddOpenTransaction(Request: TIdSipRequest);
+    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     function  GetInvite: TIdSipRequest; virtual;
     procedure MarkAsTerminated; override;
     procedure NotifyOfEndedSession(const Reason: String);
@@ -592,6 +594,8 @@ type
   end;
 
   TIdSipOptions = class(TIdSipAction)
+  protected
+    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
   public
     class function Method: String; override;
 
@@ -619,6 +623,8 @@ type
   end;
 
   TIdSipRegistration = class(TIdSipAction)
+  protected
+    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
   public
     class function Method: String; override;
 
@@ -2360,36 +2366,35 @@ end;
 
 procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
 var
-  AuthHeader: TIdSipAuthorizationHeader;
-  Password:   String;
-  ReInvite:   TIdSipRequest;
+  AuthHeader:      TIdSipAuthorizationHeader;
+  ChallengeHeader: TIdSipHttpAuthHeader;
+  Password:        String;
+  ReAttempt:       TIdSipRequest;
 begin
   Password := Self.NotifyOfAuthenticationChallenge(Challenge);
 
-  ReInvite := Self.UA.CreateInvite(Challenge.ToHeader,
-                                   Self.CurrentRequest.Body,
-                                   Self.CurrentRequest.ContentType);
+  ReAttempt := Self.CreateNewAttempt(Challenge);
   try
-    ReInvite.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
+    ReAttempt.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
 
     if AgainstProxy then begin
-      AuthHeader := ReInvite.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader;
-      AuthHeader.Response := Self.DigestFor(Challenge.FirstProxyAuthenticate.Realm,
-                                            Password);
+      AuthHeader      := ReAttempt.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader;
+      ChallengeHeader := Challenge.FirstProxyAuthenticate;
     end
     else begin
-      AuthHeader := ReInvite.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader;
-      AuthHeader.Response := Self.DigestFor(Challenge.FirstWWWAuthenticate.Realm,
-                                            Password);
+      AuthHeader      := ReAttempt.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader;
+      ChallengeHeader := Challenge.FirstWWWAuthenticate;
     end;
 
-    AuthHeader.Realm := Challenge.FirstProxyAuthenticate.Realm;
-    AuthHeader.Username := Self.Username;
+    AuthHeader.Value := ChallengeHeader.FullValue;
 
-    Self.CurrentRequest.Assign(ReInvite);
-    Self.SendRequest(ReInvite);
+    AuthHeader.Response := Self.DigestFor(ChallengeHeader.Realm,
+                                          Password);
+
+    Self.CurrentRequest.Assign(ReAttempt);
+    Self.SendRequest(ReAttempt);
   finally
-    ReInvite.Free;
+    ReAttempt.Free;
   end;
 end;
 
@@ -2661,6 +2666,13 @@ begin
   end;
 end;
 
+function TIdSipSession.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+begin
+  Result := Self.UA.CreateInvite(Challenge.ToHeader,
+                                 Self.CurrentRequest.Body,
+                                 Self.CurrentRequest.ContentType);
+end;
+
 function TIdSipSession.GetInvite: TIdSipRequest;
 begin
   Result := Self.CurrentRequest;
@@ -2843,7 +2855,7 @@ begin
 
   OkResponse := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
   try
-    Result        := Self.PayloadProcessor.LocalSessionDescription;
+    Result := Self.PayloadProcessor.LocalSessionDescription;
     OkResponse.Body := Result;
 
     OkResponse.ContentLength := Length(OkResponse.Body);
@@ -3013,6 +3025,7 @@ begin
   if not Self.InCall then begin
     Self.InCall := true;
 
+    Self.PayloadProcessor.StartListening(InitialOffer);
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
       Self.CurrentRequest.Assign(Invite);
@@ -3202,6 +3215,13 @@ begin
   Self.UA.RemoveAction(Self);
 end;
 
+//* TIdSipOptions Protected methods ********************************************
+
+function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+begin
+  Result := Self.UA.CreateOptions(Challenge.ToHeader)
+end;
+
 //******************************************************************************
 //* TIdSipInboundOptions                                                       *
 //******************************************************************************
@@ -3324,6 +3344,13 @@ end;
 procedure TIdSipRegistration.Terminate;
 begin
   Self.UA.RemoveAction(Self);
+end;
+
+//* TIdSipRegistration Protected methods ***************************************
+
+function TIdSipRegistration.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+begin
+  Result := Self.UA.CreateRegister(Challenge.ToHeader);
 end;
 
 //******************************************************************************
