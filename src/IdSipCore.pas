@@ -2574,7 +2574,6 @@ function TIdSipUserAgentCore.FindSession(Msg: TIdSipMessage): TIdSipSession;
 var
   Action: TIdSipAction;
   I:      Integer;
-  MsgID:  TIdSipDialogID;
 begin
   Result := nil;
 
