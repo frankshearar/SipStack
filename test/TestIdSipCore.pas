@@ -936,12 +936,9 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
-}
   Result.AddTest(TestTIdSipActions.Suite);
-{
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -969,7 +966,6 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -3129,8 +3125,6 @@ begin
   Self.Invite.FirstExpires.NumericValue := 50;
   Self.ReceiveInvite;
 
-  Self.ExceptionMessage := 'Waiting for OnInboundCall to fire';
-  Self.WaitForSignaled;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
   Self.DebugTimer.TriggerEarliestEvent;
