@@ -93,6 +93,8 @@ const
   // Each TortureTestN constant is a message defined in
   // http://www.ietf.org/internet-drafts/draft-ietf-sipping-torture-tests-00.txt
   // TortureTextN is defined in section 2.N of the above.
+  // Each torture test has a string '%s' that you can StringReplace with the
+  // address/port of the server you wish to test.
 
   //   This message is a correctly formatted SIP message. It contains:
   //
@@ -151,8 +153,8 @@ const
   //   A proxy should either respond with an error, or correct the method
   //   tag. The user agent should reject it with an error, and list the
   //   available methods in the response.
-  TortureTest8 = 'NEWMETHOD sip:user@comapny.com SIP/2.0'#13#10
-               + 'To: sip:j.user@company.com'#13#10
+  TortureTest8 = 'NEWMETHOD sip:user@%s SIP/2.0'#13#10
+               + 'To: sip:j.user@%s'#13#10
                + 'From: sip:caller@university.edu;tag=23411413'#13#10
                + 'Max-Forwards: 3'#13#10
                + 'Call-ID: 0ha0isndaksdj@10.0.1.1'#13#10
@@ -173,7 +175,7 @@ const
   //
   //   The server should not crash, and ideally should respond with an
   //   error
-  TortureTest11 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+  TortureTest11 = 'INVITE sip:user@%s SIP/2.0'#13#10
                 + 'CSeq: 0 INVITE'#13#10
                 + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
                 + 'Content-Type: application/sdp'#13#10
@@ -189,14 +191,14 @@ const
 
   //   This message contains an Expires header which has illegal values for
   //   a number of components, but otherwise is syntactically correct.
-  TortureTest13 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+  TortureTest13 = 'INVITE sip:user@%s SIP/2.0'#13#10
                 + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
                 + 'Max-Forwards: 88'#13#10
                 + 'CSeq: 0 INVITE'#13#10
                 + 'Call-ID: 98asdh@10.1.1.2'#13#10
                 + 'Expires: Thu, 44 Dec 19999 16:00:00 EDT'#13#10
                 + 'From: sip:caller@university.edu;tag=3651'#13#10
-                + 'To: sip:user@company.com'#13#10
+                + 'To: sip:user@%s'#13#10
                 + 'Content-Type: application/sdp'#13#10
                 + #13#10
                 + 'v=0'#13#10
@@ -213,8 +215,8 @@ const
   //   values.
   //
   //   The server should respond with a Bad Request error.
-  TortureTest15 = 'INVITE sip:user@company.com SIP/2.0'#13#10
-                + 'To: sip:j.user@company.com'#13#10
+  TortureTest15 = 'INVITE sip:user@%s SIP/2.0'#13#10
+                + 'To: sip:j.user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=134161461246'#13#10
                 + 'Max-Forwards: 7'#13#10
                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
@@ -237,9 +239,9 @@ const
   //
   //   When sent UDP, the server should respond with an error. With TCP,
   //   there's not much you can do but wait...
-  TortureTest16 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+  TortureTest16 = 'INVITE sip:user@%s SIP/2.0'#13#10
                 + 'Max-Forwards: 80'#13#10
-                + 'To: sip:j.user@company.com'#13#10
+                + 'To: sip:j.user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=93942939o2'#13#10
                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
                 + 'CSeq: 8 INVITE'#13#10
@@ -260,9 +262,9 @@ const
   //   This is a request message with a negative value for Content-Length.
   //
   //   The server should respond with an error.
-  TortureTest17 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+  TortureTest17 = 'INVITE sip:user@%s SIP/2.0'#13#10
                 + 'Max-Forwards: 254'#13#10
-                + 'To: sip:j.user@company.com'#13#10
+                + 'To: sip:j.user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=3'#13#10
                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
                 + 'CSeq: 8 INVITE'#13#10
@@ -281,8 +283,8 @@ const
   //
   //   The server can either return an error, or proxy it if it is
   //   successful parsing without the terminating quote.
-  TortureTest19 = 'INVITE sip:user@company.com SIP/2.0'#13#10
-                + 'To: "Mr. J. User <sip:j.user@company.com>'#13#10
+  TortureTest19 = 'INVITE sip:user@%s SIP/2.0'#13#10
+                + 'To: "Mr. J. User <sip:j.user@%s>'#13#10
                 + 'From: sip:caller@university.edu;tag=93334'#13#10
                 + 'Max-Forwards: 10'#13#10
                 + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
@@ -305,8 +307,8 @@ const
   //   An intelligent server may be able to deal with this and fix up
   //   athe Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
-  TortureTest21 = 'INVITE <sip:user@company.com> SIP/2.0'#13#10
-                + 'To: sip:user@company.com'#13#10
+  TortureTest21 = 'INVITE <sip:user@%s> SIP/2.0'#13#10
+                + 'To: sip:user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=39291'#13#10
                 + 'Max-Forwards: 23'#13#10
                 + 'Call-ID: 1@10.0.0.1'#13#10
@@ -329,8 +331,8 @@ const
   //   An intelligent server may be able to deal with this and fix up
   //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
-  TortureTest22 = 'INVITE sip:user@company.com; transport=udp SIP/2.0'#13#10
-                + 'To: sip:user@company.com'#13#10
+  TortureTest22 = 'INVITE sip:user@%s; transport=udp SIP/2.0'#13#10
+                + 'To: sip:user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=231413434'#13#10
                 + 'Max-Forwards: 5'#13#10
                 + 'Call-ID: 2@10.0.0.1'#13#10
@@ -348,14 +350,14 @@ const
                 + 'm=video 3227 RTP/AVP 31'#13#10
                 + 'a=rtpmap:31 LPC';
 
-  //   This INVITE has illegal >1 SP between elements of the Request-URI.
+  //   This INVITE has illegal >1 SP between elements of the Request-Line.
   //
   //   An intelligent server may be able to deal with this and fix up
   //   the Request-URI if acting as a Proxy. If not it should respond 400
   //   with an appropriate reason phrase.
-  TortureTest23 = 'INVITE sip:user@company.com  SIP/2.0'#13#10
+  TortureTest23 = 'INVITE sip:user@%s  SIP/2.0'#13#10
                 + 'Max-Forwards: 8'#13#10
-                + 'To: sip:user@company.com'#13#10
+                + 'To: sip:user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=8814'#13#10
                 + 'Call-ID: 3@10.0.0.1'#13#10
                 + 'CSeq: 1 INVITE'#13#10
@@ -374,8 +376,8 @@ const
 
   //   This INVITE is legal and has a Request-URI with a SIP URI containing
   //   escaped characters.
-  TortureTest24 = 'INVITE sip:sip%3Auser%40example.com@company.com;other-param=summit SIP/2.0'#13#10
-                + 'To: sip:user@company.com'#13#10
+  TortureTest24 = 'INVITE sip:sip%3Auser%40example.com@%s;other-param=summit SIP/2.0'#13#10
+                + 'To: sip:user@%s'#13#10
                 + 'From: sip:caller@university.edu;tag=938'#13#10
                 + 'Max-Forwards: 87'#13#10
                 + 'Call-ID: 4@10.0.0.1'#13#10
@@ -397,21 +399,21 @@ const
   //
   //   A server should respond 400 with an appropriate reason phrase if it
   //   can. It may just drop this message.
-  TortureTest35 = 'OPTIONS sip:135.180.130.133 SIP/2.0'#13#10
-                + 'Via: SIP/2.0/UDP company.com:5604'#13#10
+  TortureTest35 = 'OPTIONS sip:%s SIP/2.0'#13#10
+                + 'Via: SIP/2.0/UDP %s:5604'#13#10
                 + 'Max-Forwards: 70'#13#10
-                + 'From: sip:iuser@company.com;tag=74345345'#13#10
+                + 'From: sip:iuser@%s;tag=74345345'#13#10
                 + 'To: sip:user@135.180.130.133'#13#10
-                + 'Call-ID: 1804928587@company.com'#13#10
+                + 'Call-ID: 1804928587@%s'#13#10
                 + 'CSeq: 1 OPTIONS'#13#10
-                + 'Expires: 0 0l@company.com'#13#10               // mangled
+                + 'Expires: 0 0l@%s'#13#10               // mangled
                 + 'To: sip:user@135.180.130.133'#13#10            // 2nd To header
-                + 'Call-ID: 1804928587@company.com'#13#10         // 2nd Call-ID
+                + 'Call-ID: 1804928587@%s'#13#10         // 2nd Call-ID
                 + 'CSeq: 1 OPTIONS'#13#10                         // 2nd CSeq
-                + 'Contact: sip:host.company.com'#13#10
-                + 'Expires: 0xpires: 0sip:host.company.com'#13#10 // mangled
+                + 'Contact: sip:host.%s'#13#10
+                + 'Expires: 0xpires: 0sip:host.%s'#13#10 // mangled
                 + 'Expires: 0'#13#10
-                + 'Contact: sip:host.company.com'#13#10
+                + 'Contact: sip:host.%s'#13#10
                 + #13#10;
 
   //   This is an illegal invite as the display names in the To and From
@@ -420,11 +422,11 @@ const
   //   A server may be intelligent enough to cope with this but may also
   //   return a 400 response with an appropriate reason phrase.
 
-  TortureTest40 = 'INVITE sip:t.watson@ieee.org SIP/2.0'#13#10
+  TortureTest40 = 'INVITE sip:t.watson@%s SIP/2.0'#13#10
                 + 'Via:     SIP/2.0/UDP c.bell-tel.com:5060;branch=z9hG4bKkdjuw'#13#10
                 + 'Max-Forwards:      70'#13#10
                 + 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43'#13#10
-                + 'To:      Watson, Thomas <sip:t.watson@ieee.org>'#13#10
+                + 'To:      Watson, Thomas <sip:t.watson@%s>'#13#10
                 + 'Call-ID: 31415@c.bell-tel.com'#13#10
                 + 'CSeq:    1 INVITE'#13#10
                 + #13#10;
@@ -432,11 +434,11 @@ const
   //   This is an illegal INVITE as the SIP Protocol version is unknown.
   //
   //   The server should respond to the request with a bad version error.
-  TortureTest41 = 'INVITE sip:t.watson@ieee.org SIP/7.0'#13#10
+  TortureTest41 = 'INVITE sip:t.watson@%s SIP/7.0'#13#10
                 + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
                 + 'Max-Forwards:     70'#13#10
                 + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
-                + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                + 'To:      T. Watson <sip:t.watson@%s>'#13#10
                 + 'Call-ID: 31417@c.bell-tel.com'#13#10
                 + 'CSeq:    1 INVITE'#13#10
                 + #13#10;
