@@ -2321,7 +2321,7 @@ procedure TIdSipClientNonInviteTransactionTimer.OnTimerF(Sender: TObject);
 begin
   if Self.TimerEIsRunning then begin
     Self.Owner.FireTimerF;
-    Self.Timer.AddEvent(Self.TimerEInterval, Self.OnTimerE);
+    Self.Timer.AddEvent(Self.TimerFInterval, Self.OnTimerF);
   end;
 end;
 
