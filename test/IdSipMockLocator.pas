@@ -8,6 +8,7 @@ uses
 type
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
+    fLookupCount: Cardinal;
     fNAPTR:       TIdNaptrRecords;
     fNameRecords: TIdDomainNameRecords;
     fSRV:         TIdSrvRecords;
@@ -38,7 +39,9 @@ type
                      Weight: Word;
                      Port: Cardinal;
                      const Target: String);
+    procedure ResetLookupCount;
 
+    property LookupCount: Cardinal             read fLookupCount;
     property NameRecords: TIdDomainNameRecords read fNameRecords;
     property NAPTR:       TIdNaptrRecords      read fNAPTR;
     property SRV:          TIdSrvRecords       read fSRV;
@@ -55,6 +58,7 @@ constructor TIdSipMockLocator.Create;
 begin
   inherited Create;
 
+  Self.fLookupCount := 0;
   Self.fNameRecords := TIdDomainNameRecords.Create;
   Self.fNAPTR       := TIdNaptrRecords.Create;
   Self.fSRV         := TIdSrvRecords.Create;
@@ -132,6 +136,11 @@ begin
   end;
 end;
 
+procedure TIdSipMockLocator.ResetLookupCount;
+begin
+  Self.fLookupCount := 0;
+end;
+
 //* TIdSipMockLocator Protected methods ****************************************
 
 procedure TIdSipMockLocator.PerformNameLookup(const DomainName: String;
@@ -143,6 +152,8 @@ begin
     if (Self.NameRecords[I].Domain = DomainName) then
       Result.Add(Self.NameRecords[I]);
   end;
+
+  Inc(Self.fLookupCount);
 end;
 
 procedure TIdSipMockLocator.PerformNAPTRLookup(TargetUri: TIdUri;
@@ -156,6 +167,8 @@ begin
     if (Self.NAPTR[I].Key = TargetUri.Host) then
       Result.Add(Self.NAPTR[I]);
   end;
+
+  Inc(Self.fLookupCount);
 end;
 
 procedure TIdSipMockLocator.PerformSRVLookup(const ServiceAndDomain: String;
@@ -172,6 +185,8 @@ begin
                               Result.Last.NameRecords);
     end;
   end;
+
+  Inc(Self.fLookupCount);  
 end;
 
 end.

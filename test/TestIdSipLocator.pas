@@ -119,6 +119,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestLookupCount;
     procedure TestResolveNameRecords;
     procedure TestResolveNAPTRSip;
     procedure TestResolveNAPTRSips;
@@ -1484,6 +1485,51 @@ begin
 end;
 
 //* TestTIdSipMockLocator Published methods ************************************
+
+procedure TestTIdSipMockLocator.TestLookupCount;
+var
+  Names: TIdDomainNameRecords;
+  Naptr: TIdNaptrRecords;
+  Srv:   TIdSrvRecords;
+begin
+  CheckEquals(0, Self.Loc.LookupCount, 'Initial value');
+
+  Names := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords('', Names);
+
+    CheckEquals(1,
+                Self.Loc.LookupCount,
+                'LookuCount after name lookup');
+  finally
+    Names.Free;
+  end;
+
+  Naptr := TIdNaptrRecords.Create;
+  try
+    Self.Loc.ResolveNAPTR(Self.AOR, Naptr);
+
+    CheckEquals(2,
+                Self.Loc.LookupCount,
+                'LookuCount after NAPTR lookup');
+  finally
+    Naptr.Free;
+  end;
+
+  Srv := TIdSrvRecords.Create;
+  try
+    Self.Loc.ResolveSRV('', Srv);
+
+    CheckEquals(3,
+                Self.Loc.LookupCount,
+                'LookuCount after SRV lookup');
+  finally
+    Srv.Free;
+  end;
+
+  Self.Loc.ResetLookupCount;
+  CheckEquals(0, Self.Loc.LookupCount, 'After ResetLookupCount');
+end;
 
 procedure TestTIdSipMockLocator.TestResolveNameRecords;
 var
