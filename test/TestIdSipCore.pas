@@ -127,8 +127,8 @@ type
                                         var Username: String;
                                         var Password: String);
     procedure OnChanged(Observed: TObject);
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -214,6 +214,7 @@ type
     procedure TestSetFromMailto;
     procedure TestSimultaneousInAndOutboundCall;
     procedure TestTerminateAllCalls;
+    procedure TestUnmatchedAckGetsDropped;
     procedure TestViaMatchesTransportParameter;
   end;
 
@@ -510,8 +511,8 @@ type
     SentRequestTerminated:  Boolean;
     Session:                TIdSipInboundSession;
 
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
@@ -553,11 +554,11 @@ type
   TestTIdSipOutboundSession = class(TestTIdSipSession,
                                     IIdSipUserAgentListener)
   private
-    OnDroppedResponse: Boolean;
-    Session:           TIdSipOutboundSession;
+    OnDroppedMessage: Boolean;
+    Session:          TIdSipOutboundSession;
 
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure SimulateRemoteDecline;
     procedure SimulateForbidden;
@@ -1458,8 +1459,8 @@ end;
 //* TestTIdSipUserAgent Private methods ****************************************
 
 procedure TestTIdSipUserAgent.CheckCommaSeparatedHeaders(const ExpectedValues: String;
-                                                             Header: TIdSipHeader;
-                                                             const Msg: String);
+                                                         Header: TIdSipHeader;
+                                                         const Msg: String);
 var
   Hdr:    TIdSipCommaSeparatedHeader;
   I:      Integer;
@@ -1484,7 +1485,7 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.CheckCreateRequest(Dest: TIdSipToHeader;
-                                                     Request: TIdSipRequest);
+                                                 Request: TIdSipRequest);
 var
   Contact: TIdSipContactHeader;
 begin
@@ -1524,9 +1525,9 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                            Challenge: TIdSipResponse;
-                                                            var Username: String;
-                                                            var Password: String);
+                                                        Challenge: TIdSipResponse;
+                                                        var Username: String;
+                                                        var Password: String);
 begin
 end;
 
@@ -1535,13 +1536,13 @@ begin
   Self.OnChangedEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgent.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                             Receiver: TIdSipTransport);
+procedure TestTIdSipUserAgent.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                                        Receiver: TIdSipTransport);
 begin
 end;
 
 procedure TestTIdSipUserAgent.OnEndedSession(Session: TIdSipSession;
-                                                 const Reason: String);
+                                             const Reason: String);
 begin
   Self.OnEndedSessionFired := true;
   Self.ThreadEvent.SetEvent;
@@ -1562,7 +1563,7 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnModifiedSession(Session: TIdSipSession;
-                                                    Answer: TIdSipResponse);
+                                                Answer: TIdSipResponse);
 begin
 end;
 
@@ -1571,12 +1572,12 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
-                                                Sender: TIdSipTransport);
+                                            Sender: TIdSipTransport);
 begin
 end;
 
 procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
-                                                 Sender: TIdSipTransport);
+                                             Sender: TIdSipTransport);
 begin
   if (Response.StatusCode = SIPSessionProgress) then
     Self.SendEvent.SetEvent;
@@ -3078,6 +3079,36 @@ begin
   CheckEquals(1,
               Self.Core.SessionCount,
               'Session count after TerminateAllCalls');
+end;
+
+procedure TestTIdSipUserAgent.TestUnmatchedAckGetsDropped;
+var
+  Ack:      TIdSipRequest;
+  Listener: TIdSipTestUserAgentListener;
+begin
+  Listener := TIdSipTestUserAgentListener.Create;
+  try
+    Self.Core.AddUserAgentListener(Listener);
+
+    Self.MarkSentResponseCount;
+    Ack := TIdSipRequest.Create;
+    try
+      Ack.Assign(Self.Invite);
+      Ack.Method      := MethodAck;
+      Ack.CSeq.Method := Ack.Method;
+
+      Self.SendRequest(Ack);
+    finally
+      Ack.Free;
+    end;
+
+    Check(Listener.DroppedUnmatchedMessage,
+          'Unmatched ACK not dropped');
+    CheckNoResponseSent('Sent a response to an unmatched ACK');
+  finally
+    Self.Core.RemoveUserAgentListener(Listener);
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestViaMatchesTransportParameter;
@@ -5822,8 +5853,8 @@ end;
 
 //* TestTIdSipInboundSession Private methods ***********************************
 
-procedure TestTIdSipInboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                              Receiver: TIdSipTransport);
+procedure TestTIdSipInboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                                             Receiver: TIdSipTransport);
 begin
 end;
 
@@ -6262,7 +6293,7 @@ begin
 
   Self.Session := Self.CreateAction as TIdSipOutboundSession;
 
-  Self.OnDroppedResponse      := false;
+  Self.OnDroppedMessage       := false;
   Self.OnEndedSessionFired    := false;
   Self.OnModifiedSessionFired := false;
 end;
@@ -6295,10 +6326,10 @@ end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
 
-procedure TestTIdSipOutboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                               Receiver: TIdSipTransport);
+procedure TestTIdSipOutboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                                              Receiver: TIdSipTransport);
 begin
-  Self.OnDroppedResponse := true;
+  Self.OnDroppedMessage := true;
 end;
 
 procedure TestTIdSipOutboundSession.OnInboundCall(Session: TIdSipInboundSession);
@@ -7900,7 +7931,7 @@ begin
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   Self.Method.Receiver := Self.Receiver;
-  Self.Method.Response := Self.Response;
+  Self.Method.Message := Self.Response;
 end;
 
 procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.TearDown;
@@ -7922,11 +7953,11 @@ begin
   try
     Self.Method.Run(L);
 
-    Check(L.DroppedUnmatchedResponse, 'Listener not notified');
+    Check(L.DroppedUnmatchedMessage, 'Listener not notified');
     Check(Self.Method.Receiver = L.ReceiverParam,
           'Receiver param');
-    Check(Self.Method.Response = L.ResponseParam,
-          'Response param');
+    Check(Self.Method.Message = L.MessageParam,
+          'Message param');
   finally
     L.Free;
   end;

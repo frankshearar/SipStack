@@ -146,8 +146,8 @@ type
 
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
   end;
 
@@ -354,8 +354,8 @@ type
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
-    procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
-                                      Receiver: TIdSipTransport);
+    procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
+                                     Receiver: TIdSipTransport);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
@@ -1280,12 +1280,12 @@ type
   TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
-    fResponse: TIdSipResponse;
+    fMessage:  TIdSipMessage;
   public
     procedure Run(const Subject: IInterface); override;
 
     property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Response: TIdSipResponse  read fResponse write fResponse;
+    property Message:  TIdSipMessage  read fMessage write fMessage;
   end;
 
   TIdSipUserAgentInboundCallMethod = class(TIdMethod)
@@ -2615,9 +2615,13 @@ begin
 
   if Assigned(Action) then
     Action.ReceiveRequest(Request)
-  else
-    Self.ReturnResponse(Request,
-                        SIPCallLegOrTransactionDoesNotExist);
+  else begin
+    if Request.IsAck then
+      Self.NotifyOfDroppedMessage(Request, Receiver)
+    else
+      Self.ReturnResponse(Request,
+                          SIPCallLegOrTransactionDoesNotExist);
+  end;
 
   // Action generates the response - 8.2.6
 end;
@@ -2638,7 +2642,7 @@ begin
   if Assigned(Action) then
     Action.ReceiveResponse(Response, Receiver.IsSecure)
   else
-    Self.NotifyOfDroppedResponse(Response, Receiver);
+    Self.NotifyOfDroppedMessage(Response, Receiver);
 
   Self.Actions.CleanOutTerminatedActions;
 end;
@@ -2815,15 +2819,15 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractUserAgent.NotifyOfDroppedResponse(Response: TIdSipResponse;
-                                                          Receiver: TIdSipTransport);
+procedure TIdSipAbstractUserAgent.NotifyOfDroppedMessage(Message: TIdSipMessage;
+                                                         Receiver: TIdSipTransport);
 var
   Notification: TIdSipUserAgentDroppedUnmatchedResponseMethod;
 begin
   Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
-    Notification.Response := Response;
+    Notification.Message  := Message;
 
     Self.UserAgentListeners.Notify(Notification);
   finally
@@ -6242,8 +6246,8 @@ end;
 
 procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedResponse(Self.Response,
-                                                                  Self.Receiver);
+  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedMessage(Self.Message,
+                                                                 Self.Receiver);
 end;
 
 //******************************************************************************
