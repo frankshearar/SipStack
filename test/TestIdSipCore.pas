@@ -1504,7 +1504,7 @@ begin
   Self.Options.Free;
   Self.Actions.Free;
 
-  inherited Destroy;
+  inherited TearDown;
 end;
 
 //* TestTIdSipActions Private methods ******************************************
