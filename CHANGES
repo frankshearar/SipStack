@@ -1,0 +1,29 @@
+v0.2 (2004/09/20)
+
+* Parsing SIP messages doesn't raise exceptions. Instead, the messages
+  and headers store the original, unparsed, data and you check their
+  HasValidSyntax property to find out if the message/header contains
+  valid data.
+* The SipMessage and SipHeader objects now parse themselves - the
+  SipParser now provides helper utilities and such.
+* This allows us to simplify the servers drastically - TCP and UDP
+  servers do nothing but parse messages and hand them up to the
+  Transport object.
+* Notification of events now uses the NotificationList. This contains
+  a bunch of Interfaces, and you give it a Method (a reified method
+  call) which the NotificationList then executes on each of its
+  Interfaces. This eliminates a whole bunch of almost-identical
+  code.
+* The Transaction layer now understands how to process CANCELs as well
+  as send them. For Client INVITE transactions only, of course.
+* SDP Payload Processor never really worked nicely. We thus replace it
+  (keeping it around for the nonce for reference purposes) with
+  RTPMediaStreams and company. This implements (most of) RFC 3264, the
+  Offer/Answer model.
+* Encapsulated the essentials of TIdSocketHandle (local and remote
+  addresses and ports) so that high-level objects don't know about
+  TIdSocketHandle. This helps to minimise dependencies on the core
+  Indy classes, hopefully allowing enterprising programmers to port
+  the stack more easily to, say, FreePascal.
+* Some threads now wait for TEvents rather than polling to do their
+  thing. Much neater.
