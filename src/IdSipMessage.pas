@@ -10,6 +10,10 @@ type
   TIdSipRequest = class;
   TIdSipResponse = class;
 
+  TIdSipNotifyEvent = TNotifyEvent;
+  TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
+  TIdSipRequestEvent = procedure(Sender: TObject; const R: TIdSipRequest) of object;
+
   IIdSipMessageVisitor = interface
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
     procedure VisitRequest(const Request: TIdSipRequest);
@@ -41,7 +45,7 @@ type
   protected
     function FirstLine: String; virtual; abstract;
   public
-    constructor Create;
+    constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure Accept(const Visitor: IIdSipMessageVisitor); virtual;
@@ -55,10 +59,12 @@ type
     function  HeaderAt(const Index: Cardinal): TIdSipHeader;
     function  HeaderCount: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
+    function  IsEqualTo(const Message: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
     function  MalformedException: ExceptClass; virtual; abstract;
     procedure ReadBody(const S: TStream);
+    procedure RemoveHeader(const Header: TIdSipHeader);
 
     property Body:          String           read fBody write fBody;
     property CallID:        String           read GetCallID write SetCallID;
@@ -78,20 +84,29 @@ type
   TIdSipRequest = class(TIdSipMessage)
   private
     fMethod:     String;
-    fRequestUri: String;
+    fRequestUri: TIdURI;
+
+    procedure SetRequestUri(const Value: TIdURI);
   protected
     function FirstLine: String; override;
   public
+    constructor Create; override;
+
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
+    function  IsBye: Boolean;
+    function  IsCancel: Boolean;
+    function  IsEqualTo(const Message: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
+    function  Match(const Request: TIdSipRequest): Boolean; overload;
+    function  Match(const Response: TIdSipResponse): Boolean; overload;
 
     property Method:     String read fMethod write fMethod;
-    property RequestUri: String read fRequestUri write fRequestUri;
+    property RequestUri: TIdURI read fRequestUri write SetRequestUri;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -105,10 +120,11 @@ type
   public
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
-    function  MalformedException: ExceptClass; override;
+    function  IsEqualTo(const Message: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsProvisional: Boolean;
     function  IsRequest: Boolean; override;
+    function  MalformedException: ExceptClass; override;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -154,6 +170,7 @@ type
     class function IsMethod(Method: String): Boolean;
     class function IsQuotedString(const Token: String): Boolean;
     class function IsQValue(const Token: String): Boolean;
+    class function IsScheme(const Scheme: String): Boolean;
     class function IsSipVersion(Version: String): Boolean;
     class function IsToken(const Token: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
@@ -345,6 +362,9 @@ function TIdSipMessage.AsString: String;
 begin
   Result := Self.FirstLine;
 
+  if not Self.HasHeader(MaxForwardsHeader) then
+    Self.MaxForwards := DefaultMaxForwards;
+
   Result := Result + Self.Headers.AsString;
 
   Result := Result + EOL;
@@ -387,6 +407,11 @@ begin
   // Content-Length is set before this method is called.
   SetLength(fBody, Self.ContentLength);
   S.Read(fBody[1], Self.ContentLength);
+end;
+
+procedure TIdSipMessage.RemoveHeader(const Header: TIdSipHeader);
+begin
+  Self.Headers.Remove(Header);
 end;
 
 //* TIdSipMessage Private methods **********************************************
@@ -479,6 +504,13 @@ end;
 //*******************************************************************************
 //* TIdSipRequest Public methods ************************************************
 
+constructor TIdSipRequest.Create;
+begin
+  inherited Create;
+
+  fRequestUri := TIdURI.Create('');
+end;
+
 procedure TIdSipRequest.Accept(const Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitRequest(Self);
@@ -500,13 +532,39 @@ function TIdSipRequest.HasSipsUri: Boolean;
 var
   S: String;
 begin
-  S := Self.RequestUri;
+  S := Self.RequestUri.GetFullURI;
   Result := Lowercase(Fetch(S, ':')) = SipsScheme;
 end;
 
 function TIdSipRequest.IsAck: Boolean;
 begin
   Result := Self.Method = MethodAck;
+end;
+
+function TIdSipRequest.IsBye: Boolean;
+begin
+  Result := Self.Method = MethodBye;
+end;
+
+function TIdSipRequest.IsCancel: Boolean;
+begin
+  Result := Self.Method = MethodCancel;
+end;
+
+function TIdSipRequest.IsEqualTo(const Message: TIdSipMessage): Boolean;
+var
+  Request: TIdSipRequest;
+begin
+  if (Message is Self.ClassType) then begin
+    Request := Message as TIdSipRequest;
+
+    Result := (Self.SIPVersion            = Request.SIPVersion)
+          and (Self.Method                = Request.Method)
+          and (Self.RequestUri.GetFullURI = Request.RequestUri.GetFullURI)
+          and (Self.Headers.IsEqualTo(Request.Headers));
+  end
+  else
+    Result := false;
 end;
 
 function TIdSipRequest.IsInvite: Boolean;
@@ -524,11 +582,56 @@ begin
   Result := EBadRequest;
 end;
 
+function TIdSipRequest.Match(const Request: TIdSipRequest): Boolean;
+begin
+  // Add RFC 2543 matching
+
+  // cf. RFC 3261 section 17.2.3
+  if Request.LastHop.IsRFC3261Branch then begin
+    Result := (Request.LastHop.Branch = Self.LastHop.Branch)
+          and (Request.LastHop.SentBy = Self.LastHop.SentBy);
+
+    if Request.IsACK then
+      Result := Result and Self.IsInvite
+    else
+      Result := Result and (Request.Method = Self.Method);
+  end
+  else begin
+    raise Exception.Create('matching of SIP/1.0 messages not implemented yet');
+  end;
+end;
+
+function TIdSipRequest.Match(const Response: TIdSipResponse): Boolean;
+begin
+  // Add RFC 2543 matching
+
+  // cf. RFC 3261 section 17.1.3
+  Result := (Response.Path.Length > 0)
+        and (Self.Path.Length > 0);
+
+  Result := Result
+        and (Response.LastHop.Branch = Self.LastHop.Branch);
+
+  if (Response.CSeq.Method = MethodAck) then
+    Result := Result
+          and (Self.IsInvite)
+  else
+    Result := Result
+          and (Response.CSeq.Method = Self.Method);
+end;
+
 //* TIdSipRequest Protected methods ********************************************
 
 function TIdSipRequest.FirstLine: String;
 begin
-  Result := Format(RequestLine, [Self.Method, Self.RequestUri, Self.SIPVersion]);
+  Result := Format(RequestLine, [Self.Method, Self.RequestUri.GetFullURI, Self.SIPVersion]);
+end;
+
+//* TIdSipRequest Private methods **********************************************
+
+procedure TIdSipRequest.SetRequestUri(const Value: TIdURI);
+begin
+  Self.fRequestUri.URI := Value.GetFullURI
 end;
 
 //*******************************************************************************
@@ -553,9 +656,20 @@ begin
   Self.StatusText := R.StatusText;
 end;
 
-function TIdSipResponse.MalformedException: ExceptClass;
+function TIdSipResponse.IsEqualTo(const Message: TIdSipMessage): Boolean;
+var
+  Response: TIdSipResponse;
 begin
-  Result := EBadResponse;
+  if (Message is Self.ClassType) then begin
+    Response := Message as TIdSipResponse;
+
+    Result := (Self.SIPVersion = Response.SipVersion)
+          and (Self.StatusCode = Response.StatusCode)
+          and (Self.StatusText = Response.StatusText)
+          and (Self.Headers.IsEqualTo(Response.Headers));
+  end
+  else
+    Result := false;
 end;
 
 function TIdSipResponse.IsFinal: Boolean;
@@ -571,6 +685,11 @@ end;
 function TIdSipResponse.IsRequest: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipResponse.MalformedException: ExceptClass;
+begin
+  Result := EBadResponse;
 end;
 
 //* TIdSipResponse Protected methods *******************************************
@@ -679,6 +798,23 @@ begin
     Result := true;
   except
     Result := false;
+  end;
+end;
+
+class function TIdSipParser.IsScheme(const Scheme: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Length(Scheme) > 0;
+
+  if Result then begin
+    Result := Result and Self.IsLetter(Scheme[1]);
+
+    I := 2;
+    while (I <= Length(Scheme)) and Result do begin
+      Result := Result and (Self.IsAlphaNumeric(Scheme[I]) or (Scheme[I] in ['+', '-', '.']));
+      Inc(I);
+    end;
   end;
 end;
 
@@ -1043,6 +1179,7 @@ procedure TIdSipParser.ParseRequestLine(const Request: TIdSipRequest);
 var
   Line:   String;
   Tokens: TStrings;
+  URI:    String;
 begin
   // chew up leading blank lines (Section 7.5)
   Line := Self.ReadFirstNonBlankLine;
@@ -1061,10 +1198,12 @@ begin
     if not Self.IsMethod(Request.Method) then
       raise Request.MalformedException.Create(Format(MalformedToken, ['Method', Request.Method]));
 
-    Request.RequestUri := Tokens[1];
+    URI := Tokens[1];
 
-    if (Request.RequestUri[1] = '<') and (Request.RequestUri[Length(Request.RequestUri)] = '>') then
+    if (URI[1] = '<') and (URI[Length(URI)] = '>') then
       raise Request.MalformedException.Create(RequestUriNoAngleBrackets);
+
+    Request.RequestUri.URI := URI;
 
     Request.SIPVersion := Tokens[2];
 

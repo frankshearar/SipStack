@@ -3,20 +3,18 @@ unit Spike;
 interface
 
 uses
-  Classes, Controls, Forms, IdSipMessage, IdSipTcpServer, IdSipUdpServer,
-  IdTCPServer, StdCtrls, ExtCtrls;
+  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipMessage, IdSipTransaction,
+  IdSipTransport, StdCtrls;
 
 type
   TrnidSpike = class(TForm)
     Log: TMemo;
-    ServerType: TRadioGroup;
-    procedure ServerTypeClick(Sender: TObject);
   private
-    TcpServer: TIdSipTcpServer;
-    UdpServer: TIdSipUdpServer;
+    Dispatch:  TIdSipTransactionDispatcher;
+    Transport: TIdSipTcpTransport;
+    UA:        TIdSipUserAgentCore;
 
-    procedure OnTcpRequest(ASender: TObject; const Request: TIdSipRequest);
-    procedure OnUdpRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure OnInvite(Sender: TObject; const Request: TIdSipRequest);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -29,6 +27,9 @@ implementation
 
 {$R *.dfm}
 
+uses
+  IdSipConsts;
+
 //******************************************************************************
 //* TrnidSpike                                                                 *
 //******************************************************************************
@@ -38,49 +39,36 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.UdpServer := TIdSipUdpServer.Create(nil);
+  Self.Transport := TIdSipTcpTransport.Create(IdPORT_SIP);
+  Self.Dispatch := TIdSipTransactionDispatcher.Create;
+  Self.Dispatch.AddTransport(Self.Transport);
 
-  Self.UdpServer.OnRequest  := Self.OnUdpRequest;
-  Self.UdpServer.Active     := true;
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := Self.Dispatch;
 
-  Self.TcpServer := TIdSipTcpServer.Create(nil);
-  Self.TcpServer.OnRequest  := Self.OnTcpRequest;
+  Self.UA.OnInvite := Self.OnInvite;
+
+  Self.Transport.Start;
 end;
 
 destructor TrnidSpike.Destroy;
 begin
-  TcpServer.Free;
-  UdpServer.Free;
+  Self.Transport.Stop;
+
+  Self.UA.Free;
+  Self.Dispatch.Free;
+  Self.Transport.Free;
 
   inherited Destroy;
 end;
 
 //* TrnidSpike Private methods *************************************************
 
-procedure TrnidSpike.OnTcpRequest(ASender: TObject; const Request: TIdSipRequest);
+procedure TrnidSpike.OnInvite(Sender: TObject; const Request: TIdSipRequest);
 begin
-  Self.Log.Lines.Add('=== TCP Request ===');
-  Self.Log.Lines.Add(Request.AsString);
-end;
+  Self.Log.Text := Self.Log.Text + Request.AsString;
 
-procedure TrnidSpike.OnUdpRequest(Sender: TObject; const Request: TIdSipRequest);
-begin
-  Self.Log.Lines.Add('=== UDP Request ===');
-  Self.Log.Lines.Add(Request.AsString);
-end;
-
-procedure TrnidSpike.ServerTypeClick(Sender: TObject);
-begin
-  case ServerType.ItemIndex of
-    0: begin
-         Self.UdpServer.Active := false;
-         Self.TcpServer.Active := true;
-       end;
-    1: begin
-         Self.UdpServer.Active := true;
-         Self.TcpServer.Active := false;
-       end;
-  end;
+  Self.UA.AcceptCall(Request);
 end;
 
 end.

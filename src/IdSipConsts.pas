@@ -83,8 +83,8 @@ const
 
 // for IdAssignedNumbers
 const
-  IdPORT_SIP     = 5060;
-  IdPORT_SIP_TLS = 5061;
+  IdPORT_SIP  = 5060;
+  IdPORT_SIPS = 5061;
 
 // for IdResourceStrings
 const
@@ -191,6 +191,11 @@ const
   SIPDecline                          = 603;
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
+
+// MIME types
+const
+  SdpMimeType  = 'application/sdp';
+  T140MimeType = 'text/t140';
 
 implementation
 

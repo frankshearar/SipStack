@@ -15,24 +15,10 @@ object rnidSpike: TrnidSpike
   TextHeight = 13
   object Log: TMemo
     Left = 0
-    Top = 41
-    Width = 688
-    Height = 412
-    Align = alClient
-    TabOrder = 0
-  end
-  object ServerType: TRadioGroup
-    Left = 0
     Top = 0
     Width = 688
-    Height = 41
-    Align = alTop
-    Caption = ' Server type '
-    Columns = 2
-    Items.Strings = (
-      'TCP'
-      'UDP')
-    TabOrder = 1
-    OnClick = ServerTypeClick
+    Height = 453
+    Align = alClient
+    TabOrder = 0
   end
 end

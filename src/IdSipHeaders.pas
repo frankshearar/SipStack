@@ -173,7 +173,8 @@ type
   protected
     procedure SetValue(const Value: String); override;
   public
-    function  IsEqualTo(const Header: TIdSipHeader): Boolean; override;
+    function HasTag: Boolean;
+    function IsEqualTo(const Header: TIdSipHeader): Boolean; override;
 
     property Tag: String read GetTag write SetTag;
   end;
@@ -300,6 +301,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
     function  HasBranch: Boolean;
+    function  HasReceived: Boolean;
     function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
     function  IsRFC3261Branch: Boolean;
 
@@ -1263,6 +1265,11 @@ end;
 //******************************************************************************
 //* TIdSipFromToHeader Public methods ******************************************
 
+function TIdSipFromToHeader.HasTag: Boolean;
+begin
+  Result := Self.Tag <> '';
+end;
+
 function TIdSipFromToHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
 var
   From: TIdSipFromToHeader;
@@ -1664,7 +1671,7 @@ end;
 function TIdSipViaHeader.DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
 begin
   if (T = sttTLS) then
-    Result := IdPort_SIP_TLS
+    Result := IdPort_SIPS
   else
     Result := IdPORT_SIP;
 end;
@@ -1674,9 +1681,14 @@ begin
   Result := Self.Branch <> '';
 end;
 
+function TIdSipViaHeader.HasReceived: Boolean;
+begin
+  Result := Self.Received <> '';
+end;
+
 function TIdSipViaHeader.IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
 begin
-  Result := ((T = sttTLS) and (Port = IdPORT_SIP_TLS))
+  Result := ((T = sttTLS) and (Port = IdPORT_SIPS))
          or (Port = IdPORT_SIP);
 end;
 

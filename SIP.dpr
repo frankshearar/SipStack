@@ -15,11 +15,13 @@ uses
   IdSipTcpClient in 'src\IdSipTcpClient.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipTimer in 'src\IdSipTimer.pas',
+  IdSipTlsServer in 'src\IdSipTlsServer.pas',
   IdSipTransaction in 'src\IdSipTransaction.pas',
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
+  TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestMessages in 'test\TestMessages.pas',
   TestIdSdpParser in 'test\TestIdSdpParser.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
@@ -37,7 +39,7 @@ uses
   TestIdUri in 'test\TestIdUri.pas';
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

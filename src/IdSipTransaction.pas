@@ -3,7 +3,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdSipMessage, IdSipDialog, IdSipTimer, IdSipTransport, SyncObjs;
+  Contnrs, IdSipMessage, IdSipDialog, IdSipTimer, IdSipTransport,
+  SyncObjs;
 
 const
   InitialT1     = 500;   // ms
@@ -27,15 +28,13 @@ type
   // For the moment, Dispatcher does not manage lifetimes of transports.
   // Perhaps this might change...
   //
-  // * Add RFC 2543 matching
-  // * dispatch requests to the correct transaction
-  // * dispatch responses to the correct transaction
   TIdSipTransactionDispatcher = class(TObject)
   private
-    fOnNewDialog:        TIdSipDialogEvent;
+    fOnNewDialog:         TIdSipDialogEvent;
     fOnUnhandledRequest:  TIdSipRequestEvent;
     fOnUnhandledResponse: TIdSipResponseEvent;
     Transports:           TObjectList;
+    TransportLock:        TCriticalSection;
     Transactions:         TObjectList;
     TransactionLock:      TCriticalSection;
 
@@ -45,13 +44,15 @@ type
     function  FindTransaction(const R: TIdSipRequest): TIdSipTransaction; overload;
     function  FindTransaction(const R: TIdSipResponse): TIdSipTransaction; overload;
     function  TransactionAt(const Index: Cardinal): TIdSipTransaction;
+    function  TransportAt(const Index: Cardinal): TIdSipAbstractTransport;
   protected
     procedure DoOnNewDialog(const Dialog: TIdSipDialog);
     procedure DoOnUnhandledRequest(const R: TIdSipRequest);
     procedure DoOnUnhandledResponse(const R: TIdSipResponse);
     procedure OnTransportRequest(Sender: TObject; const R: TIdSipRequest);
     procedure OnTransportResponse(Sender: TObject; const R: TIdSipResponse);
-    function  FindAppropriateTransport(const M: TIdSipMessage): TIdSipAbstractTransport;
+    function  FindAppropriateTransport(const R: TIdSipRequest): TIdSipAbstractTransport; overload;
+    function  FindAppropriateTransport(const R: TIdSipResponse): TIdSipAbstractTransport; overload;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -60,10 +61,7 @@ type
     function  AddTransaction(const TransactionType: TIdSipTransactionClass;
                              const InitialRequest: TIdSipRequest): TIdSipTransaction;
     procedure ClearTransports;
-    function  Match(const ReceivedRequest,
-                          TranRequest: TIdSipRequest): Boolean; overload;
-    function  Match(const ReceivedResponse: TIdSipResponse;
-                    const TranRequest: TIdSipRequest): Boolean; overload;
+    function  LoopDetected(const Request: TIdSipRequest): Boolean;
     procedure SendRequest(const R: TIdSipRequest); virtual;
     procedure SendResponse(const R: TIdSipResponse); virtual;
     function  TransactionCount: Integer;
@@ -267,12 +265,14 @@ begin
   Self.Transports   := TObjectList.Create(false);
   Self.Transactions := TObjectList.Create(true);
 
+  Self.TransportLock   := TCriticalSection.Create;
   Self.TransactionLock := TCriticalSection.Create;
 end;
 
 destructor TIdSipTransactionDispatcher.Destroy;
 begin
   Self.TransactionLock.Free;
+  Self.TransportLock.Free;
   Self.Transactions.Free;
   Self.Transports.Free;
 
@@ -313,50 +313,35 @@ begin
   Self.Transports.Clear;
 end;
 
-function TIdSipTransactionDispatcher.Match(const ReceivedRequest,
-                                                 TranRequest: TIdSipRequest): Boolean;
+function TIdSipTransactionDispatcher.LoopDetected(const Request: TIdSipRequest): Boolean;
+var
+  I: Integer;
 begin
-  // cf. RFC 3261 Section 17.2.3
-  if ReceivedRequest.LastHop.IsRFC3261Branch then begin
-    Result := (ReceivedRequest.LastHop.Branch = TranRequest.LastHop.Branch)
-          and (ReceivedRequest.LastHop.SentBy = TranRequest.LastHop.SentBy);
+  // cf. RFC 3261 section 8.2.2.2
+  Result := false;
 
-    if ReceivedRequest.IsACK then
-      Result := Result and TranRequest.IsInvite
-    else
-      Result := Result and (ReceivedRequest.Method = TranRequest.Method);
-  end
-  else begin
-    raise Exception.Create('matching of SIP/1.0 messages not implemented yet');
+  Self.TransactionLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Transactions.Count) and not Result do begin
+      Result := Request.From.IsEqualTo(Self.TransactionAt(I).InitialRequest.From)
+            and (Request.CallID = Self.TransactionAt(I).InitialRequest.CallID)
+            and (Request.CSeq.IsEqualTo(Self.TransactionAt(I).InitialRequest.CSeq));
+      Inc(I);
+    end;
+  finally
+    Self.TransactionLock.Release;
   end;
-end;
-
-function TIdSipTransactionDispatcher.Match(const ReceivedResponse: TIdSipResponse;
-                                           const TranRequest:      TIdSipRequest): Boolean;
-begin
-  // cf. RFC 3261 Section 17.1.3
-  Result := (ReceivedResponse.Path.Length > 0)
-        and (TranRequest.Path.Length > 0);
-
-  Result := Result
-        and (ReceivedResponse.LastHop.Branch = TranRequest.LastHop.Branch);
-
-  if (ReceivedResponse.CSeq.Method = MethodAck) then
-    Result := Result
-          and (TranRequest.IsInvite)
-  else
-    Result := Result
-          and (ReceivedResponse.CSeq.Method = TranRequest.Method);
 end;
 
 procedure TIdSipTransactionDispatcher.SendRequest(const R: TIdSipRequest);
 begin
-  // add in a Via header describing this agent.
+  Self.FindAppropriateTransport(R).SendRequest(R);
 end;
 
 procedure TIdSipTransactionDispatcher.SendResponse(const R: TIdSipResponse);
 begin
-  // RFC 3261 Section 18.2.2
+  // RFC 3261 section 18.2.2
   // We must keep an association between open connections and transactions. If
   // the TCP connection that gave us the Request is still open then we MUST use
   // that connection to send back R. Otherwise we must open a new connection to
@@ -372,6 +357,8 @@ begin
 
   // Otherwise, send the response to the address in R.LastHop.SentBy using
   // the procedures of RFC:3263 section 5.
+
+  Self.FindAppropriateTransport(R).SendResponse(R);
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
@@ -394,6 +381,8 @@ begin
   Assert(R.Path.Length > 0, 'Messages must have at least one Via header');
 
   Result := R.LastHop.Transport <> sttUDP;
+
+//  Result := Self.FindAppropriateTransport(R).IsReliable;
 end;
 
 //* TIdSipTransactionDispatcher Protected methods ******************************
@@ -428,9 +417,63 @@ begin
   Self.DeliverToTransaction(R);
 end;
 
-function TIdSipTransactionDispatcher.FindAppropriateTransport(const M: TIdSipMessage): TIdSipAbstractTransport;
+function TIdSipTransactionDispatcher.FindAppropriateTransport(const R: TIdSipRequest): TIdSipAbstractTransport;
+var
+  I: Integer;
 begin
   Result := nil;
+
+  Self.TransportLock.Acquire;
+  try
+    Result := Self.TransportAt(0);
+{
+    I := 0;
+
+    while (I < Self.Transports.Count)
+      and (Self.TransportAt(I).GetTransportType <> R.LastHop.Transport) do
+      Inc(I);
+
+    // What should we do if there are no appropriate transports to use?
+    // It means that someone didn't configure the dispatcher properly,
+    // most likely.
+    if (I < Self.Transports.Count) then
+      Result := Self.TransportAt(I)
+    else
+      raise EUnknownTransport.Create('The dispatcher cannot find a '
+                                   + TransportToStr(R.LastHop.Transport)
+                                   + ' transport for a message');
+}
+  finally
+    Self.TransportLock.Release;
+  end;
+end;
+
+function TIdSipTransactionDispatcher.FindAppropriateTransport(const R: TIdSipResponse): TIdSipAbstractTransport;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  Self.TransportLock.Acquire;
+  try
+    I := 0;
+
+    while (I < Self.Transports.Count)
+      and (Self.TransportAt(I).GetTransportType <> R.LastHop.Transport) do
+      Inc(I);
+
+    // What should we do if there are no appropriate transports to use?
+    // It means that someone didn't configure the dispatcher properly,
+    // most likely.
+    if (I < Self.Transports.Count) then
+      Result := Self.TransportAt(I)
+    else
+      raise EUnknownTransport.Create('The dispatcher cannot find a '
+                                   + TransportToStr(R.LastHop.Transport)
+                                   + ' transport for a message');
+  finally
+    Self.TransportLock.Release;
+  end;
 end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
@@ -477,7 +520,7 @@ begin
   try
     I := 0;
     while (I < Self.Transactions.Count) and (Result = nil) do
-      if Self.Match(R, Self.TransactionAt(I).InitialRequest) then
+      if Self.TransactionAt(I).InitialRequest.Match(R) then
         Result := Self.TransactionAt(I)
       else Inc(I);
   finally
@@ -495,7 +538,7 @@ begin
   try
     I := 0;
     while (I < Self.Transactions.Count) and (Result = nil) do
-      if Self.Match(R, Self.TransactionAt(I).InitialRequest) then
+      if Self.TransactionAt(I).InitialRequest.Match(R) then
         Result := Self.TransactionAt(I)
       else Inc(I);
   finally
@@ -508,6 +551,11 @@ begin
   Result := Self.Transactions[Index] as TIdSipTransaction;
 end;
 
+function TIdSipTransactionDispatcher.TransportAt(const Index: Cardinal): TIdSipAbstractTransport;
+begin
+  Result := Self.Transports[Index] as TIdSipAbstractTransport;
+end;
+
 //******************************************************************************
 //* TIdSipMockTransactionDispatcher                                            *
 //******************************************************************************
@@ -517,7 +565,7 @@ constructor TIdSipMockTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.fTransport := TIdSipMockTransport.Create;
+  Self.fTransport := TIdSipMockTransport.Create(IdPORT_SIP);
 end;
 
 destructor TIdSipMockTransactionDispatcher.Destroy;

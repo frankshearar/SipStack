@@ -126,6 +126,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestHasTag;
     procedure TestIsEqualDifferentURI;
     procedure TestIsEqualSameURINoParams;
     procedure TestIsEqualSameURIWithParams;
@@ -224,6 +225,7 @@ type
     procedure TestAssignFromBadlyFormedVia;
     procedure TestBranch;
     procedure TestHasBranch;
+    procedure TestHasReceived;
     procedure TestIsRFC3261Branch;
     procedure TestIsEqualTo;
     procedure TestMaddr;
@@ -1397,6 +1399,20 @@ end;
 
 //* TestTIdSipFromToHeader Published methods ***********************************
 
+procedure TestTIdSipFromToHeader.TestHasTag;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  Check(not Self.F.HasTag, 'No tag');
+
+  Self.F.Tag := BranchMagicCookie + 'f00';
+  Check(Self.F.HasTag, 'Tag added via Tag property');
+
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  Check(not Self.F.HasTag, 'No tag sanity check');
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>;' + TagParam + '=f00';
+  Check(Self.F.HasTag, 'Tag added via SetValue');
+end;
+
 procedure TestTIdSipFromToHeader.TestIsEqualDifferentURI;
 var
   From: TIdSipFromToHeader;
@@ -2098,6 +2114,14 @@ begin
   Check(Self.V.HasBranch, 'Branch should have been set');
 end;
 
+procedure TestTIdSipViaHeader.TestHasReceived;
+begin
+  Check(not Self.V.HasReceived, 'No Received should be assigned on creation');
+
+  Self.V.Received := '127.0.0.1';
+  Check(Self.V.HasReceived, 'Received should have been set');
+end;
+
 procedure TestTIdSipViaHeader.TestIsRFC3261Branch;
 begin
   Self.V.Value := 'SIP/2.0/TCP gw1.leo-ix.org';
@@ -2232,7 +2256,7 @@ begin
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
   CheckEquals('',              Self.V.ParamsAsString, '2: Parameters');
-  CheckEquals(IdPORT_SIP_TLS,  Self.V.Port,           '2: Port');
+  CheckEquals(IdPORT_SIPS,     Self.V.Port,           '2: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '2: SipVersion');
   Check      (sttTLS =         Self.V.Transport,      '2: Transport');
 

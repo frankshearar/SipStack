@@ -3,7 +3,8 @@ unit TestIdSipCore;
 interface
 
 uses
-  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdURI, TestFramework;
+  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdURI, TestFramework,
+  TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -16,18 +17,30 @@ type
     procedure TestNextCallID;
   end;
 
-  TestTIdSipUserAgentCore = class(TTestCase)
+  TestTIdSipUserAgentCore = class(TTestCaseSip)
   private
-    Core:     TIdSipUserAgentCore;
-    Dispatch: TIdSipMockTransactionDispatcher;
-    P:        TIdSipParser;
-    Request:  TIdSipRequest;
+    Core:          TIdSipUserAgentCore;
+    Dispatch:      TIdSipMockTransactionDispatcher;
+    OnInviteFired: Boolean;
+    Request:       TIdSipRequest;
 
+    procedure AcceptCallImmediately(Sender: TObject; const Request: TIdSipRequest);
+    procedure CheckAcceptCall(Sender: TObject; const Session: TIdSipSession);
+    procedure CheckAcceptSecureCall(Sender: TObject; const Session: TIdSipSession);
+    procedure CheckOnInviteFired(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAcceptCall;
+    procedure TestAcceptSecureCall;
+    procedure TestAddAllowedLanguage;
+    procedure TestAddAllowedLanguageLanguageAlreadyPresent;
+    procedure TestAddAllowedMethod;
+    procedure TestAddAllowedMethodMethodAlreadyPresent;
+    procedure TestAddAllowedScheme;
+    procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestCall;
     procedure TestCreateInvite;
     procedure TestCreateRequest;
@@ -38,8 +51,21 @@ type
     procedure TestCreateResponseSipsRecordRoute;
     procedure TestCreateResponseSipsRequestUri;
     procedure TestCreateResponseUserAgent;
-//    procedure TestHandleRequestUnknownMethod;
+    procedure TestHasUnknownContentEncoding;
+    procedure TestHasUnknownContentType;
+    procedure TestIsMethodAllowed;
+    procedure TestIsSchemeAllowed;
+    procedure TestLoopDetection;
     procedure TestNextTag;
+    procedure TestOnInviteFired;
+    procedure TestRejectNoContact;
+    procedure TestRejectUnknownContentEncoding;
+    procedure TestRejectUnknownContentLanguage;
+    procedure TestRejectUnknownContentType;
+    procedure TestRejectUnknownExtension;
+    procedure TestRejectUnknownMethod;
+    procedure TestRejectUnknownScheme;
+    procedure TestRinging;
     procedure TestSessionEstablished;
     procedure TestSetContact;
     procedure TestSetContactMailto;
@@ -50,6 +76,7 @@ type
 
   TestTIdSipSession = class(TTestCase)
   private
+    Core:           TIdSipUserAgentCore;
     InitialRequest: TIdSipRequest;
     Session:        TIdSipSession;
   public
@@ -63,7 +90,7 @@ implementation
 
 uses
   Classes, IdException, IdGlobal, IdHttp, IdSipConsts, IdSipDialog, SysUtils,
-  TestMessages;
+  TestMessages, IdSipTransport;
 
 function Suite: ITestSuite;
 begin
@@ -119,6 +146,7 @@ procedure TestTIdSipUserAgentCore.SetUp;
 var
   C: TIdSipContactHeader;
   F: TIdSipFromHeader;
+  P: TIdSipParser;
 begin
   inherited SetUp;
 
@@ -143,15 +171,20 @@ begin
     F.Free;
   end;
 
-  Self.P := TIdSipParser.Create;
+  P := TIdSipParser.Create;
+  try
+    Self.Request := P.ParseAndMakeRequest(LocalLoopRequest);
+  finally
+    P.Free;
+  end;
+  Self.Request.ContentType := SdpMimeType;
 
-  Self.Request := Self.P.ParseAndMakeRequest(LocalLoopRequest);
+  Self.OnInviteFired := false;
 end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
 begin
   Self.Request.Free;
-  Self.P.Free;
   Self.Core.Free;
   Self.Dispatch.Free;
 
@@ -160,11 +193,79 @@ end;
 
 //* TestTIdSipUserAgentCore Private methods ************************************
 
+procedure TestTIdSipUserAgentCore.AcceptCallImmediately(Sender: TObject; const Request: TIdSipRequest);
+begin
+  Self.Core.AcceptCall(Request);
+end;
+
+procedure TestTIdSipUserAgentCore.CheckAcceptCall(Sender: TObject; const Session: TIdSipSession);
+var
+  Dlg:               TIdSipDialog;
+  I:                 Integer;
+  RecordRouteFilter: TIdSipHeadersFilter;
+  ReqContact:        TIdSipContactHeader;
+  Response:          TIdSipResponse;
+  RouteFilter:       TIdSipHeadersFilter;
+begin
+  Response := Self.Dispatch.Transport.LastResponse;
+
+  CheckEquals(1, Session.Dialogs.Count, 'Dialog count');
+  Dlg := Session.Dialogs.Items[0];
+
+  CheckEquals(Response.CallID,              Dlg.ID.CallID,        'Call-ID');
+  CheckEquals(Response.ToHeader.Tag,        Dlg.ID.LocalTag,      'Local tag');
+  CheckEquals(Response.From.Tag,            Dlg.ID.RemoteTag,     'Remote tag');
+  CheckEquals(0,                            Dlg.LocalSequenceNo,  'Local sequence no');
+  CheckEquals(Self.Request.CSeq.SequenceNo, Dlg.RemoteSequenceNo, 'Remote sequence no');
+  CheckEquals(Response.ToHeader.Address,
+              Dlg.LocalURI,
+              'Local URI');
+  CheckEquals(Response.From.Address,
+              Dlg.RemoteURI,
+              'Remote URI');
+  ReqContact := Self.Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
+  CheckEquals(ReqContact.Address,
+              Dlg.RemoteURI,
+              'Remote Target');
+
+  Check(not Dlg.IsSecure, 'A secure dialog shouldn''t be created from a SIP URI');
+
+  RecordRouteFilter := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
+  try
+    RouteFilter := TIdSipHeadersFilter.Create(Response.Headers, RouteHeader);
+    try
+      for I := 0 to Min(RouteFilter.Count, RecordRouteFilter.Count) - 1 do
+        CheckEquals(RecordRouteFilter.Items[I].Value,
+                    RouteFilter.Items[I].Value,
+                    'Route set differs on value ' + IntToStr(I + 1));
+    finally
+      RouteFilter.Free;
+    end;
+  finally
+    RecordRouteFilter.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.CheckAcceptSecureCall(Sender: TObject; const Session: TIdSipSession);
+var
+  Dlg: TIdSipDialog;
+begin
+  CheckEquals(1, Session.Dialogs.Count, 'Dialog count');
+  Dlg := Session.Dialogs.Items[0];
+
+  Check(Dlg.IsSecure, 'A secure dialog MUST be created from a SIPS URI');
+end;
+
+procedure TestTIdSipUserAgentCore.CheckOnInviteFired(Sender: TObject; const Request: TIdSipRequest);
+begin
+  Self.OnInviteFired := true;
+end;
+
 procedure TestTIdSipUserAgentCore.CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
 var
   Contact: TIdSipContactHeader;
 begin
-  CheckEquals(Dest.Address.GetFullURI,
+  CheckEquals(Dest.Address,
               Request.RequestUri,
               'Request-URI not properly set');
 
@@ -180,15 +281,14 @@ begin
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
               'From.DisplayName');
-  CheckEquals(Request.From.Address.GetFullURI,
-              Self.Core.From.Address.GetFullURI,
-              'From.Address.GetFullURI');
-    CheckNotEquals('',
-                   Request.From.Tag,
-                   'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
+  CheckEquals(Request.From.Address,
+              Self.Core.From.Address,
+              'From.Address');
+    Check(Request.From.HasTag,
+          'Requests MUST have a From tag; cf. RFC 3261 section 8.1.1.3');
 
   CheckEquals(Request.RequestUri,
-              Request.ToHeader.Address.GetFullURI,
+              Request.ToHeader.Address,
               'To header incorrectly set');
 
   CheckEquals(1,
@@ -203,6 +303,177 @@ begin
 end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************
+
+procedure TestTIdSipUserAgentCore.TestAcceptCall;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+  SessionCount:  Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  SessionCount  := Self.Core.SessionCount;
+
+  Self.Core.OnInvite := Self.AcceptCallImmediately;
+  Self.Core.OnNewSession := Self.CheckAcceptCall;
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPOK, Response.StatusCode,      'Status-Code');
+  Check(Response.From.HasTag,                  'No From tag');
+  Check(Response.ToHeader.HasTag,              'No To tag');
+  Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
+
+  CheckEquals(SessionCount + 1,
+              Self.Core.SessionCount,
+              'No new session was created');
+
+  // check dialog settings - local tag, remote tag, etc.
+end;
+
+procedure TestTIdSipUserAgentCore.TestAcceptSecureCall;
+begin
+  Self.Core.AddAllowedScheme(SipsScheme);
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Core.OnInvite := Self.AcceptCallImmediately;
+  Self.Core.OnNewSession := Self.CheckAcceptSecureCall;
+  Self.Core.HandleRequest(Self.Request);
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('af');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
+
+    CheckEquals('en', Languages[0], 'en first');
+    CheckEquals('af', Languages[1], 'af second');
+  finally
+    Languages.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedLanguage(' ');
+    Fail('Failed to forbid adding a malformed language ID');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedLanguageLanguageAlreadyPresent;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('en');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(1, Languages.Count, 'en was re-added');
+  finally
+    Languages.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedMethod;
+var
+  Methods: TStrings;
+begin
+  Methods := TStringList.Create;
+  try
+    Self.Core.AddAllowedMethod(MethodOptions);
+
+    Methods.CommaText := Self.Core.AllowedMethods;
+
+    CheckEquals(4, Methods.Count, 'Number of allowed methods');
+
+    CheckEquals(MethodBye,     Methods[0], 'BYE first');
+    CheckEquals(MethodCancel,  Methods[1], 'CANCEL second');
+    CheckEquals(MethodInvite,  Methods[2], 'INVITE third');
+    CheckEquals(MethodOptions, Methods[3], 'OPTIONS fourth');
+  finally
+    Methods.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedMethod(' ');
+    Fail('Failed to forbid adding a non-token Method');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedMethodMethodAlreadyPresent;
+var
+  Methods: TStrings;
+  MethodCount: Cardinal;
+begin
+  Methods := TStringList.Create;
+  try
+    Methods.CommaText := Self.Core.AllowedMethods;
+    MethodCount := Methods.Count;
+
+    Self.Core.AddAllowedMethod(MethodInvite);
+    Methods.CommaText := Self.Core.AllowedMethods;
+
+    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedScheme;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipsScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+
+    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
+
+    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
+    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
+  finally
+    Schemes.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedScheme(' ');
+    Fail('Failed to forbid adding a malformed URI scheme');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedSchemeSchemeAlreadyPresent;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+    
+    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
+  finally
+    Schemes.Free;
+  end;
+end;
 
 procedure TestTIdSipUserAgentCore.TestCall;
 var
@@ -237,10 +508,9 @@ begin
       Self.CheckCreateRequest(Dest, Request);
       CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
 
-      CheckEquals('',
-                  Request.ToHeader.Tag,
-                  'This request is outside of a dialog, hence MUST NOT have a '
-                + 'To tag. See RFC:3261, section 8.1.1.2');
+      Check(not Request.ToHeader.HasTag,
+            'This request is outside of a dialog, hence MUST NOT have a '
+          + 'To tag. See RFC:3261, section 8.1.1.2');
     finally
       Request.Free;
     end;
@@ -386,7 +656,7 @@ var
   Contact:  TIdSipContactHeader;
   Response: TIdSipResponse;
 begin
-  Self.Request.RequestUri := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
 
   Response := Self.Core.CreateResponse(Self.Request, SIPOK);
   try
@@ -403,7 +673,7 @@ var
   Response: TIdSipResponse;
 begin
   Self.Core.UserAgentName := 'SATAN/1.0';
-  Self.Request.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
 
   Response := Self.Core.CreateResponse(Self.Request, SIPOK);
   try
@@ -414,12 +684,82 @@ begin
     Response.Free;
   end;
 end;
-{
-procedure TestTIdSipUserAgentCore.TestHandleRequestUnknownMethod;
+
+procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
 begin
-  Fail('not implemented yet');
+  Self.Request.Headers.Remove(Self.Request.FirstHeader(ContentEncodingHeaderFull));
+
+  Check(not Self.Core.HasUnknownContentEncoding(Self.Request),
+        'Vacuously true');
+
+  Self.Request.AddHeader(ContentEncodingHeaderFull);
+  Check(Self.Core.HasUnknownContentEncoding(Self.Request),
+        'No encodings are supported');
 end;
-}
+
+procedure TestTIdSipUserAgentCore.TestHasUnknownContentType;
+begin
+  Self.Request.RemoveHeader(Self.Request.FirstHeader(ContentTypeHeaderFull));
+
+  Check(not Self.Core.HasUnknownContentType(Self.Request),
+        'Vacuously true');
+
+  Self.Request.AddHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+  Check(not Self.Core.HasUnknownContentType(Self.Request),
+        SdpMimeType + ' MUST supported');
+
+  Self.Request.RemoveHeader(Self.Request.FirstHeader(ContentTypeHeaderFull));
+  Self.Request.AddHeader(ContentTypeHeaderFull);
+  Check(Self.Core.HasUnknownContentType(Self.Request),
+        'Nothing else is supported');
+end;
+
+procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
+begin
+  Check(not Self.Core.IsMethodAllowed(MethodRegister),
+        MethodRegister + ' not allowed');
+
+  Self.Core.AddAllowedMethod(MethodRegister);
+  Check(Self.Core.IsMethodAllowed(MethodRegister),
+        MethodRegister + ' not recognised as an allowed method');
+
+  Check(not Self.Core.IsMethodAllowed(' '),
+        ''' '' not recognised as an allowed method');
+end;
+
+procedure TestTIdSipUserAgentCore.TestIsSchemeAllowed;
+begin
+  Check(not Self.Core.IsMethodAllowed(SipScheme),
+        SipScheme + ' not allowed');
+
+  Self.Core.AddAllowedScheme(SipScheme);
+  Check(Self.Core.IsSchemeAllowed(SipScheme),
+        SipScheme + ' not recognised as an allowed scheme');
+
+  Check(not Self.Core.IsSchemeAllowed(' '),
+        ''' '' not recognised as an allowed scheme');
+end;
+
+procedure TestTIdSipUserAgentCore.TestLoopDetection;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Dispatch.AddTransaction(TIdSipClientInviteTransaction, Self.Request);
+
+  // wipe out the tag
+  Self.Request.ToHeader.Value := Self.Request.ToHeader.Address.GetFullURI;
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Core.HandleRequest(Self.Request);
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
+end;
+
 procedure TestTIdSipUserAgentCore.TestNextTag;
 var
   I:    Integer;
@@ -444,6 +784,192 @@ begin
     end;
   finally
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestOnInviteFired;
+begin
+  Self.Core.OnInvite := CheckOnInviteFired;
+
+  Self.Request.Method := MethodInvite;
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.OnInviteFired, 'OnInviteFired event didn''t fire');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectNoContact;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Request.RemoveHeader(Self.Request.FirstHeader(ContactHeaderFull));
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPBadRequest,        Response.StatusCode, 'Status-Code');
+  CheckEquals(MissingContactHeader, Response.StatusText, 'Status-Text');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownContentEncoding;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Request.FirstHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Request.AddHeader(ContentEncodingHeaderFull).Value := 'gzip';
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptEncodingHeader), 'No Accept-Encoding header');
+  CheckEquals('',
+              Response.FirstHeader(AcceptEncodingHeader).Value,
+              'Accept value');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownContentLanguage;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Core.AddAllowedLanguage('fr');
+
+  Self.Request.AddHeader(ContentLanguageHeader).Value := 'en_GB';
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptLanguageHeader), 'No Accept-Language header');
+  CheckEquals(Self.Core.AllowedLanguages,
+              Response.FirstHeader(AcceptLanguageHeader).Value,
+              'Accept-Language value');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownContentType;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Request.ContentType := 'text/xml';
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(AcceptHeader), 'No Accept header');
+  CheckEquals(SdpMimeType,
+              Response.FirstHeader(AcceptHeader).Value,
+              'Accept value');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownExtension;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Request.AddHeader(RequireHeader).Value := '100rel';
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPBadExtension, Response.StatusCode, 'Status-Code');
+  Check(Response.HasHeader(UnsupportedHeader), 'No Unsupported header');
+  CheckEquals(Self.Request.FirstHeader(RequireHeader).Value,
+              Response.FirstHeader(UnsupportedHeader).Value,
+              'Unexpected Unsupported header value');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownMethod;
+var
+  Allow:         TIdSipCommaSeparatedHeader;
+  I:             Integer;
+  Methods:       TStrings;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Request.Method := MethodRegister;
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  Check(Response.HasHeader(AllowHeader),
+        'Allow header is mandatory. cf. RFC 3261 section 8.2.1');
+
+  Allow := Response.FirstHeader(AllowHeader) as TIdSipCommaSeparatedHeader;
+  Methods := TStringList.Create;
+  try
+    Methods.CommaText := Self.Core.AllowedMethods;
+
+    for I := 0 to Methods.Count - 1 do
+      CheckEquals(Methods[I], Allow.Values[I], IntToStr(I + 1) + 'th value');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnknownScheme;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Request.RequestUri.URI := 'tel://1';
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRinging;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Core.HandleRequest(Self.Request);
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPRinging, Response.StatusCode, 'Status-Code');
 end;
 
 procedure TestTIdSipUserAgentCore.TestSessionEstablished;
@@ -583,13 +1109,15 @@ var
 begin
   inherited SetUp;
 
+  Self.Core := TIdSipUserAgentCore.Create;
+
   ID := TIdSipDialogID.Create('', '', '');
   try
     RouteSet := TIdSipHeaders.Create;
     try
       D := TIdSipDialog.Create(ID, 1, 1, '', '', '', false, RouteSet);
       try
-        Self.Session := TIdSipSession.Create(D);
+        Self.Session := TIdSipSession.Create(D, Self.Core);
       finally
         D.Free;
       end;
@@ -605,6 +1133,7 @@ procedure TestTIdSipSession.TearDown;
 begin
   Self.Session.Free;
   Self.InitialRequest.Free;
+  Self.Core.Free;
 
   inherited TearDown;
 end;

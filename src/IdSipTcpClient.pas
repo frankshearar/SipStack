@@ -3,9 +3,12 @@ unit IdSipTcpClient;
 interface
 
 uses
-  Classes, IdSipMessage, IdTCPClient, IdSipTcpServer;
+  Classes, IdSipMessage, IdTCPClient{, IdSipTcpServer};
 
 type
+  TIdSipTcpRequestEvent = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
+  TIdSipTcpResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
+
   // todo:
   // * resend requests on the same connection
   // * keep the connection alive for "long enough"
@@ -17,18 +20,22 @@ type
 
     procedure DoOnFinished;
     procedure DoOnResponse(const R: TIdSipResponse);
+    function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
     procedure DoOnDisconnected; override;
   public
     constructor Create(AOwner: TComponent); override;
 
-    procedure Send(const Request: TIdSipRequest);
+    procedure Send(const Request: TIdSipRequest); overload;
+    procedure Send(const Response: TIdSipResponse); overload;
 
     property OnFinished: TNotifyEvent           read fOnFinished write fOnFinished;
     property OnResponse: TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
     property Timeout:    Cardinal               read fTimeout write fTimeout;
   end;
+
+  TIdSipTcpClientClass = class of TIdSipTcpClient;
 
 implementation
 
@@ -53,6 +60,11 @@ begin
   Self.ReadResponses;
 end;
 
+procedure TIdSipTcpClient.Send(const Response: TIdSipResponse);
+begin
+  Self.Write(Response.AsString);
+end;
+
 //* TIdSipTcpClient Protected methods ******************************************
 
 procedure TIdSipTcpClient.DoOnDisconnected;
@@ -75,52 +87,56 @@ begin
     Self.OnResponse(Self, R);
 end;
 
+function TIdSipTcpClient.ReadResponse(var TimedOut: Boolean): String;
+var
+  Line: String;
+begin
+  Result := '';
+
+  Line := Self.ReadLn(#$A, Self.Timeout);
+
+  while (Line <> '') do begin
+    Result := Result + Line + #13#10;
+    Line := Self.ReadLn(#$A, Self.Timeout);
+  end;
+
+  TimedOut := Self.ReadLnTimedOut;
+end;
+
 procedure TIdSipTcpClient.ReadResponses;
 var
-  Finished:              Boolean;
-  Line:                  String;
-  S:                     TStringStream;
-  P:                     TIdSipParser;
-  R:                     TIdSipResponse;
+  Finished: Boolean;
+  S:        String;
+  P:        TIdSipParser;
+  R:        TIdSipResponse;
 begin
   Finished := false;
 
   try
-    while (not Finished) do begin
-      S := TStringStream.Create('');
-      try
-        Line := Self.ReadLn(#$A, Timeout);
-        while (Line <> '') do begin
-          S.WriteString(Line);
-          Line := Self.ReadLn(#$A, Timeout);
-        end;
-        S.Seek(0, soFromBeginning);
-        Finished := Self.ReadLnTimedOut;
+    P := TIdSipParser.Create;
+    try
+      while (not Finished) do begin
+        S := Self.ReadResponse(Finished);
 
-        if (S.DataString <> '') then begin
-          P := TIdSipParser.Create;
+        if (S <> '') then begin
+          R := P.ParseAndMakeResponse(S);
           try
-            P.Source := S;
-            R := P.ParseAndMakeResponse;
-            try
-              R.Body := Self.ReadString(R.ContentLength);
-              Self.DoOnResponse(R);
+            R.Body := Self.ReadString(R.ContentLength);
+            Self.DoOnResponse(R);
 
-              Finished := R.IsFinal;
-            finally
-              R.Free;
-            end;
+            Finished := R.IsFinal;
           finally
-            P.Free;
+            R.Free;
           end;
         end;
-      finally
-        S.Free;
       end;
+    finally
+      P.Free;
     end;
   except
     on EIdConnClosedGracefully do;
   end;
+  
   Self.DoOnFinished;
 end;
 

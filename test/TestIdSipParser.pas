@@ -36,6 +36,7 @@ type
     procedure TestIsQuotedString;
     procedure TestIsQValue;
     procedure TestIsSipVersion;
+    procedure TestIsScheme;
     procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestIsWord;
@@ -327,6 +328,14 @@ begin
   Check(    TIdSipParser.IsSipVersion('sip/2.0'),  'sip/2.0');
   Check(    TIdSipParser.IsSipVersion(SIPVersion), 'SIPVersion constant');
   Check(not TIdSipParser.IsSipVersion('SIP/X.Y'),  'SIP/X.Y');
+end;
+
+procedure TestTIdSipParser.TestIsScheme;
+begin
+  Check(not TIdSipParser.IsScheme(''),          '''''');
+  Check(not TIdSipParser.IsScheme('%'),         '%');
+  Check(not TIdSipParser.IsScheme('1sip'),      '1sip');
+  Check(    TIdSipParser.IsScheme('sip-2.0+3'), 'sip-2.0+3');
 end;
 
 procedure TestTIdSipParser.TestIsToken;
@@ -1141,7 +1150,7 @@ begin
     CheckEquals('SIP/3.0',               Via1.SipVersion,       'Via1.SipVersion');
     Check      (sttTLS =                 Via1.Transport,        'Via1.Transport');
     CheckEquals('gw5.cust1.leo_ix.org',  Via1.SentBy,           'Via1.SentBy');
-    CheckEquals(IdPORT_SIP_TLS,          Via1.Port,             'Via1.Port');
+    CheckEquals(IdPORT_SIPS,             Via1.Port,             'Via1.Port');
     CheckEquals('z9hG4bK776aheh',        Via1.Params['branch'], 'Via1.Params[''branch'']');
     CheckEquals('SIP/3.0/TLS gw5.cust1.leo_ix.org',
                 Via1.Value,
@@ -1388,11 +1397,11 @@ begin
     Self.P.Source := Str;
     Self.P.ParseRequest(Request);
     
-    CheckEquals('INVITE',                              Request.Method,      'Method');
-    CheckEquals('SIP/2.0',                             Request.SipVersion,  'SipVersion');
-    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.RequestUri,  'RequestUri');
-    CheckEquals(6,                                     Request.MaxForwards, 'MaxForwards');
-    CheckEquals('0ha0isndaksdj@10.1.1.1',              Request.CallID,      'CallID');
+    CheckEquals('INVITE',                              Request.Method,                 'Method');
+    CheckEquals('SIP/2.0',                             Request.SipVersion,             'SipVersion');
+    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.RequestUri.GetFullURI,  'RequestUri');
+    CheckEquals(6,                                     Request.MaxForwards,            'MaxForwards');
+    CheckEquals('0ha0isndaksdj@10.1.1.1',              Request.CallID,                 'CallID');
 
     CheckEquals('',
                 Request.ToHeader.DisplayName,
@@ -1516,7 +1525,7 @@ begin
     Self.P.ParseRequest(Request);
 
     CheckEquals('sip:sip%3Auser%40example.com@company.com;other-param=summit',
-                Request.RequestUri,
+                Request.RequestUri.GetFullURI,
                 'Request-URI');
   finally
     Str.Free;
@@ -1587,8 +1596,12 @@ procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage; const Che
 begin
   CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
 
-  CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,     'Method');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).RequestUri, 'Request-URI');
+  CheckEquals('INVITE',
+              (Msg as TIdSipRequest).Method,
+              'Method');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+              (Msg as TIdSipRequest).RequestUri.GetFullURI,
+              'Request-URI');
 
   Self.CheckBasicMessage(Msg, CheckBody);
 end;

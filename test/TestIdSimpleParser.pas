@@ -20,6 +20,7 @@ type
     procedure TestIsHexNumber;
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
+    procedure TestIsLetter;
     procedure TestIsNumber;
     procedure TestPeek;
     procedure TestPeekLine;
@@ -174,6 +175,20 @@ begin
   Check(    TIdSimpleParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
   Check(    TIdSimpleParser.IsIPv6Address('::13.1.68.3'),                '::13.1.68.3');
   Check(    TIdSimpleParser.IsIPv6Address('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
+end;
+
+procedure TestTIdSimpleParser.TestIsLetter;
+var
+  C: Char;
+begin
+  Check(not P.IsLetter('_'), '_');
+  Check(not P.IsLetter('1'), '1');
+
+  for C := Low(Char) to High(Char) do
+    if (C in ['a'..'z', 'A'..'Z']) then
+      Check(P.IsLetter(C), C)
+    else
+      Check(not P.IsLetter(C), C)
 end;
 
 procedure TestTIdSimpleParser.TestIsNumber;

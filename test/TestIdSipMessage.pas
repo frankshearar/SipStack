@@ -3,10 +3,12 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipHeaders, IdSipMessage, TestFramework, TestFrameworkEx;
+  IdSipHeaders, IdSipMessage, IdURI, TestFramework, TestFrameworkEx;
 
 type
   TestTIdSipMessage = class(TExtendedTestCase)
+  private
+    procedure CheckEquals(Expected, Received: TIdURI; Message: String); overload;
   protected
     Message: TIdSipMessage;
   public
@@ -15,12 +17,14 @@ type
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
+    procedure TestAsStringNoMaxForwardsSet;
     procedure TestClearHeaders;
     procedure TestFirstHeader;
     procedure TestHeaderAt;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestReadBody;
+    procedure TestRemoveHeader;
     procedure TestSetCallID;
     procedure TestSetContentLength;
     procedure TestSetContentType;
@@ -33,17 +37,37 @@ type
 
   TestTIdSipRequest = class(TestTIdSipMessage)
   private
-    Request: TIdSipRequest;
+    ReceivedRequest: TIdSipRequest;
+    Request:         TIdSipRequest;
+    Response:        TIdSipResponse;
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestHasSipsUri;
     procedure TestIsAck;
+    procedure TestIsBye;
+    procedure TestIsCancel;
+    procedure TestIsEqualToComplexMessages;
+    procedure TestIsEqualToDifferentHeaders;
+    procedure TestIsEqualToDifferentMethod;
+    procedure TestIsEqualToDifferentRequestUri;
+    procedure TestIsEqualToDifferentSipVersion;
+    procedure TestIsEqualToFromAssign;
+    procedure TestIsEqualToResponse;
+    procedure TestIsEqualToTrivial;
     procedure TestIsInvite;
     procedure TestIsRequest;
+    procedure TestMatchInviteClient;
+    procedure TestMatchInviteClientAckWithInvite;
+    procedure TestMatchInviteClientDifferentCSeqMethod;
+    procedure TestMatchInviteClientDifferentViaBranch;
+    procedure TestMatchInviteServer;
+    procedure TestMatchNonInviteClient;
+    procedure TestMatchNonInviteServer;
     procedure TestSetPath;
   end;
 
@@ -56,6 +80,13 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestIsEqualToComplexMessages;
+    procedure TestIsEqualToDifferentHeaders;
+    procedure TestIsEqualToDifferentSipVersion;
+    procedure TestIsEqualToDifferentStatusCode;
+    procedure TestIsEqualToDifferentStatusText;
+    procedure TestIsEqualToRequest;
+    procedure TestIsEqualToTrivial;
     procedure TestIsFinal;
     procedure TestIsProvisional;
     procedure TestIsRequest;
@@ -84,6 +115,13 @@ begin
   Self.Message.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSipMessage Private methods ******************************************
+
+procedure TestTIdSipMessage.CheckEquals(Expected, Received: TIdURI; Message: String);
+begin
+  CheckEquals(Expected.GetFullURI, Received.GetFullURI, Message);
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
@@ -149,6 +187,11 @@ begin
   end;
 end;
 
+procedure TestTIdSipMessage.TestAsStringNoMaxForwardsSet;
+begin
+  Check(Pos(MaxForwardsHeader, Self.Message.AsString) > 0, 'No Max-Forwards header');
+end;
+
 procedure TestTIdSipMessage.TestClearHeaders;
 begin
   Self.Message.AddHeader(UserAgentHeader);
@@ -207,6 +250,7 @@ end;
 
 procedure TestTIdSipMessage.TestLastHop;
 begin
+  Self.Message.ClearHeaders;
   CheckNull(Self.Message.LastHop, 'Unexpected return for empty path');
 
   Self.Message.AddHeader(ViaHeaderFull);
@@ -233,6 +277,19 @@ begin
   finally
     Str.Free;
   end;
+end;
+
+procedure TestTIdSipMessage.TestRemoveHeader;
+begin
+  Self.Message.ClearHeaders;
+
+  Self.Message.AddHeader(ContentTypeHeaderFull);
+  Check(Self.Message.HasHeader(ContentTypeHeaderFull),
+        'Content-Type wasn''t Add()ed');
+
+  Self.Message.RemoveHeader(Self.Message.FirstHeader(ContentTypeHeaderFull));
+  Check(not Self.Message.HasHeader(ContentTypeHeaderFull),
+        'Content-Type wasn''t Remove()ed');
 end;
 
 procedure TestTIdSipMessage.TestSetCallID;
@@ -336,11 +393,30 @@ end;
 //* TestTIdSipRequest Public methods *******************************************
 
 procedure TestTIdSipRequest.SetUp;
+var
+  P: TIdSipParser;
 begin
   inherited SetUp;
 
-  Self.Message := TIdSipRequest.Create;
+  P := TIdSipParser.Create;
+  try
+    Self.Message         := P.ParseAndMakeRequest(BasicRequest);
+    Self.ReceivedRequest := P.ParseAndMakeRequest(BasicRequest);
+    Self.Response        := P.ParseAndMakeResponse(BasicResponse);
+  finally
+    P.Free;
+  end;
+
+//  Self.Message := TIdSipRequest.Create;
   Self.Request := Self.Message as TIdSipRequest;
+end;
+
+procedure TestTIdSipRequest.TearDown;
+begin
+  Self.Response.Free;
+  Self.ReceivedRequest.Free;
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
@@ -353,7 +429,7 @@ begin
   try
     R.SIPVersion := 'SIP/1.5';
     R.Method := 'NewMethod';
-    R.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+    R.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
     R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     R.ContentLength := 5;
     R.Body := 'hello';
@@ -377,7 +453,7 @@ begin
   P := TPersistent.Create;
   try
     try
-      Request.Assign(P);
+      Self.Request.Assign(P);
       Fail('Failed to bail out assigning a TPersistent to a TIdSipRequest');
     except
       on EConvertError do;
@@ -393,33 +469,16 @@ var
   Received: TStrings;
   Parser:   TIdSipParser;
   Str:      TStringStream;
-  Hop:      TIdSipViaHeader;
 begin
-  Request.Method                       := 'INVITE';
-  Request.RequestUri                   := 'sip:wintermute@tessier-ashpool.co.lu';
-  Request.SIPVersion                   := SIPVersion;
-  Hop := Request.AddHeader(ViaHeaderFull) as TIdSipViaHeader;
-  Hop.Value                            := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Request.MaxForwards                  := 70;
-
-  Request.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
-  Request.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
-  Request.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
-  Request.AddHeader(CSeqHeader).Value            := '314159 INVITE';
-  Request.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
-  Request.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
-  Request.ContentLength                          := 29;
-  Request.Body                                   := 'I am a message. Hear me roar!';
-
   Expected := TStringList.Create;
   try
     Expected.Text := BasicRequest;
 
     Received := TStringList.Create;
     try
-      Received.Text := Request.AsString;
+      Received.Text := Self.Request.AsString;
 
-      CheckEquals(Expected, Received, '');
+      CheckEquals(Expected, Received, 'AsString');
 
       Parser := TIdSipParser.Create;
       try
@@ -427,7 +486,7 @@ begin
         try
           Parser.Source := Str;
 
-          Parser.ParseRequest(Request);
+          Parser.ParseRequest(Self.Request);
         finally
           Str.Free;
         end;
@@ -444,13 +503,13 @@ end;
 
 procedure TestTIdSipRequest.TestHasSipsUri;
 begin
-  Self.Request.RequestUri := 'tel://999';
+  Self.Request.RequestUri.URI := 'tel://999';
   Check(not Self.Request.HasSipsUri, 'tel URI');
 
-  Self.Request.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
   Check(not Self.Request.HasSipsUri, 'sip URI');
 
-  Self.Request.RequestUri := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
   Check(Self.Request.HasSipsUri, 'sips URI');
 end;
 
@@ -476,6 +535,194 @@ begin
 
   Self.Request.Method := 'XXX';
   Check(not Self.Request.IsAck, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsBye;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsBye, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(Self.Request.IsBye, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsBye, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsBye, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsBye, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsBye, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsBye, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsCancel;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsCancel, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsCancel, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(Self.Request.IsCancel, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsCancel, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsCancel, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsCancel, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsCancel, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToComplexMessages;
+begin
+  Check(Self.Request.IsEqualTo(Self.ReceivedRequest), 'Request = ReceivedRequest');
+  Check(Self.ReceivedRequest.IsEqualTo(Self.Request), 'ReceivedRequest = Request');
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToDifferentHeaders;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      R1.AddHeader(ViaHeaderFull);
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToDifferentMethod;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      R1.Method := MethodInvite;
+      R2.Method := MethodOptions;
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToDifferentRequestUri;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      R1.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+      R1.RequestUri.URI := 'sip:case@fried.neurons.org';
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToDifferentSipVersion;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      R1.SIPVersion := 'SIP/2.0';
+      R2.SIPVersion := 'SIP/2.1';
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToFromAssign;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipRequest.Create;
+  try
+    Req.Assign(Self.Request);
+
+    Check(Req.IsEqualTo(Self.Request), 'Assigned = Original');
+    Check(Self.Request.IsEqualTo(Req), 'Original = Assigned');
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToResponse;
+var
+  Req: TIdSipRequest;
+  Res: TIdSipResponse;
+begin
+  Req := TIdSipRequest.Create;
+  try
+    Res := TIdSipResponse.Create;
+    try
+      Check(not Req.IsEqualTo(Res), 'Req <> Res');
+    finally
+      Res.Free;
+    end;
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsEqualToTrivial;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      Check(R1.IsEqualTo(R2), 'R1 = R2');
+      Check(R2.IsEqualTo(R1), 'R2 = R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestIsInvite;
@@ -505,6 +752,115 @@ end;
 procedure TestTIdSipRequest.TestIsRequest;
 begin
   Check(Self.Request.IsRequest, 'IsRequest');
+end;
+
+procedure TestTIdSipRequest.TestMatchInviteClient;
+begin
+  Check(Self.Request.Match(Self.Response),
+        'Identical headers');
+
+  Self.Response.AddHeader(ContentLanguageHeader).Value := 'es';
+  Check(Self.Request.Match(Self.Response),
+        'Identical headers + irrelevant headers');
+
+  (Self.Response.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
+  Check(Self.Request.Match(Self.Response),
+        'Different From tag');
+  Self.Response.FirstHeader(FromHeaderFull).Assign(Self.Request.FirstHeader(FromHeaderFull));
+
+  (Self.Response.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
+  Check(Self.Request.Match(Self.Response),
+        'Different To tag');
+end;
+
+procedure TestTIdSipRequest.TestMatchInviteClientAckWithInvite;
+begin
+  Self.Response.CSeq.Method := MethodAck;
+  Check(Self.Request.Match(Self.Response),
+        'ACK match against INVITE');
+end;
+
+procedure TestTIdSipRequest.TestMatchInviteClientDifferentCSeqMethod;
+begin
+  Self.Response.CSeq.Method := MethodCancel;
+
+  Check(not Self.Request.Match(Self.Response),
+        'Different CSeq method');
+end;
+
+procedure TestTIdSipRequest.TestMatchInviteClientDifferentViaBranch;
+begin
+  Self.Response.LastHop.Branch := BranchMagicCookie + 'foo';
+
+  Check(not Self.Request.Match(Self.Response),
+        'Different Via branch');
+end;
+
+procedure TestTIdSipRequest.TestMatchInviteServer;
+begin
+  Check(Self.Request.Match(Self.Request),
+        'Identical INVITE request');
+
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
+  Check(not Self.Request.Match(Self.ReceivedRequest),
+        'Different sent-by');
+  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
+
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
+  Check(not Self.Request.Match(Self.ReceivedRequest),
+        'Different branch');
+
+  Self.ReceivedRequest.LastHop.Branch := Self.Request.LastHop.Branch;
+  Self.ReceivedRequest.Method := MethodAck;
+  Check(Self.Request.Match(Self.ReceivedRequest), 'ACK');
+
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
+  Check(not Self.Request.Match(Self.ReceivedRequest),
+        'ACK but different sent-by');
+  Self.ReceivedRequest.LastHop.SentBy := Self.Request.LastHop.SentBy;
+
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
+  Check(not Self.Request.Match(Self.ReceivedRequest),
+        'ACK but different branch');
+end;
+
+procedure TestTIdSipRequest.TestMatchNonInviteClient;
+begin
+  Self.Response.CSeq.Method := MethodCancel;
+  Self.Request.Method           := MethodCancel;
+
+  Check(Self.Request.Match(Self.Response),
+        'Identical headers');
+
+  Self.Response.AddHeader(ContentLanguageHeader).Value := 'es';
+  Check(Self.Request.Match(Self.Response),
+        'Identical headers + irrelevant headers');
+
+  (Self.Response.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
+  Check(Self.Request.Match(Self.Response),
+        'Different From tag');
+  Self.Response.FirstHeader(FromHeaderFull).Assign(Self.Request.FirstHeader(FromHeaderFull));
+
+  (Self.Response.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
+  Check(Self.Request.Match(Self.Response),
+        'Different To tag');
+
+  Self.Response.CSeq.Method := MethodRegister;
+  Check(not Self.Request.Match(Self.Response),
+        'Different method');
+end;
+
+procedure TestTIdSipRequest.TestMatchNonInviteServer;
+begin
+  Self.ReceivedRequest.Method := MethodCancel;
+  Self.Request.Method     := MethodCancel;
+
+  Check(Self.Request.Match(Self.ReceivedRequest),
+        'Identical CANCEL request');
+
+  Self.ReceivedRequest.Method := MethodRegister;
+  Check(not Self.Request.Match(Self.ReceivedRequest),
+        'Different method');
 end;
 
 procedure TestTIdSipRequest.TestSetPath;
@@ -578,7 +934,7 @@ begin
   P := TPersistent.Create;
   try
     try
-      Response.Assign(P);
+      Self.Response.Assign(P);
       Fail('Failed to bail out assigning a TObject to a TIdSipResponse');
     except
       on EConvertError do;
@@ -595,19 +951,19 @@ var
   Parser:   TIdSipParser;
   Str:      TStringStream;
 begin
-  Response.StatusCode                             := 486;
-  Response.StatusText                             := 'Busy Here';
-  Response.SIPVersion                             := SIPVersion;
-  Response.AddHeader(ViaHeaderFull).Value         := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Response.MaxForwards                            := 70;
-  Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
-  Response.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
-  Response.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
-  Response.AddHeader(CSeqHeader).Value            := '314159 INVITE';
-  Response.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
-  Response.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
-  Response.ContentLength                          := 29;
-  Response.Body                                   := 'I am a message. Hear me roar!';
+  Self.Response.StatusCode                             := 486;
+  Self.Response.StatusText                             := 'Busy Here';
+  Self.Response.SIPVersion                             := SIPVersion;
+  Self.Response.AddHeader(ViaHeaderFull).Value         := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Response.MaxForwards                            := 70;
+  Self.Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
+  Self.Response.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  Self.Response.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.Response.AddHeader(CSeqHeader).Value            := '314159 INVITE';
+  Self.Response.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Response.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
+  Self.Response.ContentLength                          := 29;
+  Self.Response.Body                                   := 'I am a message. Hear me roar!';
 
   Expected := TStringList.Create;
   try
@@ -615,9 +971,9 @@ begin
 
     Received := TStringList.Create;
     try
-      Received.Text := Response.AsString;
+      Received.Text := Self.Response.AsString;
 
-      CheckEquals(Expected, Received, '');
+      CheckEquals(Expected, Received, 'AsString');
 
       Parser := TIdSipParser.Create;
       try
@@ -625,7 +981,7 @@ begin
         try
           Parser.Source := Str;
 
-          Parser.ParseResponse(Response);
+          Parser.ParseResponse(Self.Response);
         finally
           Str.Free;
         end;
@@ -637,6 +993,149 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToComplexMessages;
+var
+  P:      TIdSipParser;
+  R1, R2: TIdSipResponse;
+begin
+  P := TIdSipParser.Create;
+  try
+    R1 := P.ParseAndMakeResponse(LocalLoopResponse);
+    try
+      R2 := P.ParseAndMakeResponse(LocalLoopResponse);
+      try
+        Check(R1.IsEqualTo(R2), 'R1 = R2');
+        Check(R2.IsEqualTo(R1), 'R2 = R1');
+      finally
+        R2.Free;
+      end;
+    finally
+      R1.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToDifferentHeaders;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      R1.AddHeader(ViaHeaderFull);
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToDifferentSipVersion;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      R1.SIPVersion := 'SIP/2.0';
+      R2.SIPVersion := 'SIP/2.1';
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToDifferentStatusCode;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      R1.StatusCode := SIPOK;
+      R2.StatusCode := SIPTrying;
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToDifferentStatusText;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      R1.StatusText := RSSIPOK;
+      R2.StatusText := RSSIPTrying;
+
+      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
+      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToRequest;
+var
+  Req: TIdSipRequest;
+  Res: TIdSipResponse;
+begin
+  Req := TIdSipRequest.Create;
+  try
+    Res := TIdSipResponse.Create;
+    try
+      Check(not Res.IsEqualTo(Req), 'Res <> Req');
+    finally
+      Res.Free;
+    end;
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsEqualToTrivial;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      Check(R1.IsEqualTo(R2), 'R1 = R2');
+      Check(R2.IsEqualTo(R1), 'R2 = R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
   end;
 end;
 

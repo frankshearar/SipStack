@@ -22,6 +22,7 @@ type
     class function IsDigit(const C: Char): Boolean;
     class function IsFQDN(const Token: String): Boolean;
     class function IsHexNumber(const Number: String): Boolean;
+    class function IsLetter(const C: Char): Boolean;
     class function IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
     class function IsIPv4Address(const Token: String): Boolean;
     class function IsIPv6Address(const Token: String): Boolean;
@@ -141,6 +142,11 @@ begin
 
       if not Result then Break;
     end;
+end;
+
+class function TIdSimpleParser.IsLetter(const C: Char): Boolean;
+begin
+  Result := C in Alphabet;
 end;
 
 class function TIdSimpleParser.IsIPv4Address(const Token: String): Boolean;

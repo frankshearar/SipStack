@@ -4,7 +4,7 @@ interface
 
 uses
   IdSipCore, IdSipMessage, IdSipDialog, IdSipTransport, IdSipTransaction,
-  TestFramework;
+  TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase)
@@ -30,13 +30,11 @@ type
     procedure TestDispatchToCorrectTransaction;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
-    procedure TestMatchInviteClient;
-    procedure TestMatchInviteClientAckWithInvite;
-    procedure TestMatchInviteClientDifferentCSeqMethod;
-    procedure TestMatchInviteClientDifferentViaBranch;
-    procedure TestMatchInviteServer;
-    procedure TestMatchNonInviteClient;
-    procedure TestMatchNonInviteServer;
+    procedure TestLoopDetected;
+    procedure TestSendRequest;
+    procedure TestSendResponse;
+    procedure TestSendResponseButNoAppropriateTransport;
+    procedure TestSendResponseWithAppropriateTransport;
     procedure TestWillUseReliableTransport;
 //    procedure TestTortureTest41;
   end;
@@ -50,7 +48,7 @@ type
   // certain messages are not resent. To this end, we test unreliable transports
   // by default, only checking that those certain messages are not resent when
   // using reliable transports in tests like TestReliableTransportFoo
-  TTestTransaction = class(TTestCase)
+  TTestTransaction = class(TTestCaseSip)
   protected
     Core:                  TIdSipAbstractCore;
     FailMsg:               String;
@@ -244,7 +242,6 @@ end;
 procedure TestTIdSipTransactionDispatcher.SetUp;
 var
   P: TIdSipParser;
-  S: TStringStream;
 begin
   inherited SetUp;
 
@@ -254,35 +251,21 @@ begin
 
   Self.Core.Dispatcher := Self.D;
 
-  Self.MockTransport := TIdSipMockTransport.Create;
+  Self.MockTransport := TIdSipMockTransport.Create(IdPORT_SIP);
+  Self.MockTransport.TransportType := sttTCP;
   Self.D.AddTransport(Self.MockTransport);
 
   P := TIdSipParser.Create;
   try
-    S := TStringStream.Create(BasicRequest);
-    try
-      P.Source := S;
+    Self.ReceivedRequest := P.ParseAndMakeRequest(BasicRequest);
+    Self.TranRequest     := P.ParseAndMakeRequest(BasicRequest);
 
-      Self.ReceivedRequest := P.ParseAndMakeMessage as TIdSipRequest;
-      S.Seek(0, soFromBeginning);
-      Self.TranRequest := P.ParseAndMakeMessage as TIdSipRequest;
-    finally
-      S.Free;
-    end;
-
-    S := TStringStream.Create(BasicResponse);
-    try
-      P.Source := S;
-      Self.ReceivedResponse := P.ParseAndMakeMessage as TIdSipResponse;
-    finally
-      S.Free;
-    end;
+    Self.ReceivedResponse := P.ParseAndMakeResponse(BasicResponse);
   finally
     P.Free;
   end;
 
   Self.ReceivedResponse.StatusCode := SIPTrying;
-
   Self.ReceivedResponse.AddHeaders(Self.ReceivedRequest.Headers);
 
   Self.Invite := TIdSipRequest.Create;
@@ -340,12 +323,12 @@ var
 begin
   OriginalCount := Self.D.TransportCount;
 
-  T1 := TIdSipMockTransport.Create;
+  T1 := TIdSipMockTransport.Create(IdPORT_SIP);
   try
     Self.D.AddTransport(T1);
     CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
 
-    T2 := TIdSipMockTransport.Create;
+    T2 := TIdSipMockTransport.Create(IdPORT_SIP);
     try
       Self.D.AddTransport(T1);
       CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
@@ -361,11 +344,11 @@ procedure TestTIdSipTransactionDispatcher.TestClearTransports;
 var
   T1, T2: TIdSipMockTransport;
 begin
-  T1 := TIdSipMockTransport.Create;
+  T1 := TIdSipMockTransport.Create(IdPORT_SIP);
   try
     Self.D.AddTransport(T1);
 
-    T2 := TIdSipMockTransport.Create;
+    T2 := TIdSipMockTransport.Create(IdPORT_SIP);
     try
       Self.D.AddTransport(T1);
 
@@ -427,135 +410,103 @@ begin
         'Unmatched Response not handed to Core');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestMatchInviteClient;
+procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
 begin
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Identical headers');
+  Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
 
-  Self.ReceivedResponse.AddHeader(ContentLanguageHeader).Value := 'es';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Identical headers + irrelevant headers');
+  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
 
-  (Self.ReceivedResponse.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different From tag');
-  Self.ReceivedResponse.FirstHeader(FromHeaderFull).Assign(Self.TranRequest.FirstHeader(FromHeaderFull));
-
-  (Self.ReceivedResponse.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different To tag');
+  Self.D.AddTransaction(TIdSipClientInviteTransaction, Self.TranRequest);
+  Check(Self.D.LoopDetected(Self.Invite), 'Loop should be detected');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientAckWithInvite;
+procedure TestTIdSipTransactionDispatcher.TestSendRequest;
+var
+  RequestCount: Cardinal;
 begin
-  Self.ReceivedResponse.CSeq.Method := MethodAck;
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'ACK match against INVITE');
+  RequestCount := Self.MockTransport.SentRequestCount;
+
+  Self.D.SendRequest(Self.TranRequest);
+
+  CheckEquals(RequestCount + 1,
+              Self.MockTransport.SentRequestCount,
+              'No Request sent');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientDifferentCSeqMethod;
+procedure TestTIdSipTransactionDispatcher.TestSendResponse;
+var
+  ResponseCount: Cardinal;
 begin
-  Self.ReceivedResponse.CSeq.Method := MethodCancel;
+  Self.MockTransport.TransportType := Self.Response200.LastHop.Transport;
 
-  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different CSeq method');
+  ResponseCount := Self.MockTransport.SentResponseCount;
+
+  Self.D.SendResponse(Self.Response200);
+
+  CheckEquals(ResponseCount + 1,
+              Self.MockTransport.SentResponseCount,
+              'No response sent');
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientDifferentViaBranch;
+procedure TestTIdSipTransactionDispatcher.TestSendResponseButNoAppropriateTransport;
 begin
-  Self.ReceivedResponse.LastHop.Branch := BranchMagicCookie + 'foo';
+  Self.Response200.LastHop.Transport := sttTCP;
+  Self.MockTransport.TransportType   := sttSCTP;
 
-  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different Via branch');
+  try
+    Self.D.SendResponse(Self.Response200);
+    Fail('Failed to bail out');
+  except
+    on EUnknownTransport do;
+  end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.TestMatchInviteServer;
+procedure TestTIdSipTransactionDispatcher.TestSendResponseWithAppropriateTransport;
+var
+  TcpResponseCount: Cardinal;
+  UdpResponseCount: Cardinal;
+  UdpTran:          TIdSipMockTransport;
 begin
-  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'Identical INVITE request');
+  UdpTran := TIdSipMockTransport.Create(IdPORT_SIP);
+  try
+    UdpTran.TransportType := sttUDP;
 
-  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
-  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'Different sent-by');
-  Self.ReceivedRequest.LastHop.SentBy := Self.TranRequest.LastHop.SentBy;
+    Self.D.AddTransport(UdpTran);
 
-  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
-  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'Different branch');
+    TcpResponseCount := Self.MockTransport.SentResponseCount;
+    UdpResponseCount := UdpTran.SentResponseCount;
 
-  Self.ReceivedRequest.LastHop.Branch := Self.TranRequest.LastHop.Branch;
-  Self.ReceivedRequest.Method := MethodAck;
-  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest), 'ACK');
+    Self.Response200.LastHop.Transport := UdpTran.TransportType;
+    Self.D.SendResponse(Self.Response200);
 
-  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
-  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'ACK but different sent-by');
-  Self.ReceivedRequest.LastHop.SentBy := Self.TranRequest.LastHop.SentBy;
-
-  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
-  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'ACK but different branch');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestMatchNonInviteClient;
-begin
-  Self.ReceivedResponse.CSeq.Method := MethodCancel;
-  Self.TranRequest.Method           := MethodCancel;
-
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Identical headers');
-
-  Self.ReceivedResponse.AddHeader(ContentLanguageHeader).Value := 'es';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Identical headers + irrelevant headers');
-
-  (Self.ReceivedResponse.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different From tag');
-  Self.ReceivedResponse.FirstHeader(FromHeaderFull).Assign(Self.TranRequest.FirstHeader(FromHeaderFull));
-
-  (Self.ReceivedResponse.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
-  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different To tag');
-
-  Self.ReceivedResponse.CSeq.Method := MethodRegister;
-  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
-        'Different method');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestMatchNonInviteServer;
-begin
-  Self.ReceivedRequest.Method := MethodCancel;
-  Self.TranRequest.Method     := MethodCancel;
-
-  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'Identical CANCEL request');
-
-  Self.ReceivedRequest.Method := MethodRegister;
-  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
-        'Different method');
+    Check(UdpResponseCount < UdpTran.SentResponseCount,
+          'No response sent down UDP');
+    CheckEquals(TcpResponseCount, Self.MockTransport.SentResponseCount,
+                'TCP response was sent');
+  finally
+    UdpTran.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestWillUseReliableTransport;
+const
+  ViaValue = 'SIP/2.0/%s gw1.leo-ix.org;branch=z9hG4bK776asdhds';
 var
   R: TIdSipRequest;
 begin
   R := TIdSipRequest.Create;
   try
-    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := Format(ViaValue, ['TCP']);
 
     Check(Self.D.WillUseReliableTranport(R), 'TCP');
 
-    R.LastHop.Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.LastHop.Value := Format(ViaValue, ['TLS']);
     Check(Self.D.WillUseReliableTranport(R), 'TLS');
 
-    R.LastHop.Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    Check(not Self.D.WillUseReliableTranport(R), 'TCP');
+    R.LastHop.Value := Format(ViaValue, ['UDP']);
+    Check(not Self.D.WillUseReliableTranport(R), 'UDP');
 
-    R.LastHop.Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.LastHop.Value := Format(ViaValue, ['SCTP']);
     Check(Self.D.WillUseReliableTranport(R), 'SCTP');
   finally
     R.Free;

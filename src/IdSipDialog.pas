@@ -106,11 +106,6 @@ type
     constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); override;
   end;
 
-  TIdSipUASDialog = class(TIdSipDialog)
-  public
-    constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); override;
-  end;
-
   TIdSipDialogs = class(TObject)
   private
     List:    TObjectList;
@@ -264,18 +259,18 @@ begin
     Result.CSeq.SequenceNo := TIdSipRandomNumber.Next;
 
     if (Self.RouteSet.IsEmpty) then begin
-      Result.RequestUri := Self.RemoteTarget.GetFullURI;
+      Result.RequestUri := Self.RemoteTarget;
     end
     else begin
       FirstRoute := Self.RouteSet.Items[0] as TIdSipRouteHeader;
 
       if FirstRoute.IsLooseRoutable then begin
-        Result.RequestUri := Self.RemoteTarget.GetFullURI;
+        Result.RequestUri := Self.RemoteTarget;
 
         Result.AddHeaders(Self.RouteSet);
       end
       else begin
-        Result.RequestUri := FirstRoute.Address.GetFullUri;
+        Result.RequestUri := FirstRoute.Address;
 
         // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
         // remember?
@@ -425,41 +420,6 @@ begin
   RouteFilter := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
   try
     Self.RouteSet.AddInReverseOrder(RouteFilter);
-  finally
-    RouteFilter.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TIdSipUASDialog                                                            *
-//******************************************************************************
-//* TIdSipUASDialog Public methods *********************************************
-
-constructor TIdSipUASDialog.Create(const Request: TIdSipRequest; const SentOverTLS: Boolean);
-var
-  RouteFilter: TIdSipHeadersFilter;
-begin
-  inherited Create(Request, SentOverTLS);
-
-  fID := TIdSipDialogID.Create(Request.CallID,
-                               Request.ToHeader.Tag,
-                               Request.From.Tag);
-
-  Self.LocalSequenceNo  := 0;
-
-  fLocalURI := TIdURI.Create(Request.ToHeader.Address.GetFullURI);
-
-  Self.RemoteSequenceNo := Request.CSeq.SequenceNo;
-
-  Self.fRemoteTarget := TIdURI.Create((Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.GetFullURI);
-
-  fRemoteURI := TIdURI.Create(Request.From.Address.GetFullURI);
-
-  fRouteSet := TIdSipHeaders.Create;
-
-  RouteFilter := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
-  try
-    Self.RouteSet.Add(RouteFilter);
   finally
     RouteFilter.Free;
   end;
