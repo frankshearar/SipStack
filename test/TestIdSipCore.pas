@@ -658,8 +658,10 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
+    procedure TestCircularRedirect;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestDoubleRedirect;
+    procedure TestEmptyTargetSetMeansTerminate;
     procedure TestGlobalFailureEndsSession;
     procedure TestHangUp;
     procedure TestIsInboundCall;
@@ -7342,6 +7344,29 @@ begin
         'Content-Disposition');
 end;
 
+procedure TestTIdSipOutboundSession.TestCircularRedirect;
+begin
+  //  ---   INVITE (original)   --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+  //  --- INVITE (redirect #1)  --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+  //  --- INVITE (redirect #2)  --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+  //  --- INVITE (redirect #1)  ---> again!
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  Self.ReceiveMovedTemporarily('sip:bar@bar.org');
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  CheckNoRequestSent('The session accepted the run-around');
+end;
+
 procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
 var
   SentInvite: TIdSipRequest;
@@ -7389,6 +7414,13 @@ begin
   CheckEquals('sip:baz@quaax.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #2');
+end;
+
+procedure TestTIdSipOutboundSession.TestEmptyTargetSetMeansTerminate;
+begin
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  Self.ReceiveForbidden;
+  Check(Self.OnEndedSessionFired, 'Session didn''t end');
 end;
 
 procedure TestTIdSipOutboundSession.TestGlobalFailureEndsSession;
