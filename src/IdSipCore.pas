@@ -1088,7 +1088,7 @@ begin
   Result.AddHeader(Self.Contact);
 
   if Dest.HasSipsUri then
-    (Result.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.Scheme := SipsScheme;
+    Result.FirstContact.Address.Scheme := SipsScheme;
 end;
 
 function TIdSipUserAgentCore.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
