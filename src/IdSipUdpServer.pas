@@ -122,7 +122,7 @@ begin
       try
         RemainingBytes := AData.Size - AData.Position;
         if Msg.HasHeader(ContentLengthHeaderFull) and
-          (RemainingBytes <> Msg.ContentLength) then begin
+          (RemainingBytes < Msg.ContentLength) then begin
 
           Reason := Format(UnexpectedMessageLength,
                            [RemainingBytes, Msg.ContentLength]);

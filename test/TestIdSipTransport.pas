@@ -77,6 +77,7 @@ type
     LowPortTransport:      TIdSipTransport;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
+    RecvdRequest:          TIdSipRequest;
     RejectedMessage:       Boolean;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
@@ -113,6 +114,7 @@ type
                                 const Reason: String);
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest);
+    procedure SendMessage(Msg: String); virtual; abstract;
     procedure SendOkResponse(Transport: TIdSipTransport);
     function  TransportType: TIdSipTransportClass; virtual;
   public
@@ -125,7 +127,8 @@ type
     procedure TestIsNull; virtual;
     procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
-    procedure TestDiscardMalformedMessage; virtual; abstract;
+    procedure TestDiscardMalformedMessage;
+    procedure TestDiscardUnknownSipVersion;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
@@ -140,9 +143,9 @@ type
 
   TestTIdSipTCPTransport = class(TestTIdSipTransport)
   protected
+    procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   published
-    procedure TestDiscardMalformedMessage; override;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -154,6 +157,7 @@ type
     procedure SetUpTls(Transport: TIdSipTransport);
   protected
     function  DefaultPort: Cardinal; override;
+    procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   public
     procedure SetUp; override;
@@ -166,10 +170,12 @@ type
   TestTIdSipUDPTransport = class(TestTIdSipTransport,
                                  IIdSipMessageListener)
   private
-    MaddrTransport: TIdSipTransport;
-    RPort:          Cardinal;
-    RPortEvent:     TEvent;
+    MaddrTransport:  TIdSipTransport;
+    RPort:           Cardinal;
+    RPortEvent:      TEvent;
 
+    procedure CheckMessageWithTrailingGarbage(Sender: TObject;
+                                              R: TIdSipRequest);
     procedure CheckRportParamFilledIn(Sender: TObject;
                                       R: TIdSipRequest);
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
@@ -185,12 +191,13 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
   protected
-    function TransportType: TIdSipTransportClass; override;
+    procedure SendMessage(Msg: String); override;
+    function  TransportType: TIdSipTransportClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestDiscardMalformedMessage; override;
+    procedure TestMessageWithTrailingGarbage;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -483,14 +490,17 @@ begin
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
 
+  Self.RecvdRequest := TIdSipRequest.Create;
+
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
-  Self.RejectedMessage  := false; 
+  Self.RejectedMessage  := false;
   Self.WrongServer      := false;
 end;
 
 procedure TestTIdSipTransport.TearDown;
 begin
+  Self.RecvdRequest.Free;
   Self.Response.Free;
   Self.Request.Free;
 
@@ -669,6 +679,8 @@ end;
 procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
                                                Transport: TIdSipTransport);
 begin
+  Self.RecvdRequest.Assign(Request);
+
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Transport, Request);
 end;
@@ -789,6 +801,45 @@ begin
   Check(Self.RejectedMessage,
         Self.HighPortTransport.ClassName
       + ': Rejected message event didn''t fire');
+end;
+
+procedure TestTIdSipTransport.TestDiscardMalformedMessage;
+var
+  MangledSipVersion: String;
+begin
+  MangledSipVersion := 'SIP/;2.0';
+  Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+                 + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+                 + 'Max-Forwards: 70'#13#10
+                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                 + 'CSeq: 314159 INVITE'#13#10
+                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'Content-Type: text/plain'#13#10
+                 + 'Content-Length: 29'#13#10
+                 + #13#10
+                 + 'I am a message. Hear me roar!');
+
+  Self.WaitForSignaled;
+  Check(not Self.ReceivedRequest,
+        Self.HighPortTransport.ClassName
+      + ': Somehow we received a mangled message');
+  Check(Self.RejectedMessage,
+        Self.HighPortTransport.ClassName
+      + ': Notification of message rejection not received');
+end;
+
+procedure TestTIdSipTransport.TestDiscardUnknownSipVersion;
+begin
+  Self.ExceptionMessage := 'Waiting for request to arrive';
+  Self.SendMessage(TortureTest41);
+  Self.WaitForTimeout(Self.ClassName
+                    + ': Received a message with an unknown SIP-Version');
+
+  Check(not Self.ReceivedRequest,
+        Self.ClassName
+      + ': Received a message with an unknown SIP-Version');
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
@@ -931,17 +982,9 @@ end;
 //******************************************************************************
 //* TestTIdSipTCPTransport Protected methods ***********************************
 
-function TestTIdSipTCPTransport.TransportType: TIdSipTransportClass;
-begin
-  Result := TIdSipTcpTransport;
-end;
-
-//* TestTIdSipTCPTransport Published methods ***********************************
-
-procedure TestTIdSipTCPTransport.TestDiscardMalformedMessage;
+procedure TestTIdSipTCPTransport.SendMessage(Msg: String);
 var
-  Client:            TIdTcpClient;
-  MangledSipVersion: String;
+  Client: TIdTcpClient;
 begin
   Client := TIdTcpClient.Create(nil);
   try
@@ -949,34 +992,21 @@ begin
     Client.Port := Self.HighPortTransport.Bindings[0].Port;
     Client.Connect(DefaultTimeout);
     try
-      MangledSipVersion := 'SIP/;2.0';
-      Client.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
-                 + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
-                 + 'Max-Forwards: 70'#13#10
-                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                 + 'CSeq: 314159 INVITE'#13#10
-                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'Content-Type: text/plain'#13#10
-                 + 'Content-Length: 29'#13#10
-                 + #13#10
-                 + 'I am a message. Hear me roar!');
+      Client.Write(Msg);
     finally
       Client.DisconnectSocket;
     end;
-
-    Self.WaitForSignaled;
-    Check(not Self.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Somehow we received a mangled message');
-    Check(Self.RejectedMessage,
-          Self.HighPortTransport.ClassName
-        + ': Notification of message rejection not received');
   finally
     Client.Free;
   end;
 end;
+
+function TestTIdSipTCPTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipTcpTransport;
+end;
+
+//* TestTIdSipTCPTransport Published methods ***********************************
 
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
@@ -1021,6 +1051,26 @@ end;
 function TestTIdSipTLSTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
+end;
+
+procedure TestTIdSipTLSTransport.SendMessage(Msg: String);
+var
+  Client: TIdTcpClient;
+begin
+  // TODO: This won't work! You need to set up the certs & such!
+  Client := TIdTcpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortTransport.Bindings[0].IP;
+    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Connect(DefaultTimeout);
+    try
+      Client.Write(Msg);
+    finally
+      Client.DisconnectSocket;
+    end;
+  finally
+    Client.Free;
+  end;
 end;
 
 function TestTIdSipTLSTransport.TransportType: TIdSipTransportClass;
@@ -1093,13 +1143,28 @@ end;
 
 procedure TestTIdSipUDPTransport.TearDown;
 begin
-  Self.MaddrTransport.Free;
   Self.RPortEvent.Free;
+  Self.MaddrTransport.Free;
 
   inherited TearDown;
 end;
 
 //* TestTIdSipUDPTransport Protected methods ***********************************
+
+procedure TestTIdSipUDPTransport.SendMessage(Msg: String);
+var
+  Client: TIdUdpClient;
+begin
+  Client := TIdUdpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortTransport.Bindings[0].IP;
+    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+
+    Client.Send(Msg);
+  finally
+    Client.Free;
+  end;
+end;
 
 function TestTIdSipUDPTransport.TransportType: TIdSipTransportClass;
 begin
@@ -1107,6 +1172,12 @@ begin
 end;
 
 //* TestTIdSipUDPTransport Private methods *************************************
+
+procedure TestTIdSipUDPTransport.CheckMessageWithTrailingGarbage(Sender: TObject;
+                                                                 R: TIdSipRequest);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
 
 procedure TestTIdSipUDPTransport.CheckRportParamFilledIn(Sender: TObject;
                                                          R: TIdSipRequest);
@@ -1164,7 +1235,7 @@ end;
 procedure TestTIdSipUDPTransport.OnMalformedMessage(const Msg: String;
                                                     const Reason: String);
 begin
-end;                                                    
+end;
 
 procedure TestTIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);
@@ -1187,18 +1258,20 @@ end;
 
 //* TestTIdSipUDPTransport Published methods ***********************************
 
-procedure TestTIdSipUDPTransport.TestDiscardMalformedMessage;
+procedure TestTIdSipUDPTransport.TestMessageWithTrailingGarbage;
 var
-  Client:            TIdUdpClient;
-  MangledSipVersion: String;
+  Body:   String;
+  Client: TIdUdpClient;
 begin
+  Self.CheckingRequestEvent := Self.CheckMessageWithTrailingGarbage;
+  Body := 'I am a message. Hear me roar!';
+
   Client := TIdUdpClient.Create(nil);
   try
     Client.Host := Self.HighPortTransport.Bindings[0].IP;
     Client.Port := Self.HighPortTransport.Bindings[0].Port;
 
-    MangledSipVersion := 'SIP/;2.0';
-    Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+    Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
               + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
               + 'Max-Forwards: 70'#13#10
               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
@@ -1207,17 +1280,17 @@ begin
               + 'CSeq: 314159 INVITE'#13#10
               + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
               + 'Content-Type: text/plain'#13#10
-              + 'Content-Length: 29'#13#10
+              + 'Content-Length: ' + IntToStr(Length(Body)) + #13#10
               + #13#10
-              + 'I am a message. Hear me roar!');
+              + Body + #0#0#0#0#0);
 
+    Self.ExceptionMessage := Self.HighPortTransport.ClassName
+        + ': We rejected a message with a Content-Length that had trailing '
+        + 'octets';
     Self.WaitForSignaled;
-    Check(not Self.ReceivedRequest,
-          Self.HighPortTransport.ClassName
-        + ': Somehow we received a mangled message');
-    Check(Self.RejectedMessage,
-          Self.HighPortTransport.ClassName
-        + ': Notification of message rejection not received');
+    CheckEquals(Body,
+                Self.Request.Body,
+                'Body of message');
   finally
     Client.Free;
   end;

@@ -33,9 +33,10 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSdp, IdSipDialog, IdSipDialogID, IdException,
+  Classes, Contnrs, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdObservable, IdSipAuthentication, IdSipMessage,
-  IdSipRegistration, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
+  IdSipNotification, IdSipRegistration, IdSipTimer, IdSipTransaction,
+  IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -301,8 +302,7 @@ type
     KnownRegistrars:          TObjectList;
     RegistrationListenerLock: TCriticalSection;
     RegistrationListeners:    TList;
-    UserAgentListenerLock:    TCriticalSection;
-    UserAgentListeners:       TList;
+    UserAgentListeners:       TIdSipNotificationList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
@@ -395,6 +395,26 @@ type
     property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
+  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdSipMethod)
+  private
+    fReceiver: TIdSipTransport;
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Response: TIdSipResponse  read fResponse write fResponse;
+  end;
+
+  TIdSipUserAgentInboundCallMethod = class(TIdSipMethod)
+  private
+    fSession: TIdSipInboundSession;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Session: TIdSipInboundSession read fSession write fSession;
+  end;
+
   TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -417,16 +437,9 @@ type
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
   protected
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    Listeners: TIdSipNotificationList;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
-    procedure ApplyTo(List: TList;
-                      Lock: TCriticalSection;
-                      Proc: TIdSipProcedure);
-    procedure CopyList(Source: TList;
-                       Lock: TCriticalSection;
-                       Copy: TList);
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
     function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
@@ -462,6 +475,20 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
+  TIdSipActionAuthenticationChallengeMethod = class(TIdSipMethod)
+  private
+    fAction:        TIdSipAction;
+    fFirstPassword: String;
+    fResponse:      TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Action:        TIdSipAction   read fAction write fAction;
+    property FirstPassword: String         read fFirstPassword write fFirstPassword;
+    property Response:      TIdSipResponse read fResponse write fResponse;
+
+  end;
+
   TIdSipActionClass = class of TIdSipAction;
 
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
@@ -488,6 +515,36 @@ type
     procedure Stop;
 
     function Interval: Cardinal;
+  end;
+
+  TIdSipSessionMethod = class(TIdSipMethod)
+  private
+    fSession: TIdSipSession;
+  public
+    property Session: TIdSipSession read fSession write fSession;
+  end;
+
+  TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fReason:  String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason:  String        read fReason write fReason;
+  end;
+
+  TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipModifiedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fRequest: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
   // I am a SIP session. As such, I represent both what my dialog represents
@@ -636,6 +693,17 @@ type
     procedure RemoveListener(const Listener: IIdSipOptionsListener);
   end;
 
+  TIdSipOptionsSuccessMethod = class(TIdSipMethod)
+  private
+    fOptions:  TIdSipOutboundOptions;
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Options:  TIdSipOutboundOptions read fOptions write fOptions;
+    property Response: TIdSipResponse        read fResponse write fResponse;
+  end;
+
   TIdSipRegistration = class(TIdSipAction)
   protected
     function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
@@ -656,7 +724,6 @@ type
     procedure RejectNotFound(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest;
                             StatusCode: Cardinal);
-    procedure RejectUnauthorized(Request: TIdSipRequest);
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Reg: TIdSipRequest); reintroduce;
@@ -701,17 +768,50 @@ type
     procedure Unregister(Registrar: TIdSipUri);
   end;
 
+  TIdSipRegistrationMethod = class(TIdSipMethod)
+  private
+    fCurrentBindings: TIdSipContacts;
+    fRegistration:    TIdSipOutboundRegistration;
+  public
+    property CurrentBindings: TIdSipContacts             read fCurrentBindings write fCurrentBindings;
+    property Registration:    TIdSipOutboundRegistration read fRegistration write fRegistration;
+  end;
+
+  TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
+  private
+    fReason: String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
   EIdSipBadSyntax = class(EIdException);
 
 const
   BadAuthorizationTokens = 'Bad Authorization tokens';
   MissingContactHeader =   'Missing Contact Header';
 
+procedure ApplyTo(List: TList;
+                  Lock: TCriticalSection;
+                  Proc: TIdSipProcedure); overload;
+procedure ApplyTo(List: TList;
+                  Lock: TCriticalSection;
+                  Method: TIdSipMethod); overload;
+procedure CopyList(Source: TList;
+                   Lock: TCriticalSection;
+                   Copy: TList);
+
 implementation
 
 uses
   IdGlobal, IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdRandom,
-  IdStack, SysUtils, IdUDPServer;
+  IdSdp, IdStack, SysUtils, IdUDPServer;
 
 const
   BusyHere        = 'Incoming call rejected - busy here';
@@ -720,6 +820,65 @@ const
   LocalCancel     = 'Local end cancelled call';
   LocalHangUp     = 'Local end hung up';
   RemoteHangUp    = 'Remote end hung up';
+
+//******************************************************************************
+//* Unit Public procedures and functions                                       *
+//******************************************************************************
+
+procedure ApplyTo(List: TList;
+                  Lock: TCriticalSection;
+                  Proc: TIdSipProcedure);
+var
+  Copy: TList;
+  I: Integer;
+begin
+  Copy := TList.Create;
+  try
+    CopyList(List, Lock, Copy);
+
+    for I := 0 to Copy.Count - 1 do
+      try
+        Proc(Copy[I]);
+      except
+      end;
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure ApplyTo(List: TList;
+                  Lock: TCriticalSection;
+                  Method: TIdSipMethod);
+var
+  Copy: TList;
+  I: Integer;
+begin
+  Copy := TList.Create;
+  try
+    CopyList(List, Lock, Copy);
+
+    for I := 0 to Copy.Count - 1 do
+      Method.Run(IInterface(Copy[I]));
+  finally
+    Copy.Free;
+  end;
+end;
+
+procedure CopyList(Source: TList;
+                   Lock: TCriticalSection;
+                   Copy: TList);
+var
+  I: Integer;
+begin
+  Copy.Clear;
+  Lock.Acquire;
+  try
+    for I := 0 to Source.Count - 1 do
+      Copy.Add(Source[I]);
+  finally
+    Lock.Release;
+  end;
+end;
 
 //******************************************************************************
 //* TIdSipAbstractCore                                                         *
@@ -1352,8 +1511,7 @@ begin
   Self.Actions                  := TObjectList.Create;
   Self.RegistrationListenerLock := TCriticalSection.Create;
   Self.RegistrationListeners    := TList.Create;
-  Self.UserAgentListenerLock    := TCriticalSection.Create;
-  Self.UserAgentListeners       := TList.Create;
+  Self.UserAgentListeners       := TIdSipNotificationList.Create;
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
@@ -1378,7 +1536,6 @@ begin
   Self.Contact.Free;
   Self.From.Free;
   Self.UserAgentListeners.Free;
-  Self.UserAgentListenerLock.Free;
   Self.RegistrationListeners.Free;
   Self.RegistrationListenerLock.Free;
   Self.Actions.Free;
@@ -1391,12 +1548,7 @@ end;
 
 procedure TIdSipUserAgentCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
 begin
-  Self.UserAgentListenerLock.Acquire;
-  try
-    Self.UserAgentListeners.Add(Pointer(Listener));
-  finally
-    Self.UserAgentListenerLock.Release;
-  end;
+  Self.UserAgentListeners.AddListener(Listener);
 end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
@@ -1616,12 +1768,7 @@ end;
 
 procedure TIdSipUserAgentCore.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
 begin
-  Self.UserAgentListenerLock.Acquire;
-  try
-    Self.UserAgentListeners.Remove(Pointer(Listener));
-  finally
-    Self.UserAgentListenerLock.Release;
-  end;
+  Self.UserAgentListeners.RemoveListener(Listener);
 end;
 
 function TIdSipUserAgentCore.SessionCount: Integer;
@@ -2050,29 +2197,31 @@ end;
 
 procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
-  I: Integer;
+  Notification: TIdSipUserAgentInboundCallMethod;
 begin
-  Self.UserAgentListenerLock.Acquire;
+  Notification := TIdSipUserAgentInboundCallMethod.Create;
   try
-    for I := 0 to Self.UserAgentListeners.Count - 1 do
-      IIdSipUserAgentListener(Self.UserAgentListeners[I]).OnInboundCall(Session);
+    Notification.Session := Session;
+
+    Self.UserAgentListeners.Notify(Notification);
   finally
-    Self.UserAgentListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;
                                                       Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipUserAgentDroppedUnmatchedResponseMethod;
 begin
-  Self.UserAgentListenerLock.Acquire;
+  Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   try
-    for I := 0 to Self.UserAgentListeners.Count - 1 do
-      IIdSipUserAgentListener(Self.UserAgentListeners[I]).OnDroppedUnmatchedResponse(Response,
-                                                                                     Receiver);
+    Notification.Receiver := Receiver;
+    Notification.Response := Response;
+
+    Self.UserAgentListeners.Notify(Notification);
   finally
-    Self.UserAgentListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
@@ -2153,6 +2302,27 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipUserAgentDroppedUnmatchedResponseMethod                              *
+//******************************************************************************
+//* TIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***************
+
+procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedResponse(Self.Response,
+                                                                  Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentInboundCallMethod                                           *
+//******************************************************************************
+//* TIdSipUserAgentInboundCallMethod Public methods ****************************
+
+procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
+end;
+
+//******************************************************************************
 //* TIdSipAction                                                               *
 //******************************************************************************
 //* TIdSipAction Public methods ************************************************
@@ -2164,15 +2334,13 @@ begin
   Self.UA := UA;
 
   Self.fCurrentRequest := TIdSipRequest.Create;
-  Self.ListenerLock    := TCriticalSection.Create;
-  Self.Listeners       := TList.Create;
+  Self.Listeners       := TIdSipNotificationList.Create;
   Self.NonceCount      := 0;
 end;
 
 destructor TIdSipAction.Destroy;
 begin
   Self.Listeners.Free;
-  Self.ListenerLock.Free;
   Self.CurrentRequest.Free;
 
   inherited Destroy;
@@ -2249,40 +2417,7 @@ end;
 
 procedure TIdSipAction.ActionSucceeded(Response: TIdSipResponse);
 begin
-end;
-
-procedure TIdSipAction.ApplyTo(List: TList;
-                               Lock: TCriticalSection;
-                               Proc: TIdSipProcedure);
-var
-  Copy: TList;
-  I: Integer;
-begin
-  Copy := TList.Create;
-  try
-    Self.CopyList(List, Lock, Copy);
-
-    for I := 0 to Copy.Count - 1 do
-      Proc(Copy[I]);
-  finally
-    Copy.Free;
-  end;
-end;
-
-procedure TIdSipAction.CopyList(Source: TList;
-                                Lock: TCriticalSection;
-                                Copy: TList);
-var
-  I: Integer;
-begin
-  Copy.Clear;
-  Lock.Acquire;
-  try
-    for I := 0 to Source.Count - 1 do
-      Copy.Add(Source[I]);
-  finally
-    Lock.Release;
-  end;
+  // By default do nothing.
 end;
 
 procedure TIdSipAction.MarkAsTerminated;
@@ -2292,29 +2427,22 @@ end;
 
 function TIdSipAction.NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
 var
-  Copy:              TList;
-  DiscardedPassword: String;
-  I:                 Integer;
+  Notification: TIdSipActionAuthenticationChallengeMethod;
 begin
   // We present the authentication challenge to all listeners but only accept
-  // the first listener. The responsibility of listener order rests firmly on
-  // your own shoulders.
+  // the first listener's password. The responsibility of listener order rests
+  // firmly on your own shoulders.
 
-  Copy := TList.Create;
+  Notification := TIdSipActionAuthenticationChallengeMethod.Create;
   try
-    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+    Notification.Action   := Self;
+    Notification.Response := Response;
 
-    DiscardedPassword := '';
-    Result            := '';
+    Self.Listeners.Notify(Notification);
 
-    for I := 0 to Copy.Count - 1 do begin
-      if (Result = '') then
-        IIdSipActionListener(Copy[I]).OnAuthenticationChallenge(Self, Response, Result)
-      else
-        IIdSipActionListener(Copy[I]).OnAuthenticationChallenge(Self, Response, DiscardedPassword);
-    end;
+    Result := Notification.FirstPassword;
   finally
-    Copy.Free;
+    Notification.Free;
   end;
 end;
 
@@ -2503,6 +2631,27 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipActionAuthenticationChallengeMethod                                  *
+//******************************************************************************
+//* TIdSipActionAuthenticationChallengeMethod Public methods *******************
+
+procedure TIdSipActionAuthenticationChallengeMethod.Run(const Subject: IInterface);
+var
+  DiscardedPassword: String;
+  Listener:          IIdSipActionListener;
+begin
+  Listener := Subject as IIdSipActionListener;
+  if (Self.FirstPassword = '') then
+    Listener.OnAuthenticationChallenge(Self.Action,
+                                       Self.Response,
+                                       Self.fFirstPassword)
+  else
+    Listener.OnAuthenticationChallenge(Self.Action,
+                                       Self.Response,
+                                       DiscardedPassword)
+end;
+
+//******************************************************************************
 //* TIdSipSessionTimer                                                         *
 //******************************************************************************
 //* TIdSipSessionTimer Public methods ******************************************
@@ -2574,6 +2723,38 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipUserAgentFailMethod                                                  *
+//******************************************************************************
+//* TIdSipUserAgentFailMethod Public methods ***********************************
+
+procedure TIdSipEndedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnEndedSession(Self.Session,
+                                                    Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipEstablishedSessionMethod                                             *
+//******************************************************************************
+//* TIdSipEstablishedSessionMethod Public methods ******************************
+
+procedure TIdSipEstablishedSessionMethod.Run(const Subject: IInterface);
+begin
+  IIdSipSessionListener(Subject).OnEstablishedSession(Self.Session);
+end;
+
+//******************************************************************************
+//* TIdSipModifiedSessionMethod                                                *
+//******************************************************************************
+//* TIdSipModifiedSessionMethod Public methods *********************************
+
+procedure TIdSipModifiedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnModifiedSession(Self.Session,
+                                                       Self.Request);
+end;
+
+//******************************************************************************
 //* TIdSipSession                                                              *
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
@@ -2610,12 +2791,7 @@ end;
 
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 function TIdSipSession.IsEarly: Boolean;
@@ -2699,12 +2875,7 @@ end;
 
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 //* TIdSipSession Protected methods ********************************************
@@ -2745,24 +2916,23 @@ procedure TIdSipSession.MarkAsTerminated;
 begin
   inherited MarkAsTerminated;
 
-  Self.ApplyTo(Self.OpenTransactions,
-               Self.OpenTransactionLock,
-               Self.MarkAsTerminatedProc);
+  ApplyTo(Self.OpenTransactions,
+          Self.OpenTransactionLock,
+          Self.MarkAsTerminatedProc);
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession(const Reason: String);
 var
-  Copy: TList;
-  I:    Integer;
+  Notification: TIdSipEndedSessionMethod;
 begin
-  Copy := TList.Create;
+  Notification := TIdSipEndedSessionMethod.Create;
   try
-    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+    Notification.Reason  := Reason;
+    Notification.Session := Self;
 
-    for I := 0 to Copy.Count - 1 do
-        IIdSipSessionListener(Copy[I]).OnEndedSession(Self, Reason);
+    Self.Listeners.Notify(Notification);
   finally
-    Copy.Free;
+    Notification.Free;
   end;
 
   Self.UA.RemoveAction(Self);
@@ -2770,17 +2940,15 @@ end;
 
 procedure TIdSipSession.NotifyOfEstablishedSession;
 var
-  Copy: TList;
-  I:    Integer;
+  Notification: TIdSipEstablishedSessionMethod;
 begin
-  Copy := TList.Create;
+  Notification := TIdSipEstablishedSessionMethod.Create;
   try
-    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+    Notification.Session := Self;
 
-    for I := 0 to Copy.Count - 1 do
-      IIdSipSessionListener(Copy[I]).OnEstablishedSession(Self);
+    Self.Listeners.Notify(Notification);
   finally
-    Copy.Free;
+    Notification.Free;
   end;
 end;
 
@@ -2816,17 +2984,16 @@ end;
 
 procedure TIdSipSession.NotifyOfModifiedSession(Invite: TIdSipRequest);
 var
-  Copy: TList;
-  I:    Integer;
+  Notification: TIdSipModifiedSessionMethod;
 begin
-  Copy := TList.Create;
+  Notification := TIdSipModifiedSessionMethod.Create;
   try
-    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+    Notification.Session := Self;
+    Notification.Request := Invite;
 
-    for I := 0 to Copy.Count - 1 do
-        IIdSipSessionListener(Copy[I]).OnModifiedSession(Self, Invite);
+    Self.Listeners.Notify(Notification);
   finally
-    Copy.Free;
+    Notification.Free;
   end;
 end;
 
@@ -3365,12 +3532,7 @@ end;
 
 procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundOptions.QueryOptions(Server: TIdSipAddressHeader);
@@ -3388,12 +3550,7 @@ end;
 
 procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 //* TIdSipOutboundOptions Protected methods ************************************
@@ -3407,26 +3564,36 @@ end;
 
 procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
 var
-  Copy:            TList;
   CurrentBindings: TIdSipContacts;
-  I:               Integer;
+  Notification:    TIdSipOptionsSuccessMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Copy := TList.Create;
+    Notification := TIdSipOptionsSuccessMethod.Create;
     try
-      Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+      Notification.Options  := Self;
+      Notification.Response := Response;
 
-      for I := 0 to Copy.Count - 1 do
-        IIdSipOptionsListener(Copy[I]).OnSuccess(Self, Response);
+      Self.Listeners.Notify(Notification);
     finally
-      Copy.Free;
+      Notification.Free;
     end;
   finally
     CurrentBindings.Free;
   end;
 
   Self.Terminate;
+end;
+
+//******************************************************************************
+//* TIdSipOptionsSuccessMethod                                                 *
+//******************************************************************************
+//* TIdSipOptionsSuccessMethod Public methods **********************************
+
+procedure TIdSipOptionsSuccessMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOptionsListener).OnSuccess(Self.Options,
+                                               Self.Response);
 end;
 
 //******************************************************************************
@@ -3628,20 +3795,6 @@ begin
   end;
 end;
 
-procedure TIdSipInboundRegistration.RejectUnauthorized(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.UA.CreateResponse(Request, SIPInternalServerError);
-  try
-    Response.StatusText := 'Implement RejectUnauthorized, but in TIdSipAction';
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-  raise Exception.Create('Implement RejectUnauthorized, but in TIdSipAction');
-end;
-
 //******************************************************************************
 //* TIdSipOutboundRegistration                                                 *
 //******************************************************************************
@@ -3663,12 +3816,7 @@ end;
 
 procedure TIdSipOutboundRegistration.AddListener(const Listener: IIdSipRegistrationListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdSipOutboundRegistration.FindCurrentBindings(Registrar: TIdSipUri);
@@ -3714,12 +3862,7 @@ end;
 
 procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
@@ -3756,22 +3899,20 @@ end;
 
 procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
 var
-  Copy:            TList;
   CurrentBindings: TIdSipContacts;
-  I:               Integer;
+  Notification:    TIdSipRegistrationFailedMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Copy := TList.Create;
+    Notification := TIdSipRegistrationFailedMethod.Create;
     try
-      Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Reason          := Response.Description;
+      Notification.Registration    := Self;
 
-      for I := 0 to Copy.Count - 1 do
-        IIdSipRegistrationListener(Copy[I]).OnFailure(Self,
-                                                      CurrentBindings,
-                                                      Response.Description);
+      Self.Listeners.Notify(Notification);
     finally
-      Copy.Free;
+      Notification.Free;
     end;
   finally
     CurrentBindings.Free;
@@ -3854,20 +3995,19 @@ end;
 
 procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
-  Copy:            TList;
   CurrentBindings: TIdSipContacts;
-  I:               Integer;
+  Notification:    TIdSipRegistrationSucceededMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Copy := TList.Create;
+    Notification := TIdSipRegistrationSucceededMethod.Create;
     try
-      Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Registration    := Self;
 
-      for I := 0 to Copy.Count - 1 do
-        IIdSipRegistrationListener(Copy[I]).OnSuccess(Self, CurrentBindings);
+      Self.Listeners.Notify(Notification);
     finally
-      Copy.Free;
+      Notification.Free;
     end;
   finally
     CurrentBindings.Free;
@@ -3934,6 +4074,29 @@ begin
   finally
     Bindings.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipRegistrationFailedMethod                                             *
+//******************************************************************************
+//* TIdSipRegistrationFailedMethod Public methods ******************************
+
+procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
+                                                    Self.CurrentBindings,
+                                                    Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipRegistrationSucceededMethod                                          *
+//******************************************************************************
+//* TIdSipRegistrationSucceededMethod Public methods ***************************
+
+procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
+                                                    Self.CurrentBindings);
 end;
 
 end.

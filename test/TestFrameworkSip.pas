@@ -41,6 +41,22 @@ type
     property FailWith: ExceptClass read fFailWith write fFailWith;
   end;
 
+  TIdSipTestActionListener = class(TIdSipMockListener,
+                               IIdSipActionListener)
+  private
+    fAuthenticationChallenge: Boolean;
+    fPassword:                String;
+  public
+    constructor Create; override;
+
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse;
+                                        var Password: String);
+
+    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
+    property Password:                String  read fPassword write fPassword;
+  end;
+
   TIdSipTestDataListener = class(TIdSipMockListener,
                                  IIdRtpDataListener)
   private
@@ -94,18 +110,12 @@ type
     property Changed: Boolean read fChanged;
   end;
 
-  TIdSipTestOptionsListener = class(TIdSipMockListener,
+  TIdSipTestOptionsListener = class(TIdSipTestActionListener,
                                     IIdSipOptionsListener)
   private
-  private
-    fAuthenticationChallenge: Boolean;
-    fFailure:                 Boolean;
-    fPassword:                String;
-    fSuccess:                 Boolean;
+    fFailure:  Boolean;
+    fSuccess:  Boolean;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse;
-                                        var Password: String);
     procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -114,35 +124,26 @@ type
   public
     constructor Create; override;
 
-    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
-    property Failure:                 Boolean read fFailure;
-    property Success:                 Boolean read fSuccess;
-    property Password:                String  read fPassword write fPassword;
+    property Failure:  Boolean read fFailure;
+    property Success:  Boolean read fSuccess;
   end;
 
-  TIdSipTestRegistrationListener = class(TIdSipMockListener,
+  TIdSipTestRegistrationListener = class(TIdSipTestActionListener,
                                          IIdSipRegistrationListener)
   private
-    fAuthenticationChallenge: Boolean;
-    fFailure:                 Boolean;
-    fPassword:                String;
-    fSuccess:                 Boolean;
+    fFailure: Boolean;
+    fSuccess: Boolean;
   public
     constructor Create; override;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse;
-                                        var Password: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
 
-    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
-    property Failure:                 Boolean read fFailure;
-    property Success:                 Boolean read fSuccess;
-    property Password:                String  read fPassword write fPassword;
+    property Failure: Boolean read fFailure;
+    property Success: Boolean read fSuccess;
   end;
 
   TIdSipTestSessionListener = class(TIdSipMockListener,
@@ -383,6 +384,30 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipTestActionListener                                                   *
+//******************************************************************************
+//* TIdSipTestActionListener Public methods ************************************
+
+constructor TIdSipTestActionListener.Create;
+begin
+  inherited Create;
+
+  Self.fAuthenticationChallenge := false;
+  Self.Password                 := '';
+end;
+
+procedure TIdSipTestActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                         Response: TIdSipResponse;
+                                                         var Password: String);
+begin
+  Self.fAuthenticationChallenge := true;
+  Password := Self.Password;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
+end;
+
+//******************************************************************************
 //* TIdSipTestDataListener                                                     *
 //******************************************************************************
 //* TIdSipTestDataListener Public methods **************************************
@@ -496,23 +521,11 @@ constructor TIdSipTestOptionsListener.Create;
 begin
   inherited Create;
 
-  Self.fAuthenticationChallenge := false;
-  Self.fFailure                 := false;
-  Self.fSuccess                 := false;
+  Self.fFailure := false;
+  Self.fSuccess := false;
 end;
 
 //* TIdSipTestOptionsListener Private methods **********************************
-
-procedure TIdSipTestOptionsListener.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                              Response: TIdSipResponse;
-                                                              var Password: String);
-begin
-  Self.fAuthenticationChallenge := true;
-  Password := Self.Password;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestOptionsListener.OnAuthenticationChallenge');
-end;
 
 procedure TIdSipTestOptionsListener.OnFailure(OptionsAgent: TIdSipOutboundOptions;
                                               Response: TIdSipResponse;
@@ -542,23 +555,11 @@ constructor TIdSipTestRegistrationListener.Create;
 begin
   inherited Create;
 
-  Self.fAuthenticationChallenge := false;
-  Self.fFailure                 := false;
-  Self.fSuccess                 := false;
+  Self.fFailure := false;
+  Self.fSuccess := false;
 end;
 
 //* TIdSipRegistrationListener Private methods *********************************
-
-procedure TIdSipTestRegistrationListener.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                                   Response: TIdSipResponse;
-                                                                   var Password: String);
-begin
-  Self.fAuthenticationChallenge := true;
-  Password := Self.Password;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestRegistrationListener.OnAuthenticationChallenge');
-end;
 
 procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                                    CurrentBindings: TIdSipContacts;

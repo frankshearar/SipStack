@@ -250,8 +250,6 @@ object rnidSpike: TrnidSpike
         Width = 97
         Height = 17
         Caption = 'Use as proxy'
-        Checked = True
-        State = cbChecked
         TabOrder = 6
         OnClick = UseAsProxyClick
       end
@@ -271,7 +269,7 @@ object rnidSpike: TrnidSpike
         Width = 289
         Height = 21
         TabOrder = 9
-        Text = 'sip:franks@80.168.137.82'
+        Text = 'sip:franks@wsfrank'
         OnChange = ContactUriChange
       end
       object HostName: TEdit
@@ -280,7 +278,7 @@ object rnidSpike: TrnidSpike
         Width = 121
         Height = 21
         TabOrder = 10
-        Text = '80.168.138.82'
+        Text = 'wsfrank'
         OnChange = HostNameChange
       end
       object MasqAsNat: TCheckBox

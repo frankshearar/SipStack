@@ -165,7 +165,7 @@ implementation
 {$R *.dfm}
 
 uses
-  Dialogs, Graphics, IdGlobal, IdSipConsts, IdStack;
+  Dialogs, Graphics, IdGlobal, IdSimpleParser, IdSipConsts, IdStack;
 
 const
   LocalHostName = '127.0.0.1';
@@ -329,7 +329,7 @@ begin
     else
       Self.Log.Lines.Add('>>>> ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
 
-    Self.Log.Lines.Add(Msg.AsString);
+    Self.Log.Lines.Add(EncodeNonLineUnprintableChars(Msg.AsString));
   finally
     Self.Lock.Release;
   end;
@@ -416,6 +416,7 @@ begin
   Self.PayloadProcessor.RemoteSessionDescription := Session.CurrentRequest.Body;
 
   Self.PayloadProcessor.StartListening(Self.LocalSDP(Self.HostName.Text));
+//  Session.RejectCallBusy;
   Session.AcceptCall(Self.PayloadProcessor.LocalSessionDescription,
                      SdpMimeType);
 end;
