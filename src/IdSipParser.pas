@@ -34,6 +34,7 @@ type
     procedure CheckContentLengthContentType(const Msg: TIdSipMessage);
     procedure CheckCSeqMethod(const Request: TIdSipRequest);
     procedure CheckRequiredHeaders(const Request: TIdSipRequest);
+    function  CreateResponseOrRequest(const Token: String): TIdSipMessage;
     procedure InitialiseMessage(Msg: TIdSipMessage);
     procedure ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
@@ -55,6 +56,7 @@ type
     function  GetHeaderValue(Header: String): String;
     function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
     function  ParseAndMakeMessage: TIdSipMessage;
+    procedure ParseMessage(const Msg: TIdSipMessage);
     procedure ParseRequest(const Request: TIdSipRequest);
     procedure ParseResponse(const Response: TIdSipResponse);
   end;
@@ -493,17 +495,28 @@ begin
 
     // It's safe to do this because we know the string starts with "SIP/",
     // and the "/" is not allowed in an action name.
-    if (FirstToken = SipName) then begin
-      Result := TIdSipResponse.Create;
-      Self.ParseResponse(Result as TIdSipResponse);
-    end
-    else begin
-      Result := TIdSipRequest.Create;
-      Self.ParseRequest(Result as TIdSipRequest);
+    Result := Self.CreateResponseOrRequest(FirstToken);
+    try
+      Self.ParseMessage(Result);
+    except
+      Result.Free;
+
+      raise;
     end;
   end
   else
     raise EParser.Create(EmptyInputStream);
+end;
+
+procedure TIdSipParser.ParseMessage(const Msg: TIdSipMessage);
+begin
+  if (Msg is TIdSipRequest) then
+    Self.ParseRequest(Msg as TIdSipRequest)
+  else if (Msg is TIdSipResponse) then
+    Self.ParseResponse(Msg as TIdSipResponse)
+  else
+    raise EParser.Create('Unknown TIdSipMessage descendant in ' +
+                         'TIdSipParser.ParseMessage');
 end;
 
 procedure TIdSipParser.ParseRequest(const Request: TIdSipRequest);
@@ -575,6 +588,14 @@ begin
 
   if not Request.HasHeader(ViaHeaderFull) then
     raise Request.MalformedException.Create(MissingVia);
+end;
+
+function TIdSipParser.CreateResponseOrRequest(const Token: String): TIdSipMessage;
+begin
+  if (Token = SipName) then
+    Result := TIdSipResponse.Create
+  else
+    Result := TIdSipRequest.Create;
 end;
 
 procedure TIdSipParser.InitialiseMessage(Msg: TIdSipMessage);
