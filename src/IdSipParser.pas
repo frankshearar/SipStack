@@ -271,7 +271,6 @@ type
     procedure ParseViaHeader(const Msg: TIdSipMessage; ViaParms: String);
   public
     class function IsMethod(Method: String): Boolean;
-    class function IsNumber(Number: String): Boolean;
     class function IsToken(const Token: String): Boolean;
 
     function  CanonicaliseName(HeaderName: String): String;
@@ -1532,20 +1531,6 @@ end;
 class function TIdSipParser.IsMethod(Method: String): Boolean;
 begin
   Result := Self.IsToken(Method);
-end;
-
-class function TIdSipParser.IsNumber(Number: String): Boolean;
-var
-  I: Integer;
-begin
-  Result := Number <> '';
-
-  if (Result) then
-    for I := 1 to Length(Number) do begin
-      Result := Result and (Number[I] in ['0'..'9']);
-
-      if not Result then Break;
-    end;
 end;
 
 class function TIdSipParser.IsToken(const Token: String): Boolean;

@@ -13,6 +13,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsAlphaNumeric;
+    procedure TestIsDigit;
+    procedure TestIsNumber;
     procedure TestPeek;
     procedure TestPeekLine;
     procedure TestReadOctet;
@@ -53,6 +56,48 @@ begin
 end;
 
 //* TestTIdSimpleParser Published methods **************************************
+
+procedure TestTIdSimpleParser.TestIsAlphaNumeric;
+var
+  I: Integer;
+  S: String;
+begin
+  Check(not P.IsAlphaNumeric(''),           '''''');
+  Check(not P.IsAlphaNumeric(#0),           '#0');
+  Check(not P.IsAlphaNumeric(#13),          '#13');
+  Check(not P.IsAlphaNumeric(#$FF),         '#$FF');
+  Check(    P.IsAlphaNumeric('a'),          'a');
+  Check(not P.IsAlphaNumeric('a'#13#10'b'), 'a#13#10b');
+  Check(    P.IsAlphaNumeric('a1b2c3d4'),   'a1b2c3d4');
+
+  S := '';
+  for I := 1 to 1000000 do
+    S := S + 'a';
+  Check(P.IsAlphaNumeric(S), '1 000 000 a''s');
+end;
+
+procedure TestTIdSimpleParser.TestIsDigit;
+var
+  C: Char;
+begin
+  for C := '0' to '9' do
+    Check(P.IsNumber(C), C);
+
+  for C := Chr(0) to Chr(Ord('0') - 1) do
+    Check(not P.IsNumber(C), C);
+
+  for C := Chr(Ord('9') + 1) to Chr(255) do
+    Check(not P.IsNumber(C), C);
+end;
+
+procedure TestTIdSimpleParser.TestIsNumber;
+begin
+  Check(not P.IsNumber(''),                     '''''');
+  Check(not P.IsNumber('a'),                    'a');
+  Check(not P.IsNumber(#0),                     '#0');
+  Check(    P.IsNumber('13'),                   '13');
+  Check(    P.IsNumber('98765432109876543210'), '98765432109876543210');
+end;
 
 procedure TestTIdSimpleParser.TestPeek;
 var

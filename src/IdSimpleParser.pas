@@ -14,6 +14,9 @@ type
   protected
     procedure ResetCurrentLine;
   public
+    class function IsAlphaNumeric(const Token: String): Boolean;
+    class function IsDigit(const C: Char): Boolean;
+    class function IsNumber(const Number: String): Boolean;
     constructor Create; virtual;
 
     function  CurrentLine: Cardinal;
@@ -36,12 +39,49 @@ const
   EmptyInputStream = 'Empty input stream';
   MalformedToken   = 'Malformed %s: ''%s''';
 
+const
+  Alphabet = ['a'..'z', 'A'..'Z'];
+  Digits   = ['0'..'9'];
+
 implementation
 
 //******************************************************************************
 //* TIdSimpleParser                                                            *
 //******************************************************************************
 //* TIdSimpleParser Public methods *********************************************
+
+class function TIdSimpleParser.IsAlphaNumeric(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Token <> '';
+
+  if (Result) then
+    for I := 1 to Length(Token) do begin
+      Result := Result and (Self.IsDigit(Token[I])
+                        or (Token[I] in Alphabet));
+      if not Result then Break;
+    end;
+end;
+
+class function TIdSimpleParser.IsDigit(const C: Char): Boolean;
+begin
+  Result := C in Digits;
+end;
+
+class function TIdSimpleParser.IsNumber(const Number: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Number <> '';
+
+  if (Result) then
+    for I := 1 to Length(Number) do begin
+      Result := Result and Self.IsDigit(Number[I]);
+
+      if not Result then Break;
+    end;
+end;
 
 constructor TIdSimpleParser.Create;
 begin

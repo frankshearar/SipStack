@@ -196,7 +196,6 @@ type
     procedure TestGetHeaderNumberValue;
     procedure TestGetHeaderValue;
     procedure TestIsMethod;
-    procedure TestIsNumber;
     procedure TestIsSipVersion;
     procedure TestIsToken;
     procedure TestParseAndMakeMessageEmptyString;
@@ -1758,15 +1757,6 @@ begin
   Check(not P.IsMethod('Cra.-zy''+prea"cher%20man~`!'), 'Cra.-zy''+prea"cher%20man~`!'); // no "'s
   Check(    P.IsMethod('Cra.-zy''+preacher%20man~`!'),  'Cra.-zy''+preacher%20man~`!');
   Check(not P.IsMethod('LastChar"'),                    'LastChar"'); // no "'s
-end;
-
-procedure TestTIdSipParser.TestIsNumber;
-begin
-  Check(not P.IsNumber(''),                     '''''');
-  Check(not P.IsNumber('a'),                    'a');
-  Check(not P.IsNumber(#0),                     '#0');
-  Check(    P.IsNumber('13'),                   '13');
-  Check(    P.IsNumber('98765432109876543210'), '98765432109876543210');
 end;
 
 procedure TestTIdSipParser.TestIsSipVersion;
