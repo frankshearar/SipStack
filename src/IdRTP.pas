@@ -1641,20 +1641,22 @@ end;
 
 procedure TIdRTPPayload.Assign(Src: TPersistent);
 var
-  S: TStream;
+  Other: TIdRTPPayload;
+  S:     TStream;
 begin
   if not (Src is TIdRTPPayload) then
     inherited Assign(Src)
   else begin
+    Other := Src as TIdRTPPayload;
     S := TMemoryStream.Create;
     try
-      TIdRTPPayload(Src).PrintOn(S);
+      Other.PrintOn(S);
       S.Seek(0, soFromBeginning);
       Self.ReadFrom(S);
     finally
       S.Free;
     end;
-    Self.StartTime := TIdRTPPayload(Src).StartTime;
+    Self.StartTime := Other.StartTime;
   end;
 end;
 
@@ -2515,12 +2517,19 @@ begin
 end;
 
 procedure TIdRTPPacket.PrepareForTransmission(Session: TIdRTPSession);
+var
+  RelativeTime: TDateTime;
 begin
   inherited PrepareForTransmission(Session);
 
   Self.SequenceNo := Session.NextSequenceNo;
 
-  Self.Timestamp := DateTimeToRTPTimestamp(Session.TimeOffsetFromStart(Self.Payload.StartTime),
+  RelativeTime := Session.TimeOffsetFromStart(Self.Payload.StartTime);
+
+  Assert(RelativeTime >= 0,
+         'You can''t send a packet with time less than the session start time');
+
+  Self.Timestamp := DateTimeToRTPTimestamp(RelativeTime,
                                            Self.Payload.ClockRate);
 end;
 
