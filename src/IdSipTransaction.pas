@@ -927,7 +927,8 @@ begin
   try
     I := 0;
     while (I < Self.Transactions.Count) and not Assigned(Result) do
-      if (Self.TransactionAt(I).IsClient = ClientTran) and Self.TransactionAt(I).Match(R) then
+      if (Self.TransactionAt(I).IsClient = ClientTran)
+        and Self.TransactionAt(I).Match(R) then
         Result := Self.TransactionAt(I)
       else
        Inc(I);
