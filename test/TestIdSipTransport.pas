@@ -165,7 +165,6 @@ type
     procedure TestTortureTest23;
     procedure TestTortureTest35;
     procedure TestTortureTest40;
-    procedure TestTortureTest41;
     procedure TestUseRport;
   end;
 
@@ -1048,6 +1047,8 @@ end;
 
 procedure TestTIdSipTransport.TestDiscardUnknownSipVersion;
 begin
+  // Unknown SIP-Version.
+
   Self.ExceptionMessage := 'Waiting for request to arrive';
   Self.SendMessage(TortureTest41);
   Self.WaitForTimeout(Self.ClassName
@@ -1258,16 +1259,6 @@ begin
   // Illegal >1 SP between elements of the Request-Line.
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest40);
-
-  Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipTransport.TestTortureTest41;
-begin
-  // Unknown SIP-Version.
-
-  Self.CheckingResponseEvent := Self.CheckForSIPVersionNotSupported;
   Self.SendFromLowTransport(TortureTest40);
 
   Self.WaitForSignaled;
