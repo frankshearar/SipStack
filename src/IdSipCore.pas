@@ -68,12 +68,17 @@ type
   // * OnNewSession tells us that someone wants to talk to us - we may refuse or
   //   allow the session.
   // * OnSessionEstablished tells us when a session has been fully established.
-  // * OnSessionEnded lets us clean up. The Session referenced becomes invalid
-  //   after this point, and its very existence is not guaranteed. In
-  //   other words, you'd better say goodbye to the Session in this method.
+  // * OnSessionEnded tells us when the session's finished. This could be
+  //   because someone hung up, or because the outbound call failed (the request
+  //   timed out, a transport error occurec, etc). OnSessionEnded lets us clean
+  //   up. The Session referenced becomes invalid after this point. In other
+  //   words, you'd better say goodbye to the Session in your implementation of
+  //   this method. Accessing your reference to the Session will probably fail
+  //   with an access violation.
   IIdSipSessionListener = interface
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
@@ -249,7 +254,7 @@ type
     function  GetContact: TIdSipContactHeader;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-    procedure NotifyOfNewSession(Session: TIdSipSession);
+    procedure NotifyOfInboundCall(Session: TIdSipSession);
     procedure NotifyOfChange;
     procedure ProcessAck(Ack: TIdSipRequest;
                          Transaction: TIdSipTransaction;
@@ -257,7 +262,7 @@ type
     procedure ProcessInvite(Invite: TIdSipRequest;
                             Transaction: TIdSipTransaction;
                             Receiver: TIdSipTransport);
-    function RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+    function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
     procedure RejectBadRequest(Request: TIdSipRequest;
                                const Reason: String;
                                Transaction: TIdSipTransaction);
@@ -369,8 +374,7 @@ type
                                    Receiver: TIdSipTransport): TIdSipDialog;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
-    procedure NotifyOfEndedSession;
-    procedure NotifyOfEndedSessionProc(ObjectOrIntf: Pointer);
+    procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
@@ -479,6 +483,9 @@ implementation
 uses
   IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID,
   IdRandom, IdStack, SysUtils, IdUDPServer;
+
+const
+  RemoteHangUp = 'Remote end hung up';
 
 //******************************************************************************
 //* TIdSipAbstractCore                                                         *
@@ -1324,7 +1331,7 @@ begin
       Self.SessionLock.Release;
     end;
 
-    Self.NotifyOfNewSession(Result);
+    Self.NotifyOfInboundCall(Result);
     Self.NotifyOfChange;
   except
     FreeAndNil(Result);
@@ -1467,7 +1474,7 @@ begin
   Result := Self.IndexOfRegistrar(Registrar) <> -1;
 end;
 
-procedure TIdSipUserAgentCore.NotifyOfNewSession(Session: TIdSipSession);
+procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipSession);
 var
   I: Integer;
 begin
@@ -1815,7 +1822,7 @@ begin
     finally
       OK.Free;
     end;
-    Self.NotifyOfEndedSession;
+    Self.NotifyOfEndedSession(RemoteHangUp);
   end
   else if Request.IsAck then begin
     Self.fReceivedAck := true;
@@ -2043,18 +2050,28 @@ begin
   Self.TerminateOpenTransaction(TIdSipTransaction(ObjectOrIntf));
 end;
 
-procedure TIdSipSession.NotifyOfEndedSession;
+procedure TIdSipSession.NotifyOfEndedSession(const Reason: String);
+var
+  Copy: TList;
+  I: Integer;
 begin
-  Self.ApplyTo(Self.SessionListeners,
-               Self.SessionListenerLock,
-               Self.NotifyOfEndedSessionProc);
+  Copy := TList.Create;
+  try
+    Self.SessionListenerLock.Acquire;
+    try
+      for I := 0 to Self.SessionListeners.Count - 1 do
+        Copy.Add(Self.SessionListeners[I]);
+    finally
+      Self.SessionListenerLock.Release;
+    end;
+
+    for I := 0 to Copy.Count - 1 do
+        IIdSipSessionListener(Copy[I]).OnEndedSession(Self, Reason);
+  finally
+    Copy.Free;
+  end;
 
   Self.Core.RemoveSession(Self);
-end;
-
-procedure TIdSipSession.NotifyOfEndedSessionProc(ObjectOrIntf: Pointer);
-begin
-  IIdSipSessionListener(ObjectOrIntf).OnEndedSession(Self);
 end;
 
 procedure TIdSipSession.NotifyOfEstablishedSession;
@@ -2108,10 +2125,12 @@ begin
   if Response.IsOK then
     Self.SendAck(Response);
 
+  // If we get, say, a transport error, or a timeout, or a rejection of our
+  // call:
   if (Transaction = Self.InitialTran) then begin
     if Response.IsFinal and not Response.IsOK then begin
       Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession;
+      Self.NotifyOfEndedSession(Response.Description);
     end;
   end;
 end;
@@ -2120,8 +2139,8 @@ procedure TIdSipSession.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Self.RemoveTransaction(Transaction);
 
-  if Self.IsTerminated then
-    Self.NotifyOfEndedSession;
+//  if Self.IsTerminated then
+//    Self.NotifyOfEndedSession;
 end;
 
 procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest;

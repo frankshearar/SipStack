@@ -73,7 +73,8 @@ type
 
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnInboundCall(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
@@ -154,7 +155,8 @@ type
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnInboundCall(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
@@ -265,10 +267,10 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-//  Result.AddTest(TestTIdSipAbstractCore.Suite);
-//  Result.AddTest(TestTIdSipUserAgentCore.Suite);
-//  Result.AddTest(TestTIdSipSession.Suite);
-//  Result.AddTest(TestTIdSipSessionTimer.Suite);
+  Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipUserAgentCore.Suite);
+  Result.AddTest(TestTIdSipSession.Suite);
+  Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipRegistration.Suite);
 end;
 
@@ -710,7 +712,8 @@ begin
         'TCP should be the default transport');
 end;
 
-procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession);
+procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession;
+                                                 const Reason: String);
 begin
 end;
 
@@ -2004,7 +2007,8 @@ begin
   Connection.Address     := '127.0.0.1';
 end;
 
-procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession);
+procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
+                                           const Reason: String);
 begin
   Self.Session := Session;
   Self.OnEndedSessionFired := true;

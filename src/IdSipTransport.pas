@@ -206,6 +206,18 @@ type
     property CleanerThreadPollTime: Cardinal read GetCleanerThreadPollTime write SetCleanerThreadPollTime;
   end;
 
+  EIdSipTransport = class(Exception)
+  private
+    fSipMessage: TIdSipMessage;
+    fTransport:  TIdSipTransport;
+  public
+    constructor Create(Transport: TIdSipTransport;
+                       SipMessage: TIdSipMessage;
+                       const Msg: String);
+
+    property SipMessage: TIdSipMessage   read fSipMessage;
+    property Transport:  TIdSipTransport read fTransport;
+  end;
   EUnknownTransport = class(EIdException);
 
 const
@@ -319,7 +331,12 @@ end;
 
 procedure TIdSipTransport.Send(Msg: TIdSipMessage);
 begin
-  Msg.Accept(Self);
+  try
+    Msg.Accept(Self);
+  except
+    on E: EIdException do
+      raise EIdSipTransport.Create(Self, Msg, E.Message);
+  end;
 end;
 
 procedure TIdSipTransport.Start;
@@ -1024,6 +1041,21 @@ end;
 procedure TIdSipUDPTransport.SetCleanerThreadPollTime(Value: Cardinal);
 begin
   Self.ClientCleaner.PollTime := Value;
+end;
+
+//******************************************************************************
+//* EIdSipTransport                                                            *
+//******************************************************************************
+//* EIdSipTransport Public methods *********************************************
+
+constructor EIdSipTransport.Create(Transport: TIdSipTransport;
+                                        SipMessage: TIdSipMessage;
+                                        const Msg: String);
+begin
+  inherited Create(Msg);
+
+  Self.fSipMessage := SipMessage;
+  Self.fTransport := Transport;
 end;
 
 end.

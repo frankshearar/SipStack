@@ -92,7 +92,8 @@ type
   public
     constructor Create;
 
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
@@ -346,7 +347,8 @@ begin
   Self.fNewSession         := false;
 end;
 
-procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession);
+procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;
+                                                   const Reason: String);
 begin
   Self.fEndedSession := true;
 end;

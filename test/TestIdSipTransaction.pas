@@ -26,7 +26,8 @@ type
 
     function  CreateAck(const Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
@@ -457,7 +458,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession);
+procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession;
+                                                         const Reason: String);
 begin
 end;
 
@@ -857,7 +859,7 @@ begin
     TcpResponseCount := Self.MockTransport.SentResponseCount;
     UdpResponseCount := UdpTran.SentResponseCount;
 
-    while (Length(Self.Response200.AsString) < 1300) do
+    while (Length(Self.Response200.AsString) < MaximumUDPMessageSize) do
       Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
 
     Self.Response200.LastHop.Transport := UdpTran.TransportType;
@@ -890,7 +892,7 @@ begin
     UdpRequestCount := UdpTran.SentRequestCount;
 
     Self.TranRequest.LastHop.Transport := sttUDP;
-    while (Length(Self.TranRequest.AsString) < 1300) do
+    while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
       Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
                                                            + 'and with strange aeons even death may die.';
 

@@ -13,7 +13,8 @@ const
   DefaultT4    = 5000;  // ms
 
 const
-  SessionTimeoutMsg = 'Timed out';
+  MaximumUDPMessageSize = 1300;
+  SessionTimeoutMsg     = 'Timed out';
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -134,8 +135,13 @@ type
   //
   // Should I be terminated, for instance by a transport failure, my owning
   // Dispatcher immediately destroys me. Therefore, be sure that if you call
-  // TrySendRequest it is the last call in a method as I could be dead before
-  // the next line of the method is reached!
+  // TrySendRequest that it is the last call in a method as I could be dead
+  // before the next line of the method is reached! This means, further, that
+  // anything that triggers ChangeToTerminated had better be the final line
+  // of a call stack after which nothing happens except stack clearup. So if
+  // Foo calls Bar which calls Baz which calls ChangeToTerminated then
+  // ChangeToTerminated is the last line of Baz, and Baz is the last line of
+  // Bar, and Bar is the last line of Foo.                
   TIdSipTransaction = class(TIdInterfacedObject)
   private
     fInitialRequest:  TIdSipRequest;
@@ -157,7 +163,15 @@ type
     procedure ChangeToTerminated(Quiet: Boolean); overload;
     procedure ChangeToTerminated(R: TIdSipResponse;
                                  T: TIdSipTransport); overload; virtual;
-    procedure DoOnFail(const Reason: String); virtual;
+    procedure DoOnTimeout(Transport: TIdSipTransport;
+                          Request: TIdSipRequest;
+                          const Reason: String);
+    procedure DoOnTransportError(Transport: TIdSipTransport;
+                                 Request: TIdSipRequest;
+                                 const Reason: String); overload;
+    procedure DoOnTransportError(Transport: TIdSipTransport;
+                                 Response: TIdSipResponse;
+                                 const Reason: String); overload;
     procedure NotifyOfFailure(const Reason: String);
     procedure NotifyOfTermination;
     procedure NotifyOfRequest(R: TIdSipRequest;
@@ -415,6 +429,16 @@ type
     procedure SendRequest; override;
   end;
 
+  TIdSipNullTransaction = class(TIdSipTransaction)
+  public
+    constructor Create(Dispatcher: TIdSipTransactionDispatcher;
+                       InitialRequest: TIdSipRequest); override;
+
+    function IsClient: Boolean; override;
+    function IsInvite: Boolean; override;
+    function IsNull: Boolean; override;
+  end;
+
 implementation
 
 uses
@@ -573,7 +597,7 @@ var
   RewrittenVia: Boolean;
 begin
   MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > 1300) and (Msg.LastHop.Transport = sttUDP);
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize) and (Msg.LastHop.Transport = sttUDP);
 
   if RewrittenVia then
     Msg.LastHop.Transport := sttTCP;
@@ -581,7 +605,7 @@ begin
   try
     Self.FindAppropriateTransport(Msg).Send(Msg);
   except
-    on EIdException do begin
+    on EIdSipTransport do begin
       Msg.LastHop.Transport := sttUDP;
 
       Self.FindAppropriateTransport(Msg).Send(Msg);
@@ -720,7 +744,8 @@ end;
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Request: TIdSipRequest;
                                                            Receiver: TIdSipTransport);
 var
-  Tran: TIdSipTransaction;
+  NullTran: TIdSipTransaction;
+  Tran:     TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Request, false);
 
@@ -728,8 +753,12 @@ begin
     Tran.ReceiveRequest(Request, Receiver)
   else begin
     if Request.IsAck then begin
-      Self.NotifyListenersOfUnhandledRequest(Request, nil, Receiver);
-      // This is DANGEROUS and it SUCKS --------------^^^
+      NullTran := TIdSipNullTransaction.Create(Self, Request);
+      try
+        Self.NotifyListenersOfUnhandledRequest(Request, NullTran, Receiver);
+      finally
+        NullTran.Free;
+      end;
     end
     else begin
       Tran := Self.AddServerTransaction(Request, Receiver);
@@ -742,15 +771,21 @@ end;
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(Response: TIdSipResponse;
                                                            Receiver: TIdSipTransport);
 var
-  Tran: TIdSipTransaction;
+  NullTran: TIdSipTransaction;
+  Tran:     TIdSipTransaction;
 begin
   Tran := Self.FindTransaction(Response, true);
 
   if Assigned(Tran) then
     Tran.ReceiveResponse(Response, Receiver)
-  else
-    Self.NotifyListenersOfUnhandledResponse(Response, nil, Receiver);
-    // TODO: this is ugly and dangerous.              ^^^
+  else begin
+    NullTran := TIdSipNullTransaction.Create(Self, nil);
+    try
+      Self.NotifyListenersOfUnhandledResponse(Response, NullTran, Receiver);
+    finally
+      NullTran.Free;
+    end;
+  end;
 end;
 
 function TIdSipTransactionDispatcher.FindTransaction(R: TIdSipMessage;
@@ -921,7 +956,45 @@ begin
   Self.ChangeToTerminated(false);
 end;
 
-procedure TIdSipTransaction.DoOnFail(const Reason: String);
+procedure TIdSipTransaction.DoOnTimeout(Transport: TIdSipTransport;
+                                        Request: TIdSipRequest;
+                                        const Reason: String);
+var
+  Timeout: TIdSipResponse;
+begin
+  Self.NotifyOfFailure(Reason);
+
+  Timeout := TIdSipResponse.InResponseTo(Request, SIPRequestTimeout);
+  try
+    Self.NotifyOfResponse(Timeout, Transport);
+  finally
+    Timeout.Free;
+  end;
+
+  Self.ChangeToTerminated(false);
+end;
+
+procedure TIdSipTransaction.DoOnTransportError(Transport: TIdSipTransport;
+                                               Request: TIdSipRequest;
+                                               const Reason: String);
+var
+  Error: TIdSipResponse;
+begin
+  Self.NotifyOfFailure(Reason);
+
+  Error := TIdSipResponse.InResponseTo(Request, SIPServiceUnavailable);
+  try
+    Self.NotifyOfResponse(Error, Transport);
+  finally
+    Error.Free;
+  end;
+
+  Self.ChangeToTerminated(false);
+end;
+
+procedure TIdSipTransaction.DoOnTransportError(Transport: TIdSipTransport;
+                                               Response: TIdSipResponse;
+                                               const Reason: String);
 begin
   Self.NotifyOfFailure(Reason);
   Self.ChangeToTerminated(false);
@@ -1006,8 +1079,10 @@ begin
     try
       Self.Dispatcher.Send(CopyOfRequest);
     except
-      on E: EIdException do
-        Self.DoOnFail(E.Message);
+      on E: EIdSipTransport do
+        Self.DoOnTransportError(E.Transport,
+                                E.SipMessage as TIdSipRequest,
+                                E.Message);
     end;
   finally
     CopyOfRequest.Free;
@@ -1024,8 +1099,10 @@ begin
     try
       Self.Dispatcher.Send(CopyOfResponse);
     except
-      on E: EIdException do
-        Self.DoOnFail(E.Message);
+      on E: EIdSipTransport do
+        Self.DoOnTransportError(E.Transport,
+                                E.SipMessage as TIdSipResponse,
+                                E.Message);
     end;
   finally
     CopyOfResponse.Free;
@@ -1242,7 +1319,9 @@ end;
 
 procedure TIdSipServerInviteTransaction.FireTimerH;
 begin
-  Self.DoOnFail(SessionTimeoutMsg);
+  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
+                   Self.InitialRequest,
+                   SessionTimeoutMsg);
 end;
 
 procedure TIdSipServerInviteTransaction.FireTimerI;
@@ -1693,7 +1772,9 @@ end;
 procedure TIdSipClientInviteTransaction.FireTimerB;
 begin
   if (Self.State = itsCalling) then
-    Self.DoOnFail(SessionTimeoutMsg);
+    Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
+                     Self.InitialRequest,
+                     SessionTimeoutMsg);
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerD;
@@ -2012,7 +2093,9 @@ end;
 
 procedure TIdSipClientNonInviteTransaction.FireTimerF;
 begin
-  Self.DoOnFail(SessionTimeoutMsg);
+  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
+                   Self.InitialRequest,
+                   SessionTimeoutMsg);
 end;
 
 procedure TIdSipClientNonInviteTransaction.FireTimerK;
@@ -2064,6 +2147,40 @@ procedure TIdSipClientNonInviteTransaction.SetState(Value: TIdSipTransactionStat
 begin
   inherited SetState(Value);
   Self.Timer.ChangeState(Value);
+end;
+
+//******************************************************************************
+//* TIdSipNullTransaction                                                      *
+//******************************************************************************
+//* TIdSipNullTransaction Public methods ***************************************
+
+constructor TIdSipNullTransaction.Create(Dispatcher: TIdSipTransactionDispatcher;
+                                         InitialRequest: TIdSipRequest);
+var
+  NothingRequest: TIdSipRequest;
+begin
+  // Ignore InitialRequest. We treat Null Transactions as a special case.
+  NothingRequest := TIdSipRequest.Create;
+  try
+    inherited Create(Dispatcher, NothingRequest);
+  finally
+    NothingRequest.Free;
+  end;
+end;
+
+function TIdSipNullTransaction.IsClient: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipNullTransaction.IsInvite: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipNullTransaction.IsNull: Boolean;
+begin
+  Result := true;
 end;
 
 end.

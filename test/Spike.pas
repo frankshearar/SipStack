@@ -74,7 +74,8 @@ type
                                         Response: TIdSipResponse);
     procedure OnChanged(Observed: TObject);
     procedure OnEstablishedSession(Session: TIdSipSession);
-    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -323,8 +324,10 @@ procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
 end;
 
-procedure TrnidSpike.OnEndedSession(Session: TIdSipSession);
+procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
+                                    const Reason: String);
 begin
+  Self.Log.Lines.Add('Session ended: ' + Reason);
   Self.StopReadingData;
 end;
 
