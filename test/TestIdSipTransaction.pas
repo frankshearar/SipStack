@@ -1363,6 +1363,18 @@ begin
   Self.MarkSentRequestCount;
   Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
   CheckRequestSent('No re-issue of ' + Tran.InitialRequest.Method + ' attempt');
+
+  CheckEquals(Tran.InitialRequest.CSeq.SequenceNo + 1,
+              Self.LastSentRequest.CSeq.SequenceNo,
+              'Wrong CSeq sequence number');
+  CheckNotEquals(Tran.InitialRequest.LastHop.Branch,
+                 Self.LastSentRequest.LastHop.Branch,
+                 'Request reused the branch');
+
+  // As a shortcut to check that everything else matches, we quietly "adjust"
+  // the altered parts of Self.RejectedRequest.
+  Self.RejectedRequest.CSeq.SequenceNo := Tran.InitialRequest.CSeq.SequenceNo;
+  Self.RejectedRequest.LastHop.Branch  := Tran.InitialRequest.LastHop.Branch;
   Check(Self.RejectedRequest.Equals(Tran.InitialRequest),
         'Unexpected request in the authentication challenge notification');
 end;

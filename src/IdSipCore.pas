@@ -3038,9 +3038,6 @@ begin
   try
     if not TryAgain then Exit;
 
-    ChallengeResponse.CSeq.Increment;
-    ChallengeResponse.LastHop.Branch := Self.NextBranch;
-
     ChallengeHeader := Challenge.AuthenticateHeader;
 
     Self.Keyring.AddKey(ChallengeHeader,

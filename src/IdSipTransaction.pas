@@ -54,7 +54,9 @@ type
   // contents of the original request to ChallengeResponse. (The name comes from
   // "challenge/response". Don't confuse it with "request/response"!) In your
   // implementation, add the authentication token to ChallengeResponse - the
-  // TransactionDispatcher then sends this new request down the stack.
+  // TransactionDispatcher then sends this new request down the stack. You don't
+  // need to change anything else about the message - the TransactionDispatcher
+  // has already incremented the CSeq and generated a new branch.
   IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
@@ -1145,10 +1147,11 @@ begin
   ReAttempt := TIdSipRequest.Create;
   try
     ReAttempt.Assign(Transaction.InitialRequest);
+    ReAttempt.CSeq.Increment;
+    ReAttempt.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
+
     Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
 
-    // Note that whichever listener generated ReAttempt's contents generated a
-    // new (and hence unique) branch. Thus we can safely add a new transaction.
     if TryAgain then begin
       Assert(ReAttempt.LastHop.Branch <> Transaction.InitialRequest.LastHop.Branch,
              MustGenerateNewBranch);
