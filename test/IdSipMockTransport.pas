@@ -211,8 +211,6 @@ end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
-  inherited SendResponse(R);
-
   Self.fResponses.AddCopy(R);
 
   if Assigned(Self.FailWith) then
@@ -225,6 +223,8 @@ begin
 
   if Self.LocalEchoMessages then
     Self.NotifyTransportListeners(R);
+
+  inherited SendResponse(R);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
