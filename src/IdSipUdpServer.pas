@@ -178,7 +178,7 @@ begin
     OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
     OwnVia.Port       := Binding.Port;
     OwnVia.SentBy     := Binding.IP;
-    OwnVia.SipVersion := 'SIP/2.0';
+    OwnVia.SipVersion := SIPVersion;
     OwnVia.Transport  := sttUDP;
 
     Self.Send(Binding.PeerIP, Binding.PeerPort, Res.AsString);

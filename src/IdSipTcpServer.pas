@@ -526,7 +526,7 @@ begin
     OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
     OwnVia.Port       := Connection.Socket.Binding.Port;
     OwnVia.SentBy     := Connection.Socket.Binding.IP;
-    OwnVia.SipVersion := 'SIP/2.0';
+    OwnVia.SipVersion := SIPVersion;
     OwnVia.Transport  := sttUDP;
 
     // We need From, To, CSeq, Call-ID headers!
