@@ -777,7 +777,7 @@ implementation
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
   IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SysUtils,
-  TestIdObservable, TestMessages, Windows;
+  TestMessages, Windows;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
