@@ -920,7 +920,6 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -935,9 +934,7 @@ begin
   Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
-}
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-{
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -953,7 +950,6 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -5179,9 +5175,6 @@ begin
       Self.ReceiveResponse(RequestTerminated);
 
       CheckAckSent('No ACK sent');
-      CheckEquals(MethodAck,
-                  Self.LastSentRequest.Method,
-                  'The request sent wasn''t a ACK');
 
       Check(Self.Core.InviteCount < InviteCount,
             'Action not terminated');
@@ -5250,9 +5243,6 @@ begin
       Self.ReceiveResponse(RequestTerminated);
 
       CheckAckSent('No ACK sent');
-      CheckEquals(MethodAck,
-                  Self.LastSentRequest.Method,
-                  'The request sent wasn''t a ACK');
 
       Check(Self.Core.InviteCount < InviteCount,
             'Action not terminated');
@@ -7387,7 +7377,7 @@ begin
     Self.ReceiveResponse(Ok);
     CheckAckSent('Retransmission');
 
-    Ack := Self.LastSentRequest;
+    Ack := Self.LastSentAck;
     CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
     Invite := Self.Session.InitialRequest;
     CheckEquals(Invite.CSeq.SequenceNo,
