@@ -6314,8 +6314,8 @@ begin
 
   if (InviteAgent = Self.InitialInvite)
      and (Self.RemoteSessionDescription = '') then begin
-     Self.RemoteSessionDescription := Ack.Body;
-     Self.RemoteMimeType           := Ack.ContentType;
+    Self.RemoteSessionDescription := Ack.Body;
+    Self.RemoteMimeType           := Ack.ContentType;
   end;
 end;
 
