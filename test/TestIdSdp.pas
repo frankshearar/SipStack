@@ -3,8 +3,8 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle,
-  TestFramework, TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle, TestFramework,
+  TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
