@@ -693,7 +693,11 @@ begin
     Tran := Self.FindTransaction(Request, true);
 
     if Assigned(Tran) then
+      Tran.SendRequest
+    else begin
+      Tran := Self.AddClientTransaction(Request);
       Tran.SendRequest;
+    end;
   end;
 end;
 

@@ -158,12 +158,14 @@ type
   public
     constructor Create; virtual;
 
-    function CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
-    function CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
-    function CreateResponse(Request: TIdSipRequest;
-                            ResponseCode: Cardinal): TIdSipResponse; virtual;
-    function NextCallID: String;
-    function NextTag: String;
+    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
+    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
+    function  CreateResponse(Request: TIdSipRequest;
+                             ResponseCode: Cardinal): TIdSipResponse; virtual;
+    function  NextCallID: String;
+    function  NextTag: String;
+    procedure SendRequest(Request: TIdSipRequest);
+    procedure SendResponse(Response: TIdSipResponse);
 
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write fAuthenticator;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
@@ -649,6 +651,16 @@ end;
 function TIdSipAbstractCore.NextTag: String;
 begin
   Result := GRandomNumber.NextSipUserAgentTag;
+end;
+
+procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest);
+begin
+  Self.Dispatcher.SendRequest(Request);
+end;
+
+procedure TIdSipAbstractCore.SendResponse(Response: TIdSipResponse);
+begin
+  Self.Dispatcher.SendResponse(Response);
 end;
 
 //* TIdSipAbstractCore Protected methods ***************************************
@@ -1542,7 +1554,7 @@ begin
   UsingSecureTransport := Receiver.IsSecure;
 
   Action := Self.FindAction(Response);
-  
+
   if Assigned(Action) then
     Action.ReceiveResponse(Response, UsingSecureTransport)
   else
@@ -2118,8 +2130,7 @@ begin
       ReInvite.LastHop.Branch := Self.UA.NextBranch;
       ReInvite.FirstContact.Assign(Response.FirstContact);
 
-      Self.UA.Dispatcher.AddClientTransaction(ReInvite);
-      Self.UA.Dispatcher.SendRequest(ReInvite);
+      Self.UA.SendRequest(ReInvite);
     finally
       ReInvite.Free;
     end;
@@ -2428,7 +2439,7 @@ begin
   try
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
-    Self.UA.Dispatcher.AddClientTransaction(Bye).SendRequest;
+    Self.UA.SendRequest(Bye);
   finally
     Bye.Free;
   end;
@@ -2466,7 +2477,7 @@ begin
 
   OK := Self.UA.CreateResponse(Request, SIPOK);
   try
-    Self.UA.Dispatcher.SendResponse(OK);
+    Self.UA.SendResponse(OK);
   finally
     OK.Free;
   end;
@@ -2481,7 +2492,7 @@ begin
                                      SIPInternalServerError);
   try
     Response.StatusText := RSSIPRequestOutOfOrder;
-    Self.UA.Dispatcher.SendResponse(Response);
+    Self.UA.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -2494,7 +2505,7 @@ begin
   Response := Self.UA.CreateResponse(Request,
                                      SIPRequestTerminated);
   try
-    Self.UA.Dispatcher.SendResponse(Response);
+    Self.UA.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -2567,7 +2578,7 @@ begin
     finally
       Self.DialogLock.Release;
     end;
-    Self.UA.Dispatcher.SendResponse(OkResponse);
+    Self.UA.SendResponse(OkResponse);
     Self.OkTimer.Start;
   finally
     OkResponse.Free;
@@ -2584,7 +2595,7 @@ begin
                                                   SIPMovedTemporarily);
   try
     RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
-    Self.UA.Dispatcher.SendResponse(RedirectResponse);
+    Self.UA.SendResponse(RedirectResponse);
   finally
     RedirectResponse.Free;
   end;
@@ -2616,7 +2627,7 @@ begin
   BusyHereResponse := TIdSipResponse.InResponseTo(Self.InitialRequest,
                                                   SIPBusyHere);
   try
-    Self.UA.Dispatcher.SendResponse(BusyHereResponse);
+    Self.UA.SendResponse(BusyHereResponse);
   finally
     BusyHereResponse.Free;
   end;
@@ -2652,7 +2663,7 @@ begin
     Response := Self.UA.CreateResponse(Self.InitialRequest,
                                        SIPRequestTerminated);
     try
-      Self.UA.Dispatcher.SendResponse(Response);
+      Self.UA.SendResponse(Response);
     finally
       Response.Free;
     end;
@@ -2721,8 +2732,7 @@ begin
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
       Self.InitialRequest.Assign(Invite);
-      Self.UA.Dispatcher.AddClientTransaction(Invite);
-      Self.UA.Dispatcher.SendRequest(Self.InitialRequest);
+      Self.UA.SendRequest(Self.InitialRequest);
     finally
       Invite.Free;
     end;
@@ -2776,10 +2786,11 @@ end;
 function TIdSipOutboundSession.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
 begin
   Result := false;
-  if Response.IsAuthenticationChallenge then
+  if Response.IsAuthenticationChallenge then begin
     Self.ReissueInviteWithAuthorization(Response);
 
-  Result := true;
+    Result := true;
+  end;
 end;
 
 function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
@@ -2861,8 +2872,8 @@ begin
     ReInvite.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
     ReInvite.AddHeader(ProxyAuthorizationHeader);
 
-    Self.UA.Dispatcher.AddClientTransaction(ReInvite);
-    Self.UA.Dispatcher.SendRequest(ReInvite);
+    Self.InitialRequest.Assign(ReInvite);
+    Self.UA.SendRequest(ReInvite);
   finally
     ReInvite.Free;
   end;
@@ -3252,8 +3263,7 @@ procedure TIdSipRegistration.Send(Request: TIdSipRequest);
 begin
   Self.InitialRequest.Assign(Request);
 
-  Self.UA.Dispatcher.AddClientTransaction(Request);
-  Self.UA.Dispatcher.SendRequest(Request);
+  Self.UA.SendRequest(Request);
 end;
 
 end.
