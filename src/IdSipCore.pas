@@ -3888,7 +3888,7 @@ end;
 
 procedure TIdSipAction.ReceiveAck(Ack: TIdSipRequest);
 begin
-  Assert(Ack.IsAck, 'TIdSipAction.ReceiveBye must only receive ACKs');
+  Assert(Ack.IsAck, 'TIdSipAction.ReceiveAck must only receive ACKs');
   // By default do nothing
 end;
 
