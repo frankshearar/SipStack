@@ -14,8 +14,7 @@ uses
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas' {,
   TestIdURI in 'test\TestIdURI.pas'},
   IdSIPClient in 'src\IdSIPClient.pas',
-  TestIdSipClient in 'test\TestIdSipClient.pas',
-  TestIdURI in '\\Ictfilesrv\ICT Group\FrankS\Projects\SIP\test\TestIdURI.pas';
+  TestIdSipClient in 'test\TestIdSipClient.pas';
 
 //{$DEFINE SPIKE}
 
