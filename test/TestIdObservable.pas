@@ -44,7 +44,7 @@ implementation
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdRTPDiagnostics unit tests');
+  Result := TTestSuite.Create('IdObservable unit tests');
   Result.AddTest(TestTIdObservable.Suite);
 end;
 
