@@ -58,6 +58,9 @@ type
   // TODO: there's redundance with this Hostname, and the Hostnames of the
   // transports attached to this core. It's not clear how to set up the
   // hostnames and bindings of the stack.
+  //
+  // ReceiveRequest returns true if I handled the request, and false if I
+  // rejected the request.
   TIdSipAbstractCore = class(TIdInterfacedObject,
                              IIdSipUnhandledMessageListener)
   private
@@ -79,9 +82,9 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
     function  NextCallID: String;
-    procedure ReceiveRequest(Request: TIdSipRequest;
+    function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport); virtual; abstract;
+                             Receiver: TIdSipTransport): Boolean; virtual; abstract;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
                               Receiver: TIdSipTransport); virtual; abstract;
@@ -145,9 +148,9 @@ type
     function  IsSchemeAllowed(const Scheme: String): Boolean;
     function  NextBranch: String;
     function  NextTag: String;
-    procedure ReceiveRequest(Request: TIdSipRequest;
+    function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport); override;
+                             Receiver: TIdSipTransport): Boolean; override;
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal;
                              Transaction: TIdSipTransaction);
@@ -213,9 +216,9 @@ type
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure ReceiveRequest(Request: TIdSipRequest;
+    function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport); override;
+                             Receiver: TIdSipTransport): Boolean; override;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
                               Receiver: TIdSipTransport); override;
@@ -609,10 +612,12 @@ begin
           + IntToHex(TIdRandomNumber.NextCardinal, 8);
 end;
 
-procedure TIdSipAbstractUserAgent.ReceiveRequest(Request: TIdSipRequest;
-                                                 Transaction: TIdSipTransaction;
-                                                 Receiver: TIdSipTransport);
+function TIdSipAbstractUserAgent.ReceiveRequest(Request: TIdSipRequest;
+                                                Transaction: TIdSipTransaction;
+                                                Receiver: TIdSipTransport): Boolean;
 begin
+  Result := false;
+
   if (Request.SIPVersion <> SipVersion) then begin
     Self.RejectUnsupportedSipVersion(Request, Transaction);
   end;
@@ -659,6 +664,8 @@ begin
     Self.RejectRequestUnknownContentType(Request, Transaction);
     Exit;
   end;
+
+  Result := true;
 end;
 
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
@@ -1030,32 +1037,38 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.ReceiveRequest(Request: TIdSipRequest;
-                                             Transaction: TIdSipTransaction;
-                                             Receiver: TIdSipTransport);
+function TIdSipUserAgentCore.ReceiveRequest(Request: TIdSipRequest;
+                                            Transaction: TIdSipTransaction;
+                                            Receiver: TIdSipTransport): Boolean;
 begin
-  inherited ReceiveRequest(Request, Transaction, Receiver);
+  Result := inherited ReceiveRequest(Request, Transaction, Receiver);
 
-  // Processing the request - 8.2.5
-  if Request.IsInvite then begin
-    // Section 8.1.1.8 says that a request that can start a dialog (like an
-    // INVITE), MUST contain a Contact.
-    if not Request.HasHeader(ContactHeaderFull) then
-      Self.RejectBadRequest(Request, MissingContactHeader, Transaction)
-    else begin
-      Self.ProcessInvite(Request, Transaction, Receiver);
-    end;
-  end
-  else if Request.IsAck then begin
-    Self.ProcessAck(Request, Transaction, Receiver);
-  end
-  else if Request.IsBye then begin
-    Self.SendByeToAppropriateSession(Request, Transaction, Receiver);
-  end
-  else if Request.IsCancel then
-    raise Exception.Create('Handling CANCELs not implemented yet');
+  if Result then begin
+    Result := false;
 
-  // TIdSipSession generates the response - 8.2.6
+    // Processing the request - 8.2.5
+    if Request.IsInvite then begin
+      // Section 8.1.1.8 says that a request that can start a dialog (like an
+      // INVITE), MUST contain a Contact.
+      if not Request.HasHeader(ContactHeaderFull) then
+        Self.RejectBadRequest(Request, MissingContactHeader, Transaction)
+      else begin
+        Self.ProcessInvite(Request, Transaction, Receiver);
+      end;
+    end
+    else if Request.IsAck then begin
+      Self.ProcessAck(Request, Transaction, Receiver);
+    end
+    else if Request.IsBye then begin
+      Self.SendByeToAppropriateSession(Request, Transaction, Receiver);
+    end
+    else if Request.IsCancel then
+      raise Exception.Create('Handling CANCELs not implemented yet');
+
+    // TIdSipSession generates the response - 8.2.6
+    
+    Result := true;
+  end;
 end;
 
 procedure TIdSipUserAgentCore.ReceiveResponse(Response: TIdSipResponse;

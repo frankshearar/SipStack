@@ -54,9 +54,9 @@ type
     constructor Create; override;
 
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
-    procedure ReceiveRequest(Request: TIdSipRequest;
+    function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport); override;
+                             Receiver: TIdSipTransport): Boolean; override;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
                               Receiver: TIdSipTransport); override;
@@ -80,6 +80,8 @@ begin
   inherited Create;
 
   Self.AddAllowedMethod(MethodRegister);
+  Self.AddAllowedScheme(SipScheme);
+  Self.AddAllowedScheme(SipsScheme);
 end;
 
 function TIdSipRegistrar.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
@@ -87,23 +89,21 @@ begin
   raise Exception.Create('Registrars may not create in-dialog requests');
 end;
 
-procedure TIdSipRegistrar.ReceiveRequest(Request: TIdSipRequest;
-                                         Transaction: TIdSipTransaction;
-                                         Receiver: TIdSipTransport);
+function TIdSipRegistrar.ReceiveRequest(Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction;
+                                        Receiver: TIdSipTransport): Boolean;
 var
   Contacts: TIdSipHeadersFilter;
 begin
-  if Request.IsRegister then begin
 //      1. The registrar inspects the Request-URI to determine whether it
 //         has access to bindings for the domain identified in the
 //         Request-URI.  If not, and if the server also acts as a proxy
 //         server, the server SHOULD forward the request to the addressed
 //         domain, following the general behavior for proxying messages
 //         described in Section 16.
-//
-//      2. To guarantee that the registrar supports any necessary
-//         extensions, the registrar MUST process the Require header field
-//         values as described for UASs in Section 8.2.2.
+  Result := inherited ReceiveRequest(Request, Transaction, Receiver);
+
+  if Result and Request.IsRegister then begin
 //
 //      3. A registrar SHOULD authenticate the UAC.  Mechanisms for the
 //         authentication of SIP user agents are described in Section 22.
