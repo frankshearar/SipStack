@@ -26,9 +26,9 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
   end;
@@ -38,9 +38,9 @@ type
   IIdSipTransportSendingListener = interface
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
   end;
 
   TIdSipTransport = class(TIdInterfacedObject,
@@ -205,7 +205,7 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipTransportExceptionMethod = class(TIdMethod)
+  TIdSipTransportListenerExceptionMethod = class(TIdMethod)
   private
     fException: Exception;
     fReason:    String;
@@ -216,7 +216,7 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
-  TIdSipTransportReceiveRequestMethod = class(TIdMethod)
+  TIdSipTransportListenerReceiveRequestMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
     fRequest:  TIdSipRequest;
@@ -227,7 +227,7 @@ type
     property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
-  TIdSipTransportReceiveResponseMethod = class(TIdMethod)
+  TIdSipTransportListenerReceiveResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
     fResponse: TIdSipResponse;
@@ -238,7 +238,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
-  TIdSipTransportRejectedMessageMethod = class(TIdMethod)
+  TIdSipTransportListenerRejectedMessageMethod = class(TIdMethod)
   private
     fMsg:    String;
     fReason: String;
@@ -249,25 +249,25 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipTransportSendingRequestMethod = class(TIdMethod)
+  TIdSipTransportSendingListenerRequestMethod = class(TIdMethod)
   private
-    fReceiver: TIdSipTransport;
-    fRequest:  TIdSipRequest;
+    fSender:  TIdSipTransport;
+    fRequest: TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Request:  TIdSipRequest   read fRequest write fRequest;
+    property Sender:  TIdSipTransport read fSender write fSender;
+    property Request: TIdSipRequest   read fRequest write fRequest;
   end;
 
-  TIdSipTransportSendingResponseMethod = class(TIdMethod)
+  TIdSipTransportSendingListenerResponseMethod = class(TIdMethod)
   private
-    fReceiver: TIdSipTransport;
+    fSender: TIdSipTransport;
     fResponse: TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Sender:   TIdSipTransport read fSender write fSender;
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
@@ -414,9 +414,9 @@ end;
 
 procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
 var
-  Notification: TIdSipTransportReceiveRequestMethod;
+  Notification: TIdSipTransportListenerReceiveRequestMethod;
 begin
-  Notification := TIdSipTransportReceiveRequestMethod.Create;
+  Notification := TIdSipTransportListenerReceiveRequestMethod.Create;
   try
     Notification.Receiver := Self;
     Notification.Request  := Request;
@@ -429,9 +429,9 @@ end;
 
 procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse);
 var
-  Notification: TIdSipTransportReceiveResponseMethod;
+  Notification: TIdSipTransportListenerReceiveResponseMethod;
 begin
-  Notification := TIdSipTransportReceiveResponseMethod.Create;
+  Notification := TIdSipTransportListenerReceiveResponseMethod.Create;
   try
     Notification.Receiver := Self;
     Notification.Response := Response;
@@ -445,9 +445,9 @@ end;
 procedure TIdSipTransport.NotifyTransportListenersOfException(E: Exception;
                                                               const Reason: String);
 var
-  Notification: TIdSipTransportExceptionMethod;
+  Notification: TIdSipTransportListenerExceptionMethod;
 begin
-  Notification := TIdSipTransportExceptionMethod.Create;
+  Notification := TIdSipTransportListenerExceptionMethod.Create;
   try
     Notification.Exception := E;
     Notification.Reason    := Reason;
@@ -461,9 +461,9 @@ end;
 procedure TIdSipTransport.NotifyTransportListenersOfRejectedMessage(const Msg: String;
                                                                     const Reason: String);
 var
-  Notification: TIdSipTransportRejectedMessageMethod;
+  Notification: TIdSipTransportListenerRejectedMessageMethod;
 begin
-  Notification := TIdSipTransportRejectedMessageMethod.Create;
+  Notification := TIdSipTransportListenerRejectedMessageMethod.Create;
   try
     Notification.Msg    := Msg;
     Notification.Reason := Reason;
@@ -476,12 +476,12 @@ end;
 
 procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest);
 var
-  Notification: TIdSipTransportSendingRequestMethod;
+  Notification: TIdSipTransportSendingListenerRequestMethod;
 begin
-  Notification := TIdSipTransportSendingRequestMethod.Create;
+  Notification := TIdSipTransportSendingListenerRequestMethod.Create;
   try
-    Notification.Receiver := Self;
-    Notification.Request  := Request;
+    Notification.Sender  := Self;
+    Notification.Request := Request;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -491,11 +491,11 @@ end;
 
 procedure TIdSipTransport.NotifyTransportSendingListeners(Response: TIdSipResponse);
 var
-  Notification: TIdSipTransportSendingResponseMethod;
+  Notification: TIdSipTransportSendingListenerResponseMethod;
 begin
-  Notification := TIdSipTransportSendingResponseMethod.Create;
+  Notification := TIdSipTransportSendingListenerResponseMethod.Create;
   try
-    Notification.Receiver := Self;
+    Notification.Sender   := Self;
     Notification.Response := Response;
 
     Self.TransportSendingListeners.Notify(Notification);
@@ -1000,69 +1000,69 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransportExceptionMethod                                             *
+//* TIdSipTransportListenerExceptionMethod                                     *
 //******************************************************************************
-//* TIdSipTransportExceptionMethod Public methods ******************************
+//* TIdSipTransportListenerExceptionMethod Public methods **********************
 
-procedure TIdSipTransportExceptionMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportListenerExceptionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnException(Self.Exception,
                                                    Self.Reason);
 end;
 
 //******************************************************************************
-//* TIdSipTransportReceiveRequestMethod                                        *
+//* TIdSipTransportListenerReceiveRequestMethod                                *
 //******************************************************************************
-//* TIdSipTransportReceiveRequestMethod Public methods *************************
+//* TIdSipTransportListenerReceiveRequestMethod Public methods *****************
 
-procedure TIdSipTransportReceiveRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportListenerReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveRequest(Self.Request,
                                                         Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipTransportReceiveResponseMethod                                       *
+//* TIdSipTransportListenerReceiveResponseMethod                               *
 //******************************************************************************
-//* TIdSipTransportReceiveResponseMethod Public methods ************************
+//* TIdSipTransportListenerReceiveResponseMethod Public methods ****************
 
-procedure TIdSipTransportReceiveResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveResponse(Self.Response,
                                                          Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipTransportRejectedMessageMethod                                       *
+//* TIdSipTransportListenerRejectedMessageMethod                               *
 //******************************************************************************
-//* TIdSipTransportRejectedMessageMethod Public methods ************************
+//* TIdSipTransportListenerRejectedMessageMethod Public methods ****************
 
-procedure TIdSipTransportRejectedMessageMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportListenerRejectedMessageMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnRejectedMessage(Self.Msg,
                                                          Self.Reason);
 end;
 
 //******************************************************************************
-//* TIdSipTransportSendingRequestMethod                                        *
+//* TIdSipTransportSendingListenerRequestMethod                                *
 //******************************************************************************
-//* TIdSipTransportSendingRequestMethod Public methods *************************
+//* TIdSipTransportSendingListenerRequestMethod Public methods *****************
 
-procedure TIdSipTransportSendingRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportSendingListenerRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendRequest(Self.Request,
-                                                            Self.Receiver);
+                                                            Self.Sender);
 end;
 
 //******************************************************************************
-//* TIdSipTransportSendingResponseMethod                                       *
+//* TIdSipTransportSendingListenerResponseMethod                               *
 //******************************************************************************
-//* TIdSipTransportSendingResponseMethod Public methods ************************
+//* TIdSipTransportSendingListenerResponseMethod Public methods ****************
 
-procedure TIdSipTransportSendingResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipTransportSendingListenerResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendResponse(Self.Response,
-                                                             Self.Receiver);
+                                                             Self.Sender);
 end;
 
 //******************************************************************************

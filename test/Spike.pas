@@ -131,15 +131,15 @@ type
                     Binding: TIdSocketHandle);
     procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts); overload;
     procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
@@ -466,13 +466,13 @@ begin
 end;
 
 procedure TrnidSpike.OnReceiveRequest(Request: TIdSipRequest;
-                                      Transport: TIdSipTransport);
+                                      Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Request, true);
 end;
 
 procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
-                                       Transport: TIdSipTransport);
+                                       Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Response, true);
 end;
@@ -491,7 +491,7 @@ begin
 end;
 
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
-                                   Transport: TIdSipTransport);
+                                   Sender: TIdSipTransport);
 begin
   // Don't ever do this: we're on a private LAN accessing the SIP network
   // through a NATting firewall. Doing the below makes us look like the
@@ -504,7 +504,7 @@ begin
 end;
 
 procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
-                                    Transport: TIdSipTransport);
+                                    Sender: TIdSipTransport);
 begin
   Self.LogMessage(Response, false);
 end;

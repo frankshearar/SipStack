@@ -40,15 +40,15 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -107,9 +107,9 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure ReturnResponse(Sender: TObject;
@@ -225,6 +225,79 @@ type
     procedure TestIsNull; override;
   end;
 
+  TTransportMethodTestCase = class(TTestCase)
+  protected
+    Transport: TIdSipTransport;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTransportListenerExceptionMethod = class(TTransportMethodTestCase)
+  private
+    Exception: Exception;
+    Method:    TIdSipTransportListenerExceptionMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportListenerReceiveRequestMethod = class(TTransportMethodTestCase)
+  private
+    Method:  TIdSipTransportListenerReceiveRequestMethod;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportListenerReceiveResponseMethod = class(TTransportMethodTestCase)
+  private
+    Method:   TIdSipTransportListenerReceiveResponseMethod;
+    Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportListenerRejectedMessageMethod = class(TTransportMethodTestCase)
+  private
+    Method: TIdSipTransportListenerRejectedMessageMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportSendingListenerRequestMethod = class(TTransportMethodTestCase)
+  private
+    Method:  TIdSipTransportSendingListenerRequestMethod;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransportSendingListenerResponseMethod = class(TTransportMethodTestCase)
+  private
+    Method:  TIdSipTransportSendingListenerResponseMethod;
+    Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 implementation
 
 uses
@@ -239,6 +312,12 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
+  Result.AddTest(TestTIdSipTransportListenerExceptionMethod.Suite);
+  Result.AddTest(TestTIdSipTransportListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransportListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransportListenerRejectedMessageMethod.Suite);
+  Result.AddTest(TestTIdSipTransportSendingListenerRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransportSendingListenerResponseMethod.Suite);
 end;
 
 //******************************************************************************
@@ -299,7 +378,7 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(Request: TIdSipRequest;
-                                                                 Transport: TIdSipTransport);
+                                                                 Receiver: TIdSipTransport);
 begin
   Self.ReceivedRequest := true;
   Check(Self.Request = Request,     'Request not correct');
@@ -307,7 +386,7 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnReceiveResponse(Response: TIdSipResponse;
-                                                                  Transport: TIdSipTransport);
+                                                                  Receiver: TIdSipTransport);
 begin
   Self.ReceivedResponse := true;
 
@@ -321,7 +400,7 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendRequest(Request: TIdSipRequest;
-                                                              Transport: TIdSipTransport);
+                                                              Sender: TIdSipTransport);
 begin
   Self.SentRequest := true;
   Check(Self.Request = Request,     'Request not correct');
@@ -329,7 +408,7 @@ begin
 end;
 
 procedure TestTIdSipTransportEventNotifications.OnSendResponse(Response: TIdSipResponse;
-                                                               Transport: TIdSipTransport);
+                                                               Sender: TIdSipTransport);
 begin
   Self.SentResponse := true;
 
@@ -677,7 +756,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                               Transport: TIdSipTransport);
+                                               Receiver: TIdSipTransport);
 begin
   Self.RecvdRequest.Assign(Request);
 
@@ -686,7 +765,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
-                                                Transport: TIdSipTransport);
+                                                Receiver: TIdSipTransport);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Transport, Response);
@@ -1461,6 +1540,288 @@ begin
   Check(Self.HighPortTransport.IsNull, 'Null transport marked as non-null');
 end;
 
+//******************************************************************************
+//* TTransportMethodTestCase                                                   *
+//******************************************************************************
+//* TTransportMethodTestCase Public methods ************************************
+
+procedure TTransportMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Transport := TIdSipNullTransport.Create(IdPORT_SIP);
+end;
+
+procedure TTransportMethodTestCase.TearDown;
+begin
+  Self.Transport.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportListenerExceptionMethod                                 *
+//******************************************************************************
+//* TestTIdSipTransportListenerExceptionMethod Public methods ******************
+
+procedure TestTIdSipTransportListenerExceptionMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Exception := EUnknownTransport.Create('');
+
+  Self.Method := TIdSipTransportListenerExceptionMethod.Create;
+  Self.Method.Exception := Self.Exception;
+  Self.Method.Reason    := 'Bar';
+end;
+
+procedure TestTIdSipTransportListenerExceptionMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Exception.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportListenerExceptionMethod Published methods ***************
+
+procedure TestTIdSipTransportListenerExceptionMethod.TestRun;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Exception, 'Listener not notified');
+    Check(Self.Method.Exception = Listener.ExceptionParam,
+          'Exception param');
+    CheckEquals(Self.Method.Reason,
+                Listener.ReasonParam,
+                'Reason param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportListenerReceiveRequestMethod                            *
+//******************************************************************************
+//* TestTIdSipTransportListenerReceiveRequestMethod Public methods *************
+
+procedure TestTIdSipTransportListenerReceiveRequestMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Request := TIdSipRequest.Create;
+
+  Self.Method := TIdSipTransportListenerReceiveRequestMethod.Create;
+  Self.Method.Receiver := Self.Transport;
+  Self.Method.Request  := Self.Request;
+end;
+
+procedure TestTIdSipTransportListenerReceiveRequestMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Request.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportListenerReceiveRequestMethod Published methods **********
+
+procedure TestTIdSipTransportListenerReceiveRequestMethod.TestRun;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedRequest, 'Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          'Receiver param');
+    Check(Self.Method.Request = Listener.RequestParam,
+          'Request param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportListenerReceiveResponseMethod                           *
+//******************************************************************************
+//* TestTIdSipTransportListenerReceiveResponseMethod Public methods ************
+
+procedure TestTIdSipTransportListenerReceiveResponseMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipTransportListenerReceiveResponseMethod.Create;
+  Self.Method.Receiver := Self.Transport;
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipTransportListenerReceiveResponseMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportListenerReceiveResponseMethod Published methods *********
+
+procedure TestTIdSipTransportListenerReceiveResponseMethod.TestRun;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedResponse, 'Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          'Receiver param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          'Response param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportListenerRejectedMessageMethod                           *
+//******************************************************************************
+//* TestTIdSipTransportListenerRejectedMessageMethod Public methods ************
+
+procedure TestTIdSipTransportListenerRejectedMessageMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransportListenerRejectedMessageMethod.Create;
+  Self.Method.Msg    := 'Foo';
+  Self.Method.Reason := 'Bar';
+end;
+
+procedure TestTIdSipTransportListenerRejectedMessageMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportListenerRejectedMessageMethod Published methods *********
+
+procedure TestTIdSipTransportListenerRejectedMessageMethod.TestRun;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.RejectedMessage, 'Listener not notified');
+    CheckEquals(Self.Method.Msg,
+                Listener.MsgParam,
+                'Msg param');
+    CheckEquals(Self.Method.Reason,
+                Listener.ReasonParam,
+                'Reason param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportSendingListenerRequestMethod                            *
+//******************************************************************************
+//* TestTIdSipTransportSendingListenerRequestMethod Public methods *************
+
+procedure TestTIdSipTransportSendingListenerRequestMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Request := TIdSipRequest.Create;
+
+  Self.Method := TIdSipTransportSendingListenerRequestMethod.Create;
+  Self.Method.Request := Self.Request;
+  Self.Method.Sender  := Self.Transport;
+end;
+
+procedure TestTIdSipTransportSendingListenerRequestMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Request.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportSendingListenerRequestMethod Published methods **********
+
+procedure TestTIdSipTransportSendingListenerRequestMethod.TestRun;
+var
+  Listener: TIdSipTestTransportSendingListener;
+begin
+  Listener := TIdSipTestTransportSendingListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.SentRequest, 'Listener not notified');
+    Check(Self.Method.Sender = Listener.SenderParam,
+          'Sender param');
+    Check(Self.Method.Request = Listener.RequestParam,
+          'Request param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportSendingListenerResponseMethod                           *
+//******************************************************************************
+//* TestTIdSipTransportSendingListenerResponseMethod Public methods ************
+
+procedure TestTIdSipTransportSendingListenerResponseMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipTransportSendingListenerResponseMethod.Create;
+  Self.Method.Response := Self.Response;
+  Self.Method.Sender   := Self.Transport;
+end;
+
+procedure TestTIdSipTransportSendingListenerResponseMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportSendingListenerResponseMethod Published methods *********
+
+procedure TestTIdSipTransportSendingListenerResponseMethod.TestRun;
+var
+  Listener: TIdSipTestTransportSendingListener;
+begin
+  Listener := TIdSipTestTransportSendingListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.SentResponse, 'Listener not notified');
+    Check(Self.Method.Sender = Listener.SenderParam,
+          'Sender param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          'Response param');
+  finally
+    Listener.Free;
+  end;
+end;
 
 initialization
   RegisterTest('IdSipTransport', Suite);

@@ -47,15 +47,15 @@ type
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
     procedure RefreshContacts(Bindings: TIdSipContacts);
@@ -169,8 +169,8 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
-                               CurrentBindings: TIdSipContacts;
-                               const Reason: String);
+                                       CurrentBindings: TIdSipContacts;
+                                       const Reason: String);
 begin
   Self.Log.Lines.Add('---- Registration action failed: ' + Reason + ' ----');
   Self.RefreshContacts(CurrentBindings);
@@ -178,19 +178,19 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnReceiveRequest(Request: TIdSipRequest;
-                                      Transport: TIdSipTransport);
+                                              Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegister.OnReceiveResponse(Response: TIdSipResponse;
-                                       Transport: TIdSipTransport);
+                                               Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;
 
 procedure TrnidSpikeRegister.OnRejectedMessage(const Msg: String;
-                                       const Reason: String);
+                                               const Reason: String);
 begin
   Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
   Self.Log.Lines.Add(Msg);
@@ -198,19 +198,19 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnSendRequest(Request: TIdSipRequest;
-                                   Transport: TIdSipTransport);
+                                           Sender: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegister.OnSendResponse(Response: TIdSipResponse;
-                                    Transport: TIdSipTransport);
+                                            Sender: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;
 
 procedure TrnidSpikeRegister.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                               CurrentBindings: TIdSipContacts);
+                                       CurrentBindings: TIdSipContacts);
 begin
   Self.Log.Lines.Add('---- Registration action succeeded ----');
   RegisterAgent.RemoveListener(Self);

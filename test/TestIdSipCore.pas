@@ -228,9 +228,9 @@ type
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
   protected
     function CreateAction: TIdSipAction; override;
   public
@@ -445,16 +445,6 @@ type
     procedure TestUsername;
   end;
 
-  TestRegistrationMethod = class(TTestCase)
-  private
-    Bindings: TIdSipContacts;
-    Reg:      TIdSipOutboundRegistration;
-    UA:       TIdSipUserAgentCore;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  end;
-
   TestBugHunt = class(TThreadingTestCase,
                       IIdSipUserAgentListener)
   private
@@ -481,10 +471,17 @@ type
     procedure TestXlitesAckNonBug;
   end;
 
-  TestTIdSipOptionsListenerFailureMethod = class(TTestCase)
+  TOptionsMethodTestCase = class(TTestCase)
+  private
+    UA: TIdSipUserAgentCore;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipOptionsListenerFailureMethod = class(TOptionsMethodTestCase)
   private
     Method: TIdSipOptionsListenerFailureMethod;
-    UA:     TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -492,20 +489,29 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipOptionsListenerSuccessMethod = class(TTestCase)
+  TestTIdSipOptionsListenerSuccessMethod = class(TOptionsMethodTestCase)
   private
     Method: TIdSipOptionsListenerSuccessMethod;
-    UA:     TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestRun;
+  end;
+
+  TestRegistrationMethod = class(TTestCase)
+  protected
+    Bindings: TIdSipContacts;
+    Reg:      TIdSipOutboundRegistration;
+    UA:       TIdSipUserAgentCore;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TestTIdSipRegistrationListenerFailedMethod = class(TestRegistrationMethod)
   private
-    Method:   TIdSipRegistrationListenerFailedMethod;
+    Method: TIdSipRegistrationListenerFailedMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -515,7 +521,7 @@ type
 
   TestTIdSipRegistrationListenerSucceededMethod = class(TestRegistrationMethod)
   private
-    Method:   TIdSipRegistrationListenerSucceededMethod;
+    Method: TIdSipRegistrationListenerSucceededMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -2792,12 +2798,12 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                       Receiver: TIdSipTransport);
+                                                              Receiver: TIdSipTransport);
 begin
 end;
 
 procedure TestTIdSipInboundSession.OnEndedSession(Session: TIdSipSession;
-                                           const Reason: String);
+                                                  const Reason: String);
 begin
   Self.OnEndedSessionFired := true;
   Self.ActionFailed := true;
@@ -2816,24 +2822,24 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnModifiedSession(Session: TIdSipSession;
-                                              Invite: TIdSipRequest);
+                                                     Invite: TIdSipRequest);
 begin
   Self.OnModifiedSessionFired := true;
 end;
 
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
-                                      Binding: TIdSocketHandle);
+                                             Binding: TIdSocketHandle);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipInboundSession.OnSendRequest(Request: TIdSipRequest;
-                                          Transport: TIdSipTransport);
+                                                 Sender: TIdSipTransport);
 begin
 end;
 
 procedure TestTIdSipInboundSession.OnSendResponse(Response: TIdSipResponse;
-                                           Transport: TIdSipTransport);
+                                                  Sender: TIdSipTransport);
 begin
   if (Response.StatusCode = SIPRequestTerminated) then
     Self.SentRequestTerminated := true;
@@ -4848,39 +4854,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestRegistrationMethod                                                     *
-//******************************************************************************
-//* TestRegistrationMethod Public methods **************************************
-
-procedure TestRegistrationMethod.SetUp;
-var
-  Registrar: TIdSipUri;
-begin
-  inherited SetUp;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Registrar := TIdSipUri.Create;
-  try
-    Reg := Self.UA.RegisterWith(Registrar);
-  finally
-    Registrar.Free;
-  end;
-
-  Self.Bindings := TIdSipContacts.Create;
-end;
-
-procedure TestRegistrationMethod.TearDown;
-begin
-  Self.Bindings.Free;
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
-
-  inherited TearDown;
-end;
-
-//******************************************************************************
 //* TestBugHunt                                                                *
 //******************************************************************************
 //* TestBugHunt Public methods *************************************************
@@ -5070,6 +5043,27 @@ begin
 end;
 
 //******************************************************************************
+//* TOptionsMethodTestCase                                                     *
+//******************************************************************************
+//* TOptionsMethodTestCase Public methods **************************************
+
+procedure TOptionsMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+end;
+
+procedure TOptionsMethodTestCase.TearDown;
+begin
+  Self.UA.Dispatcher.Free;
+  Self.UA.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipOptionsListenerFailureMethod                                     *
 //******************************************************************************
 //* TestTIdSipOptionsListenerFailureMethod Public methods **********************
@@ -5079,9 +5073,6 @@ var
   Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
   Self.Method := TIdSipOptionsListenerFailureMethod.Create;
 
@@ -5095,9 +5086,8 @@ end;
 
 procedure TestTIdSipOptionsListenerFailureMethod.TearDown;
 begin
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
   Self.Method.Free;
+
   inherited TearDown;
 end;
 
@@ -5112,6 +5102,13 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.Failure, 'Listener not notified');
+    Check(Self.Method.Options = Listener.OptionsAgentParam,
+          'OptionsAgent param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          'Response param');
+    CheckEquals(Self.Method.Reason,
+                Listener.ReasonParam,
+                'Reason param');
   finally
     Listener.Free;
   end;
@@ -5128,9 +5125,6 @@ var
 begin
   inherited SetUp;
 
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
   Self.Method := TIdSipOptionsListenerSuccessMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
@@ -5143,9 +5137,8 @@ end;
 
 procedure TestTIdSipOptionsListenerSuccessMethod.TearDown;
 begin
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
   Self.Method.Free;
+
   inherited TearDown;
 end;
 
@@ -5160,9 +5153,46 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.Success, 'Listener not notified');
+    Check(Self.Method.Options = Listener.OptionsAgentParam,
+          'OptionsAgent param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          'Response param');
   finally
     Listener.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestRegistrationMethod                                                     *
+//******************************************************************************
+//* TestRegistrationMethod Public methods **************************************
+
+procedure TestRegistrationMethod.SetUp;
+var
+  Registrar: TIdSipUri;
+begin
+  inherited SetUp;
+
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Registrar := TIdSipUri.Create;
+  try
+    Reg := Self.UA.RegisterWith(Registrar);
+  finally
+    Registrar.Free;
+  end;
+
+  Self.Bindings := TIdSipContacts.Create;
+end;
+
+procedure TestRegistrationMethod.TearDown;
+begin
+  Self.Bindings.Free;
+  Self.UA.Dispatcher.Free;
+  Self.UA.Free;
+
+  inherited TearDown;
 end;
 
 //******************************************************************************
@@ -5198,6 +5228,12 @@ begin
     Self.Method.Run(L);
 
     Check(L.Failure, 'Listener not notified');
+    Check(Self.Method.CurrentBindings = L.CurrentBindingsParam,
+          'CurrentBindings param');
+    Check(Self.Method.Registration = L.RegisterAgentParam,
+          'RegisterAgent param');
+    CheckEquals(Self.Method.Reason, L.ReasonParam,
+          'Reason param');
   finally
     L.Free;
   end;
@@ -5235,6 +5271,10 @@ begin
     Self.Method.Run(L);
 
     Check(L.Success, 'Listener not notified');
+    Check(Self.Method.CurrentBindings = L.CurrentBindingsParam,
+          'CurrentBindings param');
+    Check(Self.Method.Registration = L.RegisterAgentParam,
+          'RegisterAgent param');
   finally
     L.Free;
   end;
@@ -5277,6 +5317,10 @@ begin
     Self.Method.Run(L);
 
     Check(L.DroppedUnmatchedResponse, 'Listener not notified');
+    Check(Self.Method.Receiver = L.ReceiverParam,
+          'Receiver param');
+    Check(Self.Method.Response = L.ResponseParam,
+          'Response param');
   finally
     L.Free;
   end;
@@ -5322,6 +5366,8 @@ begin
     Self.Method.Run(L);
 
     Check(L.InboundCall, 'Listener not notified');
+    Check(Self.Method.Session = L.SessionParam,
+          'Session param');
   finally
     L.Free;
   end;

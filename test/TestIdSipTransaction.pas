@@ -47,10 +47,10 @@ type
                                 Invite: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnTerminated(Transaction: TIdSipTransaction);
   public
     procedure SetUp; override;
@@ -153,10 +153,10 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure Proceeding(Sender: TObject;
                          R: TIdSipResponse);
@@ -521,13 +521,13 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                            Transaction: TIdSipTransaction;
-                                                           Transport: TIdSipTransport);
+                                                           Receiver: TIdSipTransport);
 begin
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                             Transaction: TIdSipTransaction;
-                                                            Transport: TIdSipTransport);
+                                                            Receiver: TIdSipTransport);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnReceiveResponseFired := true;
@@ -1740,7 +1740,7 @@ end;
 
 procedure TTestTransaction.OnReceiveRequest(Request: TIdSipRequest;
                                             Transaction: TIdSipTransaction;
-                                            Transport: TIdSipTransport);
+                                            Receiver: TIdSipTransport);
 begin
   if Assigned(Self.CheckReceiveRequest) then
     Self.CheckReceiveRequest(Self, Request);
@@ -1748,7 +1748,7 @@ end;
 
 procedure TTestTransaction.OnReceiveResponse(Response: TIdSipResponse;
                                              Transaction: TIdSipTransaction;
-                                             Transport: TIdSipTransport);
+                                             Receiver: TIdSipTransport);
 begin
   if Assigned(Self.CheckReceiveResponse) then
     Self.CheckReceiveResponse(Self, Response);

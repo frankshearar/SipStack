@@ -40,15 +40,15 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Transport: TIdSipTransport);
+                               Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transport: TIdSipTransport);
+                                Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
-                            Transport: TIdSipTransport);
+                            Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
-                             Transport: TIdSipTransport);
+                             Sender: TIdSipTransport);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -175,19 +175,19 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnReceiveRequest(Request: TIdSipRequest;
-                                      Transport: TIdSipTransport);
+                                               Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegistrar.OnReceiveResponse(Response: TIdSipResponse;
-                                       Transport: TIdSipTransport);
+                                                Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;
 
 procedure TrnidSpikeRegistrar.OnRejectedMessage(const Msg: String;
-                                       const Reason: String);
+                                                const Reason: String);
 begin
   Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
   Self.Log.Lines.Add(Msg);
@@ -195,13 +195,13 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnSendRequest(Request: TIdSipRequest;
-                                   Transport: TIdSipTransport);
+                                            Sender: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
 procedure TrnidSpikeRegistrar.OnSendResponse(Response: TIdSipResponse;
-                                    Transport: TIdSipTransport);
+                                             Sender: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;
