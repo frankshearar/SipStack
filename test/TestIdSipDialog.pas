@@ -598,9 +598,9 @@ procedure TestTIdSipUACDialog.TestRecordRouteHeaders;
 var
   D: TIdSipUACDialog;
 begin
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
 
   D := TIdSipUACDialog.Create(Self.Req, false);
   try
@@ -680,7 +680,7 @@ end;
 
 procedure TestTIdSipUASDialog.TestRemoteTarget;
 begin
-  CheckEquals((Self.Req.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI,
+  CheckEquals((Self.Req.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.GetFullURI,
               Self.Dlg.RemoteTarget.GetFullURI,
               'Remote target');
 end;
@@ -689,9 +689,9 @@ procedure TestTIdSipUASDialog.TestRecordRouteHeaders;
 var
   D: TIdSipUASDialog;
 begin
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
-  Self.Req.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
+  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
 
   D := TIdSipUASDialog.Create(Self.Req, false);
   try

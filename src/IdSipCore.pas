@@ -3,40 +3,44 @@ unit IdSipCore;
 interface
 
 uses
-  IdSipDialog, IdSipHeaders, IdSipMessage, IdSipSession, IdSipTransaction, IdUri;
+  Classes, Contnrs, IdSipDialog, IdSipHeaders, IdSipMessage, IdSipTransaction,
+  IdUri;
 
 type
-  TIdSipSessionEvent = procedure(const Self: TObject; const Session: TIdSipSession);
-
   TIdSipAbstractCore = class(TObject)
   private
     fDispatcher:   TIdSipTransactionDispatcher;
-    fOnNewSession: TIdSipSessionEvent;
+    fHostName:     String;
+    fSessions:     TObjectList;
 
-    procedure DoOnUnhandledRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure DoOnUnhandledResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure DoOnReceiveRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure SetDispatcher(const Value: TIdSipTransactionDispatcher);
   protected
-    procedure DoOnNewSession(const Session: TIdSipSession);
+    procedure DoOnNewDialog(Sender: TObject; const Dialog: TIdSipDialog);
+
+    property Sessions: TObjectList read fSessions;
   public
     constructor Create; virtual;
 
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; virtual; abstract;
     function  CreateResponse(const Request:      TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
-    procedure HandleUnmatchedRequest(const Request: TIdSipRequest); virtual; abstract;
-    procedure HandleUnmatchedResponse(const Response: TIdSipResponse); virtual; abstract;
+    procedure HandleRequest(const Request: TIdSipRequest); virtual; abstract;
+    procedure HandleResponse(const Response: TIdSipResponse); virtual; abstract;
     function  NextCallID: String;
+    function  SessionCount: Cardinal;
 
-    property Dispatcher:   TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property OnNewSession: TIdSipSessionEvent          read fOnNewSession write fOnNewSession;
+    property Dispatcher:    TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property HostName:      String                      read fHostName write fHostName;
   end;
 
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
-    fContact:    TIdSipContactHeader;
-    fFrom:       TIdSipFromHeader;
-    fLastBranch: Cardinal;
+    fContact:       TIdSipContactHeader;
+    fFrom:          TIdSipFromHeader;
+    fLastBranch:    Cardinal;
+    fUserAgentName: String;
 
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -55,30 +59,46 @@ type
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
     function  CreateResponse(const Request:      TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure HandleUnmatchedRequest(const Request: TIdSipRequest); override;
-    procedure HandleUnmatchedResponse(const Response: TIdSipResponse); override;
+    procedure HandleRequest(const Request: TIdSipRequest); override;
+    procedure HandleResponse(const Response: TIdSipResponse); override;
     function  NextBranch: String;
     function  NextTag: String;
 
-    property Contact: TIdSipContactHeader read GetContact write SetContact;
-    property From:    TIdSipFromHeader    read GetFrom write SetFrom;
+    property Contact:       TIdSipContactHeader read GetContact write SetContact;
+    property From:          TIdSipFromHeader    read GetFrom write SetFrom;
+    property UserAgentName: String              read fUserAgentName write fUserAgentName;
   end;
 
   TIdSipMockCore = class(TIdSipAbstractCore)
   private
-    fHandleUnmatchedRequestCalled: Boolean;
-    fHandleUnmatchedResponseCalled: Boolean;
+    fHandleRequestCalled: Boolean;
+    fHandleResponseCalled: Boolean;
   public
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
     function  CreateResponse(const Request:      TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure HandleUnmatchedRequest(const Request: TIdSipRequest); override;
-    procedure HandleUnmatchedResponse(const Response: TIdSipResponse); override;
+    procedure HandleRequest(const Request: TIdSipRequest); override;
+    procedure HandleResponse(const Response: TIdSipResponse); override;
 
     procedure Reset;
 
-    property HandleUnmatchedRequestCalled:  Boolean read fHandleUnmatchedRequestCalled;
-    property HandleUnmatchedResponseCalled: Boolean read fHandleUnmatchedResponseCalled;
+    property HandleRequestCalled:  Boolean read fHandleRequestCalled;
+    property HandleResponseCalled: Boolean read fHandleResponseCalled;
+  end;
+
+  TIdSipSession = class(TPersistent)
+  private
+    fDialogs: TIdSipDialogs;
+
+  public
+    constructor Create(const Dialog: TIdSipDialog);
+    destructor  Destroy; override;
+
+    procedure Cancel;
+    procedure Modify;
+    procedure Terminate;
+
+    property Dialogs: TIdSipDialogs read fDialogs;
   end;
 
 implementation
@@ -96,46 +116,40 @@ begin
 end;
 
 function TIdSipAbstractCore.NextCallID: String;
-var
-  HostName: String;
 begin
-  // TODO: it would be good to get the name of the machine. Maybe the proxy,
-  // seeing as this is a user agent.
+  Result := IntToHex(TIdSipRandomNumber.Next, 8) + '@' + Self.HostName;
+end;
 
-  // Warning: GStack may not be initialised - it's lazily created.
-  if Assigned(GStack) then
-    HostName := GStack.LocalAddress
-  else
-    HostName := 'localhost';
-
-  Result := IntToHex(TIdSipRandomNumber.Next, 8) + '@' + HostName;
+function TIdSipAbstractCore.SessionCount: Cardinal;
+begin
+  Result := Self.Sessions.Count;
 end;
 
 //* TIdSipAbstractCore Protected methods ***************************************
 
-procedure TIdSipAbstractCore.DoOnNewSession(const Session: TIdSipSession);
+procedure TIdSipAbstractCore.DoOnNewDialog(Sender: TObject; const Dialog: TIdSipDialog);
 begin
-  if Assigned(Self.OnNewSession) then
-    Self.OnNewSession(Self, Session);
+  Self.Sessions.Add(TIdSipSession.Create(Dialog));
 end;
 
 //* TIdSipAbstractCore Private methods *****************************************
 
-procedure TIdSipAbstractCore.DoOnUnhandledRequest(Sender: TObject; const Request: TIdSipRequest);
+procedure TIdSipAbstractCore.DoOnReceiveRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
-  Self.HandleUnmatchedRequest(Request);
+  Self.HandleRequest(Request);
 end;
 
-procedure TIdSipAbstractCore.DoOnUnhandledResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TIdSipAbstractCore.DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
-  Self.HandleUnmatchedResponse(Response);
+  Self.HandleResponse(Response);
 end;
 
 procedure TIdSipAbstractCore.SetDispatcher(const Value: TIdSipTransactionDispatcher);
 begin
   fDispatcher := Value;
-  fDispatcher.OnUnhandledRequest  := Self.DoOnUnhandledRequest;
-  fDispatcher.OnUnhandledResponse := Self.DoOnUnhandledResponse;
+  fDispatcher.OnNewDialog         := Self.DoOnNewDialog;
+  fDispatcher.OnUnhandledRequest  := Self.DoOnReceiveRequest;
+  fDispatcher.OnUnhandledResponse := Self.DoOnReceiveResponse;
 end;
 
 //******************************************************************************
@@ -148,10 +162,12 @@ begin
   inherited Create;
 
   Self.ResetLastBranch;
+  Self.fSessions := TObjectList.Create(true);
 end;
 
 destructor TIdSipUserAgentCore.Destroy;
 begin
+  Self.Sessions.Free;
   Self.Contact.Free;
   Self.From.Free;
 
@@ -185,14 +201,17 @@ begin
     if (Dest.Address.Protocol = SipsScheme) then
       Self.Contact.Address.Protocol := SipsScheme;
 
-    Result.Headers.Add(Self.Contact);
+    Result.AddHeader(Self.Contact);
     Result.CallID   := Self.NextCallID;
     Result.From     := Self.From;
     Result.From.Tag := Self.NextTag;
     Result.ToHeader := Dest;
 
-    Result.Headers.Add(ViaHeaderFull).Value := SipVersion + '/TCP localhost';
+    Result.AddHeader(ViaHeaderFull).Value := SipVersion + '/TCP localhost';
     Result.LastHop.Branch := Self.NextBranch;
+
+    if (Self.UserAgentName <> '') then
+      Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
   except
     Result.Free;
 
@@ -218,7 +237,7 @@ begin
 
     ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
     try
-      Result.Headers.Add(ReqRecordRoutes);
+      Result.AddHeaders(ReqRecordRoutes);
 
       if (ReqRecordRoutes.Count > 0) then begin
         FirstRR := ReqRecordRoutes.Items[0] as TIdSipRecordRouteHeader;
@@ -229,8 +248,11 @@ begin
       if (Copy(Request.RequestUri, 1, 5) = SipsScheme + ':') then
         Self.Contact.Address.Protocol := SipsScheme;
 
-      Result.Headers.Add(Self.Contact);
-      Result.Headers.Add(Self.From);
+      Result.AddHeader(Self.Contact);
+      Result.AddHeader(Self.From);
+
+      if (Self.UserAgentName <> '') then
+        Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
     finally
       ReqRecordRoutes.Free;
     end;
@@ -241,7 +263,7 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.HandleUnmatchedRequest(const Request: TIdSipRequest);
+procedure TIdSipUserAgentCore.HandleRequest(const Request: TIdSipRequest);
 begin
   // Section 8.2
   // inspect the method - 8.2.1
@@ -255,7 +277,7 @@ begin
   // Generating the response - 8.2.6
 end;
 
-procedure TIdSipUserAgentCore.HandleUnmatchedResponse(const Response: TIdSipResponse);
+procedure TIdSipUserAgentCore.HandleResponse(const Response: TIdSipResponse);
 begin
   // User Agents drop unmatched responses on the floor.
 
@@ -265,6 +287,12 @@ end;
 
 function TIdSipUserAgentCore.NextBranch: String;
 begin
+  // TODO
+  // This is a CRAP way to generate a branch.
+  // cf. RFC 3261 section 8.1.1.7
+  // While this (almost) satisfies the uniqueness constraint (the branch is
+  // unique for the lifetime of the instantiation of the UA), it just
+  // seems sensible to generate an unguessable branch.
   Result := BranchMagicCookie + IntToStr(Self.LastBranch);
 
   Self.IncLastBranch;
@@ -349,20 +377,52 @@ begin
   Result := nil;
 end;
 
-procedure TIdSipMockCore.HandleUnmatchedRequest(const Request: TIdSipRequest);
+procedure TIdSipMockCore.HandleRequest(const Request: TIdSipRequest);
 begin
-  fHandleUnmatchedRequestCalled := true;
+  fHandleRequestCalled := true;
 end;
 
-procedure TIdSipMockCore.HandleUnmatchedResponse(const Response: TIdSipResponse);
+procedure TIdSipMockCore.HandleResponse(const Response: TIdSipResponse);
 begin
-  fHandleUnmatchedResponseCalled := true;
+  fHandleResponseCalled := true;
 end;
 
 procedure TIdSipMockCore.Reset;
 begin
-  fHandleUnmatchedRequestCalled  := true;
-  fHandleUnmatchedResponseCalled := true;
+  fHandleRequestCalled  := true;
+  fHandleResponseCalled := true;
+end;
+
+//******************************************************************************
+//* TIdSipSession                                                              *
+//******************************************************************************
+//* TIdSipSession Public methods ***********************************************
+
+constructor TIdSipSession.Create(const Dialog: TIdSipDialog);
+begin
+  inherited Create;
+
+  Self.fDialogs := TIdSipDialogs.Create;
+  Self.Dialogs.Add(Dialog);
+end;
+
+destructor TIdSipSession.Destroy;
+begin
+  Self.Dialogs.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipSession.Cancel;
+begin
+end;
+
+procedure TIdSipSession.Modify;
+begin
+end;
+
+procedure TIdSipSession.Terminate;
+begin
 end;
 
 end.

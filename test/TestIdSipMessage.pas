@@ -12,6 +12,13 @@ type
   public
     procedure TearDown; override;
   published
+    procedure TestAddHeader;
+    procedure TestAddHeaderName;
+    procedure TestAddHeaders;
+    procedure TestClearHeaders;
+    procedure TestFirstHeader;
+    procedure TestHeaderAt;
+    procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestReadBody;
     procedure TestSetCallID;
@@ -81,11 +88,128 @@ end;
 
 //* TestTIdSipMessage Published methods ****************************************
 
+procedure TestTIdSipMessage.TestAddHeader;
+var
+  H: TIdSipHeader;
+begin
+  Self.Message.ClearHeaders;
+
+  H := TIdSipHeader.Create;
+  try
+    H.Name := UserAgentHeader;
+    H.Value := 'Dog''s breakfast v0.1';
+
+    Self.Message.AddHeader(H);
+
+    Check(Self.Message.HasHeader(UserAgentHeader), 'No header added');
+
+    CheckEquals(H.Name,
+                Self.Message.Headers.Items[0].Name,
+                'Name not copied');
+
+    CheckEquals(H.Value,
+                Self.Message.Headers.Items[0].Value,
+                'Value not copied');
+  finally
+    H.Free;
+  end;
+
+  CheckEquals(UserAgentHeader,
+              Self.Message.Headers.Items[0].Name,
+              'And we check that the header was copied & we''re not merely '
+            + 'storing a reference');
+end;
+
+procedure TestTIdSipMessage.TestAddHeaderName;
+begin
+  Self.Message.ClearHeaders;
+
+  CheckNotNull(Self.Message.AddHeader(UserAgentHeader), 'Nil returned');
+
+  Check(Self.Message.HasHeader(UserAgentHeader), 'No header added');
+end;
+
+procedure TestTIdSipMessage.TestAddHeaders;
+var
+  Headers: TIdSipHeaders;
+begin
+  Self.Message.ClearHeaders;
+
+  Headers := TIdSipHeaders.Create;
+  try
+    Headers.Add(UserAgentHeader).Value := '0';
+    Headers.Add(UserAgentHeader).Value := '1';
+    Headers.Add(UserAgentHeader).Value := '2';
+    Headers.Add(UserAgentHeader).Value := '3';
+
+    Self.Message.AddHeaders(Headers);
+    Self.Message.Headers.IsEqualTo(Headers);
+  finally
+    Headers.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestClearHeaders;
+begin
+  Self.Message.AddHeader(UserAgentHeader);
+  Self.Message.AddHeader(UserAgentHeader);
+  Self.Message.AddHeader(UserAgentHeader);
+  Self.Message.AddHeader(UserAgentHeader);
+
+  Self.Message.ClearHeaders;
+
+  CheckEquals(0, Self.Message.HeaderCount, 'Headers not cleared');
+end;
+
+procedure TestTIdSipMessage.TestFirstHeader;
+var
+  H: TIdSipHeader;
+begin
+  Self.Message.ClearHeaders;
+  H := Self.Message.AddHeader(UserAgentHeader);
+  Check(H = Self.Message.FirstHeader(UserAgentHeader),
+        'Wrong result returned for first User-Agent');
+
+  H := Self.Message.AddHeader(RouteHeader);
+  Check(H = Self.Message.FirstHeader(RouteHeader),
+        'Wrong result returned for first Route');
+
+  H := Self.Message.AddHeader(RouteHeader);
+  Check(H <> Self.Message.FirstHeader(RouteHeader),
+        'Wrong result returned for first Route of two');
+end;
+
+procedure TestTIdSipMessage.TestHeaderAt;
+var
+  S: TIdSipHeader;
+  I: TIdSipHeader;
+  P: TIdSipHeader;
+begin
+  Self.Message.ClearHeaders;
+
+  S := Self.Message.AddHeader(ServerHeader);
+  Self.Message.AddHeader(RouteHeader);
+  I := Self.Message.AddHeader(InReplyToHeader);
+  P := Self.Message.AddHeader(PriorityHeader);
+
+  Check(S = Self.Message.HeaderAt(0), 'Wrong header at index 0');
+  Check(I = Self.Message.HeaderAt(2), 'Wrong header at index 2');
+  Check(P = Self.Message.HeaderAt(3), 'Wrong header at index 3');
+end;
+
+procedure TestTIdSipMessage.TestHeaderCount;
+begin
+  Self.Message.ClearHeaders;
+  Self.Message.AddHeader(UserAgentHeader);
+
+  CheckEquals(1, Self.Message.HeaderCount, 'HeaderCount not correct');
+end;
+
 procedure TestTIdSipMessage.TestLastHop;
 begin
   CheckNull(Self.Message.LastHop, 'Unexpected return for empty path');
 
-  Self.Message.Headers.Add(ViaHeaderFull);
+  Self.Message.AddHeader(ViaHeaderFull);
   Check(Self.Message.LastHop = Self.Message.Path.LastHop, 'Unexpected return');
 end;
 
@@ -224,14 +348,13 @@ end;
 procedure TestTIdSipRequest.TestAssign;
 var
   R: TIdSipRequest;
-  I: Integer;
 begin
   R := TIdSipRequest.Create;
   try
     R.SIPVersion := 'SIP/1.5';
     R.Method := 'NewMethod';
     R.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     R.ContentLength := 5;
     R.Body := 'hello';
 
@@ -239,12 +362,9 @@ begin
     CheckEquals(R.SIPVersion,    Self.Request.SipVersion,    'SIP-Version');
     CheckEquals(R.Method,        Self.Request.Method,        'Method');
     CheckEquals(R.RequestUri,    Self.Request.RequestUri,    'Request-URI');
-    CheckEquals(R.Headers.Count, Self.Request.Headers.Count, 'Header count');
 
-    for I := 0 to R.Headers.Count - 1 do
-      CheckEquals(R.Headers.Items[0].Value,
-                  Self.Request.Headers.Items[0].Value,
-                  'Header ' + IntToStr(I));
+    Check(R.Headers.IsEqualTo(Self.Request.Headers),
+          'Headers not assigned properly');
   finally
     R.Free;
   end;
@@ -278,19 +398,18 @@ begin
   Request.Method                       := 'INVITE';
   Request.RequestUri                   := 'sip:wintermute@tessier-ashpool.co.lu';
   Request.SIPVersion                   := SIPVersion;
-  Hop := Request.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Hop := Request.AddHeader(ViaHeaderFull) as TIdSipViaHeader;
   Hop.Value                            := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Request.MaxForwards                  := 70;
 
-  Request.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
-  Request.Headers.Add('From').Value         := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
-  Request.CallID                            := 'a84b4c76e66710@gw1.leo-ix.org';
-  Request.Headers.Add('CSeq').Value         := '314159 INVITE';
-  Request.Headers.Add('Contact').Value      := '<sip:wintermute@tessier-ashpool.co.lu>';
-  Request.Headers.Add('Content-Type').Value := 'text/plain';
-
-  Request.ContentLength                := 29;
-  Request.Body                         := 'I am a message. Hear me roar!';
+  Request.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
+  Request.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  Request.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
+  Request.AddHeader(CSeqHeader).Value            := '314159 INVITE';
+  Request.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
+  Request.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
+  Request.ContentLength                          := 29;
+  Request.Body                                   := 'I am a message. Hear me roar!';
 
   Expected := TStringList.Create;
   try
@@ -393,7 +512,7 @@ var
   H: TIdSipHeaders;
   P: TIdSipViaPath;
 begin
-  Self.Request.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Request.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
 
   H := TIdSipHeaders.Create;
   try
@@ -430,14 +549,13 @@ end;
 procedure TestTIdSipResponse.TestAssign;
 var
   R: TIdSipResponse;
-  I: Integer;
 begin
   R := TIdSipResponse.Create;
   try
     R.SIPVersion := 'SIP/1.5';
     R.StatusCode := 101;
     R.StatusText := 'Hehaeha I''ll get back to you';
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     R.ContentLength := 5;
     R.Body := 'hello';
 
@@ -445,12 +563,9 @@ begin
     CheckEquals(R.SIPVersion,    Self.Response.SipVersion,    'SIP-Version');
     CheckEquals(R.StatusCode,    Self.Response.StatusCode,    'Status-Code');
     CheckEquals(R.StatusText,    Self.Response.StatusText,    'Status-Text');
-    CheckEquals(R.Headers.Count, Self.Response.Headers.Count, 'Header count');
 
-    for I := 0 to R.Headers.Count - 1 do
-      CheckEquals(R.Headers.Items[0].Value,
-                  Self.Response.Headers.Items[0].Value,
-                  'Header ' + IntToStr(I));
+    Check(R.Headers.IsEqualTo(Self.Response.Headers),
+          'Headers not assigned properly');
   finally
     R.Free;
   end;
@@ -480,19 +595,19 @@ var
   Parser:   TIdSipParser;
   Str:      TStringStream;
 begin
-  Response.StatusCode                        := 486;
-  Response.StatusText                        := 'Busy Here';
-  Response.SIPVersion                        := SIPVersion;
-  Response.Headers.Add('Via').Value          := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Response.MaxForwards                       := 70;
-  Response.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
-  Response.Headers.Add('From').Value         := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
-  Response.CallID                            := 'a84b4c76e66710@gw1.leo-ix.org';
-  Response.Headers.Add('CSeq').Value         := '314159 INVITE';
-  Response.Headers.Add('Contact').Value      := '<sip:wintermute@tessier-ashpool.co.lu>';
-  Response.Headers.Add('Content-Type').Value := 'text/plain';
-  Response.ContentLength                     := 29;
-  Response.Body                              := 'I am a message. Hear me roar!';
+  Response.StatusCode                             := 486;
+  Response.StatusText                             := 'Busy Here';
+  Response.SIPVersion                             := SIPVersion;
+  Response.AddHeader(ViaHeaderFull).Value         := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Response.MaxForwards                            := 70;
+  Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
+  Response.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  Response.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
+  Response.AddHeader(CSeqHeader).Value            := '314159 INVITE';
+  Response.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
+  Response.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
+  Response.ContentLength                          := 29;
+  Response.Body                                   := 'I am a message. Hear me roar!';
 
   Expected := TStringList.Create;
   try

@@ -574,55 +574,55 @@ begin
     Self.P.ParseRequest(Request);
 
     CheckEquals('Accept: text/t140, text/plain;q=0.7;foo=bar, text/xml',
-                Self.Request.Headers[AcceptHeader].AsString,
+                Self.Request.FirstHeader(AcceptHeader).AsString,
                 'Accept');
     CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',
-                Self.Request.Headers[CallIdHeaderFull].AsString,
+                Self.Request.FirstHeader(CallIdHeaderFull).AsString,
                 'Call-ID');
     CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
-                Self.Request.Headers[ContactHeaderFull].AsString,
+                Self.Request.FirstHeader(ContactHeaderFull).AsString,
                 'Contact');
     CheckEquals('Content-Length: 29',
-                Self.Request.Headers[ContentLengthHeaderFull].AsString,
+                Self.Request.FirstHeader(ContentLengthHeaderFull).AsString,
                 'Content-Length');
     CheckEquals('Content-Type: text/plain',
-                Self.Request.Headers[ContentTypeHeaderFull].AsString,
+                Self.Request.FirstHeader(ContentTypeHeaderFull).AsString,
                 'Content-Type');
     CheckEquals('CSeq: 314159 INVITE',
-                Self.Request.Headers[CSeqHeader].AsString,
+                Self.Request.FirstHeader(CSeqHeader).AsString,
                 'CSeq');
     CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 GMT',
-                Self.Request.Headers[DateHeader].AsString,
+                Self.Request.FirstHeader(DateHeader).AsString,
                 'Date');
     CheckEquals('Error-Info: <http://www.error.com/info/bloop.wav>',
-                Self.Request.Headers[ErrorInfoHeader].AsString,
+                Self.Request.FirstHeader(ErrorInfoHeader).AsString,
                 'Error-Info');
     CheckEquals('Expires: 1000',
-                Self.Request.Headers[ExpiresHeader].AsString,
+                Self.Request.FirstHeader(ExpiresHeader).AsString,
                 'Expires');
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Self.Request.Headers[FromHeaderFull].AsString,
+                Self.Request.FirstHeader(FromHeaderFull).AsString,
                 'From');
     CheckEquals('Max-Forwards: 70',
-                Self.Request.Headers[MaxForwardsHeader].AsString,
+                Self.Request.FirstHeader(MaxForwardsHeader).AsString,
                 'Max-Forwards');
     CheckEquals('Record-Route: localhost <sip:127.0.0.1>;lr',
-                Self.Request.Headers[RecordRouteHeader].AsString,
+                Self.Request.FirstHeader(RecordRouteHeader).AsString,
                 'Record-Route');
     CheckEquals('Route: localhost <sip:127.0.0.1>;lr',
-                Self.Request.Headers[RouteHeader].AsString,
+                Self.Request.FirstHeader(RouteHeader).AsString,
                 'Route');
     CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
-                Self.Request.Headers[ToHeaderFull].AsString,
+                Self.Request.FirstHeader(ToHeaderFull).AsString,
                 'To');
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
-                Self.Request.Headers[ViaHeaderFull].AsString,
+                Self.Request.FirstHeader(ViaHeaderFull).AsString,
                 'Via');
     CheckEquals('Warning: 301 draugr "Not really interested"',
-                Self.Request.Headers[WarningHeader].AsString,
+                Self.Request.FirstHeader(WarningHeader).AsString,
                 'Warning');
     CheckEquals('X-Not-A-Header: I am not defined in RFC 3261',
-                Self.Request.Headers['X-Not-A-Header'].AsString,
+                Self.Request.FirstHeader('X-Not-A-Header').AsString,
                 'X-Not-A-Header');
   finally
     Str.Free;
@@ -749,7 +749,7 @@ begin
     Self.P.Source := Str;
     Self.P.ParseRequest(Request);
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Request.Headers['from'].AsString,
+                Request.FirstHeader(FromHeaderFull).AsString,
                 'From header');
   finally
     Str.Free;
@@ -1252,13 +1252,13 @@ begin
 
     Self.P.ParseRequest(Request);
 
-    N := Self.Request.Headers.Count - 1;
-    CheckEquals('<sip:127.0.0.1>',           Self.Request.Headers.Items[N - 3].Value, '1st Route');
-    CheckEquals('wsfrank <sip:192.168.0.1>', Self.Request.Headers.Items[N - 2].Value, '2nd Route');
-    CheckEquals('<sip:192.168.0.1>',         Self.Request.Headers.Items[N - 1].Value, '3rd Route');
+    N := Self.Request.HeaderCount - 1;
+    CheckEquals('<sip:127.0.0.1>',           Self.Request.HeaderAt(N - 3).Value, '1st Route');
+    CheckEquals('wsfrank <sip:192.168.0.1>', Self.Request.HeaderAt(N - 2).Value, '2nd Route');
+    CheckEquals('<sip:192.168.0.1>',         Self.Request.HeaderAt(N - 1).Value, '3rd Route');
 
     CheckEquals(';low',
-                Self.Request.Headers.Items[N - 2].ParamsAsString,
+                Self.Request.HeaderAt(N - 2).ParamsAsString,
                 '2nd Route''s params');
   finally
     Str.Free;
@@ -1315,12 +1315,11 @@ begin
     CheckEquals(200,       Response.StatusCode, 'StatusCode');
     CheckEquals('OK',      Response.StatusText, 'StatusTest');
 
-//    CheckEquals(2, Response.Headers.Count, 'Header count');
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Response.Headers['from'].AsString,
+                Response.FirstHeader(FromHeaderFull).AsString,
                 'From header');
     CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',
-                Response.Headers['to'].AsString,
+                Response.FirstHeader(ToHeaderFull).AsString,
                 'To header');
   finally
     Str.Free;
@@ -1418,45 +1417,44 @@ begin
     CheckEquals(3, Request.Path.Length, 'Path.Length');
 
     CheckEquals('To: sip:vivekg@chair.dnrc.bell-labs.com;tag=1918181833n',
-                Request.Headers.Items[0].AsString,
+                Request.HeaderAt(0).AsString,
                 'To header');
     CheckEquals('From: "J Rosenberg \\\"" <sip:jdrosen@lucent.com>;tag=98asjd8',
-                Request.Headers.Items[1].AsString,
+                Request.HeaderAt(1).AsString,
                 'From header');
     CheckEquals('Max-Forwards: 6',
-                Request.Headers.Items[2].AsString,
+                Request.HeaderAt(2).AsString,
                 'Max-Forwards header');
     CheckEquals('Call-ID: 0ha0isndaksdj@10.1.1.1',
-                Request.Headers.Items[3].AsString,
+                Request.HeaderAt(3).AsString,
                 'Call-ID header');
     CheckEquals('CSeq: 8 INVITE',
-                Request.Headers.Items[4].AsString,
+                Request.HeaderAt(4).AsString,
                 'CSeq header');
     CheckEquals('Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw',
-                Request.Headers.Items[5].AsString,
+                Request.HeaderAt(5).AsString,
                 'Via header #1');
     CheckEquals('Subject: ',
-                Request.Headers.Items[6].AsString,
+                Request.HeaderAt(6).AsString,
                 'Subject header');
     CheckEquals('NewFangledHeader: newfangled value more newfangled value',
-                Request.Headers.Items[7].AsString,
+                Request.HeaderAt(7).AsString,
                 'NewFangledHeader');
     CheckEquals('Content-Type: application/sdp',
-                Request.Headers.Items[8].AsString,
+                Request.HeaderAt(8).AsString,
                 'Content-Type');
     CheckEquals('Via: SIP/2.0/TCP 1192.168.156.222;branch=9ikj8',
-                Request.Headers.Items[9].AsString,
+                Request.HeaderAt(9).AsString,
                 'Via header #2');
     CheckEquals('Via: SIP/2.0/UDP 192.168.255.111;hidden',
-                Request.Headers.Items[10].AsString,
+                Request.HeaderAt(10).AsString,
                 'Via header #3');
     CheckEquals('Contact: "Quoted string \"\"" <sip:jdrosen@bell-labs.com>;newparam=newvalue;secondparam=secondvalue;q=0.33',
-                Request.Headers.Items[11].AsString,
+                Request.HeaderAt(11).AsString,
                 'Contact header #1');
     CheckEquals('Contact: tel:4443322',
-                Request.Headers.Items[12].AsString,
+                Request.HeaderAt(12).AsString,
                 'Contact header #2');
-//    CheckEquals(13, Request.Headers.Count, 'Header count');
   finally
     Str.Free;
   end;
@@ -1557,10 +1555,6 @@ begin
   CheckEquals(314159,                                 Msg.CSeq.SequenceNo,              'Msg.CSeq.SequenceNo');
   CheckEquals('INVITE',                               Msg.CSeq.Method,                  'Msg.CSeq.Method');
 
-  CheckEquals(TIdSipContactHeader.ClassName,
-              Msg.Headers[ContactHeaderFull].ClassName,
-              'Contact header type');
-
   CheckEquals(1,                  Msg.Path.Length,              'Path.Length');
   CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
   Check      (sttTCP =            Msg.LastHop.Transport,        'LastHop.Transport');
@@ -1569,21 +1563,21 @@ begin
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 
   CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
-              Msg.Headers[ToHeaderFull].AsString,
+              Msg.FirstHeader(ToHeaderFull).AsString,
               'To');
   CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-              Msg.Headers[FromHeaderFull].AsString,
+              Msg.FirstHeader(FromHeaderFull).AsString,
               'From');
   CheckEquals('CSeq: 314159 INVITE',
-              Msg.Headers[CSeqHeader].AsString,
+              Msg.FirstHeader(CSeqHeader).AsString,
               'CSeq');
   CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
-              Msg.Headers[ContactHeaderFull].AsString,
+              Msg.FirstHeader(ContactHeaderFull).AsString,
               'Contact');
   CheckEquals('Content-Type: text/plain',
-              Msg.Headers[ContentTypeHeaderFull].AsString,
+              Msg.FirstHeader(ContentTypeHeaderFull).AsString,
               'Content-Type');
-  CheckEquals(9, Msg.Headers.Count, 'Header count');
+  CheckEquals(9, Msg.HeaderCount, 'Header count');
 
   if CheckBody then
     CheckEquals('', Msg.Body, 'message-body');

@@ -13,8 +13,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestNextCallIDGStackInstantiated;
-    procedure TestNextCallIDNoGStack;
+    procedure TestNextCallID;
   end;
 
   TestTIdSipUserAgentCore = class(TTestCase)
@@ -33,12 +32,15 @@ type
     procedure TestCreateInvite;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
+    procedure TestCreateRequestUserAgent;
     procedure TestCreateResponse;
     procedure TestCreateResponseRecordRoute;
     procedure TestCreateResponseSipsRecordRoute;
     procedure TestCreateResponseSipsRequestUri;
-//    procedure TestHandleUnmatchedRequestUnknownMethod;
+    procedure TestCreateResponseUserAgent;
+//    procedure TestHandleRequestUnknownMethod;
     procedure TestNextTag;
+    procedure TestSessionEstablished;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -46,10 +48,21 @@ type
     procedure TestSetFromMailto;
   end;
 
+  TestTIdSipSession = class(TTestCase)
+  private
+    InitialRequest: TIdSipRequest;
+    Session:        TIdSipSession;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+
+  end;
+
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdHttp, IdSipConsts, IdStack, SysUtils,
+  Classes, IdException, IdGlobal, IdHttp, IdSipConsts, IdSipDialog, SysUtils,
   TestMessages;
 
 function Suite: ITestSuite;
@@ -57,6 +70,7 @@ begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
+  Result.AddTest(TestTIdSipSession.Suite);
 end;
 
 //******************************************************************************
@@ -85,43 +99,15 @@ end;
 
 //* TestTIdSipAbstractCore Published methods ***********************************
 
-procedure TestTIdSipAbstractCore.TestNextCallIDGStackInstantiated;
-var
-  CallID: String;
-  H:      TIdHttp;
-begin
-  H := TIdHttp.Create(nil);
-  try
-    try
-      H.Get('http://localhost/');
-    except
-      on EIdException do;
-    end;
-
-    CallID := Self.Core.NextCallID;
-
-    Fetch(CallID, '@');
-
-    CheckEquals(GStack.LocalAddress, CallID, 'Local machine name not used');
-  finally
-    H.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractCore.TestNextCallIDNoGStack;
+procedure TestTIdSipAbstractCore.TestNextCallID;
 var
   CallID: String;
 begin
   CallID := Self.Core.NextCallID;
 
-  CheckNotEquals('',     CallID,               'Null Call-ID');
-  CheckNotEquals(CallID, Self.Core.NextCallID, 'Repeated Call-ID');
-
   Fetch(CallID, '@');
-  CheckEquals('localhost',
-              CallID,
-              '''localhost'' not appended to Call-ID when GStack not '
-            + 'instantiated');
+
+  CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
 end;
 
 //******************************************************************************
@@ -139,6 +125,7 @@ begin
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
+  Self.Core.HostName := 'wsfrank';
 
   C := TIdSipContactHeader.Create;
   try
@@ -183,11 +170,11 @@ begin
 
   Check(Request.HasHeader(CallIDHeaderFull), 'No Call-ID header added');
   CheckNotEquals('',
-                 (Request.Headers[CallIDHeaderFull] as TIdSipCallIdHeader).Value,
+                 (Request.FirstHeader(CallIDHeaderFull) as TIdSipCallIdHeader).Value,
                  'Call-ID must not be empty');
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
-  Contact := Request.Headers[ContactHeaderFull] as TIdSipContactHeader;
+  Contact := Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
   Check(Contact.IsEqualTo(Self.Core.Contact), 'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
@@ -210,23 +197,26 @@ begin
   Check(Request.LastHop.HasBranch,
         'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
 
+  // optional headers
+  Check(not Request.HasHeader(UserAgentHeader),
+        'User-Agent header present when Core''s User-Agent name is blank');
 end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************
 
 procedure TestTIdSipUserAgentCore.TestCall;
 var
-  Destination:          TIdSipToHeader;
-  OriginalRequestCount: Integer;
+  Destination:              TIdSipToHeader;
+  OriginalSentRequestCount: Integer;
 begin
-  OriginalRequestCount := Self.Dispatch.Transport.SentRequestCount;
+  OriginalSentRequestCount := Self.Dispatch.Transport.SentRequestCount;
 
   Destination := TIdSipToHeader.Create;
   try
     Destination.Value := 'sip:franks@localhost';
     Self.Core.Call(Destination);
 
-    CheckEquals(OriginalRequestCount + 1,
+    CheckEquals(OriginalSentRequestCount + 1,
                 Self.Dispatch.Transport.SentRequestCount,
                 'no INVITE sent');
   finally
@@ -289,10 +279,33 @@ begin
     Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.lu';
     Request := Self.Core.CreateRequest(Dest);
     try
-      Contact := Request.Headers[ContactHeaderFull] as TIdSipContactHeader;
+      Contact := Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
       CheckEquals(SipsScheme,
                   Contact.Address.Protocol,
                   'Contact doesn''t have a SIPS URI');
+    finally
+      Request.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateRequestUserAgent;
+var
+  Request: TIdSipRequest;
+  Dest:    TIdSipToHeader;
+begin
+  Self.Core.UserAgentName := 'SATAN/1.0';
+
+  Dest := TIdSipToHeader.Create;
+  try
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    Request := Self.Core.CreateRequest(Dest);
+    try
+      CheckEquals(Self.Core.UserAgentName,
+                  Request.FirstHeader(UserAgentHeader).Value,
+                  'User-Agent header not set');
     finally
       Request.Free;
     end;
@@ -314,6 +327,9 @@ begin
     Check(Response.Path.IsEqualTo(Request.Path),         'Via headers mismatch');
 
     Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
+
+    Check(not Response.HasHeader(UserAgentHeader),
+          'User-Agent header present when Core''s User-Agent name is blank');
   finally
     Response.Free;
   end;
@@ -325,9 +341,9 @@ var
   Response:             TIdSipResponse;
   ResponseRecordRoutes: TIdSipHeadersFilter;
 begin
-  Self.Request.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
-  Self.Request.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
-  Self.Request.Headers.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
 
   RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
   try
@@ -353,11 +369,11 @@ var
   Contact:  TIdSipContactHeader;
   Response: TIdSipResponse;
 begin
-  Self.Request.Headers.Add(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
 
   Response := Self.Core.CreateResponse(Self.Request, SIPOK);
   try
-    Contact := Response.Headers[ContactHeaderFull] as TIdSipContactHeader;
+    Contact := Response.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
     CheckEquals(SipsScheme, Contact.Address.Protocol,
                 'Must use a SIPS URI in the Contact');
   finally
@@ -374,15 +390,32 @@ begin
 
   Response := Self.Core.CreateResponse(Self.Request, SIPOK);
   try
-    Contact := Response.Headers[ContactHeaderFull] as TIdSipContactHeader;
+    Contact := Response.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
     CheckEquals(SipsScheme, Contact.Address.Protocol,
                 'Must use a SIPS URI in the Contact');
   finally
     Response.Free;
   end;
 end;
+
+procedure TestTIdSipUserAgentCore.TestCreateResponseUserAgent;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Core.UserAgentName := 'SATAN/1.0';
+  Self.Request.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+
+  Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+  try
+    CheckEquals(Self.Core.UserAgentName,
+                Response.FirstHeader(UserAgentHeader).Value,
+                'User-Agent header not set');
+  finally
+    Response.Free;
+  end;
+end;
 {
-procedure TestTIdSipUserAgentCore.TestHandleUnmatchedRequestUnknownMethod;
+procedure TestTIdSipUserAgentCore.TestHandleRequestUnknownMethod;
 begin
   Fail('not implemented yet');
 end;
@@ -410,6 +443,45 @@ begin
       CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
     end;
   finally
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestSessionEstablished;
+var
+  Destination:      TIdSipToHeader;
+  OrigSessionCount: Cardinal;
+  Dialog:           TIdSipDialog;
+  ID:               TIdSipDialogID;
+  RouteSet:         TIdSipHeadersFilter;
+begin
+  OrigSessionCount := Self.Core.SessionCount;
+
+  Destination := TIdSipToHeader.Create;
+  try
+    Destination.Value := 'sip:franks@localhost';
+
+    ID := TIdSipDialogID.Create(Self.Request.ToHeader.Tag, Self.Request.From.Tag, Self.Request.CallID);
+    try
+      RouteSet := TIdSipHeadersFilter.Create(Self.Request.Headers, RouteHeader);
+      try
+        Dialog := TIdSipDialog.Create(ID, 0, 0, '', '', '', false, RouteSet);
+        try
+          Self.Dispatch.FireOnNewDialog(Dialog);
+
+          CheckEquals(OrigSessionCount + 1,
+              Self.Core.SessionCount,
+              'No session established');
+        finally
+          Dialog.Free;
+        end;
+      finally
+        RouteSet.Free;
+      end;
+    finally
+      ID.Free;
+    end;
+  finally
+    Destination.Free;
   end;
 end;
 
@@ -497,6 +569,48 @@ begin
     F.Free;
   end;
 end;
+
+//******************************************************************************
+//* TestTIdSipSession                                                          *
+//******************************************************************************
+//* TestTIdSipSession Public methods *******************************************
+
+procedure TestTIdSipSession.SetUp;
+var
+  D:        TIdSipDialog;
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipHeaders;
+begin
+  inherited SetUp;
+
+  ID := TIdSipDialogID.Create('', '', '');
+  try
+    RouteSet := TIdSipHeaders.Create;
+    try
+      D := TIdSipDialog.Create(ID, 1, 1, '', '', '', false, RouteSet);
+      try
+        Self.Session := TIdSipSession.Create(D);
+      finally
+        D.Free;
+      end;
+    finally
+      RouteSet.Free;
+    end;
+  finally
+    ID.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TearDown;
+begin
+  Self.Session.Free;
+  Self.InitialRequest.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipSession Private methods ******************************************
+//* TestTIdSipSession Published methods ****************************************
 
 initialization
   RegisterTest('Transaction User Cores', Suite);

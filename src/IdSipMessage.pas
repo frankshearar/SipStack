@@ -45,8 +45,15 @@ type
     destructor  Destroy; override;
 
     procedure Accept(const Visitor: IIdSipMessageVisitor); virtual;
+    function  AddHeader(const HeaderName: String): TIdSipHeader; overload;
+    procedure AddHeader(const Header: TIdSipHeader); overload;
+    procedure AddHeaders(const Headers: TIdSipHeaderList);
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
+    procedure ClearHeaders;
+    function  FirstHeader(const HeaderName: String): TIdSipHeader;
+    function  HeaderAt(const Index: Cardinal): TIdSipHeader;
+    function  HeaderCount: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
@@ -303,6 +310,21 @@ procedure TIdSipMessage.Accept(const Visitor: IIdSipMessageVisitor);
 begin
 end;
 
+function TIdSipMessage.AddHeader(const HeaderName: String): TIdSipHeader;
+begin
+  Result := Self.Headers.Add(HeaderName)
+end;
+
+procedure TIdSipMessage.AddHeader(const Header: TIdSipHeader);
+begin
+  Self.Headers.Add(Header);
+end;
+
+procedure TIdSipMessage.AddHeaders(const Headers: TIdSipHeaderList);
+begin
+  Self.Headers.Add(Headers);
+end;
+
 procedure TIdSipMessage.Assign(Src: TPersistent);
 var
   S: TIdSipMessage;
@@ -312,8 +334,8 @@ begin
 
     Self.SIPVersion := S.SIPVersion;
 
-    Self.Headers.Clear;
-    Self.Headers.Add(S.Headers);
+    Self.ClearHeaders;
+    Self.AddHeaders(S.Headers);
   end
   else
     inherited Assign(Src);
@@ -327,6 +349,26 @@ begin
 
   Result := Result + EOL;
   Result := Result + Self.Body;
+end;
+
+procedure TIdSipMessage.ClearHeaders;
+begin
+  Self.Headers.Clear;
+end;
+
+function TIdSipMessage.FirstHeader(const HeaderName: String): TIdSipHeader;
+begin
+  Result := Self.Headers[HeaderName];
+end;
+
+function TIdSipMessage.HeaderAt(const Index: Cardinal): TIdSipHeader;
+begin
+  Result := Self.Headers.Items[Index];
+end;
+
+function TIdSipMessage.HeaderCount: Integer;
+begin
+  Result := Self.Headers.Count;
 end;
 
 function TIdSipMessage.HasHeader(const HeaderName: String): Boolean;
@@ -351,55 +393,55 @@ end;
 
 function TIdSipMessage.GetCallID: String;
 begin
-  Result := Self.Headers[CallIDHeaderFull].Value;
+  Result := Self.FirstHeader(CallIDHeaderFull).Value;
 end;
 
 function TIdSipMessage.GetContentLength: Cardinal;
 begin
-  Result := StrToInt(Self.Headers[ContentLengthHeaderFull].Value);
+  Result := StrToInt(Self.FirstHeader(ContentLengthHeaderFull).Value);
 end;
 
 function TIdSipMessage.GetContentType: String;
 begin
-  Result := Self.Headers[ContentTypeHeaderFull].Value;
+  Result := Self.FirstHeader(ContentTypeHeaderFull).Value;
 end;
 
 function TIdSipMessage.GetCSeq: TIdSipCSeqHeader;
 begin
-  Result := Self.Headers[CSeqHeader] as TIdSipCSeqHeader;
+  Result := Self.FirstHeader(CSeqHeader) as TIdSipCSeqHeader;
 end;
 
 function TIdSipMessage.GetFrom: TIdSipFromHeader;
 begin
-  Result := Self.Headers[FromHeaderFull] as TIdSipFromHeader;
+  Result := Self.FirstHeader(FromHeaderFull) as TIdSipFromHeader;
 end;
 
 function TIdSipMessage.GetMaxForwards: Byte;
 begin
-  if (Self.Headers[MaxForwardsHeader].Value = '') then
+  if (Self.FirstHeader(MaxForwardsHeader).Value = '') then
     Self.MaxForwards := DefaultMaxForwards;
 
-  Result := StrToInt(Self.Headers[MaxForwardsHeader].Value);
+  Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
 function TIdSipMessage.GetTo: TIdSipToHeader;
 begin
-  Result := Self.Headers[ToHeaderFull] as TIdSipToHeader;
+  Result := Self.FirstHeader(ToHeaderFull) as TIdSipToHeader;
 end;
 
 procedure TIdSipMessage.SetCallID(const Value: String);
 begin
-  Self.Headers[CallIDHeaderFull].Value := Value;
+  Self.FirstHeader(CallIDHeaderFull).Value := Value;
 end;
 
 procedure TIdSipMessage.SetContentLength(const Value: Cardinal);
 begin
-  Self.Headers[ContentLengthHeaderFull].Value := IntToStr(Value);
+  Self.FirstHeader(ContentLengthHeaderFull).Value := IntToStr(Value);
 end;
 
 procedure TIdSipMessage.SetContentType(const Value: String);
 begin
-  Self.Headers[ContentTypeHeaderFull].Value := Value;
+  Self.FirstHeader(ContentTypeHeaderFull).Value := Value;
 end;
 
 procedure TIdSipMessage.SetCSeq(const Value: TIdSipCSeqHeader);
@@ -409,12 +451,12 @@ end;
 
 procedure TIdSipMessage.SetFrom(const Value: TIdSipFromHeader);
 begin
-  Self.Headers[FromHeaderFull].Assign(Value);
+  Self.FirstHeader(FromHeaderFull).Assign(Value);
 end;
 
 procedure TIdSipMessage.SetMaxForwards(const Value: Byte);
 begin
-  Self.Headers[MaxForwardsHeader].Value := IntToStr(Value);
+  Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
 
 procedure TIdSipMessage.SetPath(const Value: TIdSipViaPath);
@@ -429,7 +471,7 @@ end;
 
 procedure TIdSipMessage.SetTo(const Value: TIdSipToHeader);
 begin
-  Self.Headers[ToHeaderFull].Assign(Value);
+  Self.FirstHeader(ToHeaderFull).Assign(Value);
 end;
 
 //*******************************************************************************
@@ -901,7 +943,7 @@ begin
   Name := Trim(Fetch(S, ':'));
   Name := TIdSipHeaders.CanonicaliseName(Name);
 
-  Msg.Headers.Add(Name).Value := Trim(S);
+  Msg.AddHeader(Name).Value := Trim(S);
 end;
 
 procedure TIdSipParser.CheckContentLengthContentType(const Msg: TIdSipMessage);
@@ -947,7 +989,7 @@ end;
 
 procedure TIdSipParser.InitialiseMessage(Msg: TIdSipMessage);
 begin
-  Msg.Headers.Clear;
+  Msg.ClearHeaders;
   Msg.SipVersion := '';
 end;
 
@@ -955,7 +997,7 @@ end;
 procedure TIdSipParser.ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
 begin
   while (Parms <> '') do
-    Msg.Headers.Add(Header).Value := Fetch(Parms, ',');
+    Msg.AddHeader(Header).Value := Fetch(Parms, ',');
 end;
 
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);

@@ -94,6 +94,8 @@ type
     property RouteSet:         TIdSipHeaders  read fRouteSet;
   end;
 
+  TIdSipDialogEvent = procedure(Sender: TObject; const Dialog: TIdSipDialog) of object;
+
   TIdSipNullDialog = class(TIdSipDialog)
   public
     function IsNull: Boolean; override;
@@ -270,18 +272,21 @@ begin
       if FirstRoute.IsLooseRoutable then begin
         Result.RequestUri := Self.RemoteTarget.GetFullURI;
 
-        Result.Headers.Add(Self.RouteSet);
+        Result.AddHeaders(Self.RouteSet);
       end
       else begin
         Result.RequestUri := FirstRoute.Address.GetFullUri;
 
         // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
         // remember?
+        // No, we can't just Assign() here because (a) we're not adding ALL
+        // the headers, and (b) we're adding Route headers, and RouteSet
+        // contains Record-Route headers.
         for I := 1 to Self.RouteSet.Count - 1 do begin
-          Result.Headers.Add(RouteHeader).Assign(Self.RouteSet.Items[I]);
+          Result.AddHeader(RouteHeader).Assign(Self.RouteSet.Items[I]);
         end;
 
-        Result.Headers.Add(RouteHeader).Value := '<' + Self.RemoteURI.GetFullURI + '>';
+        Result.AddHeader(RouteHeader).Value := '<' + Self.RemoteURI.GetFullURI + '>';
       end;
     end;
   except
@@ -297,7 +302,7 @@ end;
 procedure TIdSipDialog.HandleMessage(const Response: TIdSipResponse);
 begin
   if (Self.RemoteTarget.GetFullUri = '') then
-    Self.RemoteTarget.URI := (Response.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullUri;
+    Self.RemoteTarget.URI := (Response.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.GetFullUri;
 
   if (Self.RemoteSequenceNo = 0) then
     Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
@@ -446,7 +451,7 @@ begin
 
   Self.RemoteSequenceNo := Request.CSeq.SequenceNo;
 
-  Self.fRemoteTarget := TIdURI.Create((Request.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI);
+  Self.fRemoteTarget := TIdURI.Create((Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.GetFullURI);
 
   fRemoteURI := TIdURI.Create(Request.From.Address.GetFullURI);
 
@@ -487,21 +492,19 @@ procedure TIdSipDialogs.Add(const NewDialog: TIdSipDialog);
 var
   D: TIdSipDialog;
 begin
-  D := TIdSipDialog.Create(NewDialog.ID,
-                           NewDialog.LocalSequenceNo,
-                           NewDialog.RemoteSequenceNo,
-                           NewDialog.LocalUri,
-                           NewDialog.RemoteUri,
-                           NewDialog.RemoteTarget,
-                           NewDialog.IsSecure,
-                           NewDialog.RouteSet);
+  Self.Lock.Acquire;
   try
-    Self.List.Add(D);
-  except
-    Self.List.Remove(D);
-    D.Free;
+    D := TIdSipDialog.Create(NewDialog);
+    try
+      Self.List.Add(D);
+    except
+      Self.List.Remove(D);
+      D.Free;
 
-    raise;
+      raise;
+    end;
+  finally
+    Self.Lock.Release;
   end;
 end;
 

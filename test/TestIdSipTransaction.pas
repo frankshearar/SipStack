@@ -3,7 +3,8 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipCore, IdSipMessage, IdSipTransport, IdSipTransaction, TestFramework;
+  IdSipCore, IdSipMessage, IdSipDialog, IdSipTransport, IdSipTransaction,
+  TestFramework;
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase)
@@ -74,12 +75,17 @@ type
 
   TestTIdSipClientInviteTransaction = class(TTestTransaction)
   private
+    OnNewDialogFired: Boolean;
+
     procedure CheckACK(Sender: TObject; const R: TIdSipResponse);
     procedure MoveToCompletedState;
     procedure MoveToProceedingState;
+    procedure NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
     procedure OnFail(Sender: TObject; const Reason: String);
   protected
     function TransactionType: TIdSipTransactionClass; override;
+  public
+    procedure SetUp; override;
   published
     procedure Test100ResponseInCompletedState;
     procedure Test100ResponseInTerminatedState;
@@ -91,6 +97,7 @@ type
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
+    procedure TestOnNewDialogFired;
     procedure TestReceive1xxInCallingState;
     procedure TestReceive1xxInProceedingState;
     procedure TestReceive1xxNoResendingOfRequest;
@@ -110,6 +117,7 @@ type
     CheckReceive2xxFromTUInProceedingStateFired:                  Boolean;
     CheckReceiveNonTryingProvisionalFromTUInProceedingStateFired: Boolean;
     CheckSending100Fired:                                         Boolean;
+    OnNewDialogFired:                                             Boolean;
     Request:                                                      TIdSipRequest;
     TransactionConfirmed:                                         Boolean;
 
@@ -119,6 +127,7 @@ type
     procedure CheckSending100(Sender: TObject; const R: TIdSipResponse);
     procedure MoveToCompletedState;
     procedure MoveToConfirmedState;
+    procedure NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
     procedure OnFail(Sender: TObject; const Reason: String);
     procedure OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
     procedure ReceiveInvite;
@@ -130,6 +139,7 @@ type
   published
     procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
+    procedure TestOnNewDialogFired;
     procedure TestReceive2xxFromTUInProceedingState;
     procedure TestReceiveAckInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
@@ -273,7 +283,7 @@ begin
 
   Self.ReceivedResponse.StatusCode := SIPTrying;
 
-  Self.ReceivedResponse.Headers.Add(Self.ReceivedRequest.Headers);
+  Self.ReceivedResponse.AddHeaders(Self.ReceivedRequest.Headers);
 
   Self.Invite := TIdSipRequest.Create;
   Self.Invite.Assign(Self.ReceivedRequest);
@@ -406,14 +416,14 @@ end;
 procedure TestTIdSipTransactionDispatcher.TestHandUnmatchedRequestToCore;
 begin
   Self.MockTransport.FireOnRequest(Self.ReceivedRequest);
-  Check(Self.Core.HandleUnmatchedRequestCalled,
+  Check(Self.Core.HandleRequestCalled,
         'Unmatched request not handed to Core');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestHandUnmatchedResponseToCore;
 begin
   Self.MockTransport.FireOnResponse(Self.ReceivedResponse);
-  Check(Self.Core.HandleUnmatchedResponseCalled,
+  Check(Self.Core.HandleResponseCalled,
         'Unmatched Response not handed to Core');
 end;
 
@@ -422,16 +432,16 @@ begin
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Identical headers');
 
-  Self.ReceivedResponse.Headers.Add(ContentLanguageHeader).Value := 'es';
+  Self.ReceivedResponse.AddHeader(ContentLanguageHeader).Value := 'es';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Identical headers + irrelevant headers');
 
-  (Self.ReceivedResponse.Headers[FromHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  (Self.ReceivedResponse.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Different From tag');
-  Self.ReceivedResponse.Headers[FromHeaderFull].Value := Self.TranRequest.Headers[FromHeaderFull].Value;
+  Self.ReceivedResponse.FirstHeader(FromHeaderFull).Assign(Self.TranRequest.FirstHeader(FromHeaderFull));
 
-  (Self.ReceivedResponse.Headers[ToHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  (Self.ReceivedResponse.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Different To tag');
 end;
@@ -495,16 +505,16 @@ begin
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Identical headers');
 
-  Self.ReceivedResponse.Headers.Add(ContentLanguageHeader).Value := 'es';
+  Self.ReceivedResponse.AddHeader(ContentLanguageHeader).Value := 'es';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Identical headers + irrelevant headers');
 
-  (Self.ReceivedResponse.Headers[FromHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  (Self.ReceivedResponse.FirstHeader(FromHeaderFull) as TIdSipFromToHeader).Tag := '1';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Different From tag');
-  Self.ReceivedResponse.Headers[FromHeaderFull].Value := Self.TranRequest.Headers[FromHeaderFull].Value;
+  Self.ReceivedResponse.FirstHeader(FromHeaderFull).Assign(Self.TranRequest.FirstHeader(FromHeaderFull));
 
-  (Self.ReceivedResponse.Headers[ToHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  (Self.ReceivedResponse.FirstHeader(ToHeaderFull) as TIdSipFromToHeader).Tag := '1';
   Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Different To tag');
 
@@ -532,10 +542,10 @@ var
 begin
   R := TIdSipRequest.Create;
   try
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-    R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
 
     Check(Self.D.WillUseReliableTranport(R), 'TCP');
 
@@ -638,20 +648,20 @@ begin
 
   // this is just BasicRequest from TestIdSipParser
   Self.InitialRequest := TIdSipRequest.Create;
-  Self.InitialRequest.Method                           := MethodInvite;
-  Self.InitialRequest.MaxForwards                      := 70;
-  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.InitialRequest.From.DisplayName                 := 'Case';
-  Self.InitialRequest.From.Address.URI                 := 'sip:case@fried.neurons.org';
-  Self.InitialRequest.From.Tag                         := '1928301774';
-  Self.InitialRequest.CallID                           := 'a84b4c76e66710@gw1.leo-ix.org';
-  Self.InitialRequest.CSeq.Method                      := 'INVITE';
-  Self.InitialRequest.CSeq.SequenceNo                  := 314159;
-  Self.InitialRequest.Headers[ContactHeaderFull].Value := 'sip:wintermute@tessier-ashpool.co.lu';
-  Self.InitialRequest.ContentType                      := 'text/plain';
-  Self.InitialRequest.ContentLength                    := 29;
-  Self.InitialRequest.Body                             := 'I am a message. Hear me roar!';
+  Self.InitialRequest.Method                             := MethodInvite;
+  Self.InitialRequest.MaxForwards                        := 70;
+  Self.InitialRequest.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.From.DisplayName                   := 'Case';
+  Self.InitialRequest.From.Address.URI                   := 'sip:case@fried.neurons.org';
+  Self.InitialRequest.From.Tag                           := '1928301774';
+  Self.InitialRequest.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.InitialRequest.CSeq.Method                        := 'INVITE';
+  Self.InitialRequest.CSeq.SequenceNo                    := 314159;
+  Self.InitialRequest.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.InitialRequest.ContentType                        := 'text/plain';
+  Self.InitialRequest.ContentLength                      := 29;
+  Self.InitialRequest.Body                               := 'I am a message. Hear me roar!';
 
   Self.FailMsg               := '';
   Self.MockDispatcher        := TIdSipMockTransactionDispatcher.Create;
@@ -704,6 +714,15 @@ end;
 //******************************************************************************
 //* TestTIdSipClientInviteTransaction                                          *
 //******************************************************************************
+//* TestTIdSipClientInviteTransaction Public methods ***************************
+
+procedure TestTIdSipClientInviteTransaction.SetUp;
+begin
+  inherited SetUp;
+
+  Self.OnNewDialogFired := false;
+end;
+
 //* TestTIdSipClientInviteTransaction Private methods **************************
 
 procedure TestTIdSipClientInviteTransaction.CheckACK(Sender: TObject; const R: TIdSipResponse);
@@ -770,6 +789,11 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
+procedure TestTIdSipClientInviteTransaction.NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
+begin
+  Self.OnNewDialogFired := true;
+end;
+
 procedure TestTIdSipClientInviteTransaction.OnFail(Sender: TObject; const Reason: String);
 begin
   Self.FailMsg := Reason;
@@ -833,8 +857,8 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestACK;
 begin
-  Self.Response.Headers.Add(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
-  Self.Response.Headers.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
+  Self.Response.AddHeader(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
+  Self.Response.AddHeader(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
 
   Self.MoveToProceedingState;
   Self.Tran.OnReceiveResponse := Self.CheckACK;
@@ -910,6 +934,18 @@ begin
     Fail('Failed to bail out on non-INVITE method');
   except
   end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestOnNewDialogFired;
+begin
+  Self.Tran.OnNewDialog := Self.NewDialog;
+
+  Self.MoveToProceedingState;
+
+  Self.Response.StatusCode := SIPOK;
+  Self.Tran.HandleResponse(Self.Response);
+
+  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;
@@ -1174,6 +1210,11 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
+procedure TestTIdSipServerInviteTransaction.NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
+begin
+  Self.OnNewDialogFired := true;
+end;
+
 procedure TestTIdSipServerInviteTransaction.OnFail(Sender: TObject; const Reason: String);
 begin
   Self.FailMsg := Reason;
@@ -1206,6 +1247,16 @@ begin
   CheckEquals(Transaction(itsProceeding),
               Transaction(Tran.State),
               'Initial state');
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestOnNewDialogFired;
+begin
+  Self.Tran.OnNewDialog := Self.NewDialog;
+
+  Self.Response.StatusCode := SIPOK;
+  Self.Tran.HandleResponse(Self.Response);
+
+  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestReceive2xxFromTUInProceedingState;
@@ -1310,8 +1361,8 @@ procedure TestTIdSipServerInviteTransaction.TestReceiveFinalResponseFromTUInProc
 var
   StatusCode: Cardinal;
 begin
-  for StatusCode := 300 to 699 do begin
-    Self.Response.StatusCode := StatusCode;
+  for StatusCode := 3 to 6 do begin
+    Self.Response.StatusCode := StatusCode*100;
 
     Self.TransactionCompleted := false;
     Self.Tran.OnReceiveResponse := Self.Completed;
@@ -1371,7 +1422,7 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestSending100;
 begin
-  Self.InitialRequest.Headers.Add(TimestampHeader).Value := '100';
+  Self.InitialRequest.AddHeader(TimestampHeader).Value := '100';
   Self.MockDispatcher.Transport.OnResponse := Self.CheckSending100;
   
   Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);

@@ -12,7 +12,6 @@ uses
   IdSipHeaders in 'src\IdSipHeaders.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipRandom in 'src\IdSipRandom.pas',
-  IdSipSession in 'src\IdSipSession.pas',
   IdSipTcpClient in 'src\IdSipTcpClient.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipTimer in 'src\IdSipTimer.pas',
@@ -29,7 +28,6 @@ uses
   TestIdSipHeaders in 'test\TestIdSipHeaders.pas',
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
-  TestIdSipSession in 'test\TestIdSipSession.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTimer in 'test\TestIdSipTimer.pas',
@@ -39,7 +37,7 @@ uses
   TestIdUri in 'test\TestIdUri.pas';
 
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
