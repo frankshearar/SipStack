@@ -44,7 +44,5 @@ Known bugs:
   this is a bug in Indy's code or if I'm doing something subtly wrong
   in my code.
 * TLS tests fail because of something to do with the certificates.
-* The authentication tests fail against the SIP Foundry Test Framework
-  (http://www.sipfoundry.org/sftf/ cases 3xx).
 
 Frank Shearar, 2004/12/24

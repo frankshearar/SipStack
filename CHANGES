@@ -1,3 +1,8 @@
+v0.4 ()
+
+* The Spike.pas unit used a hardcoded username/password, whcih of
+  course made the torture tests fail.
+
 v0.3 (2004/12/24)
 
 * Transaction User Actions look like Commands (see the Gang of Four's
