@@ -108,7 +108,7 @@ constructor TIdSipSingleShotTimer.Create(Event: TNotifyEvent;
                                          WaitTime: Cardinal;
                                          Data: TObject = nil);
 begin
-  inherited Create(false);
+  inherited Create(true);
 
   Self.FreeOnTerminate := true;
   Self.WaitEvent       := TSimpleEvent.Create;
@@ -116,6 +116,8 @@ begin
   Self.Event    := Event;
   Self.fData    := Data;
   Self.WaitTime := WaitTime;
+
+  Self.Resume;
 end;
 
 destructor TIdSipSingleShotTimer.Destroy;
