@@ -880,9 +880,9 @@ type
     procedure TestTryAgain;
   end;
 
-  TestTIdSipUserAgentDroppedUnmatchedResponseMethod = class(TTestCase)
+  TestTIdSipUserAgentDroppedUnmatchedMessageMethod = class(TTestCase)
   private
-    Method:   TIdSipUserAgentDroppedUnmatchedResponseMethod;
+    Method:   TIdSipUserAgentDroppedUnmatchedMessageMethod;
     Receiver: TIdSipTransport;
     Response: TIdSipResponse;
   public
@@ -967,13 +967,10 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
-}
   Result.AddTest(TestTIdSipUserAgent.Suite);
-{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -999,9 +996,8 @@ begin
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
-  Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -9347,23 +9343,23 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod                          *
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod                          *
 //******************************************************************************
-//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***********
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ***********
 
-procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.SetUp;
+procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Receiver := TIdSipMockUdpTransport.Create;
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
+  Self.Method := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   Self.Method.Receiver := Self.Receiver;
   Self.Method.Message := Self.Response;
 end;
 
-procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.TearDown;
+procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -9372,9 +9368,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUserAgentDroppedUnmatchedResponseMethod Published methods ********
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Published methods ********
 
-procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.TestRun;
+procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TestRun;
 var
   L: TIdSipTestUserAgentListener;
 begin

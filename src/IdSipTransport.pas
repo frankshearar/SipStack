@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdException, IdInterfacedObject, IdNotification, IdSipLocator,
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
-  IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
+  IdSocketHandle, IdSSLOpenSSL, IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -54,6 +54,7 @@ type
   private
     fHostName:                 String;
     fTimeout:                  Cardinal;
+    fTimer:                    TIdTimerQueue;
     fUseRport:                 Boolean;
     TransportListeners:        TIdNotificationList;
     TransportSendingListeners: TIdNotificationList;
@@ -116,11 +117,12 @@ type
     procedure Start; virtual;
     procedure Stop; virtual;
 
-    property Address:  String   read GetAddress write SetAddress;
-    property HostName: String   read fHostName write fHostName;
-    property Port:     Cardinal read GetPort write SetPort;
-    property Timeout:  Cardinal read fTimeout write SetTimeout;
-    property UseRport: Boolean  read fUseRport write fUseRport;
+    property Address:  String        read GetAddress write SetAddress;
+    property HostName: String        read fHostName write fHostName;
+    property Port:     Cardinal      read GetPort write SetPort;
+    property Timeout:  Cardinal      read fTimeout write SetTimeout;
+    property Timer:    TIdTimerQueue read fTimer write fTimer;
+    property UseRport: Boolean       read fUseRport write fUseRport;
   end;
 
   // I supply methods for objects to find out what transports the stack knows
@@ -246,6 +248,12 @@ type
     function  IsReliable: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
+  end;
+
+  // I represent a (possibly) deferred send of a message down to the network.
+  TIdSipSendMessageWait = class(TIdSipMessageWait)
+  public
+    procedure Trigger; override;
   end;
 
   TIdSipTransportExceptionMethod = class(TIdNotification)
@@ -1206,6 +1214,15 @@ begin
   Self.Transport.Send(Dest.IPAddress,
                       Dest.Port,
                       R.AsString);
+end;
+
+//******************************************************************************
+//* TIdSipSendMessageWait                                                      *
+//******************************************************************************
+//* TIdSipSendMessageWait Public methods ***************************************
+
+procedure TIdSipSendMessageWait.Trigger;
+begin
 end;
 
 //******************************************************************************
