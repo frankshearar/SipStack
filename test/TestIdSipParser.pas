@@ -1245,23 +1245,32 @@ const
         + 'Route: wsfrank <sip:192.168.0.1>;low, <sip:192.168.0.1>'#13#10
         + BasicContentLengthHeader;
 var
-  N:   Cardinal;
-  Str: TStringStream;
+  Expected: TIdSipHeaders;
+  Routes:   TIdSipHeadersFilter;
+  Str:      TStringStream;
 begin
   Str := TStringStream.Create(StringReplace(BasicRequest, BasicContentLengthHeader, Route, []));
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
-    N := Self.Request.HeaderCount - 1;
-    CheckEquals('<sip:127.0.0.1>',           Self.Request.HeaderAt(N - 3).Value, '1st Route');
-    CheckEquals('wsfrank <sip:192.168.0.1>', Self.Request.HeaderAt(N - 2).Value, '2nd Route');
-    CheckEquals('<sip:192.168.0.1>',         Self.Request.HeaderAt(N - 1).Value, '3rd Route');
+    Expected := TIdSipHeaders.Create;
+    try
+      Expected.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+      Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.0.1>;low';
+      Expected.Add(RouteHeader).Value := '<sip:192.168.0.1>';
 
-    CheckEquals(';low',
-                Self.Request.HeaderAt(N - 2).ParamsAsString,
-                '2nd Route''s params');
+      Routes := TIdSipHeadersFilter.Create(Self.Request.Headers, RouteHeader);
+      try
+        Check(Expected.IsEqualTo(Routes),
+        'Routes not split into separate headers');
+      finally
+        Routes.Free;
+      end;
+    finally
+      Expected.Free;
+    end;
   finally
     Str.Free;
   end;

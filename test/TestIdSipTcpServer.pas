@@ -143,7 +143,7 @@ const
 implementation
 
 uses
-  Classes, IdSocketHandle, IdSipConsts, IdSimpleParser, IdStack,
+  Classes, IdSocketHandle, IdSipConsts, IdSipHeaders, IdSimpleParser, IdStack,
   TestFrameworkSip, TestMessages;
 
 function Suite: ITestSuite;
@@ -412,27 +412,33 @@ end;
 
 procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
                                                const Request: TIdSipRequest);
+var
+  Expected: TIdSipHeaders;
 begin
   try
-    CheckEquals('INVITE',                               Request.Method,         'Method');
+    CheckEquals('INVITE',                                 Request.Method,         'Method');
     CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Request.RequestUri.URI, 'RequestUri');
-    CheckEquals('SIP/2.0',                              Request.SIPVersion,     'SipVersion');
-    CheckEquals(29,                                     Request.ContentLength,  'ContentLength');
-    CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,         'CallID');
-    CheckEquals(70,                                     Request.MaxForwards,    'Max-Forwards');
+    CheckEquals('SIP/2.0',                                Request.SIPVersion,     'SipVersion');
+    CheckEquals(29,                                       Request.ContentLength,  'ContentLength');
+    CheckEquals('a84b4c76e66710@gw1.leo-ix.org',          Request.CallID,         'CallID');
+    CheckEquals(70,                                       Request.MaxForwards,    'Max-Forwards');
 
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
-                Request.HeaderAt(0).AsString,
-                'Via');
-    CheckEquals('Max-Forwards: 70',                                       Request.HeaderAt(1).AsString, 'Max-Forwards');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',  Request.HeaderAt(2).AsString, 'To');
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774', Request.HeaderAt(3).AsString, 'From');
-    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',                 Request.HeaderAt(4).AsString, 'Call-ID');
-    CheckEquals('CSeq: 314159 INVITE',                                    Request.HeaderAt(5).AsString, 'CSeq');
-    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',          Request.HeaderAt(6).AsString, 'Contact');
-    CheckEquals('Content-Type: text/plain',                               Request.HeaderAt(7).AsString, 'Content-Length');
-    CheckEquals('Content-Length: 29',                                     Request.HeaderAt(8).AsString, 'Content-Length');
+    Expected := TIdSipHeaders.Create;
+    try
+      Expected.Add(ViaHeaderFull).Value           := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+      Expected.Add(MaxForwardsHeader).Value       := '70';
+      Expected.Add(ToHeaderFull).Value            := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
+      Expected.Add(FromHeaderFull).Value          := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+      Expected.Add(CallIDHeaderFull).Value        := 'a84b4c76e66710@gw1.leo-ix.org';
+      Expected.Add(CSeqHeader).Value              := '314159 INVITE';
+      Expected.Add(ContactHeaderFull).Value       := 'sip:wintermute@tessier-ashpool.co.luna';
+      Expected.Add(ContentTypeHeaderFull).Value   := 'text/plain';
+      Expected.Add(ContentLengthHeaderFull).Value := '29';
 
+      Check(Expected.IsEqualTo(Request.Headers), 'Headers');
+    finally
+      Expected.Free;
+    end;
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
 
     Self.ThreadEvent.SetEvent;

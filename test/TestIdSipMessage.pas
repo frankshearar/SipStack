@@ -30,7 +30,6 @@ type
     procedure TestClearHeaders;
     procedure TestFirstContact;
     procedure TestFirstHeader;
-    procedure TestHeaderAt;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestReadBody;
@@ -293,24 +292,6 @@ begin
   H := Self.Msg.AddHeader(RouteHeader);
   Check(H <> Self.Msg.FirstHeader(RouteHeader),
         'Wrong result returned for first Route of two');
-end;
-
-procedure TestTIdSipMessage.TestHeaderAt;
-var
-  S: TIdSipHeader;
-  I: TIdSipHeader;
-  P: TIdSipHeader;
-begin
-  Self.Msg.ClearHeaders;
-
-  S := Self.Msg.AddHeader(ServerHeader);
-  Self.Msg.AddHeader(RouteHeader);
-  I := Self.Msg.AddHeader(InReplyToHeader);
-  P := Self.Msg.AddHeader(PriorityHeader);
-
-  Check(S = Self.Msg.HeaderAt(0), 'Wrong header at index 0');
-  Check(I = Self.Msg.HeaderAt(2), 'Wrong header at index 2');
-  Check(P = Self.Msg.HeaderAt(3), 'Wrong header at index 3');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;

@@ -224,7 +224,17 @@ begin
               Self.Dlg.RemoteTarget,
               'Remote Target not set');
   Check(not Self.Dlg.IsSecure, 'IsSecure not set');
-  Check(Self.Dlg.RouteSet.IsEqualTo(Self.RouteSet), 'Route set not set');
+
+  Check(Self.RouteSet.HasEqualValues(Self.Dlg.RouteSet),
+        'Route set not set');
+
+  Self.Dlg.RouteSet.First;
+  while Self.Dlg.RouteSet.HasNext do begin
+    CheckEquals(RouteHeader,
+                Self.Dlg.RouteSet.CurrentHeader.Name,
+                'One of the routes isn''t a Route header');
+    Self.Dlg.RouteSet.Next;
+  end;
 end;
 
 procedure TestTIdSipDialog.TestEarlyState;

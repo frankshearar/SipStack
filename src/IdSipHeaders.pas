@@ -146,6 +146,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
+    function  FullValue: String;
     function  HasParam(Name: String): Boolean;
     function  IndexOfParam(Name: String): Integer;
     function  IsEqualTo(const Header: TIdSipHeader): Boolean; virtual;
@@ -473,8 +474,9 @@ type
   public
     procedure Clear; virtual; abstract;
     function  Count: Integer; virtual; abstract;
-    function CurrentHeader: TIdSipHeader; virtual; abstract;
+    function  CurrentHeader: TIdSipHeader; virtual; abstract;
     procedure First; virtual; abstract;
+    function  HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
     function  HasNext: Boolean; virtual; abstract;
     function  IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsEmpty: Boolean;
@@ -509,8 +511,7 @@ type
     procedure Remove(Header: TIdSipHeader); override;
     procedure RemoveAll;
 
-    property HeaderName:                  String       read fHeaderName;
-    property Items[const Index: Integer]: TIdSipHeader read GetItems;
+    property HeaderName: String read fHeaderName;
   end;
 
   TIdSipHeaders = class(TIdSipHeaderList)
@@ -521,9 +522,9 @@ type
     class function HeaderTypes: TObjectList;
     class function IsHeader(const Header, ExpectedHeaderName: String): Boolean;
 
-    function  ConstructHeader(HeaderName: String): TIdSipHeader;
-    function  GetHeaders(const Name: String): TIdSipHeader;
-    function  IndexOf(const HeaderName: String): Integer;
+    function ConstructHeader(HeaderName: String): TIdSipHeader;
+    function FindFirst(const HeaderName: String): TIdSipHeader;
+    function GetHeaders(const Name: String): TIdSipHeader;
   protected
     function GetItems(const I: Integer): TIdSipHeader; override;
   public
@@ -556,14 +557,15 @@ type
     procedure Delete(const I: Integer);
     function  Count: Integer; override;
     procedure First; override;
+    function  GetAllButFirst: TIdSipHeaderList;
     function  HasHeader(const HeaderName: String): Boolean;
     function  HasNext: Boolean; override;
     procedure Next; override;
     procedure Remove(Header: TIdSipHeader); override;
     procedure RemoveAll(const HeaderName: String);
 
-    // This returns the FIRST MATCHing header
-    property Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
+    // This returns the FIRST MATCHING header
+    property Headers[const Name: String]: TIdSipHeader read GetHeaders; default;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
@@ -1133,21 +1135,23 @@ end;
 
 function TIdSipUri.HeadersAsString: String;
 var
-  I:           Integer;
   HeaderName:  String;
   HeaderValue: String;
 begin
   Result := '';
 
   if not Self.Headers.IsEmpty then begin
-    for I := 0 to Self.Headers.Count - 1 do begin
-      HeaderValue := Self.Headers.Items[I].AsString;
+    Self.Headers.First;
+    while Self.Headers.HasNext do begin
+      HeaderValue := Self.Headers.CurrentHeader.AsString;
       HeaderName  := Trim(Fetch(HeaderValue, ':'));
       HeaderValue := Trim(HeaderValue);
 
       Result := Result
               + TIdSipUri.HeaderEncode(HeaderName) + '='
               + TIdSipUri.HeaderEncode(HeaderValue) + '&';
+
+      Self.Headers.Next;
     end;
 
     Result := '?' + Copy(Result, 1, Length(Result) - 1);
@@ -1388,7 +1392,12 @@ end;
 
 function TIdSipHeader.AsString: String;
 begin
-  Result := Self.Name + ': ' + Self.Value + Self.ParamsAsString;
+  Result := Self.Name + ': ' + Self.FullValue;
+end;
+
+function TIdSipHeader.FullValue: String;
+begin
+  Result := Self.Value + Self.ParamsAsString;
 end;
 
 function TIdSipHeader.HasParam(Name: String): Boolean;
@@ -2684,17 +2693,34 @@ end;
 //******************************************************************************
 //* TIdSipHeaderList Public methods ********************************************
 
-function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
-var
-  I: Integer;
+function TIdSipHeaderList.HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
 begin
   Result := Self.Count = OtherHeaders.Count;
 
-  I := 0;
+  Self.First;
+  OtherHeaders.First;
   if Result then begin
-    while Result and (I < Self.Count) do begin
-      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
-      Inc(I);
+    while Result and Self.HasNext do begin
+      Result := Result
+            and (Self.CurrentHeader.Value = OtherHeaders.CurrentHeader.Value)
+            and (Self.CurrentHeader.ParamsAsString = OtherHeaders.CurrentHeader.ParamsAsString);
+      Self.Next;
+      OtherHeaders.Next;
+    end;
+  end;
+end;
+
+function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+begin
+  Result := Self.Count = OtherHeaders.Count;
+
+  Self.First;
+  OtherHeaders.First;
+  if Result then begin
+    while Result and Self.HasNext do begin
+      Result := Result and Self.CurrentHeader.IsEqualTo(OtherHeaders.CurrentHeader);
+      Self.Next;
+      OtherHeaders.Next;
     end;
   end;
 end;
@@ -2731,13 +2757,15 @@ begin
 end;
 
 function TIdSipHeadersFilter.Count: Integer;
-var
-  I: Integer;
 begin
   Result := 0;
-  for I := 0 to Self.Headers.Count - 1 do
-    if (Self.Headers.Items[I].Name = Self.HeaderName) then
+  Self.Headers.First;
+  while Self.Headers.HasNext do begin
+    if (Self.Headers.CurrentHeader.Name = Self.HeaderName) then
       Inc(Result);
+
+    Self.Headers.Next;
+  end;
 end;
 
 function TIdSipHeadersFilter.CurrentHeader: TIdSipHeader;
@@ -2777,21 +2805,20 @@ end;
 
 function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
 var
-  I:         Integer;
   ItemCount: Integer;
 begin
   Result    := nil;
-  I         := 0;
   ItemCount := -1;
 
-  while (I < Self.Headers.Count) and not Assigned(Result) do begin
-    if (Self.Headers.Items[I].Name = Self.HeaderName) then
+  Self.Headers.First;
+  while Self.Headers.HasNext and not Assigned(Result) do begin
+    if (Self.Headers.CurrentHeader.Name = Self.HeaderName) then
       Inc(ItemCount);
 
     if (ItemCount = Index) then
-      Result := Self.Headers.Items[I];
+      Result := Self.Headers.CurrentHeader;
 
-    Inc(I);
+    Self.Headers.Next;
   end;
 end;
 
@@ -2983,11 +3010,12 @@ begin
 end;
 
 procedure TIdSipHeaders.Add(const Headers: TIdSipHeaderList);
-var
-  I: Integer;
 begin
-  for I := 0 to Headers.Count - 1 do
-    Self.Add(Headers.Items[I]);
+  Headers.First;
+  while Headers.HasNext do begin
+    Self.Add(Headers.CurrentHeader);
+    Headers.Next;
+  end;
 end;
 
 procedure TIdSipHeaders.AddInReverseOrder(const Headers: TIdSipHeadersFilter);
@@ -3035,9 +3063,29 @@ begin
   Self.CurrentIndex := 0;
 end;
 
+function TIdSipHeaders.GetAllButFirst: TIdSipHeaderList;
+begin
+  Result := TIdSipHeaders.Create;
+  try
+    Self.First;
+
+    if Self.HasNext then
+      Self.Next;
+
+    while Self.HasNext do begin
+      (Result as TIdSipHeaders).Add(Self.CurrentHeader);
+      Self.Next;
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSipHeaders.HasHeader(const HeaderName: String): Boolean;
 begin
-  Result := Self.IndexOf(HeaderName) <> -1;
+  Result := Assigned(Self.FindFirst(HeaderName));
 end;
 
 function TIdSipHeaders.HasNext: Boolean;
@@ -3061,9 +3109,8 @@ var
   H: TIdSipHeader;
 begin
   I := 0;
-
-  while (I < Self.Count) do begin
-    H := Self.Items[I];
+  while (I < Self.List.Count) do begin
+    H := Self.GetItems(I);
     if (IsEqual(H.Name, HeaderName)) then
       Self.Remove(H)
     else
@@ -3150,32 +3197,26 @@ begin
     Result := TIdSipHeader.Create;
 end;
 
-function TIdSipHeaders.GetHeaders(const Name: String): TIdSipHeader;
+function TIdSipHeaders.FindFirst(const HeaderName: String): TIdSipHeader;
 var
   I: Integer;
 begin
-  I := Self.IndexOf(Name);
+  Result := nil;
 
-  if (I = -1) then
-    Result := Self.Add(Name)
-  else
-    Result := Self.List[I] as TIdSipHeader;
+  I := 0;
+  while (I < Self.List.Count) and not Assigned(Result) do
+    if IsEqual((Self.List[I] as TIdSipHeader).Name, HeaderName) then
+      Result := Self.List[I] as TIdSipHeader
+    else
+      Inc(I);
 end;
 
-function TIdSipHeaders.IndexOf(const HeaderName: String): Integer;
-var
-  Found: Boolean;
+function TIdSipHeaders.GetHeaders(const Name: String): TIdSipHeader;
 begin
-  Result := 0;
-  Found := false;
-  while (Result < Self.List.Count) and not Found do
-    if IsEqual((Self.List[Result] as TIdSipHeader).Name, HeaderName) then
-      Found := true
-    else
-      Inc(Result);
+  Result := Self.FindFirst(Name);
 
-  if (Result = Self.List.Count) then
-    Result := -1;
+  if not Assigned(Result) then
+    Result := Self.Add(Name);
 end;
 
 //******************************************************************************

@@ -871,7 +871,6 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogRouteSetWithoutLrParam;
 var
-  I:        Integer;
   P:        TIdSipParser;
   R:        TIdSipRequest;
   Response: TIdSipResponse;
@@ -903,10 +902,7 @@ begin
       Self.Dlg.RouteSet.Delete(0);
       Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.URI + '>';
 
-      for I := 0 to Routes.Count - 1 do
-        CheckEquals(Self.Dlg.RouteSet.Items[I].Value,
-                    Routes.Items[I].Value,
-                    'Route ' + IntToStr(I + 1) + ' value');
+      Check(Self.Dlg.RouteSet.IsEqualTo(Routes), 'Routes not added correctly');
     finally
       Routes.Free;
     end;

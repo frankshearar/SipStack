@@ -297,7 +297,12 @@ begin
   Self.SetIsSecure(IsSecure);
 
   fRouteSet := TIdSipHeaders.Create;
-  fRouteSet.Add(RouteSet);
+
+  RouteSet.First;
+  while RouteSet.HasNext do begin
+    Self.RouteSet.Add(RouteHeader).Assign(RouteSet.CurrentHeader);
+    RouteSet.Next;
+  end;
 end;
 
 function TIdSipDialog.GetIsEarly: Boolean;

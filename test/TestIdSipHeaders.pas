@@ -26,6 +26,7 @@ type
   published
     procedure TestAsString;
     procedure TestEncodeQuotedStr;
+    procedure TestFullValue;
     procedure TestGetSetParam;
     procedure TestHasParam;
     procedure TestIndexOfParam;
@@ -307,6 +308,7 @@ type
     procedure TestClear;
     procedure TestDelete;
     procedure TestFirst;
+    procedure TestGetAllButFirst;
     procedure TestHasHeader;
     procedure TestHeaders;
     procedure TestItems;
@@ -654,6 +656,27 @@ begin
               '''"I am a ''normal'' string"''');
 end;
 
+procedure TestTIdSipHeader.TestFullValue;
+begin
+  Self.H.Name := 'X-Foo';
+  CheckEquals('', Self.H.FullValue, 'No value');
+
+  Self.H.Value := 'bar';
+  CheckEquals(Self.H.Value,
+              Self.H.FullValue,
+              'Simple value');
+
+  Self.H.Value := ';bar';
+  CheckEquals(Self.H.ParamsAsString,
+              Self.H.FullValue,
+              'No value, only parameters');
+
+  Self.H.Value := 'bar;bar';
+  CheckEquals(Self.H.Value + Self.H.ParamsAsString,
+              Self.H.FullValue,
+              'No value, only parameters');
+end;
+
 procedure TestTIdSipHeader.TestGetSetParam;
 begin
   CheckEquals('', Self.H.Params['branch'], 'Value of non-existent param');
@@ -697,17 +720,17 @@ begin
   Header := TIdSipHeader.Create;
   try
     Header.Name  := Self.H.Name;
-    Header.Value := Self.H.Value + Self.H.ParamsAsString;
+    Header.Value := Self.H.FullValue;
     Check(Self.H.IsEqualTo(Header), 'H = Header');
     Check(Header.IsEqualTo(Self.H), 'Header = H');
 
     Header.Name  := Self.H.Name;
-    Header.Value := Uppercase(Self.H.Value + Self.H.ParamsAsString);
+    Header.Value := Uppercase(Self.H.FullValue);
     Check(Self.H.IsEqualTo(Header), 'H = Header, uppercase(value)');
     Check(Header.IsEqualTo(Self.H), 'Header = H, uppercase(value)');
 
     Header.Name  := 'X-Different-Header';
-    Header.Value := Self.H.Value + Self.H.ParamsAsString;
+    Header.Value := Self.H.FullValue;
     Check(not Self.H.IsEqualTo(Header), 'H <> Header, name');
     Check(not Header.IsEqualTo(Self.H), 'Header <> H, name');
 
@@ -3303,6 +3326,40 @@ begin
   CheckEquals('foo',
               Self.H.CurrentHeader.Name,
               'Name of first element');
+end;
+
+procedure TestTIdSipHeaders.TestGetAllButFirst;
+var
+  Expected: TIdSipHeaders;
+  Received: TIdSipHeaderList;
+begin
+  Expected := TIdSipHeaders.Create;
+  try
+    Received := Self.H.GetAllButFirst;
+    try
+      Check(Expected.IsEqualTo(Received),
+            'Incorrect headers returned, empty list');
+    finally
+      Received.Free;
+    end;
+
+
+    Expected.Add(ContentTypeHeaderFull).Value   := 'text/plain';
+    Expected.Add(MaxForwardsHeader).Value       := '70';
+
+    Self.H.Add(ContentLengthHeaderFull).Value := '29';
+    Self.H.Add(Expected);
+
+    Received := Self.H.GetAllButFirst;
+    try
+      Check(Expected.IsEqualTo(Received),
+            'Incorrect headers returned, nonempty list');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
 end;
 
 procedure TestTIdSipHeaders.TestHasHeader;

@@ -566,7 +566,7 @@ end;
 function TIdSipUserAgentCore.CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest;
 var
   FirstRoute: TIdSipRouteHeader;
-  I:          Integer;
+  Routes:     TIdSipHeaderList;
 begin
   Result := TIdSipRequest.Create;
   try
@@ -587,13 +587,16 @@ begin
       Result.RequestUri := Dialog.RemoteTarget;
     end
     else begin
-      FirstRoute := Dialog.RouteSet.Items[0] as TIdSipRouteHeader;
+      Dialog.RouteSet.First;
+      FirstRoute := Dialog.RouteSet.CurrentHeader as TIdSipRouteHeader;
 
       if FirstRoute.IsLooseRoutable then begin
         Result.RequestUri := Dialog.RemoteTarget;
 
-        for I := 0 to Dialog.RouteSet.Count - 1 do
-          Result.AddHeader(RouteHeader).Assign(Dialog.RouteSet.Items[I]);
+        while Dialog.RouteSet.HasNext do begin
+          Result.AddHeader(RouteHeader).Assign(Dialog.RouteSet.CurrentHeader);
+          Dialog.RouteSet.Next;
+        end;
       end
       else begin
         Result.RequestUri := FirstRoute.Address;
@@ -601,13 +604,17 @@ begin
         Result.RequestUri.Headers.Clear;
         Result.RequestUri.RemoveParameter(MethodParam);
 
-        // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
-        // remember?
-        // No, we can't just Assign() here because (a) we're not adding ALL
-        // the headers, and (b) we're adding Route headers, and RouteSet
-        // contains Record-Route headers.
-        for I := 1 to Dialog.RouteSet.Count - 1 do begin
-          Result.AddHeader(RouteHeader).Value := Dialog.RouteSet.Items[I].Value
+        // Yes, we skip the first route. We use the 1st entry as the
+        // Request-URI, remember?
+        Routes := Dialog.RouteSet.GetAllButFirst;
+        try
+          Routes.First;
+          while Routes.HasNext do begin
+            Result.AddHeader(RouteHeader).Assign(Routes.CurrentHeader);
+            Routes.Next;
+          end;
+        finally
+          Routes.Free;
         end;
 
         (Result.AddHeader(RouteHeader) as TIdSipRouteHeader).Address := Dialog.RemoteURI;

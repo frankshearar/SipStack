@@ -55,7 +55,6 @@ type
     procedure ClearHeaders;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
-    function  HeaderAt(const Index: Cardinal): TIdSipHeader;
     function  HeaderCount: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsEqualTo(const Msg: TIdSipMessage): Boolean; virtual; abstract;
@@ -392,11 +391,6 @@ begin
   Result := Self.Headers[HeaderName];
 end;
 
-function TIdSipMessage.HeaderAt(const Index: Cardinal): TIdSipHeader;
-begin
-  Result := Self.Headers.Items[Index];
-end;
-
 function TIdSipMessage.HeaderCount: Integer;
 begin
   Result := Self.Headers.Count;
@@ -513,13 +507,9 @@ begin
 end;
 
 procedure TIdSipMessage.SetPath(const Value: TIdSipViaPath);
-var
-  I: Integer;
 begin
   Self.Path.Clear;
-
-  for I := 0 to Value.Count - 1 do
-    Self.Path.Add(Value.Items[I]);
+  Self.Path.Add(Value);
 end;
 
 procedure TIdSipMessage.SetTo(const Value: TIdSipToHeader);
