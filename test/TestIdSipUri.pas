@@ -100,6 +100,7 @@ type
     procedure TestSetUriWithNoUser;
     procedure TestSetUriWithPassword;
     procedure TestSetUriWithPort;
+    procedure TestSetUriWithWeirdUser;
     procedure TestSetUriClearsOldValues;
     procedure TestTransport;
     procedure TestUserIsIP;
@@ -1175,6 +1176,13 @@ begin
   Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:100';
 
   CheckEquals(100, Self.Uri.Port, 'Port');
+end;
+
+procedure TestTIdSipUri.TestSetUriWithWeirdUser;
+begin
+  Self.Uri.Uri := 'sip:;cic=0333@pstngateway';
+
+  CheckEquals(';cic=0333', Self.Uri.Username, 'Username');
 end;
 
 procedure TestTIdSipUri.TestSetUriClearsOldValues;
