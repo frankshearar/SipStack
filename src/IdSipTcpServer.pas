@@ -20,12 +20,12 @@ type
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
     procedure OnException(E: Exception;
                           const Reason: String);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
   end;
 
   // Use me, TIdSipConnectionTableEntry and TIdSipConnectionTable to keep track
@@ -80,7 +80,7 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    function LockList: TIdSipConnectionTable;
+    function  LockList: TIdSipConnectionTable;
     procedure UnlockList;
   end;
 
@@ -158,7 +158,7 @@ begin
   inherited Create;
 
   Self.fConnection := Connection;
-  Self.fRequest := TIdSipRequest.Create;
+  Self.fRequest    := TIdSipRequest.Create;
   Self.fRequest.Assign(CopyOfRequest);
 end;
 
