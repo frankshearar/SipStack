@@ -72,6 +72,8 @@ type
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
                                                    Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -618,6 +620,13 @@ procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObje
                                                              ReceivedFrom: TIdSipConnectionBindings);
 begin
   Fail('The connection is closed. The client should not receive a response');
+end;
+
+procedure TestTIdSipTcpServer.OnException(E: Exception;
+                                          const Reason: String);
+begin
+  Self.ExceptionType    := ExceptClass(E.ClassType);
+  Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
 end;
 
 procedure TestTIdSipTcpServer.OnMalformedMessage(const Msg: String;

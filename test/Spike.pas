@@ -5,7 +5,7 @@ interface
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdRTP, IdSdp,
   IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle,
-  StdCtrls, SyncObjs;
+  StdCtrls, SyncObjs, SysUtils;
 
 type
   TIdDTMFPanel = class;
@@ -76,6 +76,8 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -169,7 +171,7 @@ implementation
 {$R *.dfm}
 
 uses
-  Dialogs, Graphics, IdGlobal, IdSipConsts, IdStack, SysUtils;
+  Dialogs, Graphics, IdGlobal, IdSipConsts, IdStack;
 
 const
   LocalHostName = '127.0.0.1';
@@ -306,14 +308,19 @@ end;
 
 procedure TrnidSpike.LogMessage(Msg: TIdSipMessage);
 begin
-  Self.Log.Lines.Add(Msg.AsString);
-  Self.Log.Lines.Add('----');
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add(Msg.AsString);
+    Self.Log.Lines.Add('----');
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TrnidSpike.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
                                                Response: TIdSipResponse);
 begin
-end;                                               
+end;
 
 procedure TrnidSpike.OnChanged(Observed: TObject);
 begin
@@ -327,8 +334,25 @@ end;
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
                                     const Reason: String);
 begin
-  Self.Log.Lines.Add('Session ended: ' + Reason);
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('Session ended: ' + Reason);
+  finally
+    Self.Lock.Release;
+  end;
   Self.StopReadingData;
+end;
+
+procedure TrnidSpike.OnException(E: Exception;
+                                 const Reason: String);
+begin
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('Exception ' + E.ClassName + ': ' + E.Message
+                     + ' raised because: ''' + Reason + '''')
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipRegistration;
@@ -389,9 +413,14 @@ end;
 procedure TrnidSpike.OnRejectedMessage(const Msg: String;
                                        const Reason: String);
 begin
-  Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
-  Self.Log.Lines.Add(Msg);
-  Self.Log.Lines.Add('----');
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
+    Self.Log.Lines.Add(Msg);
+    Self.Log.Lines.Add('----');
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;

@@ -3,7 +3,8 @@ unit TestIdSipTcpClient;
 interface
 
 uses
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, TestFrameworkEx;
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, SysUtils,
+  TestFrameworkEx;
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -33,6 +34,8 @@ type
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure DoOnFinished(Sender: TObject);
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -66,7 +69,7 @@ const
 implementation
 
 uses
-  Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, SysUtils, TestFramework,
+  Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, TestFramework,
   TestMessages;
 
 function Suite: ITestSuite;
@@ -227,6 +230,13 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
+end;
+
+procedure TestTIdSipTcpClient.OnException(E: Exception;
+                                          const Reason: String);
+begin
+  Self.ExceptionType    := ExceptClass(E.ClassType);
+  Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
 end;
 
 procedure TestTIdSipTcpClient.OnMalformedMessage(const Msg: String;

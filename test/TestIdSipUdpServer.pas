@@ -36,6 +36,8 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -309,6 +311,11 @@ begin
   end;
 end;
 }
+
+procedure TestTIdSipUdpServer.OnException(E: Exception;
+                                          const Reason: String);
+begin
+end;
 
 procedure TestTIdSipUdpServer.OnMalformedMessage(const Msg: String;
                                                  const Reason: String);

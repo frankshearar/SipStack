@@ -15,6 +15,8 @@ type
   // I listen for incoming messages.
   IIdSipTransportListener = interface
     ['{D3F0A0D5-A4E9-42BD-B337-D5B3C652F340}']
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -50,10 +52,14 @@ type
     function  GetPort: Cardinal; virtual; abstract;
     procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
+    procedure NotifyTransportListenersOfException(E: Exception;
+                                                  const Reason: String);
     procedure NotifyTransportListenersOfRejectedMessage(const Msg: String;
                                                         const Reason: String);
     procedure NotifyTransportSendingListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportSendingListeners(Response: TIdSipResponse); overload;
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -354,6 +360,20 @@ begin
   end;
 end;
 
+procedure TIdSipTransport.NotifyTransportListenersOfException(E: Exception;
+                                                              const Reason: String);
+var
+  I: Integer;
+begin
+  Self.TransportListenerLock.Acquire;
+  try
+    for I := 0 to Self.TransportListeners.Count - 1 do
+      IIdSipTransportListener(Self.TransportListeners[I]).OnException(E, Reason);
+  finally
+    Self.TransportListenerLock.Release;
+  end;
+end;
+
 procedure TIdSipTransport.NotifyTransportListenersOfRejectedMessage(const Msg: String;
                                                                     const Reason: String);
 var
@@ -392,6 +412,12 @@ begin
   finally
     Self.TransportSendingListenerLock.Release;
   end;
+end;
+
+procedure TIdSipTransport.OnException(E: Exception;
+                                      const Reason: String);
+begin
+  Self.NotifyTransportListenersOfException(E, Reason);
 end;
 
 procedure TIdSipTransport.OnMalformedMessage(const Msg: String;
@@ -786,8 +812,6 @@ begin
 end;
 
 procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest);
-var
-  Client: TIdSipUdpServer;
 begin
   inherited SendRequest(R);
 

@@ -4,11 +4,13 @@ interface
 
 uses
   Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipTcpClient, IdSipTimer,
-  IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
+  IdTCPConnection, IdTCPServer, IdThread, SyncObjs, SysUtils;
 
 type
   IIdSipMessageListener = interface
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -89,6 +91,8 @@ type
                               ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure NotifyListenersOfMalformedMessage(const Msg: String;
                                                 const Reason: String);
+    procedure OnException(T: TIdThread;
+                          E: Exception);
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
@@ -490,6 +494,11 @@ begin
   end;
 end;
 
+procedure TIdSipTcpServer.OnException(T: TIdThread;
+                                      E: Exception);
+begin
+end;
+
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
 begin
   (Sender as TIdSipTcpConnectionCutter).Connection.DisconnectSocket;
@@ -504,7 +513,8 @@ begin
     Timer := TIdSipTcpConnectionCutter.Create(true);
     try
       Timer.FreeOnTerminate := true;
-      Timer.OnTimer := Self.OnReadBodyTimeout;
+      Timer.OnException     := Self.OnException;
+      Timer.OnTimer         := Self.OnReadBodyTimeout;
       Timer.Start;
     except
       Timer.Free;

@@ -5,7 +5,7 @@ interface
 uses
   Classes, IdInterfacedObject, IdRTP, IdSdp, IdSipMessage, IdSipCore,
   IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  IdSocketHandle, TestFrameworkEx;
+  IdSocketHandle, SysUtils, TestFrameworkEx;
 
 type
   TTestCaseSip = class(TThreadingTestCase)
@@ -31,10 +31,13 @@ type
   TIdSipTestMessageListener = class(TIdInterfacedObject,
                                     IIdSipMessageListener)
   private
+    fException:        Boolean;
     fMalformedMessage: Boolean;
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
 
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
                                  const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -44,6 +47,7 @@ type
   public
     constructor Create;
 
+    property Exception:        Boolean read fException;
     property MalformedMessage: Boolean read fMalformedMessage;
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
@@ -134,10 +138,13 @@ type
   TIdSipTestTransportListener = class(TIdInterfacedObject,
                                       IIdSipTransportListener)
   private
+    fException:        Boolean;
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
     fRejectedMessage:  Boolean;
 
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -147,6 +154,7 @@ type
   public
     constructor Create;
 
+    property Exception:        Boolean read fException;
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
     property RejectedMessage:  Boolean read fRejectedMessage;
@@ -210,9 +218,6 @@ const
 
 implementation
 
-uses
-  SysUtils;
-
 //******************************************************************************
 //* TTestCaseSip                                                               *
 //******************************************************************************
@@ -256,12 +261,19 @@ constructor TIdSipTestMessageListener.Create;
 begin
   inherited Create;
 
+  Self.fException        := false;
   Self.fMalformedMessage := false;
   Self.fReceivedRequest  := false;
   Self.fReceivedResponse := false;
 end;
 
 //* TIdSipTestMessageListener Private methods **********************************
+
+procedure TIdSipTestMessageListener.OnException(E: Exception;
+                                                const Reason: String);
+begin
+  Self.fException := true;
+end;
 
 procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
                                                        const Reason: String);
@@ -420,12 +432,19 @@ constructor TIdSipTestTransportListener.Create;
 begin
   inherited Create;
 
+  Self.fException        := false;
   Self.fReceivedRequest  := false;
   Self.fReceivedResponse := false;
   Self.fRejectedMessage  := false;
 end;
 
 //* TIdSipTestTransportListener Private methods ********************************
+
+procedure TIdSipTestTransportListener.OnException(E: Exception;
+                                                  const Reason: String);
+begin
+  Self.fException := true;
+end;
 
 procedure TIdSipTestTransportListener.OnReceiveRequest(Request: TIdSipRequest;
                                                        Transport: TIdSipTransport);

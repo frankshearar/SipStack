@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdRTPTimerQueue, IdSipMessage,
-  IdSipTimer, IdSipTransport, SyncObjs;
+  IdSipTimer, IdSipTransport, IdThread, SyncObjs, SysUtils;
 
 const
   DefaultT1    = 500;   // ms
@@ -102,6 +102,8 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
 
     // IIdSipTransportListener
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -195,6 +197,7 @@ type
     destructor  Destroy; override;
 
     procedure AddTransactionListener(const Listener: IIdSipTransactionListener);
+    procedure ExceptionRaised(E: Exception);
     function  IsClient: Boolean; virtual; abstract;
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
@@ -237,6 +240,8 @@ type
     T2:               Cardinal;
     Timer:            TIdRTPTimerQueue;
 
+    procedure OnException(T: TIdThread;
+                          E: Exception);
     procedure OnTimerG(Sender: TObject);
     procedure OnTimerH(Sender: TObject);
     procedure OnTimerI(Sender: TObject);
@@ -332,6 +337,8 @@ type
     State:            TIdSipTransactionState;
     Timer:            TIdRTPTimerQueue;
 
+    procedure OnException(T: TIdThread;
+                          E: Exception);
     procedure OnTimerA(Sender: TObject);
     procedure OnTimerB(Sender: TObject);
     procedure OnTimerD(Sender: TObject);
@@ -398,6 +405,8 @@ type
     T2:               Cardinal;
     Timer:            TIdRTPTimerQueue;
 
+    procedure OnException(T: TIdThread;
+                          E: Exception);
     procedure OnTimerE(Sender: TObject);
     procedure OnTimerF(Sender: TObject);
     procedure OnTimerK(Sender: TObject);
@@ -460,7 +469,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, Math, SysUtils;
+  IdException, IdSipConsts, IdSipDialogID, Math;
 
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
@@ -745,6 +754,11 @@ procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransactio
 begin
 end;
 
+procedure TIdSipTransactionDispatcher.OnException(E: Exception;
+                                                  const Reason: String);
+begin
+end;                                                  
+
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Receiver: TIdSipTransport);
 begin
@@ -895,6 +909,12 @@ begin
   finally
     Self.TranListenerLock.Release;
   end;
+end;
+
+procedure TIdSipTransaction.ExceptionRaised(E: Exception);
+begin
+  Self.NotifyOfFailure(Self.ClassName + 'raised an '
+                     + E.ClassName + ': ' + E.Message);
 end;
 
 function TIdSipTransaction.IsServer: Boolean;
@@ -1179,6 +1199,7 @@ begin
   Self.Owner := OwnerTran;
 
   Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer.OnException := Self.OnException;
 
   Self.fTimerGInterval := T1;
   Self.fTimerHInterval := 64*T1;
@@ -1291,6 +1312,12 @@ begin
 end;
 
 //* TIdSipServerInviteTransactionTimer Private methods *************************
+
+procedure TIdSipServerInviteTransactionTimer.OnException(T: TIdThread;
+                                                         E: Exception);
+begin
+  Self.Owner.ExceptionRaised(E);
+end;
 
 procedure TIdSipServerInviteTransactionTimer.OnTimerG(Sender: TObject);
 begin
@@ -1602,6 +1629,7 @@ begin
   Self.Owner := OwnerTran;
 
   Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer.OnException := Self.OnException;
 
   Self.fTimerAInterval := T1;
   Self.fTimerBInterval := 64*T1;
@@ -1721,6 +1749,12 @@ begin
 end;
 
 //* TIdSipClientInviteTransactionTimer Private methods *************************
+
+procedure TIdSipClientInviteTransactionTimer.OnException(T: TIdThread;
+                                                          E: Exception);
+begin
+  Self.Owner.ExceptionRaised(E);
+end;
 
 procedure TIdSipClientInviteTransactionTimer.OnTimerA(Sender: TObject);
 begin
@@ -1937,6 +1971,7 @@ begin
   Self.Owner := OwnerTran;
 
   Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer.OnException := Self.OnException;
 
   Self.fTimerEInterval := T1;
   Self.fTimerFInterval := 64*T1;
@@ -2079,6 +2114,12 @@ begin
 end;
 
 //* TIdSipClientNonInviteTransactionTimer Private methods **********************
+
+procedure TIdSipClientNonInviteTransactionTimer.OnException(T: TIdThread;
+                                                            E: Exception);
+begin
+  Self.Owner.ExceptionRaised(E);
+end;
 
 procedure TIdSipClientNonInviteTransactionTimer.OnTimerE(Sender: TObject);
 begin

@@ -28,6 +28,8 @@ type
     SentResponse:     Boolean;
     Transport:        TIdSipTransportSubclass;
 
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -86,6 +88,8 @@ type
     procedure CheckSendRequestTopVia(Sender: TObject;
                                      R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
+    procedure OnException(E: Exception;
+                          const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -255,6 +259,11 @@ begin
 end;
 
 //* TestTIdSipTransportEventNotifications Private methods **********************
+
+procedure TestTIdSipTransportEventNotifications.OnException(E: Exception;
+                                                            const Reason: String);
+begin
+end;
 
 procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(Request: TIdSipRequest;
                                                                  Transport: TIdSipTransport);
@@ -576,6 +585,13 @@ end;
 function TestTIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
+end;
+
+procedure TestTIdSipTransport.OnException(E: Exception;
+                                          const Reason: String);
+begin
+  Self.ExceptionType := ExceptClass(E.ClassType);
+  Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
 end;
 
 procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
