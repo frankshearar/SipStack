@@ -50,6 +50,8 @@ type
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
     Invite:                 TIdSipRequest;
+    MockTcpTransport:       TIdSipMockTransport;
+    MockUdpTransport:       TIdSipMockTransport;
     OnReceiveResponseFired: Boolean;
     OnTerminatedFired:      Boolean;
     Options:                TIdSipRequest;
@@ -62,6 +64,7 @@ type
     TranRequest:            TIdSipRequest;
     Username:               String;
 
+    function  AddTransport(const TransportType: String): TIdSipMockTransport;
     procedure CheckAuthentication(const AuthenticationHeaderName: String;
                                   const AuthorizationHeaderName: String;
                                   const QopType: String);
@@ -638,15 +641,17 @@ begin
 
   Self.Core := TIdSipMockCore.Create;
 
+  Self.MockTcpTransport := Self.AddTransport(TcpTransport);
+  Self.MockUdpTransport := Self.AddTransport(UdpTransport);
+  Self.MockTransport := Self.MockTcpTransport;
+
   Self.D := TIdSipTransactionDispatcher.Create;
   Self.D.AddTransactionDispatcherListener(Self);
 
   Self.Core.Dispatcher := Self.D;
 
-  Self.MockTransport := TIdSipMockTransport.Create;
-  Self.MockTransport.TransportType := TcpTransport;
-
-  Self.D.AddTransport(Self.MockTransport);
+  Self.D.AddTransport(Self.MockTcpTransport);
+  Self.D.AddTransport(Self.MockUdpTransport);
 
   Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.TranRequest      := TIdSipTestResources.CreateLocalLoopRequest;
@@ -690,7 +695,8 @@ begin
   Self.ReceivedRequest.Free;
 
   Self.D.Free;
-  Self.MockTransport.Free;
+  Self.MockUdpTransport.Free;
+  Self.MockTcpTransport.Free;
   Self.Core.Free;
 
   inherited TearDown;
@@ -708,6 +714,12 @@ begin
 end;
 
 //* TestTIdSipTransactionDispatcher Private methods ****************************
+
+function TestTIdSipTransactionDispatcher.AddTransport(const TransportType: String): TIdSipMockTransport;
+begin
+  Result := TIdSipMockTransport.Create;
+  Result.TransportType := TransportType;
+end;
 
 procedure TestTIdSipTransactionDispatcher.CheckAuthentication(const AuthenticationHeaderName: String;
                                                               const AuthorizationHeaderName: String;
@@ -1745,93 +1757,61 @@ procedure TestTIdSipTransactionDispatcher.TestSendMessageWithAppropriateTranspor
 var
   TcpResponseCount: Cardinal;
   UdpResponseCount: Cardinal;
-  UdpTran:          TIdSipMockTransport;
 begin
-  UdpTran := TIdSipMockTransport.Create;
-  try
-    UdpTran.TransportType := UdpTransport;
+  TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
+  UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
 
-    Self.D.AddTransport(UdpTran);
+  Self.Response200.LastHop.Transport := Self.MockUdpTransport.TransportType;
+  Self.D.SendToTransport(Self.Response200);
 
-    TcpResponseCount := Self.SentResponseCount;
-    UdpResponseCount := UdpTran.SentResponseCount;
-
-    Self.Response200.LastHop.Transport := UdpTran.TransportType;
-    Self.D.SendToTransport(Self.Response200);
-
-    Check(UdpResponseCount < UdpTran.SentResponseCount,
-          'No response sent down UDP');
-    CheckEquals(TcpResponseCount, Self.SentResponseCount,
-                'TCP response was sent');
-  finally
-    UdpTran.Free;
-  end;
+  Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
+        'No response sent down UDP');
+  CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
+              'TCP response was sent');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendVeryBigMessageWithTcpFailure;
 var
   TcpResponseCount: Cardinal;
   UdpResponseCount: Cardinal;
-  UdpTran:          TIdSipMockTransport;
 begin
   Self.MockTransport.TransportType := TcpTransport;
   Self.MockTransport.FailWith      := EIdConnectTimeout;
 
-  UdpTran := TIdSipMockTransport.Create;
-  try
-    UdpTran.TransportType := UdpTransport;
+  TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
+  UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
 
-    Self.D.AddTransport(UdpTran);
+  while (Length(Self.Response200.AsString) < MaximumUDPMessageSize) do
+    Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
 
-    TcpResponseCount := Self.SentResponseCount;
-    UdpResponseCount := UdpTran.SentResponseCount;
+  Self.Response200.LastHop.Transport := Self.MockUdpTransport.TransportType;
+  Self.D.SendToTransport(Self.Response200);
 
-    while (Length(Self.Response200.AsString) < MaximumUDPMessageSize) do
-      Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
-
-    Self.Response200.LastHop.Transport := UdpTran.TransportType;
-    Self.D.SendToTransport(Self.Response200);
-
-    Check(UdpResponseCount < UdpTran.SentResponseCount,
-          'No response sent down UDP');
-    CheckEquals(TcpResponseCount, Self.SentResponseCount,
-                'TCP response was sent');
-  finally
-    UdpTran.Free;
-  end;
+  Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
+        'No response sent down UDP');
+  CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
+              'TCP response was sent');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendVeryBigRequest;
 var
   TcpRequestCount: Cardinal;
   UdpRequestCount: Cardinal;
-  UdpTran:         TIdSipMockTransport;
 begin
-  Self.MockTransport.TransportType := TcpTransport;
+  TcpRequestCount := Self.MockTcpTransport.SentRequestCount;
+  UdpRequestCount := Self.MockUdpTransport.SentRequestCount;
 
-  UdpTran := TIdSipMockTransport.Create;
-  try
-    UdpTran.TransportType := UdpTransport;
+  Self.TranRequest.LastHop.Transport := UdpTransport;
+  while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
+    Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
+                                                         + 'and with strange aeons even death may die.';
 
-    Self.D.AddTransport(UdpTran);
+  Self.D.SendToTransport(Self.TranRequest);
 
-    TcpRequestCount := Self.SentRequestCount;
-    UdpRequestCount := UdpTran.SentRequestCount;
-
-    Self.TranRequest.LastHop.Transport := UdpTransport;
-    while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
-      Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
-                                                           + 'and with strange aeons even death may die.';
-
-    Self.D.SendToTransport(Self.TranRequest);
-
-    CheckEquals(UdpRequestCount, UdpTran.SentRequestCount,
-                'UDP response was sent');
-    Check(TcpRequestCount < Self.SentRequestCount,
-          'No response sent down TCP');
-  finally
-    UdpTran.Free;
-  end;
+  CheckEquals(UdpRequestCount, Self.MockUdpTransport.SentRequestCount,
+              'UDP response was sent');
+  Check(TcpRequestCount < Self.MockTcpTransport.SentRequestCount,
+        'No response sent down TCP');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestServerInviteTransactionGetsAck;
