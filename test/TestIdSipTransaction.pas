@@ -3,33 +3,14 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipMessage, IdSipParser, IdSipTransport, IdSipTransaction, IdThread,
-  SysUtils, TestFramework;
+  IdSipMessage, IdSipParser, IdSipTransport, IdSipTransaction,
+  TestFramework;
 
   // Transactions behave slightly differently if a reliable transport is used -
   // certain messages are not resent. To this end, we test unreliable transports
   // by default, only checking that those certain messages are not resent when
   // using reliable transports in tests like TestReliableTransportFoo
 type
-  TestTIdSipTransactionTimer = class(TTestCase)
-  private
-    GotException:    Boolean;
-    Tick:            Boolean;
-    TickAccumulator: Cardinal;
-    Timer:           TIdSipTransactionTimer;
-    procedure OnAccumulatorTimer(Sender: TObject);
-    procedure OnException(AThread: TIdThread; AException: Exception);
-    procedure OnRaiseExceptionTimer(Sender: TObject);
-    procedure OnTickTimer(Sender: TObject);
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestExceptionHandling;
-    procedure TestMultipleTicks;
-    procedure TestTick;
-    procedure TestReset;
-  end;
 
   TestTIdSipClientInviteTransaction = class(TTestCase)
   private
@@ -116,12 +97,11 @@ type
 implementation
 
 uses
-  IdException, TypInfo;
+  IdException, SysUtils, TypInfo;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
-//  Result.AddTest(TestTIdSipTransactionTimer.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
 end;
@@ -129,98 +109,6 @@ end;
 function InviteStateToStr(const S: TIdSipInviteTransactionState): String;
 begin
   Result := GetEnumName(TypeInfo(TIdSipInviteTransactionState), Integer(S));
-end;
-
-//******************************************************************************
-//* TestTIdSipTransactionTimer                                                 *
-//******************************************************************************
-//* TestTIdSipTransactionTimer Public methods **********************************
-
-procedure TestTIdSipTransactionTimer.SetUp;
-begin
-  GotException    := false;
-  Tick            := false;
-  TickAccumulator := 0;
-  Timer           := TIdSipTransactionTimer.Create(true);
-end;
-
-procedure TestTIdSipTransactionTimer.TearDown;
-begin
-  Timer.Stop;
-  Timer.WaitFor;
-  Timer.Free;
-end;
-
-//* TestTIdSipTransactionTimer Private methods *********************************
-
-procedure TestTIdSipTransactionTimer.OnAccumulatorTimer(Sender: TObject);
-begin
-  Inc(TickAccumulator);
-  Self.Check(Self.Timer = Sender, 'Unknown Sender');
-end;
-
-procedure TestTIdSipTransactionTimer.OnException(AThread: TIdThread; AException: Exception);
-begin
-  GotException := true;
-end;
-
-procedure TestTIdSipTransactionTimer.OnRaiseExceptionTimer(Sender: TObject);
-begin
-  raise Exception.Create('OnRaiseExceptionTimer');
-end;
-
-procedure TestTIdSipTransactionTimer.OnTickTimer(Sender: TObject);
-begin
-  Tick := true;
-  Self.Check(Self.Timer = Sender, 'Unknown Sender');
-end;
-
-//* TestTIdSipTransactionTimer Published methods *******************************
-
-procedure TestTIdSipTransactionTimer.TestExceptionHandling;
-begin
-  Timer.OnException := Self.OnException;
-  Timer.OnTimer     := Self.OnRaiseExceptionTimer;
-  Timer.Interval    := 100;
-  Timer.Start;
-  Sleep(375);
-
-  Check(GotException, 'Main thread never heard of the exception');
-end;
-
-procedure TestTIdSipTransactionTimer.TestMultipleTicks;
-begin
-  Timer.OnTimer := Self.OnAccumulatorTimer;
-
-  Timer.Interval   := 100;
-  Timer.Start;
-  Sleep(375);
-
-  CheckEquals(3, TickAccumulator, 'Unexpected number of ticks');
-end;
-
-procedure TestTIdSipTransactionTimer.TestTick;
-begin
-  Timer.OnTimer := Self.OnTickTimer;
-
-  Timer.Interval := 100;
-  Timer.Start;
-  Sleep(150);
-
-  Check(Tick, 'Event didn''t fire');
-end;
-
-procedure TestTIdSipTransactionTimer.TestReset;
-begin
-  Timer.OnTimer := Self.OnTickTimer;
-  Timer.Interval := 1000;
-  Timer.Start;
-  Sleep(500);
-
-  Check(not Tick, 'Ticked prematurely before Reset');
-  Timer.Reset;
-  Sleep(500);
-  Check(not Tick, 'Ticked prematurely after Reset');
 end;
 
 //******************************************************************************

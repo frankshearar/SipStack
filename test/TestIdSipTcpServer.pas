@@ -43,6 +43,7 @@ type
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
+//    procedure TestTortureTest16;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -469,7 +470,15 @@ begin
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
-
+{
+procedure TestTIdSipTcpServer.TestTortureTest16;
+begin
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest16);
+//  Fail('We have to somehow wait and then sever a connection if it''s taking too long');
+//  Self.CheckTortureTest16;
+end;
+}
 procedure TestTIdSipTcpServer.TestTortureTest19;
 begin
   Self.Client.Connect(DefaultTimeout);

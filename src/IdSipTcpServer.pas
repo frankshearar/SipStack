@@ -3,7 +3,7 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, IdTCPConnection, IdTCPServer;
+  Classes, IdSipMessage, IdSipParser, IdSipTimer, IdTCPConnection, IdTCPServer;
 
 type
   TIdSipMethodEvent = procedure(AThread: TIdPeerThread;

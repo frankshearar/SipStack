@@ -2441,7 +2441,7 @@ begin
   CheckType(TIdSipWeightedCommaSeparatedHeader, Self.H.Add(AcceptHeader),               AcceptHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AcceptEncodingHeader),       AcceptEncodingHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
+  CheckType(TIdSipUriHeader,                    Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AllowHeader),                AllowHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(AuthorizationHeader),        AuthorizationHeader);

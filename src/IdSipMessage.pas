@@ -2038,7 +2038,7 @@ begin
 
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,                TIdSipWeightedCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,        TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,             TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,             TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                 TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,            TIdSipCallIDHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,           TIdSipCallIDHeader));

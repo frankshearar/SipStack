@@ -3,7 +3,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  Classes, QExtCtrls, IdSipMessage, IdSipParser, IdSipTransport, IdThread, SysUtils;
+  QExtCtrls, IdSipMessage, IdSipParser, IdSipTimer, IdSipTransport, SysUtils;
 
 const
   InitialT1     = 500;   // ms
@@ -17,24 +17,6 @@ type
   // Warning: these are both client and server states - itsCalling is client
   // only, itsConfirmed is server only.
   TIdSipInviteTransactionState = (itsCalling, itsProceeding, itsCompleted, itsConfirmed, itsTerminated);
-
-  TIdSipTransactionTimer = class(TIdThread)
-  private
-    fInterval:  Cardinal;
-    fOnTimer:   TNotifyEvent;
-    fStart:     TDateTime;
-    Resolution: Cardinal;
-  protected
-    procedure Run; override;
-  public
-    constructor Create(ACreateSuspended: Boolean = True); override;
-
-    function  ElapsedTime: TDateTime;
-    procedure Reset;
-
-    property Interval: Cardinal     read fInterval write fInterval;
-    property OnTimer:  TNotifyEvent read fOnTimer write fOnTimer;
-  end;
 
   TIdSipTransaction = class(TObject)
   private
@@ -67,9 +49,9 @@ type
   TIdSipClientInviteTransaction = class(TIdSipTransaction)
   private
     fTimeout:       Cardinal;
-    TimerA:         TIdSipTransactionTimer;
-    TimerB:         TIdSipTransactionTimer;
-    TimerD:         TIdSipTransactionTimer;
+    TimerA:         TIdSipTimer;
+    TimerB:         TIdSipTimer;
+    TimerD:         TIdSipTimer;
 
     procedure GenerateACK(const R: TIdSipResponse; Req: TIdSipRequest);
     procedure OnTimerA(Sender: TObject);
@@ -99,10 +81,10 @@ type
     fOnConfirmed:               TIdSipRequestEvent;
     fTransport:                 TIdSipAbstractTransport;
     LastProceedingResponseSent: Cardinal;
-    TimerG:                     TIdSipTransactionTimer;
+    TimerG:                     TIdSipTimer;
     TimerGHasFired:             Boolean;
-    TimerH:                     TIdSipTransactionTimer;
-    TimerI:                     TIdSipTransactionTimer;
+    TimerH:                     TIdSipTimer;
+    TimerI:                     TIdSipTimer;
 
     procedure ChangeToConfirmed(const R: TIdSipRequest);
     procedure DoOnConfirmed(const R: TIdSipRequest);
@@ -139,44 +121,7 @@ type
 implementation
 
 uses
-  DateUtils, IdException, Math;
-
-//******************************************************************************
-//* TIdSipTransactionTimer                                                     *
-//******************************************************************************
-//* TIdSipTransactionTimer Public methods **************************************
-
-constructor TIdSipTransactionTimer.Create(ACreateSuspended: Boolean = True);
-begin
-  Self.Resolution := 50;
-
-  inherited Create(ACreateSuspended);
-end;
-
-function TIdSipTransactionTimer.ElapsedTime: TDateTime;
-begin
-  Result := Now - Self.fStart
-end;
-
-procedure TIdSipTransactionTimer.Reset;
-begin
-  Self.fStart := Now;
-end;
-
-//* TIdSipTransactionTimer Protected methods ***********************************
-
-procedure TIdSipTransactionTimer.Run;
-begin
-  Self.Reset;
-  while not Self.Terminated do begin
-    Sleep(Self.Resolution);
-
-    if (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
-      Self.Reset;
-      Self.OnTimer(Self);
-    end;
-  end;
-end;
+  IdException, Math;
 
 //******************************************************************************
 //* TIdSipTransaction                                                          *
@@ -234,14 +179,14 @@ constructor TIdSipClientInviteTransaction.Create;
 begin
   inherited Create;
 
-  Self.TimerA          := TIdSipTransactionTimer.Create(true);
+  Self.TimerA          := TIdSipTimer.Create(true);
   Self.TimerA.Interval := InitialT1;
   Self.TimerA.OnTimer  := Self.OnTimerA;
 
-  Self.TimerB          := TIdSipTransactionTimer.Create(true);
+  Self.TimerB          := TIdSipTimer.Create(true);
   Self.TimerB.OnTimer  := Self.OnTimerB;
 
-  Self.TimerD          := TIdSipTransactionTimer.Create(true);
+  Self.TimerD          := TIdSipTimer.Create(true);
   Self.TimerD.Interval := TimerDTimeout;
   Self.TimerD.OnTimer  := Self.OnTimerD;
 end;
@@ -429,15 +374,15 @@ constructor TIdSipServerInviteTransaction.Create;
 begin
   inherited Create;
 
-  Self.TimerG := TIdSipTransactionTimer.Create;
+  Self.TimerG := TIdSipTimer.Create;
   Self.TimerG.Interval := InitialT1;
   Self.TimerG.OnTimer  := Self.OnTimerG;
 
-  Self.TimerH := TIdSipTransactionTimer.Create;
+  Self.TimerH := TIdSipTimer.Create;
   Self.TimerH.Interval := 64*InitialT1;
   Self.TimerH.OnTimer  := Self.OnTimerH;
 
-  Self.TimerI := TIdSipTransactionTimer.Create;
+  Self.TimerI := TIdSipTimer.Create;
   Self.TimerI.Interval := T4;
   Self.TimerI.OnTimer  := Self.OnTimerI;
 end;

@@ -10,6 +10,7 @@ uses
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipParser in 'src\IdSipParser.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
+  IdSipTimer in 'src\IdSipTimer.pas',
   IdSipTransaction in 'src\IdSipTransaction.pas',
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
@@ -26,7 +27,8 @@ uses
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdURI in 'test\TestIdURI.pas';
+  TestIdURI in 'test\TestIdURI.pas',
+  TestIdSipTimer in 'test\TestIdSipTimer.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}

@@ -17,6 +17,7 @@ type
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure CheckTortureTest16;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
     procedure CheckTortureTest22;
@@ -34,6 +35,7 @@ type
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
     procedure TestRequest;
+    procedure TestTortureTest16;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -160,6 +162,30 @@ begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
       Self.ExceptionMessage := E.Message;
     end;
+  end;
+end;
+
+procedure TestTIdSipUdpServer.CheckTortureTest16;
+var
+  Response: TIdSipResponse;
+  S:        TStringStream;
+begin
+  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  try
+    Self.Parser.Source := S;
+
+    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
+    try
+      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+      CheckEquals(Format(UnexpectedMessageLength, [154, 9999]),
+                  Response.StatusText,
+                  'StatusText');
+    finally
+      Response.Free;
+    end;
+  finally
+    S.Free;
   end;
 end;
 
@@ -409,6 +435,13 @@ begin
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestTortureTest16;
+begin
+  Self.Client.Send(TortureTest16);
+
+  Self.CheckTortureTest16;
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest19;

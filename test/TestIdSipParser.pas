@@ -460,7 +460,40 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Request);
-//    CheckEquals('
+    CheckEquals(TIdSipWeightedCommaSeparatedHeader.ClassName,
+                Self.Request.Headers[AcceptHeader].ClassName,
+                'Accept class');
+
+    CheckEquals(3,
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).ValueCount,
+                'Accept ValueCount');
+    CheckEquals('text/t140',
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[0].Value,
+                'Accept Values[0].Name');
+    CheckEquals(1000,
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[0].Weight,
+                'Accept Values[0].Weight');
+    CheckEquals('text/plain',
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Value,
+                'Accept Values[1].Name');
+    CheckEquals(700,
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Weight,
+                'Accept Values[1].Weight');
+    CheckEquals(1,
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Parameters.Count,
+                'Accept Values[1].Parameters.Count');
+    CheckEquals('bar',
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Parameters.Values['foo'],
+                'Accept Values[1].Parameters[''foo'']');
+    CheckEquals('text/xml',
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[2].Value,
+                'Accept Values[2].Name');
+    CheckEquals(1000,
+                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[2].Weight,
+                'Accept Values[2].Weight');
+    CheckEquals(TIdSipCallIdHeader.ClassName,
+                Self.Request.Headers[CallIDHeaderFull].ClassName,
+                'Call-ID class');
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',
                 Self.Request.Headers[CallIdHeaderFull].Value,
                 'Call-ID');

@@ -37,6 +37,9 @@ type
 
 implementation
 
+uses
+  SysUtils;
+
 //*******************************************************************************
 //* TestFoo                                                                     *
 //*******************************************************************************
@@ -62,8 +65,9 @@ end;
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
-  Msg:      TIdSipMessage;
-  PeerInfo: TPeerInfo;
+  RemainingBytes: Cardinal;
+  Msg:            TIdSipMessage;
+  PeerInfo:       TPeerInfo;
 begin
   inherited DoUDPRead(AData, ABinding);
 
@@ -76,7 +80,17 @@ begin
   try
     Msg := Self.Parser.ParseAndMakeMessage;
     try
+      RemainingBytes := AData.Size - AData.Position;
+      // Yes, typecasting an Integer to a Cardinal is not clever. However, the
+      // Abs() ensures that Length(Msg.Body) >= 0 and so we can rest in peace
+      // knowing we shan't cause an overflow. And we just the compiler warning
+      // about comparing signed and unsigned types.
+      if Msg.HasHeader(ContentLengthHeaderFull) and
+        (RemainingBytes <> Msg.ContentLength) then
+        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
+
       Msg.ReadBody(Self.Parser.Source);
+
       if (Msg is TIdSipRequest) then begin
         if TIdSipParser.IsFQDN(Msg.Path.LastHop.Host)
           or (Msg.Path.LastHop.Host <> ABinding.IP) then
