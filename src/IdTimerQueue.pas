@@ -166,7 +166,7 @@ function AddModuloWord(Addend, Augend: Word): Word;
 implementation
 
 uses
-  IdGlobal;
+  IdSystem;
 
 const
   DefaultSleepTime      = 10000;

@@ -48,6 +48,7 @@ uses
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
+  IdSystem in 'src\IdSystem.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
   IdUnicode in 'src\IdUnicode.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
@@ -57,7 +58,7 @@ uses
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
-  TestMessages in 'test\TestMessages.pas'{,
+  TestMessages in 'test\TestMessages.pas',
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
   TestIdRandom in 'test\TestIdRandom.pas',
@@ -70,8 +71,8 @@ uses
   TestIdSipCore in 'test\TestIdSipCore.pas',
   TestIdSipDialog in 'test\TestIdSipDialog.pas',
   TestIdSipDialogID in 'test\TestIdSipDialogID.pas',
-  TestIdSipHeaders in 'test\TestIdSipHeaders.pas'},
-  TestIdSipLocator in 'test\TestIdSipLocator.pas'{,
+  TestIdSipHeaders in 'test\TestIdSipHeaders.pas',
+  TestIdSipLocator in 'test\TestIdSipLocator.pas',
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipServerNotifier in 'test\TestIdSipServerNotifier.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
@@ -85,13 +86,13 @@ uses
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas'};
+  TestIdUnicode in 'test\TestIdUnicode.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
