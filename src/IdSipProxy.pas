@@ -12,7 +12,7 @@ unit IdSipProxy;
 interface
 
 uses
-  IdSipCore, IdSipMessage;
+  IdSipCore, IdSipDialog, IdSipMessage;
 
 type
   TIdSipProxy = class(TIdSipAbstractCore)
@@ -20,16 +20,30 @@ type
     function  AuthenticationHeader: String; override;
     function  AuthenticationStatusCode: Cardinal; override;
     function  HasAuthorization(Request: TIdSipRequest): Boolean; override;
+  public
+    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
   end;
 
 implementation
 
 uses
-  IdSipConsts;
+  IdSipConsts, SysUtils;
 
 //******************************************************************************
 //* TIdSipProxy                                                                *
 //******************************************************************************
+
+function TIdSipProxy.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+begin
+  raise Exception.Create('This stack cannot proxy requests as yet');
+end;
+
+function TIdSipProxy.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  raise Exception.Create('This stack cannot proxy requests as yet');
+end;
+
 //* TIdSipProxy Protected methods **********************************************
 
 function TIdSipProxy.AuthenticationHeader: String;
