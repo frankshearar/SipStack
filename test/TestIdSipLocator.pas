@@ -265,9 +265,9 @@ var
 begin
   Copy := Self.Loc.Copy;
   try
-    CheckEquals(Self.Loc.Transport, Copy.Transport, 'Transport');
-    CheckEquals(Self.Loc.Address,   Copy.Address,   'Address');
+    CheckEquals(Self.Loc.IPAddress, Copy.IPAddress, 'IPAddress');
     CheckEquals(Self.Loc.Port,      Copy.Port,      'Port');
+    CheckEquals(Self.Loc.Transport, Copy.Transport, 'Transport');
   finally
     Copy.Free;
   end;
@@ -275,7 +275,7 @@ end;
 
 procedure TestTIdSipLocation.TestCreate;
 begin
-  CheckEquals(Self.Address,   Self.Loc.Address,   'Address');
+  CheckEquals(Self.Address,   Self.Loc.IPAddress, 'IPAddress');
   CheckEquals(Self.Port,      Self.Loc.Port,      'Port');
   CheckEquals(Self.Transport, Self.Loc.Transport, 'Transport');
 end;
@@ -294,7 +294,7 @@ begin
     Loc := TIdSipLocation.Create(Via);
     try
       CheckEquals(Via.Port,      Loc.Port,      'Port');
-      CheckEquals(Via.SentBy,    Loc.Address,   'Address');
+      CheckEquals(Via.SentBy,    Loc.IPAddress, 'IPAddress');
       CheckEquals(Via.Transport, Loc.Transport, 'Transport');
     finally
       Loc.Free;
@@ -333,9 +333,9 @@ const
 begin
   Self.Locs.AddLocation(Transport, Address, Port);
 
-  CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
-  CheckEquals(Address,   Self.Locs.First.Address,   'Address');
+  CheckEquals(Address,   Self.Locs.First.IPAddress, 'IPAddress');
   CheckEquals(Port,      Self.Locs.First.Port,      'Port');
+  CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
 end;
 
 procedure TestTIdSipLocations.TestAddLocationsFromNames;
@@ -356,7 +356,7 @@ begin
                   Self.Locs[I].Transport,
                   IntToStr(I) + 'th location transport');
       CheckEquals(Names[I].IPAddress,
-                  Self.Locs[I].Address,
+                  Self.Locs[I].IPAddress,
                   IntToStr(I) + 'th location address');
       CheckEquals(Port,
                   Self.Locs[I].Port,
@@ -441,11 +441,11 @@ begin
                 Locations.Count, 'Location count');
 
     CheckEquals(ExpectedTransport, Locations[0].Transport, '1st record Transport');
-    CheckEquals(Self.ARecord,      Locations[0].Address,   '1st record Address');
+    CheckEquals(Self.ARecord,      Locations[0].IPAddress, '1st record IPAddress');
     CheckEquals(Self.Port,         Locations[0].Port,      '1st record Port');
 
     CheckEquals(ExpectedTransport, Locations[1].Transport, '2nd record Transport');
-    CheckEquals(Self.AAAARecord,   Locations[1].Address,   '2nd record Address');
+    CheckEquals(Self.AAAARecord,   Locations[1].IPAddress, '2nd record IPAddress');
     CheckEquals(Self.Port,         Locations[1].Port,      '2nd record Port');
   finally
     Locations.Free;
@@ -472,7 +472,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.Loc.NameRecords[0].IPAddress,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -482,7 +482,7 @@ begin
                   Locations[1].Transport,
                   'Second location transport');
       CheckEquals(Self.Loc.NameRecords[1].IPAddress,
-                  Locations[1].Address,
+                  Locations[1].IPAddress,
                   'Second location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[1].Port,
@@ -513,7 +513,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.Loc.NameRecords[0].IPAddress,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -523,7 +523,7 @@ begin
                   Locations[1].Transport,
                   'Second location transport');
       CheckEquals(Self.Loc.NameRecords[1].IPAddress,
-                  Locations[1].Address,
+                  Locations[1].IPAddress,
                   'Second location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[1].Port,
@@ -551,7 +551,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.IP,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -579,7 +579,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.IP,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -607,7 +607,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Response.LastHop.Received,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -638,7 +638,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Response.LastHop.Received,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Rport,
                   Locations[0].Port,
@@ -668,7 +668,7 @@ begin
                   Locations[1].Transport,
                   'First location transport');
       CheckEquals(SentByIP,
-                  Locations[1].Address,
+                  Locations[1].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[1].Port,
@@ -698,7 +698,7 @@ begin
                   Locations[1].Transport,
                   'First location transport');
       CheckEquals(SentByIP,
-                  Locations[1].Address,
+                  Locations[1].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[1].Port,
@@ -726,7 +726,7 @@ begin
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.IP,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
@@ -770,7 +770,7 @@ begin
                   Locations[0].Transport,
                   '1st record transport');
       CheckEquals(SecondRecord,
-                  Locations[0].Address,
+                  Locations[0].IPAddress,
                   '1st record address');
       CheckEquals(IdPORT_SIPS,
                   Locations[0].Port,
@@ -779,7 +779,7 @@ begin
                   Locations[1].Transport,
                   '2nd record transport');
       CheckEquals(ThirdRecord,
-                  Locations[1].Address,
+                  Locations[1].IPAddress,
                   '2nd record address');
       CheckEquals(IdPORT_SIPS,
                   Locations[1].Port,
@@ -830,7 +830,7 @@ begin
   Locations := Self.Loc.FindServersFor(Self.Target);
   try
     CheckEquals(1, Locations.Count, 'Number of locations');
-    CheckEquals('127.0.0.3', Locations[0].Address, 'Wrong location');
+    CheckEquals('127.0.0.3', Locations[0].IPAddress, 'Wrong location');
   finally
     Locations.Free;
   end;
@@ -909,7 +909,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,    Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -927,7 +927,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,    Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -946,7 +946,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,    Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -965,7 +965,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,    Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -983,7 +983,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.Address,   'Address');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,    Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -1001,7 +1001,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(UdpTransport,    Locations.First.Transport, 'Transport');
-    CheckEquals(Self.AAAARecord, Locations.First.Address,   'Address');
+    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
     CheckEquals(Self.Port,       Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -1019,7 +1019,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.ARecord, Locations.First.Address,   'Address');
+    CheckEquals(Self.ARecord, Locations.First.IPAddress, 'IPAddress');
     CheckEquals(IdPORT_SIPS,  Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -1037,7 +1037,7 @@ begin
     Check(Locations.Count > 0, 'Too few locations');
 
     CheckEquals(TlsTransport,    Locations.First.Transport, 'Transport');
-    CheckEquals(Self.AAAARecord, Locations.First.Address,   'Address');
+    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
     CheckEquals(IdPORT_SIPS,     Locations.First.Port,      'Port');
   finally
     Locations.Free;
@@ -1326,8 +1326,8 @@ begin
   Locations := Self.Loc.FindServersFor(Self.Target);
   try
     Check(Locations.Count > 1, 'Too few locations');
-    CheckEquals('127.0.0.1', Locations[0].Address, '1st record address');
-    CheckEquals('127.0.0.2', Locations[1].Address, '2nd record address');
+    CheckEquals('127.0.0.1', Locations[0].IPAddress, '1st record address');
+    CheckEquals('127.0.0.2', Locations[1].IPAddress, '2nd record address');
   finally
     Locations.Free;
   end;

@@ -51,18 +51,18 @@ type
   TIdSipLocation = class(TObject)
   private
     fTransport: String;
-    fAddress:   String;
+    fIPAddress: String;
     fPort:      Cardinal;
   public
     constructor Create(const Transport: String;
-                       const Address:   String;
+                       const IPAddress:   String;
                              Port: Cardinal); overload;
     constructor Create(Via: TIdSipViaHeader); overload;
 
     function Copy: TIdSipLocation;
 
     property Transport: String   read fTransport;
-    property Address:   String   read fAddress;
+    property IPAddress: String   read fIPAddress;
     property Port:      Cardinal read fPort;
   end;
 
@@ -479,13 +479,13 @@ end;
 //* TIdSipLocation Public methods **********************************************
 
 constructor TIdSipLocation.Create(const Transport: String;
-                                  const Address:   String;
+                                  const IPAddress:   String;
                                   Port: Cardinal);
 begin
   inherited Create;
 
   Self.fTransport := Transport;
-  Self.fAddress   := Address;
+  Self.fIPAddress   := IPAddress;
   Self.fPort      := Port;
 end;
 
@@ -493,14 +493,16 @@ constructor TIdSipLocation.Create(Via: TIdSipViaHeader);
 begin
   inherited Create;
 
+  // Note: You'd better be sure that the Via's sent-by contains an IP address
+  // and not a domain name!
   Self.fTransport := Via.Transport;
-  Self.fAddress   := Via.SentBy;
+  Self.fIPAddress := Via.SentBy;
   Self.fPort      := Via.Port;
 end;
 
 function TIdSipLocation.Copy: TIdSipLocation;
 begin
-  Result := TIdSipLocation.Create(Self.Transport, Self.Address, Self.Port);
+  Result := TIdSipLocation.Create(Self.Transport, Self.IPAddress, Self.Port);
 end;
 
 //******************************************************************************
@@ -892,7 +894,7 @@ begin
   UriLocation := Self.CreateLocationFromUri(AddressOfRecord);
   try
   List.AddLocation(UriLocation.Transport,
-                   UriLocation.Address,
+                   UriLocation.IPAddress,
                    UriLocation.Port);
   finally
     UriLocation.Free;
