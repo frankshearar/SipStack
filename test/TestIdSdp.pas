@@ -6482,7 +6482,12 @@ begin
     Binding.IP   := Address;
     Binding.Port := Port;
 
-    Server.Active := true;
+    try
+      Server.Active := true;
+    except
+      on EIdCouldNotBindSocket do
+        Fail('Port ' + Address + ':' + IntToStr(Port) + ' is not free');
+    end;
   finally
     Server.Free;
   end;
