@@ -132,6 +132,7 @@ type
     fRealm:                 String;
     fRequireAuthentication: Boolean;
     fUserAgentName:         String;
+    Observed:               TIdObservable;
 
     function  DefaultHostName: String;
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
@@ -149,6 +150,7 @@ type
     function  AuthenticationHeaderValue: String; virtual;
     function  AuthenticationStatusCode: Cardinal; virtual;
     function  HasAuthorization(Request: TIdSipRequest): Boolean; virtual;
+    procedure NotifyOfChange;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -164,13 +166,16 @@ type
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
   public
     constructor Create; virtual;
+    destructor  Destroy; override;
 
+    procedure AddObserver(const Listener: IIdSipObserver);
     function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; virtual;
     function  NextCallID: String;
     function  NextTag: String;
+    procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse);
 
@@ -285,7 +290,6 @@ type
     fMinimumExpiryTime:       Cardinal; // in seconds
     fProxy:                   TIdSipUri;
     KnownRegistrars:          TObjectList;
-    Observed:                 TIdObservable;
     RegistrationListenerLock: TCriticalSection;
     RegistrationListeners:    TList;
     UserAgentListenerLock:    TCriticalSection;
@@ -315,7 +319,6 @@ type
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
-    procedure NotifyOfChange;
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
     procedure OnInboundSessionExpire(Sender: TObject);
@@ -344,7 +347,6 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddObserver(const Listener: IIdSipObserver);
     procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
@@ -367,7 +369,6 @@ type
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
-    procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure RemoveAction(Action: TIdSipAction);
     procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
@@ -709,9 +710,23 @@ constructor TIdSipAbstractCore.Create;
 begin
   inherited Create;
 
+  Self.Observed := TIdObservable.Create;
+
   Self.HostName              := Self.DefaultHostName;
   Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
+end;
+
+destructor TIdSipAbstractCore.Destroy;
+begin
+  Self.Observed.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipAbstractCore.AddObserver(const Listener: IIdSipObserver);
+begin
+  Self.Observed.AddObserver(Listener);
 end;
 
 function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
@@ -731,6 +746,11 @@ end;
 function TIdSipAbstractCore.NextTag: String;
 begin
   Result := GRandomNumber.NextSipUserAgentTag;
+end;
+
+procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdSipObserver);
+begin
+  Self.Observed.RemoveObserver(Listener);
 end;
 
 procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest);
@@ -776,6 +796,11 @@ begin
   // challenge/authenticate.
 
   Result := Request.HasAuthorization;
+end;
+
+procedure TIdSipAbstractCore.NotifyOfChange;
+begin
+  Self.Observed.NotifyListenersOfChange(Self);
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
@@ -1301,7 +1326,6 @@ begin
 
   Self.ActionLock               := TCriticalSection.Create;
   Self.Actions                  := TObjectList.Create;
-  Self.Observed                 := TIdObservable.Create;
   Self.RegistrationListenerLock := TCriticalSection.Create;
   Self.RegistrationListeners    := TList.Create;
   Self.UserAgentListenerLock    := TCriticalSection.Create;
@@ -1333,18 +1357,12 @@ begin
   Self.UserAgentListenerLock.Free;
   Self.RegistrationListeners.Free;
   Self.RegistrationListenerLock.Free;
-  Self.Observed.Free;
   Self.Actions.Free;
   Self.ActionLock.Free;  
   Self.KnownRegistrars.Free;
   Self.Proxy.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipUserAgentCore.AddObserver(const Listener: IIdSipObserver);
-begin
-  Self.Observed.AddObserver(Listener);
 end;
 
 procedure TIdSipUserAgentCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
@@ -1544,11 +1562,6 @@ begin
   finally
     Self.ActionLock.Release;
   end;
-end;
-
-procedure TIdSipUserAgentCore.RemoveObserver(const Listener: IIdSipObserver);
-begin
-  Self.Observed.RemoveObserver(Listener);
 end;
 
 procedure TIdSipUserAgentCore.RemoveAction(Action: TIdSipAction);
@@ -2010,11 +2023,6 @@ begin
   finally
     Self.UserAgentListenerLock.Release;
   end;
-end;
-
-procedure TIdSipUserAgentCore.NotifyOfChange;
-begin
-  Self.Observed.NotifyListenersOfChange;
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;

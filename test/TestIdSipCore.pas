@@ -18,6 +18,7 @@ type
   published
     procedure TestNextCallID;
     procedure TestNextTag;
+    procedure TestNotifyOfChange;
   end;
 
   TTestCaseTU = class(TTestCaseSip)
@@ -420,6 +421,12 @@ uses
   IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SyncObjs,
   SysUtils, TestIdObservable, TestMessages;
 
+type
+  TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
+  public
+    procedure TriggerNotify;
+  end;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
@@ -434,6 +441,16 @@ begin
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
+end;
+
+//******************************************************************************
+//* TIdSipCoreWithExposedNotify                                                *
+//******************************************************************************
+//* TIdSipCoreWithExposedNotify Public methods *********************************
+
+procedure TIdSipCoreWithExposedNotify.TriggerNotify;
+begin
+  Self.NotifyOfChange;
 end;
 
 //******************************************************************************
@@ -498,6 +515,35 @@ begin
   finally
   end;
 end;
+
+// Self.Core is an (almost) abstract base class. We want to test the (static)
+// methods that are not abstract, and we want to do this without the compiler
+// moaning about something we know to be safe.
+{$WARNINGS OFF}
+procedure TestTIdSipAbstractCore.TestNotifyOfChange;
+var
+  C: TIdSipCoreWithExposedNotify;
+  O: TIdObserverListener;
+begin
+  C := TIdSipCoreWithExposedNotify.Create;
+  try
+    O := TIdObserverListener.Create;
+    try
+      C.AddObserver(O);
+      C.TriggerNotify;
+      Check(O.Changed,
+            'Observer not notified');
+      Check(O.Data = C,
+           'Core didn''t return itself as parameter in the notify');
+
+    finally
+      O.Free;
+    end;
+  finally
+    C.Free;
+  end;
+end;
+{$WARNINGS ON}
 
 //******************************************************************************
 //* TTestCaseTU                                                                *
