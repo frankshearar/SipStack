@@ -72,6 +72,7 @@ type
     UDPByteCount:   Integer;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
+    function  LocalSDP(const Address: String): String;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
@@ -273,6 +274,21 @@ begin
   Result.AddTransportSendingListener(Self);
 end;
 
+function TrnidSpike.LocalSDP(const Address: String): String;
+begin
+  Result := 'v=0'#13#10
+          + 'o=franks 123456 123456 IN IP4 ' + Address + #13#10
+          + 's=-'#13#10
+          + 'c=IN IP4 ' + Address + #13#10
+          + 't=0 0'#13#10
+          + 'm=audio 8000 RTP/AVP 0'#13#10
+          + 'm=audio 8002 RTP/AVP 96'#13#10
+          + 'a=rtpmap:96 telephone-event/8000'#13#10
+          + 'a=fmtp:101 0-16'#13#10
+          + 'm=text 8004 RTP/AVP 97'#13#10
+          + 'a=rtpmap:97 T140/1000'#13#10;
+end;
+
 procedure TrnidSpike.LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
 begin
   Self.Lock.Acquire;
@@ -357,20 +373,8 @@ begin
 
   Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
 
-  SDP := 'v=0'#13#10
-       + 'o=franks 123456 123456 IN IP4 ' + Address + #13#10
-       + 's=-'#13#10
-       + 'c=IN IP4 ' + Address + #13#10
-       + 't=0 0'#13#10
-       + 'm=audio 8000 RTP/AVP 0'#13#10
-       + 'm=audio 8002 RTP/AVP 96'#13#10
-       + 'a=rtpmap:96 telephone-event/8000'#13#10
-       + 'a=fmtp:101 0-16'#13#10
-       + 'm=text 8004 RTP/AVP 97'#13#10
-       + 'a=rtpmap:97 T140/1000'#13#10;
-
   Session.AddSessionListener(Self);
-  Session.AcceptCall(SDP, SdpMimeType);
+  Session.AcceptCall(Self.LocalSDP(Address), SdpMimeType);
 
   Session.PayloadProcessor.AddRTPListener(Self.HistListener);
   Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
@@ -526,20 +530,7 @@ begin
   try
     Target.Value := Self.TargetUri.Text;
 
-    SDP := 'v=0'#13#10
-         + 'o=franks 123456 123456 IN IP4 ' + Address + #13#10
-         + 's=-'#13#10
-         + 'c=IN IP4 ' + Address + #13#10
-         + 't=0 0'#13#10
-         + 'm=audio 8000 RTP/AVP 0'#13#10
-         + 'm=audio 8002 RTP/AVP 96'#13#10
-         + 'a=rtpmap:96 telephone-event/8000'#13#10
-         + 'a=fmtp:101 0-16'#13#10
-         + 'm=text 8004 RTP/AVP 97'#13#10
-         + 'a=rtpmap:97 T140/1000'#13#10;
-
-
-    Self.StartReadingData(SDP);
+    Self.StartReadingData(Self.LocalSDP(Address));
 
     Session := Self.UA.Call(Target,
                             SDP,
