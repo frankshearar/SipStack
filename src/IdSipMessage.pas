@@ -528,20 +528,22 @@ type
 
   TIdSipRetryAfterHeader = class(TIdSipNumericHeader)
   private
-    fComment:  String;
+    fComment:  WideString;
 
-    procedure EatLeadingWhitespace(var S: String);
+    procedure EatLeadingWhitespace(var S: String); overload;
+    procedure EatLeadingWhitespace(var W: WideString); overload;
     function  GetDuration: Cardinal;
-    procedure ParseComment(CommentString: String);
+    procedure ParseComment(CommentString: WideString);
     procedure SetDuration(const Value: Cardinal);
   protected
     function  GetName: String; override;
+    function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
     function HasDuration: Boolean;
 
-    property Comment:  String read fComment write fComment;
-    property Duration: Cardinal read GetDuration write SetDuration;
+    property Comment:  WideString read fComment write fComment;
+    property Duration: Cardinal   read GetDuration write SetDuration;
   end;
 
   TIdSipRouteHeader = class(TIdSipHeader)
@@ -1261,11 +1263,12 @@ function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdS
 function StrToTransport(const S: String): TIdSipTransportType;
 function TransportToStr(const T: TIdSipTransportType): String;
 function WithoutFirstAndLastChars(const S: String): String;
+function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
 implementation
 
 uses
-  IdRandom, IdSipConsts, IdSipDialog;
+  IdRandom, IdSipConsts, IdSipDialog, IdUnicode;
 
 // class variables
 var
@@ -1560,6 +1563,11 @@ end;
 function WithoutFirstAndLastChars(const S: String): String;
 begin
   Result := Copy(S, 2, Length(S) - 2);
+end;
+
+function WithoutFirstAndLastCharsW(const W: WideString): WideString;
+begin
+  Result := Copy(W, 2, Length(W) - 2);
 end;
 
 //******************************************************************************
@@ -3559,6 +3567,16 @@ begin
   Result := RetryAfterHeader;
 end;
 
+function TIdSipRetryAfterHeader.GetValue: String;
+begin
+  Result := IntToStr(Self.NumericValue);
+
+  if (Self.Comment <> '') then
+    Result := Result + ' (' + UTF8Encode(Self.Comment) + ')';
+
+  Result := Result + Self.ParamsAsString;
+end;
+
 procedure TIdSipRetryAfterHeader.Parse(const Value: String);
 var
   Token: String;
@@ -3579,7 +3597,7 @@ begin
 
   if (Raw <> '') then begin
     if (IndyPos('(', Raw) > 0) then begin
-      Self.ParseComment(Raw);
+      Self.ParseComment(UTF8Decode(TIdSipUri.Decode(Raw)));
     end
     else begin
       // If there's anything in Raw, it must be only parameters.
@@ -3610,6 +3628,18 @@ begin
   S := Copy(S, I, Length(S));
 end;
 
+procedure TIdSipRetryAfterHeader.EatLeadingWhitespace(var W: WideString);
+var
+  I: Integer;
+begin
+  // Eat leading whitespace
+  I := 1;
+  while (Ord(W[I]) in [$20, $09]) do
+    Inc(I);
+
+  W := Copy(W, I, Length(W));
+end;
+
 function TIdSipRetryAfterHeader.GetDuration: Cardinal;
 begin
   if Self.HasDuration then
@@ -3618,7 +3648,7 @@ begin
     Result := 0;
 end;
 
-procedure TIdSipRetryAfterHeader.ParseComment(CommentString: String);
+procedure TIdSipRetryAfterHeader.ParseComment(CommentString: WideString);
 var
   I:                Integer;
   ParenthesisCount: Integer;
@@ -3628,8 +3658,8 @@ begin
 
   Self.EatLeadingWhitespace(CommentString);
 
-  CommentString := Copy(CommentString, 1, RPos(')', CommentString));
-  CommentString := WithoutFirstAndLastChars(CommentString);
+  CommentString := Copy(CommentString, 1, RPosW(')', CommentString));
+  CommentString := WithoutFirstAndLastCharsW(CommentString);
 
   I := 1;
   while (I <= Length(CommentString)) do begin
@@ -3646,13 +3676,14 @@ begin
 
   if (ParenthesisCount <> 0) then
     Self.FailParse(UnmatchedParentheses);
-
-  Self.fComment := TIdSipUri.Decode(Self.fComment);
 end;
 
 procedure TIdSipRetryAfterHeader.SetDuration(const Value: Cardinal);
 begin
-  Self.Params[DurationParam] := IntToStr(Value);
+  if (Value > 0) then
+    Self.Params[DurationParam] := IntToStr(Value)
+  else
+    Self.Parameters.Delete(Self.IndexOfParam(DurationParam));
 end;
 
 //******************************************************************************

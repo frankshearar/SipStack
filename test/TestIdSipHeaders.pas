@@ -12,7 +12,7 @@ unit TestIdSipHeaders;
 interface
 
 uses
-  IdSipMessage, TestFramework;
+  IdSipMessage, TestFramework, TestFrameworkEx;
 
 type
   TestFunctions = class(TTestCase)
@@ -30,7 +30,7 @@ type
     procedure TestWithoutFirstAndLastChars;
   end;
 
-  THeaderTestCase = class(TTestCase)
+  THeaderTestCase = class(TThreadingTestCase)
   protected
     Header: TIdSipHeader;
     function HeaderType: TIdSipHeaderClass; virtual;
@@ -305,6 +305,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestGetValue;
     procedure TestHasDuration;
     procedure TestMalformedValue;
     procedure TestName;
@@ -597,7 +598,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, SysUtils, TestFrameworkSip;
+  Classes, IdSipConsts, IdUnicode, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -2815,6 +2816,38 @@ end;
 
 //* TestTIdSipRetryAfterHeader Published methods *******************************
 
+procedure TestTIdSipRetryAfterHeader.TestGetValue;
+begin
+  Self.R.NumericValue := 0;
+  CheckEquals('0', Self.R.Value, 'Zero Retry-After');
+
+  Self.R.NumericValue := 42;
+  CheckEquals('42', Self.R.Value, 'Non-zero numeric value');
+
+  Self.R.Comment := 'No comment';
+  CheckEquals('42 (No comment)', Self.R.Value, 'Simple comment');
+
+  Self.R.Comment := '(Nested comment) "And quoted string" ';
+  Self.R.Comment := Self.R.Comment + ZeroWidthNonBreakingSpaceChar;
+  CheckEquals('42 ((Nested comment) "And quoted string" '
+            + Utf8ZeroWidthNonBreakingSpace + ')',
+              Self.R.Value,
+              'Weird comment');
+
+  Self.R.Comment := 'No comment';
+  Self.R.Duration := 22;
+  CheckEquals('42 (No comment);duration=22', Self.R.Value, 'Comment + Duration');
+
+  Self.R.Comment := '';
+  CheckEquals('42;duration=22', Self.R.Value, 'Duration');
+
+  Self.R.Duration := 0;
+  CheckEquals('42', Self.R.Value, 'Duration set to zero');
+
+  Self.R.Params['foo'] := 'bar';
+  CheckEquals('42;foo=bar', Self.R.Value, 'General params');
+end;
+
 procedure TestTIdSipRetryAfterHeader.TestHasDuration;
 begin
   Check(not Self.R.HasDuration,
@@ -2950,20 +2983,20 @@ end;
 
 procedure TestTIdSipRetryAfterHeader.TestValueWithUtf8Comment;
 var
-  ZeroWidthNonBreakingSpace: String;
+  ZeroWidthNonBreakingSpace: WideString;
 begin
   // FEFF = zero-width, non-breaking space; in UTF-8 we encode this as
   // EF BB BF
-  ZeroWidthNonBreakingSpace := #$ef#$bb#$bf;
+  ZeroWidthNonBreakingSpace := ZeroWidthNonBreakingSpaceChar;
 
-  Self.R.Value := '1 (' + ZeroWidthNonBreakingSpace + ')';
+  Self.R.Value := '1 (' + Utf8ZeroWidthNonBreakingSpace + ')';
 
   CheckEquals(1,
               Self.R.NumericValue,
               'NumericValue');
-  CheckEquals(ZeroWidthNonBreakingSpace,
-              Self.R.Comment,
-              'Comment');
+  CheckEqualsW(ZeroWidthNonBreakingSpace,
+               Self.R.Comment,
+               'Comment');
 end;
 
 //******************************************************************************
