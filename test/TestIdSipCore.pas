@@ -25,7 +25,7 @@ type
   protected
     Core:        TIdSipUserAgentCore;
     Destination: TIdSipToHeader;
-    Dispatch:    TIdSipMockTransactionDispatcher;
+    Dispatcher:  TIdSipMockTransactionDispatcher;
     Invite:      TIdSipRequest;
     Session:     TIdSipSession;
 
@@ -39,9 +39,9 @@ type
 
   TestTIdSipAbstractUserAgent = class(TTestCase)
   private
-    Dispatch: TIdSipMockTransactionDispatcher;
-    Request:  TIdSipRequest;
-    UA:       TIdSipAbstractUserAgent;
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Request:    TIdSipRequest;
+    UA:         TIdSipAbstractUserAgent;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -140,19 +140,25 @@ type
     procedure TestHangUpAllCalls;
   end;
 
-  TestTIdSipAction = class(TTestCaseTU);
-{
-  private
-    Action: TIdSipAction;
+  TestTIdSipAction = class(TTestCaseTU)
   protected
-    function ActionClass: TIdSipActionClass; virtual; abstract;
+    ActionFailed: Boolean;
+
+    function  CreateAction: TIdSipAction; virtual; abstract;
+    procedure SimulateRemoteBadExtensionResponse;
+    procedure SimulateRemoteMovedPermanently(const SipUrl: String);
+    procedure SimulateRemoteResponse(StatusCode: Cardinal);
   public
     procedure SetUp; override;
-    procedure TearDown; override;
-  procedure
+  published
+    procedure TestReceiveFailureNotification;
+    procedure TestReceiveMovedPermanently;
+{
     procedure TestReceiveResponseBadExtension;
-  end;
+    procedure TestReceiveResponseBadExtensionWithoutRequires;
 }
+  end;
+
   TestTIdSipSession = class(TestTIdSipAction,
                             IIdRTPDataListener,
                             IIdSipSessionListener,
@@ -185,6 +191,8 @@ type
     procedure SimulateRemoteAccept(Invite: TIdSipRequest);
     procedure SimulateRemoteRinging(Invite: TIdSipRequest);
     procedure SimulateRemoteTryingWithNoToTag(Invite: TIdSipRequest);
+  protected
+    function CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -202,7 +210,6 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
-    procedure TestCreateAck;
     procedure TestCreateCancel;
     procedure TestCreateCancelANonInviteRequest;
     procedure TestCreateCancelWithProxyRequire;
@@ -232,19 +239,16 @@ type
     procedure TestTimerIntervalIncreases;
   end;
 
-  TestTIdSipRegistration = class(TTestCase,
+  TestTIdSipRegistration = class(TestTIdSipAction,
                                  IIdSipRegistrationListener)
   private
     Challenged:  Boolean;
     Contacts:    TIdSipContacts;
-    Dispatch:    TIdSipMockTransactionDispatcher;
-    Failed:      Boolean;
     MinExpires:  Cardinal;
     Reg:         TIdSipRegistration;
     Registrar:   TIdSipRegistrar;
     Request:     TIdSipRequest;
     Succeeded:   Boolean;
-    UA:          TIdSipUserAgentCore;
 
     procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
                                         Response: TIdSipResponse);
@@ -256,6 +260,8 @@ type
     procedure SimulateRemoteIntervalTooBrief;
     procedure SimulateRemoteOK;
     procedure SimulateRemoteResponse(StatusCode: Cardinal);
+  protected
+    function CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -340,12 +346,12 @@ begin
   Self.Destination := TIdSipToHeader.Create;
   Self.Destination.Value := 'sip:franks@localhost';
 
-  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatch.Transport.LocalEchoMessages := false;
-  Self.Dispatch.Transport.TransportType := sttTCP;
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatcher.Transport.LocalEchoMessages := false;
+  Self.Dispatcher.Transport.TransportType := sttTCP;
 
   Self.Core := TIdSipUserAgentCore.Create;
-  Self.Core.Dispatcher := Self.Dispatch;
+  Self.Core.Dispatcher := Self.Dispatcher;
 
   Self.Core.Contact.Value := 'sip:wintermute@localhost';
   Self.Core.From.Value    := 'sip:wintermute@localhost';
@@ -363,7 +369,7 @@ procedure TTestCaseTU.TearDown;
 begin
   Self.Invite.Free;
   Self.Core.Free;
-  Self.Dispatch.Free;
+  Self.Dispatcher.Free;
   Self.Destination.Free;
 
   inherited TearDown;
@@ -391,7 +397,7 @@ end;
 
 procedure TTestCaseTU.SimulateRemoteInvite;
 begin
-  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+  Self.Dispatcher.Transport.FireOnRequest(Self.Invite);
 end;
 
 procedure TTestCaseTU.SimulateRemoteBye(const LocalDialog: TIdSipDialog);
@@ -400,7 +406,7 @@ var
 begin
   Bye := Self.CreateRemoteBye(LocalDialog);
   try
-    Self.Dispatch.Transport.FireOnRequest(Bye);
+    Self.Dispatcher.Transport.FireOnRequest(Bye);
   finally
     Bye.Free;
   end;
@@ -424,9 +430,9 @@ var
 begin
   inherited SetUp;
 
-  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.UA := TIdSipAbstractUserAgent.Create;
-  Self.UA.Dispatcher := Self.Dispatch;
+  Self.UA.Dispatcher := Self.Dispatcher;
 
   P := TIdSipParser.Create;
   try
@@ -446,7 +452,7 @@ procedure TestTIdSipAbstractUserAgent.TearDown;
 begin
   Self.Request.Free;
   Self.UA.Free;
-  Self.Dispatch.Free;
+  Self.Dispatcher.Free;
 
   inherited TearDown;
 end;
@@ -765,15 +771,18 @@ begin
         'SimulateRemoteAck called but Self.Session''s dialog isn''t '
       + 'established');
 
-  Ack := Self.Session.CreateAck;
+  Ack := Self.Core.CreateRequest(Self.Session.Dialog);
   try
+    Ack.Method          := MethodAck;
+    Ack.CSeq.SequenceNo := Self.Session.Invite.CSeq.SequenceNo;
+    Ack.CSeq.Method     := Ack.Method;
     // We have to swop the tags because CreateAck returns a LOCALLY created ACK,
     // so the remote tag is actually the far end's local tag.
     Temp             := Ack.From.Tag;
     Ack.From.Tag     := Ack.ToHeader.Tag;
     Ack.ToHeader.Tag := Temp;
 
-    Self.Dispatch.Transport.FireOnRequest(Ack);
+    Self.Dispatcher.Transport.FireOnRequest(Ack);
   finally
     Ack.Free;
   end;
@@ -785,7 +794,7 @@ var
 begin
   Bye := Self.CreateRemoteBye(Dialog);
   try
-    Self.Dispatch.Transport.FireOnRequest(Bye);
+    Self.Dispatcher.Transport.FireOnRequest(Bye);
   finally
     Bye.Free;
   end;
@@ -1021,7 +1030,7 @@ begin
     Response := P.ParseAndMakeResponse(LocalLoopResponse);
     try
       Response.StatusCode := SIPTrying;
-      Self.Dispatch.Transport.FireOnResponse(Response);
+      Self.Dispatcher.Transport.FireOnResponse(Response);
     finally
       Response.Free;
     end;
@@ -1086,7 +1095,7 @@ begin
     Response := P.ParseAndMakeResponse(LocalLoopResponse);
     try
       Response.StatusCode := SIPTrying;
-      Self.Dispatch.Transport.FireOnResponse(Response);
+      Self.Dispatcher.Transport.FireOnResponse(Response);
     finally
       Response.Free;
     end;
@@ -1316,7 +1325,7 @@ begin
               'Number of sessions after two INVITEs');
   SessionOne.AcceptCall('', '');
   SessionTwo.AcceptCall('', '');
-  Self.SimulateRemoteAck(Self.Dispatch.Transport.LastResponse);
+  Self.SimulateRemoteAck(Self.Dispatcher.Transport.LastResponse);
   Check(not SessionOne.ReceivedAck, 'SessionOne got the ACK');
   Check(    SessionTwo.ReceivedAck, 'SessionTwo didn''t get the ACK');
 end;
@@ -1382,19 +1391,19 @@ var
   ResponseCount: Cardinal;
 begin
   // cf. RFC 3261, section 8.2.2.2
-  Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
+  Self.Dispatcher.AddServerTransaction(Self.Invite, Self.Dispatcher.Transport);
 
   // wipe out the tag & give a different branch
   Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.SimulateRemoteInvite;
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
 end;
 
@@ -1443,14 +1452,14 @@ begin
     Bye.CSeq.SequenceNo := $deadbeef;
     Bye.CSeq.Method     := Bye.Method;
 
-    ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
-    Self.Dispatch.Transport.FireOnRequest(Bye);
+    Self.Dispatcher.Transport.FireOnRequest(Bye);
 
     CheckEquals(ResponseCount + 1,
-                Self.Dispatch.Transport.SentResponseCount,
+                Self.Dispatcher.Transport.SentResponseCount,
                 'no response sent');
-    Response := Self.Dispatch.Transport.LastResponse;
+    Response := Self.Dispatcher.Transport.LastResponse;
     CheckEquals(SIPCallLegOrTransactionDoesNotExist,
                 Response.StatusCode,
                 'Response Status-Code')
@@ -1470,14 +1479,14 @@ begin
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
   Self.Session.AcceptCall('', '');
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.SimulateRemoteBye(Self.Session.Dialog);
 
   CheckEquals(ResponseCount + 1,
-              Self.Dispatch.Transport.SentResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
               'SOMETHING should have sent a response');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckNotEquals(SIPCallLegOrTransactionDoesNotExist,
                  Response.StatusCode,
                  'UA tells us no matching dialog was found');
@@ -1497,14 +1506,14 @@ begin
     Bye.CSeq.SequenceNo := $deadbeef;
     Bye.CSeq.Method     := Bye.Method;
 
-    ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
-    Self.Dispatch.Transport.FireOnRequest(Bye);
+    Self.Dispatcher.Transport.FireOnRequest(Bye);
 
     CheckEquals(ResponseCount + 1,
-                Self.Dispatch.Transport.SentResponseCount,
+                Self.Dispatcher.Transport.SentResponseCount,
                 'no response sent');
-    Response := Self.Dispatch.Transport.LastResponse;
+    Response := Self.Dispatcher.Transport.LastResponse;
     CheckEquals(SIPCallLegOrTransactionDoesNotExist,
                 Response.StatusCode,
                 'Response Status-Code')
@@ -1516,7 +1525,6 @@ end;
 procedure TestTIdSipUserAgentCore.TestReceiveResponseWithMultipleVias;
 var
   Response: TIdSipResponse;
-  Transaction: TIdSipTransaction;
 begin
   Self.Core.Call(Self.Destination, '', '');
 
@@ -1525,7 +1533,7 @@ begin
                                           Self.Core.Contact);
   try
     Response.AddHeader(Response.Path.LastHop);
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
     Check(not Self.SessionEstablished,
           'Multiple-Via Response not dropped');
   finally
@@ -1619,14 +1627,14 @@ var
 begin
   Self.Invite.RemoveHeader(Self.Invite.FirstContact);
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPBadRequest,        Response.StatusCode, 'Status-Code');
   CheckEquals(MissingContactHeader, Response.StatusText, 'Status-Text');
 end;
@@ -1638,16 +1646,16 @@ var
 begin
   Self.Invite.FirstHeader(ContentTypeHeaderFull).Value := SdpMimeType;
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.Invite.AddHeader(ContentEncodingHeaderFull).Value := 'gzip';
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
   Check(Response.HasHeader(AcceptEncodingHeader), 'No Accept-Encoding header');
   CheckEquals('',
@@ -1664,14 +1672,14 @@ begin
 
   Self.Invite.AddHeader(ContentLanguageHeader).Value := 'en_GB';
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
   Check(Response.HasHeader(AcceptLanguageHeader), 'No Accept-Language header');
   CheckEquals(Self.Core.AllowedLanguages,
@@ -1684,16 +1692,16 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.Invite.ContentType := 'text/xml';
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPUnsupportedMediaType, Response.StatusCode, 'Status-Code');
   Check(Response.HasHeader(AcceptHeader), 'No Accept header');
   CheckEquals(SdpMimeType,
@@ -1706,16 +1714,16 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.Invite.AddHeader(RequireHeader).Value := '100rel';
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPBadExtension, Response.StatusCode, 'Status-Code');
   Check(Response.HasHeader(UnsupportedHeader), 'No Unsupported header');
   CheckEquals(Self.Invite.FirstHeader(RequireHeader).Value,
@@ -1728,15 +1736,15 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.Invite.RequestUri.URI := 'tel://1';
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
 end;
 
@@ -1751,14 +1759,14 @@ begin
   Self.Invite.Method := MethodRegister;
   Self.Invite.CSeq.Method := Self.Invite.Method;
 
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.SimulateRemoteInvite;
 
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+  Check(Self.Dispatcher.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   Check(Response.HasHeader(AllowHeader),
         'Allow header is mandatory. cf. RFC 3261 section 8.2.1');
 
@@ -1779,16 +1787,16 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.Invite.SIPVersion := 'SIP/1.0';
 
   Self.SimulateRemoteInvite;
 
   CheckEquals(ResponseCount + 1,
-              Self.Dispatch.Transport.SentResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
               'No response sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPSIPVersionNotSupported,
               Response.StatusCode,
               'Status-Code');
@@ -1905,6 +1913,122 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipAction                                                           *
+//******************************************************************************
+//* TestTIdSipAction Public methods ********************************************
+
+procedure TestTIdSipAction.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ActionFailed := false;
+end;
+
+//* TestTIdSipAction Protected methods *****************************************
+
+procedure TestTIdSipAction.SimulateRemoteBadExtensionResponse;
+begin
+  Self.SimulateRemoteResponse(SIPBadExtension);
+end;
+
+procedure TestTIdSipAction.SimulateRemoteMovedPermanently(const SipUrl: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                          SIPMovedPermanently);
+  try
+    Response.AddHeader(ContactHeaderFull).Value := SipUrl;
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipAction.SimulateRemoteResponse(StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                          StatusCode);
+  try
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//* TestTIdSipAction Published methods *****************************************
+
+procedure TestTIdSipAction.TestReceiveFailureNotification;
+var
+  Action:          TIdSipAction;
+  ActionClassname: String;
+begin
+  // CreateAction creates an Action owned by Self.Core. When we free Self.Core
+  // then it'll free Action.
+  Action          := Self.CreateAction;
+  ActionClassname := Action.ClassName;
+  Self.SimulateRemoteBadExtensionResponse;
+
+  Check(Self.ActionFailed, ActionClassName + ' failure not reported');
+end;
+
+procedure TestTIdSipAction.TestReceiveMovedPermanently;
+var
+  Action:          TIdSipAction;
+  ActionClassname: String;
+  RequestCount:    Cardinal;
+begin
+  Action          := Self.CreateAction;
+  ActionClassname := Action.ClassName;
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Self.SimulateRemoteMovedPermanently('sip:case@fried.neurons.org');
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        ActionClassname + ' no request re-issued');
+end;
+{
+procedure TestTIdSipAction.TestReceiveResponseBadExtension;
+var
+  Action:          TIdSipAction;
+  ActionClassname: String;
+  RequestCount:    Cardinal;
+begin
+  // CreateAction creates an Action owned by Self.Core. When we free Self.Core
+  // then it'll free Action.
+  Action          := Self.CreateAction;
+  ActionClassname := Action.ClassName;
+  Self.SimulateRemoteBadExtensionResponse;
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        ActionClassname + ' request wasn''t reissued');
+  Check(not Self.Dispatcher.Transport.LastRequest.HasHeader(RequireHeader),
+        'Require header still in 2nd attempt');
+end;
+
+procedure TestTIdSipAction.TestReceiveResponseBadExtensionWithoutRequires;
+var
+  Action:          TIdSipAction;
+  ActionClassname: String;
+begin
+
+  // If we send a request that has no Requires header, but get a 420 Bad
+  // Extension back (which can only come from a bad SIP implementation on the
+  // remote end), then we must report a failure.
+
+  // CreateAction creates an Action owned by Self.Core. When we free Self.Core
+  // then it'll free Action.
+  Action          := Self.CreateAction;
+  ActionClassname := Action.ClassName;
+
+  Self.SimulateRemoteBadExtensionResponse;
+  Check(Self.ActionFailed, ActionClassName + ' failure not reported');
+end;
+}
+//******************************************************************************
 //* TestTIdSipSession                                                          *
 //******************************************************************************
 //* TestTIdSipSession Public methods *******************************************
@@ -1936,6 +2060,14 @@ begin
   Self.MultiStreamSdp.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSipSession Protected methods ****************************************
+
+function TestTIdSipSession.CreateAction: TIdSipAction;
+begin
+  Result := Self.Core.Call(Self.Destination, '', '');
+  (Result as TIdSipSession).AddSessionListener(Self);
 end;
 
 //* TestTIdSipSession Private methods ******************************************
@@ -2044,6 +2176,7 @@ procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
 begin
   Self.Session := Session;
   Self.OnEndedSessionFired := true;
+  Self.ActionFailed := true;
 end;
 
 procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession);
@@ -2090,7 +2223,7 @@ begin
   Response := Self.Core.CreateResponse(Invite, SIPOK);
   try
     Response.ToHeader.Tag := Self.Core.NextTag;
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
   end;
@@ -2102,7 +2235,7 @@ var
 begin
   Response := Self.Core.CreateResponse(Invite, SIPRinging);
   try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
   end;
@@ -2117,7 +2250,7 @@ begin
     // strip the To header tag
     Response.ToHeader.Value := Response.ToHeader.Value;
 
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
   end;
@@ -2131,13 +2264,13 @@ begin
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
   Self.Session.AcceptCall('', '');
-  Self.Dispatch.Transport.ResetSentResponseCount;
+  Self.Dispatcher.Transport.ResetSentResponseCount;
   Self.Session.ResendLastResponse;
   CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
               'Response not resent');
   CheckEquals(SIPOK,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
               'Unexpected response code');
 end;
 
@@ -2146,19 +2279,19 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
-  Self.Dispatch.Transport.TransportType := sttTCP;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.Dispatcher.Transport.TransportType := sttTCP;
 
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
   Self.Session.AcceptCall('', '');
 
-  Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
   CheckNotNull(Session.Dialog, 'Dialog object wasn''t created');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPOK, Response.StatusCode,      'Status-Code');
   Check(Response.From.HasTag,                  'No From tag');
   Check(Response.ToHeader.HasTag,              'No To tag');
@@ -2209,16 +2342,16 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
   Self.Session.AcceptCall(Self.SimpleSdp.AsString, SdpMimeType);
 
-  Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
 
-  Response := Self.Dispatch.Transport.LastResponse;
+  Response := Self.Dispatcher.Transport.LastResponse;
   Check(Response.HasHeader(ContentTypeHeaderFull),
         'No Content-Type header');
   CheckEquals(SdpMimeType,
@@ -2284,19 +2417,19 @@ var
   Session:      TIdSipSession;
   TranCount:    Integer;
 begin
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   SessCount    := Self.Core.SessionCount;
-  TranCount    := Self.Dispatch.TransactionCount;
+  TranCount    := Self.Dispatcher.TransactionCount;
 
   Session := Self.Core.Call(Self.Destination, '', '');
 
   CheckEquals(RequestCount + 1,
-              Self.Dispatch.Transport.SentRequestCount,
+              Self.Dispatcher.Transport.SentRequestCount,
               'no INVITE sent');
-  Invite := Self.Dispatch.Transport.LastRequest;
+  Invite := Self.Dispatcher.Transport.LastRequest;
 
   CheckEquals(TranCount + 1,
-              Self.Dispatch.TransactionCount,
+              Self.Dispatcher.TransactionCount,
               'no client INVITE transaction created');
 
   CheckEquals(SessCount + 1,
@@ -2305,7 +2438,7 @@ begin
 
   Response := Self.Core.CreateResponse(Invite, SIPRinging);
   try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Check(Session.Dialog.IsEarly,
           'Dialog in incorrect state: should be Early');
@@ -2327,7 +2460,7 @@ begin
 
   Response := Self.Core.CreateResponse(Invite, SIPOK);
   try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
   finally
@@ -2342,7 +2475,7 @@ var
   TranCount: Integer;
 begin
   SessCount := Self.Core.SessionCount;
-  TranCount := Self.Dispatch.TransactionCount;
+  TranCount := Self.Dispatcher.TransactionCount;
 
   Session := Self.Core.Call(Self.Destination, '', '');
   Session.Call(Self.Destination, '', '');
@@ -2351,7 +2484,7 @@ begin
               Self.Core.SessionCount,
               'A second session was created');
   CheckEquals(TranCount + 1,
-              Self.Dispatch.TransactionCount,
+              Self.Dispatcher.TransactionCount,
               'A second transaction was created');
 end;
 
@@ -2362,11 +2495,11 @@ var
 begin
   Session := Self.Core.Call(Self.Destination, '', '');
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                        SIPForbidden);
   try
     Session.AddSessionListener(Self);
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
   finally
@@ -2382,13 +2515,13 @@ begin
   Session := TIdSipSession.Create(Self.Core);
   try
     Session.AddSessionListener(Self);
-    Self.Dispatch.Transport.FailWith := EIdConnectTimeout;
+    Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
     Session.Call(Self.Destination, '', '');
 
-    Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+    Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                          SIPForbidden);
     try
-      Self.Dispatch.Transport.FireOnResponse(Response);
+      Self.Dispatcher.Transport.FireOnResponse(Response);
 
       Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
     finally
@@ -2404,15 +2537,15 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatch.Transport.TransportType := sttTLS;
+  Self.Dispatcher.Transport.TransportType := sttTLS;
 
   Self.Destination.Address.Scheme := SipsScheme;
   Session := Self.Core.Call(Self.Destination, '', '');
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                        SIPRinging);
   try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Response.StatusCode := SIPOK;
     Check(Session.Dialog.IsSecure, 'Dialog not secure when TLS used');
@@ -2427,15 +2560,15 @@ var
   SentInvite:   TIdSipRequest;
   Session:      TIdSipSession;
 begin
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
-  Self.Dispatch.Transport.TransportType := sttTCP;
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Self.Dispatcher.Transport.TransportType := sttTCP;
   Self.Destination.Address.Scheme := SipsScheme;
 
   Session := Self.Core.Call(Self.Destination, '', '');
 
-  Check(RequestCount < Self.Dispatch.Transport.SentRequestCount,
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
         'INVITE wasn''t sent');
-  SentInvite := Self.Dispatch.Transport.LastRequest;
+  SentInvite := Self.Dispatcher.Transport.LastRequest;
 
   Self.SimulateRemoteRinging(SentInvite);
 
@@ -2447,43 +2580,20 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatch.Transport.TransportType := sttTCP;
+  Self.Dispatcher.Transport.TransportType := sttTCP;
 
   Session := Self.Core.Call(Self.Destination, '', '');
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                        SipRinging);
   try
     Response.FirstContact.Address.Scheme := SipsScheme;
     Response.StatusCode := SIPOK;
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
   finally
     Response.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateAck;
-var
-  Ack:    TIdSipRequest;
-  Invite: TIdSipRequest;
-begin
-  Ack := Self.EstablishedSession.CreateAck;
-  try
-    CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-
-    Invite := Self.EstablishedSession.Invite;
-
-    CheckEquals(Invite.CSeq.SequenceNo,
-                Ack.CSeq.SequenceNo,
-                'CSeq numerical portion');
-    CheckEquals(MethodAck,
-                Ack.CSeq.Method,
-                'ACK must have an INVITE method in the CSeq');
-
-  finally
-    Ack.Free;
   end;
 end;
 
@@ -2601,14 +2711,14 @@ var
   SentInvite:   TIdSipRequest;
   Session:      TIdSipSession;
 begin
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Session := Self.Core.Call(Self.Destination, '', '');
   Check(not Session.DialogEstablished, 'Brand new session');
 
-  Check(RequestCount < Self.Dispatch.Transport.SentRequestCount,
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
         'The INVITE wasn''t sent');
-  SentInvite := Self.Dispatch.Transport.LastRequest;
+  SentInvite := Self.Dispatcher.Transport.LastRequest;
 
   Self.SimulateRemoteTryingWithNoToTag(SentInvite);
   Check(not Session.DialogEstablished,
@@ -2620,15 +2730,28 @@ begin
 end;
 
 procedure TestTIdSipSession.TestReceive2xxSendsAck;
+var
+  Ack:    TIdSipRequest;
+  Invite: TIdSipRequest;
 begin
   // Remember, we established a dialog for EstablishedSession in the SetUp
   CheckEquals(1,
-              Self.Dispatch.Transport.ACKCount,
+              Self.Dispatcher.Transport.ACKCount,
               'Retransmission');
-  Self.Dispatch.Transport.FireOnResponse(Self.Dispatch.Transport.LastResponse);
+  Self.Dispatcher.Transport.FireOnResponse(Self.Dispatcher.Transport.LastResponse);
   CheckEquals(2,
-              Self.Dispatch.Transport.ACKCount,
+              Self.Dispatcher.Transport.ACKCount,
               'Retransmission');
+
+  Ack := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
+  Invite := Self.EstablishedSession.Invite;
+  CheckEquals(Invite.CSeq.SequenceNo,
+              Ack.CSeq.SequenceNo,
+              'CSeq numerical portion');
+  CheckEquals(MethodAck,
+              Ack.CSeq.Method,
+              'ACK must have an INVITE method in the CSeq');
 end;
 
 procedure TestTIdSipSession.TestReceiveBye;
@@ -2657,7 +2780,7 @@ begin
   // This must be a CLIENT transaction!
   ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
-    Self.Dispatch.Transport.FireOnRequest(ReInvite);
+    Self.Dispatcher.Transport.FireOnRequest(ReInvite);
     Self.SimulateRemoteBye(Self.Session.Dialog);
 
     Check(Self.SentRequestTerminated,
@@ -2679,12 +2802,12 @@ begin
   Invite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
     Invite.CSeq.SequenceNo := Invite.CSeq.SequenceNo - 1;
-    Self.Dispatch.Transport.ResetSentResponseCount;
-    Self.Dispatch.Transport.FireOnRequest(Invite);
+    Self.Dispatcher.Transport.ResetSentResponseCount;
+    Self.Dispatcher.Transport.FireOnRequest(Invite);
     CheckEquals(1,
-                Self.Dispatch.Transport.SentResponseCount,
+                Self.Dispatcher.Transport.SentResponseCount,
                 'No response sent');
-    Response := Self.Dispatch.Transport.LastResponse;
+    Response := Self.Dispatcher.Transport.LastResponse;
     CheckEquals(SIPInternalServerError,
                 Response.StatusCode,
                 'Unexpected response');
@@ -2706,7 +2829,7 @@ begin
 
   ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
-    Self.Dispatch.Transport.FireOnRequest(ReInvite);
+    Self.Dispatcher.Transport.FireOnRequest(ReInvite);
 
     Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
   finally
@@ -2747,7 +2870,7 @@ var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
 begin
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
@@ -2756,10 +2879,10 @@ begin
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
-              Self.Dispatch.Transport.SentRequestCount,
+              Self.Dispatcher.Transport.SentRequestCount,
               'no BYE sent');
 
-  Request := Self.Dispatch.Transport.LastRequest;
+  Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.IsBye, 'Unexpected last request');
 
   Check(Self.Session.IsTerminated, 'Session not marked as terminated');
@@ -2772,15 +2895,15 @@ var
   Session:      TIdSipSession;
 begin
   Session := Self.Core.Call(Self.Destination, '', '');
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Session.Terminate;
 
   CheckEquals(RequestCount + 1,
-              Self.Dispatch.Transport.SentRequestCount,
+              Self.Dispatcher.Transport.SentRequestCount,
               'no CANCEL sent');
 
-  Request := Self.Dispatch.Transport.LastRequest;
+  Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.IsCancel, 'Unexpected last request');
 
   Check(Session.IsTerminated, 'Session not marked as terminated');
@@ -2844,10 +2967,6 @@ begin
 
   Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
-  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := Self.Dispatch;
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
@@ -2862,11 +2981,10 @@ begin
 
   Self.Contacts := TIdSipContacts.Create(Self.Request.Headers);
 
-  Self.Reg := TIdSipRegistration.Create(Self.UA);
+  Self.Reg := TIdSipRegistration.Create(Self.Core);
   Self.Reg.AddListener(Self);
 
   Self.Challenged := false;
-  Self.Failed     := false;
   Self.Succeeded  := false;
   Self.MinExpires := TwoHours;
 end;
@@ -2876,11 +2994,17 @@ begin
   Self.Reg.Free;
   Self.Contacts.Free;
   Self.Request.Free;
-  Self.UA.Free;
-  Self.Dispatch.Free;
   Self.Registrar.Free;
 
   inherited TearDown;
+end;
+
+//*  TestTIdSipRegistration Protected methods **********************************
+
+function TestTIdSipRegistration.CreateAction: TIdSipAction;
+begin
+  Result := Self.Core.RegisterWith(Self.Registrar.From.Address);
+  (Result as TIdSipRegistration).AddListener(Self);
 end;
 
 //*  TestTIdSipRegistration Private methods ************************************
@@ -2895,7 +3019,7 @@ procedure TestTIdSipRegistration.OnFailure(RegisterAgent: TIdSipRegistration;
                                            CurrentBindings: TIdSipContacts;
                                            const Reason: String);
 begin
-  Self.Failed := true;
+  Self.ActionFailed := true;
 end;
 
 procedure TestTIdSipRegistration.OnSuccess(RegisterAgent: TIdSipRegistration;
@@ -2908,12 +3032,12 @@ procedure TestTIdSipRegistration.SimulateRemoteIntervalTooBrief;
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Registrar.CreateResponse(Self.Dispatch.Transport.LastRequest,
+  Response := Self.Registrar.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                             SIPIntervalTooBrief);
   try
     Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.MinExpires);
 
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
   end;
@@ -2928,10 +3052,10 @@ procedure TestTIdSipRegistration.SimulateRemoteResponse(StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Registrar.CreateResponse(Self.Dispatch.Transport.LastRequest,
+  Response := Self.Registrar.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                             StatusCode);
   try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
   end;
@@ -2966,7 +3090,7 @@ end;
 procedure TestTIdSipRegistration.TestRegister;
 begin
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
-  Check(Self.Dispatch.Transport.SentRequestCount > 0,
+  Check(Self.Dispatcher.Transport.SentRequestCount > 0,
         'No request sent');
 end;
 
@@ -2974,7 +3098,7 @@ procedure TestTIdSipRegistration.TestReceiveFail;
 begin
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
   Self.SimulateRemoteResponse(SIPInternalServerError);
-  Check(Self.Failed, 'Registration succeeded');
+  Check(Self.ActionFailed, 'Registration succeeded');
 end;
 
 procedure TestTIdSipRegistration.TestReceiveIntervalTooBrief;
@@ -2987,15 +3111,15 @@ begin
   Self.Contacts.CurrentContact.Expires := OneHour;
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
 
-  RequestSendCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestSendCount := Self.Dispatcher.Transport.SentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
 
-  Check(Self.Dispatch.Transport.SentRequestCount > RequestSendCount,
+  Check(Self.Dispatcher.Transport.SentRequestCount > RequestSendCount,
         'No re-request issued');
-  Check(Self.Dispatch.Transport.LastRequest.HasExpiry,
+  Check(Self.Dispatcher.Transport.LastRequest.HasExpiry,
         'Re-request has no expiry');
   CheckEquals(Self.MinExpires,
-              Self.Dispatch.Transport.LastRequest.QuickestExpiry,
+              Self.Dispatcher.Transport.LastRequest.QuickestExpiry,
               'Re-request minimum expires');
 
   Self.SimulateRemoteOK;
@@ -3024,17 +3148,17 @@ begin
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna;expires=' + IntToStr(SecondContactExpires);
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
 
-  RequestSendCount := Self.Dispatch.Transport.SentRequestCount;
+  RequestSendCount := Self.Dispatcher.Transport.SentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
 
-  Check(Self.Dispatch.Transport.SentRequestCount > RequestSendCount,
+  Check(Self.Dispatcher.Transport.SentRequestCount > RequestSendCount,
         'No re-request issued');
-  Check(Self.Dispatch.Transport.LastRequest.HasExpiry,
+  Check(Self.Dispatcher.Transport.LastRequest.HasExpiry,
         'Re-request has no expiry');
   CheckEquals(Self.MinExpires,
-              Self.Dispatch.Transport.LastRequest.QuickestExpiry,
+              Self.Dispatcher.Transport.LastRequest.QuickestExpiry,
               'Re-request minimum expires');
-  RequestContacts := TIdSipContacts.Create(Self.Dispatch.Transport.LastRequest.Headers);
+  RequestContacts := TIdSipContacts.Create(Self.Dispatcher.Transport.LastRequest.Headers);
   try
     RequestContacts.First;
     Check(RequestContacts.HasNext, 'No Contacts');
@@ -3076,9 +3200,9 @@ var
   SeqNo: Cardinal;
 begin
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
-  SeqNo := Self.Dispatch.Transport.LastRequest.CSeq.SequenceNo;
+  SeqNo := Self.Dispatcher.Transport.LastRequest.CSeq.SequenceNo;
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
-  Check(SeqNo + 1 = Self.Dispatch.Transport.LastRequest.CSeq.SequenceNo,
+  Check(SeqNo + 1 = Self.Dispatcher.Transport.LastRequest.CSeq.SequenceNo,
         'CSeq sequence number didn''t increment');
 end;
 

@@ -181,9 +181,6 @@ type
     procedure ResetLastBranch;
     procedure SetFrom(Value: TIdSipFromHeader);
   protected
-    procedure ActOnRequest(Request: TIdSipRequest;
-                           Transaction: TIdSipTransaction;
-                           Receiver: TIdSipTransport); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest;
                             Transaction: TIdSipTransaction); override;
@@ -347,6 +344,10 @@ type
   private
     UA: TIdSipUserAgentCore;
   protected
+    CurrentRequest: TIdSipRequest;
+
+    procedure ActionSucceeded(Response: TIdSipResponse); virtual;
+    procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -356,8 +357,27 @@ type
                                 Transaction: TIdSipTransaction;
                                 Receiver: TIdSipTransport); virtual;
     procedure OnTerminated(Transaction: TIdSipTransaction); virtual;
+    function  ReceiveFailureResponse(Response: TIdSipResponse;
+                                     Transaction: TIdSipTransaction;
+                                     Receiver: TIdSipTransport): Boolean; virtual;
+    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse;
+                                           Transaction: TIdSipTransaction;
+                                           Receiver: TIdSipTransport): Boolean; virtual;
+    function  ReceiveOKResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport): Boolean; virtual;
+    function  ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean; virtual;
+    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean; virtual;
+    function  ReceiveServerFailureResponse(Response: TIdSipResponse;
+                                           Transaction: TIdSipTransaction;
+                                           Receiver: TIdSipTransport): Boolean; virtual;
   public
     constructor Create(UA: TIdSipUserAgentCore); virtual;
+    destructor  Destroy; override;
   end;
 
   TIdSipActionClass = class of TIdSipAction;
@@ -401,7 +421,6 @@ type
   TIdSipSession = class(TIdSipAction)
   private
     fDialog:             TIdSipDialog;
-    fInvite:             TIdSipRequest;
     fIsEstablished:      Boolean;
     fIsTerminated:       Boolean;
     fPayloadProcessor:   TIdSdpPayloadProcessor;
@@ -423,6 +442,7 @@ type
     procedure CreateInternal;
     function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     function  CreateOutboundDialog(Response: TIdSipResponse;
+                                   Transaction: TIdSipTransaction;
                                    Receiver: TIdSipTransport): TIdSipDialog;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
@@ -430,25 +450,30 @@ type
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
-    procedure NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest;
                                       Transaction: TIdSipTransaction);
     procedure RejectRequest(Request: TIdSipRequest;
                             Transaction: TIdSipTransaction);
     procedure RemoveTransaction(Transaction: TIdSipTransaction);
-    procedure SendAck(Final: TIdSipResponse);
+    procedure SendAck(Final: TIdSipResponse;
+                      Transaction: TIdSipTransaction);
     procedure SendBye;
     procedure SendCancel;
     procedure TerminateOpenTransaction(Transaction: TIdSipTransaction);
 
     property IsEstablished: Boolean read fIsEstablished write fIsEstablished;
   protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String); override;
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport); override;
     procedure OnTerminated(Transaction: TIdSipTransaction); override;
+    function  ReceiveOKResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport): Boolean; override;
+    function  ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean; override;
   public
     constructor Create(UA: TIdSipUserAgentCore); overload; override;
     constructor Create(UA: TIdSipUserAgentCore;
@@ -463,7 +488,6 @@ type
     procedure Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String);
-    function  CreateAck: TIdSipRequest;
     function  CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
     function  DialogEstablished: Boolean;
     procedure Terminate;
@@ -475,7 +499,7 @@ type
     procedure ResendLastResponse; virtual;
 
     property Dialog:           TIdSipDialog           read fDialog;
-    property Invite:           TIdSipRequest          read fInvite;
+    property Invite:           TIdSipRequest          read CurrentRequest;
     property IsTerminated:     Boolean                read fIsTerminated;
     property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
     property ReceivedAck:      Boolean                read fReceivedAck;
@@ -497,23 +521,25 @@ type
     function  CreateRegister(Registrar: TIdSipUri;
                              Bindings: TIdSipContacts): TIdSipRequest;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse);
-    procedure NotifyOfFailure(CurrentBindings: TIdSipContacts;
-                              const Reason: String);
-    procedure NotifyOfSuccess(CurrentBindings: TIdSipContacts);
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure ReissueRequest(Registrar: TIdSipUri;
                              MinimumExpiry: Cardinal);
+    procedure RetryWithoutExtensions(Registrar: TIdSipUri;
+                                     Response: TIdSipResponse);
     procedure Send(Request: TIdSipRequest);
     procedure Terminate;
   protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String); override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport); override;
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport); override;
     procedure OnTerminated(Transaction: TIdSipTransaction); override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse;
+                                     Transaction: TIdSipTransaction;
+                                     Receiver: TIdSipTransport): Boolean; override;
   public
     constructor Create(UA: TIdSipUserAgentCore); override;
     destructor  Destroy; override;
@@ -607,7 +633,7 @@ procedure TIdSipAbstractCore.OnReceiveUnhandledResponse(Response: TIdSipResponse
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
 begin
-  // We silently discard unacceptable responses
+  // We silently discard unacceptable responses.
   if (Self.WillAcceptResponse(Response) = uarAccept) then
     Self.ActOnResponse(Response, Transaction, Receiver);
 end;
@@ -822,12 +848,6 @@ end;
 
 //* TIdSipAbstractUserAgent Protected methods **********************************
 
-procedure TIdSipAbstractUserAgent.ActOnRequest(Request: TIdSipRequest;
-                                               Transaction: TIdSipTransaction;
-                                               Receiver: TIdSipTransport);
-begin
-end;
-
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                                 Request: TIdSipRequest;
                                                 Transaction: TIdSipTransaction);
@@ -859,6 +879,7 @@ procedure TIdSipAbstractUserAgent.RejectRequestBadExtension(Request: TIdSipReque
 var
   Response: TIdSipResponse;
 begin
+  // We simply reject ALL Requires
   Response := Self.CreateResponse(Request, SIPBadExtension);
   try
     Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
@@ -1358,6 +1379,8 @@ procedure TIdSipUserAgentCore.ActOnRequest(Request: TIdSipRequest;
                                            Transaction: TIdSipTransaction;
                                            Receiver: TIdSipTransport);
 begin
+  inherited ActOnRequest(Request, Transaction, Receiver);
+
   // Processing the request - 8.2.5
   if Request.IsInvite then
     Self.ProcessInvite(Request, Transaction, Receiver)
@@ -1556,6 +1579,7 @@ end;
 
 function TIdSipUserAgentCore.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
 begin
+  // Precondition: something's acquired the RegistrationLock
   Result := 0;
   while (Result < Self.KnownRegistrars.Count) do
     if Self.RegistrarAt(Result).Registrar.Equals(Registrar) then
@@ -1569,6 +1593,7 @@ end;
 
 function TIdSipUserAgentCore.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
 begin
+  // Precondition: something's acquired the RegistrationLock
   Result := Self.IndexOfRegistrar(Registrar) <> -1;
 end;
 
@@ -1698,10 +1723,26 @@ constructor TIdSipAction.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create;
 
+  Self.CurrentRequest := TIdSipRequest.Create;
   Self.UA := UA;
 end;
 
+destructor TIdSipAction.Destroy;
+begin
+  Self.CurrentRequest.Free;
+
+  inherited Destroy;
+end;
+
 //* TIdSipAction Protected methods *********************************************
+
+procedure TIdSipAction.ActionSucceeded(Response: TIdSipResponse);
+begin
+end;
+
+procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
+begin
+end;
 
 procedure TIdSipAction.OnFail(Transaction: TIdSipTransaction;
                               const Reason: String);
@@ -1717,11 +1758,111 @@ end;
 procedure TIdSipAction.OnReceiveResponse(Response: TIdSipResponse;
                                          Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport);
+var
+  Succeeded: Boolean;
 begin
+  // Each of the ReceiveXXXResponse functions returns true if we succeeded
+  // in our Action, or we could re-issue the request. They only return
+  // false when the action Succeeded irrecoverably.
+
+  case Response.StatusCode div 100 of
+    SIPProvisionalResponseClass:
+      Succeeded := Self.ReceiveProvisionalResponse(Response,
+                                                   Transaction,
+                                                   Receiver);
+    SIPOKResponseClass:
+      Succeeded := Self.ReceiveOKResponse(Response,
+                                          Transaction,
+                                          Receiver);
+    SIPRedirectionResponseClass:
+      Succeeded := Self.ReceiveRedirectionResponse(Response,
+                                                   Transaction,
+                                                   Receiver);
+    SIPFailureResponseClass:
+      Succeeded := Self.ReceiveFailureResponse(Response,
+                                               Transaction,
+                                               Receiver);
+    SIPServerFailureResponseClass:
+      Succeeded := Self.ReceiveServerFailureResponse(Response,
+                                                     Transaction,
+                                                     Receiver);
+    SIPGlobalFailureResponseClass:
+      Succeeded := Self.ReceiveGlobalFailureResponse(Response,
+                                                     Transaction,
+                                                     Receiver);
+  else
+    // This should never happen
+    Succeeded := false;
+  end;
+
+  if Succeeded then
+    Self.ActionSucceeded(Response)
+  else
+    Self.NotifyOfFailure(Response);
 end;
 
 procedure TIdSipAction.OnTerminated(Transaction: TIdSipTransaction);
 begin
+end;
+
+function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse;
+                                     Transaction: TIdSipTransaction;
+                                     Receiver: TIdSipTransport): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse;
+                                           Transaction: TIdSipTransaction;
+                                           Receiver: TIdSipTransport): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport): Boolean;
+begin
+  Result := true;
+end;
+
+function TIdSipAction.ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                 Transaction: TIdSipTransaction;
+                                                 Receiver: TIdSipTransport): Boolean;
+var
+  ReInvite: TIdSipRequest;
+  Tran:     TIdSipTransaction;
+begin
+  Result := false;
+  if Response.HasHeader(ContactHeaderFull) then begin
+    ReInvite := TIdSipRequest.Create;
+    try
+      ReInvite.Assign(Transaction.InitialRequest);
+      ReInvite.FirstContact.Assign(Response.FirstContact);
+      Self.CurrentRequest.Assign(ReInvite);
+
+      Tran := Self.UA.Dispatcher.AddClientTransaction(ReInvite);
+      Tran.AddTransactionListener(Self);
+      Tran.SendRequest;
+    finally
+      ReInvite.Free;
+    end;
+    Result := true;
+  end;
+end;
+
+function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse;
+                                           Transaction: TIdSipTransaction;
+                                           Receiver: TIdSipTransport): Boolean;
+begin
+  Result := false;
 end;
 
 //******************************************************************************
@@ -1816,7 +1957,7 @@ begin
   inherited Create(UA);
 
   Self.CreateInternal;
-  Self.Invite.Assign(Invite);
+  Self.CurrentRequest.Assign(Invite);
 
   Self.IsInboundCall    := true;
   Self.InitialTran      := InitialTransaction;
@@ -1835,7 +1976,6 @@ begin
 
   Self.OkTimer.Free;
 
-  Self.Invite.Free;
   Self.PayloadProcessor.Free;
   
   Self.LastResponse.Free;
@@ -1858,7 +1998,7 @@ begin
     // The type of payload processor depends on the ContentType passed in!
     Self.PayloadProcessor.StartListening(Offer);
 
-    Response := Self.UA.CreateResponse(Self.Invite, SIPOK);
+    Response := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
     try
       Result        := Self.PayloadProcessor.LocalSessionDescription;
       Response.Body := Result;
@@ -1872,7 +2012,7 @@ begin
         Self.NotifyOfEstablishedSession;
       end;
 
-      Self.Dialog.HandleMessage(Self.Invite);
+      Self.Dialog.HandleMessage(Self.CurrentRequest);
       Self.Dialog.HandleMessage(Response);
 
       Self.InitialTran.SendResponse(Response);
@@ -1906,9 +2046,9 @@ begin
   if not Self.IsInboundCall and not Assigned(Self.InitialTran) then begin
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
-      Self.Invite.Assign(Invite);
+      Self.CurrentRequest.Assign(Invite);
 
-      Self.InitialTran := Self.UA.Dispatcher.AddClientTransaction(Self.Invite);
+      Self.InitialTran := Self.UA.Dispatcher.AddClientTransaction(Self.CurrentRequest);
       Self.InitialTran.AddTransactionListener(Self);
       Self.InitialTran.SendRequest;
     finally
@@ -1995,39 +2135,23 @@ end;
 
 //* TIdSipSession Protected methods ********************************************
 
+procedure TIdSipSession.ActionSucceeded(Response: TIdSipResponse);
+begin
+  if Self.DialogEstablished then
+    Self.Dialog.HandleMessage(Response);
+end;
+
+procedure TIdSipSession.NotifyOfFailure(Response: TIdSipResponse);
+begin
+  Self.MarkAsTerminated;
+  Self.NotifyOfEndedSession(Response.Description);
+end;
+
 procedure TIdSipSession.OnFail(Transaction: TIdSipTransaction;
                                const Reason: String);
 begin
   if (Transaction = Self.InitialTran) then
     Self.MarkAsTerminated;
-end;
-
-procedure TIdSipSession.OnReceiveResponse(Response: TIdSipResponse;
-                                          Transaction: TIdSipTransaction;
-                                          Receiver: TIdSipTransport);
-begin
-  // We should check for "and Response.ToHeader.HasTag" but that would prevent
-  // us connecting to X-Lite, the non-compliant SIP phone.
-  if not Response.IsTrying{ and Response.ToHeader.HasTag} then begin
-    if not Self.DialogEstablished then begin
-      fDialog := Self.CreateOutboundDialog(Response, Receiver);
-      Self.NotifyOfEstablishedSession;
-    end;
-
-    Self.Dialog.HandleMessage(Response);
-  end;
-
-  if Response.IsOK then
-    Self.SendAck(Response);
-
-  // If we get, say, a transport error, or a timeout, or a rejection of our
-  // call:
-  if (Transaction = Self.InitialTran) then begin
-    if Response.IsFinal and not Response.IsOK then begin
-      Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession(Response.Description);
-    end;
-  end;
 end;
 
 procedure TIdSipSession.OnTerminated(Transaction: TIdSipTransaction);
@@ -2036,6 +2160,35 @@ begin
 
 //  if Self.IsTerminated then
 //    Self.NotifyOfEndedSession;
+end;
+
+function TIdSipSession.ReceiveOKResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport): Boolean;
+begin
+  if not Self.DialogEstablished then begin
+    fDialog := Self.CreateOutboundDialog(Response, Transaction, Receiver);
+    Self.NotifyOfEstablishedSession;
+  end;
+
+  if Response.IsOK then
+    Self.SendAck(Response, Transaction);
+  Result := true;
+end;
+
+function TIdSipSession.ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                                  Transaction: TIdSipTransaction;
+                                                  Receiver: TIdSipTransport): Boolean;
+begin
+  // We should check for "and Response.ToHeader.HasTag" but that would prevent
+  // us connecting to X-Lite, the non-compliant SIP phone.
+  if not Response.IsTrying{ and Response.ToHeader.HasTag} then begin
+    if not Self.DialogEstablished then begin
+      fDialog := Self.CreateOutboundDialog(Response, Transaction, Receiver);
+      Self.NotifyOfEstablishedSession;
+    end;
+  end;
+  Result := true;
 end;
 
 //* TIdSipSession Private methods **********************************************
@@ -2084,7 +2237,6 @@ begin
   Self.PayloadProcessor.Host     := Self.UA.HostName;
   Self.PayloadProcessor.Username := Self.UA.Username;
 
-  Self.fInvite       := TIdSipRequest.Create;
   Self.IsEstablished := false;
 
   Self.OkTimer := TIdSipSessionTimer.Create(Self, DefaultT1, DefaultT2);
@@ -2104,18 +2256,18 @@ begin
   try
     ID := TIdSipDialogID.Create(Response.CallID,
                                 Response.ToHeader.Tag,
-                                Self.Invite.From.Tag);
+                                Self.CurrentRequest.From.Tag);
     try
-      RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
+      RouteSet := TIdSipHeadersFilter.Create(Self.CurrentRequest.Headers,
                                              RecordRouteHeader);
       try
         Result := TIdSipDialog.Create(ID,
                                        0,
-                                       Self.Invite.CSeq.SequenceNo,
-                                       Self.Invite.ToHeader.Address,
-                                       Self.Invite.From.Address,
-                                       Self.Invite.FirstContact.Address,
-                                       Self.InitialTransport.IsSecure and (Self.Invite.HasSipsUri),
+                                       Self.CurrentRequest.CSeq.SequenceNo,
+                                       Self.CurrentRequest.ToHeader.Address,
+                                       Self.CurrentRequest.From.Address,
+                                       Self.CurrentRequest.FirstContact.Address,
+                                       Self.InitialTransport.IsSecure and (Self.CurrentRequest.HasSipsUri),
                                        RouteSet);
       finally
         RouteSet.Free;
@@ -2134,25 +2286,26 @@ begin
 end;
 
 function TIdSipSession.CreateOutboundDialog(Response: TIdSipResponse;
+                                            Transaction: TIdSipTransaction;
                                             Receiver: TIdSipTransport): TIdSipDialog;
 var
   ID:       TIdSipDialogID;
   RouteSet: TIdSipHeadersFilter;
 begin
-  ID := TIdSipDialogID.Create(Self.Invite.CallID,
-                              Self.Invite.From.Tag,
+  ID := TIdSipDialogID.Create(Transaction.InitialRequest.CallID,
+                              Transaction.InitialRequest.From.Tag,
                               Response.ToHeader.Tag);
   try
-    RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
+    RouteSet := TIdSipHeadersFilter.Create(Transaction.InitialRequest.Headers,
                                            RecordRouteHeader);
     try
       Result := TIdSipDialog.Create(ID,
-                                    Self.Invite.CSeq.SequenceNo,
+                                    Transaction.InitialRequest.CSeq.SequenceNo,
                                     0,
-                                    Self.Invite.From.Address,
-                                    Self.Invite.ToHeader.Address,
+                                    Transaction.InitialRequest.From.Address,
+                                    Transaction.InitialRequest.ToHeader.Address,
                                     Response.FirstContact.Address,
-                                    Receiver.IsSecure and Self.Invite.FirstContact.HasSipsUri,
+                                    Receiver.IsSecure and Transaction.InitialRequest.FirstContact.HasSipsUri,
                                     RouteSet);
       Self.NotifyOfEstablishedSession;
     finally
@@ -2160,20 +2313,6 @@ begin
     end;
   finally
     ID.Free;
-  end;
-end;
-
-function TIdSipSession.CreateAck: TIdSipRequest;
-begin
-  try
-    Result := Self.UA.CreateRequest(Self.Dialog);
-    Result.Method          := MethodAck;
-    Result.CSeq.SequenceNo := Self.Invite.CSeq.SequenceNo;
-    Result.CSeq.Method     := Result.Method;
-  except
-    FreeAndNil(Result);
-
-    raise;
   end;
 end;
 
@@ -2266,15 +2405,25 @@ begin
 end;
 
 procedure TIdSipSession.NotifyOfModifiedSession(Invite: TIdSipRequest);
+var
+  Copy: TList;
+  I: Integer;
 begin
-  Self.ApplyTo(Self.SessionListeners,
-               Self.SessionListenerLock,
-               Self.NotifyOfModifiedSessionProc);
-end;
+  Copy := TList.Create;
+  try
+    Self.SessionListenerLock.Acquire;
+    try
+      for I := 0 to Self.SessionListeners.Count - 1 do
+        Copy.Add(Self.SessionListeners[I]);
+    finally
+      Self.SessionListenerLock.Release;
+    end;
 
-procedure TIdSipSession.NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
-begin
-  IIdSipSessionListener(ObjectOrIntf).OnModifiedSession(Self, Invite);
+    for I := 0 to Copy.Count - 1 do
+        IIdSipSessionListener(Copy[I]).OnModifiedSession(Self, Invite);
+  finally
+    Copy.Free;
+  end;
 end;
 
 procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest;
@@ -2316,11 +2465,12 @@ begin
   end;
 end;
 
-procedure TIdSipSession.SendAck(Final: TIdSipResponse);
+procedure TIdSipSession.SendAck(Final: TIdSipResponse;
+                                Transaction: TIdSipTransaction);
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.CreateAck;
+  Ack := Transaction.InitialRequest.AckFor(Final);
   try
     Self.UA.Dispatcher.Send(Ack);
   finally
@@ -2334,6 +2484,8 @@ var
 begin
   Bye := Self.UA.CreateBye(Self.Dialog);
   try
+    // We don't listen to the new transaction because we assume the BYE
+    // succeeds immediately.
     Self.UA.Dispatcher.AddClientTransaction(Bye).SendRequest;
   finally
     Bye.Free;
@@ -2344,8 +2496,10 @@ procedure TIdSipSession.SendCancel;
 var
   Cancel: TIdSipRequest;
 begin
-  Cancel := Self.CreateCancel(Self.Invite);
+  Cancel := Self.CreateCancel(Self.CurrentRequest);
   try
+    // We don't listen to the new transaction because we assume the CANCEL
+    // succeeds immediately.
     Self.UA.Dispatcher.AddClientTransaction(Cancel).SendRequest;
   finally
     Cancel.Free;
@@ -2399,6 +2553,7 @@ var
 begin
   Request := Self.CreateRegister(Registrar, Bindings);
   try
+    Self.CurrentRequest.Assign(Request);
     Self.Bindings.Clear;
     Self.Bindings.Add(Bindings);
 
@@ -2434,6 +2589,34 @@ end;
 
 //* TIdSipRegistration Protected methods ***************************************
 
+procedure TIdSipRegistration.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+procedure TIdSipRegistration.NotifyOfFailure(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  I:               Integer;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Self.ListenerLock.Acquire;
+    try
+      for I := 0 to Self.Listeners.Count - 1 do
+        IIdSipRegistrationListener(Self.Listeners[I]).OnFailure(Self,
+                                                                CurrentBindings,
+                                                                Response.Description);
+    finally
+      Self.ListenerLock.Release;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
 procedure TIdSipRegistration.OnFail(Transaction: TIdSipTransaction;
                                     const Reason: String);
 begin
@@ -2445,37 +2628,31 @@ procedure TIdSipRegistration.OnReceiveRequest(Request: TIdSipRequest;
 begin
 end;
 
-procedure TIdSipRegistration.OnReceiveResponse(Response: TIdSipResponse;
-                                               Transaction: TIdSipTransaction;
-                                               Receiver: TIdSipTransport);
-var
-  Bindings: TIdSipContacts;
-begin
-  Bindings := TIdSipContacts.Create(Response.Headers);
-  try
-    case Response.StatusCode of
-      SIPOK: begin
-        Self.NotifyOfSuccess(Bindings);
-      end;
-
-      SIPUnauthorized,
-      SIPProxyAuthenticationRequired:
-        Self.NotifyOfAuthenticationChallenge(Response);
-      SIPIntervalTooBrief: Self.ReissueRequest(Transaction.InitialRequest.RequestUri,
-                                               Response.FirstMinExpires.NumericValue);
-    else
-      Self.NotifyOfFailure(Bindings,
-                           IntToStr(Response.StatusCode)
-                         + ' ' + Response.StatusText);
-    end;
-  finally
-    Bindings.Free;
-  end;
-end;
-
 procedure TIdSipRegistration.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Transaction.RemoveTransactionListener(Self);
+end;
+
+function TIdSipRegistration.ReceiveFailureResponse(Response: TIdSipResponse;
+                                                   Transaction: TIdSipTransaction;
+                                                   Receiver: TIdSipTransport): Boolean;
+begin
+  Result := true;
+  case Response.StatusCode of
+    SIPUnauthorized,
+    SIPProxyAuthenticationRequired:
+      Self.NotifyOfAuthenticationChallenge(Response);
+    SIPIntervalTooBrief: Self.ReissueRequest(Transaction.InitialRequest.RequestUri,
+                                             Response.FirstMinExpires.NumericValue);
+    SIPBadExtension: begin
+      Result := Transaction.InitialRequest.HasHeader(RequireHeader);
+      if Result then
+        Self.RetryWithoutExtensions(Transaction.InitialRequest.RequestUri,
+                                    Response);
+    end;
+  else
+    Result := false;
+  end;
 end;
 
 //* TIdSipRegistration Private methods *****************************************
@@ -2521,35 +2698,23 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.NotifyOfFailure(CurrentBindings: TIdSipContacts;
-                                             const Reason: String);
+procedure TIdSipRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
-  I: Integer;
+  CurrentBindings: TIdSipContacts;
+  I:               Integer;
 begin
-  Self.ListenerLock.Acquire;
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipRegistrationListener(Self.Listeners[I]).OnFailure(Self,
-                                                              CurrentBindings,
-                                                              Reason);
+    Self.ListenerLock.Acquire;
+    try
+      for I := 0 to Self.Listeners.Count - 1 do
+        IIdSipRegistrationListener(Self.Listeners[I]).OnSuccess(Self,
+                                                                CurrentBindings);
+    finally
+      Self.ListenerLock.Release;
+    end;
   finally
-    Self.ListenerLock.Release;
-  end;
-
-  Self.Terminate;
-end;
-
-procedure TIdSipRegistration.NotifyOfSuccess(CurrentBindings: TIdSipContacts);
-var
-  I: Integer;
-begin
-  Self.ListenerLock.Acquire;
-  try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipRegistrationListener(Self.Listeners[I]).OnSuccess(Self,
-                                                              CurrentBindings);
-  finally
-    Self.ListenerLock.Release;
+    CurrentBindings.Free;
   end;
 
   Self.Terminate;
@@ -2582,6 +2747,36 @@ begin
     Self.Send(Request);
   finally
     Request.Free;
+  end;
+end;
+
+procedure TIdSipRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
+                                                    Response: TIdSipResponse);
+var
+  Bindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Self.UA.Contact);
+
+    Request := Self.CreateRegister(Registrar, Bindings);
+    try
+      if not Response.HasHeader(UnsupportedHeader) then begin
+        // A 420 Bad Extension MUST have an unsupported header. In the
+        // interests of accepting liberally though, we just drop all
+        // Requires.
+        Request.RemoveAllHeadersNamed(RequireHeader);
+      end
+      else
+        Request.FirstRequire.RemoveValues(Response.FirstUnsupported);
+        
+      Self.Send(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    Bindings.Free;
   end;
 end;
 
