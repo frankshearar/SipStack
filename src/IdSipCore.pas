@@ -4292,7 +4292,9 @@ begin
 
   inherited Send;
 
+  // TODO: Perhaps we should CreateInvite and assign individual headers across?
   Self.InitialRequest.Assign(OriginalInvite);
+  Self.InitialRequest.CSeq.SequenceNo := Self.UA.NextInitialSequenceNo;
   Self.InitialRequest.LastHop.Branch := Self.UA.NextBranch;
   Self.InitialRequest.RequestUri := Self.Contact.Address;
   Self.SendRequest(Self.InitialRequest);
