@@ -60,6 +60,7 @@ uses
   TestMessages in 'test\TestMessages.pas',
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
+  TestIdRandom in 'test\TestIdRandom.pas',
   TestIdRTP in 'test\TestIdRTP.pas',
   TestIdRTPDiagnostics in 'test\TestIdRTPDiagnostics.pas',
   TestIdRTPServer in 'test\TestIdRTPServer.pas',
