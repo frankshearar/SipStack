@@ -170,12 +170,12 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); virtual;
     procedure PrepareResponse(Response: TIdSipResponse;
-                              Request: TIdSipRequest);
+                              Request: TIdSipRequest); virtual;
     procedure RejectBadRequest(Request: TIdSipRequest;
                                const Reason: String);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); virtual;
-    procedure RejectRequestUnauthorized(Request: TIdSipRequest); virtual;
+    procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
   public
@@ -591,6 +591,7 @@ type
     OkTimer:      TIdSipSessionTimer;
 
     function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
+    procedure SendSimpleResponse(StatusCode: Cardinal);
     procedure TerminatePendingInvite;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
@@ -3071,8 +3072,8 @@ procedure TIdSipInboundSession.ForwardCall(NewDestination: TIdSipAddressHeader);
 var
   RedirectResponse: TIdSipResponse;
 begin
-  RedirectResponse := TIdSipResponse.InResponseTo(Self.CurrentRequest,
-                                                  SIPMovedTemporarily);
+  RedirectResponse := Self.UA.CreateResponse(Self.CurrentRequest,
+                                             SIPMovedTemporarily);
   try
     RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
     Self.SendResponse(RedirectResponse);
@@ -3101,31 +3102,15 @@ begin
 end;
 
 procedure TIdSipInboundSession.RejectCallBusy;
-var
-  BusyHereResponse: TIdSipResponse;
 begin
-  BusyHereResponse := TIdSipResponse.InResponseTo(Self.CurrentRequest,
-                                                  SIPBusyHere);
-  try
-    Self.SendResponse(BusyHereResponse);
-  finally
-    BusyHereResponse.Free;
-  end;
+  Self.SendSimpleResponse(SIPBusyHere);
 
   Self.NotifyOfEndedSession(BusyHere);
 end;
 
 procedure TIdSipInboundSession.Ring;
-var
-  RingingResponse: TIdSipResponse;
 begin
-  RingingResponse := TIdSipResponse.InResponseTo(Self.CurrentRequest,
-                                                 SIPRinging);
-  try
-    Self.SendResponse(RingingResponse);
-  finally
-    RingingResponse.Free;
-  end;
+  Self.SendSimpleResponse(SIPRinging);
 end;
 
 procedure TIdSipInboundSession.ResendLastResponse;
@@ -3147,19 +3132,11 @@ begin
 end;
 
 procedure TIdSipInboundSession.TimeOut;
-var
-  Response: TIdSipResponse;
 begin
   if not Self.FullyEstablished then begin
     Self.MarkAsTerminated;
 
-    Response := Self.UA.CreateResponse(Self.CurrentRequest,
-                                       SIPRequestTerminated);
-    try
-      Self.SendResponse(Response);
-    finally
-      Response.Free;
-    end;
+    Self.SendSimpleResponse(SIPRequestTerminated);
 
     Self.NotifyOfEndedSession(InviteTimeout);
   end;
@@ -3186,17 +3163,22 @@ begin
   Self.LastResponse.Assign(Response);
 end;
 
-procedure TIdSipInboundSession.TerminatePendingInvite;
+procedure TIdSipInboundSession.SendSimpleResponse(StatusCode: Cardinal);
 var
-  TerminateResponse: TIdSipResponse;
+  Response: TIdSipResponse;
 begin
-  TerminateResponse := Self.UA.CreateResponse(Self.CurrentRequest,
-                                              SIPBusyHere);
+  Response := Self.UA.CreateResponse(Self.CurrentRequest,
+                                     StatusCode);
   try
-    Self.SendResponse(TerminateResponse);
+    Self.SendResponse(Response);
   finally
-    TerminateResponse.Free;
+    Response.Free;
   end;
+end;
+
+procedure TIdSipInboundSession.TerminatePendingInvite;
+begin
+  Self.SendSimpleResponse(SIPBusyHere);
 end;
 
 //******************************************************************************
@@ -3476,7 +3458,8 @@ procedure TIdSipInboundOptions.ReceiveRequest(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Request, Self.UA.ResponseForInvite);
+  Response := Self.UA.CreateResponse(Request,
+                                     Self.UA.ResponseForInvite);
   try
     Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
     Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
@@ -3720,7 +3703,8 @@ procedure TIdSipInboundRegistration.RejectExpireTooBrief(Request: TIdSipRequest)
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Request, SIPIntervalTooBrief);
+  Response := Self.UA.CreateResponse(Request,
+                                     SIPIntervalTooBrief);
   try
     Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.UA.MinimumExpiryTime);
     Self.SendResponse(Response);
@@ -3749,7 +3733,8 @@ procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Request, StatusCode);
+  Response := Self.UA.CreateResponse(Request,
+                                     StatusCode);
   try
     Self.SendResponse(Response);
   finally
