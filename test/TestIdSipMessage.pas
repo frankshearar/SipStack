@@ -49,6 +49,19 @@ type
     procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
+  TestTIdSipContactHeader = class(TTestCase)
+  private
+    C: TIdSipContactHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestGetSetExpires;
+    procedure TestGetSetQ;
+    procedure TestValueWithExpires;
+    procedure TestValueWithQ;
+  end;
+
   TestTIdSipCSeqHeader = class(TTestCase)
   private
     C: TIdSipCSeqHeader;
@@ -56,8 +69,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestGetValue;
-    procedure TestSetValue;
+    procedure TestValue;
   end;
 
   TestTIdSipDateHeader = class(TTestCase)
@@ -70,6 +82,17 @@ type
     procedure TestValueAbsoluteTime;
     procedure TestValueMalformedAbsoluteTime;
     procedure TestValueRelativeTime;
+  end;
+
+  TestTIdSipFromToHeader = class(TTestCase)
+  private
+    F: TIdSipFromToHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestValueWithTag;
+    procedure TestGetSetTag;
   end;
 
   TestTIdSipNumericHeader = class(TTestCase)
@@ -187,8 +210,10 @@ begin
   Result := TTestSuite.Create('IdSipMessage tests');
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
+  Result.AddTest(TestTIdSipContactHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
+  Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -425,7 +450,7 @@ end;
 
 procedure TestTIdSipAddressHeader.TestValue;
 begin
-  A.Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.A.Value := 'sip:wintermute@tessier-ashpool.co.lu';
 
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.GetFullURI, 'Address');
   CheckEquals('',                                     Self.A.DisplayName,        'DisplayName');
@@ -618,6 +643,137 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipContactHeader                                                    *
+//******************************************************************************
+//* TestTIdSipContactHeader Public methods *************************************
+
+procedure TestTIdSipContactHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := TIdSipContactHeader.Create;
+end;
+
+procedure TestTIdSipContactHeader.TearDown;
+begin
+  Self.C.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipContactHeader Published methods **********************************
+
+procedure TestTIdSipContactHeader.TestGetSetExpires;
+begin
+  Self.C.Expires := 0;
+  CheckEquals(0, Self.C.Expires, '0');
+
+  Self.C.Expires := 666;
+  CheckEquals(666, Self.C.Expires, '666');
+end;
+
+procedure TestTIdSipContactHeader.TestGetSetQ;
+begin
+  Self.C.Q := 0;
+  CheckEquals(0, Self.C.Q, '0');
+
+  Self.C.Q := 666;
+  CheckEquals(666, Self.C.Q, '666');
+end;
+
+procedure TestTIdSipContactHeader.TestValueWithExpires;
+begin
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=0';
+  CheckEquals(0, C.Expires, 'expires=0');
+
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=666';
+  CheckEquals(666, C.Expires, 'expires=666');
+
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=65536';
+  CheckEquals(65536, C.Expires, 'expires=65536');
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=a';
+    Fail('Failed to bail out with letters');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=-1';
+    Fail('Failed to bail out with negative number');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;expires=';
+    Fail('Failed to bail out with empty string');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipContactHeader.TestValueWithQ;
+begin
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Address.GetFullURI, 'Address');
+  CheckEquals('',                                     Self.C.DisplayName,        'DisplayName');
+  CheckEquals('',                                     Self.C.ParamsAsString,     'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Value,              'Value');
+
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0';
+  CheckEquals(0, C.Q, 'q=0');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.0';
+  CheckEquals(0, C.Q, 'q=0.0');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.00';
+  CheckEquals(0, C.Q, 'q=0.00');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.000';
+  CheckEquals(0, C.Q, 'q=0.000');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.123';
+  CheckEquals(123, C.Q, 'q=0.123');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.666';
+  CheckEquals(666, C.Q, 'q=0.666');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=1';
+  CheckEquals(1000, C.Q, 'q=1');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=1.0';
+  CheckEquals(1000, C.Q, 'q=1.0');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=1.00';
+  CheckEquals(1000, C.Q, 'q=1.00');
+  Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=1.000';
+  CheckEquals(1000, C.Q, 'q=1.000');
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=';
+    Fail('Failed to bail out on empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=a';
+    Fail('Failed to bail out on letters');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0.1234';
+    Fail('Failed to bail out on too many digits');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=1.1';
+    Fail('Failed to bail out on number too big');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipCSeqHeader                                                       *
 //******************************************************************************
 //* TestTIdSipCSeqHeader Public methods ****************************************
@@ -638,11 +794,11 @@ end;
 
 //* TestTIdSipCSeqHeader Published methods *************************************
 
-procedure TestTIdSipCSeqHeader.TestGetValue;
+procedure TestTIdSipCSeqHeader.TestValue;
 begin
   Self.C.Value := '1 INVITE';
-  CheckEquals(1,        Self.C.SequenceNo, '1: SequenceNo');
-  CheckEquals('INVITE', Self.C.Method,     '1: Method');
+  CheckEquals(1,        Self.C.SequenceNo, 'SequenceNo');
+  CheckEquals('INVITE', Self.C.Method,     'Method');
 
   Self.C.Value := '1  INVITE';
   CheckEquals(1,        Self.C.SequenceNo, '2: SequenceNo');
@@ -651,13 +807,6 @@ begin
   Self.C.Value := '1'#13#10'  INVITE';
   CheckEquals(1,        Self.C.SequenceNo, '3: SequenceNo');
   CheckEquals('INVITE', Self.C.Method,     '3: Method');
-end;
-
-procedure TestTIdSipCSeqHeader.TestSetValue;
-begin
-  Self.C.Value := '1 INVITE';
-  CheckEquals(1,        Self.C.SequenceNo, 'SequenceNo');
-  CheckEquals('INVITE', Self.C.Method,     'Method');
 
   try
     Self.C.Value := 'a';
@@ -733,6 +882,59 @@ begin
   try
     Self.D.Value := '1';
     Fail('Failed to bail out');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipFromToHeader                                                     *
+//******************************************************************************
+//* TestTIdSipFromToHeader Public methods **************************************
+
+procedure TestTIdSipFromToHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.F := TIdSipFromToHeader.Create;
+end;
+
+procedure TestTIdSipFromToHeader.TearDown;
+begin
+  Self.F.Free;
+  
+  inherited TearDown;
+end;
+
+//* TestTIdSipFromToHeader Published methods ***********************************
+
+procedure TestTIdSipFromToHeader.TestValueWithTag;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  CheckEquals('', Self.F.Tag, '''''');
+
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  CheckEquals('1928301774', Self.F.Tag, '1928301774');
+
+  try
+    Self.F.Value := 'Case <sip:case@fried.neurons.org>;tag=19283@01774';
+    Fail('Failed to bail out with malformed token');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipFromToHeader.TestGetSetTag;
+begin
+  Self.F.Tag := '123';
+  CheckEquals('123', Self.F.Tag, '123');
+
+  Self.F.Tag := '123abc';
+  CheckEquals('123abc', Self.F.Tag, '123abc');
+
+  try
+    Self.F.Tag := '19283@01774';
+    Fail('Failed to bail out with malformed token');
   except
     on EBadHeader do;
   end;
@@ -1192,14 +1394,14 @@ end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
-  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
+  CheckEquals(TIdSipContactHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
   CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
   CheckEquals(TIdSipCSeqHeader.ClassName,        Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
   CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(DateHeader).ClassName,              DateHeader);
   CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
-  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
+  CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
   CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
-  CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
+  CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
   CheckEquals(TIdSipViaHeader.ClassName,         Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;
 

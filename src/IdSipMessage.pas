@@ -6,6 +6,7 @@ uses
   Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdURI, SysUtils;
 
 type
+  TIdSipQValue = 0..1000;
   TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP);
 
   TIdSipHeader = class(TPersistent)
@@ -63,6 +64,19 @@ type
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
+  TIdSipContactHeader = class(TIdSipAddressHeader)
+  private
+    function  GetExpires: Cardinal;
+    function  GetQ: TIdSipQValue;
+    procedure SetExpires(const Value: Cardinal);
+    procedure SetQ(const Value: TIdSipQValue);
+  protected
+    procedure SetValue(const Value: String); override;
+  public
+    property Expires: Cardinal     read GetExpires write SetExpires;
+    property Q:       TIdSipQValue read GetQ write SetQ;
+  end;
+
   TIdSipCSeqHeader = class(TIdSipHeader)
   private
     fMethod:     String;
@@ -88,6 +102,16 @@ type
     destructor Destroy; override;
 
     property Time: TIdDateTimeStamp read GetAbsoluteTime;
+  end;
+
+  TIdSipFromToHeader = class(TIdSipAddressHeader)
+  private
+    function  GetTag: String;
+    procedure SetTag(const Value: String);
+  protected
+    procedure SetValue(const Value: String); override;
+  public
+    property Tag: String read GetTag write SetTag;
   end;
 
   TIdSipNumericHeader = class(TIdSipHeader)
@@ -214,17 +238,17 @@ type
     function  GetContentLength: Cardinal;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
-    function  GetFrom: TIdSipAddressHeader;
+    function  GetFrom: TIdSipFromToHeader;
     function  GetMaxForwards: Byte;
-    function  GetTo: TIdSipAddressHeader;
+    function  GetTo: TIdSipFromToHeader;
     procedure SetCallID(const Value: String);
     procedure SetContentLength(const Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(const Value: TIdSipCSeqHeader);
-    procedure SetFrom(const Value: TIdSipAddressHeader);
+    procedure SetFrom(const Value: TIdSipFromToHeader);
     procedure SetMaxForwards(const Value: Byte);
     procedure SetPath(const Value: TIdSipPath);
-    procedure SetTo(const Value: TIdSipAddressHeader);
+    procedure SetTo(const Value: TIdSipFromToHeader);
   protected
     function FirstLine: String; virtual; abstract;
   public
@@ -241,12 +265,12 @@ type
     property ContentLength: Cardinal            read GetContentLength write SetContentLength;
     property ContentType:   String              read GetContentType write SetContentType;
     property CSeq:          TIdSipCSeqHeader    read GetCSeq write SetCSeq;
-    property From:          TIdSipAddressHeader read GetFrom write SetFrom;
+    property From:          TIdSipFromToHeader  read GetFrom write SetFrom;
     property Headers:       TIdSipHeaders       read fHeaders;
     property MaxForwards:   Byte                read GetMaxForwards write SetMaxForwards;
     property Path:          TIdSipPath          read fPath write SetPath;
     property SIPVersion:    String              read fSIPVersion write fSIPVersion;
-    property ToHeader:      TIdSipAddressHeader read GetTo write SetTo;
+    property ToHeader:      TIdSipFromToHeader  read GetTo write SetTo;
   end;
 
   TIdSipRequest = class(TIdSipMessage)
@@ -620,6 +644,43 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipContactHeader                                                        *
+//******************************************************************************
+//* TIdSipContactHeader Protected methods **************************************
+
+procedure TIdSipContactHeader.SetValue(const Value: String);
+begin
+  inherited SetValue(Value);
+
+  if (Self.IndexOfParam(QParam) > -1) and not TIdSipParser.IsQValue(Self.Params[QParam]) then
+    raise EBadHeader.Create(Self.Name);
+  if (Self.IndexOfParam(ExpiresParam) > -1) and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
+    raise EBadHeader.Create(Self.Name);
+end;
+
+//* TIdSipContactHeader Private methods ****************************************
+
+function TIdSipContactHeader.GetExpires: Cardinal;
+begin
+  Result := StrToInt(Self.Params[ExpiresParam]);
+end;
+
+function TIdSipContactHeader.GetQ: TIdSipQValue;
+begin
+  Result := StrToQValue(Self.Params[QParam]);
+end;
+
+procedure TIdSipContactHeader.SetExpires(const Value: Cardinal);
+begin
+  Self.Params[ExpiresParam] := IntToStr(Value);
+end;
+
+procedure TIdSipContactHeader.SetQ(const Value: TIdSipQValue);
+begin
+  Self.Params[QParam] := QValueToStr(Value);
+end;
+
+//******************************************************************************
 //* TIdSipCSeqHeader                                                           *
 //******************************************************************************
 //* TIdSipCSeqHeader Protected methods *****************************************
@@ -697,6 +758,34 @@ begin
   // this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
   if (Self.Time.AsTDateTime = 0) then
     raise EBadHeader.Create(Self.Name);
+end;
+
+//******************************************************************************
+//* TIdSipFromToHeader                                                         *
+//******************************************************************************
+//* TIdSipFromToHeader Protected methods ***************************************
+
+procedure TIdSipFromToHeader.SetValue(const Value: String);
+begin
+  inherited SetValue(Value);
+
+  if (Self.IndexOfParam(TagParam) > -1) and not TIdSipParser.IsToken(Self.Params[TagParam]) then
+    raise EBadHeader.Create(Self.Name);
+end;
+
+//* TIdSipFromToHeader Private methods *****************************************
+
+function TIdSipFromToHeader.GetTag: String;
+begin
+  Result := Self.Params[TagParam];
+end;
+
+procedure TIdSipFromToHeader.SetTag(const Value: String);
+begin
+  Self.Params[TagParam] := Value;
+
+  if (Self.IndexOfParam(TagParam) > -1) and not TIdSipParser.IsToken(Self.Params[TagParam]) then
+    raise EBadHeader.Create(Self.Name);  
 end;
 
 //******************************************************************************
@@ -1055,17 +1144,17 @@ class function TIdSipHeaders.HeaderTypes: TObjectList;
 begin
   if not Assigned(GIdSipHeadersMap) then begin
     GIdSipHeadersMap := TObjectList.Create(true);
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,       TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,      TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,       TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,      TIdSipContactHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull, TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,              TIdSipCSeqHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,              TIdSipDateHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,           TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,          TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,         TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,          TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,         TIdSipFromToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,       TIdSipMaxForwardsHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,            TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,           TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,            TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,           TIdSipFromToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,           TIdSipViaHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,          TIdSipViaHeader));
   end;
@@ -1275,9 +1364,9 @@ begin
   Result := Self.Headers[CSeqHeader] as TIdSipCSeqHeader;
 end;
 
-function TIdSipMessage.GetFrom: TIdSipAddressHeader;
+function TIdSipMessage.GetFrom: TIdSipFromToHeader;
 begin
-  Result := Self.Headers[FromHeaderFull] as TIdSipAddressHeader;
+  Result := Self.Headers[FromHeaderFull] as TIdSipFromToHeader;
 end;
 
 function TIdSipMessage.GetMaxForwards: Byte;
@@ -1288,9 +1377,9 @@ begin
   Result := StrToInt(Self.Headers[MaxForwardsHeader].Value);
 end;
 
-function TIdSipMessage.GetTo: TIdSipAddressHeader;
+function TIdSipMessage.GetTo: TIdSipFromToHeader;
 begin
-  Result := Self.Headers[ToHeaderFull] as TIdSipAddressHeader;
+  Result := Self.Headers[ToHeaderFull] as TIdSipFromToHeader;
 end;
 
 procedure TIdSipMessage.SetCallID(const Value: String);
@@ -1313,7 +1402,7 @@ begin
   Self.CSeq.Assign(Value);
 end;
 
-procedure TIdSipMessage.SetFrom(const Value: TIdSipAddressHeader);
+procedure TIdSipMessage.SetFrom(const Value: TIdSipFromToHeader);
 begin
   Self.Headers[FromHeaderFull].Assign(Value);
 end;
@@ -1328,7 +1417,7 @@ begin
 //  Self.Path.Assign(Value);
 end;
 
-procedure TIdSipMessage.SetTo(const Value: TIdSipAddressHeader);
+procedure TIdSipMessage.SetTo(const Value: TIdSipFromToHeader);
 begin
   Self.Headers[ToHeaderFull].Assign(Value);
 end;

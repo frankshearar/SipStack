@@ -9,7 +9,9 @@ type
   TestFunctions = class(TTestCase)
   published
     procedure TestIsEqual;
+    procedure TestQValueToStr;
     procedure TestShortMonthToInt;
+    procedure TestStrToQValue;
     procedure TestStrToTransport;
     procedure TestTransportToStr;
   end;
@@ -35,6 +37,7 @@ type
     procedure TestGetHeaderValue;
     procedure TestIsIPv6Reference;
     procedure TestIsMethod;
+    procedure TestIsQValue;
     procedure TestIsSipVersion;
     procedure TestIsToken;
     procedure TestIsTransport;
@@ -158,6 +161,16 @@ begin
   Check(not IsEqual('absd', 'Abcd'), '''absd'', ''Abcd''');
 end;
 
+procedure TestFunctions.TestQValueToStr;
+begin
+  CheckEquals('0',     QValueToStr(0),    'QValueToStr(0)');
+  CheckEquals('0.001', QValueToStr(1),    'QValueToStr(1)');
+  CheckEquals('0.01',  QValueToStr(10),   'QValueToStr(10)');
+  CheckEquals('0.1',   QValueToStr(100),  'QValueToStr(100)');
+  CheckEquals('0.666', QValueToStr(666),  'QValueToStr(666)');
+  CheckEquals('1',     QValueToStr(1000), 'QValueToStr(1000)');
+end;
+
 procedure TestFunctions.TestShortMonthToInt;
 begin
   CheckEquals(1, ShortMonthToInt('JAN'), 'JAN');
@@ -182,6 +195,129 @@ begin
   except
     on E: EConvertError do
       CheckEquals('Failed to convert ''xxx'' to type Integer', E.Message, 'Unexpected error');
+  end;
+end;
+
+procedure TestFunctions.TestStrToQValue;
+begin
+  CheckEquals(0,    StrToQValue('0'),     'StrToQValue(''0'')');
+  CheckEquals(0,    StrToQValue('0.0'),   'StrToQValue(''0.0'')');
+  CheckEquals(0,    StrToQValue('0.00'),  'StrToQValue(''0.00'')');
+  CheckEquals(0,    StrToQValue('0.000'), 'StrToQValue(''0.000'')');
+  CheckEquals(666,  StrToQValue('0.666'), 'StrToQValue(''0.666'')');
+  CheckEquals(1000, StrToQValue('1'),     'StrToQValue(''1'')');
+  CheckEquals(1000, StrToQValue('1.0'),   'StrToQValue(''1.0'')');
+  CheckEquals(1000, StrToQValue('1.00'),  'StrToQValue(''1.00'')');
+  CheckEquals(1000, StrToQValue('1.000'), 'StrToQValue(''1.000'')');
+
+  try
+    StrToQValue('.');
+    Fail('Failed to bail out on malformed q (.');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''.'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.');
+    Fail('Failed to bail out on malformed q (0.');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0.'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0. 0');
+    Fail('Failed to bail out on malformed q (0. 0)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0. 0'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('1.');
+    Fail('Failed to bail out on malformed q (1.');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''1.'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.0000');
+    Fail('Failed to bail out on too many digits (0.0000)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0.0000'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.0123');
+    Fail('Failed to bail out on too many digits (0.0123)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0.0123'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.1234');
+    Fail('Failed to bail out on too many digits (0.1234)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0.1234'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.a');
+    Fail('Failed to bail out on letters');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''0.a'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('1.1');
+    Fail('Failed to bail out on number too big (1.1)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''1.1'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('3');
+    Fail('Failed to bail out on number too big (3)');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert ''3'' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('');
+    Fail('Failed to bail out on empty string');
+  except
+    on E: EConvertError do
+      CheckEquals('Failed to convert '''' to type TIdSipQValue',
+                  E.Message,
+                  'Unexpected exception');
   end;
 end;
 
@@ -538,6 +674,25 @@ begin
   Check(    TIdSipParser.IsMethod('Cra.-zy''+preacher%20man~`!'),  'Cra.-zy''+preacher%20man~`!');
 end;
 
+procedure TestTIdSipParser.TestIsQValue;
+begin
+  Check(not TIdSipParser.IsQValue(''),       '''''');
+  Check(not TIdSipParser.IsQValue('a'),      'a');
+  Check(not TIdSipParser.IsQValue('0.a'),    '0.a');
+  Check(not TIdSipParser.IsQValue('1.1'),    '1.1');
+  Check(not TIdSipParser.IsQValue('0.1234'), '0.1234');
+  Check(not TIdSipParser.IsQValue('.1'),     '.1');
+  Check(not TIdSipParser.IsQValue('0.'),     '0.');
+  Check(    TIdSipParser.IsQValue('0.0'),    '0.0');
+  Check(    TIdSipParser.IsQValue('0.00'),   '0.00');
+  Check(    TIdSipParser.IsQValue('0.000'),  '0.000');
+  Check(    TIdSipParser.IsQValue('0.123'),    '0.123');
+  Check(    TIdSipParser.IsQValue('0.666'),    '0.666');
+  Check(    TIdSipParser.IsQValue('1.0'),    '1.0');
+  Check(    TIdSipParser.IsQValue('1.00'),   '1.00');
+  Check(    TIdSipParser.IsQValue('1.000'),  '1.000');
+end;
+
 procedure TestTIdSipParser.TestIsSipVersion;
 begin
   Check(not TIdSipParser.IsSipVersion(''),         '''''');
@@ -661,7 +816,7 @@ begin
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',
                 Self.Request.Headers[CallIdHeaderFull].Value,
                 'Call-ID');
-    CheckEquals(TIdSipAddressHeader.ClassName,
+    CheckEquals(TIdSipContactHeader.ClassName,
                 Self.Request.Headers[ContactHeaderFull].ClassName,
                 'Contact class');
     CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
@@ -703,7 +858,7 @@ begin
     CheckEquals(1000,
                 (Self.Request.Headers[ExpiresHeader] as TIdSipNumericHeader).NumericValue,
                 'Expires');
-    CheckEquals(TIdSipAddressHeader.ClassName,
+    CheckEquals(TIdSipFromToHeader.ClassName,
                 Self.Request.Headers[FromHeaderFull].ClassName,
                 'From class');
     CheckEquals('Case',
@@ -721,7 +876,7 @@ begin
     CheckEquals(70,
                 (Self.Request.Headers[MaxForwardsHeader] as TIdSipMaxForwardsHeader).NumericValue,
                 'Max-Forwards');
-    CheckEquals(TIdSipAddressHeader.ClassName,
+    CheckEquals(TIdSipFromToHeader.ClassName,
                 Self.Request.Headers[ToHeaderFull].ClassName,
                 'To class');
     CheckEquals('Wintermute',
@@ -1654,7 +1809,7 @@ begin
   CheckEquals(314159,                                 Msg.CSeq.SequenceNo,              'Msg.CSeq.SequenceNo');
   CheckEquals('INVITE',                               Msg.CSeq.Method,                  'Msg.CSeq.Method');
 
-  CheckEquals(TIdSipAddressHeader.ClassName,
+  CheckEquals(TIdSipContactHeader.ClassName,
               Msg.Headers[ContactHeaderFull].ClassName,
               'Contact header type');
 

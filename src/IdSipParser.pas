@@ -44,6 +44,7 @@ type
   public
     class function IsIPv6Reference(const Token: String): Boolean;
     class function IsMethod(Method: String): Boolean;
+    class function IsQValue(const Token: String): Boolean;
     class function IsSipVersion(Version: String): Boolean;
     class function IsToken(const Token: String): Boolean;
     class function IsTransport(const Token: String): Boolean;
@@ -111,6 +112,7 @@ const
   DateHeader                 = 'Date';
   ErrorInfoHeader            = 'Error-Info';
   ExpiresHeader              = 'Expires';
+  ExpiresParam               = ExpiresHeader;
   FromHeaderFull             = 'From';
   FromHeaderShort            = 'f';
   InReplyToHeader            = 'In-Reply-To';
@@ -129,6 +131,7 @@ const
   ProxyAuthenticateHeader    = 'Proxy-Authenticate';
   ProxyAuthorizationHeader   = 'Proxy-Authorization';
   ProxyRequireHeader         = 'Proxy-Require';
+  QParam                     = 'q';
   ReceivedParam              = 'received';
   RecordRouteHeader          = 'Record-Route';
   ReplyToHeader              = 'Reply-To';
@@ -141,6 +144,7 @@ const
   SubjectHeaderShort         = 's';
   SupportedHeaderFull        = 'Supported';
   SupportedHeaderShort       = 'k';
+  TagParam                   = 'tag';
   TimestampHeader            = 'Timestamp';
   ToHeaderFull               = 'To';
   ToHeaderShort              = 't';
@@ -264,7 +268,9 @@ const
   SIPNotAcceptableGlobal              = 606;
 
 function IsEqual(const S1, S2: String): Boolean;
+function QValueToStr(const Q: TIdSipQValue): String;
 function ShortMonthToInt(const Month: String): Integer;
+function StrToQValue(const S: String): TIdSipQValue;
 function StrToTransport(const S: String): TIdSipTransportType;
 function TransportToStr(const T: TIdSipTransportType): String;
 
@@ -286,6 +292,22 @@ begin
   Result := Lowercase(S1) = Lowercase(S2);
 end;
 
+function QValueToStr(const Q: TIdSipQValue): String;
+begin
+  Result := IntToStr(Q div 1000);
+
+  if (Q mod 1000 > 0) then begin
+    Result := Result + '.';
+
+    Result := Result + IntToStr(((Q mod 1000) div 100));
+    Result := Result + IntToStr(((Q mod 100)  div 10));
+    Result := Result + IntToStr(((Q mod 10)   div 1));
+
+    while (Result[Length(Result)] = '0') do
+      Delete(Result, Length(Result), 1);
+  end;
+end;
+
 function ShortMonthToInt(const Month: String): Integer;
 var
   Found: Boolean;
@@ -299,6 +321,40 @@ begin
 
   if not Found then
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
+end;
+
+function StrToQValue(const S: String): TIdSipQValue;
+var
+  Fraction, Int: String;
+  Malformed:     Boolean;
+  F, I:          Cardinal;
+  E:             Integer;
+begin
+  Result := 0;
+  F      := 0;
+  Fraction := S;
+  Malformed := (Fraction = '') or (Pos(' ', S) > 0);
+
+  if not Malformed then begin
+    Malformed := (IndyPos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
+
+    Int := Fetch(Fraction, '.');
+
+    Val(Int, I, E);
+    Malformed := Malformed or (E <> 0) or (I > 1);
+
+    Malformed := Malformed or (Length(Fraction) > 3);
+    if (Fraction <> '') then begin
+      Val(Fraction, F, E);
+      Malformed := Malformed or (E <> 0);
+    end;
+
+    Result := 1000*I + F;
+    Malformed := Malformed or (Result > 1000);
+  end;
+
+  if Malformed then
+    raise EConvertError.Create('Failed to convert ''' + S + ''' to type TIdSipQValue');
 end;
 
 function StrToTransport(const S: String): TIdSipTransportType;
@@ -337,6 +393,16 @@ end;
 class function TIdSipParser.IsMethod(Method: String): Boolean;
 begin
   Result := Self.IsToken(Method);
+end;
+
+class function TIdSipParser.IsQValue(const Token: String): Boolean;
+begin
+  try
+    StrToQValue(Token);
+    Result := true;
+  except
+    Result := false;
+  end;
 end;
 
 class function TIdSipParser.IsSipVersion(Version: String): Boolean;
