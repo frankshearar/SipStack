@@ -83,6 +83,7 @@ type
     class function IsEscapedOrInSet(const Token: String;
                                     AcceptableChars: TIdSipChars): Boolean;
 
+    function  CouldContainIPv6Reference(const Token: String): Boolean;
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
     function  GetMaddr: String;
     function  GetMethod: String;
@@ -2277,6 +2278,11 @@ begin
   end;
 end;
 
+function TIdSipUri.CouldContainIPv6Reference(const Token: String): Boolean;
+begin
+  Result := (Token <> '') and (Token[1] = '[');
+end;
+
 function TIdSipUri.EqualParameters(const Uri: TIdSipUri): Boolean;
 begin
   Result := (Self.HasParameter(TransportParam) = Uri.HasParameter(TransportParam))
@@ -2335,7 +2341,10 @@ begin
       Result := Result + '@';
     end;
 
-    Result := Result + Self.Host;
+    if TIdIPAddressParser.IsIPv6Address(Self.Host) then
+      Result := Result + '[' + Self.Host + ']'
+    else
+      Result := Result + Self.Host;
 
     if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
       Result := Result + ':' + IntToStr(Self.Port);
@@ -2474,7 +2483,19 @@ end;
 
 procedure TIdSipUri.ParseHost(HostAndPort: String);
 begin
-  Self.Host := Fetch(HostAndPort, ':');
+  if Self.CouldContainIPv6Reference(HostAndPort) then begin
+    Self.Host := Fetch(HostAndPort, ']');
+
+    // Get rid of the [ we just ate.
+    Self.Host := Copy(Self.Host, 2, Length(Self.Host));
+
+    // And then eat up to the real host:port delimiter
+    Fetch(HostAndPort, ':');
+  end
+  else begin
+    // A numeric IPv4 address or a domain name
+    Self.Host := Fetch(HostAndPort, ':');
+  end;
 
   if (HostAndPort = '') then begin
     if Self.IsSecure then

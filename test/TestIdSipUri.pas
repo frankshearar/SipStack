@@ -98,6 +98,7 @@ type
     procedure TestSetUriUserHasEscapedChars;
     procedure TestSetUriValuelessParameter;
     procedure TestSetUriWithEscapedCharacters;
+    procedure TestSetUriWithIPv6;
     procedure TestSetUriWithNoUser;
     procedure TestSetUriWithPassword;
     procedure TestSetUriWithPort;
@@ -1165,6 +1166,21 @@ begin
   CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
               Self.Uri.Uri,
               '(Needlessly) escaped characters in username');
+end;
+
+procedure TestTIdSipUri.TestSetUriWithIPv6;
+begin
+  Self.Uri.Uri := 'sip:[2002:DEAD:BEEF:1::1]:15060';
+
+  CheckEquals('2002:DEAD:BEEF:1::1',
+              Self.Uri.Host,
+              'Host');
+  CheckEquals(15060,
+              Self.Uri.Port,
+              'Port');
+  CheckEquals('sip:[2002:DEAD:BEEF:1::1]:15060',
+              Self.Uri.Uri,
+              'IPv6 host with a port');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithNoUser;
