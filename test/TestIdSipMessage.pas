@@ -124,6 +124,7 @@ type
     procedure TestCreateCancelWithProxyRequire;
     procedure TestCreateCancelWithRequire;
     procedure TestCreateCancelWithRoute;
+    procedure TestDestinationUri;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentMethod;
@@ -1619,6 +1620,22 @@ begin
   finally
     Cancel.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestDestinationUri;
+const
+  ProxyUri   = '';
+  RequestUri = '';
+begin
+  Self.Request.RequestUri.Uri := RequestUri;
+
+  CheckEquals(RequestUri, Self.Request.DestinationUri, 'No Route headers');
+
+  Self.Request.AddHeader(RouteHeader).Value := '<' + ProxyUri + '>';
+  CheckEquals(RequestUri, Self.Request.DestinationUri, 'A strict router');
+
+  Self.Request.FirstRoute.IsLooseRoutable := true;
+  CheckEquals(ProxyUri, Self.Request.DestinationUri, 'A loose router');
 end;
 
 procedure TestTIdSipRequest.TestEqualsComplexMessages;

@@ -342,6 +342,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestIsLooseRoutable;
     procedure TestValue; override;
     procedure TestValueWithLeadingSpaceParam;
     procedure TestValueWithParamsAndHeaderParams;
@@ -3184,6 +3185,23 @@ begin
 end;
 
 //* TRouteHeaderTestCase Public methods ****************************************
+
+procedure TRouteHeaderTestCase.TestIsLooseRoutable;
+const
+  LrOff = '<sip:127.0.0.1>';
+  LrOn  = '<sip:127.0.0.1;lr>';
+begin
+  Self.R.Value := LrOff;
+  Check(not Self.R.IsLooseRoutable, 'No lr param');
+  Self.R.Value := LrOn;
+  Check(Self.R.IsLooseRoutable, 'lr param present');
+
+  Self.R.IsLooseRoutable := false;
+  CheckEquals(LrOff, Self.R.Value, 'Set via property; no lr param');
+
+  Self.R.IsLooseRoutable := true;
+  CheckEquals(LrOn, Self.R.Value, 'Set via property; lr param present');
+end;
 
 procedure TRouteHeaderTestCase.TestValue;
 begin

@@ -577,7 +577,9 @@ type
     fAddress:     TIdSipURI;
     fDisplayName: String;
 
+    function  GetIsLooseRoutable: Boolean;
     procedure SetAddress(Value: TIdSipURI);
+    procedure SetIsLooseRoutable(Value: Boolean);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
@@ -588,10 +590,10 @@ type
 
     function EncodeQuotedStr(const S: String): String;
     function HasSipsUri: Boolean;
-    function IsLooseRoutable: Boolean;
 
-    property Address:     TIdSipURI read fAddress write SetAddress;
-    property DisplayName: String    read fDisplayName write fDisplayName;
+    property Address:         TIdSipURI read fAddress write SetAddress;
+    property DisplayName:     String    read fDisplayName write fDisplayName;
+    property IsLooseRoutable: Boolean   read GetIsLooseRoutable write SetIsLooseRoutable;
   end;
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
@@ -1068,6 +1070,7 @@ type
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
+    function  DestinationUri: String;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
@@ -4153,11 +4156,6 @@ begin
   Result := Self.Address.Scheme = SipsScheme;
 end;
 
-function TIdSipRouteHeader.IsLooseRoutable: Boolean;
-begin
-  Result := IndyPos(LooseRoutableParam, Self.Address.URI) > 0;
-end;
-
 //* TIdSipRouteHeader Protected methods ****************************************
 
 function TIdSipRouteHeader.GetName: String;
@@ -4207,9 +4205,25 @@ end;
 
 //* TIdSipRouteHeader Private methods ******************************************
 
+function TIdSipRouteHeader.GetIsLooseRoutable: Boolean;
+begin
+  Result := IndyPos(LooseRoutableParam, Self.Address.URI) > 0;
+end;
+
 procedure TIdSipRouteHeader.SetAddress(Value: TIdSipURI);
 begin
   fAddress.URI := Value.URI;
+end;
+
+procedure TIdSipRouteHeader.SetIsLooseRoutable(Value: Boolean);
+begin
+  if Value then begin
+    if not Self.Address.HasParameter(LooseRoutableParam) then
+      Self.Address.AddParameter(LooseRoutableParam);
+  end
+  else begin
+    Self.Address.RemoveParameter(LooseRoutableParam);
+  end;
 end;
 
 //******************************************************************************
@@ -6346,6 +6360,17 @@ end;
 function TIdSipRequest.DefaultMaxForwards: Cardinal;
 begin
   Result := 70;
+end;
+
+function TIdSipRequest.DestinationUri: String;
+begin
+  // Use the Result of this function to know what URI you can use to determine
+  // possible target machines. cf RFC 3261 section 8.1.2.
+
+  if Self.HasRoute and Self.FirstRoute.IsLooseRoutable then
+    Result := Self.FirstRoute.Address.AsString
+  else
+    Result := Self.RequestUri.AsString;
 end;
 
 function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;
