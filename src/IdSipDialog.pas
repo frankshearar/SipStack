@@ -508,25 +508,25 @@ procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
                                       RouteSet: TIdSipHeaderList);
 begin
   Self.fInitialRequest  := TIdSipRequest.Create;
-  Self.fInitialResponse := TIdSipResponse.Create;
+  Self.fInitialRequest.Assign(Request);
 
-  Self.InitialRequest.Assign(Request);
-  Self.InitialResponse.Assign(Response);
+  Self.fInitialResponse := TIdSipResponse.Create;
+  Self.fInitialResponse.Assign(Response);
 
   Self.LocalSequenceNoLock := TCriticalSection.Create;
 
-  fID := TIdSipDialogID.Create(DialogID);
+  Self.fID := TIdSipDialogID.Create(DialogID);
   Self.SetLocalSequenceNo(LocalSequenceNo);
   Self.SetRemoteSequenceNo(RemoteSequenceNo);
 
-  fLocalUri := TIdSipURI.Create(LocalUri);
-  fRemoteUri := TIdSipURI.Create(RemoteUri);
+  Self.fLocalUri := TIdSipURI.Create(LocalUri);
+  Self.fRemoteUri := TIdSipURI.Create(RemoteUri);
 
-  fRemoteTarget := TIdSipURI.Create(RemoteTarget);
+  Self.fRemoteTarget := TIdSipURI.Create(RemoteTarget);
 
   Self.SetIsSecure(IsSecure);
 
-  fRouteSet := TIdSipRoutePath.Create;
+  Self.fRouteSet := TIdSipRoutePath.Create;
 
   // We normalise the RouteSet to contain only Routes. This just makes our
   // lives a bit simpler.
@@ -589,8 +589,8 @@ constructor TIdSipDialogs.Create;
 begin
   inherited Create;
 
-  Self.List := TObjectList.Create(true);
-  Self.Lock := TCriticalSection.Create;
+  Self.List    := TObjectList.Create(true);
+  Self.Lock    := TCriticalSection.Create;
   Self.NullDlg := TIdSipNullDialog.Create;
 end;
 
