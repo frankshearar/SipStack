@@ -90,6 +90,7 @@ type
     procedure TestCount;
     procedure TestDebugWaitTime;
     procedure TestEventAt;
+    procedure TestScheduledEvent;
   end;
 
 const
@@ -605,6 +606,29 @@ begin
               'Unexpected event (1)');
   Check(Self.Timer.EventAt(1).MatchEvent(Self.WaitEvent),
         'Wrong timer (1)');
+end;
+
+procedure TestTIdDebugTimerQueue.TestScheduledEvent;
+var
+  Callback: TNotifyEvent;
+begin
+  Callback := Self.OnTimer;
+
+  Check(not Self.Timer.ScheduledEvent(Callback),
+        'Empty timer');
+
+  Self.Timer.AddEvent(1000, Callback);
+
+  Check(Self.Timer.ScheduledEvent(Callback),
+        'Scheduled event doesn''t appear as scheduled');
+
+  Check(not Self.Timer.ScheduledEvent(Self.WaitEvent),
+        'TEvent not yet scheduled');
+
+  Self.Timer.AddEvent(1000, Self.WaitEvent);
+
+  Check(Self.Timer.ScheduledEvent(Self.WaitEvent),
+        'TEvent scheduled');
 end;
 
 initialization

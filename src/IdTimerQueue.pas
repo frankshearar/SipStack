@@ -85,6 +85,7 @@ type
     EventList: TObjectList;
     Lock:      TCriticalSection;
 
+    function  IndexOfEvent(Event: Pointer): Integer;
     procedure Run; override;
   public
     constructor Create(ACreateSuspended: Boolean = True); override;
@@ -104,9 +105,15 @@ type
   end;
 
   TIdDebugTimerQueue = class(TIdTimerQueue)
+  private
+    function HasScheduledEvent(Event: Pointer): Boolean;
   public
-    function EventAt(Index: Integer): TIdWait;
-    function EventCount: Integer;
+    function  EventAt(Index: Integer): TIdWait;
+    function  EventCount: Integer;
+    procedure LockTimer;
+    function  ScheduledEvent(Event: TEvent): Boolean; overload;
+    function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
+    procedure UnlockTimer;
   end;
 
 // Math and conversion functions
@@ -119,7 +126,8 @@ uses
   IdGlobal, SysUtils;
 
 const
-  DefaultSleepTime = 10000;
+  DefaultSleepTime      = 10000;
+  NotFoundSentinelValue = -1;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -272,6 +280,28 @@ end;
 
 //* TIdTimerQueue Protected methods ********************************************
 
+function TIdTimerQueue.IndexOfEvent(Event: Pointer): Integer;
+var
+  Found: Boolean;
+begin
+  Found := false;
+  Self.Lock.Acquire;
+  try
+    Result := 0;
+    while (Result < Self.EventList.Count) and not Found do begin
+      if Self.EventAt(Result).MatchEvent(Event) then
+        Found := true
+      else
+        Inc(Result);
+    end;
+
+    if not Found or (Result >= Self.EventList.Count) then
+      Result := NotFoundSentinelValue;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
 procedure TIdTimerQueue.Run;
 begin
   while not Self.Terminated do begin
@@ -337,6 +367,7 @@ procedure TIdTimerQueue.InternalRemove(Event: Pointer);
 var
   I: Integer;
 begin
+  // This removes ALL matching wait events matching Event.
   Self.Lock.Acquire;
   try
     I := 0;
@@ -379,7 +410,7 @@ begin
 
       Self.EventList.Remove(NextEvent);
     end;
-    
+
     Self.WaitEvent.ResetEvent;
   finally
     Self.Lock.Release;
@@ -393,22 +424,44 @@ end;
 
 function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
 begin
-  Self.Lock.Acquire;
-  try
-    Result := (Self.EventList[Index]) as TIdWait;
-  finally
-    Self.Lock.Release;
-  end;
+    Result := inherited EventAt(Index);
 end;
 
 function TIdDebugTimerQueue.EventCount: Integer;
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     Result := Self.EventList.Count;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
+end;
+
+procedure TIdDebugTimerQueue.LockTimer;
+begin
+  Self.Lock.Acquire;
+end;
+
+function TIdDebugTimerQueue.ScheduledEvent(Event: TEvent): Boolean;
+begin
+  Result := Self.HasScheduledEvent(Event);
+end;
+
+function TIdDebugTimerQueue.ScheduledEvent(Event: TNotifyEvent): Boolean;
+begin
+  Result := Self.HasScheduledEvent(@Event);
+end;
+
+procedure TIdDebugTimerQueue.UnlockTimer;
+begin
+  Self.Lock.Release;
+end;
+
+//* TIdDebugTimerQueue Protected methods ***************************************
+
+function TIdDebugTimerQueue.HasScheduledEvent(Event: Pointer): Boolean;
+begin
+  Result := Self.IndexOfEvent(Event) <> NotFoundSentinelValue;
 end;
 
 end.
