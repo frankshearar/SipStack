@@ -1946,9 +1946,11 @@ begin
     Action.ReceiveRequest(Request)
   else
     Self.ReturnResponse(Request,
-                        SIPCallLegOrTransactionDoesNotExist);    
+                        SIPCallLegOrTransactionDoesNotExist);
 
-  // TIdSipSession generates the response - 8.2.6
+  // Action generates the response - 8.2.6
+
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.ActOnResponse(Response: TIdSipResponse;
@@ -1968,6 +1970,8 @@ begin
     Action.ReceiveResponse(Response, Receiver.IsSecure)
   else
     Self.NotifyOfDroppedResponse(Response, Receiver);
+
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
