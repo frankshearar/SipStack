@@ -88,6 +88,7 @@ end;
 
 function TIdRandomNumber.NextHexString: String;
 begin
+  // Generate a hex-string representing a random 32-bit number.
   Result := IntToHex(Self.NextCardinal, Sizeof(Cardinal)*2);
 end;
 
