@@ -44,6 +44,9 @@ uses
   IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
   IdSipTransport, SyncObjs;
 
+const
+  SipStackVersion = '0.3';  
+
 type
   TIdSipAction = class;
   TIdSipActionClass = class of TIdSipAction;
@@ -716,8 +719,12 @@ type
   // pointer style) should you keep a reference to the Dialog property.
   TIdSipOutboundSession = class(TIdSipSession)
   private
-    InCall:       Boolean;
-    TargetUriSet: TIdSipContacts;
+    CancelRequest:                  TIdSipRequest;
+    fCancelling:                    Boolean;
+    HasReceivedProvisionalResponse: Boolean;
+    InCall:                         Boolean;
+    SentCancel:                     Boolean;
+    TargetUriSet:                   TIdSipContacts;
 
     function  CreateOutboundDialog(Response: TIdSipResponse;
                                    UsingSecureTransport: Boolean): TIdSipDialog;
@@ -728,6 +735,7 @@ type
     procedure TerminateAfterSendingCancel;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): Boolean; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
@@ -745,6 +753,7 @@ type
                    const InitialOffer: String;
                    const MimeType: String);
     procedure Cancel;
+    function  Cancelling: Boolean;
     function  CanForkOn(Response: TIdSipResponse): Boolean;
     function  IsInboundCall: Boolean; override;
     procedure Terminate; override;
@@ -1958,7 +1967,7 @@ begin
 
   // Action generates the response - 8.2.6
 
-  Self.CleanOutTerminatedActions;
+//  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.ActOnResponse(Response: TIdSipResponse;
@@ -1979,7 +1988,7 @@ begin
   else
     Self.NotifyOfDroppedResponse(Response, Receiver);
 
-  Self.CleanOutTerminatedActions;
+//  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
@@ -2138,7 +2147,7 @@ end;
 
 function TIdSipUserAgentCore.DefaultUserAgent: String;
 begin
-  Result := 'Indy SIP/2.0 Server v0.1';
+  Result := 'RNID SipStack v' + SipStackVersion;
 end;
 
 function TIdSipUserAgentCore.FindAction(Msg: TIdSipMessage): TIdSipAction;
@@ -2666,25 +2675,8 @@ end;
 
 function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
-var
-  ReInvite: TIdSipRequest;
 begin
-  Self.NotifyOfRedirect(Response);
-
   Result := false;
-  if Response.HasHeader(ContactHeaderFull) then begin
-    ReInvite := TIdSipRequest.Create;
-    try
-      ReInvite.Assign(Self.CurrentRequest);
-      ReInvite.LastHop.Branch := Self.UA.NextBranch;
-      ReInvite.FirstContact.Assign(Response.FirstContact);
-
-      Self.SendRequest(ReInvite);
-    finally
-      ReInvite.Free;
-    end;
-    Result := true;
-  end;
 end;
 
 procedure TIdSipAction.ReceiveRegister(Register: TIdSipRequest);
@@ -4022,6 +4014,7 @@ end;
 destructor TIdSipOutboundSession.Destroy;
 begin
   Self.TargetUriSet.Free;
+  Self.CancelRequest.Free;
 
   inherited Destroy;
 end;
@@ -4049,8 +4042,15 @@ procedure TIdSipOutboundSession.Cancel;
 begin
   if Self.FullyEstablished then Exit;
 
-  Self.SendCancel;
-  Self.TerminateAfterSendingCancel;
+  Self.fCancelling := true;
+
+  if Self.HasReceivedProvisionalResponse then
+    Self.SendCancel;
+end;
+
+function TIdSipOutboundSession.Cancelling: Boolean;
+begin
+  Result := Self.fCancelling;
 end;
 
 function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
@@ -4096,6 +4096,15 @@ begin
                                     Msg.ToHeader.Tag);
 end;
 
+function TIdSipOutboundSession.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Result := inherited ReceiveFailureResponse(Response);
+
+  if not Result
+    and Self.Cancelling
+    and Self.CurrentRequest.Match(Response) then
+    Self.TerminateAfterSendingCancel;
+end;
 
 function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
@@ -4104,25 +4113,34 @@ begin
   // A 2xx response immediately terminates a client INVITE transaction so that
   // the ACK can get passed up to the UA (as an unhandled request).
 
-  Self.DialogLock.Acquire;
-  try
-    if not Self.DialogEstablished then begin
-      fDialog := Self.CreateOutboundDialog(Response, UsingSecureTransport);
-      Self.NotifyOfEstablishedSession;
+  // If we receive a 200 OK for our CANCEL (which we should!) we just ignore it.
+  // Yes, we mean to do that. Yes, it complies with the RFC.
+  if Self.Cancelling and Self.CancelRequest.Match(Response) then
+  else begin
+    Self.DialogLock.Acquire;
+    try
+      if not Self.DialogEstablished then begin
+        fDialog := Self.CreateOutboundDialog(Response, UsingSecureTransport);
+        Self.NotifyOfEstablishedSession;
+      end;
+    finally
+      Self.DialogLock.Release;
     end;
-  finally
-    Self.DialogLock.Release;
+    Self.FullyEstablished := true;
+    Self.SendAck(Response);
   end;
 
-  Self.SendAck(Response);
-
   Result := true;
-  Self.FullyEstablished := true;
 end;
 
 function TIdSipOutboundSession.ReceiveProvisionalResponse(Response: TIdSipResponse;
                                                           UsingSecureTransport: Boolean): Boolean;
 begin
+  Self.HasReceivedProvisionalResponse := true;
+
+  if Self.Cancelling and not Self.SentCancel then
+    Self.SendCancel;
+
   // We should check for "and Response.ToHeader.HasTag" but that would prevent
   // us connecting to X-Lite, the non-compliant SIP phone.
   if not Response.IsTrying and Response.ToHeader.HasTag then begin
@@ -4182,7 +4200,9 @@ end;
 
 procedure TIdSipOutboundSession.Initialize;
 begin
-  Self.InCall := false;
+  Self.InCall                         := false;
+  Self.fCancelling                    := false;
+  Self.HasReceivedProvisionalResponse := false;
 
   Self.TargetUriSet := TIdSipContacts.Create;
 end;
@@ -4231,15 +4251,11 @@ begin
 end;
 
 procedure TIdSipOutboundSession.SendCancel;
-var
-  Cancel: TIdSipRequest;
 begin
-  Cancel := Self.CurrentRequest.CreateCancel;
-  try
-    Self.SendRequest(Cancel);
-  finally
-    Cancel.Free;
-  end;
+  Assert(not Self.SentCancel, 'SendCancel already invoked');
+  Self.SentCancel := true;
+  Self.CancelRequest := Self.CurrentRequest.CreateCancel;
+  Self.SendRequest(Self.CancelRequest);
 end;
 
 procedure TIdSipOutboundSession.TerminateAfterSendingCancel;

@@ -382,6 +382,8 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
+    procedure TestCancelBeforeAccept;
+    procedure TestCancelBeforeAcceptWithLateProvisional;
     procedure TestHangUp;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
@@ -392,6 +394,7 @@ type
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
+    procedure TestTerminateEstablishedSession;
   end;
 
   TIdModifyAuthHeaderProc = procedure(Auth: TIdSipAuthenticateHeader) of object;
@@ -3825,7 +3828,7 @@ var
 begin
   // <--- INVITE ---
   //  --- 200 OK --->
-  // <---- ACK -----
+  // <---  ACK   ---
   // <--- CANCEL ---
   //  --- 200 OK --->
 
@@ -3865,6 +3868,11 @@ procedure TestTIdSipInboundSession.TestCancelBeforeAccept;
 var
   SessionCount: Integer;
 begin
+  // <---         INVITE         ---
+  // <---         CANCEL         ---
+  //  ---         200 OK         ---> (for the CANCEL)
+  //  --- 487 Request Terminated ---> (for the INVITE)
+  // <---           ACK          ---
   SessionCount := Self.Core.SessionCount;
 
   Self.SimulateRemoteCancel;
@@ -3875,7 +3883,7 @@ begin
         'Session didn''t terminate');
 
   Check(Self.OnEndedSessionFired,
-        'Session didn''t notify listeners of ended session');        
+        'Session didn''t notify listeners of ended session');
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveOutOfOrderReInvite;
@@ -4412,6 +4420,128 @@ begin
         'Content-Disposition');
 end;
 
+procedure TestTIdSipOutboundSession.TestCancelBeforeAccept;
+var
+  AckCount:          Cardinal;
+  Invite:            TIdSipRequest;
+  RequestCount:      Cardinal;
+  RequestTerminated: TIdSipResponse;
+begin
+  //  ---         INVITE         --->
+  // <---       180 Ringing      ---
+  //  ---         CANCEL         --->
+  // <---         200 OK         ---  (for the CANCEL)
+  // <--- 487 Request Terminated ---  (for the INVITE)
+  // <---           ACK          --->
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+    // Note that Invite's To header has no tag because we haven't established
+    // a dialog.
+    RequestTerminated := TIdSipResponse.InResponseTo(Invite, SIPRequestTerminated);
+    try
+      Self.SimulateRemoteRinging(Invite);
+
+      // Now that we have established a dialog, the Request Terminated response
+      // will contain that dialog ID.
+      RequestTerminated.ToHeader.Tag := Self.Session.Dialog.ID.RemoteTag;
+
+      RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+      Self.Session.Cancel;
+
+      Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+            'No CANCEL sent');
+      CheckEquals(MethodCancel,
+                  Self.Dispatcher.Transport.LastRequest.Method,
+                  'The request sent wasn''t a CANCEL');
+      Check(not Self.Session.IsTerminated,
+            'No Request Terminated received means no termination');
+
+      Self.SimulateRemoteOK;
+
+      AckCount := Self.Dispatcher.Transport.ACKCount;
+      Self.Dispatcher.Transport.FireOnResponse(RequestTerminated);
+
+      Check(AckCount < Self.Dispatcher.Transport.ACKCount,
+            'No ACK sent');
+      CheckEquals(MethodAck,
+                  Self.Dispatcher.Transport.LastRequest.Method,
+                  'The request sent wasn''t a ACK');
+
+      Check(Self.Session.IsTerminated,
+            'Session not terminated');
+    finally
+      RequestTerminated.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestCancelBeforeAcceptWithLateProvisional;
+var
+  ACKCount:          Cardinal;
+  Invite:            TIdSipRequest;
+  RequestCount:      Cardinal;
+  RequestTerminated: TIdSipResponse;
+begin
+  //  ---         INVITE         --->
+  //  ---         CANCEL         --->
+  // <---         200 OK         ---  (for the CANCEL)
+  // <--- 487 Request Terminated ---  (for the INVITE)
+  // <---           ACK          --->
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+    // Note that Invite's To header has no tag because we haven't established
+    // a dialog.
+    RequestTerminated := TIdSipResponse.InResponseTo(Invite, SIPRequestTerminated);
+    try
+      RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+      Self.Session.Cancel;
+
+      CheckEquals(RequestCount,
+                  Self.Dispatcher.Transport.SentRequestCount,
+                  'CANCEL sent before the session receives a provisional response');
+
+      Self.SimulateRemoteRinging(Invite);
+      // Now that we have established a dialog, the Request Terminated response
+      // will contain that dialog ID.
+      RequestTerminated.ToHeader.Tag := Session.Dialog.ID.RemoteTag;
+
+      Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+            'No CANCEL sent');
+      CheckEquals(MethodCancel,
+                  Self.Dispatcher.Transport.LastRequest.Method,
+                  'The request sent wasn''t a CANCEL');
+      Check(not Self.Session.IsTerminated,
+            'No Request Terminated received means no termination');
+
+      Self.SimulateRemoteOK;
+
+      AckCount := Self.Dispatcher.Transport.ACKCount;
+      Self.Dispatcher.Transport.FireOnResponse(RequestTerminated);
+
+      Check(AckCount < Self.Dispatcher.Transport.ACKCount,
+            'No ACK sent');
+      CheckEquals(MethodAck,
+                  Self.Dispatcher.Transport.LastRequest.Method,
+                  'The request sent wasn''t a ACK');
+
+      Check(Self.Session.IsTerminated,
+            'Session not terminated');
+    finally
+      RequestTerminated.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestHangUp;
 var
   RequestCount: Cardinal;
@@ -4566,32 +4696,67 @@ end;
 
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
 var
-  Request:      TIdSipRequest;
-  RequestCount: Cardinal;
-  Ringing:      TIdSipResponse;
-  SessionCount: Integer;
+  Invite:            TIdSipRequest;
+  Request:           TIdSipRequest;
+  RequestCount:      Cardinal;
+  RequestTerminated: TIdSipResponse;
 begin
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SessionCount := Self.Core.SessionCount;
+  // When you Terminate a Session, the Session should attempt to CANCEL its
+  // initial INVITE (if it hasn't yet received a final response).
 
-  // We don't actually send CANCELs when we've not received a provisional
-  // response.
-  Ringing := TIdSipResponse.InResponseTo(Self.Session.CurrentRequest, SIPRinging);
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+  Invite := TIdSipRequest.Create;
   try
-    Self.Dispatcher.Transport.FireOnResponse(Ringing);
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    // We don't actually send CANCELs when we've not received a provisional
+    // response.
+    Self.SimulateRemoteRinging(Invite);
+
+    RequestTerminated := TIdSipResponse.InResponseTo(Invite, SIPRequestTerminated);
+    try
+      RequestTerminated.ToHeader.Tag := Self.Session.Dialog.ID.RemoteTag;
+
+      Self.Session.Terminate;
+
+      CheckEquals(RequestCount + 1,
+                  Self.Dispatcher.Transport.SentRequestCount,
+                  'no CANCEL sent');
+
+      Request := Self.Dispatcher.Transport.LastRequest;
+      CheckEquals(MethodCancel,
+                  Request.Method,
+                  'Session didn''t terminate with a CANCEL');
+
+      Self.Dispatcher.Transport.FireOnResponse(RequestTerminated);
+
+      Check(Self.Session.IsTerminated,
+            'Session not marked as terminated');
+    finally
+      RequestTerminated.Free;
+    end;
   finally
-    Ringing.Free;
+    Invite.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
+var
+  RequestCount: Cardinal;
+begin
+  Self.SimulateRemoteOK;
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   Self.Session.Terminate;
 
-  CheckEquals(RequestCount + 1,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'no CANCEL sent');
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'No request sent');
+  CheckEquals(MethodBye,
+              Self.Dispatcher.Transport.LastRequest.Method,
+              'Session didn''t terminate with a BYE');
 
-  Request := Self.Dispatcher.Transport.LastRequest;
-  Check(Request.IsCancel, 'Unexpected last request');
-
-  Check(Self.Core.SessionCount < SessionCount,
+  Check(Self.Session.IsTerminated,
         'Session not marked as terminated');
 end;
 
