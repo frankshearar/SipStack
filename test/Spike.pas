@@ -35,6 +35,7 @@ type
     Lock:         TCriticalSection;
     Media:        TIdSdpPayloadProcessor;
     RTPByteCount: Integer;
+    StopEvent:    TEvent;
     TransportUDP: TIdSipTransport;
     UA:           TIdSipUserAgentCore;
     UDPByteCount: Integer;
@@ -57,7 +58,6 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
-    procedure StartPlayback;
     procedure StartReadingData(const SDP: String);
     procedure StopReadingData;
   public
@@ -91,6 +91,16 @@ var
   From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
+
+  Self.StopEvent := TSimpleEvent.Create;
+
+  Self.DataStore := TMemoryStream.Create;
+  Self.AudioPlayer := TAudioData.Create;
+  Self.AudioPlayer.AutoFreeSource := false;
+  Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
+  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
+  Self.AudioPlayer.Assign(Self.DataStore);
+  Self.AudioPlayer.Play(AnyAudioDevice);
 
   Self.Lock := TCriticalSection.Create;
 
@@ -154,8 +164,14 @@ begin
   Self.TransportUDP.Free;
 
   Self.Lock.Free;
-  Self.DataStore.Free;
+
+  // If no data at all has arrived we stall here.
+  Self.AudioPlayer.Stop;
+  Self.StopEvent.WaitFor(10000);
   Self.AudioPlayer.Free;
+
+  Self.DataStore.Free;
+  Self.StopEvent.Free;
 
   inherited Destroy;
 end;
@@ -193,9 +209,14 @@ begin
   try
     Inc(Self.RTPByteCount, Data.Size);
 
-    if Assigned(Self.DataStore) then begin
-      Self.DataStore.Seek(0, soFromEnd);
-      Self.DataStore.CopyFrom(Data, 0);
+    Self.AudioPlayer.Lock;
+    try
+      if Assigned(Self.DataStore) then begin
+        Self.DataStore.Seek(0, soFromEnd);
+        Self.DataStore.CopyFrom(Data, 0);
+      end;
+    finally
+      Self.AudioPlayer.UnLock;                        
     end;
   finally
     Self.Lock.Release;
@@ -223,9 +244,7 @@ end;
 
 procedure TrnidSpike.OnPlaybackStopped(Origin: TAudioData);
 begin
-  Self.AudioPlayer.Stop;
-  FreeAndNil(Self.AudioPlayer);
-  Self.Invite.Enabled := true;
+  Self.StopEvent.SetEvent;
 end;
 
 procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;
@@ -252,24 +271,8 @@ begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpike.StartPlayback;
-begin
-  Self.AudioPlayer := TAudioData.Create;
-  Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
-  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
-  Self.AudioPlayer.LoadFromFile(AudioFile);
-  Self.AudioPlayer.Play(AnyAudioDevice);
-end;
-
 procedure TrnidSpike.StartReadingData(const SDP: String);
 begin
-  if FileExists(AudioFile) then
-    DeleteFile(AudioFile);
-    FileClose(FileCreate(AudioFile));
-
-  if not Assigned(Self.DataStore) then
-    Self.DataStore := TFileStream.Create(AudioFile, fmOpenWrite);
-
   Self.Invite.Enabled := false;
   Self.RTPByteCount   := 0;
   Self.UDPByteCount   := 0;
@@ -280,10 +283,7 @@ end;
 procedure TrnidSpike.StopReadingData;
 begin
   Self.Media.StopListening;
-
-  FreeAndNil(Self.DataStore);
-  Sleep(500);
-  Self.StartPlayback;
+  Self.Invite.Enabled := true;
 end;
 
 //* TrnidSpike Published methods ***********************************************

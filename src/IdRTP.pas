@@ -388,7 +388,6 @@ const
   DTMFD     = 15;
   DTMFFlash = 16;
 
-
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
   RTCPSourceDescription  = 202;
@@ -803,7 +802,17 @@ begin
 end;
 
 procedure TIdTelephoneEventPayload.PrintOn(Dest: TStream);
+var
+  B: Byte;
 begin
+  Dest.Write(Self.Event, 1);
+
+  B := Self.Volume;
+  if Self.IsEnd then
+    B := B or $80;
+  Dest.Write(B, 1);
+
+  WriteWord(Dest, Self.Duration);
 end;
 
 //******************************************************************************

@@ -1311,10 +1311,13 @@ begin
           IntToStr(I) + ' ' + Self.Response.StatusText);
   end;
 
-  Self.Response.StatusCode := SIPOK;
-  Check(Self.Response.IsOK, RSSIPOK);
+  for I := 200 to 299 do begin
+    Self.Response.StatusCode := I;
+    Check(Self.Response.IsOK,
+          IntToStr(I) + ' ' + Self.Response.StatusText);
+  end;
 
-  for I := 201 to 699 do begin
+  for I := 301 to 699 do begin
     Self.Response.StatusCode := I;
     Check(not Self.Response.IsOK,
           IntToStr(I) + ' ' + Self.Response.StatusText);

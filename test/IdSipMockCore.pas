@@ -27,6 +27,17 @@ type
     property ReceiveResponseCalled: Boolean read fReceiveResponseCalled;
   end;
 
+  TIdSipMockSession = class(TIdSipSession)
+  private
+    fResponseResent: Boolean;
+  public
+    constructor Create;
+
+    procedure ResendLastResponse; override;
+
+    property ResponseResent: Boolean read fResponseResent;
+  end;
+
 implementation
 
 //******************************************************************************
@@ -70,6 +81,23 @@ procedure TIdSipMockCore.Reset;
 begin
   fReceiveRequestCalled  := true;
   fReceiveResponseCalled := true;
+end;
+
+//******************************************************************************
+//* TIdSipMockSession                                                          *
+//******************************************************************************
+//* TIdSipMockSession Public methods *******************************************
+
+constructor TIdSipMockSession.Create;
+begin
+  inherited Create;
+
+  Self.fResponseResent := false;
+end;
+
+procedure TIdSipMockSession.ResendLastResponse;
+begin
+  Self.fResponseResent := true;
 end;
 
 end.

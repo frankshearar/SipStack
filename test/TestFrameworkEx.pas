@@ -54,7 +54,7 @@ end;
 
 procedure TThreadingTestCase.TearDown;
 begin
-  ThreadEvent.Free;
+  Self.ThreadEvent.Free;
 
   inherited TearDown;
 end;

@@ -611,7 +611,6 @@ var
   Request:  TIdSipRequest;
   Response: TIdSipResponse;
 begin
-
   if (Msg is TIdSipRequest) then begin
     Request := Msg as TIdSipRequest;
     // Add RFC 2543 matching
@@ -729,7 +728,7 @@ end;
 
 function TIdSipResponse.IsOK: Boolean;
 begin
-  Result := Self.StatusCode = SIPOK;
+  Result := Self.StatusCode div 100 = 2;
 end;
 
 function TIdSipResponse.IsProvisional: Boolean;

@@ -83,11 +83,15 @@ end;
 procedure TIdSipMockTransport.FireOnRequest(const R: TIdSipRequest);
 begin
   Self.NotifyTransportListeners(R);
+
+  Self.LastRequest.Assign(R);
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
 begin
   Self.NotifyTransportListeners(R);
+
+  Self.LastResponse.Assign(R);
 end;
 
 function TIdSipMockTransport.GetTransportType: TIdSipTransportType;

@@ -439,6 +439,10 @@ end;
 
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
 begin
+  Assert(Msg.Path.Length > 0,
+         'An outbound message must always have at least one Via, '
+       + 'namely, this stack.');
+
   Msg.LastHop.Transport := Self.GetTransportType;
   Msg.LastHop.SentBy := Self.HostName;
 end;

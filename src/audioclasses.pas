@@ -385,7 +385,7 @@ end;
 function TAudioData.GetVersion: TAudioDataVersion;
 begin
   Result.Major:=0;
-  Result.Minor:=3;
+  Result.Minor:=5;
 end;
 
 function TAudioData.Lock: Boolean;
@@ -535,7 +535,6 @@ begin
               OutPutBuffers[I].Header.dwFlags:=0;
             end;
           end;
-          Synchronize(AudioData.StopEvent);
         finally
           try
             waveOutReset(WaveDeviceHandle);
@@ -546,6 +545,7 @@ begin
       end;
     end;
   end;
+  Synchronize(AudioData.StopEvent);
 end;
 
 { TMutex }

@@ -1765,7 +1765,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPConnectionName, Value]),
+        CheckEquals(Format(MalformedToken, [RSSDPConnectionName, 'c=' + Value]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -1788,7 +1788,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPOriginName, OriginValue]),
+        CheckEquals(Format(MalformedToken, [RSSDPOriginName, 'o=' + OriginValue]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -1810,7 +1810,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPPhoneName, Value]),
+        CheckEquals(Format(MalformedToken, [RSSDPPhoneName, 'p=' + Value]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -1839,7 +1839,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPMediaDescriptionName, Value]),
+        CheckEquals(Format(MalformedToken, [RSSDPMediaDescriptionName, 'm=' + Value]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -1863,7 +1863,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [Name, Value]),
+        CheckEquals(Format(MalformedToken, [Name, Name + '=' + Value]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -1887,7 +1887,7 @@ begin
       Fail('Failed to bail out');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPRepeatName, RepeatValue]),
+        CheckEquals(Format(MalformedToken, [RSSDPRepeatName, 'r=' + RepeatValue]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -2199,7 +2199,7 @@ begin
       Fail('Failed to bail out on a malformed bandwidth');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPBandwidthName, ':']),
+        CheckEquals(Format(MalformedToken, [RSSDPBandwidthName, 'b=:']),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -2530,7 +2530,7 @@ begin
       Fail('Failed to bail out on malformed information-field');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPInformationName, 'haha'#0'haha']),
+        CheckEquals(Format(MalformedToken, [RSSDPInformationName, 'i=haha'#0'haha']),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -3456,7 +3456,7 @@ begin
       Fail('Failed to bail out malformed version');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPVersionName, 'a']),
+        CheckEquals(Format(MalformedToken, [RSSDPVersionName, 'v=a']),
                     E.Message,
                     'Unexpected exception');
     end;

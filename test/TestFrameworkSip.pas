@@ -120,8 +120,8 @@ type
   TIdSipTestTransportSendingListener = class(TIdSipInterfacedObject,
                                              IIdSipTransportSendingListener)
   private
-    fSentRequest:      Boolean;
-    fSentResponse:     Boolean;
+    fSentRequest:  Boolean;
+    fSentResponse: Boolean;
 
     procedure OnSendRequest(const Request: TIdSipRequest;
                             const Transport: TIdSipTransport);
@@ -132,6 +132,25 @@ type
 
     property SentRequest:  Boolean read fSentRequest;
     property SentResponse: Boolean read fSentResponse;
+  end;
+
+  TIdSipTestUnhandledMessageListener = class(TIdSipInterfacedObject,
+                                             IIdSipUnhandledMessageListener)
+  private
+    fReceivedUnhandledRequest:  Boolean;
+    fReceivedUnhandledResponse: Boolean;
+
+    procedure OnReceiveUnhandledRequest(const Request: TIdSipRequest;
+                                        const Transaction: TIdSipTransaction;
+                                        const Receiver: TIdSipTransport);
+    procedure OnReceiveUnhandledResponse(const Response: TIdSipResponse;
+                                         const Transaction: TIdSipTransaction;
+                                         const Receiver: TIdSipTransport);
+  public
+    constructor Create;
+
+    property ReceivedUnhandledRequest:  Boolean read fReceivedUnhandledRequest;
+    property ReceivedUnhandledResponse: Boolean read fReceivedUnhandledResponse;
   end;
 
   // constants used in tests
@@ -353,6 +372,35 @@ procedure TIdSipTestTransportSendingListener.OnSendResponse(const Response: TIdS
                                                             const Transport: TIdSipTransport);
 begin
   Self.fSentResponse := true;
+end;
+
+//******************************************************************************
+//* TIdSipTestUnhandledMessageListener                                         *
+//******************************************************************************
+//* TIdSipTestUnhandledMessageListener Public methods **************************
+
+constructor TIdSipTestUnhandledMessageListener.Create;
+begin
+  inherited Create;
+
+  fReceivedUnhandledRequest  := false;
+  fReceivedUnhandledResponse := false;
+end;
+
+//* TIdSipTestUnhandledMessageListener Private methods *************************
+
+procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest(const Request: TIdSipRequest;
+                                                                       const Transaction: TIdSipTransaction;
+                                                                       const Receiver: TIdSipTransport);
+begin
+  fReceivedUnhandledRequest := true;
+end;
+
+procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse(const Response: TIdSipResponse;
+                                                                        const Transaction: TIdSipTransaction;
+                                                                        const Receiver: TIdSipTransport);
+begin
+  fReceivedUnhandledResponse := true;
 end;
 
 end.

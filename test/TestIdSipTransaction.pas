@@ -8,7 +8,9 @@ uses
   IdSipTransaction, IdSipTransport, TestFramework, TestFrameworkSip;
 
 type
-  TestTIdSipTransactionDispatcher = class(TTestCase, IIdSipTransactionListener)
+  TestTIdSipTransactionDispatcher = class(TTestCase,
+                                          IIdSipSessionListener,
+                                          IIdSipTransactionListener)
   private
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
@@ -20,10 +22,18 @@ type
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
     Response200:            TIdSipResponse;
+    Session:                TIdSipSession;
     TranRequest:            TIdSipRequest;
 
+    function  CreateAck(const Response: TIdSipResponse): TIdSipRequest;
+    function  CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
+    procedure OnEndedSession(const Session: TIdSipSession);
+    procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
+    procedure OnNewSession(const Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
                                const Transport: TIdSipTransport);
@@ -35,12 +45,16 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAckDoesntCreateATransaction;
     procedure TestAddAndCountTransport;
     procedure TestClearTransports;
     procedure TestCreateNewTransaction;
+    procedure TestAckHandedUpToTU;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
     procedure TestDispatchToCorrectTransaction;
+    procedure TestDispatcherDoesntGetTransactionRequests;
+    procedure TestDispatcherDoesntGetTransactionResponses;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestLoopDetected;
@@ -52,6 +66,7 @@ type
     procedure TestSendMessageWithAppropriateTransport;
     procedure TestSendVeryBigMessageWithTcpFailure;
     procedure TestSendVeryBigRequest;
+    procedure TestServerInviteTransactionGetsAck;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
 //    procedure TestTortureTest41;
@@ -136,6 +151,7 @@ type
     procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
     procedure TestIsClient;
+    procedure TestIsInvite;
     procedure TestReceive2xxFromTUInProceedingState;
     procedure TestReceiveAckInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
@@ -171,6 +187,7 @@ type
     procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
     procedure TestIsClient;
+    procedure TestIsInvite;
     procedure TestReceiveFinalResponseFromTUInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
     procedure TestReceiveFinalResponseFromTUInTerminatedState;
@@ -201,6 +218,7 @@ type
     procedure TestInitialState;
     procedure TestInviteWithHostUnreachable;
     procedure TestIsClient;
+    procedure TestIsInvite;
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
@@ -235,6 +253,7 @@ type
     procedure TestInitialRequestSent;
     procedure TestInitialState;
     procedure TestIsClient;
+    procedure TestIsInvite;
     procedure TestMultipleRequestSendingInProceedingState;
     procedure TestMultipleRequestSendingInTryingState;
     procedure TestReceive1xxInCompletedState;
@@ -321,7 +340,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSipConsts, IdSipHeaders, Math, SyncObjs,
+  Classes, IdException, IdSdp, IdSipConsts, IdSipHeaders, Math, SyncObjs,
   SysUtils, TestMessages, TypInfo;
 
 function Suite: ITestSuite;
@@ -380,6 +399,8 @@ begin
 
   Self.Invite := TIdSipRequest.Create;
   Self.Invite.Assign(Self.ReceivedRequest);
+  Self.Invite.Body := '';
+  Self.Invite.ContentType := SdpMimeType;
 
   Self.Options := TIdSipRequest.Create;
   Self.Options.Assign(Self.ReceivedRequest);
@@ -411,9 +432,51 @@ end;
 
 //* TestTIdSipTransactionDispatcher Private methods ****************************
 
+function TestTIdSipTransactionDispatcher.CreateAck(const Response: TIdSipResponse): TIdSipRequest;
+var
+  ClientTran: TIdSipClientInviteTransaction;
+begin
+  ClientTran := TidSipClientInviteTransaction.Create(Self.D, Self.Invite);
+  try
+    Result := ClientTran.CreateAck(Response);
+  finally
+    ClientTran.Free;
+  end;
+end;
+
+function TestTIdSipTransactionDispatcher.CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
+var
+  UA: TIdSipUserAgentCore;
+begin
+  UA := TIdSipUserAgentCore.Create;
+  try
+    Result := UA.CreateResponse(Request, SIPMultipleChoices);
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnEndedSession(const Session: TIdSipSession);
+begin
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(const Session: TIdSipSession);
+begin
+end;
+
 procedure TestTIdSipTransactionDispatcher.OnFail(const Transaction: TIdSipTransaction;
                                                  const Reason: String);
 begin
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnModifiedSession(const Session: TIdSipSession;
+                                                            const Invite: TIdSipRequest);
+begin
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnNewSession(const Session: TIdSipSession);
+begin
+  Self.Session := Session;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
@@ -437,6 +500,22 @@ begin
 end;
 
 //* TestTIdSipTransactionDispatcher Published methods **************************
+
+procedure TestTIdSipTransactionDispatcher.TestAckDoesntCreateATransaction;
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := TIdSipRequest.Create;
+  try
+    Ack.Method := MethodAck;
+
+    Self.MockTransport.FireOnRequest(Ack);
+
+    CheckEquals(0, Self.D.TransactionCount, 'ACK created a transaction');
+  finally
+    Ack.Free;
+  end;
+end;
 
 procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
 var
@@ -495,6 +574,35 @@ begin
   CheckEquals(OriginalCount + 1,
               Self.D.TransactionCount,
               'No new transaction was created');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
+var
+  Ack:      TIdSipRequest;
+  Listener: TIdSipTestUnhandledMessageListener;
+  Tran:     TIdSipTransaction;
+begin
+  Ack := Self.CreateAck(Self.Response200);
+  try
+    Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+
+    Listener := TIdSipTestUnhandledMessageListener.Create;
+    try
+      Self.D.AddUnhandledMessageListener(Listener);
+
+      Tran.SendResponse(Self.Response200);
+
+      Self.MockTransport.FireOnRequest(Ack);
+      // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
+      // responsible for handling ACKs to a 2xx response!
+      Check(Listener.ReceivedUnhandledRequest,
+            'ACK not handed up to TU');
+    finally
+      Listener.Free;
+    end;
+  finally
+    Ack.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestAddClientTransaction;
@@ -565,6 +673,42 @@ begin
     end;
   finally
     InviteListener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionRequests;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.D.AddUnhandledMessageListener(Listener);
+    Self.MockTransport.FireOnRequest(Self.Invite);
+
+    Check(not Listener.ReceivedUnhandledRequest,
+          'Dispatcher said it got an unhandled request');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionResponses;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Self.D.AddClientTransaction(Self.Invite);
+
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.D.AddUnhandledMessageListener(Listener);
+    Self.MockTransport.FireOnResponse(Self.ReceivedResponse);
+
+    Check(not Listener.ReceivedUnhandledResponse,
+          'Dispatcher said it got an unhandled response');
+  finally
+    Listener.Free;
   end;
 end;
 
@@ -762,6 +906,39 @@ begin
           'No response sent down TCP');
   finally
     UdpTran.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestServerInviteTransactionGetsAck;
+var
+  Ack:        TIdSipRequest;
+  Listener:   TIdSipTestTransactionListener;
+  Response:   TIdSipResponse;
+  ServerTran: TIdSipTransaction;
+begin
+  // We want to check that a server invite transaction gets its ACK.
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    ServerTran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+    ServerTran.AddTransactionListener(Listener);
+
+    Response := Self.CreateMultipleChoices(Self.Invite);
+    try
+      ServerTran.SendResponse(Response);
+
+      Ack := Self.CreateAck(Response);
+      try
+        Self.MockTransport.FireOnRequest(Ack);
+        Check(Listener.ReceivedRequest,
+              'Server INVITE transaction didn''t get its ACK');
+      finally
+        Ack.Free;
+      end;
+    finally
+     Response.Free;
+    end;
+  finally
+    Listener.Free;
   end;
 end;
 
@@ -1297,6 +1474,11 @@ begin
   Check(not Self.Tran.IsClient, 'IsClient not false');
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestIsInvite;
+begin
+  Check(Self.Tran.IsInvite, 'IsInvite not true');
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestReceive2xxFromTUInProceedingState;
 var
   ResponseCount: Cardinal;
@@ -1766,6 +1948,11 @@ begin
   Check(not Self.Tran.IsClient, 'IsClient not false');
 end;
 
+procedure TestTIdSipServerNonInviteTransaction.TestIsInvite;
+begin
+  Check(not Self.Tran.IsInvite, 'IsInvite not false');
+end;
+
 procedure TestTIdSipServerNonInviteTransaction.TestReceiveFinalResponseFromTUInCompletedState;
 var
   SentResponseCount: Cardinal;
@@ -2232,6 +2419,11 @@ begin
   Check(Self.Tran.IsClient, 'IsClient not true');
 end;
 
+procedure TestTIdSipClientInviteTransaction.TestIsInvite;
+begin
+  Check(Self.Tran.IsInvite, 'IsInvite not true');
+end;
+
 procedure TestTIdSipClientInviteTransaction.TestMultipleInviteSending;
 begin
   (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
@@ -2354,18 +2546,25 @@ end;
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCallingState;
 var
   ACKCount: Cardinal;
+  Listener: TIdSipTestTransactionListener;
 begin
-  ACKCount := Self.MockDispatcher.Transport.ACKCount;
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.Tran.AddTransactionListener(Listener);
+    ACKCount := Self.MockDispatcher.Transport.ACKCount;
 
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+    Self.Response.StatusCode := SIPOK;
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
 
-  Check(ACKCount < Self.MockDispatcher.Transport.ACKCount,
-        'No ACK sent');
+    CheckEquals(ACKCount, Self.MockDispatcher.Transport.ACKCount,
+          'ACK sending arrogated by transaction');
 
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
-              'State on receiving a 200');
+    CheckEquals(Transaction(itsTerminated),
+                Transaction(Self.Tran.State),
+                'State on receiving a 200');
+  finally
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCompletedState;
@@ -2384,20 +2583,26 @@ end;
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInProceedingState;
 var
   ACKCount: Cardinal;
+  Listener: TIdSipTestTransactionListener;
 begin
-  Self.MoveToProceedingState(Self.Tran);
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.MoveToProceedingState(Self.Tran);
+    Self.Tran.AddTransactionListener(Listener);
+    ACKCount := Self.MockDispatcher.Transport.ACKCount;
 
-  ACKCount := Self.MockDispatcher.Transport.ACKCount;
+    Self.Response.StatusCode := SIPOK;
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
 
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+    CheckEquals(ACKCount, Self.MockDispatcher.Transport.ACKCount,
+          'ACK sending arrogated by transaction');
 
-  Check(ACKCount < Self.MockDispatcher.Transport.ACKCount,
-        'No ACK sent');
-
-  CheckEquals(Transaction(itsTerminated),
-              Transaction(Self.Tran.State),
-              'State on receiving a 200');
+    CheckEquals(Transaction(itsTerminated),
+                Transaction(Self.Tran.State),
+                'State on receiving a 200');
+  finally
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive3xxInCallingState;
@@ -2489,8 +2694,7 @@ var
   Tran: TIdSipTransaction;
 begin
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                      Self.Request,
-                                      250);
+                                      Self.Request);
   try
     Tran.AddTransactionListener(Self);
     Self.CheckTerminated := Self.Terminated;
@@ -2645,6 +2849,11 @@ end;
 procedure TestTIdSipClientNonInviteTransaction.TestIsClient;
 begin
   Check(Self.Tran.IsClient, 'IsClient not true');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestIsInvite;
+begin
+  Check(not Self.Tran.IsInvite, 'IsInvite not false');
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestMultipleRequestSendingInProceedingState;
@@ -3131,9 +3340,9 @@ procedure TestTIdSipClientNonInviteTransactionTimer.TestProceedingTimerEInterval
 begin
   Self.Timer.ChangeState(itsProceeding);
   Self.Timer.FireTimerE;
-  CheckEquals(T2, Self.Timer.TimerEInterval, 'After 1 fire');
+  CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 1 fire');
   Self.Timer.FireTimerE;
-  CheckEquals(T2, Self.Timer.TimerEInterval, 'After 2 fires');
+  CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 2 fires');
 end;
 
 procedure TestTIdSipClientNonInviteTransactionTimer.TestTerminatedStopsAllTimers;
@@ -3188,9 +3397,9 @@ begin
   Self.Timer.FireTimerE;
   CheckEquals(2000, Self.Timer.TimerEInterval, 'After 2 fires');
   Self.Timer.FireTimerE;
-  CheckEquals(T2, Self.Timer.TimerEInterval, 'After 3 fires');
+  CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 3 fires');
   Self.Timer.FireTimerE;
-  CheckEquals(T2, Self.Timer.TimerEInterval, 'After 4 fires');
+  CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 4 fires');
 end;
 
 initialization

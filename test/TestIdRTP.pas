@@ -85,8 +85,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestReadFrom;
     procedure TestPrintOn;
+    procedure TestReadFrom;
   end;
 
   TestTIdTelephoneEventPayload = class(TTestCase)
@@ -96,6 +96,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestPrintOnDuration;
+    procedure TestPrintOnEvent;
+    procedure TestPrintOnIsEnd;
+    procedure TestPrintOnReservedBit;
+    procedure TestPrintOnVolume;
     procedure TestReadFromDuration;
     procedure TestReadFromEvent;
     procedure TestReadFromIsEnd;
@@ -749,21 +754,6 @@ end;
 
 //* TestTIdT140Payload Published methods ***************************************
 
-procedure TestTIdT140Payload.TestReadFrom;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create(#$BE#$EF'fooing the bar');
-  try
-    Self.Packet.ReadFrom(S);
-
-    CheckEquals($BEEF,            Self.Packet.BlockCount, 'BlockCount');
-    CheckEquals('fooing the bar', Self.Packet.Block,      'Block');
-  finally
-    S.Free;
-  end;
-end;
-
 procedure TestTIdT140Payload.TestPrintOn;
 var
   S: TStringStream;
@@ -778,6 +768,21 @@ begin
     CheckEquals(#$BE#$EF'fooing the bar',
                 S.DataString,
                 'PrintOn');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdT140Payload.TestReadFrom;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$BE#$EF'fooing the bar');
+  try
+    Self.Packet.ReadFrom(S);
+
+    CheckEquals($BEEF,            Self.Packet.BlockCount, 'BlockCount');
+    CheckEquals('fooing the bar', Self.Packet.Block,      'Block');
   finally
     S.Free;
   end;
@@ -803,6 +808,129 @@ begin
 end;
 
 //* TestTIdTelephoneEventPayload Published methods *****************************
+
+procedure TestTIdTelephoneEventPayload.TestPrintOnDuration;
+const
+  SampleDurations: array[0..5] of Word = ($f00d, $beef, $cafe, $deaf, $deca, $fbad);
+var
+  I: Integer;
+  S: TStringStream;
+begin
+  for I := Low(SampleDurations) to High(SampleDurations) do begin
+    S := TStringStream.Create('');
+    try
+      Self.Packet.Duration := SampleDurations[I];
+      Self.Packet.PrintOn(S);
+
+      Check(S.Size > 3, 'Output stream too short');
+      CheckEquals(Self.Packet.Duration shr 8,
+                  Ord(S.DataString[3]),
+                  'Duration ' + IntToHex(Self.Packet.Duration, 4) + ' '
+                + 'MSB');
+      CheckEquals(Self.Packet.Duration and $00FF,
+                  Ord(S.DataString[4]),
+                  'Duration ' + IntToHex(Self.Packet.Duration, 4) + ' '
+                + 'LSB');
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestPrintOnEvent;
+const
+  SampleEvents: array[0..7] of Byte = ($f0, $0d, $be, $ef, $de, $ca, $fb, $ad);
+var
+  I: Integer;
+  S: TStringStream;
+begin
+  for I := Low(SampleEvents) to High(SampleEvents) do begin
+    S := TStringStream.Create('');
+    try
+      Self.Packet.Event := SampleEvents[I];
+      Self.Packet.PrintOn(S);
+
+      Check(S.Size > 3, 'Output stream too short');
+      CheckEquals(Self.Packet.Event,
+                  Ord(S.DataString[1]),
+                  'Event ' + IntToHex(Self.Packet.Event, 2));
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestPrintOnIsEnd;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Packet.IsEnd := false;
+    Self.Packet.PrintOn(S);
+
+    Check(S.Size > 3, 'Output stream too short, not end');
+    CheckEquals($00, Ord(S.DataString[1]), 'First byte, not end');
+    CheckEquals($00, Ord(S.DataString[2]), 'Second byte, not end');
+    CheckEquals($00, Ord(S.DataString[3]), 'Third byte, not end');
+    CheckEquals($00, Ord(S.DataString[4]), 'Fourth byte, not end');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create('');
+  try
+    Self.Packet.IsEnd := true;
+    Self.Packet.PrintOn(S);
+
+    Check(S.Size > 3, 'Output stream too short, end');
+    CheckEquals($00, Ord(S.DataString[1]), 'First byte, end');
+    CheckEquals($80, Ord(S.DataString[2]), 'Second byte, end');
+    CheckEquals($00, Ord(S.DataString[3]), 'Third byte, end');
+    CheckEquals($00, Ord(S.DataString[4]), 'Fourth byte, end');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestPrintOnReservedBit;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Packet.ReservedBit := true;
+    Self.Packet.PrintOn(S);
+
+    Check(S.Size > 3, 'Output stream too short');
+    CheckEquals(0, Ord(S.DataString[1]) and $40, 'Reserved bit MUST be zero');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestPrintOnVolume;
+var
+  V: TIdTelephoneEventVolume;
+  S: TStringStream;
+begin
+  for V := Low(TIdTelephoneEventVolume) to High(TIdTelephoneEventVolume) do begin
+    S := TStringStream.Create('');
+    try
+      Self.Packet.IsEnd  := V mod 2 = 0;
+      Self.Packet.Volume := V;
+      Self.Packet.PrintOn(S);
+
+      Check(S.Size > 3, 'Output stream too short');
+      CheckEquals(V,
+                  Ord(S.DataString[2]) and $7F,
+                  'Volume ' + IntToStr(V)
+                + '; IsEnd = ' + BoolToStr(Self.Packet.IsEnd));
+    finally
+      S.Free;
+    end;
+  end;
+end;
 
 procedure TestTIdTelephoneEventPayload.TestReadFromDuration;
 var
