@@ -724,6 +724,8 @@ type
 
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
+    function  TrySendRequest(Request: TIdSipRequest;
+                             Targets: TIdSipLocations): Boolean;
   protected
     Listeners:       TIdNotificationList;
     TargetLocations: TIdSipLocations;
@@ -1510,6 +1512,8 @@ const
   LocalHangUp                    = 'Local end hung up';
   InboundActionFailed            = 'An inbound %s failed because: %s';
   ItemNotFoundIndex              = -1;
+  NoLocationFound                = 'No destination addresses found';
+  NoLocationSucceeded            = 'Attempted message sends to all destination addresses failed';
   NoSuchRegistrar                = 'No such registrar known: %s';
   OutboundActionFailed           = 'An outbound %s failed because: %s';
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
@@ -3941,42 +3945,29 @@ end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
 var
-  CurrentLocation: Integer;
-  EMessage:        String;
-
-  Succeeded:       Boolean;
+  TargetLocations: TIdSipLocations;
 begin
   Self.SentRequest := true;
 
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
-  // Freed in Destroy
-  if not Assigned(Self.TargetLocations) then
-    Self.TargetLocations := Self.UA.Locator.FindServersFor(Request.RequestUri);
-
-  if Self.TargetLocations.IsEmpty then begin
-    // FAIL
-    Exit;
-  end;
-
-  CurrentLocation := 0;
-  Succeeded       := false;
-
-  while not Succeeded and (CurrentLocation < Self.TargetLocations.Count) do begin
-    try
-      Request.LastHop.Transport := Self.TargetLocations[CurrentLocation].Transport;
-      Self.UA.SendRequest(Request);
-      Succeeded := true;
-    except
-      on E: EIdSipTransport do
-        EMessage := E.Message;
+  TargetLocations := Self.UA.Locator.FindServersFor(Request.DestinationUri);
+  try
+    if TargetLocations.IsEmpty then begin
+      // The Locator should at the least return a location based on the
+      // Request-URI. Thus this clause should never execute. Still, this
+      // clause protects the code that follows.
+      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed, [Self.Method, NoLocationFound]));
+      Exit;
     end;
-    Inc(CurrentLocation);
-  end;
 
-  if not Succeeded then
-    Self.NotifyOfNetworkFailure(Format(OutboundActionFailed, [Self.Method, EMessage]));
+    if not Self.TrySendRequest(Request, TargetLocations) then
+      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed,
+                                         [Self.Method, NoLocationSucceeded]));
+  finally
+    TargetLocations.Free;
+  end;
 end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
@@ -3999,6 +3990,51 @@ end;
 procedure TIdSipAction.SetUsername(const Value: String);
 begin
   Self.UA.From.DisplayName := Value;
+end;
+
+function TIdSipAction.TrySendRequest(Request: TIdSipRequest;
+                                     Targets: TIdSipLocations): Boolean;
+var
+  ActualRequest: TIdSipRequest;
+  CurrentTarget: Integer;
+  NewAttempt:    TIdSipRequest;
+begin
+  // Result indicates success.
+
+  CurrentTarget := 0;
+  Result        := false;
+
+  ActualRequest := TIdSipRequest.Create;
+  try
+    ActualRequest.Assign(Request);
+
+    while not Result and (CurrentTarget < Targets.Count) do begin
+      ActualRequest.LastHop.Transport := Targets[CurrentTarget].Transport;
+
+      try
+        Self.UA.SendRequest(ActualRequest);
+        Result := true;
+
+        // Synchronise our state to what actually went down to the network.
+        if Request.Match(Self.InitialRequest) then
+          Self.InitialRequest.Assign(ActualRequest);
+      except
+        on E: EIdSipTransport do begin
+          // Maybe we should log this?
+          NewAttempt := Self.CreateNewAttempt;
+          try
+            ActualRequest.Assign(NewAttempt);
+          finally
+            NewAttempt.Free;
+          end;
+        end;
+      end;
+
+      Inc(CurrentTarget);
+    end;
+  finally
+    ActualRequest.Free;
+  end;
 end;
 
 //******************************************************************************

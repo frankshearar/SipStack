@@ -319,6 +319,40 @@ type
 }
   end;
 
+  // These tests exercise the SIP discovery algorithms as defined in RFC 3263.
+  TestLocation = class(TTestCaseTU,
+                       IIdSipActionListener,
+                       IIdSipInviteListener)
+  private
+    InviteOffer:    String;
+    InviteMimeType: String;
+    NetworkFailure: Boolean;
+    TransportParam: String;
+
+    function  CreateAction: TIdSipOutboundInitialInvite;
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog);
+    procedure OnNetworkFailure(Action: TIdSipAction;
+                               const Reason: String);
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAllLocationsFail;
+    procedure TestLooseRoutingProxy;
+    procedure TestStrictRoutingProxy;
+    procedure TestUseCorrectTransport;
+    procedure TestUseTransportParam;
+    procedure TestUseUdpByDefault;
+    procedure TestVeryLargeMessagesUseAReliableTransport;
+  end;
+
   TestTIdSipInboundInvite = class(TestTIdSipAction,
                                   IIdSipInboundInviteListener)
   private
@@ -925,8 +959,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdNotification, IdSipAuthentication, IdSipConsts, IdSipMockTransport,
-  IdUdpServer, SysUtils, TestMessages, Windows;
+  IdNotification, IdSipAuthentication, IdSipConsts, IdSipLocator,
+  IdSipMockTransport, IdUdpServer, SysUtils, TestMessages, Windows;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -989,6 +1023,7 @@ begin
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
+  Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -4091,6 +4126,212 @@ begin
   Check(Self.ActionFailed, ActionClassName + ' failure not reported');
 end;
 }
+//******************************************************************************
+//* TestLocation                                                               *
+//******************************************************************************
+//* TestLocation Public methods ************************************************
+
+procedure TestLocation.SetUp;
+begin
+  inherited SetUp;
+
+  Self.InviteMimeType := '';
+  Self.InviteOffer    := '';
+  Self.NetworkFailure := false;
+  Self.TransportParam := SctpTransport;
+end;
+
+//* TestLocation Private methods ***********************************************
+
+function TestLocation.CreateAction: TIdSipOutboundInitialInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
+  Result.Destination := Self.Destination;
+  Result.MimeType    := Self.InviteMimeType;
+  Result.Offer       := Self.InviteOffer;
+  Result.AddListener(Self);
+  Result.Send;
+end;
+
+procedure TestLocation.OnFailure(InviteAgent: TIdSipOutboundInvite;
+                                 Response: TIdSipResponse;
+                                 const Reason: String);
+begin
+end;
+
+procedure TestLocation.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                           NewDialog: TIdSipDialog);
+begin
+end;
+
+procedure TestLocation.OnNetworkFailure(Action: TIdSipAction;
+                                        const Reason: String);
+begin
+  Self.NetworkFailure := true;
+end;
+
+procedure TestLocation.OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                                  Redirect: TIdSipResponse);
+begin
+end;
+
+procedure TestLocation.OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                                 Response: TIdSipResponse);
+begin
+end;
+
+//* TestLocation Published methods *********************************************
+
+procedure TestLocation.TestAllLocationsFail;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           SctpTransport,
+                           'localhost',
+                           IdPORT_SIP);
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           TcpTransport,
+                           'localhost',
+                           IdPORT_SIP);
+
+  Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+
+  Locations := Self.Locator.FindServersFor(Self.Destination.Address);
+  try
+    // Locations.Count >= 0, so the typecast is safe.
+    CheckEquals(Self.RequestCount + Cardinal(Locations.Count),
+                Self.SentRequestCount,
+                'Number of requests sent');
+  finally
+    Locations.Free;
+  end;
+
+  Check(Self.NetworkFailure,
+        'No notification of failure after all locations attempted');
+end;
+
+procedure TestLocation.TestLooseRoutingProxy;
+const
+  ProxyTransport = SctpTransport;
+  ProxyUri       = 'sip:127.0.0.1;lr';
+var
+  RequestUriTransport: String;
+begin
+  RequestUriTransport := Self.Invite.LastHop.Transport;
+
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy  := true;
+
+  Self.Locator.AddLocation(ProxyUri,
+                           ProxyTransport,
+                           'localhost',
+                           IdPORT_SIP);
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           TcpTransport,
+                           'localhost',
+                           IdPORT_SIP);
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  CheckEquals(ProxyTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'Wrong transport means UA gave Locator wrong URI');
+end;
+
+procedure TestLocation.TestStrictRoutingProxy;
+const
+  ProxyTransport = SctpTransport;
+  ProxyUri       = 'sip:127.0.0.1';
+var
+  RequestUriTransport: String;
+begin
+  RequestUriTransport := Self.Invite.LastHop.Transport;
+
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy  := true;
+
+  Self.Locator.AddLocation(ProxyUri,
+                           ProxyTransport,
+                           'localhost',
+                           IdPORT_SIP);
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           TcpTransport,
+                           'localhost',
+                           IdPORT_SIP);
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  CheckEquals(RequestUriTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'Wrong transport means UA gave Locator wrong URI');
+end;
+
+procedure TestLocation.TestUseCorrectTransport;
+const
+  CorrectTransport = SctpTransport;
+var
+  Action: TIdSipAction;  
+begin
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           CorrectTransport,
+                           'localhost',
+                           IdPORT_SIP);
+  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
+                           TcpTransport,
+                           'localhost',
+                           IdPORT_SIP);
+
+  Self.MarkSentRequestCount;
+  Action := Self.CreateAction;
+
+  CheckRequestSent('No request sent');
+  CheckEquals(CorrectTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'Incorrect transport');
+  Check(Self.LastSentRequest.Equals(Action.InitialRequest),
+        'Action''s InitialRequest not updated to the latest attempt');
+end;
+
+procedure TestLocation.TestUseTransportParam;
+begin
+  Self.Destination.Address.Transport := Self.TransportParam;
+
+  Self.CreateAction;
+
+  CheckEquals(SctpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use transport param');
+end;
+
+procedure TestLocation.TestUseUdpByDefault;
+begin
+  Self.CreateAction;
+
+  CheckEquals(UdpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use UDP by default');
+end;
+
+procedure TestLocation.TestVeryLargeMessagesUseAReliableTransport;
+begin
+  Self.InviteOffer    := TIdSipTestResources.VeryLargeSDP('localhost');
+  Self.InviteMimeType := SdpMimeType;
+
+  Self.CreateAction;
+
+  CheckEquals(TcpTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'INVITE didn''t use a reliable transport despite the large size '
+            + 'of the message');
+end;
+
 //******************************************************************************
 //* TestTIdSipSession                                                          *
 //******************************************************************************
