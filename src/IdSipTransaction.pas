@@ -746,8 +746,8 @@ begin
   // the Transport layer.
 
   MsgLen := Length(Msg.AsString);
-  // TODO: Add a
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize) and (Msg.LastHop.Transport = UdpTransport);
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
+              and (Msg.LastHop.Transport = UdpTransport);
 
   if RewrittenVia then
     Msg.LastHop.Transport := TcpTransport;
