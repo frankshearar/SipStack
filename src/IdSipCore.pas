@@ -326,8 +326,8 @@ type
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure RemoveRegistration(Registration: TIdSipRegistration);
-    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure RemoveSession(Session: TIdSipSession);
+    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
     procedure HangUpAllCalls;
     function  Username: String;
