@@ -218,24 +218,24 @@ type
 
   TIdSipTransportReceiveRequestMethod = class(TIdSipMethod)
   private
-    fRequest:   TIdSipRequest;
-    fTransport: TIdSipTransport;
+    fReceiver: TIdSipTransport;
+    fRequest:  TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Request:   TIdSipRequest read fRequest write fRequest;
-    property Transport: TIdSipTransport read fTransport write fTransport;
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
   TIdSipTransportReceiveResponseMethod = class(TIdSipMethod)
   private
+    fReceiver: TIdSipTransport;
     fResponse:  TIdSipResponse;
-    fTransport: TIdSipTransport;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Response:  TIdSipResponse  read fResponse write fResponse;
-    property Transport: TIdSipTransport read fTransport write fTransport;
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
   TIdSipTransportRejectedMessageMethod = class(TIdSipMethod)
@@ -251,24 +251,24 @@ type
 
   TIdSipTransportSendingRequestMethod = class(TIdSipMethod)
   private
+    fReceiver: TIdSipTransport;
     fRequest:   TIdSipRequest;
-    fTransport: TIdSipTransport;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Request:   TIdSipRequest read fRequest write fRequest;
-    property Transport: TIdSipTransport read fTransport write fTransport;
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
   TIdSipTransportSendingResponseMethod = class(TIdSipMethod)
   private
+    fReceiver: TIdSipTransport;
     fResponse:   TIdSipResponse;
-    fTransport: TIdSipTransport;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Response:   TIdSipResponse read fResponse write fResponse;
-    property Transport: TIdSipTransport read fTransport write fTransport;
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
   EIdSipTransport = class(Exception)
@@ -418,8 +418,8 @@ var
 begin
   Notification := TIdSipTransportReceiveRequestMethod.Create;
   try
-    Notification.Request   := Request;
-    Notification.Transport := Self;
+    Notification.Receiver := Self;
+    Notification.Request  := Request;
 
     Self.TransportListeners.Notify(Notification);
   finally
@@ -433,8 +433,8 @@ var
 begin
   Notification := TIdSipTransportReceiveResponseMethod.Create;
   try
-    Notification.Response  := Response;
-    Notification.Transport := Self;
+    Notification.Receiver := Self;
+    Notification.Response := Response;
 
     Self.TransportListeners.Notify(Notification);
   finally
@@ -480,8 +480,8 @@ var
 begin
   Notification := TIdSipTransportSendingRequestMethod.Create;
   try
-    Notification.Request   := Request;
-    Notification.Transport := Self;
+    Notification.Receiver := Self;
+    Notification.Request  := Request;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -495,8 +495,8 @@ var
 begin
   Notification := TIdSipTransportSendingResponseMethod.Create;
   try
-    Notification.Response   := Response;
-    Notification.Transport := Self;
+    Notification.Receiver := Self;
+    Notification.Response := Response;
 
     Self.TransportSendingListeners.Notify(Notification);
   finally
@@ -1018,7 +1018,7 @@ end;
 procedure TIdSipTransportReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveRequest(Self.Request,
-                                                        Self.Transport);
+                                                        Self.Receiver);
 end;
 
 //******************************************************************************
@@ -1029,7 +1029,7 @@ end;
 procedure TIdSipTransportReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportListener).OnReceiveResponse(Self.Response,
-                                                        Self.Transport);
+                                                         Self.Receiver);
 end;
 
 //******************************************************************************
@@ -1051,7 +1051,7 @@ end;
 procedure TIdSipTransportSendingRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendRequest(Self.Request,
-                                                            Self.Transport);
+                                                            Self.Receiver);
 end;
 
 //******************************************************************************
@@ -1062,7 +1062,7 @@ end;
 procedure TIdSipTransportSendingResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransportSendingListener).OnSendResponse(Self.Response,
-                                                             Self.Transport);
+                                                             Self.Receiver);
 end;
 
 //******************************************************************************
