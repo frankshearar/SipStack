@@ -65,6 +65,8 @@ begin
         try
           Msg := Parser.ParseAndMakeMessage;
           try
+            if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
+              Msg.ContentLength := 0;
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
             Self.DoOnMethod(AThread, Msg)

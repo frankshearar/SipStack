@@ -19,6 +19,7 @@ type
     procedure CheckTortureTest23(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest35(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest40(Sender: TObject; const Response: TIdSipResponse);
+    procedure CheckTortureTest41(Sender: TObject; const Response: TIdSipResponse);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -33,6 +34,7 @@ type
     procedure TestTortureTest23;
     procedure TestTortureTest35;
     procedure TestTortureTest40;
+    procedure TestTortureTest41;
   end;
 
 const
@@ -247,6 +249,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipUdpServer.CheckTortureTest41(Sender: TObject; const Response: TIdSipResponse);
+begin
+  try
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(InvalidSipVersion, ['SIP/7.0']),
+                Response.StatusText,
+                'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 //* TestTIdSipUdpServer Published methods ***************************************
 
 procedure TestTIdSipUdpServer.TestMalformedRequest;
@@ -346,6 +366,9 @@ begin
   Server.OnResponse := Self.CheckTortureTest19;
 
   Self.Client.Send(TortureTest19);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest21;
@@ -353,6 +376,9 @@ begin
   Server.OnResponse := Self.CheckTortureTest21;
 
   Self.Client.Send(TortureTest21);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest22;
@@ -360,6 +386,9 @@ begin
   Server.OnResponse := Self.CheckTortureTest22;
 
   Self.Client.Send(TortureTest22);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest23;
@@ -367,6 +396,9 @@ begin
   Server.OnResponse := Self.CheckTortureTest23;
 
   Self.Client.Send(TortureTest23);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest35;
@@ -374,6 +406,9 @@ begin
   Server.OnResponse := Self.CheckTortureTest35;
 
   Self.Client.Send(TortureTest35);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest40;
@@ -381,6 +416,19 @@ begin
   Server.OnResponse := Self.CheckTortureTest40;
 
   Self.Client.Send(TortureTest40);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestTortureTest41;
+begin
+  Server.OnResponse := Self.CheckTortureTest41;
+
+  Self.Client.Send(TortureTest41);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 initialization

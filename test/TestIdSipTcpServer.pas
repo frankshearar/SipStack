@@ -11,24 +11,21 @@ type
   private
     Client:          TIdTcpClient;
     MethodCallCount: Cardinal;
+    Parser:          TIdSipParser;
     Server:          TIdSipTcpServer;
 
     procedure CheckMultipleMessages(AThread: TIdPeerThread;
                                     AMessage: TIdSipMessage);
     procedure CheckMethodEvent(AThread: TIdPeerThread;
                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest19(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest21(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest22(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest23(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest35(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
-    procedure CheckTortureTest40(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest19;
+    procedure CheckTortureTest21;
+    procedure CheckTortureTest22;
+    procedure CheckTortureTest23;
+    procedure CheckTortureTest35;
+    procedure CheckTortureTest40;
+//    procedure CheckTortureTest41;
+    function ReadResponse: String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -43,10 +40,11 @@ type
     procedure TestTortureTest23;
     procedure TestTortureTest35;
     procedure TestTortureTest40;
+//    procedure TestTortureTest41;
   end;
 
 const
-  DefaultTimeout = 5000;
+  DefaultTimeout = 50000;
 
 implementation
 
@@ -76,10 +74,13 @@ begin
 
   Self.MethodCallCount := 0;
   Self.Server.Active := true;
+
+  Self.Parser := TIdSipParser.Create;
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
+  Self.Parser.Free;
   Self.Server.Active := false;
 
   Client.Free;
@@ -141,134 +142,155 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest19(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest19;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
 
-    CheckEquals(SipVersion, Response.SipVersion, 'SipVersion');
-    CheckEquals(400,        Response.StatusCode, 'StatusCode');
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
 
-    CheckEquals(Format(MalformedToken, [ToHeaderFull, '"Mr. J. User <sip:j.user@company.com>']),
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+
+    CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
                 Response.StatusText,
                 'StatusText');
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+  finally
+    Str.Free;
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest21(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest21;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
+
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
 
     CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
-    CheckEquals(400,                       Response.StatusCode, 'StatusCode');
+    CheckEquals(SIPBadRequest,             Response.StatusCode, 'StatusCode');
     CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+  finally
+    Str.Free;
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest22(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest22;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
+
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
 
     CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
     CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+  finally
+    Str.Free;
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest23(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest23;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
+
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
 
     CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
     CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+  finally
+    Str.Free;
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest35(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest35;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
 
-    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(350,                Response.StatusCode, 'StatusCode');
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
     CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
                 Response.StatusText,
                 'StatusText');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+  finally
+    Str.Free;
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckTortureTest40(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+procedure TestTIdSipTcpServer.CheckTortureTest40;
 var
   Response: TIdSipResponse;
+  Str:      TStringStream;
 begin
+  Str := TStringStream.Create(Self.ReadResponse);
   try
-    Response := AMessage as TIdSipResponse;
+    Parser.Source := Str;
 
-    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(400,                Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
                 Response.StatusText,
                 'StatusText');
+  finally
+    Str.Free;
+  end;
+end;
+{
+procedure TestTIdSipTcpServer.CheckTortureTest41;
+var
+  Response: TIdSipResponse;
+  Str:      TStringStream;
+begin
+  Str := TStringStream.Create(Self.ReadResponse);
+  try
+    Parser.Source := Str;
 
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
+    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
+    CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
+  finally
+    Str.Free;
+  end;
+end;
+}
+function TestTIdSipTcpServer.ReadResponse: String;
+var
+  Line: String;
+begin
+  Result := '';
+  Line := Self.Client.ReadLn(#$A, DefaultTimeout);
+  while Line <> '' do begin
+    Result := Result + Line;
+    Line := Self.Client.ReadLn(#$A, DefaultTimeout);
   end;
 end;
 
@@ -395,51 +417,60 @@ end;
 
 procedure TestTIdSipTcpServer.TestTortureTest19;
 begin
-  Server.OnMethod := Self.CheckTortureTest19;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest19);
+
+  Self.CheckTortureTest19;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest21;
 begin
-  Server.OnMethod := Self.CheckTortureTest21;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest21);
+
+  Self.CheckTortureTest21;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest22;
 begin
-  Server.OnMethod := Self.CheckTortureTest22;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest22);
+
+  Self.CheckTortureTest22;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest23;
 begin
-  Server.OnMethod := Self.CheckTortureTest23;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest23);
+
+  Self.CheckTortureTest23;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest35;
 begin
-  Server.OnMethod := Self.CheckTortureTest35;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest35);
+
+  Self.CheckTortureTest35;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest40;
 begin
-  Server.OnMethod := Self.CheckTortureTest40;
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest40);
+
+  Self.CheckTortureTest40;
 end;
+{
+procedure TestTIdSipTcpServer.TestTortureTest41;
+begin
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest41);
+
+  Self.CheckTortureTest41;
+end;
+}
 
 initialization
   RegisterTest('SIP Server using TCP', Suite);

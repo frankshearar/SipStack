@@ -48,6 +48,7 @@ type
     fAddress:     TIdURI;
     fDisplayName: String;
 
+    function  NeedsQuotes(Name: String): Boolean;
     function  QuoteStringIfNecessary(const Name: String): String;
     procedure SetAddress(const Value: TIdURI);
   protected
@@ -754,6 +755,8 @@ begin
         Self.DisplayName := Self.DecodeQuotedStr(Name);
     end else begin
       Self.DisplayName := Trim(Fetch(S, '<'));
+      if Self.NeedsQuotes(Self.DisplayName) then
+        raise EBadHeader.Create(Self.Name);
     end;
 
     Self.Address.URI := Trim(Fetch(S, '>'));
@@ -774,27 +777,30 @@ end;
 
 //* TIdSipAddressHeader Private methods ****************************************
 
-function TIdSipAddressHeader.QuoteStringIfNecessary(const Name: String): String;
+function TIdSipAddressHeader.NeedsQuotes(Name: String): Boolean;
 var
-  S:     String;
-  Token: String;
   DontQuote: Boolean;
+  Token:     String;
 begin
   if (Name = '') then
-    Result := Name
+    Result := false
   else begin
     DontQuote := true;
-    S := Name;
-    while (S <> '') do begin
-      Token := Fetch(S, ' ');
+
+    while (Name <> '') do begin
+      Token := Fetch(Name, ' ');
       DontQuote := DontQuote and TIdSipParser.IsToken(Token);
     end;
 
-    Result := Name;
-
-    if not DontQuote then
-      Result := '"' + Result + '"'
+    Result := not DontQuote;
   end;
+end;
+
+function TIdSipAddressHeader.QuoteStringIfNecessary(const Name: String): String;
+begin
+  Result := Name;
+  if Self.NeedsQuotes(Name) then
+    Result := '"' + Result + '"'
 end;
 
 procedure TIdSipAddressHeader.SetAddress(const Value: TIdURI);
@@ -1079,6 +1085,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,      TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,     TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,    TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,  TIdSipNumericHeader));    
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,       TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,      TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,      TIdSipViaHeader));
@@ -1556,6 +1563,7 @@ end;
 
 function TIdSipParser.MakeBadRequestResponse(const Reason: String): TIdSipResponse;
 begin
+  // this is wrong. We need the original request's details - via headers, etc.
   Result := TIdSipResponse.Create;
   Result.StatusCode := SIPBadRequest;
   Result.StatusText := Reason;

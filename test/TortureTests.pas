@@ -171,7 +171,8 @@ const
                 + 'Contact: sip:host.company.com'#13#10
                 + 'Expires: 0xpires: 0sip:host.company.com'#13#10 // mangled
                 + 'Expires: 0'#13#10
-                + 'Contact: sip:host.company.com';
+                + 'Contact: sip:host.company.com'#13#10
+                + #13#10;
 
   //   This is an illegal invite at the display names in the To and From
   //   headers contain non-token characters but are unquoted.
@@ -185,7 +186,20 @@ const
                 + 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43'#13#10
                 + 'To:      Watson, Thomas <sip:t.watson@ieee.org>'#13#10
                 + 'Call-ID: 31415@c.bell-tel.com'#13#10
-                + 'CSeq:    1 INVITE';
+                + 'CSeq:    1 INVITE'#13#10
+                + #13#10;
+
+  //   This is an illegal INVITE as the SIP Protocol version is unknown.
+  //
+  //   The server should respond to the request with a bad version error.
+  TortureTest41 = 'INVITE sip:t.watson@ieee.org SIP/7.0'#13#10
+                + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                + 'Max-Forwards:     70'#13#10
+                + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                + 'CSeq:    1 INVITE'#13#10
+                + #13#10;
 
 implementation
 

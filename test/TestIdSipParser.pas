@@ -52,6 +52,7 @@ type
     procedure TestValueWithSpace;
     procedure TestValueWithSpecialChars;
     procedure TestValueWithTrailingWhitespacePlusParam;
+    procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
   TestTIdSipCSeqHeader = class(TTestCase)
@@ -111,6 +112,7 @@ type
     procedure TestIsMaxForwards;
     procedure TestIsTo;
     procedure TestIsVia;
+    procedure TestSetMaxForwards;
     procedure TestValues;
   end;
 
@@ -674,6 +676,16 @@ begin
   CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com',             A.Value,              'Value');
 end;
 
+procedure TestTIdSipAddressHeader.TestValueWithUnquotedNonTokensPlusParam;
+begin
+  try
+    A.Value := 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43';
+    Fail('Failed to bail out with unquoted non-tokens');
+  except
+    on EBadHeader do;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipCSeqHeader                                                       *
 //******************************************************************************
@@ -950,6 +962,7 @@ begin
   CheckEquals(TIdSipCSeqHeader.ClassName,    H.Add(CSeqHeader).ClassName,              CSeqHeader);
   CheckEquals(TIdSipNumericHeader.ClassName, H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
   CheckEquals(TIdSipAddressHeader.ClassName, H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
+  CheckEquals(TIdSipNumericHeader.ClassName, H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
   CheckEquals(TIdSipAddressHeader.ClassName, H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
   CheckEquals(TIdSipViaHeader.ClassName,     H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;
@@ -1105,6 +1118,19 @@ begin
   Check(not TIdSipHeaders.IsVia('Content-Length'),       'Content-Length');
   Check(    TIdSipHeaders.IsVia('Via:'),                 'Via:');
   Check(    TIdSipHeaders.IsVia('ViA'),                  'ViA');
+end;
+
+procedure TestTIdSipHeaders.TestSetMaxForwards;
+begin
+  H.Headers[MaxForwardsHeader].Value := '1';
+  CheckEquals('1', H.Headers[MaxForwardsHeader].Value, '1');
+
+  try
+    H.Headers[MaxForwardsHeader].Value := 'a';
+    Fail('Failed to bail out setting value to ''a''');
+  except
+    on E: EBadHeader do;
+  end;
 end;
 
 procedure TestTIdSipHeaders.TestValues;
