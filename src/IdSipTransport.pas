@@ -1175,7 +1175,6 @@ end;
 initialization
   GTransportTypes := TStringList.Create;
 
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSCTPTransport);
   TIdSipTransport.RegisterTransport(TcpTransport,  TIdSipTCPTransport);
   TIdSipTransport.RegisterTransport(TlsTransport,  TIdSipTLSTransport);
   TIdSipTransport.RegisterTransport(UdpTransport,  TIdSipUDPTransport);
