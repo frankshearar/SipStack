@@ -715,7 +715,6 @@ type
 
     procedure Assign(Src: TPersistent); override;
     function  AsUri: String;
-    function  DefaultPortForTransport(const Transport: String): Cardinal;
     function  HasBranch: Boolean;
     function  HasMaddr: Boolean;
     function  HasReceived: Boolean;
@@ -4627,14 +4626,8 @@ end;
 
 function TIdSipViaHeader.AsUri: String;
 begin
-  // Transport registry!
-  Result := TIdSipTransport.TransportFor(Self.Transport).UriScheme
+  Result := TIdSipTransport.UriSchemeFor(Self.Transport)
           + ':' + Self.HostAndPort.Value;
-end;
-
-function TIdSipViaHeader.DefaultPortForTransport(const Transport: String): Cardinal;
-begin
-  Result := TIdSipTransport.TransportFor(Transport).DefaultPort;
 end;
 
 function TIdSipViaHeader.HasBranch: Boolean;
@@ -4877,7 +4870,7 @@ procedure TIdSipViaHeader.SetTransport(const Value: String);
 begin
   Self.fTransport := Value;
 
-  Self.HostAndPort.DefaultPort := Self.DefaultPortForTransport(Value)
+  Self.HostAndPort.DefaultPort := TIdSipTransport.DefaultPortFor(Value);
 end;
 
 procedure TIdSipViaHeader.SetTTL(Value: Byte);

@@ -56,6 +56,7 @@ type
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
     class function DefaultPort: Cardinal; override;
+    class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function MockedClass: TIdSipTransportClass; virtual;
     class function SrvPrefix: String; override;
@@ -65,7 +66,6 @@ type
 
     procedure FireOnRequest(R: TIdSipRequest);
     procedure FireOnResponse(R: TIdSipResponse);
-    function  GetTransportType: String; override;
     function  IsReliable: Boolean; override;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
@@ -90,37 +90,32 @@ type
 
   TIdSipMockSctpTransport = class(TIdSipMockTransport)
   public
+    class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
-
-    function GetTransportType: String; override;
   end;
 
   TIdSipMockTcpTransport = class(TIdSipMockTransport)
   public
+    class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
-
-    function GetTransportType: String; override;
   end;
 
   TIdSipMockTlsTransport = class(TIdSipMockTransport)
   public
+    class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
-
-    function GetTransportType: String; override;
   end;
 
   TIdSipMockTlsOverSctpTransport = class(TIdSipMockTransport)
   public
+    class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
-
-    function GetTransportType: String; override;
   end;
 
   TIdSipMockUdpTransport = class(TIdSipMockTransport)
   public
+    class function GetTransportType: String; override;
     class function MockedClass: TIdSipTransportClass; override;
-
-    function GetTransportType: String; override;
   end;
 
 const
@@ -149,6 +144,11 @@ end;
 class function TIdSipMockTransport.DefaultPort: Cardinal;
 begin
   Result := Self.MockedClass.DefaultPort;
+end;
+
+class function TIdSipMockTransport.GetTransportType: String;
+begin
+  raise Exception.Create('Use a subclass of TIdSipMockTransport instead');
 end;
 
 class function TIdSipMockTransport.IsSecure: Boolean;
@@ -216,11 +216,6 @@ begin
   finally
     CopyOfMessage.Free;
   end;
-end;
-
-function TIdSipMockTransport.GetTransportType: String;
-begin
-  raise Exception.Create('Use a subclass of TIdSipMockTransport instead');
 end;
 
 function TIdSipMockTransport.IsReliable: Boolean;
@@ -437,14 +432,14 @@ end;
 //******************************************************************************
 //* TIdSipMockSctpTransport Public methods *************************************
 
+class function TIdSipMockSctpTransport.GetTransportType: String;
+begin
+  Result := SctpTransport;
+end;
+
 class function TIdSipMockSctpTransport.MockedClass: TIdSipTransportClass;
 begin
   Result := TIdSipSctpTransport;
-end;
-
-function TIdSipMockSctpTransport.GetTransportType: String;
-begin
-  Result := SctpTransport;
 end;
 
 //******************************************************************************
@@ -452,14 +447,14 @@ end;
 //******************************************************************************
 //* TIdSipMockTcpTransport Public methods **************************************
 
+class function TIdSipMockTcpTransport.GetTransportType: String;
+begin
+  Result := TcpTransport;
+end;
+
 class function TIdSipMockTcpTransport.MockedClass: TIdSipTransportClass;
 begin
   Result := TIdSipTcpTransport;
-end;
-
-function TIdSipMockTcpTransport.GetTransportType: String;
-begin
-  Result := TcpTransport;
 end;
 
 //******************************************************************************
@@ -467,14 +462,14 @@ end;
 //******************************************************************************
 //* TIdSipMockTlsTransport Public methods **************************************
 
+class function TIdSipMockTlsTransport.GetTransportType: String;
+begin
+  Result := TlsTransport;
+end;
+
 class function TIdSipMockTlsTransport.MockedClass: TIdSipTransportClass;
 begin
   Result := TIdSipTlsTransport;
-end;
-
-function TIdSipMockTlsTransport.GetTransportType: String;
-begin
-  Result := TlsTransport;
 end;
 
 //******************************************************************************
@@ -482,14 +477,14 @@ end;
 //******************************************************************************
 //* TIdSipMockTlsOverSctpTransport Public methods ******************************
 
+class function TIdSipMockTlsOverSctpTransport.GetTransportType: String;
+begin
+  Result := TlsOverSctpTransport;
+end;
+
 class function TIdSipMockTlsOverSctpTransport.MockedClass: TIdSipTransportClass;
 begin
   Result := TIdSipTlsOverSctpTransport;
-end;
-
-function TIdSipMockTlsOverSctpTransport.GetTransportType: String;
-begin
-  Result := TlsOverSctpTransport;
 end;
 
 //******************************************************************************
@@ -497,14 +492,14 @@ end;
 //******************************************************************************
 //* TIdSipMockUdpTransport Public methods **************************************
 
+class function TIdSipMockUdpTransport.GetTransportType: String;
+begin
+  Result := UdpTransport;
+end;
+
 class function TIdSipMockUdpTransport.MockedClass: TIdSipTransportClass;
 begin
   Result := TIdSipUdpTransport;
-end;
-
-function TIdSipMockUdpTransport.GetTransportType: String;
-begin
-  Result := UdpTransport;
 end;
 
 initialization

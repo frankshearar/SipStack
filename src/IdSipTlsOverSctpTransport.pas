@@ -12,10 +12,9 @@ type
   TIdSipTlsOverSctpTransport = class(TIdSipSctpTransport)
   public
     class function DefaultPort: Cardinal; override;
+    class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
-
-    function GetTransportType: String; override;
   end;
 
 implementation
@@ -28,6 +27,11 @@ begin
   Result := IdPORT_SIPS;
 end;
 
+class function TIdSipTlsOverSctpTransport.GetTransportType: String;
+begin
+  Result := TlsOverSctpTransport;
+end;
+
 class function TIdSipTlsOverSctpTransport.IsSecure: Boolean;
 begin
   Result := true;
@@ -36,11 +40,6 @@ end;
 class function TIdSipTlsOverSctpTransport.SrvPrefix: String;
 begin
   Result := SrvTlsOverSctpPrefix;
-end;
-
-function TIdSipTlsOverSctpTransport.GetTransportType: String;
-begin
-  Result := TlsOverSctpTransport;
 end;
 
 end.

@@ -13,7 +13,8 @@ interface
 
 uses
   Classes, IdSipMessage, IdSipTcpServer, IdSipTransport, IdSocketHandle,
-  IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx,
+  TestFrameworkSip;
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
@@ -24,7 +25,7 @@ type
     procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
   end;
 
-  TestTIdSipTransportEventNotifications = class(TTestCase,
+  TestTIdSipTransportEventNotifications = class(TTestCaseSip,
                                                 IIdSipTransportListener,
                                                 IIdSipTransportSendingListener)
   private
@@ -66,6 +67,14 @@ type
                                      R: TIdSipRequest) of object;
   TTestIdSipResponseEvent = procedure(Sender: TObject;
                                       R: TIdSipResponse) of object;
+
+  TestTransportRegistry = class(TTestCase)
+  published
+    procedure TestDefaultPortFor;
+    procedure TestRegisterTransport;
+    procedure TestTransportFor;
+    procedure TestUriSchemeFor;
+  end;
 
   TestTIdSipTransport = class(TThreadingTestCase,
                               IIdSipTransportListener,
@@ -153,14 +162,12 @@ type
     procedure TestCanReceiveUnsolicitedResponse;
     procedure TestChangePort;
     procedure TestIsNull; virtual;
-    procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDiscardMalformedMessage;
     procedure TestDiscardUnknownSipVersion;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
-    procedure TestRegisterTransport;
     procedure TestSendRequest;
     procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
@@ -346,8 +353,7 @@ implementation
 
 uses
   IdException, IdGlobal, IdSipConsts, IdSipMockTransport, IdSipUdpServer,
-  IdSSLOpenSSL, IdStack, IdTcpClient, IdUdpClient, IdUDPServer, TestMessages,
-  TestFrameworkSip;
+  IdSSLOpenSSL, IdStack, IdTcpClient, IdUdpClient, IdUDPServer, TestMessages;
 
 var
   ServerThatInstantiatesGStack: TIdTcpServer;
@@ -356,6 +362,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
+  Result.AddTest(TestTransportRegistry.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
@@ -578,6 +585,103 @@ begin
 end;
 
 //******************************************************************************
+//* TestTransportRegistry                                                      *
+//******************************************************************************
+//* TestTransportRegistry Published methods ************************************
+
+procedure TestTransportRegistry.TestDefaultPortFor;
+begin
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  try
+    TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+    try
+      CheckEquals(TIdSipUDPTransport.DefaultPort,
+                  TIdSipTransport.DefaultPortFor(UdpTransport),
+                  UdpTransport);
+
+      CheckEquals(TIdSipTLSTransport.DefaultPort,
+                  TIdSipTransport.DefaultPortFor(TlsTransport),
+                  TlsTransport);
+
+      CheckEquals(TIdSipTransport.DefaultPort,
+                  TIdSipTransport.DefaultPortFor('unknown transport'),
+                  'unknown transport');
+    finally
+      TIdSipTransport.UnregisterTransport(TlsTransport);
+    end;
+  finally
+    TIdSipTransport.UnregisterTransport(UdpTransport);
+  end;
+end;
+
+procedure TestTransportRegistry.TestRegisterTransport;
+const
+  Foo = 'foo';
+  TransportType: TIdSipTransportClass = TIdSipUDPTransport;
+begin
+  try
+    TIdSipTransport.TransportFor(Foo);
+    Fail('Didn''t blow up on an unknown transport ' + Foo);
+  except
+    on EUnknownTransport do;
+  end;
+
+  TIdSipTransport.RegisterTransport(Foo, TransportType);
+  try
+    Check(TransportType = TIdSipTransport.TransportFor(Foo),
+          Foo + ' transport type not registered');
+  finally
+    TIdSipTransport.UnregisterTransport(Foo);
+  end;
+
+  try
+    TIdSipTransport.TransportFor(Foo);
+    Fail('Didn''t unregister transport ' + Foo);
+  except
+    on EUnknownTransport do;
+  end;
+end;
+
+procedure TestTransportRegistry.TestTransportFor;
+const
+  NewTransport = 'UNKNOWN-TRANSPORT';
+begin
+  TIdSipTransport.RegisterTransport(NewTransport, TIdSipSCTPTransport);
+  try
+    CheckEquals(TIdSipSCTPTransport,
+                TIdSipTransport.TransportFor(NewTransport),
+                NewTransport);
+  finally
+    TIdSipTransport.UnregisterTransport(NewTransport);
+  end;
+end;
+
+procedure TestTransportRegistry.TestUriSchemeFor;
+begin
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  try
+    TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+    try
+      CheckEquals(TIdSipUDPTransport.UriScheme,
+                  TIdSipTransport.UriSchemeFor(UdpTransport),
+                  UdpTransport);
+
+      CheckEquals(TIdSipTLSTransport.UriScheme,
+                  TIdSipTransport.UriSchemeFor(TlsTransport),
+                  TlsTransport);
+
+      CheckEquals(TIdSipTransport.UriScheme,
+                  TIdSipTransport.UriSchemeFor('unknown transport'),
+                  'unknown transport');
+    finally
+      TIdSipTransport.UnregisterTransport(TlsTransport);
+    end;
+  finally
+    TIdSipTransport.UnregisterTransport(UdpTransport);
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipTransport                                                        *
 //******************************************************************************
 //* TestTIdSipTransport Public methods *****************************************
@@ -585,6 +689,8 @@ end;
 procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
+
+  TIdSipTransport.RegisterTransport(Self.TransportType.GetTransportType, Self.TransportType);
 
   if not Assigned(GStack) then
     raise Exception.Create('GStack isn''t instantiated - you need something '
@@ -637,7 +743,9 @@ begin
   Self.LowPortTransport.Free;
   Self.HighPortTransport.Free;
 
-  Self.LastSentResponse.Free;  
+  Self.LastSentResponse.Free;
+
+  TIdSipTransport.UnregisterTransport(Self.TransportType.GetTransportType);
 
   inherited TearDown;
 end;
@@ -1014,20 +1122,6 @@ begin
       + ') marked as null');
 end;
 
-procedure TestTIdSipTransport.TestTransportFor;
-const
-  NewTransport = 'UNKNOWN-TRANSPORT';
-begin
-  TIdSipTransport.RegisterTransport(NewTransport, TIdSipSCTPTransport);
-  try
-    CheckEquals(TIdSipSCTPTransport,
-                TIdSipTransport.TransportFor(NewTransport),
-                NewTransport);
-  finally
-    TIdSipTransport.UnregisterTransport(NewTransport);
-  end;
-end;
-
 procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
 begin
   Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
@@ -1134,34 +1228,6 @@ begin
   Self.HighPortTransport.Send(Self.Request);
 
   Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipTransport.TestRegisterTransport;
-const
-  Foo = 'foo';
-  TransportType: TIdSipTransportClass = TIdSipUDPTransport;
-begin
-  try
-    TIdSipTransport.TransportFor(Foo);
-    Fail('Didn''t blow up on an unknown transport ' + Foo);
-  except
-    on EUnknownTransport do;
-  end;
-
-  TIdSipTransport.RegisterTransport(Foo, TransportType);
-  try
-    Check(TransportType = TIdSipTransport.TransportFor(Foo),
-          Foo + ' transport type not registered');
-  finally
-    TIdSipTransport.UnregisterTransport(Foo);
-  end;
-
-  try
-    TIdSipTransport.TransportFor(Foo);
-    Fail('Didn''t unregister transport ' + Foo);
-  except
-    on EUnknownTransport do;
-  end;
 end;
 
 procedure TestTIdSipTransport.TestSendRequest;

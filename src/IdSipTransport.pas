@@ -96,6 +96,8 @@ type
     property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  DefaultPort: Cardinal; virtual;
+    class function  DefaultPortFor(const Transport: String): Cardinal;
+    class function  GetTransportType: String; virtual; abstract;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure: Boolean; virtual;
     class function  SrvPrefix: String; virtual;
@@ -106,6 +108,7 @@ type
     class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure UnregisterTransport(const Name: String);
     class function  UriScheme: String;
+    class function  UriSchemeFor(const Transport: String): String;
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -113,7 +116,6 @@ type
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     function  DefaultTimeout: Cardinal; virtual;
-    function  GetTransportType: String; virtual; abstract;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
@@ -159,12 +161,12 @@ type
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
   public
-    class function  SrvPrefix: String; override;
+    class function GetTransportType: String; override;
+    class function SrvPrefix: String; override;
 
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  GetTransportType: String; override;
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -188,10 +190,9 @@ type
     function  ServerType: TIdSipTcpServerClass; override;
   public
     class function DefaultPort: Cardinal; override;
+    class function GetTransportType: String; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
-
-    function GetTransportType: String; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName      read GetRootCertificate write SetRootCertificate;
@@ -203,9 +204,8 @@ type
   // for the SIP stack.
   TIdSipSCTPTransport = class(TIdSipTransport)
   public
+    class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
-
-    function GetTransportType: String; override;
   end;
 
   // I implement the User Datagram Protocol (RFC 768) connections for the SIP
@@ -225,12 +225,12 @@ type
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
   public
+    class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
 
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  GetTransportType: String; override;
     function  IsReliable: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
@@ -342,6 +342,16 @@ begin
   Result := IdPORT_SIP;
 end;
 
+class function TIdSipTransport.DefaultPortFor(const Transport: String): Cardinal;
+begin
+  try
+    Result := TIdSipTransport.TransportFor(Transport).DefaultPort;
+  except
+    on EUnknownTransport do
+      Result := Self.DefaultPort;
+  end;
+end;
+
 class procedure TIdSipTransport.InsecureTransports(Result: TStrings);
 var
   I: Integer;
@@ -411,6 +421,16 @@ begin
     Result := SipsScheme
   else
     Result := SipScheme;
+end;
+
+class function TIdSipTransport.UriSchemeFor(const Transport: String): String;
+begin
+  try
+    Result := TIdSipTransport.TransportFor(Transport).UriScheme;
+  except
+    on EUnknownTransport do
+      Result := Self.UriScheme;
+  end;
 end;
 
 constructor TIdSipTransport.Create;
@@ -750,6 +770,11 @@ end;
 //******************************************************************************
 //* TIdSipTCPTransport Public methods ******************************************
 
+class function TIdSipTCPTransport.GetTransportType: String;
+begin
+  Result := TcpTransport;
+end;
+
 class function TIdSipTCPTransport.SrvPrefix: String;
 begin
   Result := SrvTcpPrefix;
@@ -773,11 +798,6 @@ begin
   Self.Clients.Free;
 
   inherited Destroy;
-end;
-
-function TIdSipTCPTransport.GetTransportType: String;
-begin
-  Result := TcpTransport;
 end;
 
 procedure TIdSipTCPTransport.Start;
@@ -939,6 +959,11 @@ begin
   Result := IdPORT_SIPS;
 end;
 
+class function TIdSipTLSTransport.GetTransportType: String;
+begin
+  Result := TlsTransport;
+end;
+
 class function TIdSipTLSTransport.IsSecure: Boolean;
 begin
   Result := true;
@@ -947,11 +972,6 @@ end;
 class function TIdSipTLSTransport.SrvPrefix: String;
 begin
   Result := SrvTlsPrefix;
-end;
-
-function TIdSipTLSTransport.GetTransportType: String;
-begin
-  Result := TlsTransport;
 end;
 
 //* TIdSipTLSTransport Protected methods ***************************************
@@ -1027,20 +1047,25 @@ end;
 //******************************************************************************
 //* TIdSipSCTPTransport Public methods *****************************************
 
+class function TIdSipSCTPTransport.GetTransportType: String;
+begin
+  Result := SctpTransport;
+end;
+
 class function TIdSipSCTPTransport.SrvPrefix: String;
 begin
   Result := SrvSctpPrefix;
-end;
-
-function TIdSipSCTPTransport.GetTransportType: String;
-begin
-  Result := SctpTransport;
 end;
 
 //******************************************************************************
 //* TIdSipUDPTransport                                                         *
 //******************************************************************************
 //* TIdSipUDPTransport Public methods ******************************************
+
+class function TIdSipUDPTransport.GetTransportType: String;
+begin
+  Result := UdpTransport;
+end;
 
 class function TIdSipUDPTransport.SrvPrefix: String;
 begin
@@ -1059,11 +1084,6 @@ begin
   Self.Transport.Free;
 
   inherited Destroy;
-end;
-
-function TIdSipUDPTransport.GetTransportType: String;
-begin
-  Result := UdpTransport;
 end;
 
 function TIdSipUDPTransport.IsReliable: Boolean;
@@ -1144,33 +1164,16 @@ begin
 end;
 
 procedure TIdSipUDPTransport.SendResponse(R: TIdSipResponse);
-var
-  Host: String;
-  Port: Cardinal;
 begin
   inherited SendResponse(R);
 
-  if R.LastHop.HasMaddr then begin
-    Host := R.LastHop.Maddr;
-    Port := R.LastHop.Port;
-  end
-  else if R.LastHop.HasRport then begin
-    // cf RFC 3581 section 4.
-    // TODO: this isn't quite right. We have to send the response
-    // from the ip/port that the request was received on.
-    Host := R.LastHop.Received;
-    Port := R.LastHop.RPort;
-  end
-  else if R.LastHop.HasReceived then begin
-    Host := R.LastHop.Received;
-    Port := R.LastHop.Port;
-  end
-  else begin
-    Host := R.LastHop.SentBy;
-    Port := R.LastHop.Port;
-  end;
+  // cf RFC 3581 section 4.
+  // TODO: this isn't quite right. We have to send the response
+  // from the ip/port that the request was received on.
 
-  Self.Transport.Send(Host, Port, R.AsString);
+  Self.Transport.Send(R.LastHop.RoutingAddress,
+                      R.LastHop.RoutingPort,
+                      R.AsString);
 end;
 
 //******************************************************************************
