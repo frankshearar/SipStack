@@ -193,6 +193,7 @@ type
     procedure TestEqualsDifferentStatusText;
     procedure TestEqualsRequest;
     procedure TestEqualsTrivial;
+    procedure TestFirstAuthenticationInfo;
     procedure TestFirstProxyAuthenticate;
     procedure TestFirstUnsupported;
     procedure TestFirstWarning;
@@ -2748,6 +2749,24 @@ begin
   finally
     R1.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestFirstAuthenticationInfo;
+var
+  A: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstAuthenticationInfo,
+               'Authentication-Info not present');
+  CheckEquals(1,
+              Self.Response.HeaderCount,
+              'Authentication-Info not auto-added');
+
+  A := Self.Response.FirstHeader(AuthenticationInfoHeader);
+  Self.Response.AddHeader(AuthenticationInfoHeader);
+
+  Check(A = Self.Response.FirstAuthenticationInfo, 'Wrong Authentication-Info');
 end;
 
 procedure TestTIdSipResponse.TestFirstProxyAuthenticate;

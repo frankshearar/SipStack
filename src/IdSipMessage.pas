@@ -526,7 +526,7 @@ type
     function CredentialHeaderType: TIdSipAuthorizationHeaderClass; override;
   end;
 
-  TIdSipAuthenticateInfoHeader = class(TIdSipHttpAuthHeader);
+  TIdSipAuthenticationInfoHeader = class(TIdSipHttpAuthHeader);
 
   TIdSipProxyAuthorizationHeader = class(TIdSipAuthorizationHeader)
   protected
@@ -1098,6 +1098,7 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  Description: String;
+    function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
     function  FirstWarning: TIdSipWarningHeader;
@@ -4755,7 +4756,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticateInfoHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticationInfoHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
@@ -6696,6 +6697,11 @@ end;
 function TIdSipResponse.Description: String;
 begin
   Result := IntToStr(Self.StatusCode) + ' ' + Self.StatusText;
+end;
+
+function TIdSipResponse.FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
+begin
+  Result := Self.FirstHeader(AuthenticationInfoHeader) as TIdSipAuthenticationInfoHeader;
 end;
 
 function TIdSipResponse.FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
