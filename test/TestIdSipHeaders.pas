@@ -2638,6 +2638,11 @@ begin
               Self.ClassName + ' Realm');
   Check      (Self.P.Stale,
               Self.ClassName + ' Stale');
+
+  Self.P.Value := 'Digest realm="quasinormal.paranoia"';
+  CheckEquals('quasinormal.paranoia',
+              Self.P.Realm,
+              Self.ClassName + ' Realm (only)');
 end;
 
 //* TestTIdSipProxyAuthenticateHeader Protected methods ************************
