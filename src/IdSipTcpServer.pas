@@ -14,7 +14,7 @@ interface
 uses
   Classes, Contnrs, IdNotification, IdSipConsts, IdSipMessage,
   IdSipServerNotifier, IdSipTcpClient, IdSipTimer, IdTCPConnection,
-  IdTCPServer, IdThread, SyncObjs, SysUtils;
+  IdTCPServer, SyncObjs, SysUtils;
 
 type
   // I relate a request with a TCP connection. I store a COPY of a request
