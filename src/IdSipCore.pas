@@ -3355,6 +3355,10 @@ begin
     Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
     Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
 
+    Response.FirstWarning.Code  := WarningMisc;
+    Response.FirstWarning.Agent := Self.UA.HostName;
+    Response.FirstWarning.Text  := '';
+
     Self.SendResponse(Response);
   finally
     Response.Free;

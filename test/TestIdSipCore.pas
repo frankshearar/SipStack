@@ -4322,6 +4322,12 @@ begin
         'No Contact header');
   Check(Self.Core.Contact.Equals(Response.FirstContact),
         'Contact header value');
+
+  Check(Response.HasHeader(WarningHeader),
+        'No Warning header');
+  CheckEquals(Self.Core.Hostname + ':5060',
+              Response.FirstWarning.Agent,
+              'Warning warn-agent');
 end;
 
 procedure TestTIdSipInboundOptions.TestOptionsWhenDoNotDisturb;
