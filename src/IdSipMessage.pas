@@ -165,6 +165,7 @@ type
     procedure EraseUserInfo;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
+    function  HasMaddr: Boolean;
     function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
@@ -2274,6 +2275,11 @@ end;
 function TIdSipUri.HasHeaders: Boolean;
 begin
   Result := not Self.Headers.IsEmpty;
+end;
+
+function TIdSipUri.HasMaddr: Boolean;
+begin
+  Result := Self.HasParameter(MaddrParam)
 end;
 
 function TIdSipUri.HasParameter(const Name: String): Boolean;

@@ -96,6 +96,7 @@ type
     procedure TestGetSetUserParam;
     procedure TestGetUriWithDefaultPortSpecified;
     procedure TestHasHeaders;
+    procedure TestHasMaddr;
     procedure TestHasParameter;
     procedure TestHasValidSyntax;
     procedure TestIsLooseRoutable;
@@ -1083,6 +1084,18 @@ begin
 
   Self.Uri.Headers.Add(RouteHeader);
   Check(Uri.HasHeaders, 'One header');
+end;
+
+procedure TestTIdSipUri.TestHasMaddr;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Uri.HasMaddr, 'no parameters');
+
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;maddr=127.0.0.1';
+  Check(Uri.HasMaddr, 'maddr parameter');
+
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp;maddr=127.0.0.1;lr';
+  Check(Uri.HasMaddr, 'maddr parameter amongst others');
 end;
 
 procedure TestTIdSipUri.TestHasParameter;
