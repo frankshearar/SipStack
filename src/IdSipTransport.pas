@@ -150,17 +150,17 @@ type
 
   TIdServerCleanupThread = class(TIdThread)
   private
-    fOwner:            TIdSipUDPTransport;
+    Owner:             TIdSipUDPTransport;
     fPollTime:         Cardinal;
     TerminatedServers: TObjectList;
     ListLock:          TCriticalSection;
 
     procedure CleanOutTerminatedClients;
+    function  DefaultPollTime: Cardinal;
   public
     constructor Create(Owner: TIdSipUDPTransport); reintroduce;
     destructor  Destroy; override;
 
-    function  DefaultPollTime: Cardinal;
     procedure TerminateClient(Server: TIdSipUdpClient);
     procedure Run; override;
 
@@ -707,7 +707,7 @@ begin
 
   Self.ListLock := TCriticalSection.Create;
 
-  Self.fOwner := Owner;
+  Self.Owner := Owner;
   Self.PollTime := Self.DefaultPollTime;
 
   Self.TerminatedServers := TObjectList.Create(false);
@@ -719,11 +719,6 @@ begin
   Self.ListLock.Free;
 
   inherited Destroy;
-end;
-
-function TIdServerCleanupThread.DefaultPollTime: Cardinal;
-begin
-  Result := 1000;
 end;
 
 procedure TIdServerCleanupThread.TerminateClient(Server: TIdSipUdpClient);
@@ -754,12 +749,17 @@ begin
   Self.ListLock.Acquire;
   try
     for I := 0 to Self.TerminatedServers.Count - 1 do
-      Self.fOwner.RemoveClient(Self.TerminatedServers[I] as TIdSipUdpClient);
+      Self.Owner.RemoveClient(Self.TerminatedServers[I] as TIdSipUdpClient);
 
     Self.TerminatedServers.Clear;
   finally
     Self.ListLock.Release;
   end;
+end;
+
+function TIdServerCleanupThread.DefaultPollTime: Cardinal;
+begin
+  Result := 1000;
 end;
 
 //******************************************************************************
