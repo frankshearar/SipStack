@@ -1050,11 +1050,12 @@ begin
     if Request.IsInvite then begin
       // Section 8.1.1.8 says that a request that can start a dialog (like an
       // INVITE), MUST contain a Contact.
-      if not Request.HasHeader(ContactHeaderFull) then
-        Self.RejectBadRequest(Request, MissingContactHeader, Transaction)
-      else begin
-        Self.ProcessInvite(Request, Transaction, Receiver);
+      if not Request.HasHeader(ContactHeaderFull) then begin
+        Self.RejectBadRequest(Request, MissingContactHeader, Transaction);
+        Exit;
       end;
+
+      Self.ProcessInvite(Request, Transaction, Receiver);
     end
     else if Request.IsAck then begin
       Self.ProcessAck(Request, Transaction, Receiver);
@@ -1066,7 +1067,7 @@ begin
       raise Exception.Create('Handling CANCELs not implemented yet');
 
     // TIdSipSession generates the response - 8.2.6
-    
+
     Result := true;
   end;
 end;

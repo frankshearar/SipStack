@@ -1409,7 +1409,10 @@ begin
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Core.ReceiveRequest(Self.Invite, Tran, Self.Dispatch.Transport);
+  Check(not Self.Core.ReceiveRequest(Self.Invite,
+                                     Tran,
+                                     Self.Dispatch.Transport),
+        'Request was accepted');
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
