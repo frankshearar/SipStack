@@ -377,6 +377,7 @@ type
     procedure SetUp; override;
   published
     procedure TestGetValue;
+    procedure TestIsHostPort;
     procedure TestName;
     procedure TestValue; override;
     procedure TestSetValueMalformed;
@@ -3546,6 +3547,25 @@ begin
   CheckEquals('302 gw1.leo-ix.net "Case is not home"',
               Self.W.Value,
               'Value');
+end;
+
+procedure TestTIdSipWarningHeader.TestIsHostPort;
+begin
+  Check(not TIdSipWarningHeader.IsHostPort(''),
+        'Empty string');
+  Check(not TIdSipWarningHeader.IsHostPort('foo'),
+        'foo');
+  Check(not TIdSipWarningHeader.IsHostPort('foo:bar'),
+        'foo:bar');
+
+  Check(TIdSipWarningHeader.IsHostPort('foo:0'),
+        'foo:0');
+  Check(TIdSipWarningHeader.IsHostPort('foo:25'),
+        'foo:25');
+  Check(TIdSipWarningHeader.IsHostPort('foo:65535'),
+        'foo:65535');
+  Check(TIdSipWarningHeader.IsHostPort('foo:65536'),
+        'foo:65536');
 end;
 
 procedure TestTIdSipWarningHeader.TestName;

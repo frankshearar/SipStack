@@ -3781,7 +3781,8 @@ var
 begin
   Colon := Pos(':', Token);
 
-  Result := true;
+  Result := TIdSipParser.IsToken(Copy(Token, 1, Colon - 1))
+        and TIdSipParser.IsNumber(Copy(Token, Colon + 1, Length(Token)));
 end;
 
 //* TIdSipWarningHeader Protected methods **************************************
