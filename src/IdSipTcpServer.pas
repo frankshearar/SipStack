@@ -98,7 +98,6 @@ type
     procedure SendResponse(Response: TIdSipResponse);
   published
     property ConnectionTimeout: Integer read fConnectionTimeout write fConnectionTimeout;
-    property DefaultPort default IdPORT_SIP;
     property ReadTimeout:       Integer read fReadTimeout write fReadTimeout;
   end;
 
@@ -107,7 +106,7 @@ type
 implementation
 
 uses
-  IdException;
+  IdException, IdSipTransport;
 
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *
@@ -253,7 +252,7 @@ begin
 
   Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
   Self.ConnectionTimeout := Self.DefaultTimeout;
-  Self.DefaultPort       := IdPORT_SIP;
+  Self.DefaultPort       := TIdSipTransport.TransportFor(TcpTransport).DefaultPort;
   Self.Notifier          := TIdSipServerNotifier.Create;
   Self.ReadTimeout   := Self.DefaultTimeout;
 end;

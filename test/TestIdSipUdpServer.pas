@@ -105,7 +105,7 @@ begin
   Self.Server.Bindings.Clear;
   Binding := Self.Server.Bindings.Add;
   Binding.IP := '127.0.0.1';
-  Binding.Port := IdPORT_SIP;
+  Binding.Port := Server.DefaultPort;
 
   Self.Server.AddMessageListener(Self);
   Self.Server.Active := true;

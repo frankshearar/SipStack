@@ -105,6 +105,7 @@ type
     class procedure SecureTransports(Result: TStrings);
     class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure UnregisterTransport(const Name: String);
+    class function  UriScheme: String;
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -402,6 +403,14 @@ begin
   Index := Self.TransportRegistry.IndexOf(Name);
   if (Index <> -1) then
     Self.TransportRegistry.Delete(Index);
+end;
+
+class function TIdSipTransport.UriScheme: String;
+begin
+  if Self.IsSecure then
+    Result := SipsScheme
+  else
+    Result := SipScheme;
 end;
 
 constructor TIdSipTransport.Create;

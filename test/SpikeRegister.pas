@@ -32,10 +32,11 @@ type
     procedure RegisterClick(Sender: TObject);
     procedure UnregisterClick(Sender: TObject);
   private
-    Dispatcher: TIdSipTransactionDispatcher;
-    Lock:       TCriticalSection;
-    Transport:  TIdSipTransport;
-    UA:         TIdSipUserAgent;
+    Dispatcher:  TIdSipTransactionDispatcher;
+    Lock:        TCriticalSection;
+    RunningPort: Cardinal;
+    Transport:   TIdSipTransport;
+    UA:          TIdSipUserAgent;
 
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnException(E: Exception;
@@ -75,7 +76,6 @@ uses
 
 const
   LocalHostName = '127.0.0.1';
-  RunningPort   = IdPORT_SIP;
 
 //******************************************************************************
 //* TrnidSpikeRegister                                                         *
@@ -125,6 +125,8 @@ begin
   finally
     From.Free;
   end;
+
+  Self.RunningPort := Self.Transport.DefaultPort;
 end;
 
 destructor TrnidSpikeRegister.Destroy;

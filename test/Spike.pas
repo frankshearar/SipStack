@@ -208,13 +208,13 @@ begin
 
   TIdSipTransport.RegisterTransport(TcpTransport, TIdSipTcpTransport);
   TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);  
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
 
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.Transports := TObjectList.Create(true);
   Self.RTPProfile := TIdAudioVisualProfile.Create;
-  Self.RunningPort := IdPORT_SIP;
+  TIdSipTransport.TransportFor(UdpTransport).DefaultPort;
 
   Self.DTMFPanel := TIdDTMFPanel.Create(nil);
   Self.DTMFPanel.Align  := alLeft;
@@ -281,6 +281,7 @@ begin
   Self.UA.Proxy.Uri     := Self.TargetUri.Text + ';lr';
 
   Self.fPayloadProcessor := TIdSDPMultimediaSession.Create(Self.RTPProfile);
+  Self.RunningPort := (Self.Transports[0] as TIdSipTransport).Port;
 end;
 
 destructor TrnidSpike.Destroy;

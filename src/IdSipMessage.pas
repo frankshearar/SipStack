@@ -4626,20 +4626,13 @@ end;
 function TIdSipViaHeader.AsUri: String;
 begin
   // Transport registry!
-  if (Self.Transport = TlsTransport) then
-    Result := SipsScheme
-  else
-    Result := SipScheme;
-
-  Result := Result + Self.HostAndPort.Value;
+  Result := TIdSipTransport.TransportFor(Self.Transport).UriScheme
+          + ':' + Self.HostAndPort.Value;
 end;
 
 function TIdSipViaHeader.DefaultPortForTransport(const Transport: String): Cardinal;
 begin
-  if (Transport = TlsTransport) then
-    Result := IdPort_SIPS
-  else
-    Result := IdPORT_SIP;
+  Result := TIdSipTransport.TransportFor(Transport).DefaultPort;
 end;
 
 function TIdSipViaHeader.HasBranch: Boolean;

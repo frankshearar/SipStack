@@ -404,6 +404,7 @@ type
   published
     procedure TestAssign;
     procedure TestAssignWithDefaultPortSpecified;
+    procedure TestAsUri;
     procedure TestBranch;
     procedure TestHasBranch;
     procedure TestHasMaddr;
@@ -3606,6 +3607,45 @@ begin
   end;
 end;
 
+procedure TestTIdSipViaHeader.TestAsUri;
+type
+  TestData = record
+    Reference: String;
+    SentBy:    String;
+  end;
+const
+  SentBys: array[1..3] of TestData =
+          ((Reference: 'FQDN';           SentBy: 'gw1.leo-ix.net'),
+           (Reference: 'IP';             SentBy: '127.0.0.1'),
+           (Reference: 'IPv6 reference'; SentBy: '[::1]'));
+var
+  I: Integer;
+begin
+  for I := Low(SentBys) to High(SentBys) do begin
+    Self.V.Value := 'SIP/2.0/UDP ' + SentBys[I].SentBy;
+    CheckEquals('sip:' + SentBys[I].SentBy,
+                Self.V.AsUri,
+                SentBys[I].Reference);
+
+    Self.V.Port := 2020;
+    CheckEquals('sip:' + SentBys[I].SentBy + ':' + IntToStr(Self.V.Port),
+                Self.V.AsUri,
+                SentBys[I].Reference + ' + port');
+  end;
+
+  for I := Low(SentBys) to High(SentBys) do begin
+    Self.V.Value := 'SIP/2.0/TLS ' + SentBys[I].SentBy;
+    CheckEquals('sips:' + SentBys[I].SentBy,
+                Self.V.AsUri,
+                SentBys[I].Reference);
+
+    Self.V.Port := 2020;
+    CheckEquals('sips:' + SentBys[I].SentBy + ':' + IntToStr(Self.V.Port),
+                Self.V.AsUri,
+                SentBys[I].Reference + ' + port');
+  end;
+end;
+
 procedure TestTIdSipViaHeader.TestBranch;
 begin
   Self.V.Branch := BranchMagicCookie;
@@ -3870,7 +3910,9 @@ begin
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;tag=heehee';
   CheckEquals('127.0.0.1',   Self.V.SentBy,         '1: SentBy');
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '1: Parameters');
-  CheckEquals(IdPORT_SIP,    Self.V.Port,           '1: Port');
+  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+              Self.V.Port,
+              '1: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '1: SipVersion');
   CheckEquals(UdpTransport,  Self.V.Transport,      '1: Transport');
   CheckEquals('SIP/1.5/UDP 127.0.0.1',
@@ -3880,7 +3922,9 @@ begin
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
   CheckEquals('',              Self.V.ParamsAsString, '2: Parameters');
-  CheckEquals(IdPORT_SIPS,     Self.V.Port,           '2: Port');
+  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+              Self.V.Port,
+              '2: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '2: SipVersion');
   CheckEquals(TlsTransport,    Self.V.Transport,      '2: Transport');
 
@@ -3956,14 +4000,15 @@ end;
 procedure TestTIdSipViaHeader.TestValueWithIPv6NumericAddressAndPort;
 const
   IPv6 = '[2002:DEAD:BEEF:1::1]';
+  Port = 6000;
 var
   Value: String;
 begin
-  Value := 'SIP/2.0/UDP ' + IPv6 + ':' + IntToStr(IdPORT_SIP);
+  Value := 'SIP/2.0/UDP ' + IPv6 + ':' + IntToStr(Port);
   Self.V.Value := Value;
 
   CheckEquals(IPv6, Self.V.SentBy, 'IPv6 sent-by');
-  CheckEquals(IdPORT_SIP, Self.V.Port, 'Port');
+  CheckEquals(Port, Self.V.Port, 'Port');
 
   CheckEquals(Value, Self.V.Value, 'Port lost');
 end;
@@ -3974,7 +4019,7 @@ const
 begin
   Self.V.Value := 'SIP/2.0/UDP 127.0.0.1';
 
-  Self.V.Port := IdPORT_SIP;
+  Self.V.Port := TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort;
   CheckEquals(ValueWithPort, Self.V.Value, 'Port lost');
 end;
 
@@ -5829,10 +5874,14 @@ begin
 
   Self.Headers := TIdSipHeaders.Create;
   Self.Path := TIdSipViaPath.Create(Self.Headers);
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
 end;
 
 procedure TestTIdSipViaPath.TearDown;
 begin
+  TIdSipTransport.UnregisterTransport(SctpTransport);
+
   Self.Path.Free;
   Self.Headers.Free;
 

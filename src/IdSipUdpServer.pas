@@ -35,7 +35,7 @@ type
 implementation
 
 uses
-  IdUDPBase;
+  IdUDPBase, IdSipTransport;
 
 //******************************************************************************
 //* TIdSipUdpServer                                                            *
@@ -46,7 +46,7 @@ constructor TIdSipUdpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.DefaultPort   := IdPORT_SIP;
+  Self.DefaultPort   := TIdSipTransport.TransportFor(UdpTransport).DefaultPort;
   Self.Notifier      := TIdSipServerNotifier.Create;
   Self.ThreadedEvent := true;
 end;
