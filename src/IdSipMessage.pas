@@ -1071,10 +1071,12 @@ type
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
+    function  FirstRoute: TIdSipRouteHeader;
     function  HasAuthorization: Boolean;
     function  HasAuthorizationFor(const Realm: String): Boolean;
     function  HasProxyAuthorization: Boolean;
     function  HasProxyAuthorizationFor(const Realm: String): Boolean;
+    function  HasRoute: Boolean;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -6361,6 +6363,11 @@ begin
   Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
 end;
 
+function TIdSipRequest.FirstRoute: TIdSipRouteHeader;
+begin
+  Result := Self.FirstHeader(RouteHeader) as TIdSipRouteHeader
+end;
+
 function TIdSipRequest.HasAuthorization: Boolean;
 begin
   Result := Self.HasHeader(AuthorizationHeader);
@@ -6398,7 +6405,7 @@ begin
   try
     ProxyAuthHeaders.First;
 
-    Result := false;    
+    Result := false;
     while ProxyAuthHeaders.HasNext and not Result do
       if IsEqual(ProxyAuthHeaders.CurrentProxyAuthorization.Realm, Realm) then
         Result := true
@@ -6407,6 +6414,11 @@ begin
   finally
     ProxyAuthHeaders.Free;
   end;
+end;
+
+function TIdSipRequest.HasRoute: Boolean;
+begin
+  Result := Self.HasHeader(RouteHeader);
 end;
 
 function TIdSipRequest.HasSipsUri: Boolean;

@@ -135,10 +135,12 @@ type
     procedure TestFirstAuthorization;
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
+    procedure TestFirstRoute;
     procedure TestHasAuthorization;
     procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
     procedure TestHasProxyAuthorizationFor;
+    procedure TestHasRoute;
     procedure TestHasSipsUri;
     procedure TestInSameDialogAsRequest;
     procedure TestInSameDialogAsResponse;
@@ -1811,6 +1813,21 @@ begin
   Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
 end;
 
+procedure TestTIdSipRequest.TestFirstRoute;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstRoute, 'Route not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Route not auto-added');
+
+  A := Self.Request.FirstHeader(RouteHeader);
+  Self.Request.AddHeader(RouteHeader);
+
+  Check(A = Self.Request.FirstRoute, 'Wrong Route');
+end;
+
 procedure TestTIdSipRequest.TestHasAuthorization;
 begin
   Check(not Self.Request.HasHeader(AuthorizationHeader),
@@ -1871,6 +1888,20 @@ begin
   Self.Request.AddHeader(ProxyAuthorizationHeader).Value := 'Digest realm="leo-ix.net"';
   Check(Self.Request.HasProxyAuthorizationFor('leo-ix.net'),
         'Cannot find existing Proxy-Authorization');
+end;
+
+procedure TestTIdSipRequest.TestHasRoute;
+begin
+  Check(not Self.Request.HasHeader(RouteHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasRoute,
+        'New request');
+
+
+  Self.Request.AddHeader(RouteHeader);
+  Check(Self.Request.HasRoute,
+        'Lies! There is too a Route header!');
 end;
 
 procedure TestTIdSipRequest.TestHasSipsUri;
