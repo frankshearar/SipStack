@@ -4258,6 +4258,8 @@ begin
 
     Check(Session.IsEarly,
           'Dialog in incorrect state: should be Early');
+    Check(Session.DialogEstablished,
+          'Dialog not established');
     Check(not Session.Dialog.IsSecure,
           'Dialog secure when TLS not used');
 
