@@ -355,14 +355,24 @@ const
 
 // for IdResourceStrings ?
 const
+  AcceptHeader               = 'Accept';
+  AcceptEncodingHeader       = 'Accept-Encoding';
+  AcceptLanguageHeader       = 'Accept-Language';
+  AlertInfoHeader            = 'Alert-Info';
+  AllowHeader                = 'Allow';
+  AuthenticationInfoHeader   = 'Authentication-Info';
+  AuthorizationHeader        = 'Authorization';
   BranchMagicCookie          = 'z9hG4bK';
   BranchParam                = 'branch';
   CallIDHeaderFull           = 'Call-ID';
   CallIDHeaderShort          = 'i';
+  CallInfoHeader             = 'Call-Info';
   ContactHeaderFull          = 'Contact';
   ContactHeaderShort         = 'm';
+  ContentDispositionHeader   = 'Content-Disposition';
   ContentEncodingHeaderFull  = 'Content-Encoding';
   ContentEncodingHeaderShort = 'e';
+  ContentLanguageHeader      = 'Content-Language';
   ContentLengthHeaderFull    = 'Content-Length';
   ContentLengthHeaderShort   = 'l';
   ContentTypeHeaderFull      = 'Content-Type';
@@ -370,9 +380,11 @@ const
   CSeqHeader                 = 'CSeq';
   DefaultMaxForwards         = 70;
   DateHeader                 = 'Date';
+  ErrorInfoHeader            = 'Error-Info';
   ExpiresHeader              = 'Expires';
   FromHeaderFull             = 'From';
   FromHeaderShort            = 'f';
+  InReplyToHeader            = 'In-Reply-To';
   MaddrParam                 = 'maddr';
   MaxForwardsHeader          = 'Max-Forwards';
   MethodAck                  = 'ACK';
@@ -381,17 +393,35 @@ const
   MethodInvite               = 'INVITE';
   MethodOptions              = 'OPTIONS';
   MethodRegister             = 'REGISTER';
+  MIMEVersionHeader          = 'MIME-Version';
+  MinExpiresHeader           = 'Min-Expires';
+  OrganizationHeader         = 'Organization';
+  PriorityHeader             = 'Priority';
+  ProxyAuthenticateHeader    = 'Proxy-Authenticate';
+  ProxyAuthorizationHeader   = 'Proxy-Authorization';
+  ProxyRequireHeader         = 'Proxy-Require';
   ReceivedParam              = 'received';
+  RecordRouteHeader          = 'Record-Route';
+  ReplyToHeader              = 'Reply-To';
+  RequireHeader              = 'Require';
+  RetryAfterHeader           = 'Retry-After';
+  RouteHeader                = 'Route';
+  ServerHeader               = 'Server';
   SipName                    = 'SIP';
   SubjectHeaderFull          = 'Subject';
   SubjectHeaderShort         = 's';
   SupportedHeaderFull        = 'Supported';
   SupportedHeaderShort       = 'k';
+  TimestampHeader            = 'Timestamp';
   ToHeaderFull               = 'To';
   ToHeaderShort              = 't';
   TTLParam                   = 'ttl';
+  UnsupportedHeader          = 'Unsupported';
+  UserAgentHeader            = 'User-Agent';
   ViaHeaderFull              = 'Via';
   ViaHeaderShort             = 'v';
+  WarningHeader              = 'Warning';
+  WWWAuthenticateHeader      = 'WWW-Authenticate';
 
 // for IdAssignedNumbers
 const
@@ -516,7 +546,8 @@ uses
 
 // class variables
 var
-  GIdSipHeadersMap: TObjectList;
+  GCanonicalHeaderNames: TStrings;
+  GIdSipHeadersMap:      TObjectList;
 
 //******************************************************************************
 //* Unit public procedures & functions                                         *
@@ -1766,30 +1797,71 @@ end;
 
 function TIdSipParser.CanonicaliseName(HeaderName: String): String;
 begin
-       if IsEqual(CallIDHeaderFull,           HeaderName) then Result := CallIDHeaderFull
-  else if IsEqual(CallIDHeaderShort,          HeaderName) then Result := CallIDHeaderFull
-  else if IsEqual(ContactHeaderFull,          HeaderName) then Result := ContactHeaderFull
-  else if IsEqual(ContactHeaderShort,         HeaderName) then Result := ContactHeaderFull
-  else if IsEqual(ContentEncodingHeaderFull,  HeaderName) then Result := ContentEncodingHeaderFull
-  else if IsEqual(ContentEncodingHeaderShort, HeaderName) then Result := ContentEncodingHeaderFull
-  else if IsEqual(ContentLengthHeaderFull,    HeaderName) then Result := ContentLengthHeaderFull
-  else if IsEqual(ContentLengthHeaderShort,   HeaderName) then Result := ContentLengthHeaderFull
-  else if IsEqual(ContentTypeHeaderFull,      HeaderName) then Result := ContentTypeHeaderFull
-  else if IsEqual(ContentTypeHeaderShort,     HeaderName) then Result := ContentTypeHeaderFull
-  else if IsEqual(CSeqHeader,                 HeaderName) then Result := CSeqHeader
-  else if IsEqual(FromHeaderFull,             HeaderName) then Result := FromHeaderFull
-  else if IsEqual(FromHeaderShort,            HeaderName) then Result := FromHeaderFull
-  else if IsEqual(MaxForwardsHeader,          HeaderName) then Result := MaxForwardsHeader
-  else if IsEqual(SubjectHeaderFull,          HeaderName) then Result := SubjectHeaderFull
-  else if IsEqual(SubjectHeaderShort,         HeaderName) then Result := SubjectHeaderFull
-  else if IsEqual(SupportedHeaderFull,        HeaderName) then Result := SupportedHeaderFull
-  else if IsEqual(SupportedHeaderShort,       HeaderName) then Result := SupportedHeaderFull
-  else if IsEqual(ToHeaderFull,               HeaderName) then Result := ToHeaderFull
-  else if IsEqual(ToHeaderShort,              HeaderName) then Result := ToHeaderFull
-  else if IsEqual(ViaHeaderFull,              HeaderName) then Result := ViaHeaderFull
-  else if IsEqual(ViaHeaderShort,             HeaderName) then Result := ViaHeaderFull
-  else
-    Result := HeaderName;
+  Result := '';
+  if not Assigned(GCanonicalHeaderNames) then begin
+    GCanonicalHeaderNames := TStringList.Create;
+    GCanonicalHeaderNames.Add(AcceptHeader               + '=' + AcceptHeader);
+    GCanonicalHeaderNames.Add(AcceptEncodingHeader       + '=' + AcceptEncodingHeader);
+    GCanonicalHeaderNames.Add(AcceptLanguageHeader       + '=' + AcceptLanguageHeader);
+    GCanonicalHeaderNames.Add(AlertInfoHeader            + '=' + AlertInfoHeader);
+    GCanonicalHeaderNames.Add(AllowHeader                + '=' + AllowHeader);
+    GCanonicalHeaderNames.Add(AuthenticationInfoHeader   + '=' + AuthenticationInfoHeader);
+    GCanonicalHeaderNames.Add(AuthorizationHeader        + '=' + AuthorizationHeader);
+    GCanonicalHeaderNames.Add(CallIDHeaderFull           + '=' + CallIDHeaderFull);
+    GCanonicalHeaderNames.Add(CallIDHeaderShort          + '=' + CallIDHeaderFull);
+    GCanonicalHeaderNames.Add(CallInfoHeader             + '=' + CallInfoHeader);
+    GCanonicalHeaderNames.Add(ContactHeaderFull          + '=' + ContactHeaderFull);
+    GCanonicalHeaderNames.Add(ContactHeaderShort         + '=' + ContactHeaderFull);
+    GCanonicalHeaderNames.Add(ContentDispositionHeader   + '=' + ContentDispositionHeader);
+    GCanonicalHeaderNames.Add(ContentEncodingHeaderFull  + '=' + ContentEncodingHeaderFull);
+    GCanonicalHeaderNames.Add(ContentEncodingHeaderShort + '=' + ContentEncodingHeaderFull);
+    GCanonicalHeaderNames.Add(ContentLanguageHeader      + '=' + ContentLanguageHeader);
+    GCanonicalHeaderNames.Add(ContentLengthHeaderFull    + '=' + ContentLengthHeaderFull);
+    GCanonicalHeaderNames.Add(ContentLengthHeaderShort   + '=' + ContentLengthHeaderFull);
+    GCanonicalHeaderNames.Add(ContentTypeHeaderFull      + '=' + ContentTypeHeaderFull);
+    GCanonicalHeaderNames.Add(ContentTypeHeaderShort     + '=' + ContentTypeHeaderFull);
+    GCanonicalHeaderNames.Add(CSeqHeader                 + '=' + CSeqHeader);
+    GCanonicalHeaderNames.Add(DateHeader                 + '=' + DateHeader);
+    GCanonicalHeaderNames.Add(ErrorInfoHeader            + '=' + ErrorInfoHeader);
+    GCanonicalHeaderNames.Add(ExpiresHeader              + '=' + ExpiresHeader);
+    GCanonicalHeaderNames.Add(FromHeaderFull             + '=' + FromHeaderFull);
+    GCanonicalHeaderNames.Add(FromHeaderShort            + '=' + FromHeaderFull);
+    GCanonicalHeaderNames.Add(InReplyToHeader            + '=' + InReplyToHeader);
+    GCanonicalHeaderNames.Add(MaxForwardsHeader          + '=' + MaxForwardsHeader);
+    GCanonicalHeaderNames.Add(MIMEVersionHeader          + '=' + MIMEVersionHeader);
+    GCanonicalHeaderNames.Add(MinExpiresHeader           + '=' + MinExpiresHeader);
+    GCanonicalHeaderNames.Add(OrganizationHeader         + '=' + OrganizationHeader);
+    GCanonicalHeaderNames.Add(PriorityHeader             + '=' + PriorityHeader);
+    GCanonicalHeaderNames.Add(ProxyAuthenticateHeader    + '=' + ProxyAuthenticateHeader);
+    GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
+    GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
+    GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
+    GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
+    GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
+    GCanonicalHeaderNames.Add(RetryAfterHeader           + '=' + RetryAfterHeader);
+    GCanonicalHeaderNames.Add(RouteHeader                + '=' + RouteHeader);
+    GCanonicalHeaderNames.Add(ServerHeader               + '=' + ServerHeader);
+    GCanonicalHeaderNames.Add(SubjectHeaderFull          + '=' + SubjectHeaderFull);
+    GCanonicalHeaderNames.Add(SubjectHeaderShort         + '=' + SubjectHeaderFull);
+    GCanonicalHeaderNames.Add(SupportedHeaderFull        + '=' + SupportedHeaderFull);
+    GCanonicalHeaderNames.Add(SupportedHeaderShort       + '=' + SupportedHeaderFull);
+    GCanonicalHeaderNames.Add(TimestampHeader            + '=' + TimestampHeader);
+    GCanonicalHeaderNames.Add(ToHeaderFull               + '=' + ToHeaderFull);
+    GCanonicalHeaderNames.Add(ToHeaderShort              + '=' + ToHeaderFull);
+    GCanonicalHeaderNames.Add(UnsupportedHeader          + '=' + UnsupportedHeader);
+    GCanonicalHeaderNames.Add(UserAgentHeader            + '=' + UserAgentHeader);
+    GCanonicalHeaderNames.Add(ViaHeaderFull              + '=' + ViaHeaderFull);
+    GCanonicalHeaderNames.Add(ViaHeaderShort             + '=' + ViaHeaderFull);
+    GCanonicalHeaderNames.Add(WarningHeader              + '=' + WarningHeader);
+    GCanonicalHeaderNames.Add(WWWAuthenticateHeader      + '=' + WWWAuthenticateHeader);
+  end;
+
+  if (GCanonicalHeaderNames.IndexOfName(HeaderName) > -1) then
+    Result := GCanonicalHeaderNames.Values[HeaderName];
+
+  if (Result = '') then begin
+      Result := HeaderName;
+  end;
 end;
 
 function TIdSipParser.GetHeaderName(Header: String): String;
@@ -2043,5 +2115,6 @@ end;
 
 initialization
 finalization
+  GCanonicalHeaderNames.Free;
   GIdSipHeadersMap.Free;
 end.
