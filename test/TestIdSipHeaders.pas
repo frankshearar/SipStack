@@ -256,6 +256,7 @@ type
     procedure TestValueWithMultipleTokens;
     procedure TestValueWithNegativeNumber;
     procedure TestValueWithString;
+    procedure TestVeryLargeValue;
   end;
 
   TestTIdSipAuthenticateHeader = class(THeaderTestCase)
@@ -2607,6 +2608,16 @@ begin
   try
     Self.N.Value := 'one';
     Fail('Failed to bail out with string value');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipNumericHeader.TestVeryLargeValue;
+begin
+  try
+    Self.N.Value := '4294967297';
+    Fail('Failed to bail out with a ridiculously large number');
   except
     on EBadHeader do;
   end;

@@ -3352,7 +3352,16 @@ begin
   if not TIdSipParser.IsNumber(Value) then
     Self.FailParse
   else begin
-    fNumericValue := StrToInt(Value);
+    try
+      fNumericValue := StrToInt(Value);
+    except
+      on EConvertError do
+        Self.FailParse;
+      on ERangeError do
+        Self.FailParse;
+      else
+        raise;
+    end;
 
     inherited SetValue(Value);
   end;
