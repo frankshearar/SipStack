@@ -760,6 +760,9 @@ type
   // back-off timer starting with an interval of T1 milliseconds and capping
   // the interval at T2 milliseconds. InitialResend, MaxResendInterval and
   // ResendInterval provide the numbers, my UA provides the timer.
+  //
+  // I consider myself to have succeeded (in other words I call OnSuccess on my
+  // listeners) once I receive an ACK to my 2xx response.
   TIdSipInboundInvite = class(TIdSipInvite)
   private
     fMaxResendInterval: Cardinal; // in milliseconds
@@ -809,8 +812,9 @@ type
   // and not.
   // I guarantee that I will notify my listeners of the OnDialogEvent before the
   // OnSuccess event.
-  // I consider a successful action (in other words I call OnSuccess on my
-  // listeners) when I receive a 2xx response.
+  //
+  // I consider myself to have succeeded (in other words I call OnSuccess on
+  // my listeners) when I receive a 2xx response.
   TIdSipOutboundInvite = class(TIdSipInvite)
   private
     Cancelling:                     Boolean;
@@ -4233,11 +4237,18 @@ var
 begin
   Ack := Self.UA.CreateAck(Dialog);
   try
-    // cf. RFC 3261, section 13.2.2.4
-    Ack.Body := Self.InitialRequest.Body;
+    if Self.InitialRequest.HasBody then begin
+      // cf. RFC 3261, section 13.2.2.4
+      Ack.Body        := Self.InitialRequest.Body;
+      Ack.ContentType := Self.InitialRequest.ContentType;
+    end
+    else begin
+      Ack.Body        := Self.Offer;
+      Ack.ContentType := Self.MimeType;
+    end;
     Ack.ContentDisposition.Value := DispositionSession;
     Ack.ContentLength := Length(Ack.Body);
-    Ack.ContentType := Self.InitialRequest.ContentType;
+
 
     // cf. RFC 3261 section 22.1
     if Self.InitialRequest.HasAuthorization then

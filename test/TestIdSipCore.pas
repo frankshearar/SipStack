@@ -49,7 +49,7 @@ type
     function  ThirdLastSentRequest: TIdSipRequest;
     procedure ReceiveAck;
     procedure ReceiveAckFor(Request: TIdSipRequest;
-                             Response: TIdSipResponse);
+                            Response: TIdSipResponse);
     procedure ReceiveBye(LocalDialog: TIdSipDialog);
     procedure ReceiveCancel;
     procedure ReceiveInvite;
@@ -306,9 +306,12 @@ type
   TestTIdSipInboundInvite = class(TestTIdSipAction,
                                   IIdSipInboundInviteListener)
   private
-    Dialog:       TIdSipDialog;
-    Failed:       Boolean;
-    InviteAction: TIdSipInboundInvite;
+    Answer:         String;
+    AnswerMimeType: String;
+    Dialog:         TIdSipDialog;
+    Failed:         Boolean;
+    InviteAction:   TIdSipInboundInvite;
+    OnSuccessFired: Boolean;
 
     procedure CheckAck(InviteAction: TIdSipInboundInvite);
     procedure CheckAckWithDifferentCSeq(InviteAction: TIdSipInboundInvite);
@@ -318,11 +321,11 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-
   published
     procedure TestAccept;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
+    procedure TestInviteWithNoOffer;
     procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
@@ -348,6 +351,8 @@ type
                                    IIdSipInviteListener)
   private
     Dialog:                   TIdSipDialog;
+    InviteMimeType:           String;
+    InviteOffer:              String;
     OnDialogEstablishedFired: Boolean;
     OnFailureFired:           Boolean;
     OnRedirectFired:          Boolean;
@@ -364,6 +369,9 @@ type
                          Response: TIdSipResponse);
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
+    procedure ReceiveOkWithBody(Invite: TIdSipRequest;
+                                const Body: String;
+                                const ContentType: String);
   protected
     function  CreateAction: TIdSipAction; override;
   public
@@ -371,6 +379,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddListener;
+    procedure TestAnswerInAck;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
@@ -378,6 +387,7 @@ type
     procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestMethod;
+    procedure TestOfferInInvite;
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveInviteOkBeforeCancelOk;
     procedure TestReceiveRedirect;
@@ -1173,7 +1183,7 @@ begin
 end;
 
 procedure TTestCaseTU.ReceiveAckFor(Request: TIdSipRequest;
-                                     Response: TIdSipResponse);
+                                    Response: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
@@ -4577,7 +4587,10 @@ begin
     Ok.Free;
   end;
 
-  Self.Failed       := false;
+  Self.Answer         := '';
+  Self.Failed         := false;
+  Self.OnSuccessFired := false;
+
   Self.InviteAction := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
   Self.InviteAction.AddListener(Self);
 end;
@@ -4653,7 +4666,10 @@ end;
 procedure TestTIdSipInboundInvite.OnSuccess(InviteAgent: TIdSipInboundInvite;
                                             Ack: TIdSipRequest);
 begin
-end;                                            
+  Self.Answer         := Ack.Body;
+  Self.AnswerMimeType := Ack.ContentType;
+  Self.OnSuccessFired := true;
+end;
 
 //* TestTIdSipInboundInvite Published methods **********************************
 
@@ -4755,6 +4771,61 @@ begin
         'Action not marked as terminated');
   Check(Self.Failed,
         'Listeners not notified of failure');
+end;
+
+procedure TestTIdSipInboundInvite.TestInviteWithNoOffer;
+var
+  Ack:    TIdSipRequest;
+  Action: TIdSipInboundInvite;
+  Answer: String;
+  Offer:  String;
+begin
+  // <---       INVITE        ---
+  //  --- 200 OK (with offer) --->
+  // <---  ACK (with answer)  ---
+
+  Answer := TIdSipTestResources.BasicSDP('4.3.2.1');
+  Offer  := TIdSipTestResources.BasicSDP('1.2.3.4');
+
+  Self.Invite.Body := '';
+  Self.Invite.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Action.AddListener(Self);
+
+  Self.MarkSentResponseCount;
+  Action.Accept(Offer,
+                SdpMimeType);
+
+  Self.CheckResponseSent('No 2xx sent');
+  CheckEquals(Offer,
+              Self.LastSentResponse.Body,
+              'Body of 2xx');
+  CheckEquals(SdpMimeType,
+              Self.LastSentResponse.ContentType,
+              'Content-Type of 2xx');
+
+  Ack := Self.Invite.AckFor(Self.LastSentResponse);
+  try
+    Ack.Body                        := Answer;
+    Ack.ContentDisposition.Handling := DispositionSession;
+    Ack.ContentLength               := Length(Answer);
+    Ack.ContentType                 := Self.LastSentResponse.ContentType;
+
+    Action.ReceiveRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+
+  Check(Self.OnSuccessFired,
+        'InviteAction never received the ACK');
+
+  CheckEquals(Answer,
+              Self.Answer,
+              'ACK''s body');
+  CheckEquals(Self.LastSentResponse.ContentType,
+              Self.AnswerMimeType,
+              'ACK''s Content-Type');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsInbound;
@@ -5093,6 +5164,8 @@ begin
   Self.OnDialogEstablishedFired := false;
   Self.OnFailureFired           := false;
   Self.OnRedirectFired          := false;
+  Self.InviteMimeType           := SdpMimeType;
+  Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
 end;
 
 procedure TestTIdSipOutboundInvite.TearDown;
@@ -5111,8 +5184,8 @@ begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundInitialInvite);
   Invite := Result as TIdSipOutboundInitialInvite;
   Invite.Destination := Self.Destination;
-  Invite.MimeType    := '';
-  Invite.Offer       := '';
+  Invite.MimeType    := Self.InviteMimeType;
+  Invite.Offer       := Self.InviteOffer;
   Invite.AddListener(Self);
   Invite.Send;
 end;
@@ -5176,6 +5249,25 @@ procedure TestTIdSipOutboundInvite.OnSuccess(InviteAgent: TIdSipOutboundInvite;
 begin
 end;
 
+procedure TestTIdSipOutboundInvite.ReceiveOkWithBody(Invite: TIdSipRequest;
+                                                     const Body: String;
+                                                     const ContentType: String);
+var
+  Ok: TIdSipResponse;
+begin
+  Ok := Self.CreateRemoteOk(Invite);
+  try
+    Ok.Body                        := Body;
+    Ok.ContentDisposition.Handling := DispositionSession;
+    Ok.ContentLength               := Length(Body);
+    Ok.ContentType                 := ContentType;
+
+    Self.ReceiveResponse(Ok);
+  finally
+    Ok.Free;
+  end;
+end;
+
 //* TestTIdSipOutboundInvite Published methods *********************************
 
 procedure TestTIdSipOutboundInvite.TestAddListener;
@@ -5202,6 +5294,40 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundInvite.TestAnswerInAck;
+var
+  Invite: TIdSipOutboundInvite;
+begin
+  //  ---       INVITE        --->
+  // <--- 200 OK (with offer) ---
+  //  ---  ACK (with answer)  --->
+
+  Self.InviteOffer    := '';
+  Self.InviteMimeType := '';
+  Invite := Self.CreateAction as TIdSipOutboundInvite;
+
+  // Sanity check
+  CheckEquals('',
+              Self.LastSentRequest.Body,
+              'You just sent an INVITE with a body!');
+
+  Invite.Offer    := TIdSipTestResources.BasicSDP('1.2.3.4');
+  Invite.MimeType := SdpMimeType;
+
+  Self.MarkSentAckCount;
+  Self.ReceiveOkWithBody(Invite.InitialRequest,
+                         TIdSipTestResources.BasicSDP('4.3.2.1'),
+                         Invite.MimeType);
+
+  CheckAckSent('No ACK sent');
+  CheckEquals(Invite.Offer,
+              Self.LastSentAck.Body,
+              'Incorrect answer');
+  CheckEquals(Invite.MimeType,
+              Self.LastSentAck.ContentType,
+              'Incorrect answer type');
 end;
 
 procedure TestTIdSipOutboundInvite.TestCancelAfterAccept;
@@ -5388,6 +5514,37 @@ begin
   CheckEquals(MethodInvite,
               TIdSipOutboundInvite.Method,
               'Outbound INVITE Method');
+end;
+
+procedure TestTIdSipOutboundInvite.TestOfferInInvite;
+begin
+  //  ---    INVITE (with offer)   --->
+  // <---   200 OK (with answer)   ---
+  //  --- ACK (with copy of offer) --->
+
+  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  CheckRequestSent('No initial INVITE sent');
+
+  CheckEquals(Self.InviteOffer,
+              Self.LastSentRequest.Body,
+              'Body of INVITE');
+  CheckEquals(Self.InviteMimeType,
+              Self.LastSentRequest.ContentType,
+              'Content-Type of INVITE');
+
+  Self.MarkSentAckCount;
+  Self.ReceiveOkWithBody(Self.LastSentRequest,
+                         TIdSipTestResources.BasicSDP('4.3.2.1'),
+                         SdpMimeType);
+
+  CheckAckSent('No ACK sent');
+  CheckEquals(Self.LastSentRequest.Body,
+              Self.LastSentAck.Body,
+              'Body of ACK doesn''t match INVITE');
+  CheckEquals(Self.LastSentRequest.ContentType,
+              Self.LastSentAck.ContentType,
+              'Content-Type of ACK doesn''t match INVITE');
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
@@ -5625,7 +5782,9 @@ begin
   Result := Self.Core.AddOutboundReInvite;
 
   Invite := Result as TIdSipOutboundReInvite;
-  Invite.Dialog := Self.Dialog;
+  Invite.Dialog         := Self.Dialog;
+  Invite.MimeType       := Self.InviteMimeType;
+  Invite.Offer          := Self.InviteOffer;
   Invite.OriginalInvite := Self.Invite;
   Invite.AddListener(Self);
   Invite.Send;
