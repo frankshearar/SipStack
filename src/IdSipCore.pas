@@ -331,8 +331,7 @@ type
                                       Receiver: TIdSipTransport);
     procedure OnInboundSessionExpire(Sender: TObject);
     function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
-    procedure RejectDoNotDisturb(Request: TIdSipRequest;
-                                 const Reason: String);
+    function  ResponseForInvite: Cardinal;
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
@@ -611,8 +610,6 @@ type
   end;
 
   TIdSipInboundOptions = class(TIdSipOptions)
-  private
-    function DetermineAppropriateResponse: Cardinal;
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Options: TIdSipRequest); reintroduce;
@@ -1636,7 +1633,8 @@ end;
 procedure TIdSipUserAgentCore.ActOnRequest(Request: TIdSipRequest;
                                            Receiver: TIdSipTransport);
 var
-  Action: TIdSipAction;
+  Action:             TIdSipAction;
+  ExpectedStatusCode: Cardinal;
 begin
   inherited ActOnRequest(Request, Receiver);
 
@@ -1650,9 +1648,9 @@ begin
       Self.ReturnResponse(Request,
                           SIPCallLegOrTransactionDoesNotExist)
     else if Request.IsInvite then begin
-      if Self.DoNotDisturb then
-        Self.RejectDoNotDisturb(Request,
-                                Self.DoNotDisturbMessage)
+      ExpectedStatusCode := Self.ResponseForInvite;
+      if (ExpectedStatusCode <> SIPOK) then
+        Self.ReturnResponse(Request, ExpectedStatusCode)
       else
         Self.AddInboundSession(Request, Receiver.IsSecure)
     end
@@ -2087,19 +2085,17 @@ begin
   Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
-procedure TIdSipUserAgentCore.RejectDoNotDisturb(Request: TIdSipRequest;
-                                                 const Reason: String);
-var
-  Response: TIdSipResponse;
+function TIdSipUserAgentCore.ResponseForInvite: Cardinal;
 begin
-  Response := Self.CreateResponse(Request, SIPTemporarilyUnavailable);
-  try
-    Response.StatusText := Reason;
+  // If we receive an INVITE (or an OPTIONS), what response code
+  // would we return? If we don't wish to be disturbed, we return
+  // SIPTemporarilyUnavailable; if we have no available lines, we
+  // return SIPBusyHere, etc.
 
-    Self.Dispatcher.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
+  if Self.DoNotDisturb then
+    Result := SIPTemporarilyUnavailable
+  else
+    Result := SIPOK;
 end;
 
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
@@ -3246,7 +3242,7 @@ procedure TIdSipInboundOptions.ReceiveRequest(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Request, Self.DetermineAppropriateResponse);
+  Response := Self.UA.CreateResponse(Request, Self.UA.ResponseForInvite);
   try
     Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
     Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
@@ -3260,16 +3256,6 @@ begin
   end;
 
   Self.Terminate;
-end;
-
-//* TIdSipInboundOptions Private methods ***************************************
-
-function TIdSipInboundOptions.DetermineAppropriateResponse: Cardinal;
-begin
-  if Self.UA.DoNotDisturb then
-    Result := SIPTemporarilyUnavailable
-  else
-    Result := SIPOK;
 end;
 
 //******************************************************************************
