@@ -10,16 +10,18 @@ type
     fTriggerTime: Cardinal;
   public
     function  Due: Boolean;
+    function  MatchEvent(Event: Pointer): Boolean; virtual; abstract;
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
 
-    property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;    
+    property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;
   end;
 
   TIdEventWait = class(TIdWait)
   private
     fEvent: TEvent;
   public
+    function  MatchEvent(Event: Pointer): Boolean; override;
     procedure Trigger; override;
 
     property Event: TEvent read fEvent write fEvent;
@@ -29,6 +31,7 @@ type
   private
     fEvent: TNotifyEvent;
   public
+    function  MatchEvent(Event: Pointer): Boolean; override;
     procedure Trigger; override;
 
     property Event: TNotifyEvent read fEvent write fEvent;
@@ -53,6 +56,7 @@ type
                   Event: TIdWait);
     function  EarliestEvent: TIdWait;
     function  EventAt(Index: Integer): TIdWait;
+    procedure InternalRemove(Event: Pointer);
     function  ShortestWait: Cardinal;
     procedure TriggerEarliestEvent;
   protected
@@ -100,6 +104,11 @@ end;
 //******************************************************************************
 //* TIdEventWait Public methods ************************************************
 
+function TIdEventWait.MatchEvent(Event: Pointer): Boolean;
+begin
+  Result := Self.Event = Event;
+end;
+
 procedure TIdEventWait.Trigger;
 begin
   if Assigned(Self.Event) then
@@ -110,6 +119,11 @@ end;
 //* TIdNotifyEventWait                                                         *
 //******************************************************************************
 //* TIdNotifyEventWait Public methods ******************************************
+
+function TIdNotifyEventWait.MatchEvent(Event: Pointer): Boolean;
+begin
+  Result := @Self.Event = Event;
+end;
 
 procedure TIdNotifyEventWait.Trigger;
 begin
@@ -149,7 +163,7 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                    Event: TEvent);
+                                 Event: TEvent);
 var
   EventWait: TIdEventWait;
 begin
@@ -160,7 +174,7 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                    Event: TNotifyEvent);
+                                 Event: TNotifyEvent);
 var
   EventWait: TIdNotifyEventWait;
 begin
@@ -179,44 +193,13 @@ begin
 end;
 
 procedure TIdTimerQueue.RemoveEvent(Event: TEvent);
-var
-  I: Integer;
 begin
-  Self.Lock.Acquire;
-  try
-    I := 0;
-    while (I < Self.EventList.Count) do
-      if (Self.EventAt(I) is TIdEventWait)
-        and ((Self.EventAt(I) as TIdEventWait).Event = Event) then
-        Self.EventList.Delete(I)
-      else
-        Inc(I);
-  finally
-    Self.Lock.Release;
-  end;
-  Self.WaitEvent.SetEvent;
+  Self.InternalRemove(Event);
 end;
 
 procedure TIdTimerQueue.RemoveEvent(Event: TNotifyEvent);
-var
-  I:         Integer;
-  ThisEvent: TNotifyEvent;
 begin
-  Self.Lock.Acquire;
-  try
-    I := 0;
-    while (I < Self.EventList.Count) do
-      if (Self.EventAt(I) is TIdNotifyEventWait) then begin
-        ThisEvent := (Self.EventAt(I) as TIdNotifyEventWait).Event;
-        if (@ThisEvent = @Event) then
-          Self.EventList.Delete(I)
-      end
-      else
-        Inc(I);
-  finally
-    Self.Lock.Release;
-  end;
-  Self.WaitEvent.SetEvent;
+  Self.InternalRemove(@Event);
 end;
 
 procedure TIdTimerQueue.Terminate;
@@ -241,7 +224,7 @@ end;
 //* TIdTimerQueue Private methods **********************************************
 
 procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
-                               Event: TIdWait);
+                            Event: TIdWait);
 begin
   Self.Lock.Acquire;
   try
@@ -285,6 +268,24 @@ begin
   // Precondition: Something acquired Self.Lock
   Result := Self.EventList[Index] as TIdWait;
 end;
+
+procedure TIdTimerQueue.InternalRemove(Event: Pointer);
+var
+  I: Integer;
+begin
+  Self.Lock.Acquire;
+  try
+    I := 0;
+    while (I < Self.EventList.Count) do
+      if Self.EventAt(I).MatchEvent(Event) then
+          Self.EventList.Delete(I)
+        else
+          Inc(I);
+  finally
+    Self.Lock.Release;
+  end;
+  Self.WaitEvent.SetEvent;
+end;  
 
 function TIdTimerQueue.ShortestWait: Cardinal;
 var

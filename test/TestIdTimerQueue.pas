@@ -49,6 +49,9 @@ type
     procedure TestNotifyEvent;
     procedure TestOneEvent;
     procedure TestRemoveEvent;
+    procedure TestRemoveNonExistentEvent;
+    procedure TestRemoveNonExistentEventWithOtherEvents;
+    procedure TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
     procedure TestRemoveNotifyEvent;
     procedure TestTwoNotifyEvents;
     procedure TestTwoEvents;
@@ -274,7 +277,7 @@ begin
   Self.Queue.AddEvent(ShortTimeout*3, Self.EventTwo);
   Self.Queue.RemoveEvent(Self.EventOne);
 
-  Self.ExceptionMessage := 'Event didn''t fire';
+  Self.ExceptionMessage := 'EventTwo didn''t fire';
   Self.Queue.Start;
   try
     Self.WaitForSignaled(Self.EventTwo);
@@ -285,6 +288,45 @@ begin
   finally
     Self.Queue.Stop;
   end;
+end;
+
+procedure TestTIdTimerQueue.TestRemoveNonExistentEvent;
+begin
+  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout*2, Self.EventTwo);
+
+  Self.ExceptionMessage := 'EventTwo didn''t fire';
+  Self.Queue.Start;
+  try
+    Self.Queue.RemoveEvent(Self.EventOne);
+    Self.WaitForSignaled(Self.EventTwo);
+    CheckEquals(0,
+                Pos('1', Self.OrderOfFire),
+                'EventOne wasn''t removed (Order of fire was '
+              + Self.OrderOfFire + ')');
+  finally
+    Self.Queue.Stop;
+  end;
+end;
+
+procedure TestTIdTimerQueue.TestRemoveNonExistentEventWithOtherEvents;
+begin
+  // This catches a bug where if there were multiple TNotifyEvents
+  // and you removed a non-existent one you'd enter an infinite loop.
+  // Simple implementation bug.
+
+  Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
+  Self.Queue.RemoveEvent(Self.EventTwo);
+end;
+
+procedure TestTIdTimerQueue.TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
+begin
+  // This catches a bug where if there were multiple TNotifyEvents
+  // and you removed a non-existent one you'd enter an infinite loop.
+  // Simple implementation bug.
+
+  Self.Queue.AddEvent(ShortTimeout, Self.NotifyEventOne);
+  Self.Queue.RemoveEvent(Self.NotifyEventTwo);
 end;
 
 procedure TestTIdTimerQueue.TestRemoveNotifyEvent;
