@@ -59,7 +59,7 @@ type
     procedure AddHeader(const Header: TIdSipHeader); overload;
     procedure AddHeaders(const Headers: TIdSipHeaderList);
     procedure Assign(Src: TPersistent); override;
-    function  AsString: String;
+    function  AsString: String; virtual;
     procedure ClearHeaders;
     function  CreateDialogID: TIdSipDialogID; virtual; abstract;
     function  FirstContact: TIdSipContactHeader;
@@ -103,6 +103,7 @@ type
 
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
+    function  AsString: String; override;
     function  CreateDialogID: TIdSipDialogID; override;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
@@ -389,9 +390,6 @@ function TIdSipMessage.AsString: String;
 begin
   Result := Self.FirstLine;
 
-  if not Self.HasHeader(MaxForwardsHeader) then
-    Self.MaxForwards := DefaultMaxForwards;
-
   Result := Result + Self.Headers.AsString;
 
   Result := Result + EOL;
@@ -563,6 +561,14 @@ begin
 
   Self.Method     := R.Method;
   Self.RequestUri := R.RequestUri;
+end;
+
+function TIdSipRequest.AsString: String;
+begin
+  if not Self.HasHeader(MaxForwardsHeader) then
+    Self.MaxForwards := DefaultMaxForwards;
+
+  Result := inherited AsString;
 end;
 
 function TIdSipRequest.CreateDialogID: TIdSipDialogID;

@@ -67,7 +67,8 @@ type
     property Terminated:       Boolean read fTerminated;
   end;
 
-  TIdSipTestTransportListener = class(TIdSipInterfacedObject, IIdSipTransportListener)
+  TIdSipTestTransportListener = class(TIdSipInterfacedObject,
+                                      IIdSipTransportListener)
   private
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
@@ -81,6 +82,23 @@ type
 
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
+  end;
+
+  TIdSipTestTransportSendingListener = class(TIdSipInterfacedObject,
+                                             IIdSipTransportSendingListener)
+  private
+    fSentRequest:      Boolean;
+    fSentResponse:     Boolean;
+
+    procedure OnSendRequest(const Request: TIdSipRequest;
+                            const Transport: TIdSipTransport);
+    procedure OnSendResponse(const Response: TIdSipResponse;
+                             const Transport: TIdSipTransport);
+  public
+    constructor Create;
+
+    property SentRequest:  Boolean read fSentRequest;
+    property SentResponse: Boolean read fSentResponse;
   end;
 
 implementation
@@ -218,5 +236,32 @@ begin
   Self.fReceivedResponse := true;
 end;
 
+//******************************************************************************
+//* TIdSipTestTransportSendingListener                                         *
+//******************************************************************************
+//* TIdSipTestTransportSendingListener Public methods **************************
+
+constructor TIdSipTestTransportSendingListener.Create;
+begin
+  inherited Create;
+
+  Self.fSentRequest      := false;
+  Self.fSentResponse     := false;
+end;
+
+//* TIdSipTestTransportSendingListener Private methods *************************
+
+
+procedure TIdSipTestTransportSendingListener.OnSendRequest(const Request: TIdSipRequest;
+                                                           const Transport: TIdSipTransport);
+begin
+  Self.fSentRequest := true;
+end;
+
+procedure TIdSipTestTransportSendingListener.OnSendResponse(const Response: TIdSipResponse;
+                                                            const Transport: TIdSipTransport);
+begin
+  Self.fSentResponse := true;
+end;
 
 end.

@@ -20,21 +20,21 @@ type
 
   TestTIdSipUserAgentCore = class(TTestCaseSip, IIdSipSessionListener)
   private
+    Core:                      TIdSipUserAgentCore;
+    Dlg:                       TIdSipDialog;
+    Destination:               TIdSipToHeader;
+    Dispatch:                  TIdSipMockTransactionDispatcher;
     ID:                        TIdSipDialogID;
     LocalSequenceNo:           Cardinal;
     LocalUri:                  TIdURI;
-    RemoteSequenceNo:          Cardinal;
-    RemoteTarget:              TIdURI;
-    RemoteUri:                 TIdURI;
-    RouteSet:                  TIdSipHeaders;
-    Dlg:                       TIdSipDialog;
-    Core:                      TIdSipUserAgentCore;
-    Destination:               TIdSipToHeader;
-    Dispatch:                  TIdSipMockTransactionDispatcher;
     OnEndedSessionFired:       Boolean;
     OnEstablishedSessionFired: Boolean;
     OnNewSessionFired:         Boolean;
+    RemoteSequenceNo:          Cardinal;
+    RemoteTarget:              TIdURI;
+    RemoteUri:                 TIdURI;
     Request:                   TIdSipRequest;
+    RouteSet:                  TIdSipHeaders;
     Session:                   TIdSipSession;
 
     procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
@@ -59,7 +59,7 @@ type
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
     procedure TestCreateRequestInDialogRouteSetWithLrParam;
-    procedure TestCreateRequestRouteSetWithoutLrParam;
+    procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateResponse;
@@ -76,6 +76,9 @@ type
     procedure TestLoopDetection;
     procedure TestNextTag;
     procedure TestNotificationOfNewSession;
+    procedure TestReceiveByeForUnmatchedDialog;
+    procedure TestReceiveByeForDialog;
+    procedure TestReceiveByeWithoutTags;
     procedure TestRemoveSessionListener;
     procedure TestRejectNoContact;
     procedure TestRejectUnknownContentEncoding;
@@ -228,7 +231,11 @@ begin
 
   P := TIdSipParser.Create;
   try
-    Self.Request  := P.ParseAndMakeRequest(LocalLoopRequest);
+    Self.Request := P.ParseAndMakeRequest(BasicRequest);
+    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+    Self.Request.Body := '';
+    Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
+                                 + ' <' + Self.Request.ToHeader.Address.GetFullURI + '>';
   finally
     P.Free;
   end;
@@ -452,6 +459,7 @@ end;
 procedure TestTIdSipUserAgentCore.TestAddSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
+  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -460,7 +468,8 @@ begin
       Self.Core.AddSessionListener(L1);
       Self.Core.AddSessionListener(L2);
 
-      Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
 
       Check(L1.NewSession and L2.NewSession, 'Not all Listeners notified, hence not added');
     finally
@@ -631,7 +640,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRequestRouteSetWithoutLrParam;
+procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogRouteSetWithoutLrParam;
 var
   I:        Integer;
   P:        TIdSipParser;
@@ -966,17 +975,118 @@ begin
 end;
 
 procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;
+var
+  Tran: TIdSipTransaction;
 begin
   Self.Core.AddSessionListener(Self);
 
-  Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+  Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+  Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
 
   Check(Self.OnNewSessionFired, 'UI not notified of new session');
+end;
+
+procedure TestTIdSipUserAgentCore.TestReceiveByeForUnmatchedDialog;
+var
+  Bye:           TIdSipRequest;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Bye := Self.Core.CreateRequest(Self.Destination);
+  try
+    Bye.Method          := MethodBye;
+    Bye.CSeq.SequenceNo := $deadbeef;
+    Bye.CSeq.Method     := Bye.Method;
+
+    ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+
+    CheckEquals(ResponseCount + 1,
+                Self.Dispatch.Transport.SentResponseCount,
+                'no response sent');
+    Response := Self.Dispatch.Transport.LastResponse;
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Response.StatusCode,
+                'Response Status-Code')
+
+  finally
+    Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestReceiveByeForDialog;
+var
+  Bye:           TIdSipRequest;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+  Temp:          String;
+begin
+  Self.Core.AddSessionListener(Self);
+
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  Self.Session.AcceptCall;
+
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  Bye := Self.Core.CreateBye(Self.Session.Dialog);
+  try
+    // Because this BYE actually comes from the network, its from/to headers will
+    // be the REVERSE of a locally generated BYE
+    Temp := Bye.ToHeader.Value + Bye.ToHeader.ParamsAsString;
+    Bye.ToHeader.Value := Bye.From.Value + Bye.From.ParamsAsString;
+    Bye.From.Value := Temp;
+
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+  finally
+    Bye.Free;
+  end;
+
+  CheckEquals(ResponseCount + 1,
+              Self.Dispatch.Transport.SentResponseCount,
+              'SOMETHING should have sent a response');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckNotEquals(SIPCallLegOrTransactionDoesNotExist,
+                 Response.StatusCode,
+                 'UA tells us no matching dialog was found');
+end;
+
+procedure TestTIdSipUserAgentCore.TestReceiveByeWithoutTags;
+var
+  Bye:           TIdSipRequest;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Bye := Self.Core.CreateRequest(Self.Destination);
+  try
+    Bye.Method          := MethodBye;
+    Bye.From.Value      := Bye.From.Address.URI;     // strip the tag
+    Bye.ToHeader.Value  := Bye.ToHeader.Address.URI; // strip the tag
+    Bye.CSeq.SequenceNo := $deadbeef;
+    Bye.CSeq.Method     := Bye.Method;
+
+    ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+
+    CheckEquals(ResponseCount + 1,
+                Self.Dispatch.Transport.SentResponseCount,
+                'no response sent');
+    Response := Self.Dispatch.Transport.LastResponse;
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Response.StatusCode,
+                'Response Status-Code')
+  finally
+    Bye.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgentCore.TestRemoveSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
+  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -986,7 +1096,8 @@ begin
       Self.Core.AddSessionListener(L2);
       Self.Core.RemoveSessionListener(L2);
 
-      Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
 
       Check(L1.NewSession and not L2.NewSession,
             'Listener notified, hence not removed');
@@ -1304,14 +1415,14 @@ procedure TestTIdSipSession.TestAcceptCall;
 var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
-  Tran:          TIdSipTransaction;
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Tran := Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
+  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall(Self.Invite, Tran, Self.Dispatch.Transport);
+
+  Self.Session.AcceptCall;
 
   Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
         'no responses sent');
@@ -1435,14 +1546,13 @@ procedure TestTIdSipSession.TestTerminate;
 var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
-  Tran:         TIdSipTransaction;
 begin
   RequestCount := Self.Dispatch.Transport.SentRequestCount;
 
-  Tran := Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
+  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall(Self.Invite, Tran, Self.Dispatch.Transport);
 
+  Self.Session.AcceptCall;
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
@@ -1451,6 +1561,8 @@ begin
 
   Request := Self.Dispatch.Transport.LastRequest;
   Check(Request.IsBye, 'Unexpected last request');
+
+  Check(Self.Session.IsTerminated, 'Session not marked as terminated');
 end;
 
 initialization

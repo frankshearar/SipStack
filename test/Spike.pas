@@ -7,7 +7,10 @@ uses
   IdSipTransport, StdCtrls;
 
 type
-  TrnidSpike = class(TForm)
+  TrnidSpike = class(TForm,
+                     IIdSipSessionListener,
+                     IIdSipTransportListener,
+                     IIdSipTransportSendingListener)
     Log: TMemo;
     Panel1: TPanel;
     InviteSelf: TButton;
@@ -17,7 +20,18 @@ type
     Transport: TIdSipTcpTransport;
     UA:        TIdSipUserAgentCore;
 
-//    procedure OnInvite(Sender: TObject; const Request: TIdSipRequest);
+    procedure LogMessage(const Msg: TIdSipMessage);
+    procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnEndedSession(const Session: TIdSipSession);
+    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const Transport: TIdSipTransport);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const Transport: TIdSipTransport);
+    procedure OnSendRequest(const Request: TIdSipRequest;
+                            const Transport: TIdSipTransport);
+    procedure OnSendResponse(const Response: TIdSipResponse;
+                             const Transport: TIdSipTransport);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -47,11 +61,14 @@ begin
 
   Self.Transport := TIdSipTcpTransport.Create(IdPORT_SIP);
   Self.Transport.HostName := 'wsfrank';
+  Self.Transport.AddTransportListener(Self);
+  Self.Transport.AddTransportSendingListener(Self);
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.Transport);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
+  Self.UA.AddSessionListener(Self);
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -86,14 +103,52 @@ begin
 end;
 
 //* TrnidSpike Private methods *************************************************
-{
-procedure TrnidSpike.OnInvite(Sender: TObject; const Request: TIdSipRequest);
-begin
-  Self.Log.Text := Self.Log.Text + Request.AsString;
 
-//  Self.UA.AcceptCall(Request, Self.Transport);
+procedure TrnidSpike.LogMessage(const Msg: TIdSipMessage);
+begin
+  Self.Log.Lines.Add(Msg.AsString);
+  Self.Log.Lines.Add('----');
 end;
-}
+
+procedure TrnidSpike.OnEstablishedSession(const Session: TIdSipSession);
+begin
+end;
+
+procedure TrnidSpike.OnEndedSession(const Session: TIdSipSession);
+begin
+end;
+
+procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
+begin
+  Session.AcceptCall;
+end;
+
+procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;
+                                      const Transport: TIdSipTransport);
+begin
+  Self.LogMessage(Request);
+end;
+
+procedure TrnidSpike.OnReceiveResponse(const Response: TIdSipResponse;
+                                       const Transport: TIdSipTransport);
+begin
+  Self.LogMessage(Response);
+end;
+
+procedure TrnidSpike.OnSendRequest(const Request: TIdSipRequest;
+                                   const Transport: TIdSipTransport);
+begin
+  Self.LogMessage(Request);
+end;
+
+procedure TrnidSpike.OnSendResponse(const Response: TIdSipResponse;
+                                    const Transport: TIdSipTransport);
+begin
+  Self.LogMessage(Response);
+end;
+
+//* TrnidSpike Private methods *************************************************
+
 procedure TrnidSpike.InviteSelfClick(Sender: TObject);
 var
   Local: TIdSipToHeader;

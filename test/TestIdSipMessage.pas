@@ -1077,7 +1077,6 @@ begin
   Self.Response.StatusText                             := 'Busy Here';
   Self.Response.SIPVersion                             := SIPVersion;
   Self.Response.AddHeader(ViaHeaderFull).Value         := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.Response.MaxForwards                            := 70;
   Self.Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
   Self.Response.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
   Self.Response.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';

@@ -1,9 +1,9 @@
-object Form1: TForm1
+object Spike: TSpike
   Left = 192
   Top = 107
   Width = 696
   Height = 480
-  Caption = 'Form1'
+  Caption = 'SIP Test Client'
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText

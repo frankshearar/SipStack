@@ -15,28 +15,30 @@ type
   // where the request was INVITE, will establish a dialog.
   TIdSipDialog = class(TObject)
   private
-    fCanBeEstablished: Boolean;
-    fID:               TIdSipDialogID;
-    fInitialRequest:   TIdSipRequest;
-    fIsSecure:         Boolean;
-    fLocalSequenceNo:  Cardinal;
-    fLocalURI:         TIdURI;
-    fOnEstablished:    TIdSipDialogEvent;
-    fRemoteSequenceNo: Cardinal;
-    fRemoteTarget:     TIdURI;
-    fRemoteURI:        TIdURI;
-    fRouteSet:         TIdSipHeaders;
-    fState:            TIdSipDialogState;
+    fCanBeEstablished:   Boolean;
+    fID:                 TIdSipDialogID;
+    fInitialRequest:     TIdSipRequest;
+    fIsSecure:           Boolean;
+    fLocalSequenceNo:    Cardinal;
+    fLocalURI:           TIdURI;
+    fOnEstablished:      TIdSipDialogEvent;
+    fRemoteSequenceNo:   Cardinal;
+    fRemoteTarget:       TIdURI;
+    fRemoteURI:          TIdURI;
+    fRouteSet:           TIdSipHeaders;
+    fState:              TIdSipDialogState;
+    LocalSequenceNoLock: TCriticalSection;
 
     function  GetIsEarly: Boolean;
     procedure CreateInternal(const DialogID: TIdSipDialogID;
-                       const LocalSequenceNo,
-                             RemoteSequenceNo: Cardinal;
-                       const LocalUri,
-                             RemoteUri,
-                             RemoteTarget: String;
-                       const IsSecure: Boolean;
-                       const RouteSet: TIdSipHeaderList);
+                             const LocalSequenceNo,
+                                   RemoteSequenceNo: Cardinal;
+                             const LocalUri,
+                                   RemoteUri,
+                                   RemoteTarget: String;
+                             const IsSecure: Boolean;
+                             const RouteSet: TIdSipHeaderList);
+    function  GetLocalSequenceNo: Cardinal;
     procedure SetCanBeEstablished(const Value: Boolean);
     procedure SetIsEarly(const Value: Boolean);
     procedure SetIsSecure(const Value: Boolean);
@@ -71,15 +73,15 @@ type
 
     procedure HandleMessage(const Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(const Response: TIdSipResponse); overload; virtual;
-    procedure IncLocalSequenceNo;
     function  IsNull: Boolean; virtual;
+    function  NextLocalSequenceNo: Cardinal;
 
     property ID:               TIdSipDialogID read fID;
     property IsEarly:          Boolean        read GetIsEarly;
     property IsSecure:         Boolean        read fIsSecure;
-    property LocalSequenceNo:  Cardinal       read fLocalSequenceNo write SetLocalSequenceNo;
+    property LocalSequenceNo:  Cardinal       read GetLocalSequenceNo;
     property LocalURI:         TIdURI         read fLocalURI;
-    property RemoteSequenceNo: Cardinal       read fRemoteSequenceNo write SetRemoteSequenceNo;
+    property RemoteSequenceNo: Cardinal       read fRemoteSequenceNo;
     property RemoteTarget:     TIdURI         read fRemoteTarget write SetRemoteTarget;
     property RemoteURI:        TIdURI         read fRemoteURI;
     property RouteSet:         TIdSipHeaders  read fRouteSet;
@@ -184,6 +186,7 @@ begin
   Self.RemoteURI.Free;
   Self.LocalUri.Free;
   Self.ID.Free;
+  Self.LocalSequenceNoLock.Free;
 
   inherited Destroy;
 end;
@@ -213,14 +216,20 @@ begin
     Self.SetIsEarly(true);
 end;
 
-procedure TIdSipDialog.IncLocalSequenceNo;
-begin
-  Self.SetLocalSequenceNo(Self.LocalSequenceNo + 1);
-end;
-
 function TIdSipDialog.IsNull: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipDialog.NextLocalSequenceNo: Cardinal;
+begin
+  Self.LocalSequenceNoLock.Acquire;
+  try
+    Inc(Self.fLocalSequenceNo);
+    Result := Self.fLocalSequenceNo;
+  finally
+    Self.LocalSequenceNoLock.Release;
+  end;
 end;
 
 //* TIdSipDialog Protected methods *********************************************
@@ -233,7 +242,12 @@ end;
 
 procedure TIdSipDialog.SetLocalSequenceNo(const Value: Cardinal);
 begin
-  Self.fLocalSequenceNo := Value;
+  Self.LocalSequenceNoLock.Acquire;
+  try
+    Self.fLocalSequenceNo := Value;
+  finally
+  Self.LocalSequenceNoLock.Release;
+  end;
 end;
 
 procedure TIdSipDialog.SetRemoteSequenceNo(const Value: Cardinal);
@@ -262,6 +276,8 @@ procedure TIdSipDialog.CreateInternal(const DialogID: TIdSipDialogID;
                                       const IsSecure: Boolean;
                                       const RouteSet: TIdSipHeaderList);
 begin
+  Self.LocalSequenceNoLock := TCriticalSection.Create;
+
   fID := TIdSipDialogID.Create(DialogID);
   Self.SetLocalSequenceNo(LocalSequenceNo);
   Self.SetRemoteSequenceNo(RemoteSequenceNo);
@@ -280,6 +296,16 @@ end;
 function TIdSipDialog.GetIsEarly: Boolean;
 begin
   Result := Self.fState = sdsEarly;
+end;
+
+function TIdSipDialog.GetLocalSequenceNo: Cardinal;
+begin
+  Self.LocalSequenceNoLock.Acquire;
+  try
+    Result := Self.fLocalSequenceNo;
+  finally
+    Self.LocalSequenceNoLock.Release;
+  end;
 end;
 
 procedure TIdSipDialog.SetCanBeEstablished(const Value: Boolean);

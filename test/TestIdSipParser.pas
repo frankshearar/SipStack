@@ -1741,7 +1741,6 @@ begin
   CheckEquals('SIP/2.0',                              Msg.SIPVersion,                   'SipVersion');
   CheckEquals(29,                                     Msg.ContentLength,                'ContentLength');
   CheckEquals('text/plain',                           Msg.ContentType,                  'ContentType');
-  CheckEquals(70,                                     Msg.MaxForwards,                  'MaxForwards');
   CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Msg.CallID,                       'CallID');
   CheckEquals('Wintermute',                           Msg.ToHeader.DisplayName,         'ToHeader.DisplayName');
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Msg.ToHeader.Address.GetFullURI,  'ToHeader.Address.GetFullURI');
@@ -1790,6 +1789,7 @@ begin
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
               (Msg as TIdSipRequest).RequestUri.GetFullURI,
               'Request-URI');
+  CheckEquals(70, Msg.MaxForwards, 'MaxForwards');
 
   Self.CheckBasicMessage(Msg, CheckBody);
 end;

@@ -19,7 +19,6 @@ const
                + BasicBody;
   BasicResponse = 'SIP/2.0 486 Busy Here'#13#10
                 + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                + 'Max-Forwards: 70'#13#10
                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10

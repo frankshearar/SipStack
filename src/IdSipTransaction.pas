@@ -35,11 +35,21 @@ type
                      const Reason: String);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
-                                const Transport: TIdSipTransport);
+                               const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transaction: TIdSipTransaction;
                                 const Transport: TIdSipTransport);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
+  end;
+
+  IIdSipUnhandledMessageListener = interface
+    ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
+    procedure OnReceiveUnhandledRequest(const Request: TIdSipRequest;
+                                        const Transaction: TIdSipTransaction;
+                                        const Transport: TIdSipTransport);
+    procedure OnReceiveUnhandledResponse(const Response: TIdSipResponse;
+                                         const Transaction: TIdSipTransaction;
+                                         const Transport: TIdSipTransport);
   end;
 
   // I am the single connection point between the transport layer and the
@@ -48,16 +58,16 @@ type
   // don't match any transactions.
   //
   // I do not manage any transports that may be given to me.
-  TIdSipTransactionDispatcher = class(TIdSipMessageSubject,
+  TIdSipTransactionDispatcher = class(TIdSipInterfacedObject,
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
-    TranListenerLock: TCriticalSection;
-    TranListeners:    TList;
-    Transports:       TObjectList;
-    TransportLock:    TCriticalSection;
-    Transactions:     TObjectList;
-    TransactionLock:  TCriticalSection;
+    MsgListenerLock: TCriticalSection;
+    MsgListeners:    TList;
+    Transports:      TObjectList;
+    TransportLock:   TCriticalSection;
+    Transactions:    TObjectList;
+    TransactionLock: TCriticalSection;
 
     procedure CheckMessage(const Msg: TIdSipMessage);
     procedure DeliverToTransaction(const Msg: TIdSipMessage; const T: TIdSipTransport);
@@ -67,15 +77,12 @@ type
     function  TransportAt(const Index: Cardinal): TIdSipTransport;
   protected
     function  FindAppropriateTransport(const Msg: TIdSipMessage): TIdSipTransport;
-    procedure NotifyListenersOfFail(const Transaction: TIdSipTransaction;
-                                    const Reason: String);
     procedure NotifyListenersOfUnhandledRequest(const Request: TIdSipRequest;
                                                 const Transaction: TIdSipTransaction;
                                                 const Transport: TIdSipTransport);
     procedure NotifyListenersOfUnhandledResponse(const Response: TIdSipResponse;
                                                  const Transaction: TIdSipTransaction;
                                                  const Transport: TIdSipTransport);
-    procedure NotifyListenersOfTermination(const Transaction: TIdSipTransaction);
 
     // IIdSipTransactionListener
     procedure OnFail(const Transaction: TIdSipTransaction;
@@ -97,7 +104,7 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddTransactionListener(const Listener: IIdSipTransactionListener);
+    procedure AddUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
     procedure AddTransport(const Transport: TIdSipTransport);
     function  AddClientTransaction(const InitialRequest: TIdSipRequest): TIdSipTransaction;
     function  AddServerTransaction(const InitialRequest: TIdSipRequest;
@@ -105,7 +112,7 @@ type
     procedure ClearTransports;
     function  LoopDetected(const Request: TIdSipRequest): Boolean;
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
-    procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
+    procedure RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
     procedure Send(const Msg: TIdSipMessage); virtual;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
@@ -187,8 +194,6 @@ type
                             const T: TIdSipTransport); override;
   end;
 
-  TIdSipClientTransaction = class(TIdSipTransaction);
-
   TIdSipServerInviteTransaction = class(TIdSipServerTransaction)
   private
     TimerG:         TIdSipTimer;
@@ -243,6 +248,8 @@ type
                              const T: TIdSipTransport); override;
     procedure SendResponse(const R: TIdSipResponse); override;
   end;
+
+  TIdSipClientTransaction = class(TIdSipTransaction);
 
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
   private
@@ -314,8 +321,8 @@ constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.TranListenerLock := TCriticalSection.Create;
-  Self.TranListeners    := TList.Create;
+  Self.MsgListenerLock := TCriticalSection.Create;
+  Self.MsgListeners    := TList.Create;
 
   Self.Transports    := TObjectList.Create(false);
   Self.TransportLock := TCriticalSection.Create;
@@ -330,19 +337,19 @@ begin
   Self.Transactions.Free;
   Self.TransportLock.Free;
   Self.Transports.Free;
-  Self.TranListeners.Free;
-  Self.TranListenerLock.Free;
+  Self.MsgListeners.Free;
+  Self.MsgListenerLock.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipTransactionDispatcher.AddTransactionListener(const Listener: IIdSipTransactionListener);
+procedure TIdSipTransactionDispatcher.AddUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
-  Self.TranListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    Self.TranListeners.Add(Pointer(Listener));
+    Self.MsgListeners.Add(Pointer(Listener));
   finally
-    Self.TranListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
@@ -369,8 +376,6 @@ begin
       Index := Self.Transactions.Add(TIdSipTransaction.GetClientTransactionType(InitialRequest).Create(Self, InitialRequest));
       Result := Self.TransactionAt(Index);
       Result.AddTransactionListener(Self);
-
-      Result.SendRequest;
     except
       Self.Transactions.Remove(Result);
 
@@ -394,8 +399,6 @@ begin
       Index := Self.Transactions.Add(TIdSipTransaction.GetServerTransactionType(InitialRequest).Create(Self, InitialRequest));
       Result := Self.TransactionAt(Index);
       Result.AddTransactionListener(Self);
-
-      Result.ReceiveRequest(InitialRequest, Transport);
     except
       Self.Transactions.Remove(Result);
 
@@ -446,13 +449,13 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.RemoveTransactionListener(const Listener: IIdSipTransactionListener);
+procedure TIdSipTransactionDispatcher.RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
-  Self.TranListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    Self.TranListeners.Remove(Pointer(Listener));
+    Self.MsgListeners.Remove(Pointer(Listener));
   finally
-    Self.TranListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
@@ -532,35 +535,20 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfFail(const Transaction: TIdSipTransaction;
-                                                            const Reason: String);
-var
-  I: Integer;
-begin
-  Self.TranListenerLock.Acquire;
-  try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnFail(Transaction,
-                                                              Reason);
-  finally
-    Self.TranListenerLock.Release;
-  end;
-end;
-
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(const Request: TIdSipRequest;
                                                                         const Transaction: TIdSipTransaction;
                                                                         const Transport: TIdSipTransport);
 var
   I: Integer;
 begin
-  Self.TranListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnReceiveRequest(Request,
-                                                                        Transaction,
-                                                                        Transport);
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledRequest(Request,
+                                                                                      Transaction,
+                                                                                      Transport);
   finally
-    Self.TranListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
@@ -570,34 +558,20 @@ procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(const R
 var
   I: Integer;
 begin
-  Self.TranListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnReceiveResponse(Response,
-                                                                         Transaction,
-                                                                         Transport);
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledResponse(Response,
+                                                                                       Transaction,
+                                                                                       Transport);
   finally
-    Self.TranListenerLock.Release;
-  end;
-end;
-
-procedure TIdSipTransactionDispatcher.NotifyListenersOfTermination(const Transaction: TIdSipTransaction);
-var
-  I: Integer;
-begin
-  Self.TranListenerLock.Acquire;
-  try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnTerminated(Transaction);
-  finally
-    Self.TranListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.OnFail(const Transaction: TIdSipTransaction;
                                              const Reason: String);
 begin
-  Self.NotifyListenersOfFail(Transaction, Reason);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
@@ -616,7 +590,6 @@ end;
 
 procedure TIdSipTransactionDispatcher.OnTerminated(const Transaction: TIdSipTransaction);
 begin
-  Self.NotifyListenersOfTermination(Transaction);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
@@ -978,6 +951,8 @@ constructor TIdSipServerInviteTransaction.Create(const Dispatcher: TIdSipTransac
 begin
   inherited Create(Dispatcher, InitialRequest, Timeout);
 
+  Self.SetState(itsProceeding);
+
   Self.TimerG := TIdSipTimer.Create;
   Self.TimerG.Interval := InitialT1;
   Self.TimerG.OnTimer  := Self.OnTimerG;
@@ -1162,6 +1137,8 @@ constructor TIdSipServerNonInviteTransaction.Create(const Dispatcher: TIdSipTran
 begin
   inherited Create(Dispatcher, InitialRequest, Timeout);
 
+  Self.SetState(itsTrying);
+
   Self.TimerJ         := TIdSipTimer.Create(true);
   Self.TimerJ.OnTimer := Self.OnTimerJ;
 end;
@@ -1267,6 +1244,8 @@ constructor TIdSipClientInviteTransaction.Create(const Dispatcher: TIdSipTransac
                                                  const Timeout: Cardinal = InitialT1_64);
 begin
   inherited Create(Dispatcher, InitialRequest, Timeout);
+
+  Self.SetState(itsCalling);
 
   Self.TimerA          := TIdSipTimer.Create(true);
   Self.TimerA.Interval := InitialT1;
@@ -1453,6 +1432,8 @@ constructor TIdSipClientNonInviteTransaction.Create(const Dispatcher: TIdSipTran
                                                     const Timeout: Cardinal = InitialT1_64);
 begin
   inherited Create(Dispatcher, InitialRequest, Timeout);
+
+  Self.SetState(itsTrying);
 
   Self.TimerE          := TIdSipTimer.Create(true);
   Self.TimerE.Interval := InitialT1;

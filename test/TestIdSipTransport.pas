@@ -7,32 +7,46 @@ uses
   SysUtils, TestFramework, TestFrameworkEx;
 
 type
-  TIdSipTransportSubjectSubclass = class(TIdSipTcpTransport)
+  TIdSipTransportSubclass = class(TIdSipTcpTransport)
   public
     procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyTransportSendingListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
   end;
 
-  TestTIdSipTransportSubject = class(TTestCase, IIdSipTransportListener)
+  TestTIdSipTransportEventNotifications = class(TTestCase,
+                                                IIdSipTransportListener,
+                                                IIdSipTransportSendingListener)
   private
     ReceivedRequest:  Boolean;
     ReceivedResponse: Boolean;
     Request:          TIdSipRequest;
     Response:         TIdSipResponse;
-    Transport:        TIdSipTransportSubjectSubclass;
+    SentRequest:      Boolean;
+    SentResponse:     Boolean;
+    Transport:        TIdSipTransportSubclass;
 
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transport: TIdSipTransport);
+    procedure OnSendRequest(const Request: TIdSipRequest;
+                            const Transport: TIdSipTransport);
+    procedure OnSendResponse(const Response: TIdSipResponse;
+                             const Transport: TIdSipTransport);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddTransportListener;
+    procedure TestAddTransportSendingListener;
     procedure TestAllListenersReceiveRequests;
     procedure TestAllListenersReceiveResponses;
+    procedure TestAllListenersSendRequests;
+    procedure TestAllListenersSendResponses;
     procedure TestRemoveTransportListener;
+    procedure TestRemoveTransportSendingListener;
   end;
 
   TestTIdSipTransport = class(TThreadingTestCase, IIdSipTransportListener)
@@ -132,7 +146,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-  Result.AddTest(TestTIdSipTransportSubject.Suite);
+  Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
   Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
@@ -140,26 +154,36 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransportSubjectSubclass                                             *
+//* TIdSipTransportSubclass                                             *
 //******************************************************************************
-//* TIdSipTransportSubjectSubclass Public methods ******************************
+//* TIdSipTransportSubclass Public methods ******************************
 
-procedure TIdSipTransportSubjectSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
+procedure TIdSipTransportSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
 begin
   inherited NotifyTransportListeners(Request);
 end;
 
-procedure TIdSipTransportSubjectSubclass.NotifyTransportListeners(const Response: TIdSipResponse);
+procedure TIdSipTransportSubclass.NotifyTransportListeners(const Response: TIdSipResponse);
 begin
   inherited NotifyTransportListeners(Response);
 end;
 
-//******************************************************************************
-//* TestTIdSipTransportSubject                                                 *
-//******************************************************************************
-//* TestTIdSipTransportSubject Public methods **********************************
+procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Request: TIdSipRequest);
+begin
+  inherited NotifyTransportSendingListeners(Request);
+end;
 
-procedure TestTIdSipTransportSubject.SetUp;
+procedure TIdSipTransportSubclass.NotifyTransportSendingListeners(const Response: TIdSipResponse);
+begin
+  inherited NotifyTransportSendingListeners(Response);
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportEventNotifications                                      *
+//******************************************************************************
+//* TestTIdSipTransportEventNotifications Public methods ***********************
+
+procedure TestTIdSipTransportEventNotifications.SetUp;
 begin
   inherited SetUp;
 
@@ -167,10 +191,10 @@ begin
   Self.ReceivedResponse := false;
   Self.Request          := TIdSipRequest.Create;
   Self.Response         := TIdSipResponse.Create;
-  Self.Transport        := TIdSipTransportSubjectSubclass.Create(0);
+  Self.Transport        := TIdSipTransportSubclass.Create(0);
 end;
 
-procedure TestTIdSipTransportSubject.TearDown;
+procedure TestTIdSipTransportEventNotifications.TearDown;
 begin
   Self.Transport.Free;
   Self.Response.Free;
@@ -179,18 +203,18 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipTransportSubject Private methods *********************************
+//* TestTIdSipTransportEventNotifications Private methods **********************
 
-procedure TestTIdSipTransportSubject.OnReceiveRequest(const Request: TIdSipRequest;
-                                                      const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(const Request: TIdSipRequest;
+                                                                 const Transport: TIdSipTransport);
 begin
   Self.ReceivedRequest := true;
   Check(Self.Request = Request,     'Request not correct');
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-procedure TestTIdSipTransportSubject.OnReceiveResponse(const Response: TIdSipResponse;
-                                                       const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnReceiveResponse(const Response: TIdSipResponse;
+                                                                  const Transport: TIdSipTransport);
 begin
   Self.ReceivedResponse := true;
 
@@ -198,9 +222,26 @@ begin
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-//* TestTIdSipTransportSubject Published methods *******************************
+procedure TestTIdSipTransportEventNotifications.OnSendRequest(const Request: TIdSipRequest;
+                                                              const Transport: TIdSipTransport);
+begin
+  Self.SentRequest := true;
+  Check(Self.Request = Request,     'Request not correct');
+  Check(Self.Transport = Transport, 'Transport not correct');
+end;
 
-procedure TestTIdSipTransportSubject.TestAddTransportListener;
+procedure TestTIdSipTransportEventNotifications.OnSendResponse(const Response: TIdSipResponse;
+                                                               const Transport: TIdSipTransport);
+begin
+  Self.SentResponse := true;
+
+  Check(Self.Response = Response,   'Response not correct');
+  Check(Self.Transport = Transport, 'Transport not correct');
+end;
+
+//* TestTIdSipTransportEventNotifications Published methods *******************************
+
+procedure TestTIdSipTransportEventNotifications.TestAddTransportListener;
 begin
   Self.Transport.AddTransportListener(Self);
 
@@ -209,7 +250,16 @@ begin
   Check(Self.ReceivedRequest, 'Listener wasn''t added');
 end;
 
-procedure TestTIdSipTransportSubject.TestAllListenersReceiveRequests;
+procedure TestTIdSipTransportEventNotifications.TestAddTransportSendingListener;
+begin
+  Self.Transport.AddTransportSendingListener(Self);
+
+  Self.Transport.NotifyTransportSendingListeners(Self.Request);
+
+  Check(Self.SentRequest, 'Listener wasn''t added');
+end;
+
+procedure TestTIdSipTransportEventNotifications.TestAllListenersReceiveRequests;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -227,7 +277,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransportSubject.TestAllListenersReceiveResponses;
+procedure TestTIdSipTransportEventNotifications.TestAllListenersReceiveResponses;
 var
   Listener: TIdSipTestTransportListener;
 begin
@@ -245,7 +295,43 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransportSubject.TestRemoveTransportListener;
+procedure TestTIdSipTransportEventNotifications.TestAllListenersSendRequests;
+var
+  Listener: TIdSipTestTransportSendingListener;
+begin
+  Listener := TIdSipTestTransportSendingListener.Create;
+  try
+    Self.Transport.AddTransportSendingListener(Self);
+    Self.Transport.AddTransportSendingListener(Listener);
+
+    Self.Transport.NotifyTransportSendingListeners(Self.Request);
+
+    Check(Self.SentRequest and Listener.SentRequest,
+          'Not all Listeners Sent the request');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransportEventNotifications.TestAllListenersSendResponses;
+var
+  Listener: TIdSipTestTransportSendingListener;
+begin
+  Listener := TIdSipTestTransportSendingListener.Create;
+  try
+    Self.Transport.AddTransportSendingListener(Self);
+    Self.Transport.AddTransportSendingListener(Listener);
+
+    Self.Transport.NotifyTransportSendingListeners(Self.Response);
+
+    Check(Self.SentResponse and Listener.SentResponse,
+          'Not all Listeners Sent the Response');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransportEventNotifications.TestRemoveTransportListener;
 begin
   Self.Transport.AddTransportListener(Self);
   Self.Transport.RemoveTransportListener(Self);
@@ -253,6 +339,16 @@ begin
   Self.Transport.NotifyTransportListeners(Self.Request);
 
   Check(not Self.ReceivedRequest, 'Listener wasn''t removed');
+end;
+
+procedure TestTIdSipTransportEventNotifications.TestRemoveTransportSendingListener;
+begin
+  Self.Transport.AddTransportSendingListener(Self);
+  Self.Transport.RemoveTransportSendingListener(Self);
+
+  Self.Transport.NotifyTransportSendingListeners(Self.Request);
+
+  Check(not Self.SentRequest, 'Listener wasn''t removed');
 end;
 
 //******************************************************************************
