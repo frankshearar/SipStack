@@ -152,9 +152,6 @@ type
     procedure TestReceiveByeWithoutTags;
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
-    procedure TestRemoveObserver;
-    procedure TestRemoveAction;
-    procedure TestRemoveUserAgentListener;
     procedure TestRejectNoContact;
     procedure TestRejectUnknownContentEncoding;
     procedure TestRejectUnknownContentLanguage;
@@ -163,6 +160,9 @@ type
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
     procedure TestRejectUnsupportedSipVersion;
+    procedure TestRemoveAction;
+    procedure TestRemoveObserver;
+    procedure TestRemoveUserAgentListener;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -2174,71 +2174,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestRemoveObserver;
-var
-  L1, L2: TIdObserverListener;
-begin
-  L1 := TIdObserverListener.Create;
-  try
-    L2 := TIdObserverListener.Create;
-    try
-      Self.Core.AddObserver(L1);
-      Self.Core.AddObserver(L2);
-      Self.Core.RemoveObserver(L2);
-
-      Self.SimulateRemoteInvite;
-
-      Check(L1.Changed and not L2.Changed,
-            'Listener notified, hence not removed');
-    finally
-      L2.Free
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestRemoveAction;
-var
-  Registration:      TIdSipOutboundRegistration;
-  RegistrationCount: Cardinal;
-begin
-  // Yes, this seems crazy. The fact that a SipRegistration
-  // gets created concerns us, not where we're sending the
-  // registration.
-  Registration := Self.Core.RegisterWith(Self.Core.Contact.Address);
-
-  RegistrationCount := Self.Core.RegistrationCount;
-  Self.Core.RemoveAction(Registration);
-  CheckEquals(RegistrationCount - 1,
-              Self.Core.RegistrationCount,
-              'Registration wasn''t removed');
-end;
-
-procedure TestTIdSipUserAgentCore.TestRemoveUserAgentListener;
-var
-  L1, L2: TIdSipTestUserAgentListener;
-begin
-  L1 := TIdSipTestUserAgentListener.Create;
-  try
-    L2 := TIdSipTestUserAgentListener.Create;
-    try
-      Self.Core.AddUserAgentListener(L1);
-      Self.Core.AddUserAgentListener(L2);
-      Self.Core.RemoveUserAgentListener(L2);
-
-      Self.SimulateRemoteInvite;
-
-      Check(L1.InboundCall and not L2.InboundCall,
-            'Listener notified, hence not removed');
-    finally
-      L2.Free
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgentCore.TestRejectNoContact;
 var
   Response:      TIdSipResponse;
@@ -2409,6 +2344,71 @@ begin
   CheckEquals(SIPSIPVersionNotSupported,
               Response.StatusCode,
               'Status-Code');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveAction;
+var
+  Registration:      TIdSipOutboundRegistration;
+  RegistrationCount: Cardinal;
+begin
+  // Yes, this seems crazy. The fact that a SipRegistration
+  // gets created concerns us, not where we're sending the
+  // registration.
+  Registration := Self.Core.RegisterWith(Self.Core.Contact.Address);
+
+  RegistrationCount := Self.Core.RegistrationCount;
+  Self.Core.RemoveAction(Registration);
+  CheckEquals(RegistrationCount - 1,
+              Self.Core.RegistrationCount,
+              'Registration wasn''t removed');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveObserver;
+var
+  L1, L2: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    L2 := TIdObserverListener.Create;
+    try
+      Self.Core.AddObserver(L1);
+      Self.Core.AddObserver(L2);
+      Self.Core.RemoveObserver(L2);
+
+      Self.SimulateRemoteInvite;
+
+      Check(L1.Changed and not L2.Changed,
+            'Listener notified, hence not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveUserAgentListener;
+var
+  L1, L2: TIdSipTestUserAgentListener;
+begin
+  L1 := TIdSipTestUserAgentListener.Create;
+  try
+    L2 := TIdSipTestUserAgentListener.Create;
+    try
+      Self.Core.AddUserAgentListener(L1);
+      Self.Core.AddUserAgentListener(L2);
+      Self.Core.RemoveUserAgentListener(L2);
+
+      Self.SimulateRemoteInvite;
+
+      Check(L1.InboundCall and not L2.InboundCall,
+            'Listener notified, hence not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgentCore.TestSetContact;
