@@ -57,13 +57,19 @@ type
 
   TestTIdNotificationList = class(TTestCase)
   private
-    List: TIdNotificationList;
+    BarCaller: TIdCallBar;
+    F1:        TIdFoo;
+    F2:        TIdFoo;
+    F3:        TIdFoo;
+    F4:        TIdFoo;
+    List:      TIdNotificationList;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddRemoveCount;
     procedure TestAddNil;
+    procedure TestAddListeners;
     procedure TestAssign;
     procedure TestAssignNonList;
     procedure TestNotify;
@@ -145,12 +151,22 @@ procedure TestTIdNotificationList.SetUp;
 begin
   inherited SetUp;
 
-  Self.List := TIdNotificationList.Create;
+  Self.BarCaller := TIdCallBar.Create;
+  Self.F1        := TIdFoo.Create;
+  Self.F2        := TIdFoo.Create;
+  Self.F3        := TIdFoo.Create;
+  Self.F4        := TIdFoo.Create;
+  Self.List      := TIdNotificationList.Create;
 end;
 
 procedure TestTIdNotificationList.TearDown;
 begin
   Self.List.Free;
+  Self.F4.Free;
+  Self.F3.Free;
+  Self.F2.Free;
+  Self.F1.Free;
+  Self.BarCaller.Free;
 
   inherited TearDown;
 end;
@@ -158,77 +174,69 @@ end;
 //* TestTIdNotificationList Published methods **********************************
 
 procedure TestTIdNotificationList.TestAddRemoveCount;
-var
-  O1, O2: TIdInterfacedObject;
 begin
-  O1 := TIdInterfacedObject.Create;
-  try
-    O2:= TIdInterfacedObject.Create;
-    try
-      CheckEquals(0, Self.List.Count, 'Empty list');
-      Self.List.AddListener(O1);
-      CheckEquals(1, Self.List.Count, '[O1]');
-      Self.List.AddListener(O2);
-      CheckEquals(2, Self.List.Count, '[O1, O2]');
+  CheckEquals(0, Self.List.Count, 'Empty list');
+  Self.List.AddListener(Self.F1);
+  CheckEquals(1, Self.List.Count, '[F1]');
+  Self.List.AddListener(Self.F2);
+  CheckEquals(2, Self.List.Count, '[F1, F2]');
 
-      Self.List.RemoveListener(O1);
-      CheckEquals(1, Self.List.Count, '[O2]');
-      Self.List.RemoveListener(O2);
-      CheckEquals(0, Self.List.Count, 'Empty list again');
-    finally
-      O2.Free;
-    end;
-  finally
-    O1.Free;
-  end;
+  Self.List.RemoveListener(Self.F1);
+  CheckEquals(1, Self.List.Count, '[F2]');
+  Self.List.RemoveListener(Self.F2);
+  CheckEquals(0, Self.List.Count, 'Empty list again');
 end;
 
 procedure TestTIdNotificationList.TestAddNil;
-var
-  BarCaller: TIdCallBar;
 begin
   Self.List.AddListener(nil);
 
-  BarCaller := TIdCallBar.Create;
+  Self.List.Notify(Self.BarCaller);
+end;
+
+procedure TestTIdNotificationList.TestAddListeners;
+var
+  Other: TIdNotificationList;
+begin
+  Other := TIdNotificationList.Create;
   try
-    Self.List.Notify(BarCaller);
+    Self.List.AddListener(Self.F1);
+    Self.List.AddListener(Self.F2);
+    Other.AddListener(Self.F3);
+    Other.AddListener(Self.F4);
+
+    Self.List.Add(Other);
+
+    Self.List.Notify(Self.BarCaller);
+
+    Check(Self.F1.BarCalled, 'Method not invoked on F1');
+    Check(Self.F2.BarCalled, 'Method not invoked on F2');
+    Check(Self.F3.BarCalled, 'Method not invoked on F3');
+    Check(Self.F4.BarCalled, 'Method not invoked on F4');
   finally
-    BarCaller.Free;
+    Other.Free;
   end;
 end;
 
 procedure TestTIdNotificationList.TestAssign;
 var
-  F1, F2:    TIdFoo;
-  BarCaller: TIdCallBar;
-  Other:     TIdNotificationList;
+  Other: TIdNotificationList;
 begin
   Other := TIdNotificationList.Create;
   try
-    F1 := TIdFoo.Create;
-    try
-      F2 := TIdFoo.Create;
-      try
-        Self.List.AddListener(F1);
-        Self.List.AddListener(F2);
+    Other.AddListener(Self.F1);
+    Other.AddListener(Self.F2);
+    Self.List.AddListener(Self.F3);
+    Self.List.AddListener(Self.F4);
 
-        Other.Assign(Self.List);
+    Other.Assign(Self.List);
 
-        BarCaller := TIdCallBar.Create;
-        try
-          Other.Notify(BarCaller);
-        finally
-          BarCaller.Free;
-        end;
+    Other.Notify(Self.BarCaller);
 
-        Check(F1.BarCalled, 'Method not invoked on F1');
-        Check(F2.BarCalled, 'Method not invoked on F2');
-      finally
-        F2.Free;
-      end;
-    finally
-      F1.Free;
-    end;
+    Check(not Self.F1.BarCalled, 'Method invoked on F1 (Original list not cleared)');
+    Check(not Self.F2.BarCalled, 'Method invoked on F2 (Original list not cleared)');
+    Check(    Self.F3.BarCalled, 'Method not invoked on F3 (New list not added)');
+    Check(    Self.F4.BarCalled, 'Method not invoked on F4 (New list not added)');
   finally
     Other.Free;
   end;
@@ -248,81 +256,51 @@ begin
 end;
 
 procedure TestTIdNotificationList.TestNotify;
-var
-  F1, F2:    TIdFoo;
-  BarCaller: TIdCallBar;
 begin
-  F1 := TIdFoo.Create;
-  try
-    F2 := TIdFoo.Create;
-    try
-      Self.List.AddListener(F1);
-      Self.List.AddListener(F2);
+  Self.List.AddListener(Self.F1);
+  Self.List.AddListener(Self.F2);
 
-      BarCaller := TIdCallBar.Create;
-      try
-        Self.List.Notify(BarCaller);
-      finally
-        BarCaller.Free;
-      end;
+  Self.List.Notify(Self.BarCaller);
 
-      Check(F1.BarCalled, 'Method not invoked on F1');
-      Check(F2.BarCalled, 'Method not invoked on F2');
-    finally
-      F2.Free;
-    end;
-  finally
-    F1.Free;
-  end;
+  Check(Self.F1.BarCalled, 'Method not invoked on F1');
+  Check(Self.F2.BarCalled, 'Method not invoked on F2');
 end;
 
 procedure TestTIdNotificationList.TestListenerRaisesException;
 var
-  Failure:       TIdRaiseException;
-  FailureMethod: TIdCallBar;
+  Failure: TIdRaiseException;
 begin
-  FailureMethod := TIdCallBar.Create;
+  Failure := TIdRaiseException.Create;
   try
-    Failure := TIdRaiseException.Create;
+    Failure.ExceptClass := EConvertError;
+
+    Self.List.AddListener(Failure);
+
     try
-      Failure.ExceptClass := EConvertError;
-
-      Self.List.AddListener(Failure);
-
-      try
-        Self.List.Notify(FailureMethod);
-        Fail('No exception raised');
-      except
-        on EConvertError do;
-      end;
-    finally
-      Failure.Free;
+      Self.List.Notify(Self.BarCaller);
+      Fail('No exception raised');
+    except
+      on EConvertError do;
     end;
   finally
-    FailureMethod.Free;
+    Failure.Free;
   end;
 end;
 
 procedure TestTIdNotificationList.TestListSwallowsExpectedExceptions;
 var
   Failure:       TIdRaiseException;
-  FailureMethod: TIdCallBar;
 begin
-  FailureMethod := TIdCallBar.Create;
+  Failure := TIdRaiseException.Create;
   try
-    Failure := TIdRaiseException.Create;
-    try
-      Failure.ExceptClass := EConvertError;
-      Self.List.AddExpectedException(Failure.ExceptClass);
+    Failure.ExceptClass := EConvertError;
+    Self.List.AddExpectedException(Failure.ExceptClass);
 
-      Self.List.AddListener(Failure);
+    Self.List.AddListener(Failure);
 
-      Self.List.Notify(FailureMethod);
-    finally
-      Failure.Free;
-    end;
+    Self.List.Notify(Self.BarCaller);
   finally
-    FailureMethod.Free;
+    Failure.Free;
   end;
 end;
 
@@ -330,25 +308,19 @@ procedure TestTIdNotificationList.TestSelfRemovingListener;
 var
   Count:   Integer;
   Remover: TIdSelfRemover;
-  Method:  TIdCallBar;
 begin
-  Method := TIdCallBar.Create;
+  Remover := TIdSelfRemover.Create;
   try
-    Remover := TIdSelfRemover.Create;
-    try
-      Remover.Observed := Self.List;
-      Self.List.AddListener(Remover);
+    Remover.Observed := Self.List;
+    Self.List.AddListener(Remover);
 
-      Count := Self.List.Count;
-      Self.List.Notify(Method);
-      Check(Remover.BarCalled, 'Listener not notified');
+    Count := Self.List.Count;
+    Self.List.Notify(Self.BarCaller);
+    Check(Remover.BarCalled, 'Listener not notified');
 
-      Check(Self.List.Count < Count, 'Listener didn''t remove itself');
-    finally
-      Remover.Free;
-    end;
+    Check(Self.List.Count < Count, 'Listener didn''t remove itself');
   finally
-    Method.Free;
+    Remover.Free;
   end;
 end;
 

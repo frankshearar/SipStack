@@ -41,6 +41,7 @@ type
     destructor  Destroy; override;
 
     procedure AddExpectedException(ExceptionType: TClass);
+    procedure Add(Listeners: TIdNotificationList);
     procedure Assign(Src: TPersistent); override;
     procedure AddListener(const L: IInterface);
     function  Count: Integer;
@@ -109,6 +110,24 @@ begin
   end;
 end;
 
+procedure TIdNotificationList.Add(Listeners: TIdNotificationList);
+var
+  I: Integer;
+begin
+  Self.Lock.Acquire;
+  try
+    Listeners.Lock.Acquire;
+    try
+      for I := 0 to Listeners.List.Count - 1 do
+        Self.List.Add(Listeners.List[I]);
+    finally
+      Listeners.Lock.Release;
+    end;
+  finally
+    Self.Lock.Release;
+  end
+end;
+
 procedure TIdNotificationList.Assign(Src: TPersistent);
 var
   I:     Integer;
@@ -116,17 +135,11 @@ var
 begin
   if (Src is TIdNotificationList) then begin
     Other := Src as TIdNotificationList;
+
     Self.Lock.Acquire;
     try
       Self.List.Clear;
-
-      Other.Lock.Acquire;
-      try
-        for I := 0 to Other.List.Count - 1 do
-          Self.List.Add(Other.List[I]);
-      finally
-        Other.Lock.Release;
-      end;
+      Self.Add(Other);
     finally
       Self.Lock.Release;
     end
