@@ -1317,6 +1317,9 @@ begin
     CheckEquals(Copy(MalformedMessage, 1, 255),
                 Copy(Self.RawMessage, 1, 255),
                 'Unexpected raw message');
+    CheckEquals(7,
+                Self.Response.HeaderCount,
+                'Parsing bailed out after the first malformed header');
   finally
     Str.Free;
   end;
