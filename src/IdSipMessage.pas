@@ -56,6 +56,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     procedure ClearHeaders;
+    function  ContactCount: Cardinal;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HasExpiry: Boolean;
@@ -406,6 +407,18 @@ end;
 procedure TIdSipMessage.ClearHeaders;
 begin
   Self.Headers.Clear;
+end;
+
+function TIdSipMessage.ContactCount: Cardinal;
+var
+  Contacts: TIdSipContacts;
+begin
+  Contacts := TIdSipContacts.Create(Self.Headers);
+  try
+    Result := Contacts.Count;
+  finally
+    Contacts.Free;
+  end;
 end;
 
 function TIdSipMessage.FirstContact: TIdSipContactHeader;

@@ -38,6 +38,7 @@ type
     procedure TestAddHeaders;
     procedure TestAssignCopiesBody;
     procedure TestClearHeaders;
+    procedure TestContactCount;
     procedure TestFirstContact;
     procedure TestFirstHeader;
     procedure TestHasExpiry;
@@ -358,6 +359,21 @@ begin
   Self.Msg.ClearHeaders;
 
   CheckEquals(0, Self.Msg.HeaderCount, 'Headers not cleared');
+end;
+
+procedure TestTIdSipMessage.TestContactCount;
+begin
+  Self.Msg.ClearHeaders;
+  CheckEquals(0, Self.Msg.ContactCount, 'No headers');
+
+  Self.Msg.AddHeader(ContactHeaderFull);
+  CheckEquals(1, Self.Msg.ContactCount, 'Contact');
+
+  Self.Msg.AddHeader(ViaHeaderFull);
+  CheckEquals(1, Self.Msg.ContactCount, 'Contact + Via');
+
+  Self.Msg.AddHeader(ContactHeaderFull);
+  CheckEquals(2, Self.Msg.ContactCount, '2 Contacts + Via');
 end;
 
 procedure TestTIdSipMessage.TestFirstContact;
