@@ -3,19 +3,42 @@ unit IdRTPServer;
 interface
 
 uses
-  Classes, IdRTP, IdSocketHandle, IdUDPServer;
+  Classes, Contnrs, IdRTP, IdSocketHandle, IdUDPServer;
 
 type
   TIdRTPReadEvent = procedure(Sender: TObject;
                               APacket: TIdRTPPacket;
                               ABinding: TIdSocketHandle) of object;
 
+  TIdRTPMemberEntry = class(TObject)
+  private
+    fControlAddress: String;
+    fSourceAddress:  String;
+    fSSRC:           Cardinal;
+  public
+    property ControlAddress: String   read fControlAddress write fControlAddress;
+    property SourceAddress:  String   read fSourceAddress write fSourceAddress;
+    property SSRC:           Cardinal read fSSRC write fSSRC;
+  end;
+
+  TIdRTPMembers = class(TObject)
+  private
+    List: TObjectList;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+  end;
+
   TIdRTPServer = class(TIdUDPServer)
   private
-    FProfile:   TIdRTPProfile;
-    FOnRTPRead: TIdRTPReadEvent;
+    FControlPort: Cardinal;
+    FMemberTable: TIdRTPMembers;
+    FOnRTPRead:   TIdRTPReadEvent;
+    FProfile:     TIdRTPProfile;
 
     procedure DoOnRTPRead(APacket: TIdRTPPacket; ABinding: TIdSocketHandle);
+
+    property MemberTable: TIdRTPMembers read FMemberTable;
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
   public
@@ -24,13 +47,33 @@ type
 
     property Profile: TIdRTPProfile read FProfile;
   published
-    property OnRTPRead: TIdRTPReadEvent read FOnRTPRead write FOnRTPRead;
+
+    property ControlPort: Cardinal        read FControlPort write FControlPort;
+    property OnRTPRead:   TIdRTPReadEvent read FOnRTPRead write FOnRTPRead;
   end;
 
 implementation
 
 uses
   IdSipConsts, Math;
+
+//******************************************************************************
+//* TIdRTPMembers                                                              *
+//******************************************************************************
+//* TIdRTPMembers Public methods ***********************************************
+
+constructor TIdRTPMembers.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdRTPMembers.Destroy;
+begin
+  Self.List.Free;
+  inherited Destroy;
+end;
 
 //******************************************************************************
 //* TIdRTPServer                                                               *
@@ -41,14 +84,19 @@ constructor TIdRTPServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.FProfile := TIdAudioVisualProfile.Create;
+  Self.FMemberTable := TIdRTPMembers.Create;
+  Self.FProfile     := TIdAudioVisualProfile.Create;
 
   Self.ThreadedEvent := true;
+
+  Self.DefaultPort := 8000;
+  Self.ControlPort := 8001;
 end;
 
 destructor TIdRTPServer.Destroy;
 begin
   Self.Profile.Free;
+  Self.MemberTable.Free;
 
   inherited Destroy;
 end;
@@ -64,7 +112,6 @@ begin
   Pkt := TIdRTPPacket.Create(Self.Profile);
   try
     Pkt.ReadFrom(AData);
-    Pkt.ReadPayload(AData);
     Self.DoOnRTPRead(Pkt, ABinding);
   finally
     Pkt.Free;

@@ -355,6 +355,7 @@ end;
 
 procedure TIdSipTransport.SendResponse(const R: TIdSipResponse);
 begin
+//  Self.RewriteOwnVia(R);
   Self.NotifyTransportSendingListeners(R);
 end;
 

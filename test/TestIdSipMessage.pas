@@ -42,7 +42,6 @@ type
     procedure TestSetContentType;
     procedure TestSetCSeq;
     procedure TestSetFrom;
-    procedure TestSetMaxForwards;
     procedure TestSetSipVersion;
     procedure TestSetTo;
   end;
@@ -82,6 +81,7 @@ type
     procedure TestMatchInviteServer;
     procedure TestMatchNonInviteClient;
     procedure TestMatchNonInviteServer;
+    procedure TestSetMaxForwards;
     procedure TestSetPath;
   end;
 
@@ -489,17 +489,6 @@ begin
   finally
     From.Free;
   end;
-end;
-
-procedure TestTIdSipMessage.TestSetMaxForwards;
-var
-  OrigMaxForwards: Byte;
-begin
-  OrigMaxForwards := Self.Msg.MaxForwards;
-
-  Self.Msg.MaxForwards := Self.Msg.MaxForwards + 1;
-
-  CheckEquals(OrigMaxForwards + 1, Self.Msg.MaxForwards, 'Max-Forwards not set');
 end;
 
 procedure TestTIdSipMessage.TestSetSipVersion;
@@ -1018,6 +1007,19 @@ begin
   Self.ReceivedRequest.Method := MethodRegister;
   Check(not Self.Request.Match(Self.ReceivedRequest),
         'Different method');
+end;
+
+procedure TestTIdSipRequest.TestSetMaxForwards;
+var
+  OrigMaxForwards: Byte;
+begin
+  OrigMaxForwards := Self.Request.MaxForwards;
+
+  Self.Request.MaxForwards := Self.Request.MaxForwards + 1;
+
+  CheckEquals(OrigMaxForwards + 1,
+              Self.Request.MaxForwards,
+              'Max-Forwards not set');
 end;
 
 procedure TestTIdSipRequest.TestSetPath;

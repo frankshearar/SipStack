@@ -6,13 +6,14 @@ uses
   Classes, SysUtils;
 
 type
-  TIdCardinalArray  = array of Cardinal;
-  TIdNTPTimestamp   = Cardinal;
-  TIdRTPCsrcCount   = 0..15;
-  TIdRTPPayloadType = 0..127;
-  TIdRTPSequenceNo  = Word;
-  TIdRTPVersion     = 0..3;
-  TIdT140BlockCount = Word;
+  TIdCardinalArray   = array of Cardinal;
+  TIdNTPTimestamp    = Cardinal;
+  TIdRTCPSourceCount = 0..31;
+  TIdRTPCsrcCount    = 0..15;
+  TIdRTPPayloadType  = 0..127;
+  TIdRTPSequenceNo   = Word;
+  TIdRTPVersion      = 0..3;
+  TIdT140BlockCount  = Word;
 
   // I am an Encoding. I am described in an SDP payload (RFC 2327),
   // and instantiated by things that need to describe these sorts
@@ -174,24 +175,46 @@ type
     function  TransportDesc: String; override;
   end;
 
+  // I'm a Header Extension. RFC 3550 doesn't define an interpretation for my
+  // data beyond the length field, so it's up to my subclasses to provide more
+  // meaningful properties.
+  TIdRTPHeaderExtension = class(TObject)
+  private
+    fData:                array of Cardinal;
+    fProfileDefinedValue: Word;
+
+    function  GetData(Index: Word): Cardinal;
+    function  GetLength: Word;
+    procedure SetData(Index: Word; const Value: Cardinal);
+    procedure SetLength(const Value: Word);
+  public
+    procedure ReadFrom(Src: TStream);
+    procedure PrintOn(Dest: TStream);
+
+    property Length:              Word     read GetLength write SetLength;
+    property ProfileDefinedValue: Word     read fProfileDefinedValue write fProfileDefinedValue;
+    property Data[Index: Word]:   Cardinal read GetData write SetData;
+  end;
+
   // I am a packet of the Real-time Transport Protocol.
   //
   // I currently do not support the Header Extension as defined in RFC 3550,
   // section 5.3.1, nor do I have timestamp (either RTP or NTP) information.
   TIdRTPPacket = class(TObject)
   private
-    fCsrcCount:    TIdRTPCsrcCount;
-    fCsrcIDs:      TIdCardinalArray;
-    fHasExtension: Boolean;
-    fHasPadding:   Boolean;
-    fIsMarker:     Boolean;
-    fPayload:      TIdRTPPayload;
-    fPayloadType:  TIdRTPPayloadType;
-    fSequenceNo:   TIdRTPSequenceNo;
-    fSyncSrcID:    Cardinal;
-    fTimestamp:    TIdNTPTimestamp;
-    fVersion:      TIdRTPVersion;
-    Profile:       TIdRTPProfile;
+    fCsrcCount:       TIdRTPCsrcCount;
+    fCsrcIDs:         TIdCardinalArray;
+    fHasExtension:    Boolean;
+    fHasPadding:      Boolean;
+    fHeaderExtension: TIdRTPHeaderExtension;
+    fIsMarker:        Boolean;
+    fPayload:         TIdRTPPayload;
+    fPayloadType:     TIdRTPPayloadType;
+    fSequenceNo:      TIdRTPSequenceNo;
+    fSyncSrcID:       Cardinal;
+    fTimestamp:       TIdNTPTimestamp;
+    fVersion:         TIdRTPVersion;
+    Profile:          TIdRTPProfile;
 
     procedure CreatePayload(const Encoding: TIdRTPEncoding);
     function  GetCsrcCount: TIdRTPCsrcCount;
@@ -208,17 +231,58 @@ type
     procedure ReadPayload(Src: TStream); overload;
     procedure ReadPayload(Src: String); overload;
 
-    property CsrcCount:                       TIdRTPCsrcCount   read GetCsrcCount write SetCsrcCount;
-    property CsrcIDs[Index: TIdRTPCsrcCount]: Cardinal          read GetCsrcID write SetCsrcID;
-    property HasExtension:                    Boolean           read fHasExtension write fHasExtension;
-    property HasPadding:                      Boolean           read fHasPadding write fHasPadding;
-    property IsMarker:                        Boolean           read fIsMarker write fIsMarker;
-    property Payload:                         TIdRTPPayload     read fPayload;
-    property PayloadType:                     TIdRTPPayloadType read fPayloadType write fPayloadType;
-    property SequenceNo:                      TIdRTPSequenceNo  read fSequenceNo write fSequenceNo;
-    property SyncSrcID:                       Cardinal          read fSyncSrcID write fSyncSrcID;
-    property Timestamp:                       TIdNTPTimestamp   read fTimestamp write fTimestamp;
-    property Version:                         TIdRTPVersion     read fVersion write fVersion;
+    property CsrcCount:                       TIdRTPCsrcCount       read GetCsrcCount write SetCsrcCount;
+    property CsrcIDs[Index: TIdRTPCsrcCount]: Cardinal              read GetCsrcID write SetCsrcID;
+    property HasExtension:                    Boolean               read fHasExtension write fHasExtension;
+    property HasPadding:                      Boolean               read fHasPadding write fHasPadding;
+    property HeaderExtension:                 TIdRTPHeaderExtension read fHeaderExtension;
+    property IsMarker:                        Boolean               read fIsMarker write fIsMarker;
+    property Payload:                         TIdRTPPayload         read fPayload;
+    property PayloadType:                     TIdRTPPayloadType     read fPayloadType write fPayloadType;
+    property SequenceNo:                      TIdRTPSequenceNo      read fSequenceNo write fSequenceNo;
+    property SyncSrcID:                       Cardinal              read fSyncSrcID write fSyncSrcID;
+    property Timestamp:                       TIdNTPTimestamp       read fTimestamp write fTimestamp;
+    property Version:                         TIdRTPVersion         read fVersion write fVersion;
+  end;
+
+  // I am a packet in the Real-time Transport Control Protocol, as defined in
+  // RFC 3550 section 6.
+  TIdRTCPPacket = class(TObject)
+  protected
+    function GetPacketType: Cardinal; virtual; abstract;
+  public
+    procedure PrintOn(Dest: TStream); virtual; abstract;
+    procedure ReadFrom(Src: TStream); virtual; abstract;
+  end;
+
+  TIdRTCPByePacket = class(TIdRTCPPacket)
+  private
+    fSources:      TIdCardinalArray;
+    fHasPadding:   Boolean;
+    fLength:       Word;
+    fReason:       String;
+    fReasonLength: Word;
+    fVersion:      TIdRTPVersion;
+
+    function  GetSourceCount: TIdRTCPSourceCount;
+    function  GetSource(Index: TIdRTCPSourceCount): Cardinal;
+    procedure SetSourceCount(const Value: TIdRTCPSourceCount);
+    procedure SetSource(Index: TIdRTCPSourceCount;
+                        const Value: Cardinal);
+  protected
+    function GetPacketType: Cardinal; override;
+  public
+    procedure PrintOn(Dest: TStream); override;
+    procedure ReadFrom(Src: TStream); override;
+
+    property HasPadding:                         Boolean            read fHasPadding write fHasPadding;
+    property Length:                             Word               read fLength write fLength;
+    property PacketType:                         Cardinal           read GetPacketType;
+    property Reason:                             String             read fReason write fReason;
+    property ReasonLength:                       Word               read fReasonLength write fReasonLength;
+    property SourceCount:                        TIdRTCPSourceCount read GetSourceCount write SetSourceCount;
+    property Sources[Index: TIdRTCPSourceCount]: Cardinal           read GetSource write SetSource;
+    property Version:                            TIdRTPVersion      read fVersion write fVersion;
   end;
 
   ENoPayloadTypeFound = class(Exception);
@@ -267,6 +331,22 @@ const
   InterleavedT140MimeType = 'audio/t140';
   RedundantT140MimeType   = 'text/RED';
   T140MimeType            = 'text/t140';
+
+  RTCPSenderReport       = 200;
+  RTCPReceiverReport     = 201;
+  RTCPSourceDescription  = 202;
+  RTCPGoodbye            = 203;
+  RTCPApplicationDefined = 204;
+
+  SDESEnd   = 0;
+  SDESCName = 1;
+  SDESName  = 2;
+  SDESEmail = 3;
+  SDESPhone = 4;
+  SDESLoc   = 5;
+  SDESTool  = 6;
+  SDESNote  = 7;
+  SDESPriv  = 8;
 
 implementation
 
@@ -330,6 +410,7 @@ var
   Buf:  array[1..BufLen] of Char;
   Read: Integer;
 begin
+  FillChar(Buf, Length(Buf), 0);
   Result := '';
 
   repeat
@@ -834,6 +915,55 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTPHeaderExtension                                                      *
+//******************************************************************************
+//* TIdRTPHeaderExtension Public methods ***************************************
+
+procedure TIdRTPHeaderExtension.ReadFrom(Src: TStream);
+var
+  I: Integer;
+begin
+  Self.ProfileDefinedValue := ReadWord(Src);
+  Self.Length              := ReadWord(Src);
+
+  for I := 0 to Self.Length - 1 do
+    Self.Data[I] := ReadCardinal(Src);
+end;
+
+procedure TIdRTPHeaderExtension.PrintOn(Dest: TStream);
+var
+  I: Integer;
+begin
+  WriteWord(Dest, Self.ProfileDefinedValue);
+  WriteWord(Dest, Self.Length);
+
+  for I := 0 to Self.Length - 1 do
+    WriteCardinal(Dest, Self.Data[I]);
+end;
+
+//* TIdRTPHeaderExtension Private methods ***************************************
+
+function TIdRTPHeaderExtension.GetData(Index: Word): Cardinal;
+begin
+  Result := fData[Index];
+end;
+
+function TIdRTPHeaderExtension.GetLength: Word;
+begin
+  Result := System.Length(fData);
+end;
+
+procedure TIdRTPHeaderExtension.SetData(Index: Word; const Value: Cardinal);
+begin
+  fData[Index] := Value;
+end;
+
+procedure TIdRTPHeaderExtension.SetLength(const Value: Word);
+begin
+  System.SetLength(fData, Value);
+end;
+
+//******************************************************************************
 //* TIdRTPPacket                                                               *
 //******************************************************************************
 //* TIdRTPPacket Public methods ************************************************
@@ -842,7 +972,8 @@ constructor TIdRTPPacket.Create(const Profile: TIdRTPProfile);
 begin
   inherited Create;
 
-  fPayload := TIdRTPPayload.NullPayload;
+  fHeaderExtension := TIdRTPHeaderExtension.Create;
+  fPayload         := TIdRTPPayload.NullPayload;
 
   Self.Profile := Profile;
   Self.Version := Self.DefaultVersion;
@@ -850,6 +981,8 @@ end;
 
 destructor TIdRTPPacket.Destroy;
 begin
+  fHeaderExtension.Free;
+
   if not Self.Payload.IsNull then
     Self.Payload.Free;
 
@@ -882,6 +1015,11 @@ begin
 
   for I := 1 to Self.CsrcCount do
     Self.CsrcIDs[I - 1] := ReadCardinal(Src);
+
+  if Self.HasExtension then
+    Self.HeaderExtension.ReadFrom(Src);
+
+  Self.ReadPayload(Src);  
 end;
 
 procedure TIdRTPPacket.PrintOn(Dest: TStream);
@@ -955,6 +1093,76 @@ end;
 procedure TIdRTPPacket.SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
 begin
   fCsrcIDs[Index] := Value;
+end;
+
+//******************************************************************************
+//* TIdRTCPByePacket                                                           *
+//******************************************************************************
+//* TIdRTCPByePacket Public methods ********************************************
+
+procedure TIdRTCPByePacket.PrintOn(Dest: TStream);
+begin
+end;
+
+procedure TIdRTCPByePacket.ReadFrom(Src: TStream);
+var
+  B: Byte;
+  I: Integer;
+  S: PChar;
+begin
+  Src.Read(B, 1);
+  Self.Version    := B and $C0 shr 6;
+  Self.HasPadding := (B and $20) <> 0;
+
+  Self.SourceCount := B and $1F;
+
+  Src.Read(B, 1);
+  Assert(RTCPGoodBye = B, 'TIdRTCPByePacket packet type');
+
+  Self.Length := ReadWord(Src);
+
+  for I := 0 to Self.SourceCount - 1 do
+    Self.Sources[I] := ReadCardinal(Src);
+
+  Self.ReasonLength := ReadWord(Src);
+
+  S := AllocMem(Self.ReasonLength);
+  try
+    Src.Read(S^, Self.ReasonLength);
+    Self.Reason := S;
+  finally
+    FreeMem(S);
+  end;
+end;
+
+//* TIdRTCPByePacket Protected methods *****************************************
+
+function TIdRTCPByePacket.GetPacketType: Cardinal;
+begin
+  Result := RTCPGoodbye;
+end;
+
+//* TIdRTCPByePacket Private methods *******************************************
+
+function TIdRTCPByePacket.GetSourceCount: TIdRTCPSourceCount;
+begin
+  Result := System.Length(fSources);
+end;
+
+function TIdRTCPByePacket.GetSource(Index: TIdRTCPSourceCount): Cardinal;
+begin
+  Result := fSources[Index];
+end;
+
+procedure TIdRTCPByePacket.SetSourceCount(const Value: TIdRTCPSourceCount);
+begin
+  SetLength(fSources, Value);
+end;
+
+procedure TIdRTCPByePacket.SetSource(Index: TIdRTCPSourceCount;
+                                     const Value: Cardinal);
+begin
+  fSources[Index] := Value;
 end;
 
 initialization

@@ -72,7 +72,6 @@ const
                    + BasicBody;
   LocalLoopResponse = 'SIP/2.0 486 Busy Here'#13#10
                 + 'Via: SIP/2.0/TCP 127.0.0.1;branch=z9hG4bK776asdhds'#13#10
-                + 'Max-Forwards: 70'#13#10
                 + 'To: Wintermute <sip:franks@127.0.0.1>;tag=1928301775'#13#10
                 + 'From: Case <sip:franks@127.0.0.1>;tag=1928301774'#13#10
                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10

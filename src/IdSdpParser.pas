@@ -315,6 +315,8 @@ type
     procedure PrintUriField(Dest: TStream);
     procedure PrintVersionField(Dest: TStream);
   public
+    class function CreateFrom(Src: TStream): TIdSdpPayload;
+
     destructor Destroy; override;
 
     function  AllDescriptionsHaveConnections: Boolean;
@@ -324,6 +326,7 @@ type
     function  HasKey: Boolean;
     procedure InitializeProfile(Profile: TIdRTPProfile);
     procedure PrintOn(Dest: TStream);
+    procedure ReadFrom(Src: TStream);
 
     property Attributes:        TIdSdpAttributes        read GetAttributes;
     property Bandwidths:        TIdSdpBandwidths        read GetBandwidths;
@@ -1169,6 +1172,18 @@ end;
 //******************************************************************************
 //* TIdSdpPayload Public methods ***********************************************
 
+class function TIdSdpPayload.CreateFrom(Src: TStream): TIdSdpPayload;
+begin
+  Result := TIdSdpPayload.Create;
+  try
+    Result.ReadFrom(Src);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 destructor TIdSdpPayload.Destroy;
 begin
   fAttributes.Free;
@@ -1266,6 +1281,20 @@ begin
 
   Self.Attributes.PrintOn(Dest);
   Self.MediaDescriptions.PrintOn(Dest);
+end;
+
+procedure TIdSdpPayload.ReadFrom(Src: TStream);
+var
+  P: TIdSdpParser;
+begin
+  P := TIdSdpParser.Create;
+  try
+    P.Source := Src;
+
+    P.Parse(Self);
+  finally
+    P.Free;
+  end;
 end;
 
 //* TIdSdpPayload Private methods **********************************************

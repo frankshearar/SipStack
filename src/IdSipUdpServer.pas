@@ -111,8 +111,8 @@ begin
         Msg.ReadBody(Parser.Source);
 
         if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
-          or (Msg.LastHop.SentBy <> ABinding.IP) then
-          Msg.LastHop.Received := ABinding.IP;
+          or (Msg.LastHop.SentBy <> ABinding.PeerIP) then
+          Msg.LastHop.Received := ABinding.PeerIP;
 
         Msg.Accept(Self);
       finally

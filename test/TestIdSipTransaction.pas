@@ -990,7 +990,6 @@ begin
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
 
   Self.Response                                    := TIdSipResponse.Create;
-  Self.Response.MaxForwards                        := 70;
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Response.From.DisplayName                   := 'Case';

@@ -38,14 +38,12 @@ type
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
     function  GetFrom: TIdSipFromHeader;
-    function  GetMaxForwards: Byte;
     function  GetTo: TIdSipToHeader;
     procedure SetCallID(const Value: String);
     procedure SetContentLength(const Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(const Value: TIdSipCSeqHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
-    procedure SetMaxForwards(const Value: Byte);
     procedure SetPath(const Value: TIdSipViaPath);
     procedure SetTo(const Value: TIdSipToHeader);
   protected
@@ -59,7 +57,7 @@ type
     procedure AddHeader(const Header: TIdSipHeader); overload;
     procedure AddHeaders(const Headers: TIdSipHeaderList);
     procedure Assign(Src: TPersistent); override;
-    function  AsString: String; virtual;
+    function  AsString: String;
     procedure ClearHeaders;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
@@ -81,7 +79,6 @@ type
     property CSeq:          TIdSipCSeqHeader read GetCSeq write SetCSeq;
     property From:          TIdSipFromHeader read GetFrom write SetFrom;
     property Headers:       TIdSipHeaders    read fHeaders;
-    property MaxForwards:   Byte             read GetMaxForwards write SetMaxForwards;
     property Path:          TIdSipViaPath    read fPath write SetPath;
     property SIPVersion:    String           read fSIPVersion write fSIPVersion;
     property ToHeader:      TIdSipToHeader   read GetTo write SetTo;
@@ -94,6 +91,8 @@ type
     fMethod:     String;
     fRequestUri: TIdURI;
 
+    function  GetMaxForwards: Byte;
+    procedure SetMaxForwards(const Value: Byte);
     procedure SetRequestUri(const Value: TIdURI);
   protected
     function FirstLine: String; override;
@@ -102,7 +101,7 @@ type
 
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
-    function  AsString: String; override;
+    function  DefaultMaxForwards: Cardinal;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -113,8 +112,9 @@ type
     function  MalformedException: ExceptClass; override;
     function  Match(const Msg: TIdSipMessage): Boolean;
 
-    property Method:     String read fMethod write fMethod;
-    property RequestUri: TIdURI read fRequestUri write SetRequestUri;
+    property MaxForwards: Byte   read GetMaxForwards write SetMaxForwards;
+    property Method:      String read fMethod write fMethod;
+    property RequestUri:  TIdURI read fRequestUri write SetRequestUri;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -490,14 +490,6 @@ begin
   Result := Self.FirstHeader(FromHeaderFull) as TIdSipFromHeader;
 end;
 
-function TIdSipMessage.GetMaxForwards: Byte;
-begin
-  if (Self.FirstHeader(MaxForwardsHeader).Value = '') then
-    Self.MaxForwards := DefaultMaxForwards;
-
-  Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
-end;
-
 function TIdSipMessage.GetTo: TIdSipToHeader;
 begin
   Result := Self.FirstHeader(ToHeaderFull) as TIdSipToHeader;
@@ -526,11 +518,6 @@ end;
 procedure TIdSipMessage.SetFrom(const Value: TIdSipFromHeader);
 begin
   Self.FirstHeader(FromHeaderFull).Assign(Value);
-end;
-
-procedure TIdSipMessage.SetMaxForwards(const Value: Byte);
-begin
-  Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
 
 procedure TIdSipMessage.SetPath(const Value: TIdSipViaPath);
@@ -578,12 +565,9 @@ begin
   Self.RequestUri := R.RequestUri;
 end;
 
-function TIdSipRequest.AsString: String;
+function TIdSipRequest.DefaultMaxForwards: Cardinal;
 begin
-  if not Self.HasHeader(MaxForwardsHeader) then
-    Self.MaxForwards := DefaultMaxForwards;
-
-  Result := inherited AsString;
+  Result := 70;
 end;
 
 function TIdSipRequest.HasSipsUri: Boolean;
@@ -693,6 +677,19 @@ begin
 end;
 
 //* TIdSipRequest Private methods **********************************************
+
+function TIdSipRequest.GetMaxForwards: Byte;
+begin
+  if (Self.FirstHeader(MaxForwardsHeader).Value = '') then
+    Self.MaxForwards := Self.DefaultMaxForwards;
+
+  Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
+end;
+
+procedure TIdSipRequest.SetMaxForwards(const Value: Byte);
+begin
+  Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
+end;
 
 procedure TIdSipRequest.SetRequestUri(const Value: TIdURI);
 begin

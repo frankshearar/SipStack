@@ -383,8 +383,8 @@ begin
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
             if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
-              or (Msg.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
-              Msg.LastHop.Received := AThread.Connection.Socket.Binding.IP;
+              or (Msg.LastHop.SentBy <> AThread.Connection.Socket.Binding.PeerIP) then
+              Msg.LastHop.Received := AThread.Connection.Socket.Binding.PeerIP;
 
             if Msg.IsRequest then
               Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);

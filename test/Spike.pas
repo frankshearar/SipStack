@@ -4,22 +4,28 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipMessage, IdSipTransaction,
-  IdSipTransport, StdCtrls;
+  IdSipTransport, StdCtrls, SyncObjs;
 
 type
   TrnidSpike = class(TForm,
+                     IIdSipDataListener,
                      IIdSipObserver,
                      IIdSipSessionListener,
                      IIdSipTransportListener,
                      IIdSipTransportSendingListener)
     Log: TMemo;
     Panel1: TPanel;
-    InviteSelf: TButton;
     Label1: TLabel;
     SessionCounter: TLabel;
-    procedure InviteSelfClick(Sender: TObject);
+    Label2: TLabel;
+    DataCount: TLabel;
+    UiTimer: TTimer;
+    procedure UiTimerTimer(Sender: TObject);
   private
+    ByteCount: Integer;
+    DataStore: TStream;
     Dispatch:  TIdSipTransactionDispatcher;
+    Lock:      TCriticalSection;
     Transport: TIdSipTransport;
     UA:        TIdSipUserAgentCore;
 
@@ -29,6 +35,7 @@ type
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
+    procedure OnNewData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -66,11 +73,15 @@ var
 begin
   inherited Create(AOwner);
 
+  Self.ByteCount := 0;
+  Self.DataStore := TFileStream.Create('..\etc\dump.wav', fmCreate or fmShareDenyWrite);
+  Self.Lock      := TCriticalSection.Create;
+
   Self.Transport := TIdSipUdpTransport.Create(IdPORT_SIP);
   Binding := Self.Transport.Bindings.Add;
-  Binding.IP := GStack.LocalAddress;
+  Binding.IP := '192.168.1.43';
   Binding.Port := 5060;
-  Self.Transport.HostName := IndyGetHostName;
+  Self.Transport.HostName := Binding.IP;
 
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
@@ -85,7 +96,7 @@ begin
 
   Contact := TIdSipContactHeader.Create;
   try
-    Contact.Value := 'sip:franks@' + IndyGetHostName;
+    Contact.Value := 'sip:franks@' + Self.Transport.HostName;
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -93,7 +104,7 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@' + IndyGetHostName;
+    From.Value := 'sip:franks@' + Self.Transport.HostName;
     Self.UA.From := From;
   finally
     From.Free;
@@ -109,6 +120,8 @@ begin
   Self.UA.Free;
   Self.Dispatch.Free;
   Self.Transport.Free;
+
+  Self.DataStore.Free;
 
   inherited Destroy;
 end;
@@ -139,9 +152,22 @@ procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
 begin
 end;
 
+procedure TrnidSpike.OnNewData(const Data: TStream);
+begin
+  Self.Lock.Acquire;
+  try
+    Inc(Self.ByteCount, Data.Size);
+
+    Self.DataStore.CopyFrom(Data, 0);
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
 procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
 begin
   Session.AcceptCall;
+  Session.AddDataListener(Self);
 end;
 
 procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;
@@ -168,18 +194,15 @@ begin
   Self.LogMessage(Response);
 end;
 
-//* TrnidSpike Private methods *************************************************
+//* TrnidSpike Published methods ***********************************************
 
-procedure TrnidSpike.InviteSelfClick(Sender: TObject);
-var
-  Local: TIdSipToHeader;
+procedure TrnidSpike.UiTimerTimer(Sender: TObject);
 begin
-  Local := TIdSipToHeader.Create;
+  Self.Lock.Acquire;
   try
-    Local.Value := 'Frank <sip:franks@wsfrank:15060>';
-    Self.UA.Call(Local);
+    DataCount.Caption := IntToStr(Self.ByteCount);
   finally
-    Local.Free;
+    Self.Lock.Release;
   end;
 end;
 

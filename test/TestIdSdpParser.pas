@@ -338,6 +338,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
+    procedure TestCreateFrom;
     procedure TestGetRtpMapAttributes;
     procedure TestInitializeOnEmptySdpPayload;
     procedure TestInitializeOnSingleMediaSdp;
@@ -3457,6 +3458,32 @@ begin
   Self.SetToMinimumPayload(Self.Payload);
 
   CheckEquals(MinimumPayload, Self.Payload.AsString, 'AsString');
+end;
+
+procedure TestTIdSdpPayload.TestCreateFrom;
+var
+  Dest:    TStringStream;
+  Payload: TIdSdpPayload;
+  Src:     TStringStream;
+begin
+  Src := TStringStream.Create(MinimumPayload);
+  try
+    Payload := TIdSdpPayload.CreateFrom(Src);
+    try
+      Dest := TStringStream.Create('');
+      try
+        Payload.PrintOn(Dest);
+
+        CheckEquals(MinimumPayload, Dest.DataString, 'ReadFrom');
+      finally
+        Dest.Free;
+      end;
+    finally
+      Payload.Free;
+    end;
+  finally
+    Src.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayload.TestGetRtpMapAttributes;

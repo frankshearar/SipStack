@@ -174,8 +174,9 @@ type
     function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
-    function DefaultHostName: String;
-    function DefaultUserAgent: String;
+    function  DefaultFrom: String;
+    function  DefaultHostName: String;
+    function  DefaultUserAgent: String;
     procedure ReceiveRequest(const Request: TIdSipRequest;
                              const Transaction: TIdSipTransaction;
                              const Receiver: TIdSipTransport); override;
@@ -198,6 +199,7 @@ type
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure RemoveSession(const Session: TIdSipSession);
     function  SessionCount: Integer;
+    function  UserName: String;
 
     property Contact:       TIdSipContactHeader read GetContact write SetContact;
     property From:          TIdSipFromHeader    read GetFrom write SetFrom;
@@ -223,6 +225,8 @@ type
     fInvite:             TIdSipRequest;
     fIsEstablished:      Boolean;
     fIsTerminated:       Boolean;
+    Forwarders:          TObjectList;
+    ForwarderLock:       TCriticalSection;
     fProfile:            TIdRTPProfile;
     InitialTran:         TIdSipTransaction;
     InitialTransport:    TIdSipTransport;
@@ -230,6 +234,7 @@ type
     OpenTransactionLock: TCriticalSection;
     OpenTransactions:    TList;
     RTPClients:          TObjectList;
+    RTPLock:             TCriticalSection;
     RTPServers:          TObjectList;
     SessionListenerLock: TCriticalSection;
     SessionListeners:    TList;
@@ -237,6 +242,11 @@ type
     procedure AddOpenTransaction(const Transaction: TIdSipTransaction);
     procedure ApplyTo(const List: TList; const Lock: TCriticalSection; Proc: TIdSipProcedure);
     procedure CreateInternal(const UA: TIdSipUserAgentCore);
+    function  CreateInboundDialog(const Response: TIdSipResponse): TIdSipDialog;
+    function  CreateOutboundDialog(const Response: TIdSipResponse;
+                                   const Receiver: TIdSipTransport): TIdSipDialog;
+    function  CreateSdpReply: TIdSdpPayload;
+    function  DialogEstablished: Boolean;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEndedSession;
@@ -254,12 +264,21 @@ type
     procedure OnReceiveRTP(Sender: TObject;
                            APacket: TIdRTPPacket;
                            ABinding: TIdSocketHandle);
+    procedure OnReceiveUDP(Sender: TObject;
+                           Data: TStream;
+                           ABinding: TIdSocketHandle);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
-    procedure ProcessInviteBody(const Invite: TIdSipRequest);
-    procedure SetUpMediaStreams(const Payload: TIdSdpPayload);
+    procedure ProcessInviteBody(const Invite: TIdSipRequest;
+                                const Receiver: TIdSipTransport);
+    procedure SetUpMediaStreams(const Payload: TIdSdpPayload;
+                                const Receiver: TIdSipTransport);
+    procedure SetUpSingleStream(const Address: String;
+                                const Port: Cardinal;
+                                const Receiver: TIdSipTransport);
     procedure RejectRequest(const Request: TIdSipRequest;
                             const Transaction: TIdSipTransaction);
     procedure RemoveTransaction(const Transaction: TIdSipTransaction);
+    function  ServerAt(const Index: Integer): TIdRTPServer;
     procedure TerminateOpenTransaction(const Transaction: TIdSipTransaction);
 
     property Core:          TIdSipUserAgentCore read fCore;
@@ -296,10 +315,15 @@ type
 const
   MissingContactHeader = 'Missing Contact Header';
 
+  // we want to remove this ASAP
+const
+  MagicNumber = 10000;
+
 implementation
 
 uses
-  IdGlobal, IdSipConsts, IdSipDialogID, IdSipRandom, IdStack, SysUtils;
+  IdGlobal, IdMappedPortUDP, IdSimpleParser, IdSipConsts, IdSipDialogID,
+  IdSipRandom, IdStack, SysUtils, IdUDPServer;
 
 //******************************************************************************
 //* TIdSipAbstractCore                                                         *
@@ -367,6 +391,7 @@ begin
 
   Self.AddAllowedScheme(SipScheme);
 
+  Self.From.Value    := Self.DefaultFrom;
   Self.HostName      := Self.DefaultHostName;
   Self.UserAgentName := Self.DefaultUserAgent;
 end;
@@ -507,11 +532,13 @@ begin
       Self.Contact.Address.Protocol := SipsScheme;
 
     Result.AddHeader(Self.Contact);
-    Result.CallID   := Self.NextCallID;
-    Result.From     := Self.From;
-    Result.From.Tag := Self.NextTag;
-    Result.ToHeader := Dest;
+    Result.CallID      := Self.NextCallID;
+    Result.From        := Self.From;
+    Result.From.Tag    := Self.NextTag;
+    Result.MaxForwards := Result.DefaultMaxForwards;
+    Result.ToHeader    := Dest;
 
+    // This is a lie, but anyway. Pure hack to get X-Lite talking
     if (Pos(TransportParam, Dest.AsString) > 0) then
       Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
     else
@@ -639,6 +666,11 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipUserAgentCore.DefaultFrom: String;
+begin
+  Result := 'unknown <sip:unknown@' + Self.DefaultHostName + '>';
 end;
 
 function TIdSipUserAgentCore.DefaultHostName: String;
@@ -841,6 +873,11 @@ begin
   finally
     Self.SessionLock.Release;
   end;
+end;
+
+function TIdSipUserAgentCore.UserName: String;
+begin
+  Result := Self.From.Address.Username;
 end;
 
 //* TIdSipUserAgentCore Private methods ****************************************
@@ -1149,7 +1186,7 @@ begin
 
   Self.CreateInternal(UA);
   Self.Invite.Assign(Invite);
-  Self.ProcessInviteBody(Self.Invite);
+  Self.ProcessInviteBody(Self.Invite, Receiver);
 
   Self.IsInboundCall    := true;
   Self.InitialTran      := InitialTransaction;
@@ -1164,6 +1201,7 @@ begin
   Self.SessionListenerLock.Free;
 
   Self.RTPServers.Free;
+  Self.RTPLock.Free;
   Self.RTPClients.Free;
 
   Self.OpenTransactions.Free;
@@ -1171,6 +1209,9 @@ begin
 
   Self.Profile.Free;
   Self.Invite.Free;
+
+  Self.Forwarders.Free;
+  Self.ForwarderLock.Free;
 
   Self.DataListeners.Free;
   Self.DataListenerLock.Free;
@@ -1180,41 +1221,29 @@ end;
 
 procedure TIdSipSession.AcceptCall;
 var
-  ID:       TIdSipDialogID;
   Response: TIdSipResponse;
-  RouteSet: TIdSipHeaderList;
+  SdpReply: TIdSdpPayload;
 begin
   if Self.IsInboundCall then begin
-    Response := Self.Core.CreateResponse(Invite, SIPOK);
+    Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
     try
-      Response.ToHeader.Tag := Self.Core.NextTag;
-
-      if not Assigned(Self.Dialog) then begin
-        ID := TIdSipDialogID.Create(Response.CallID,
-                                    Response.ToHeader.Tag,
-                                    Self.Invite.From.Tag);
-        try
-          RouteSet := TIdSipHeadersFilter.Create(Invite.Headers,
-                                                 RecordRouteHeader);
-          try
-            fDialog := TIdSipDialog.Create(ID,
-                                           0,
-                                           Invite.CSeq.SequenceNo,
-                                           Invite.ToHeader.Address,
-                                           Invite.From.Address,
-                                           Invite.FirstContact.Address,
-                                           Self.InitialTransport.IsSecure and (Invite.HasSipsUri),
-                                           RouteSet);
-            Self.NotifyOfEstablishedSession;
-          finally
-            RouteSet.Free;
-          end;
-        finally
-          ID.Free;
-        end;
+      SdpReply := Self.CreateSdpReply;
+      try
+        Response.Body := SdpReply.AsString;
+      finally
+        SdpReply.Free;
       end;
 
-      Self.Dialog.HandleMessage(Invite);
+      Response.ContentLength := Length(Response.Body);
+      Response.ContentType   := SdpMimeType;
+      Response.ToHeader.Tag  := Self.Core.NextTag;
+
+      if not Self.DialogEstablished then begin
+        fDialog := Self.CreateInboundDialog(Response);
+        Self.NotifyOfEstablishedSession;
+      end;
+
+      Self.Dialog.HandleMessage(Self.Invite);
       Self.Dialog.HandleMessage(Response);
 
       Self.InitialTran.SendResponse(Response);
@@ -1365,22 +1394,133 @@ end;
 
 procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore);
 begin
-  Self.DataListenerLock := TCriticalSection.Create;
-  Self.DataListeners    := TList.Create;
+  Self.DataListenerLock    := TCriticalSection.Create;
+  Self.DataListeners       := TList.Create;
 
-  Self.fCore := UA;
-  Self.fInvite := TIdSipRequest.Create;
-  Self.fProfile := TIdAudioVisualProfile.Create;
-  Self.IsEstablished := false;
+  Self.fCore               := UA;
+
+  Self.ForwarderLock       := TCriticalSection.Create;
+  Self.Forwarders          := TObjectList.Create(true);
+
+  Self.fInvite             := TIdSipRequest.Create;
+  Self.fProfile            := TIdAudioVisualProfile.Create;
+  Self.IsEstablished       := false;
 
   Self.OpenTransactionLock := TCriticalSection.Create;
   Self.OpenTransactions    := TList.Create;
 
-  Self.RTPClients := TObjectList.Create(true);
-  Self.RTPServers := TObjectList.Create(true);
+  Self.RTPClients          := TObjectList.Create(true);
+  Self.RTPLock             := TCriticalSection.Create;
+  Self.RTPServers          := TObjectList.Create(true);
 
   Self.SessionListenerLock := TCriticalSection.Create;
   Self.SessionListeners    := TList.Create;
+end;
+
+function TIdSipSession.CreateInboundDialog(const Response: TIdSipResponse): TIdSipDialog;
+var
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipHeadersFilter;
+begin
+  try
+    ID := TIdSipDialogID.Create(Response.CallID,
+                                Response.ToHeader.Tag,
+                                Self.Invite.From.Tag);
+    try
+      RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
+                                             RecordRouteHeader);
+      try
+        Result := TIdSipDialog.Create(ID,
+                                       0,
+                                       Self.Invite.CSeq.SequenceNo,
+                                       Self.Invite.ToHeader.Address,
+                                       Self.Invite.From.Address,
+                                       Self.Invite.FirstContact.Address,
+                                       Self.InitialTransport.IsSecure and (Self.Invite.HasSipsUri),
+                                       RouteSet);
+      finally
+        RouteSet.Free;
+      end;
+    finally
+      ID.Free;
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipSession.CreateOutboundDialog(const Response: TIdSipResponse;
+                                           const Receiver: TIdSipTransport): TIdSipDialog;
+var
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipHeadersFilter;
+begin
+  ID := TIdSipDialogID.Create(Self.Invite.CallID,
+                              Self.Invite.From.Tag,
+                              Response.ToHeader.Tag);
+  try
+    RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
+                                           RecordRouteHeader);
+    try
+      Result := TIdSipDialog.Create(ID,
+                                    Self.Invite.CSeq.SequenceNo,
+                                    0,
+                                    Self.Invite.From.Address,
+                                    Self.Invite.ToHeader.Address,
+                                    Response.FirstContact.Address,
+                                    Receiver.IsSecure and Self.Invite.FirstContact.HasSipsUri,
+                                    RouteSet);
+      Self.NotifyOfEstablishedSession;
+    finally
+      RouteSet.Free;
+    end;
+  finally
+    ID.Free;
+  end;
+end;
+
+function TIdSipSession.CreateSdpReply: TIdSdpPayload;
+var
+  I: Integer;
+begin
+  Result := TIdSdpPayload.Create;
+  try
+    Result.Version := 0;
+    Result.Origin.UserName       := Self.Core.UserName;
+    Result.Origin.SessionID      := '0';
+    Result.Origin.SessionVersion := '0';
+    Result.Origin.NetType        := Id_SDP_IN;
+    Result.Origin.AddressType    := Id_IPv4;
+    Result.Origin.Address        := '192.168.1.43';
+    Result.Connection.NetType     := Id_SDP_IN;
+    Result.Connection.AddressType := Id_IPv4;
+    Result.Connection.Address     := '192.168.1.43';
+    Result.SessionName := '-';
+
+    for I := 0 to Self.RTPServers.Count - 1 do begin
+      Result.MediaDescriptions.Add(TIdSdpMediaDescription.Create);
+      Result.MediaDescriptions[I].MediaType := mtAudio;
+
+      if (Self.ServerAt(I).Bindings.Count > 0) then
+        Result.MediaDescriptions[I].Port := Self.ServerAt(I).Bindings[0].Port
+      else
+        Result.MediaDescriptions[I].Port := Self.ServerAt(I).DefaultPort;
+
+      Result.MediaDescriptions[I].Transport := Self.ServerAt(I).Profile.TransportDesc;
+      Result.MediaDescriptions[I].AddFormat('0');
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipSession.DialogEstablished: Boolean;
+begin
+  Result := Assigned(Self.fDialog);
 end;
 
 procedure TIdSipSession.MarkAsTerminated;
@@ -1460,33 +1600,10 @@ end;
 procedure TIdSipSession.OnReceiveResponse(const Response: TIdSipResponse;
                                           const Transaction: TIdSipTransaction;
                                           const Receiver: TIdSipTransport);
-var
-  ID:       TIdSipDialogID;
-  RouteSet: TIdSipHeadersFilter;
 begin
-  if not Assigned(Self.Dialog) then begin
-    ID := TIdSipDialogID.Create(Self.Invite.CallID,
-                                Self.Invite.From.Tag,
-                                Response.ToHeader.Tag);
-    try
-      RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
-                                             RecordRouteHeader);
-      try
-        fDialog := TIdSipDialog.Create(ID,
-                                       Self.Invite.CSeq.SequenceNo,
-                                       0,
-                                       Self.Invite.From.Address,
-                                       Self.Invite.ToHeader.Address,
-                                       Response.FirstContact.Address,
-                                       Receiver.IsSecure and Self.Invite.FirstContact.HasSipsUri,
-                                       RouteSet);
-        Self.NotifyOfEstablishedSession;
-      finally
-        RouteSet.Free;
-      end;
-    finally
-      ID.Free;
-    end;
+  if not Self.DialogEstablished then begin
+    fDialog := Self.CreateOutboundDialog(Response, Receiver);
+    Self.NotifyOfEstablishedSession;
   end;
 
   Self.Dialog.HandleMessage(Response);
@@ -1513,6 +1630,13 @@ begin
   end;
 end;
 
+procedure TIdSipSession.OnReceiveUDP(Sender: TObject;
+                                     Data: TStream;
+                                     ABinding: TIdSocketHandle);
+begin
+  Self.NotifyOfNewData(Data);
+end;
+
 procedure TIdSipSession.OnTerminated(const Transaction: TIdSipTransaction);
 begin
   Self.RemoveTransaction(Transaction);
@@ -1521,30 +1645,21 @@ begin
     Self.NotifyOfEndedSession;
 end;
 
-procedure TIdSipSession.ProcessInviteBody(const Invite: TIdSipRequest);
+procedure TIdSipSession.ProcessInviteBody(const Invite: TIdSipRequest;
+                                          const Receiver: TIdSipTransport);
 var
-  Parser: TIdSdpParser;
-  S:      TStringStream;
-  SDP:    TIdSdpPayload;
+  S:   TStringStream;
+  SDP: TIdSdpPayload;
 begin
   if (Invite.ContentType = SdpMimeType) then begin
     S := TStringStream.Create(Invite.Body);
     try
-      Parser := TIdSdpParser.Create;
+      SDP := TIdSdpPayload.CreateFrom(S);
       try
-        Parser.Source := S;
-
-        SDP := TIdSdpPayload.Create;
-        try
-          Parser.Parse(SDP);
-
-          SDP.InitializeProfile(Self.Profile);
-          Self.SetUpMediaStreams(SDP);
-        finally
-          SDP.Free;
-        end;
+        SDP.InitializeProfile(Self.Profile);
+        Self.SetUpMediaStreams(SDP, Receiver);
       finally
-        Parser.Free;
+        SDP.Free;
       end;
     finally
       S.Free;
@@ -1552,20 +1667,33 @@ begin
   end;
 end;
 
-procedure TIdSipSession.SetUpMediaStreams(const Payload: TIdSdpPayload);
+procedure TIdSipSession.SetUpMediaStreams(const Payload: TIdSdpPayload;
+                                          const Receiver: TIdSipTransport);
+var
+  I: Integer;
+begin
+  for I := 0 to Payload.MediaDescriptions.Count - 1 do
+    Self.SetUpSingleStream(Payload.Connection.Address,
+                           Payload.MediaDescriptions[I].Port,
+                           Receiver);
+end;
+
+procedure TIdSipSession.SetUpSingleStream(const Address: String;
+                                          const Port: Cardinal;
+                                          const Receiver: TIdSipTransport);
 var
   Binding:   TIdSocketHandle;
-  I:         Integer;
   NewClient: TIdRTPClient;
   NewServer: TIdRTPServer;
 begin
-  for I := 0 to Payload.MediaDescriptions.Count - 1 do begin
+  Self.RTPLock.Acquire;
+  try
     NewClient := TIdRTPClient.Create(nil);
     try
       Self.RTPClients.Add(NewClient);
 
-      NewClient.Host := Payload.Connection.Address;
-      NewClient.Port := Payload.MediaDescriptions[I].Port;
+      NewClient.Host := Address;
+      NewClient.Port := Port;
 
       NewServer := TIdRTPServer.Create(nil);
       try
@@ -1573,18 +1701,25 @@ begin
 
         NewServer.Profile.Assign(Self.Profile);
         NewServer.OnRTPRead := Self.OnReceiveRTP;
+//        NewServer.OnUDPRead := Self.OnReceiveUDP;
 
+        NewServer.Bindings.Clear;
         Binding := NewServer.Bindings.Add;
+//          Binding.IP := Receiver.Bindings[0].IP;
         Binding.Port := NewClient.Port;
         NewServer.Active := true;
       except
         Self.RTPServers.Remove(NewServer);
-        FreeAndNil(NewServer);
+
+        raise;
       end;
     except
       Self.RTPClients.Remove(NewClient);
-      FreeAndNil(NewClient);
+
+      raise;
     end;
+  finally
+    Self.RTPLock.Release;
   end;
 end;
 
@@ -1610,6 +1745,11 @@ begin
   finally
     Self.OpenTransactionLock.Release;
   end;
+end;
+
+function TIdSipSession.ServerAt(const Index: Integer): TIdRTPServer;
+begin
+  Result := Self.RTPServers[Index] as TIdRTPServer;
 end;
 
 procedure TIdSipSession.TerminateOpenTransaction(const Transaction: TIdSipTransaction);

@@ -27,7 +27,6 @@ const
   ContentTypeHeaderFull      = 'Content-Type';
   ContentTypeHeaderShort     = 'c';
   CSeqHeader                 = 'CSeq';
-  DefaultMaxForwards         = 70;
   DateHeader                 = 'Date';
   ErrorInfoHeader            = 'Error-Info';
   ExpiresHeader              = 'Expires';

@@ -1788,7 +1788,7 @@ begin
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
               (Msg as TIdSipRequest).RequestUri.GetFullURI,
               'Request-URI');
-  CheckEquals(70, Msg.MaxForwards, 'MaxForwards');
+  CheckEquals(70, (Msg as TIdSipRequest).MaxForwards, 'MaxForwards');
   CheckEquals(9,  Msg.HeaderCount, 'Header count');
 
   Self.CheckBasicMessage(Msg, CheckBody);

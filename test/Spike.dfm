@@ -19,6 +19,7 @@ object rnidSpike: TrnidSpike
     Width = 688
     Height = 429
     Align = alClient
+    ScrollBars = ssVertical
     TabOrder = 0
   end
   object Panel1: TPanel
@@ -30,27 +31,38 @@ object rnidSpike: TrnidSpike
     BevelOuter = bvNone
     TabOrder = 1
     object Label1: TLabel
-      Left = 416
+      Left = 5
       Top = 4
       Width = 71
       Height = 13
       Caption = 'Session Count:'
     end
     object SessionCounter: TLabel
-      Left = 490
+      Left = 79
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
-    object InviteSelf: TButton
-      Left = 0
-      Top = 0
-      Width = 75
-      Height = 25
-      Caption = 'Invite Self'
-      TabOrder = 0
-      OnClick = InviteSelfClick
+    object Label2: TLabel
+      Left = 490
+      Top = 4
+      Width = 57
+      Height = 13
+      Caption = 'Data Count:'
     end
+    object DataCount: TLabel
+      Left = 550
+      Top = 4
+      Width = 6
+      Height = 13
+      Caption = '0'
+    end
+  end
+  object UiTimer: TTimer
+    Interval = 100
+    OnTimer = UiTimerTimer
+    Left = 216
+    Top = 8
   end
 end

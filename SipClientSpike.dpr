@@ -3,6 +3,9 @@ program SipClientSpike;
 uses
   Forms,
   SpikeClient in 'test\SpikeClient.pas' {Spike},
+  IdRTP in 'src\IdRTP.pas',
+  IdRTPClient in 'src\IdRTPClient.pas',
+  IdRTPServer in 'src\IdRTPServer.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
   IdSipConsts in 'src\IdSipConsts.pas',

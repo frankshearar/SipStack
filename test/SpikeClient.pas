@@ -60,16 +60,16 @@ begin
   UA := TIdSipUserAgentCore.Create;
   UA.Dispatcher := TIdSipTransactionDispatcher.Create;
 
-  Tran := TIdSipTCPTransport.Create(IdPORT_SIP + 10000);
+  Tran := TIdSipUDPTransport.Create(IdPORT_SIP + 10000);
   Tran.Bindings.Add.IP := GStack.LocalAddress;
   Tran.HostName := 'wsfrank';
   Tran.AddTransportListener(Self);
   Tran.AddTransportSendingListener(Self);
   UA.Dispatcher.AddTransport(Tran);
 
-  UA.From.Address.URI    := 'sip:franks' + ':' + IntToStr(Tran.Bindings[0].Port) + '@' + Tran.HostName;
-  UA.From.Tag            := '1';
-  UA.Contact.Address.URI := UA.From.Address.URI;
+  UA.From.Address.URI := 'sip:franks' + '@' + Tran.HostName + ':' + IntToStr(Tran.Bindings[0].Port);
+  UA.From.Tag         := '1';
+  UA.Contact.Address  := UA.From.Address;
   UA.HostName := Tran.HostName;
 
   UA.AddSessionListener(Self);

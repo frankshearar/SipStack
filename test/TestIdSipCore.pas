@@ -149,6 +149,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAcceptCall;
+    procedure TestAcceptCallReturnsSdp;
     procedure TestAddDataListener;
     procedure TestAddSessionListener;
     procedure TestCall;
@@ -176,7 +177,7 @@ implementation
 
 uses
   IdException, IdGlobal, IdRTP, IdSipConsts, IdSocketHandle,
-  IdUdpServer, SyncObjs, SysUtils, TestMessages;
+  IdUdpServer, SyncObjs, SysUtils, TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
@@ -1788,6 +1789,49 @@ begin
   Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
 end;
 
+procedure TestTIdSipSession.TestAcceptCallReturnsSdp;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+  S:             TStringStream;
+  SDP:           TIdSdpPayload;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+
+  Self.Session.AcceptCall;
+
+  Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
+        'no responses sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  Check(Response.HasHeader(ContentTypeHeaderFull),
+        'No Content-Type header');
+  Check(Response.ContentLength > 0,
+        'Content-Length = 0');
+  Check(Response.Body <> '',
+        'Response missing body');
+
+  S := TStringStream.Create(Response.Body);
+  try
+    SDP := TIdSdpPayload.CreateFrom(S);
+    try
+      CheckEquals(Self.Core.From.Address.UserName,
+                  SDP.Origin.UserName,
+                  'Origin username');
+      Check(SDP.MediaDescriptions.Count > 0,
+            'No media descriptions');
+      Check(Self.SimpleSdp.MediaDescriptions[0].Port <> 0,
+            'Media description port');
+    finally
+      SDP.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestAddDataListener;
 var
   L1, L2: TIdSipTestDataListener;
@@ -2049,7 +2093,7 @@ begin
   try
     try
       Binding := Server.Bindings.Add;
-      Binding.Port := 11000;
+      Binding.Port := Self.SimpleSdp.MediaDescriptions[0].Port;
       Server.Active := true;
       Fail('(Server) Media stream wasn''t set up');
     except
@@ -2062,27 +2106,47 @@ end;
 
 procedure TestTIdSipSession.TestMediaStreamsSetUp;
 var
-  Binding: TIdSocketHandle;
-  I:       Integer;
-  Server:  TIdUdpServer;
+  Binding:  TIdSocketHandle;
+  I:        Integer;
+  Response: TIdSipResponse;
+  ResponseCount: Cardinal;
+  S:        TStringStream;
+  SDP:      TIdSdpPayload;
+  Server:   TIdUdpServer;
 begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.Invite.Body := Self.MultiStreamSdp.AsString;
 
   Self.SimulateRemoteInvite;
+  Self.Session.AcceptCall;
+  CheckEquals(ResponseCount + 1,
+              Self.Dispatch.Transport.SentResponseCount,
+              'No response sent');
+  Response := Self.Dispatch.Transport.LastResponse;
 
   Server := TIdUdpServer.Create(nil);
   try
     Binding := Server.Bindings.Add;
 
-    for I := 0 to Self.MultiStreamSdp.MediaDescriptions.Count - 1 do begin
+    S := TStringStream.Create(Response.Body);
+    try
+      SDP := TIdSdpPayload.CreateFrom(S);
       try
-        Binding.Port := Self.MultiStreamSdp.MediaDescriptions[I].Port;
-        Server.Active := true;
-        Fail('(Server) Media stream wasn''t set up on port '
-           + IntToStr(Self.MultiStreamSdp.MediaDescriptions[I].Port));
-      except
-        on EIdCouldNotBindSocket do;
+        for I := 0 to SDP.MediaDescriptions.Count - 1 do begin
+          try
+            Binding.Port := SDP.MediaDescriptions[I].Port;
+            Server.Active := true;
+            Fail('(Server) Media stream wasn''t set up on port '
+               + IntToStr(SDP.MediaDescriptions[I].Port));
+          except
+            on EIdCouldNotBindSocket do;
+          end;
+        end;
+      finally
+        SDP.Free;
       end;
+    finally
+      S.Free;
     end;
   finally
     Server.Free;
