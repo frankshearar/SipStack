@@ -1232,6 +1232,8 @@ end;
 
 function TIdSipAbstractCore.AuthenticationStatusCode: Cardinal;
 begin
+  // Proxies and User Agent Servers use different Status-Codes to
+  // challenge/authenticate.
   Result := SIPUnauthorized;
 end;
 
