@@ -1844,7 +1844,6 @@ begin
 
   if FirstResponse then
     Self.NotifyOfResponse(R, T);
-
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
@@ -1879,11 +1878,13 @@ procedure TIdSipClientInviteTransaction.TrySendACK(R: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.InitialRequest.AckFor(R);
-  try
-    Self.TrySendRequest(Ack);
-  finally
-    Ack.Free;
+  if not R.IsOK then begin
+    Ack := Self.InitialRequest.AckFor(R);
+    try
+      Self.TrySendRequest(Ack);
+    finally
+      Ack.Free;
+    end;
   end;
 end;
 
