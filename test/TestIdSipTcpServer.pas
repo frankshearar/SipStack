@@ -12,8 +12,9 @@ unit TestIdSipTcpServer;
 interface
 
 uses
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPClient, IdTCPConnection,
-  IdTCPServer, SyncObjs, SysUtils, TestFramework, TestFrameworkSip;
+  IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPClient,
+  IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
+  TestFrameworkSip;
 
 type
   TIdTcpClientClass = class of TIdTcpClient;
@@ -92,6 +93,7 @@ type
     Client:                 TIdTcpClient;
     ClientReceivedResponse: Boolean;
     ConnectionDropped:      Boolean;
+    HighPortLocation:       TIdSipLocation;
     HighPortServer:         TIdSipTcpServer;
     LowPortServer:          TIdSipTcpServer;
     MethodCallCount:        Cardinal;
@@ -334,6 +336,10 @@ begin
   Binding.IP   := GStack.LocalAddress;
   Binding.Port := IdPORT_SIP + 10000;
 
+  Self.HighPortLocation := TIdSipLocation.Create(TcpTransport,
+                                                 Binding.IP,
+                                                 Binding.Port);
+
   Self.LowPortServer.Active  := true;
   Self.HighPortServer.Active := true;
 
@@ -353,6 +359,7 @@ begin
 
   Self.HighPortServer.DestroyClient(Self.SipClient);
   Self.LowPortServer.Free;
+  Self.HighPortLocation.Free;
   Self.HighPortServer.Free;
   Self.Client.Free;
 
@@ -534,7 +541,7 @@ begin
   Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
   try
     Response.StatusCode := SIPOK;
-    LowPortServer.SendResponse(Response);
+    Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
   finally
     Response.Free;
   end;
@@ -692,7 +699,7 @@ begin
     Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
     try
       Response.StatusCode := SIPOK;
-      Self.LowPortServer.SendResponse(Response);
+      Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
     finally
       Response.Free;
     end;
@@ -749,7 +756,7 @@ begin
               Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
               Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
               Response.StatusCode       := SIPOK;
-              Self.LowPortServer.SendResponse(Response);
+              Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
             finally
               Response.Free;
             end;
