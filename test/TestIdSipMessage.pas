@@ -74,6 +74,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAckForEstablishingDialog;
     procedure TestAckFor;
     procedure TestAckForWithRoute;
     procedure TestAddressOfRecord;
@@ -837,13 +838,13 @@ end;
 
 //* TestTIdSipRequest Published methods ****************************************
 
-procedure TestTIdSipRequest.TestAckFor;
+procedure TestTIdSipRequest.TestAckForEstablishingDialog;
 var
   Ack: TIdSipRequest;
 begin
   Self.Request.Method      := MethodInvite;
   Self.Response.StatusCode := SIPOK;
-  
+
   Ack := Self.Request.AckFor(Self.Response);
   try
     Check(Ack.IsAck, 'Method');
@@ -858,8 +859,50 @@ begin
                 Ack.ToHeader.AsString,
                 'To');
     CheckEquals(1, Ack.Path.Count, 'Via path hop count');
-    CheckEquals(Self.Response.LastHop.AsString,
-                Ack.LastHop.AsString, 'Via last hop');
+    CheckEquals(Self.Response.LastHop.Value,
+                Ack.LastHop.Value,
+                'Via last hop');
+    CheckNotEquals(Self.Response.LastHop.Branch,
+                Ack.LastHop.Branch,
+                'Via last hop branch');
+    CheckEquals(Self.Request.Cseq.SequenceNo,
+                Ack.Cseq.SequenceNo,
+                'CSeq sequence no');
+    CheckEquals(MethodAck,
+                Ack.Cseq.Method,
+                'CSeq method');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestAckFor;
+var
+  Ack: TIdSipRequest;
+begin
+  Self.Request.Method      := MethodInvite;
+  Self.Response.StatusCode := SIPNotFound;
+
+  Ack := Self.Request.AckFor(Self.Response);
+  try
+    Check(Ack.IsAck, 'Method');
+    CheckEquals(Self.Request.CallID, Ack.CallID, 'Call-ID');
+    CheckEquals(Self.Request.From.AsString,
+                Ack.From.AsString,
+                'From');
+    CheckEquals(Self.Request.RequestUri.Uri,
+                Ack.RequestUri.Uri,
+                'Request-URI');
+    CheckEquals(Self.Response.ToHeader.AsString,
+                Ack.ToHeader.AsString,
+                'To');
+    CheckEquals(1, Ack.Path.Count, 'Via path hop count');
+    CheckEquals(Self.Response.LastHop.Value,
+                Ack.LastHop.Value,
+                'Via last hop');
+    CheckEquals(Self.Response.LastHop.Branch,
+                Ack.LastHop.Branch,
+                'Via last hop branch');
     CheckEquals(Self.Request.Cseq.SequenceNo,
                 Ack.Cseq.SequenceNo,
                 'CSeq sequence no');

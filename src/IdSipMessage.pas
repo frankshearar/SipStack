@@ -985,7 +985,7 @@ function WithoutFirstAndLastChars(const S: String): String;
 implementation
 
 uses
-  IdSipConsts;
+  IdRandom, IdSipConsts;
 
 // class variables
 var
@@ -4423,6 +4423,8 @@ begin
 
       Result.CSeq.Method := Result.Method;
       Result.AddHeader(Response.LastHop);
+      Result.LastHop.Branch := GRandomNumber.NextSipUserAgentTag;
+
       Result.AddHeaders(Self.Route);
     end
     else begin
