@@ -55,15 +55,6 @@ type
 
 implementation
 
-uses
-  SysUtils;
-
-const
-  AORIndex        = 0;
-  OrderIndex      = 1;
-  PreferenceIndex = 2;
-  DomainNameIndex = 3;
-
 function NaptrSort(Item1, Item2: Pointer): Integer;
 var
   A: TIdNaptrRec;
