@@ -5715,7 +5715,7 @@ begin
               'Unexpected response');
   Check(InternalServerError.HasHeader(RetryAfterHeader),
         'No Retry-After header');
-  Check(InternalServerError.FirstRetryAfter.NumericValue < 10,
+  Check(InternalServerError.FirstRetryAfter.NumericValue <= MaxPrematureInviteRetry,
         'Bad Retry-After value (' + IntToStr(InternalServerError.FirstRetryAfter.NumericValue) + ')');
 
   Self.SimulateAck;
