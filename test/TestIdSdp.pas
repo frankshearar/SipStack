@@ -2544,13 +2544,13 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'k=uri:sip:wintermute@tessier-ashpool.co.lu');
+                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna');
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
     Check(ktUri =                                       Self.Payload.Key.KeyType, 'KeyType');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.Payload.Key.Value,   'Value');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Self.Payload.Key.Value,   'Value');
   finally
     S.Free;
   end;
@@ -2558,7 +2558,7 @@ end;
 
 procedure TestTIdSdpParser.TestParseKeyMalformedPrompt;
 begin
-  Self.CheckMalformedKey('prompt:sip:wintermute@tessier-ashpool.co.lu');
+  Self.CheckMalformedKey('prompt:sip:wintermute@tessier-ashpool.co.luna');
 end;
 
 procedure TestTIdSdpParser.TestParseKeyMalformedBase64;
@@ -2870,7 +2870,7 @@ begin
   S := TStringStream.Create(MinimumPayload + #13#10
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
-                          + 'k=uri:sip:wintermute@tessier-ashpool.co.lu');
+                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna');
   try
     Self.P.Source := S;
 
@@ -2884,7 +2884,7 @@ begin
     Check(ktUri = Self.Payload.MediaDescriptions[0].Key.KeyType,
           'KeyType');
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
                 Self.Payload.MediaDescriptions[0].Key.Value,
                 'Value');
   finally

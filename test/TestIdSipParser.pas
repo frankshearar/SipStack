@@ -429,7 +429,7 @@ procedure TestTIdSipParser.TestParseAndMakeMessageMalformedRequest;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
                             + #13#10);
   try
     Self.P.Source := Str;
@@ -594,7 +594,7 @@ begin
     CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',
                 Self.Request.FirstHeader(CallIdHeaderFull).AsString,
                 'Call-ID');
-    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
+    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',
                 Self.Request.FirstContact.AsString,
                 'Contact');
     CheckEquals('Content-Length: 29',
@@ -627,7 +627,7 @@ begin
     CheckEquals('Route: localhost <sip:127.0.0.1>;lr',
                 Self.Request.FirstHeader(RouteHeader).AsString,
                 'Route');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
                 Self.Request.FirstHeader(ToHeaderFull).AsString,
                 'To');
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
@@ -659,14 +659,14 @@ begin
       S := S + 'SIP/2.0/UDP 127.0.' + IntToStr(I) + '.' + IntToStr(J) + ',';
   Delete(S, Length(S), 1);
 
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+               + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                + 'Content-Type: text/plain'#13#10
                + 'Content-Length: 29'#13#10
                + S + #13#10
@@ -749,14 +749,14 @@ procedure TestTIdSipParser.TestParseRequestFoldedHeader;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'Max-Forwards: 70'#13#10
                             + 'From: Case'#13#10
                             + ' <sip:case@fried.neurons.org>'#13#10
                             + #9';tag=1928301774'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'CSeq: 8'#13#10
                             + '  INVITE'#13#10
                             + #13#10);
@@ -776,7 +776,7 @@ var
   Str: TStringStream;
 begin
   // Section 20.22 states that 0 <= Max-Forwards <= 255
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Max-Forwards: 666'#13#10
                             + #13#10);
   try
@@ -801,11 +801,11 @@ procedure TestTIdSipParser.TestParseRequestMalformedMethod;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('Bad"method sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('Bad"method sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                           + 'From: Case'#13#10
                           + ' <sip:case@fried.neurons.org>'#13#10
                           + #9';tag=1928301774'#13#10
-                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                           + #13#10);
   try
     Self.P.Source := Str;
@@ -826,7 +826,7 @@ procedure TestTIdSipParser.TestParseRequestMalformedRequestLine;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE  sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10);
+  Str := TStringStream.Create('INVITE  sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
     try
@@ -840,7 +840,7 @@ begin
     Str.Free;
   end;
 
-  Str := TStringStream.Create('INVITEsip:wintermute@tessier-ashpool.co.luSIP/2.0'#13#10);
+  Str := TStringStream.Create('INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0'#13#10);
   try
     Self.P.Source := Str;
     try
@@ -848,7 +848,7 @@ begin
       Fail('Malformed start line (no spaces between Method and Request-URI) parsed without error');
     except
       on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITEsip:wintermute@tessier-ashpool.co.luSIP/2.0']),
+        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0']),
                     E.Message,
                     'Missing spaces');
     end;
@@ -856,7 +856,7 @@ begin
     Str.Free;
   end;
 
-  Str := TStringStream.Create('sip:wintermute@tessier-ashpool.co.lu SIP/2.0');
+  Str := TStringStream.Create('sip:wintermute@tessier-ashpool.co.luna SIP/2.0');
   try
     Self.P.Source := Str;
     try
@@ -864,7 +864,7 @@ begin
       Fail('Malformed start line (no Method) parsed without error');
     except
       on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Request-Line', 'sip:wintermute@tessier-ashpool.co.lu SIP/2.0']),
+        CheckEquals(Format(MalformedToken, ['Request-Line', 'sip:wintermute@tessier-ashpool.co.luna SIP/2.0']),
                     E.Message,
                     'Missing Method');
     end;
@@ -888,7 +888,7 @@ begin
     Str.Free;
   end;
 
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10);
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10);
   try
     Self.P.Source := Str;
     try
@@ -931,13 +931,13 @@ procedure TestTIdSipParser.TestParseRequestMissingCallID;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -962,13 +962,13 @@ procedure TestTIdSipParser.TestParseRequestMissingCSeq;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -993,13 +993,13 @@ procedure TestTIdSipParser.TestParseRequestMissingFrom;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -1024,13 +1024,13 @@ procedure TestTIdSipParser.TestParseRequestMissingMaxForwards;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -1050,13 +1050,13 @@ procedure TestTIdSipParser.TestParseRequestMissingTo;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -1081,13 +1081,13 @@ procedure TestTIdSipParser.TestParseRequestMissingVia;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10
@@ -1113,14 +1113,14 @@ var
   Str:        TStringStream;
   Via0, Via1: TIdSipViaHeader;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org:5061;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Via: SIP/3.0/TLS gw5.cust1.leo_ix.org;branch=z9hG4bK776aheh'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 4'#13#10
@@ -1189,7 +1189,7 @@ procedure TestTIdSipParser.TestParseRequestRequestUriInAngleBrackets;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE <sip:wintermute@tessier-ashpool.co.lu> SIP/2.0'#13#10);
+  Str := TStringStream.Create('INVITE <sip:wintermute@tessier-ashpool.co.luna> SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
     try
@@ -1321,7 +1321,7 @@ begin
                           + 'From: Case'#13#10
                           + ' <sip:case@fried.neurons.org>'#13#10
                           + #9';tag=1928301774'#13#10
-                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                          + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                           + 'Via: SIP/2.0/TCP gw1.leo-ix.org'#13#10
                           + 'CSeq: 271828 INVITE'#13#10
                           + 'Call-ID: cafebabe@sip.neurons.org'#13#10
@@ -1337,7 +1337,7 @@ begin
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
                 Response.FirstHeader(FromHeaderFull).AsString,
                 'From header');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
                 Response.FirstHeader(ToHeaderFull).AsString,
                 'To header');
   finally
@@ -1373,10 +1373,10 @@ begin
   Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1403,10 +1403,10 @@ begin
   Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1433,10 +1433,10 @@ begin
   Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1462,11 +1462,11 @@ var
 begin
   Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1489,7 +1489,7 @@ begin
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1515,11 +1515,11 @@ var
 begin
   Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                             + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                             + 'Content-Type: text/plain'#13#10
                             + 'Content-Length: 29'#13#10
                             + #13#10);
@@ -1738,7 +1738,7 @@ begin
   CheckEquals('text/plain',                           Msg.ContentType,             'ContentType');
   CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Msg.CallID,                  'CallID');
   CheckEquals('Wintermute',                           Msg.ToHeader.DisplayName,    'ToHeader.DisplayName');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Msg.ToHeader.Address.URI,    'ToHeader.Address.GetFullURI');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Msg.ToHeader.Address.URI,    'ToHeader.Address.GetFullURI');
   CheckEquals(';tag=1928301775',                      Msg.ToHeader.ParamsAsString, 'Msg.ToHeader.ParamsAsString');
   CheckEquals('Case',                                 Msg.From.DisplayName,        'From.DisplayName');
   CheckEquals('sip:case@fried.neurons.org',           Msg.From.Address.URI,        'From.Address.GetFullURI');
@@ -1753,7 +1753,7 @@ begin
   CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 
-  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775',
               Msg.FirstHeader(ToHeaderFull).AsString,
               'To');
   CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
@@ -1762,7 +1762,7 @@ begin
   CheckEquals('CSeq: 314159 INVITE',
               Msg.FirstHeader(CSeqHeader).AsString,
               'CSeq');
-  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
+  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',
               Msg.FirstContact.AsString,
               'Contact');
   CheckEquals('Content-Type: text/plain',
@@ -1780,7 +1780,7 @@ begin
   CheckEquals('INVITE',
               (Msg as TIdSipRequest).Method,
               'Method');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
               (Msg as TIdSipRequest).RequestUri.URI,
               'Request-URI');
   CheckEquals(70, (Msg as TIdSipRequest).MaxForwards, 'MaxForwards');

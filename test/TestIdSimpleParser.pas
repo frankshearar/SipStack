@@ -205,7 +205,7 @@ procedure TestTIdSimpleParser.TestPeek;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
@@ -222,13 +222,13 @@ procedure TestTIdSimpleParser.TestPeekLine;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line');
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line, 2nd time');
+    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line');
+    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line, 2nd time');
     Self.P.ReadLn;
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds', Self.P.PeekLine, 'PeekLine 2nd line');
     Self.P.ReadLn;
@@ -242,7 +242,7 @@ procedure TestTIdSimpleParser.TestReadOctet;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
@@ -262,7 +262,7 @@ procedure TestTIdSimpleParser.TestReadOctets;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
@@ -271,7 +271,7 @@ begin
     CheckEquals('I',      Self.P.ReadOctets(1), '1st ReadOctets(1)');
     CheckEquals('NVIT',   Self.P.ReadOctets(4), '2nd ReadOctets(4)');
     CheckEquals('E sip:', Self.P.ReadOctets(6), '3rd ReadOctets(6)');
-    CheckEquals('wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+    CheckEquals('wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
               + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10,
                 Self.P.ReadOctets(1000), 'ReadOctets(1000)');
   finally
@@ -283,12 +283,12 @@ procedure TestTIdSimpleParser.TestReadln;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                             + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0',     Self.P.ReadLn, '1st ReadLn');
+    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0',     Self.P.ReadLn, '1st ReadLn');
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds', Self.P.ReadLn, '2nd ReadLn');
   finally
     Str.Free;

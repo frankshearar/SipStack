@@ -453,7 +453,7 @@ procedure TestTIdSipMessage.TestSetFrom;
 var
   From: TIdSipFromHeader;
 begin
-  Self.Msg.From.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Msg.From.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
   From := TIdSipFromHeader.Create;
   try
@@ -479,7 +479,7 @@ procedure TestTIdSipMessage.TestSetTo;
 var
   ToHeader: TIdSipToHeader;
 begin
-  Self.Msg.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Msg.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
   ToHeader := TIdSipToHeader.Create;
   try
@@ -533,7 +533,7 @@ begin
   try
     R.SIPVersion := 'SIP/1.5';
     R.Method := 'NewMethod';
-    R.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    R.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
     R.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     R.ContentLength := 5;
     R.Body := 'hello';
@@ -628,10 +628,10 @@ begin
   Self.Request.RequestUri.URI := 'tel://999';
   Check(not Self.Request.HasSipsUri, 'tel URI');
 
-  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
   Check(not Self.Request.HasSipsUri, 'sip URI');
 
-  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
   Check(Self.Request.HasSipsUri, 'sips URI');
 end;
 
@@ -762,7 +762,7 @@ begin
   try
     R2 := TIdSipRequest.Create;
     try
-      R1.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+      R1.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
       R1.RequestUri.URI := 'sip:case@fried.neurons.org';
 
       Check(not R1.IsEqualTo(R2), 'R1 <> R2');
@@ -1116,11 +1116,11 @@ begin
   Self.Response.StatusText                             := 'Busy Here';
   Self.Response.SIPVersion                             := SIPVersion;
   Self.Response.AddHeader(ViaHeaderFull).Value         := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
+  Self.Response.AddHeader(ToHeaderFull).Value          := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775';
   Self.Response.AddHeader(FromHeaderFull).Value        := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
   Self.Response.CallID                                 := 'a84b4c76e66710@gw1.leo-ix.org';
   Self.Response.AddHeader(CSeqHeader).Value            := '314159 INVITE';
-  Self.Response.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Response.AddHeader(ContactHeaderFull).Value     := '<sip:wintermute@tessier-ashpool.co.luna>';
   Self.Response.AddHeader(ContentTypeHeaderFull).Value := 'text/plain';
   Self.Response.ContentLength                          := 29;
   Self.Response.Body                                   := 'I am a message. Hear me roar!';

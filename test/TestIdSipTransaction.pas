@@ -587,7 +587,7 @@ begin
   // cf. RFC 3261, section 8.2.2.2
   Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
 
-  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
   Self.D.AddClientTransaction(Self.TranRequest);
   Check(not Self.D.LoopDetected(Self.Invite),
@@ -1057,7 +1057,7 @@ begin
   Self.Request.Method                             := MethodInvite;
   Self.Request.MaxForwards                        := 70;
   Self.Request.ToHeader.DisplayName               := 'Wintermute';
-  Self.Request.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Request.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Request.From.DisplayName                   := 'Case';
@@ -1066,7 +1066,7 @@ begin
   Self.Request.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
   Self.Request.CSeq.Method                        := 'INVITE';
   Self.Request.CSeq.SequenceNo                    := 314159;
-  Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Request.ContentType                        := 'text/plain';
   Self.Request.ContentLength                      := 29;
   Self.Request.Body                               := 'I am a message. Hear me roar!';
@@ -1078,14 +1078,14 @@ begin
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Response.ToHeader.DisplayName               := 'Wintermute';
-  Self.Response.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Response.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Response.From.DisplayName                   := 'Case';
   Self.Response.From.Address.URI                   := 'sip:case@fried.neurons.org';
   Self.Response.From.Tag                           := '1928301774';
   Self.Response.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
   Self.Response.CSeq.Method                        := 'INVITE';
   Self.Response.CSeq.SequenceNo                    := 314159;
-  Self.Response.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Response.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.Request.ContentLength                       := 0;
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);

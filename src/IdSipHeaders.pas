@@ -18,6 +18,7 @@ type
   TIdSipUri = class(TObject)
   private
     fHeaders:   TIdSipHeaders;
+    fHasPort:   Boolean;
     fHost:      String;
     fPassword:  String;
     fPort:      Cardinal;
@@ -47,6 +48,7 @@ type
     procedure Reset;
     procedure SetMaddr(const Value: String);
     procedure SetMethod(const Value: String);
+    procedure SetPort(const Value: Cardinal);
     procedure SetTransport(const Value: String);
     procedure SetTTL(const Value: Cardinal);
     procedure SetUri(const Value: String);
@@ -63,6 +65,7 @@ type
     function  DefaultPort: Cardinal; virtual;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
+    function  HasPort: Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
     function  ParamCount: Integer;
@@ -77,7 +80,7 @@ type
     property Maddr:         String        read GetMaddr write SetMaddr;
     property Method:        String        read GetMethod write SetMethod;
     property Password:      String        read fPassword write fPassword;
-    property Port:          Cardinal      read fPort write fPort;
+    property Port:          Cardinal      read fPort write SetPort;
     property Scheme:        String        read fScheme write fScheme;
     property Transport:     String        read GetTransport write SetTransport;
     property TTL:           Cardinal      read GetTTL write SetTTL;
@@ -775,6 +778,11 @@ begin
   Result := not Self.Headers.IsEmpty;
 end;
 
+function TIdSipUri.HasPort: Boolean;
+begin
+  Result := Self.fHasPort;
+end;
+
 function TIdSipUri.IsLooseRoutable: Boolean;
 begin
   Result := Self.Parameters.IndexOfName(LooseRoutableParam) <> -1;
@@ -1010,6 +1018,7 @@ begin
       Self.Port := IdPORT_SIPS
     else
       Self.Port := IdPORT_SIP;
+    Self.fHasPort := false;
   end
   else
     Self.Port := StrToIntDef(HostAndPort, IdPORT_SIP);
@@ -1053,6 +1062,12 @@ end;
 procedure TIdSipUri.SetMethod(const Value: String);
 begin
   Self.Parameters.Values[MethodParam] := Value;
+end;
+
+procedure TIdSipUri.SetPort(const Value: Cardinal);
+begin
+  Self.fPort    := Value;
+  Self.fHasPort := true;
 end;
 
 procedure TIdSipUri.SetTransport(const Value: String);

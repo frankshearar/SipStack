@@ -63,14 +63,14 @@ type
   end;
 
 const
-  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                + 'Content-Type: text/plain'#13#10
                + 'Content-Length: 29'#13#10
                + #13#10

@@ -122,14 +122,14 @@ type
   end;
 
 const
-  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
                + 'Content-Type: text/plain'#13#10
                + 'Content-Length: 29'#13#10
                + #13#10
@@ -194,7 +194,7 @@ begin
   Self.Req     := TIdSipRequest.Create;
   Self.Table   := TIdSipConnectionTable.Create;
 
-  Self.Req.RequestUri.URI    := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Req.RequestUri.URI    := 'sip:wintermute@tessier-ashpool.co.luna';
   Self.NewReq.RequestUri.URI := 'sip:case@fried.neurons.org';
 end;
 
@@ -415,7 +415,7 @@ procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
 begin
   try
     CheckEquals('INVITE',                               Request.Method,         'Method');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.RequestUri.URI, 'RequestUri');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna', Request.RequestUri.URI, 'RequestUri');
     CheckEquals('SIP/2.0',                              Request.SIPVersion,     'SipVersion');
     CheckEquals(29,                                     Request.ContentLength,  'ContentLength');
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,         'CallID');
@@ -425,11 +425,11 @@ begin
                 Request.HeaderAt(0).AsString,
                 'Via');
     CheckEquals('Max-Forwards: 70',                                       Request.HeaderAt(1).AsString, 'Max-Forwards');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',  Request.HeaderAt(2).AsString, 'To');
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',  Request.HeaderAt(2).AsString, 'To');
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774', Request.HeaderAt(3).AsString, 'From');
     CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',                 Request.HeaderAt(4).AsString, 'Call-ID');
     CheckEquals('CSeq: 314159 INVITE',                                    Request.HeaderAt(5).AsString, 'CSeq');
-    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',          Request.HeaderAt(6).AsString, 'Contact');
+    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.luna',          Request.HeaderAt(6).AsString, 'Contact');
     CheckEquals('Content-Type: text/plain',                               Request.HeaderAt(7).AsString, 'Content-Length');
     CheckEquals('Content-Length: 29',                                     Request.HeaderAt(8).AsString, 'Content-Length');
 
@@ -761,7 +761,7 @@ var
 begin
   // For the weak of eyes - the SIP-Version is malformed. Spot the semicolon.
   Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10
+  Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
                   + #13#10);
 
   P := TIdSipParser.Create;

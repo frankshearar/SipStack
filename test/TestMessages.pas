@@ -5,41 +5,41 @@ interface
 const
   BasicBody = 'I am a message. Hear me roar!';
   BasicContentLengthHeader = 'Content-Length: 29'#13#10;
-  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775'#13#10
                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+               + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                + 'Content-Type: text/plain'#13#10
                + BasicContentLengthHeader
                + #13#10
                + BasicBody;
   BasicResponse = 'SIP/2.0 486 Busy Here'#13#10
                 + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
+                + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775'#13#10
                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                 + 'CSeq: 314159 INVITE'#13#10
-                + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                 + 'Content-Type: text/plain'#13#10
                 + BasicContentLengthHeader
                 + #13#10
                 + BasicBody;
-  EmptyRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+  EmptyRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775'#13#10
                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
                + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10;
-  ExtensiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+               + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10;
+  ExtensiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
                    + 'Accept: text/t140;q=1.0, text/plain;q=0.7;foo=bar, text/xml'#13#10
                    + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                   + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                   + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
                    + BasicContentLengthHeader
                    + 'Content-Type: text/plain'#13#10
                    + 'CSeq: 314159 INVITE'#13#10
@@ -51,7 +51,7 @@ const
                    + 'Record-Route: localhost <sip:127.0.0.1>;lr'#13#10
                    + 'Route: localhost <sip:127.0.0.1>;lr'#13#10
                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
-                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
+                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775'#13#10
                    + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
                    + 'Warning: 301 draugr "Not really interested"'#13#10
                    + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10

@@ -341,7 +341,7 @@ begin
   Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
   Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
@@ -359,7 +359,7 @@ begin
 
   C := TIdSipContactHeader.Create;
   try
-    C.Value := 'sip:wintermute@tessier-ashpool.co.lu';
+    C.Value := 'sip:wintermute@tessier-ashpool.co.luna';
     Self.Core.Contact := C;
   finally
     C.Free;
@@ -367,7 +367,7 @@ begin
 
   F := TIdSipFromHeader.Create;
   try
-    F.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+    F.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
     Self.Core.From := F;
   finally
     F.Free;
@@ -720,7 +720,7 @@ var
 begin
   Dest := TIdSipToHeader.Create;
   try
-    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
     Request := Self.Core.CreateInvite(Dest, '', '');
     try
       Self.CheckCreateRequest(Dest, Request);
@@ -770,7 +770,7 @@ var
 begin
   Dest := TIdSipToHeader.Create;
   try
-    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
     Request := Self.Core.CreateRequest(Dest);
     try
       Self.CheckCreateRequest(Dest, Request);
@@ -921,7 +921,7 @@ var
 begin
   Dest := TIdSipToHeader.Create;
   try
-    Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+    Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.luna';
     Request := Self.Core.CreateRequest(Dest);
     try
       Contact := Request.FirstContact;
@@ -945,7 +945,7 @@ begin
 
   Dest := TIdSipToHeader.Create;
   try
-    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
     Request := Self.Core.CreateRequest(Dest);
     try
       CheckEquals(Self.Core.UserAgentName,
@@ -966,7 +966,7 @@ var
 begin
   Dest := TIdSipToHeader.Create;
   try
-    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu;transport=udp';
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
     Request := Self.Core.CreateRequest(Dest);
     try
       Check(Request.LastHop.Transport = sttUDP,
@@ -1062,7 +1062,7 @@ var
   Contact:  TIdSipContactHeader;
   Response: TIdSipResponse;
 begin
-  Self.Invite.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Invite.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
 
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
@@ -1094,7 +1094,7 @@ var
   Response: TIdSipResponse;
 begin
   Self.Core.UserAgentName := 'SATAN/1.0';
-  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
 
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
@@ -1111,7 +1111,7 @@ var
   Response: TIdSipResponse;
 begin
   Self.Core.UserAgentName := '';
-  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
 
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try

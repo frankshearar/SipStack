@@ -28,6 +28,7 @@ type
     procedure TestGetUriWithPassword;
     procedure TestGetUriWithSpecialPort;
     procedure TestHasHeaders;
+    procedure TestHasPort;
     procedure TestHasValidSyntax;
     procedure TestIsLooseRoutable;
     procedure TestIsPassword;
@@ -88,9 +89,9 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
                 Uri.Uri,
                 'URI');
   finally
@@ -104,15 +105,15 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
-    CheckEquals('sip',                   Uri.Scheme,        'Scheme');
-    CheckEquals('wintermute',            Uri.Username,      'User');
-    CheckEquals('tessier-ashpool.co.lu', Uri.Host,          'Host');
-    CheckEquals(IdPORT_SIP,              Uri.Port,          'Port');
-    CheckEquals(0,                       Uri.ParamCount,    'Parameters');
-    CheckEquals('',                      Uri.Password,      'Password');
-    CheckEquals(0,                       Uri.Headers.Count, 'Headers');
+    CheckEquals('sip',                     Uri.Scheme,        'Scheme');
+    CheckEquals('wintermute',              Uri.Username,      'User');
+    CheckEquals('tessier-ashpool.co.luna', Uri.Host,          'Host');
+    CheckEquals(IdPORT_SIP,                Uri.Port,          'Port');
+    CheckEquals(0,                         Uri.ParamCount,    'Parameters');
+    CheckEquals('',                        Uri.Password,      'Password');
+    CheckEquals(0,                         Uri.Headers.Count, 'Headers');
   finally
     Uri.Free;
   end;
@@ -122,11 +123,11 @@ procedure TestTIdSipUri.TestCreateSetsUri;
 var
   Uri: TIdSipUri;
 begin
-  Uri := TIdSipUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Uri := TIdSipUri.Create('sip:wintermute@tessier-ashpool.co.luna');
   try
-    CheckEquals('sip',                   Uri.Scheme,   'Scheme');
-    CheckEquals('wintermute',            Uri.Username, 'User');
-    CheckEquals('tessier-ashpool.co.lu', Uri.Host,     'Host');
+    CheckEquals('sip',                     Uri.Scheme,   'Scheme');
+    CheckEquals('wintermute',              Uri.Username, 'User');
+    CheckEquals('tessier-ashpool.co.luna', Uri.Host,     'Host');
   finally
     Uri.Free;
   end;
@@ -224,10 +225,10 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
     Uri.AddParameter('foo', '<b%61r>');
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu;foo=%3Cbar%3E',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna;foo=%3Cbar%3E',
                 Uri.Uri,
                 'URI');
   finally
@@ -243,10 +244,10 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
     Uri.Headers.Add(RouteHeader).Value := '<sip:127.0.0.1>';
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu?Route=%3Csip:127.0.0.1%3E',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna?Route=%3Csip:127.0.0.1%3E',
                 Uri.Uri,
                 'URI');
   finally
@@ -262,13 +263,13 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
     Uri.Headers.Add(RouteHeader).Value := '<sip:127.0.0.1>';
     Uri.AddParameter('foo', '<bar>');
     Uri.AddParameter('lr');
     Uri.AddParameter('baz', 'quaax');
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu'
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna'
               + ';foo=%3Cbar%3E;lr;baz=quaax?Route=%3Csip:127.0.0.1%3E',
                 Uri.Uri,
                 'URI');
@@ -285,10 +286,10 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
     Uri.AddParameter('foo', 'bar');
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu;foo=bar',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna;foo=bar',
                 Uri.Uri,
                 'URI');
   finally
@@ -304,9 +305,9 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := '';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
 
-    CheckEquals('sip:tessier-ashpool.co.lu',
+    CheckEquals('sip:tessier-ashpool.co.luna',
                 Uri.Uri,
                 'URI');
   finally
@@ -322,10 +323,10 @@ begin
   try
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
     Uri.Port     := IdPORT_SIP;
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
                 Uri.Uri,
                 'URI');
   finally
@@ -342,9 +343,9 @@ begin
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
     Uri.Password := 'song';
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
 
-    CheckEquals('sip:wintermute:song@tessier-ashpool.co.lu',
+    CheckEquals('sip:wintermute:song@tessier-ashpool.co.luna',
                 Uri.Uri,
                 'URI');
   finally
@@ -361,9 +362,9 @@ begin
     Uri.Scheme   := 'sip';
     Uri.Username := 'wintermute';
     Uri.Port     := IdPORT_SIP + 10000;
-    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Host     := 'tessier-ashpool.co.luna';
 
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu:15060',
+    CheckEquals('sip:wintermute@tessier-ashpool.co.luna:15060',
                 Uri.Uri,
                 'URI');
   finally
@@ -386,13 +387,35 @@ begin
   end;
 end;
 
+procedure TestTIdSipUri.TestHasPort;
+var
+  Uri: TIdSipUri;
+begin
+  Uri := TIdSipUri.Create('sip:wintermute@tessier-ashpool.co.luna');
+  try
+    Check(not Uri.HasPort, 'No port specified (default)');
+
+    Uri.Port := Uri.DefaultPort;
+    Check(Uri.HasPort, 'Port set to default value');
+  finally
+    Uri.Free;
+  end;
+
+  Uri := TIdSipUri.Create('sip:wintermute@tessier-ashpool.co.luna:5060');
+  try
+    Check(Uri.HasPort, 'Port specified');
+  finally
+    Uri.Free;
+  end;
+end;
+
 procedure TestTIdSipUri.TestHasValidSyntax;
 var
   Uri: TIdSipUri;
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := ':wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := ':wintermute@tessier-ashpool.co.luna';
     Check(not Uri.HasValidSyntax, 'Missing scheme');
 
     Uri.Uri := 'sipx:a';
@@ -443,10 +466,10 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
     Check(not Uri.IsLooseRoutable, 'Non-loose-routable SIP URI marked as loose routable');
 
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;lr';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
     Check(Uri.IsLooseRoutable, 'Loose routable URI not marked as loose routable');
   finally
     Uri.Free;
@@ -529,10 +552,10 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
     Check(not Uri.IsSecure, 'SIP URI marked as secure');
 
-    Uri.Uri := 'sips:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
     Check(Uri.IsSecure, 'SIPS URI not marked as secure');
   finally
     Uri.Free;
@@ -545,7 +568,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
     CheckEquals(IdPORT_SIP, Uri.Port, 'SIP URI default port');
   finally
     Uri.Free;
@@ -558,7 +581,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sips:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
     CheckEquals(IdPORT_SIPS, Uri.Port, 'SIPS URI default port');
   finally
     Uri.Free;
@@ -571,7 +594,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;user=ip&method=INVITE&ttl=2&maddr=127.0.0.255;lr';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;user=ip&method=INVITE&ttl=2&maddr=127.0.0.255;lr';
 {
     CheckEquals('ip',          Uri.User,            'user');
     CheckEquals('127.0.0.255', Uri.Maddr,           'maddr');
@@ -587,12 +610,12 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
-    CheckEquals('sip',                   Uri.Scheme,     'Scheme');
-    CheckEquals('wintermute',            Uri.Username,   'User');
-    CheckEquals('tessier-ashpool.co.lu', Uri.Host,       'Host');
-    CheckEquals(0,                       Uri.ParamCount, 'Parameter count');
+    CheckEquals('sip',                     Uri.Scheme,     'Scheme');
+    CheckEquals('wintermute',              Uri.Username,   'User');
+    CheckEquals('tessier-ashpool.co.luna', Uri.Host,       'Host');
+    CheckEquals(0,                         Uri.ParamCount, 'Parameter count');
   finally
     Uri.Free;
   end;
@@ -604,7 +627,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu'
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna'
              + '?Route=%3Csip:127.0.0.1%3E&Route=%3Csip:127.0.0.2%3E';
 
     CheckEquals(2,                 Uri.Headers.Count,          'Header count');
@@ -629,7 +652,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;foo=bar;baz=quaax';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar;baz=quaax';
 
     CheckEquals(2,       Uri.ParamCount,    'Parameter count');
     CheckEquals('foo',   Uri.ParamName(0),  'Parameter 1 name');
@@ -647,7 +670,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu?Route=%3Csip:127.0.0.1%3E';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna?Route=%3Csip:127.0.0.1%3E';
 
     CheckEquals(1,                 Uri.Headers.Count,          'Header count');
     CheckEquals('Route',           Uri.Headers.Items[0].Name,  'Header name');
@@ -666,7 +689,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;foo=bar';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;foo=bar';
 
     CheckEquals(1,     Uri.ParamCount,    'Parameter count');
     CheckEquals('foo', Uri.ParamName(0),  'Parameter name');
@@ -682,7 +705,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;lr;foo=bar;baz=qu%61ax';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr;foo=bar;baz=qu%61ax';
 
     CheckEquals(3,       Uri.ParamCount,    'Parameter count');
     CheckEquals('lr',    Uri.ParamName(0),  'Parameter 1 name');
@@ -702,7 +725,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;lr';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;lr';
 
     CheckEquals(1,    Uri.ParamCount,    'Parameter count');
     CheckEquals('lr', Uri.ParamName(0),  'Parameter name');
@@ -718,10 +741,10 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:tessier-ashpool.co.luna';
 
-    CheckEquals('tessier-ashpool.co.lu', Uri.Host,     'Host');
-    CheckEquals('',                      Uri.Username, 'User');
+    CheckEquals('tessier-ashpool.co.luna', Uri.Host,     'Host');
+    CheckEquals('',                        Uri.Username, 'User');
   finally
     Uri.Free;
   end;
@@ -747,7 +770,7 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu:100';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:100';
 
     CheckEquals(100, Uri.Port, 'Port');
   finally
@@ -761,8 +784,8 @@ var
 begin
   Uri := TIdSipUri.Create('');
   try
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu;transport=udp';
-    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.lu';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
+    Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
 
     CheckEquals('', Uri.Transport, 'Transport not cleared after SetUri');
   finally

@@ -103,7 +103,7 @@ begin
   Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
   Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
@@ -356,7 +356,7 @@ begin
   Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
   Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
