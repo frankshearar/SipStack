@@ -704,7 +704,7 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
-  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdActionMethod)
+  TIdSipActionAuthenticationChallengeMethod = class(TIdActionMethod)
   private
     fFirstPassword: String;
   public
@@ -2404,13 +2404,13 @@ end;
 
 function TIdSipAction.NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
 var
-  Notification: TIdSipActionListenerAuthenticationChallengeMethod;
+  Notification: TIdSipActionAuthenticationChallengeMethod;
 begin
   // We present the authentication challenge to all listeners but only accept
   // the first listener's password. The responsibility of listener order rests
   // firmly on your own shoulders.
 
-  Notification := TIdSipActionListenerAuthenticationChallengeMethod.Create;
+  Notification := TIdSipActionAuthenticationChallengeMethod.Create;
   try
     Notification.Action   := Self;
     Notification.Response := Response;
@@ -4003,11 +4003,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionListenerAuthenticationChallengeMethod                          *
+//* TIdSipActionAuthenticationChallengeMethod                                  *
 //******************************************************************************
-//* TIdSipActionListenerAuthenticationChallengeMethod Public methods ***********
+//* TIdSipActionAuthenticationChallengeMethod Public methods *******************
 
-procedure TIdSipActionListenerAuthenticationChallengeMethod.Run(const Subject: IInterface);
+procedure TIdSipActionAuthenticationChallengeMethod.Run(const Subject: IInterface);
 var
   DiscardedPassword: String;
   Listener:          IIdSipActionListener;

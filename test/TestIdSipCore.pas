@@ -454,9 +454,9 @@ type
     procedure TestXlitesAckNonBug;
   end;
 
-  TestTIdSipActionListenerAuthenticationChallengeMethod = class(TTestCase)
+  TestTIdSipActionAuthenticationChallengeMethod = class(TTestCase)
   private
-    Method:   TIdSipActionListenerAuthenticationChallengeMethod;
+    Method:   TIdSipActionAuthenticationChallengeMethod;
     Response: TIdSipResponse;
     UA:       TIdSipUserAgentCore;
   public
@@ -580,7 +580,7 @@ begin
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestBugHunt.Suite);
-  Result.AddTest(TestTIdSipActionListenerAuthenticationChallengeMethod.Suite);
+  Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipOptionsFailureMethod.Suite);
   Result.AddTest(TestTIdSipOptionsSuccessMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
@@ -5028,11 +5028,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipActionListenerAuthenticationChallengeMethod                      *
+//* TestTIdSipActionAuthenticationChallengeMethod                              *
 //******************************************************************************
-//* TestTIdSipActionListenerAuthenticationChallengeMethod Public methods *******
+//* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
 
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.SetUp;
+procedure TestTIdSipActionAuthenticationChallengeMethod.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
@@ -5043,7 +5043,7 @@ begin
 
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipActionListenerAuthenticationChallengeMethod.Create;
+  Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
   try
@@ -5055,7 +5055,7 @@ begin
   Self.Method.Response := Self.Response;
 end;
 
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.TearDown;
+procedure TestTIdSipActionAuthenticationChallengeMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -5064,9 +5064,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipActionListenerAuthenticationChallengeMethod Published methods ****
+//* TestTIdSipActionAuthenticationChallengeMethod Published methods ****
 
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.Run;
+procedure TestTIdSipActionAuthenticationChallengeMethod.Run;
 var
   L1, L2: TIdSipTestRegistrationListener;
 begin
