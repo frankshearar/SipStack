@@ -46,21 +46,21 @@ type
   protected
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual; abstract;
-    procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
-    procedure NotifyTransportSendingListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
+    procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
+    procedure NotifyTransportSendingListeners(Request: TIdSipRequest); overload;
+    procedure NotifyTransportSendingListeners(Response: TIdSipResponse); overload;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const ReceivedFrom: TIdSipConnectionBindings); virtual;
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const ReceivedFrom: TIdSipConnectionBindings);
-    procedure SendRequest(const R: TIdSipRequest); virtual;
-    procedure SendResponse(const R: TIdSipResponse); virtual;
-    function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; virtual;
-    procedure SetPort(const Value: Cardinal); virtual; abstract;
+    procedure SendRequest(R: TIdSipRequest); virtual;
+    procedure SendResponse(R: TIdSipResponse); virtual;
+    function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
+    procedure SetPort(Value: Cardinal); virtual; abstract;
   public
-    class function TransportFor(const TT: TIdSipTransportType): TIdSipTransportClass;
-    constructor Create(const Port: Cardinal); virtual;
+    class function TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
+    constructor Create(Port: Cardinal); virtual;
     destructor  Destroy; override;
 
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
@@ -72,7 +72,7 @@ type
     function  IsSecure: Boolean; virtual;
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
-    procedure Send(const Msg: TIdSipMessage);
+    procedure Send(Msg: TIdSipMessage);
     procedure Start; virtual;
     procedure Stop; virtual;
     procedure VisitRequest(Request: TIdSipRequest);
@@ -92,8 +92,8 @@ type
     function  AddClient: TIdSipTcpClient;
     procedure DoOnClientFinished(Sender: TObject);
     procedure DoOnTcpResponse(Sender: TObject;
-                              const Response: TIdSipResponse;
-                              const ReceivedFrom: TIdSipConnectionBindings);
+                              Response: TIdSipResponse;
+                              ReceivedFrom: TIdSipConnectionBindings);
     procedure RemoveClient(Client: TIdSipTcpClient);
   protected
     Transport: TIdSipTcpServer;
@@ -102,12 +102,12 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
-    procedure SendRequest(const R: TIdSipRequest); override;
-    procedure SendResponse(const R: TIdSipResponse); override;
+    procedure SendRequest(R: TIdSipRequest); override;
+    procedure SendResponse(R: TIdSipResponse); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
-    procedure SetPort(const Value: Cardinal); override;
+    procedure SetPort(Value: Cardinal); override;
   public
-    constructor Create(const Port: Cardinal); override;
+    constructor Create(Port: Cardinal); override;
     destructor  Destroy; override;
 
     function  GetTransportType: TIdSipTransportType; override;
@@ -122,10 +122,10 @@ type
     function  GetServerCertificate: TFileName;
     function  GetServerKey: TFileName;
     function  TLS: TIdSipTlsServer;
-    procedure SetOnGetPassword(const Value: TPasswordEvent);
-    procedure SetRootCertificate(const Value: TFileName);
-    procedure SetServerCertificate(const Value: TFileName);
-    procedure SetServerKey(const Value: TFileName);
+    procedure SetOnGetPassword(Value: TPasswordEvent);
+    procedure SetRootCertificate(Value: TFileName);
+    procedure SetServerCertificate(Value: TFileName);
+    procedure SetServerKey(Value: TFileName);
   protected
     function  CreateClient: TIdSipTcpClient; override;
     procedure DestroyClient(Client: TIdSipTcpClient); override;
@@ -178,18 +178,18 @@ type
     procedure DoOnClientFinished(Sender: TObject);
     function  GetCleanerThreadPollTime: Cardinal;
     procedure RemoveClient(Client: TIdSipUdpClient);
-    procedure SendRequestNotExpectingResponses(const R: TIdSipRequest);
-    procedure SetCleanerThreadPollTime(const Value: Cardinal);
+    procedure SendRequestNotExpectingResponses(R: TIdSipRequest);
+    procedure SetCleanerThreadPollTime(Value: Cardinal);
   protected
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const ReceivedFrom: TIdSipConnectionBindings); override;
-    procedure SendRequest(const R: TIdSipRequest); override;
-    procedure SendResponse(const R: TIdSipResponse); override;
-    procedure SetPort(const Value: Cardinal); override;
+    procedure SendRequest(R: TIdSipRequest); override;
+    procedure SendResponse(R: TIdSipResponse); override;
+    procedure SetPort(Value: Cardinal); override;
   public
-    constructor Create(const Port: Cardinal); override;
+    constructor Create(Port: Cardinal); override;
     destructor  Destroy; override;
 
     function  GetTransportType: TIdSipTransportType; override;
@@ -212,7 +212,7 @@ uses
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
-class function TIdSipTransport.TransportFor(const TT: TIdSipTransportType): TIdSipTransportClass;
+class function TIdSipTransport.TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
 begin
   case TT of
     sttSCTP: Result := TIdSipSCTPTransport;
@@ -224,7 +224,7 @@ begin
   end;
 end;
 
-constructor TIdSipTransport.Create(const Port: Cardinal);
+constructor TIdSipTransport.Create(Port: Cardinal);
 begin
   inherited Create;
 
@@ -308,7 +308,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.Send(const Msg: TIdSipMessage);
+procedure TIdSipTransport.Send(Msg: TIdSipMessage);
 begin
   Msg.Accept(Self);
 end;
@@ -333,7 +333,7 @@ end;
 
 //* TIdSipTransport Protected methods ******************************************
 
-procedure TIdSipTransport.NotifyTransportListeners(const Request: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
 var
   I: Integer;
 begin
@@ -346,7 +346,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportListeners(const Response: TIdSipResponse);
+procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse);
 var
   I: Integer;
 begin
@@ -359,7 +359,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(const Request: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportSendingListeners(Request: TIdSipRequest);
 var
   I: Integer;
 begin
@@ -372,7 +372,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.NotifyTransportSendingListeners(const Response: TIdSipResponse);
+procedure TIdSipTransport.NotifyTransportSendingListeners(Response: TIdSipResponse);
 var
   I: Integer;
 begin
@@ -406,19 +406,19 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipTransport.SendRequest(R: TIdSipRequest);
 begin
   Self.RewriteOwnVia(R);
   Self.NotifyTransportSendingListeners(R);
 end;
 
-procedure TIdSipTransport.SendResponse(const R: TIdSipResponse);
+procedure TIdSipTransport.SendResponse(R: TIdSipResponse);
 begin
 //  Self.RewriteOwnVia(R);
   Self.NotifyTransportSendingListeners(R);
 end;
 
-function TIdSipTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;
+function TIdSipTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
 var
   I: Integer;
 begin
@@ -452,7 +452,7 @@ end;
 //******************************************************************************
 //* TIdSipTCPTransport Public methods ******************************************
 
-constructor TIdSipTCPTransport.Create(const Port: Cardinal);
+constructor TIdSipTCPTransport.Create(Port: Cardinal);
 begin
   inherited Create(Port);
 
@@ -503,7 +503,7 @@ begin
   Result := Self.Transport.DefaultPort;
 end;
 
-procedure TIdSipTCPTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest);
 var
   Client: TIdSipTcpClient;
 begin
@@ -519,7 +519,7 @@ begin
   Client.Send(R);
 end;
 
-procedure TIdSipTCPTransport.SendResponse(const R: TIdSipResponse);
+procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse);
 begin
   inherited SendResponse(R);
 
@@ -545,7 +545,7 @@ begin
   Result := Self.Transport.Bindings;
 end;
 
-procedure TIdSipTCPTransport.SetPort(const Value: Cardinal);
+procedure TIdSipTCPTransport.SetPort(Value: Cardinal);
 var
   I: Integer;
 begin
@@ -582,8 +582,8 @@ begin
 end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
-                                             const Response: TIdSipResponse;
-                                             const ReceivedFrom: TIdSipConnectionBindings);
+                                             Response: TIdSipResponse;
+                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.OnReceiveResponse(Response, ReceivedFrom);
 end;
@@ -666,22 +666,22 @@ begin
   Result := Self.Transport as TIdSipTlsServer;
 end;
 
-procedure TIdSipTLSTransport.SetOnGetPassword(const Value: TPasswordEvent);
+procedure TIdSipTLSTransport.SetOnGetPassword(Value: TPasswordEvent);
 begin
   Self.TLS.OnGetPassword := Value;
 end;
 
-procedure TIdSipTLSTransport.SetRootCertificate(const Value: TFileName);
+procedure TIdSipTLSTransport.SetRootCertificate(Value: TFileName);
 begin
   Self.TLS.RootCertificate := Value;
 end;
 
-procedure TIdSipTLSTransport.SetServerCertificate(const Value: TFileName);
+procedure TIdSipTLSTransport.SetServerCertificate(Value: TFileName);
 begin
   Self.TLS.ServerCertificate := Value;
 end;
 
-procedure TIdSipTLSTransport.SetServerKey(const Value: TFileName);
+procedure TIdSipTLSTransport.SetServerKey(Value: TFileName);
 begin
   Self.TLS.ServerKey := Value;
 end;
@@ -767,7 +767,7 @@ end;
 //******************************************************************************
 //* TIdSipUDPTransport Public methods ******************************************
 
-constructor TIdSipUDPTransport.Create(const Port: Cardinal);
+constructor TIdSipUDPTransport.Create(Port: Cardinal);
 begin
   inherited Create(Port);
 
@@ -841,7 +841,7 @@ begin
   inherited OnReceiveRequest(Request, ReceivedFrom);
 end;
 
-procedure TIdSipUDPTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest);
 var
   Client: TIdSipUdpServer;
 begin
@@ -862,7 +862,7 @@ begin
   end;
 end;
 
-procedure TIdSipUDPTransport.SendResponse(const R: TIdSipResponse);
+procedure TIdSipUDPTransport.SendResponse(R: TIdSipResponse);
 var
   Host: String;
   Port: Cardinal;
@@ -912,7 +912,7 @@ begin
   Self.Transport.Send(Host, Port, R.AsString);
 end;
 
-procedure TIdSipUDPTransport.SetPort(const Value: Cardinal);
+procedure TIdSipUDPTransport.SetPort(Value: Cardinal);
 var
   I: Integer;
 begin
@@ -972,7 +972,7 @@ begin
   end;
 end;
 
-procedure TIdSipUDPTransport.SendRequestNotExpectingResponses(const R: TIdSipRequest);
+procedure TIdSipUDPTransport.SendRequestNotExpectingResponses(R: TIdSipRequest);
 var
   Client: TIdUdpClient;
 begin
@@ -986,7 +986,7 @@ begin
   end;
 end;
 
-procedure TIdSipUDPTransport.SetCleanerThreadPollTime(const Value: Cardinal);
+procedure TIdSipUDPTransport.SetCleanerThreadPollTime(Value: Cardinal);
 begin
   Self.ClientCleaner.PollTime := Value;
 end;

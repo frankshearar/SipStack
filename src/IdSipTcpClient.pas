@@ -16,8 +16,8 @@ type
   TIdSipTcpClient = class;
   TIdSipClientEvent = procedure(Sender: TObject) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
-                                  const R: TIdSipResponse;
-                                  const ReceivedFrom: TIdSipConnectionBindings) of object;
+                                  R: TIdSipResponse;
+                                  ReceivedFrom: TIdSipConnectionBindings) of object;
 
   // Note that the Timeout property determines the maximum length of time to
   // wait for the next line of data to arrive.
@@ -28,18 +28,18 @@ type
     fTimeout:    Cardinal;
 
     procedure DoOnFinished;
-    procedure DoOnResponse(const R: TIdSipResponse;
-                           const ReceivedFrom: TIdSipConnectionBindings);
+    procedure DoOnResponse(R: TIdSipResponse;
+                           ReceivedFrom: TIdSipConnectionBindings);
     function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
+    function  DefaultTimeout: Cardinal; virtual;
     procedure DoOnDisconnected; override;
   public
     constructor Create(AOwner: TComponent); override;
 
-    function  DefaultTimeout: Cardinal; virtual;
-    procedure Send(const Request: TIdSipRequest); overload;
-    procedure Send(const Response: TIdSipResponse); overload;
+    procedure Send(Request: TIdSipRequest); overload;
+    procedure Send(Response: TIdSipResponse); overload;
 
     property OnFinished:    TIdSipClientEvent   read fOnFinished write fOnFinished;
     property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
@@ -65,23 +65,23 @@ begin
   Self.Timeout := Self.DefaultTimeout;
 end;
 
-function TIdSipTcpClient.DefaultTimeout: Cardinal;
-begin
-  Result := 5000;
-end;
-
-procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);
+procedure TIdSipTcpClient.Send(Request: TIdSipRequest);
 begin
   Self.Write(Request.AsString);
   Self.ReadResponses;
 end;
 
-procedure TIdSipTcpClient.Send(const Response: TIdSipResponse);
+procedure TIdSipTcpClient.Send(Response: TIdSipResponse);
 begin
   Self.Write(Response.AsString);
 end;
 
 //* TIdSipTcpClient Protected methods ******************************************
+
+function TIdSipTcpClient.DefaultTimeout: Cardinal;
+begin
+  Result := 5000;
+end;
 
 procedure TIdSipTcpClient.DoOnDisconnected;
 begin
@@ -97,8 +97,8 @@ begin
     Self.OnFinished(Self);
 end;
 
-procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse;
-                                       const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTcpClient.DoOnResponse(R: TIdSipResponse;
+                                       ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.OnResponse) then
     Self.OnResponse(Self, R, ReceivedFrom);

@@ -7,7 +7,7 @@ uses
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
-                                 const R: TIdSipRequest) of object;
+                                 R: TIdSipRequest) of object;
 
   TestTIdSipTcpClient = class(TThreadingTestCase, IIdSipMessageListener)
   private
@@ -21,25 +21,28 @@ type
     Server:                TIdSipTcpServer;
 
     procedure CheckReceiveOkResponse(Sender: TObject;
-                                     const Response: TIdSipResponse;
-                                     const ReceivedFrom: TIdSipConnectionBindings);
+                                     Response: TIdSipResponse;
+                                     ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject;
-                                                   const Response: TIdSipResponse;
-                                                   const ReceivedFrom: TIdSipConnectionBindings);
-    procedure CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
-    procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
+                                                   Response: TIdSipResponse;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
+    procedure CheckSendInvite(Sender: TObject;
+                              Request: TIdSipRequest);
+    procedure CheckSendTwoInvites(Sender: TObject;
+                                  Request: TIdSipRequest);
+    procedure CutConnection(Sender: TObject;
+                            R: TIdSipRequest);
     procedure DoOnFinished(Sender: TObject);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const ReceivedFrom: TIdSipConnectionBindings);
     procedure PauseAndSendOkResponse(Sender: TObject;
-                                     const Request: TIdSipRequest);
+                                     Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject;
-                             const Request: TIdSipRequest);
+                             Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject;
-                                           const Request: TIdSipRequest);
+                                           Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -116,8 +119,8 @@ end;
 //* TestTIdSipTcpClient Private methods ****************************************
 
 procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject;
-                                                     const Response: TIdSipResponse;
-                                                     const ReceivedFrom: TIdSipConnectionBindings);
+                                                     Response: TIdSipResponse;
+                                                     ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Self.ThreadEvent.SetEvent;
@@ -130,8 +133,8 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.CheckReceiveProvisionalAndOkResponse(Sender: TObject;
-                                                                   const Response: TIdSipResponse;
-                                                                   const ReceivedFrom: TIdSipConnectionBindings);
+                                                                   Response: TIdSipResponse;
+                                                                   ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Inc(Self.ReceivedResponseCount);
@@ -153,7 +156,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.CheckSendInvite(Sender: TObject;
+                                              Request: TIdSipRequest);
 begin
   try
     CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
@@ -169,7 +173,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.CheckSendTwoInvites(Sender: TObject;
+                                                  Request: TIdSipRequest);
 begin
   try
     Inc(Self.InviteCount);
@@ -186,7 +191,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CutConnection(Sender: TObject; const R: TIdSipRequest);
+procedure TestTIdSipTcpClient.CutConnection(Sender: TObject;
+                                            R: TIdSipRequest);
 var
   Threads: TList;
 begin
@@ -240,14 +246,14 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject;
-                                                     const Request: TIdSipRequest);
+                                                     Request: TIdSipRequest);
 begin
   IdGlobal.Sleep(200);
   Self.SendOkResponse(Sender, Request);
 end;
 
 procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject;
-                                             const Request: TIdSipRequest);
+                                             Request: TIdSipRequest);
 var
   S:       String;
   Threads: TList;
@@ -262,7 +268,7 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject;
-                                                           const Request: TIdSipRequest);
+                                                           Request: TIdSipRequest);
 var
   OK:      String;
   Threads: TList;

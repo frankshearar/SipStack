@@ -20,19 +20,19 @@ type
     fTransportType:     TIdSipTransportType;
   protected
     function  GetBindings: TIdSocketHandles; override;
-    procedure SendRequest(const R: TIdSipRequest); override;
-    procedure SendResponse(const R: TIdSipResponse); override;
-    function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; override;
+    procedure SendRequest(R: TIdSipRequest); override;
+    procedure SendResponse(R: TIdSipResponse); override;
+    function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
-    constructor Create(const Port: Cardinal); override;
+    constructor Create(Port: Cardinal); override;
     destructor  Destroy; override;
 
-    procedure FireOnRequest(const R: TIdSipRequest);
-    procedure FireOnResponse(const R: TIdSipResponse);
+    procedure FireOnRequest(R: TIdSipRequest);
+    procedure FireOnResponse(R: TIdSipResponse);
     function  GetTransportType: TIdSipTransportType; override;
     function  IsReliable: Boolean; override;
     function  IsSecure: Boolean; override;
-    procedure RaiseException(const E: ExceptClass);
+    procedure RaiseException(E: ExceptClass);
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
     procedure ResetSentResponseCount;
@@ -57,7 +57,7 @@ implementation
 //******************************************************************************
 //* TIdSipMockTransport Public methods *****************************************
 
-constructor TIdSipMockTransport.Create(const Port: Cardinal);
+constructor TIdSipMockTransport.Create(Port: Cardinal);
 begin
   inherited Create(Port);
 
@@ -80,14 +80,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransport.FireOnRequest(const R: TIdSipRequest);
+procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 begin
   Self.NotifyTransportListeners(R);
 
   Self.LastRequest.Assign(R);
 end;
 
-procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
+procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
 begin
   Self.NotifyTransportListeners(R);
 
@@ -109,7 +109,7 @@ begin
   Result := Self.TransportType = sttTLS;
 end;
 
-procedure TIdSipMockTransport.RaiseException(const E: ExceptClass);
+procedure TIdSipMockTransport.RaiseException(E: ExceptClass);
 begin
   raise E.Create('TIdSipMockTransport');
 end;
@@ -144,7 +144,7 @@ begin
   Result := Self.fBindings;
 end;
 
-procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);
 begin
   inherited SendRequest(R);
 
@@ -165,7 +165,7 @@ begin
     Self.NotifyTransportListeners(R);
 end;
 
-procedure TIdSipMockTransport.SendResponse(const R: TIdSipResponse);
+procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
   inherited SendResponse(R);
 
@@ -180,7 +180,7 @@ begin
     Self.NotifyTransportListeners(R);
 end;
 
-function TIdSipMockTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;
+function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
 begin
   Result := true;
 end;

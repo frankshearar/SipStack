@@ -37,25 +37,25 @@ type
   end;
 
   TIdSipRequestEvent = procedure(Sender: TObject;
-                                 const R: TIdSipRequest) of object;
+                                 R: TIdSipRequest) of object;
 
   TestTIdSipTcpServer = class(TThreadingTestCase, IIdSipMessageListener)
   private
     procedure AcknowledgeEvent(Sender: TObject;
-                               const Request: TIdSipRequest); overload;
+                               Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
-                               const Response: TIdSipResponse;
-                               const ReceivedFrom: TIdSipConnectionBindings); overload;
+                               Response: TIdSipResponse;
+                               ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure CheckInternalServerError(Sender: TObject;
-                                       const Response: TIdSipResponse;
-                                       const ReceivedFrom: TIdSipConnectionBindings);
+                                       Response: TIdSipResponse;
+                                       ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckMultipleMessages(Sender: TObject;
-                                    const Request: TIdSipRequest);
+                                    Request: TIdSipRequest);
     procedure CheckMethodEvent(Sender: TObject;
-                               const Request: TIdSipRequest);
+                               Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                                     const Response: TIdSipResponse;
-                                                     const ReceivedFrom: TIdSipConnectionBindings);
+                                                     Response: TIdSipResponse;
+                                                     ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
@@ -65,21 +65,21 @@ type
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
     procedure ClientOnResponse(Sender: TObject;
-                               const Response: TIdSipResponse;
-                               const ReceivedFrom: TIdSipConnectionBindings);
+                               Response: TIdSipResponse;
+                               ReceivedFrom: TIdSipConnectionBindings);
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                   const Response: TIdSipResponse;
-                                                   const ReceivedFrom: TIdSipConnectionBindings);
+                                                   Response: TIdSipResponse;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnServerDisconnect(AThread: TIdPeerThread);
     procedure RaiseException(Sender: TObject;
-                             const Request: TIdSipRequest);
+                             Request: TIdSipRequest);
     function  ReadResponse: String;
     procedure Send200OK(Sender: TObject;
-                        const Request: TIdSipRequest);
+                        Request: TIdSipRequest);
   protected
     CheckingRequestEvent:   TIdSipRequestEvent;
     CheckingResponseEvent:  TIdSipResponseEvent;
@@ -373,27 +373,27 @@ end;
 //* TestTIdSipTcpServer Private methods ****************************************
 
 procedure TestTIdSipTcpServer.AcknowledgeEvent(Sender: TObject;
-                                               const Request: TIdSipRequest);
+                                               Request: TIdSipRequest);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpServer.AcknowledgeEvent(Sender: TObject;
-                                               const Response: TIdSipResponse;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+                                               Response: TIdSipResponse;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpServer.CheckInternalServerError(Sender: TObject;
-                                                       const Response: TIdSipResponse;
-                                                       const ReceivedFrom: TIdSipConnectionBindings);
+                                                       Response: TIdSipResponse;
+                                                       ReceivedFrom: TIdSipConnectionBindings);
 begin
   CheckEquals(SIPInternalServerError, Response.StatusCode, 'Status-Code');
 end;
 
 procedure TestTIdSipTcpServer.CheckMultipleMessages(Sender: TObject;
-                                                    const Request: TIdSipRequest);
+                                                    Request: TIdSipRequest);
 begin
   try
     Inc(Self.MethodCallCount);
@@ -411,7 +411,7 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
-                                               const Request: TIdSipRequest);
+                                               Request: TIdSipRequest);
 var
   Expected: TIdSipHeaders;
 begin
@@ -451,8 +451,8 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                                                     const Response: TIdSipResponse;
-                                                                     const ReceivedFrom: TIdSipConnectionBindings);
+                                                                     Response: TIdSipResponse;
+                                                                     ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -591,8 +591,8 @@ begin
 end;
 }
 procedure TestTIdSipTcpServer.ClientOnResponse(Sender: TObject;
-                                               const Response: TIdSipResponse;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+                                               Response: TIdSipResponse;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -608,8 +608,8 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                             const Response: TIdSipResponse;
-                                                             const ReceivedFrom: TIdSipConnectionBindings);
+                                                             Response: TIdSipResponse;
+                                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
   Fail('The connection is closed. The client should not receive a response');
 end;
@@ -634,7 +634,7 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.RaiseException(Sender: TObject;
-                                             const Request: TIdSipRequest);
+                                             Request: TIdSipRequest);
 begin
   raise Exception.Create('RaiseException');
 end;
@@ -653,7 +653,7 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.Send200OK(Sender: TObject;
-                                        const Request: TIdSipRequest);
+                                        Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin

@@ -8,7 +8,7 @@ uses
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
-                                 const R: TIdSipRequest) of object;
+                                 R: TIdSipRequest) of object;
 
   TestTIdSipUdpServer = class(TThreadingTestCase,
                               IIdSipMessageListener)
@@ -20,12 +20,12 @@ type
     Server:                TIdSipUdpServer;
 
     procedure AcknowledgeEvent(Sender: TObject;
-                               const Request: TIdSipRequest); overload;
+                               Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
-                               const Response: TIdSipResponse;
-                               const ReceivedFrom: TIdSipConnectionBindings); overload;
+                               Response: TIdSipResponse;
+                               ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure CheckRequest(Sender: TObject;
-                           const Request: TIdSipRequest);
+                           Request: TIdSipRequest);
     procedure CheckTortureTest16;
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
@@ -133,20 +133,20 @@ end;
 //* TestTIdSipUdpServer Private methods *****************************************
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
-                                               const Request: TIdSipRequest);
+                                               Request: TIdSipRequest);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
-                                               const Response: TIdSipResponse;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+                                               Response: TIdSipResponse;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject;
-                                           const Request: TIdSipRequest);
+                                           Request: TIdSipRequest);
 begin
   try
     CheckEquals(MethodInvite, Request.Method,        'Method');
