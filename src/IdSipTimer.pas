@@ -12,7 +12,7 @@ unit IdSipTimer;
 interface
 
 uses
-  Classes, IdThread;
+  Classes, IdThread, SyncObjs;
 
 type
   // I represent a recurring timer. Use me whenever you want an event to be
@@ -39,17 +39,22 @@ type
 
   // I provide a one-shot timer. I free myself once I've executed the notify
   // event you supply.
-  TIdSipSingleShotTimer = class(TThread)
+  TIdSipSingleShotTimer = class(TIdThread)
   private
-    Event:    TNotifyEvent;
-    fData:    TObject;
-    WaitTime: Cardinal;
+    Event:     TNotifyEvent;
+    fData:     TObject;
+    WaitEvent: TEvent;
+    WaitTime:  Cardinal;
   protected
-    procedure Execute; override;
+    procedure Run; override;
   public
     constructor Create(Event: TNotifyEvent;
                        WaitTime: Cardinal;
                        Data: TObject = nil); reintroduce;
+    destructor  Destroy; override;
+
+    procedure Terminate; override;
+
 
     property Data: TObject read fData;
   end;
@@ -115,21 +120,39 @@ constructor TIdSipSingleShotTimer.Create(Event: TNotifyEvent;
                                          Data: TObject = nil);
 begin
   inherited Create(false);
+
   Self.FreeOnTerminate := true;
+  Self.WaitEvent       := TSimpleEvent.Create;
 
   Self.Event    := Event;
   Self.fData    := Data;
   Self.WaitTime := WaitTime;
 end;
 
+destructor TIdSipSingleShotTimer.Destroy;
+begin
+  Self.WaitEvent.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipSingleShotTimer.Terminate;
+begin
+  inherited Terminate;
+
+  Self.WaitEvent.SetEvent;
+end;
+
 //* TIdSipSingleShotTimer Protected methods ************************************
 
-procedure TIdSipSingleShotTimer.Execute;
+procedure TIdSipSingleShotTimer.Run;
 begin
-  IdGlobal.Sleep(Self.WaitTime);
+  Self.WaitEvent.WaitFor(Self.WaitTime);
 
-  if Assigned(Self.Event) then
+  if not Self.Terminated and Assigned(Self.Event) then
     Self.Event(Self);
+
+  Self.Terminate;
 end;
 
 end.
