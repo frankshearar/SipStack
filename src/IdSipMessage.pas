@@ -4823,7 +4823,7 @@ begin
   try
     Parser.Source := RawData;
 
-    // chew up leading blank lines (Section 7.5)
+    // chew up leading blank lines (RFC 3261, section 7.5)
     Parser.SkipBlankLines;
 
     Result := Self.CreateAndReadMessageFrom(RawData,
