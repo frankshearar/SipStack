@@ -1688,7 +1688,7 @@ procedure TestTIdSipTransactionDispatcher.TestSendRequest;
 begin
   Self.MarkSentRequestCount;
 
-  Self.D.Send(Self.TranRequest);
+  Self.D.SendToTransport(Self.TranRequest);
 
   CheckRequestSent('No Request sent');
 end;
@@ -1700,7 +1700,7 @@ begin
   Self.MarkSentRequestCount;
 
   Self.TranRequest.LastHop.Transport := Self.MockTransport.TransportType;
-  Self.D.Send(Self.TranRequest);
+  Self.D.SendToTransport(Self.TranRequest);
 
   CheckRequestSent('No Request sent');
 end;
@@ -1712,7 +1712,7 @@ begin
   Self.MarkSentRequestCount;
 
   Self.TranRequest.LastHop.Transport := Self.MockTransport.TransportType;
-  Self.D.Send(Self.TranRequest);
+  Self.D.SendToTransport(Self.TranRequest);
 
   CheckRequestSent('No Request sent');
 end;
@@ -1723,7 +1723,7 @@ begin
 
   Self.MarkSentResponseCount;
 
-  Self.D.Send(Self.Response200);
+  Self.D.SendToTransport(Self.Response200);
 
   CheckResponseSent('No response sent');
 end;
@@ -1734,7 +1734,7 @@ begin
   Self.MockTransport.TransportType   := SctpTransport;
 
   try
-    Self.D.Send(Self.Response200);
+    Self.D.SendToTransport(Self.Response200);
     Fail('Failed to bail out');
   except
     on EUnknownTransport do;
@@ -1757,7 +1757,7 @@ begin
     UdpResponseCount := UdpTran.SentResponseCount;
 
     Self.Response200.LastHop.Transport := UdpTran.TransportType;
-    Self.D.Send(Self.Response200);
+    Self.D.SendToTransport(Self.Response200);
 
     Check(UdpResponseCount < UdpTran.SentResponseCount,
           'No response sent down UDP');
@@ -1790,7 +1790,7 @@ begin
       Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
 
     Self.Response200.LastHop.Transport := UdpTran.TransportType;
-    Self.D.Send(Self.Response200);
+    Self.D.SendToTransport(Self.Response200);
 
     Check(UdpResponseCount < UdpTran.SentResponseCount,
           'No response sent down UDP');
@@ -1823,7 +1823,7 @@ begin
       Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
                                                            + 'and with strange aeons even death may die.';
 
-    Self.D.Send(Self.TranRequest);
+    Self.D.SendToTransport(Self.TranRequest);
 
     CheckEquals(UdpRequestCount, UdpTran.SentRequestCount,
                 'UDP response was sent');

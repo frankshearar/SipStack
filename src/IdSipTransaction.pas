@@ -169,7 +169,7 @@ type
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
                             Request: TIdSipMessage);
-    procedure Send(Msg: TIdSipMessage); virtual;
+    procedure SendToTransport(Msg: TIdSipMessage); virtual;
     procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
     function  TransactionCount: Integer;
@@ -737,7 +737,7 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.Send(Msg: TIdSipMessage);
+procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage);
 var
   MsgLen:       Cardinal;
   RewrittenVia: Boolean;
@@ -772,7 +772,7 @@ begin
   if Request.IsAck then begin
     // Since ACKs to 200s live outside of transactions, we must send the
     // ACK directly to the transport layer.
-    Self.Send(Request);
+    Self.SendToTransport(Request);
   end
   else begin
     Tran := Self.FindTransaction(Request, true);
@@ -805,7 +805,7 @@ begin
       Self.RemoveTransaction(Tran);
   end
   else
-    Self.Send(Response);
+    Self.SendToTransport(Response);
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
@@ -1122,7 +1122,7 @@ procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: T
 begin
   // Three reasons why a transaction would terminate: one of its timers fired,
   // or a transport error occurred. Transport errors can only occur in
-  // Self.Send(Request|Response); timers happen in
+  // Self.SendToTransport(Request|Response); timers happen in
   // <transaction type>Transaction<timer name> methods -
   // ClientInviteTransactionTimerA etc.; 2xx terminate client INVITE transactions.
 
@@ -1467,7 +1467,7 @@ begin
   try
     CopyOfRequest.Assign(R);
     try
-      Self.Dispatcher.Send(CopyOfRequest);
+      Self.Dispatcher.SendToTransport(CopyOfRequest);
     except
       on E: EIdSipTransport do
         Self.DoOnTransportError(E.Transport,
@@ -1487,7 +1487,7 @@ begin
   try
     CopyOfResponse.Assign(R);
     try
-      Self.Dispatcher.Send(CopyOfResponse);
+      Self.Dispatcher.SendToTransport(CopyOfResponse);
     except
       on E: EIdSipTransport do
         Self.DoOnTransportError(E.Transport,

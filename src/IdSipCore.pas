@@ -1743,7 +1743,7 @@ begin
   try
     Response.StatusText := BadAuthorizationTokens;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendResponse(Response);
   finally
     Response.Free;
   end;
