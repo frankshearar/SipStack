@@ -514,7 +514,8 @@ begin
        + 'namely, this stack.');
 
   Msg.LastHop.Transport := Self.GetTransportType;
-  Msg.LastHop.SentBy := Self.HostName;
+  Msg.LastHop.SentBy    := Self.HostName;
+  Msg.LastHop.Port      := Self.Port;
 end;
 
 //******************************************************************************

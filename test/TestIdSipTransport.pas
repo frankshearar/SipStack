@@ -85,8 +85,12 @@ type
                                            Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
                                            Request: TIdSipRequest);
+    procedure CheckSendRequestFromNonStandardPort(Sender: TObject;
+                                                  R: TIdSipRequest);
     procedure CheckSendRequestTopVia(Sender: TObject;
                                      R: TIdSipRequest);
+    procedure CheckSendResponseFromNonStandardPort(Sender: TObject;
+                                                   R: TIdSipResponse);
     function  DefaultPort: Cardinal; virtual;
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -115,8 +119,10 @@ type
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
     procedure TestSendRequest;
+    procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
     procedure TestSendResponse;
+    procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseWithReceivedParam;
   end;
 
@@ -564,6 +570,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.CheckSendRequestFromNonStandardPort(Sender: TObject;
+                                                                  R: TIdSipRequest);
+begin
+  try
+    CheckEquals(Request.LastHop.Port,
+                Self.HighPortTransport.Bindings[0].Port,
+                Self.HighPortTransport.ClassName
+              + ': Port number on top via');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
                                                      R: TIdSipRequest);
 begin
@@ -574,6 +598,24 @@ begin
 
     Check(R.LastHop.HasBranch,
           Self.HighPortTransport.ClassName + ': Branch parameter missing');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTransport.CheckSendResponseFromNonStandardPort(Sender: TObject;
+                                                                   R: TIdSipResponse);
+begin
+  try
+    CheckEquals(Self.LowPortTransport.Bindings[0].Port,
+                R.LastHop.Port,
+                Self.HighPortTransport.ClassName
+              + ': Port number on top via');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -763,6 +805,16 @@ begin
         Self.HighPortTransport.ClassName + ': Request not received');
 end;
 
+procedure TestTIdSipTransport.TestSendRequestFromNonStandardPort;
+begin
+  Self.Request.RequestUri.Host := Self.LowPortTransport.HostName;
+  Self.Request.RequestUri.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.CheckingRequestEvent := Self.CheckSendRequestFromNonStandardPort;
+  Self.HighPortTransport.Send(Self.Request);
+
+  Self.WaitForSignaled;
+end;
+
 procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
@@ -781,6 +833,15 @@ begin
 
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
+end;
+
+procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;
+begin
+  Self.Response.LastHop.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.CheckingResponseEvent := Self.CheckSendResponseFromNonStandardPort;
+  Self.HighPortTransport.Send(Self.Response);
+
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
