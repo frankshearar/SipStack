@@ -2019,57 +2019,74 @@ end;
 
 function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
 begin
-  Result := TIdSipOutboundOptions.Create(Self);
+  Self.ActionLock.Acquire;
   try
-    Self.ActionLock.Acquire;
+    Result := TIdSipOutboundOptions.Create(Self);
     try
       Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
-    end;
-    Self.NotifyOfChange;
-  except
-    FreeAndNil(Result);
+    except
+      if (Self.Actions.IndexOf(Result) <> -1) then
+        Self.Actions.Remove(Result)
+      else
+        Result.Free;
 
-    raise;
+      Result := nil;
+
+      raise;
+    end;
+  finally
+    Self.ActionLock.Release;
   end;
+
+  Self.NotifyOfChange;
 end;
 
 function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
 begin
-  Result := TIdSipOutboundSession.Create(Self);
+  Self.ActionLock.Acquire;
   try
-    Self.ActionLock.Acquire;
+    Result := TIdSipOutboundSession.Create(Self);
     try
       Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
+    except
+      if (Self.Actions.IndexOf(Result) <> -1) then
+        Self.Actions.Remove(Result)
+      else
+        Result.Free;
+
+      Result := nil;
+
+      raise;
     end;
-
-    Self.NotifyOfChange;
-  except
-    FreeAndNil(Result);
-
-    raise;
+  finally
+    Self.ActionLock.Release;
   end;
+
+  Self.NotifyOfChange;
 end;
 
 function TIdSipUserAgentCore.AddOutboundRegistration: TIdSipOutboundRegistration;
 begin
-  Result := TIdSipOutboundRegistration.Create(Self);
+  Self.ActionLock.Acquire;
   try
-    Self.ActionLock.Acquire;
+    Result := TIdSipOutboundRegistration.Create(Self);
     try
       Self.Actions.Add(Result);
-    finally
-      Self.ActionLock.Release;
-    end;
-    Self.NotifyOfChange;
-  except
-    FreeAndNil(Result);
+    except
+      if (Self.Actions.IndexOf(Result) <> -1) then
+        Self.Actions.Remove(Result)
+      else
+        Result.Free;
 
-    raise;
+      Result := nil;
+
+      raise;
+    end;
+  finally
+    Self.ActionLock.Release;
   end;
+
+  Self.NotifyOfChange;
 end;
 
 
