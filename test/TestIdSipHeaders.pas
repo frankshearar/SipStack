@@ -3813,6 +3813,9 @@ begin
   CheckEquals(IdPORT_SIP,    Self.V.Port,           '1: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '1: SipVersion');
   CheckEquals(UdpTransport,  Self.V.Transport,      '1: Transport');
+  CheckEquals('SIP/1.5/UDP 127.0.0.1',
+              Self.V.Value,
+              'Port added?');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
