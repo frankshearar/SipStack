@@ -960,6 +960,7 @@ type
   public
     constructor Create(Headers: TIdSipHeaders);
 
+    function  CurrentHop: TIdSipViaHeader;
     function  LastHop: TIdSipViaHeader;
     function  Length: Integer;
     procedure RemoveLastHop;
@@ -5797,6 +5798,11 @@ end;
 constructor TIdSipViaPath.Create(Headers: TIdSipHeaders);
 begin
   inherited Create(Headers, ViaHeaderFull);
+end;
+
+function TIdSipViaPath.CurrentHop: TIdSipViaHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipViaHeader;
 end;
 
 function TIdSipViaPath.LastHop: TIdSipViaHeader;

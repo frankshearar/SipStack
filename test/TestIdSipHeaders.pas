@@ -617,6 +617,7 @@ type
   published
     procedure TestAddAndLastHop;
     procedure TestClear;
+    procedure TestCurrentHop;
     procedure TestRemoveLastHop;
   end;
 
@@ -5805,6 +5806,29 @@ begin
 
   Self.Path.Clear;
   CheckEquals(0, Self.Headers.Count, 'After Clear()');
+end;
+
+procedure TestTIdSipViaPath.TestCurrentHop;
+var
+  NewVia: TIdSipHeader;
+begin
+  Check(nil = Self.Path.CurrentHop,
+        'No headers');
+
+  Self.Headers.Add(RouteHeader);
+  Check(nil = Self.Path.CurrentHop,
+        'No Path');
+
+  NewVia := Self.Headers.Add(ViaHeaderFull);
+  Self.Path.First;
+  Check(NewVia = Self.Path.CurrentHop,
+        'First Via');
+
+  NewVia := Self.Headers.Add(ViaHeaderFull);
+  Self.Path.First;
+  Self.Path.Next;
+  Check(NewVia = Self.Path.CurrentHop,
+        'Second Via');
 end;
 
 procedure TestTIdSipViaPath.TestRemoveLastHop;
