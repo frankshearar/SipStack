@@ -1939,12 +1939,11 @@ begin
   Self.UdpTransport := TIdSipMockTransport.Create;
   Self.UdpTransport.TransportType := IdSipMessage.UdpTransport;
 
-
   Self.MockTransport := Self.UdpTransport;
 
   Self.D := TIdSipTransactionDispatcher.Create;
   Self.D.AddTransport(Self.TcpTransport);
-  Self.D.AddTransport(Self.UdpTransport);  
+  Self.D.AddTransport(Self.UdpTransport);
   Self.D.Locator := Self.L;
 
   Self.Request := TIdSipTestResources.CreateBasicRequest;
@@ -1975,37 +1974,25 @@ end;
 
 procedure TestLocation.TestNetworkFailureTriesAlternateDestinations;
 var
-  SctpTransport:     TIdSipMockTransport;
-  Tran:              TIdSipTransaction;
-  SctpResponseCount: Cardinal;
+  Tran: TIdSipTransaction;
 begin
-  SctpTransport := TIdSipMockTransport.Create;
-  try
-    SctpTransport.TransportType := IdSipMessage.SctpTransport;
-    Self.D.AddTransport(SctpTransport);
-    SctpResponseCount := SctpTransport.SentResponseCount;
+  // The transaction should try send the response to all the IPs returned by
+  // the A/AAAA lookup of the SRV of the sent-by (phew!).
 
-    Self.L.AddLocation('sip:' + Self.Response.LastHop.SentBy,
-                       IdSipMessage.SctpTransport,
-                       '127.0.0.1',
-                       IdPORT_SIP);
-    Self.L.AddLocation('sip:' + Self.Response.LastHop.SentBy,
-                       IdSipMessage.UdpTransport,
-                       '127.0.0.1',
-                       IdPORT_SIP);
+  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
+  Self.L.AddA('localhost', '127.0.0.1');
+  Self.L.AddA('localhost', '127.0.0.2');
 
-    Self.TcpTransport.FailWith := EIdConnectTimeout;
+  Self.TcpTransport.FailWith := EIdSipTransport;
 
-    Tran := Self.D.AddServerTransaction(Self.Request, Self.TcpTransport);
+  Tran := Self.D.AddServerTransaction(Self.Request, Self.TcpTransport);
 
-    Self.MarkSentResponseCount;
-    Tran.SendResponse(Self.Response);
+  Self.MarkSentResponseCount;
+  Tran.SendResponse(Self.Response);
 
-    Check(SctpResponseCount < SctpTransport.SentResponseCount,
-          'Wrong transport used');
-  finally
-    SctpTransport.Free;
-  end;
+  CheckEquals(Self.RequestCount + Cardinal(Self.L.NameRecords.Count),
+              Self.TcpTransport.SentResponseCount,
+              'Number of locations tried');
 end;
 
 procedure TestLocation.TestNormalOperation;
@@ -2013,6 +2000,9 @@ var
   Tran: TIdSipTransaction;
 begin
   Tran := Self.D.AddServerTransaction(Self.Request, Self.MockTransport);
+
+  Self.L.AddSRV(Self.Response.LastHop.SentBy, SrvTcpPrefix,  0, 0, IdPORT_SIP, 'localhost');
+  Self.L.AddA('localhost', '127.0.0.1');
 
   Self.MarkSentResponseCount;
   Tran.SendResponse(Self.Response);
