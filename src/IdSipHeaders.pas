@@ -921,7 +921,7 @@ begin
     ResultUri.Headers.Clear;
     ResultUri.Parameters.Clear;
 
-    Result := ResultUri.Uri;
+    Result := TIdSipUri.Decode(ResultUri.Uri);
   finally
     ResultUri.Free;
   end;
@@ -2793,26 +2793,29 @@ var
   OurHeaders:   TStringList;
   TheirHeaders: TStringList;
 begin
-  // In brief: TStringLists allow handy. We dump our headers in one TStringList
-  // and their headers in another, sort the lists and compare them. First
-  // though we try short-circuit the comparison.
+  // In brief: TStringLists allow handy sorting of strings. We dump our
+  // headers in one TStringList and their headers in another, sort the
+  // lists and compare them. First though we try short-circuit the
+  // comparison.
 
   Result := Self.Count = OtherHeaders.Count;
 
-  OurHeaders := TStringList.Create;
-  try
-    TheirHeaders := TStringList.Create;
+  if Result then begin
+    OurHeaders := TStringList.Create;
     try
-      DumpHeaders(Self, OurHeaders);
-      DumpHeaders(OtherHeaders, TheirHeaders);
+      TheirHeaders := TStringList.Create;
+      try
+        DumpHeaders(Self, OurHeaders);
+        DumpHeaders(OtherHeaders, TheirHeaders);
 
-      for I := 0 to OurHeaders.Count - 1 do
-        Result := (OurHeaders[I] = TheirHeaders[I]);
+        for I := 0 to OurHeaders.Count - 1 do
+          Result := (OurHeaders[I] = TheirHeaders[I]);
+      finally
+        TheirHeaders.Free;
+      end;
     finally
-      TheirHeaders.Free;
+      OurHeaders.Free;
     end;
-  finally
-    OurHeaders.Free;
   end;
 end;
 
