@@ -61,6 +61,7 @@ type
     procedure TestValueParameterClearing;
     procedure TestValueWithNewParams;
     procedure TestValueWithQuotedParams;
+    procedure TestUnparsedValue;
   end;
 
   TestTIdSipAddressHeader = class(THeaderTestCase)
@@ -547,7 +548,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, SysUtils;
+  Classes, IdSipConsts, SysUtils, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -1082,6 +1083,31 @@ begin
   CheckEquals(';branch=haha',
               Self.H.ParamsAsString,
               'Parameters not cleared');
+end;
+
+procedure TestTIdSipHeader.TestUnparsedValue;
+var
+  E: TIdSipExceptionRaisingHeader;
+begin
+  Self.H.Value := 'Fighters';
+  CheckEquals(Self.H.Value,
+              Self.H.UnparsedValue,
+              'Normal value');
+
+  E := TIdSipExceptionRaisingHeader.Create;
+  try
+    try
+      E.Value := 'foo';
+    except
+      on EBadHeader do;
+    end;
+
+    CheckEquals('foo',
+                E.UnparsedValue,
+                'Invalid value');
+  finally
+    E.Free;
+  end;
 end;
 
 //******************************************************************************

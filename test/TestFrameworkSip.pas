@@ -32,6 +32,11 @@ type
     procedure CheckEquals(Expected, Received: TIdSipURI; Message: String); overload;
   end;
 
+  TIdSipExceptionRaisingHeader = class(TIdSipHeader)
+  protected
+    procedure Parse(const Value: String); override;
+  end;
+
   TIdSipMockListener = class(TIdInterfacedObject)
   private
     fFailWith: ExceptClass;
@@ -424,7 +429,17 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipMockListener
+//* TIdSipExceptionRaisingHeader                                               *
+//******************************************************************************
+//* TIdSipExceptionRaisingHeader Protected methods *****************************
+
+procedure TIdSipExceptionRaisingHeader.Parse(const Value: String);
+begin
+  raise EBadHeader.Create('TIdSipExceptionRaisingHeader.Parse');
+end;
+
+//******************************************************************************
+//* TIdSipMockListener                                                         *
 //******************************************************************************
 //* TIdSipMockListener Public methods ******************************************
 

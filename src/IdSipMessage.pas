@@ -157,9 +157,10 @@ type
   //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   TIdSipHeader = class(TPersistent)
   private
-    fName:   String;
-    fParams: TStrings;
-    fValue:  String;
+    fName:          String;
+    fParams:        TStrings;
+    fValue:         String;
+    fUnparsedValue: String;
 
     function  GetParam(const Name: String): String;
     function  GetParameters: TStrings;
@@ -171,11 +172,12 @@ type
     procedure FailParse;
     function  GetName: String; virtual;
     function  GetValue: String; virtual;
+    procedure Parse(const Value: String); virtual;
     procedure ParseParameters(Value: String;
                               Parameters: TStrings;
                               Delimiter: String = ';');
     procedure SetName(const Value: String); virtual;
-    procedure SetValue(const Value: String); virtual;
+    procedure SetValue(const Value: String);
   public
     class function EncodeQuotedStr(const S: String): String;
     constructor Create; virtual;
@@ -194,6 +196,7 @@ type
     property Name:                       String read GetName write SetName;
     property Value:                      String read GetValue write SetValue;
     property Params[const Name: String]: String read GetParam write SetParam;
+    property UnparsedValue:              String read fUnparsedValue;
   end;
 
   TIdSipHeaderClass = class of TIdSipHeader;
@@ -205,7 +208,7 @@ type
     procedure SetAddress(Value: TIdSipUri);
   protected
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -220,7 +223,7 @@ type
     fDisplayName: String;
   protected
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     function AsAddressOfRecord: String;
     function AsToHeader: TIdSipToHeader;
@@ -255,7 +258,7 @@ type
     function  DigestResponseValue(const Name: String): String;
     function  GetValue: String; override;
     function  KnownResponse(const Name: String): Boolean; virtual;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     class function IsNonce(const Token: String): Boolean;
 
@@ -303,7 +306,7 @@ type
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
     function  GetName: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     function Equals(Header: TIdSipHeader): Boolean; override;
   end;
@@ -313,7 +316,7 @@ type
     fValues: TStrings;
   protected
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -349,7 +352,7 @@ type
                         Value: TIdSipWeightedValue);
   protected
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -373,7 +376,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     procedure RemoveExpires;
     function  WillExpire: Boolean;
@@ -401,7 +404,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     procedure Increment;
 
@@ -418,7 +421,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     destructor Destroy; override;
 
@@ -432,7 +435,7 @@ type
     function  GetTag: String;
     procedure SetTag(const Value: String);
   protected
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     function HasTag: Boolean;
     function Equals(Header: TIdSipHeader): Boolean; override;
@@ -450,7 +453,7 @@ type
     fNumericValue: Cardinal;
   protected
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     property NumericValue: Cardinal read fNumericValue write fNumericValue;
   end;
@@ -458,7 +461,7 @@ type
   TIdSipMaxForwardsHeader = class(TIdSipNumericHeader)
   protected
     function  GetName: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   end;
 
   TIdSipAuthenticateHeader = class(TIdSipHttpAuthHeader)
@@ -497,7 +500,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -531,7 +534,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -572,7 +575,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     procedure Assign(Src: TPersistent); override;
     function  DefaultPortForTransport(T: TIdSipTransportType): Cardinal;
@@ -603,7 +606,7 @@ type
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
+    procedure Parse(const Value: String); override;
   public
     class function IsHostPort(const Token: String): Boolean;
 
@@ -2187,6 +2190,20 @@ begin
   Result := fValue;
 end;
 
+procedure TIdSipHeader.Parse(const Value: String);
+var
+  S: String;
+begin
+  S := Value;
+
+  if (IndyPos(';', S) = 0) then
+    fValue := S
+  else
+    fValue := Trim(Fetch(S, ';', false));
+
+  Self.ParseParameters(S, Self.Parameters);
+end;
+
 procedure TIdSipHeader.ParseParameters(Value: String;
                                        Parameters: TStrings;
                                        Delimiter: String = ';');
@@ -2225,17 +2242,10 @@ begin
 end;
 
 procedure TIdSipHeader.SetValue(const Value: String);
-var
-  S: String;
 begin
-  S := Value;
+  Self.fUnparsedValue := Value;
 
-  if (IndyPos(';', S) = 0) then
-    fValue := S
-  else
-    fValue := Trim(Fetch(S, ';', false));
-
-  Self.ParseParameters(S, Self.Parameters);
+  Self.Parse(Value);
 end;
 
 //* TIdSipHeader Private methods ***********************************************
@@ -2311,7 +2321,7 @@ begin
     Result := '<' + Result + '>';
 end;
 
-procedure TIdSipUriHeader.SetValue(const Value: String);
+procedure TIdSipUriHeader.Parse(const Value: String);
 var
   AddrSpec:    String;
   DisplayName: String;
@@ -2331,7 +2341,7 @@ begin
   Self.Address.URI := AddrSpec;
   Fetch(S, '>');
 
-  inherited SetValue(S);
+  inherited Parse(S);
 end;
 
 //* TIdSipUriHeader Private methods ********************************************
@@ -2384,7 +2394,7 @@ begin
     Result := Result + ' ' + URI;
 end;
 
-procedure TIdSipAddressHeader.SetValue(const Value: String);
+procedure TIdSipAddressHeader.Parse(const Value: String);
 var
   AddrSpec:    String;
   DisplayName: String;
@@ -2503,12 +2513,12 @@ begin
          or (Name = UsernameParam);
 end;
 
-procedure TIdSipHttpAuthHeader.SetValue(const Value: String);
+procedure TIdSipHttpAuthHeader.Parse(const Value: String);
 var
   S: String;
 
 begin
-  inherited SetValue(Value);
+  inherited Parse(Value);
 
   S := Value;
   Self.AuthorizationScheme := Fetch(S, ' ');
@@ -2732,7 +2742,7 @@ begin
   Result := CallIDHeaderFull;
 end;
 
-procedure TIdSipCallIdHeader.SetValue(const Value: String);
+procedure TIdSipCallIdHeader.Parse(const Value: String);
 var
   Val: String;
   Token: String;
@@ -2746,7 +2756,7 @@ begin
   else if not TIdSipParser.IsWord(Value) then
     Self.FailParse;
 
-  inherited SetValue(Value);
+  inherited Parse(Value);
 end;
 
 //******************************************************************************
@@ -2792,7 +2802,7 @@ begin
     Result := Result + Self.Values[Self.Values.Count - 1];
 end;
 
-procedure TIdSipCommaSeparatedHeader.SetValue(const Value: String);
+procedure TIdSipCommaSeparatedHeader.Parse(const Value: String);
 var
   S: String;
 begin
@@ -2903,7 +2913,7 @@ begin
   Delete(Result, Length(Result) - 1, 2);
 end;
 
-procedure TIdSipWeightedCommaSeparatedHeader.SetValue(const Value: String);
+procedure TIdSipWeightedCommaSeparatedHeader.Parse(const Value: String);
 var
   S:          String;
   MediaRange: String;
@@ -2991,7 +3001,7 @@ begin
     Result := inherited GetValue;
 end;
 
-procedure TIdSipContactHeader.SetValue(const Value: String);
+procedure TIdSipContactHeader.Parse(const Value: String);
 var
   S: String;
 begin
@@ -3001,7 +3011,7 @@ begin
   if Self.IsWildCard then
     Self.ParseParameters(Value, Self.Parameters)
   else
-    inherited SetValue(Value);
+    inherited Parse(Value);
 
   if (Self.IndexOfParam(QParam) > -1) and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse;
@@ -3085,7 +3095,7 @@ begin
   Result := IntToStr(Self.SequenceNo) + ' ' + Self.Method;
 end;
 
-procedure TIdSipCSeqHeader.SetValue(const Value: String);
+procedure TIdSipCSeqHeader.Parse(const Value: String);
 var
   S:     String;
   Token: String;
@@ -3146,9 +3156,9 @@ begin
   Result := Self.Time.GetAsRFC822;
 end;
 
-procedure TIdSipDateHeader.SetValue(const Value: String);
+procedure TIdSipDateHeader.Parse(const Value: String);
 begin
-  inherited SetValue(Value);
+  inherited Parse(Value);
 
   Self.SetAbsoluteTime(Value);
 end;
@@ -3207,9 +3217,9 @@ end;
 
 //* TIdSipFromToHeader Protected methods ***************************************
 
-procedure TIdSipFromToHeader.SetValue(const Value: String);
+procedure TIdSipFromToHeader.Parse(const Value: String);
 begin
-  inherited SetValue(Value);
+  inherited Parse(Value);
 
   if (Self.IndexOfParam(TagParam) > -1)
     and not TIdSipParser.IsToken(Self.Params[TagParam]) then
@@ -3258,7 +3268,7 @@ begin
   Result := MaxForwardsHeader;
 end;
 
-procedure TIdSipMaxForwardsHeader.SetValue(const Value: String);
+procedure TIdSipMaxForwardsHeader.Parse(const Value: String);
 var
   N: Cardinal;
   E: Integer;
@@ -3268,7 +3278,7 @@ begin
   if (E <> 0) or (N > 255) then
     Self.FailParse;
 
-  inherited SetValue(Value);
+  inherited Parse(Value);
 end;
 
 //******************************************************************************
@@ -3347,7 +3357,7 @@ begin
   Result := IntToStr(fNumericValue);
 end;
 
-procedure TIdSipNumericHeader.SetValue(const Value: String);
+procedure TIdSipNumericHeader.Parse(const Value: String);
 begin
   if not TIdSipParser.IsNumber(Value) then
     Self.FailParse
@@ -3363,7 +3373,7 @@ begin
         raise;
     end;
 
-    inherited SetValue(Value);
+    inherited Parse(Value);
   end;
 end;
 
@@ -3428,7 +3438,7 @@ begin
     Result := Result + ' ' + URI;
 end;
 
-procedure TIdSipRouteHeader.SetValue(const Value: String);
+procedure TIdSipRouteHeader.Parse(const Value: String);
 var
   AddrSpec:     String;
   DisplayName:  String;
@@ -3447,7 +3457,7 @@ begin
   HeaderParams := Value;
   Fetch(HeaderParams, '>');
 
-  inherited SetValue(HeaderParams);
+  inherited Parse(HeaderParams);
 end;
 
 //* TIdSipRouteHeader Private methods ******************************************
@@ -3540,7 +3550,7 @@ begin
     Result := Result + IntToStr(Self.Timestamp.FractionalPart);
 end;
 
-procedure TIdSipTimestampHeader.SetValue(const Value: String);
+procedure TIdSipTimestampHeader.Parse(const Value: String);
 var
   S: String;
 begin
@@ -3672,12 +3682,12 @@ begin
     Result := Result + ':' + IntToStr(Self.Port);
 end;
 
-procedure TIdSipViaHeader.SetValue(const Value: String);
+procedure TIdSipViaHeader.Parse(const Value: String);
 var
   Token: String;
   S:     String;
 begin
-  inherited SetValue(Value);
+  inherited Parse(Value);
 
   Self.AssertBranchWellFormed;
   Self.AssertReceivedWellFormed;
@@ -3839,7 +3849,7 @@ begin
   Result := Format('%d %s "%s"', [Self.Code, Self.Agent, Self.EncodeQuotedStr(Self.Text)]);
 end;
 
-procedure TIdSipWarningHeader.SetValue(const Value: String);
+procedure TIdSipWarningHeader.Parse(const Value: String);
 var
   S: String;
   Token: String;
