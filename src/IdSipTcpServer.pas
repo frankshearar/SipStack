@@ -87,15 +87,9 @@ type
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
     procedure DoOnParserError(const RawMessage, Reason: String);
-    procedure OnException(T: TIdThread;
-                          E: Exception);
-    procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
-    procedure ReturnBadRequest(Connection: TIdTCPConnection;
-                               Request: TIdSipRequest;
-                               const Reason: String);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         Reason: String;
                                         Parser: TIdSipParser);
@@ -379,8 +373,8 @@ begin
         Parser.Source := S;
         Parser.OnParserError := Self.DoOnParserError;
 
+        Msg := Parser.ParseAndMakeMessage;
         try
-          Msg := Parser.ParseAndMakeMessage;
           try
             try
               Msg.Body := Self.ReadBody(AThread.Connection, Msg);
@@ -395,23 +389,24 @@ begin
               // If Self.ReadBody closes the connection, we don't want to AddConnection!
               if not ConnTimedOut then
                 Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-                
+
               Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
                                                      ReceivedFrom);
             end
             else
               Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
                                                       ReceivedFrom);
-          finally
-            Msg.Free;
+          except
+            on E: Exception do begin
+              // This results in returning a 500 Internal Server Error to a response!
+              Self.ReturnInternalServerError(AThread.Connection, E.Message, Parser);
+              AThread.Connection.DisconnectSocket;
+              Self.Notifier.NotifyListenersOfException(E,
+                                                       'TCP Server: ' + E.Message);
+            end;
           end;
-        except
-          on E: Exception do begin
-            Self.ReturnInternalServerError(AThread.Connection, E.Message, Parser);
-            AThread.Connection.DisconnectSocket;
-            Self.Notifier.NotifyListenersOfException(E,
-                                                     'TCP Server: ' + E.Message);
-          end;
+        finally
+          Msg.Free;
         end;
       finally
         Parser.Free;
@@ -442,38 +437,9 @@ begin
   Self.Notifier.NotifyListenersOfMalformedMessage(RawMessage, Reason);
 end;
 
-procedure TIdSipTcpServer.OnException(T: TIdThread;
-                                      E: Exception);
-begin
-  Self.Notifier.NotifyListenersOfException(E,
-                                           'Connection Cutter Timer: '
-                                         + E.Message);
-end;
-
-procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
-begin
-  (Sender as TIdSipTcpConnectionCutter).Connection.DisconnectSocket;
-end;
-
 function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection;
                                   Message: TIdSipMessage): String;
-var
-  Timer: TIdSipTcpConnectionCutter;
 begin
-{
-  if (Self.ReadBodyTimeout > 0) then begin
-    Timer := TIdSipTcpConnectionCutter.Create(true);
-    try
-      Timer.Connection      := Connection;
-      Timer.FreeOnTerminate := true;
-      Timer.OnException     := Self.OnException;
-      Timer.OnTimer         := Self.OnReadBodyTimeout;
-      Timer.Start;
-    except
-      Timer.Free;
-    end;
-  end;
-}
   Result := Connection.ReadString(Message.ContentLength);
 end;
 
@@ -493,22 +459,6 @@ begin
     Result.Free;
 
     raise;
-  end;
-end;
-
-procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection;
-                                           Request: TIdSipRequest;
-                                           const Reason: String);
-var
-  Res: TIdSipResponse;
-begin
-  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
-  try
-    Res.StatusText := Reason;
-
-    Connection.Write(Res.AsString);
-  finally
-    Res.Free;
   end;
 end;
 
