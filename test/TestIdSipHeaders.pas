@@ -8,6 +8,8 @@ uses
 type
   TestFunctions = class(TTestCase)
   published
+    procedure TestDecodeQuotedStr;
+    procedure TestIsQuoted;
     procedure TestNeedsQuotes;
     procedure TestQuoteStringIfNecessary;
     procedure TestQValueToStr;
@@ -15,6 +17,7 @@ type
     procedure TestStrToQValueDef;
     procedure TestStrToTransport;
     procedure TestTransportToStr;
+    procedure TestWithoutFirstAndLastChars;
   end;
 
   THeaderTestCase = class(TTestCase)
@@ -48,6 +51,7 @@ type
     procedure TestParamsAsString;
     procedure TestValueParameterClearing;
     procedure TestValueWithNewParams;
+    procedure TestValueWithQuotedParams;
   end;
 
   TestTIdSipAddressHeader = class(THeaderTestCase)
@@ -77,6 +81,32 @@ type
     procedure TestValueWithSpecialChars;
     procedure TestValueWithTrailingWhitespacePlusParam;
     procedure TestValueWithUnquotedNonTokensPlusParam;
+  end;
+
+  TestTIdSipAuthorizationHeader = class(THeaderTestCase)
+  private
+    A: TIdSipAuthorizationHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAlgorithm;
+    procedure TestCNonce;
+    procedure TestDigestResponse;
+    procedure TestDigestUri;
+    procedure TestIsBasic;
+    procedure TestIsDigest;
+    procedure TestNonce;
+    procedure TestIsNonce;
+    procedure TestNonceCount;
+    procedure TestOpaque;
+    procedure TestQop;
+    procedure TestRealm;
+    procedure TestSetValue;
+    procedure TestUnknownResponses;
+    procedure TestUnquotedResponse;
+    procedure TestUsername;
   end;
 
   TestTIdSipCallIDHeader = class(THeaderTestCase)
@@ -442,10 +472,13 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipHeaders unit tests');
-
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
+}
+  Result.AddTest(TestTIdSipAuthorizationHeader.Suite);
+{
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
@@ -467,12 +500,45 @@ begin
   Result.AddTest(TestTIdSipContacts.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+}
 end;
 
 //******************************************************************************
 //* TestFunctions                                                              *
 //******************************************************************************
 //* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestDecodeQuotedStr;
+var
+  Answer: String;
+begin
+  Check(DecodeQuotedStr('', Answer), 'Decoding ''''');
+  CheckEquals('', Answer, 'Result of decoding ''''');
+
+  Check(DecodeQuotedStr('\\', Answer), 'Decoding \\');
+  CheckEquals('\', Answer, 'Result of decoding \\');
+
+  Check(DecodeQuotedStr('\"', Answer), 'Decoding \"');
+  CheckEquals('"', Answer, 'Result of decoding \"');
+
+  Check(DecodeQuotedStr('\a', Answer), 'Decoding \a');
+  CheckEquals('a', Answer, 'Result of decoding \a');
+
+  Check(DecodeQuotedStr('\"foo\\bar\"', Answer), 'Decoding \"foo\\bar\"');
+  CheckEquals('"foo\bar"', Answer, 'Result of decoding \"foo\\bar\"');
+
+  Check(not DecodeQuotedStr('\', Answer), 'Decoding \');
+  Check(not DecodeQuotedStr('"', Answer), 'Decoding "');
+end;
+
+procedure TestFunctions.TestIsQuoted;
+begin
+  Check(    IsQuoted('"I am Quoted"'),    '"I am Quoted"');
+  Check(not IsQuoted('"I am not Quoted'), '"I am not Quoted');
+  Check(not IsQuoted('I am not Quoted"'), 'I am not Quoted"');
+  Check(not IsQuoted('I am not Quoted'),  'I am not Quoted');
+  Check(not IsQuoted(''),                 '''''');
+end;
 
 procedure TestFunctions.TestNeedsQuotes;
 begin
@@ -663,6 +729,14 @@ var
 begin
   for T := Low(TIdSipTransportType) to High(TIdSipTransportType) do
     Check(T = StrToTransport(TransportToStr(T)), 'Ord(T) = ' + IntToStr(Ord(T)));
+end;
+
+procedure TestFunctions.TestWithoutFirstAndLastChars;
+begin
+  CheckEquals('bc', WithoutFirstAndLastChars('abcd'), 'abcd');
+  CheckEquals('',   WithoutFirstAndLastChars('ab'), 'ab');
+  CheckEquals('',   WithoutFirstAndLastChars('a'), 'a');
+  CheckEquals('',   WithoutFirstAndLastChars(''), '''''');
 end;
 
 //******************************************************************************
@@ -901,8 +975,9 @@ procedure TestTIdSipHeader.TestParamsAsString;
 begin
   Self.H.Params['branch'] := 'z9hG4bK776asdhds';
   Self.H.Params['ttl']    := '5';
+  Self.H.Params['foo']    := 'foo bar\';
 
-  CheckEquals(';branch=z9hG4bK776asdhds;ttl=5',
+  CheckEquals(';branch=z9hG4bK776asdhds;ttl=5;foo="foo bar\\"',
               Self.H.ParamsAsString,
               'ParamsAsString');
 end;
@@ -919,6 +994,14 @@ begin
   Self.H.Value := 'Fighters;branch=haha';
   Self.H.Value := 'Fighters;tickle=feather';
   CheckEquals(';tickle=feather', Self.H.ParamsAsString, 'Parameters not cleared');
+end;
+
+procedure TestTIdSipHeader.TestValueWithQuotedParams;
+begin
+  Self.H.Value := 'Fighters;branch="haha"';
+  CheckEquals(';branch=haha',
+              Self.H.ParamsAsString,
+              'Parameters not cleared');
 end;
 
 //******************************************************************************
@@ -1222,6 +1305,255 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipAuthorizationHeader                                              *
+//******************************************************************************
+//* TestTIdSipAuthorizationHeader Public methods *******************************
+
+procedure TestTIdSipAuthorizationHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.A := Self.Header as TIdSipAuthorizationHeader;
+end;
+
+//* TestTIdSipAuthorizationHeader Protected methods ****************************
+
+function TestTIdSipAuthorizationHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipAuthorizationHeader;
+end;
+
+//* TestTIdSipAuthorizationHeader Published methods ****************************
+
+procedure TestTIdSipAuthorizationHeader.TestAlgorithm;
+var
+  Value: String;
+begin
+  Value := 'SHA-1024';
+  Self.A.Algorithm := Value;
+  CheckEquals(Value,
+              Self.A.Algorithm,
+              'Algorithm');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestCNonce;
+var
+  Value: String;
+begin
+  Value := '00f00f00f00f';
+  Self.A.CNonce := Value;
+  CheckEquals(Value,
+              Self.A.CNonce,
+              'CNonce');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestDigestResponse;
+var
+  Value: String;
+begin
+  Value := 'f00f00f00f00';
+  Self.A.DigestResponse := Value;
+  CheckEquals(Value,
+              Self.A.DigestResponse,
+              'DigestResponse');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestDigestUri;
+var
+  Value: String;
+begin
+  Value := 'sip:sos@tessier-ashpool.co.luna';
+  Self.A.DigestUri := Value;
+  CheckEquals(Value,
+              Self.A.DigestUri,
+              'DigestUri');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestIsBasic;
+begin
+  Self.A.AuthorizationScheme := 'foo';
+  Check(not Self.A.IsBasic, 'foo');
+
+  Self.A.AuthorizationScheme := Lowercase(BasicAuthorizationScheme);
+  Check(Self.A.IsBasic, Lowercase(BasicAuthorizationScheme));
+
+  Self.A.AuthorizationScheme := BasicAuthorizationScheme;
+  Check(Self.A.IsBasic, BasicAuthorizationScheme);
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestIsDigest;
+begin
+  Self.A.AuthorizationScheme := 'foo';
+  Check(not Self.A.IsDigest, 'foo');
+
+  Self.A.AuthorizationScheme := Lowercase(DigestAuthorizationScheme);
+  Check(Self.A.IsDigest, Lowercase(DigestAuthorizationScheme));
+
+  Self.A.AuthorizationScheme := DigestAuthorizationScheme;
+  Check(Self.A.IsDigest, DigestAuthorizationScheme);
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestIsNonce;
+begin
+  Check(Self.A.IsNonce(''), '''''');
+  Check(Self.A.IsNonce('foo'), 'foo');
+  Check(Self.A.IsNonce('fo\"o'), 'fo\"o');
+  Check(not Self.A.IsNonce('foo\'), 'foo\');
+  Check(Self.A.IsNonce('foo\\'), 'foo\\');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestNonce;
+var
+  Value: String;
+begin
+  Value := 'f00f00f00f00';
+  Self.A.Nonce := Value;
+  CheckEquals(Value,
+              Self.A.Nonce,
+              'Nonce');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestNonceCount;
+begin
+  Self.A.NonceCount := $f00f;
+  CheckEquals(IntToHex($f00f, 4),
+              IntToHex(Self.A.NonceCount, 4),
+              '$f00f');
+
+  Self.A.NonceCount := 0;
+  CheckEquals(IntToHex(0, 4),
+              IntToHex(Self.A.NonceCount, 4),
+              '0');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestOpaque;
+var
+  Value: String;
+begin
+  Value := 'transparent';
+  Self.A.Opaque := Value;
+  CheckEquals(Value,
+              Self.A.Opaque,
+              'Opaque');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestQop;
+var
+  Value: String;
+begin
+  Value := 'don''t even know what this is';
+  Self.A.Qop := Value;
+  CheckEquals(Value,
+              Self.A.Qop,
+              'Qop');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestRealm;
+var
+  Value: String;
+begin
+  Value := 'tessier-ashpool.co.luna';
+  Self.A.Realm := Value;
+  CheckEquals(Value,
+              Self.A.Realm,
+              'Realm');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestSetValue;
+begin
+  Self.A.Value := 'Digest username="Alice",realm="atlanta.com", '
+                + 'algorithm="MD5", '
+                + 'cnonce="f00f00", '
+                + 'nonce="84a4cc6f3082121f32b42a2187831a9e", '
+                + 'nc="8f", '
+                + 'opaque="aaaabbbb", '
+                + 'otherparam=foo,'
+                + 'qop=" token",'
+                + 'uri="tel://112", '
+                + 'response="7587245234b3434cc3412213e5f113a5432"';
+
+  Check(Self.A.IsDigest, 'Authorization Scheme');
+  CheckEquals('MD5',
+              Self.A.Algorithm,
+              'Algorithm');
+  CheckEquals('f00f00',
+              Self.A.CNonce,
+              'CNonce');
+  CheckEquals('7587245234b3434cc3412213e5f113a5432',
+              Self.A.DigestResponse,
+              'DigestResponse');
+  CheckEquals('tel://112',
+              Self.A.DigestUri,
+              'DigestUri');
+  CheckEquals('84a4cc6f3082121f32b42a2187831a9e',
+              Self.A.Nonce,
+              'Nonce');
+  CheckEquals(IntToHex($8f, 2),
+              IntToHex(Self.A.NonceCount, 2),
+              'NonceCount');
+  CheckEquals('aaaabbbb',
+              Self.A.Opaque,
+              'Opaque');
+  CheckEquals(' token',
+              Self.A.Qop,
+              'Qop');
+  CheckEquals('atlanta.com',
+              Self.A.Realm,
+              'Realm');
+  CheckEquals('Alice',
+              Self.A.Username,
+              'Username');
+  CheckEquals('foo',
+              Self.A.UnknownResponses['otherparam'],
+              'otherparam');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUnknownResponses;
+var
+  Value: String;
+begin
+  Value := 'Wonky';
+  Self.A.UnknownResponses['skew'] := Value;
+  CheckEquals(Value,
+              Self.A.UnknownResponses['skew'],
+              'Unknown response');
+
+  Value := '';
+  Self.A.UnknownResponses['skew'] := Value;
+  CheckEquals(Value,
+              Self.A.UnknownResponses['skew'],
+              'Unknown response, blanked out');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUnquotedResponse;
+begin
+  try
+    Self.A.Value := 'Digest username=Alice"';
+    Fail('Failed to bail out on quoted-string without leading quote');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.A.Value := 'Digest username="Alice';
+    Fail('Failed to bail out on quoted-string without trailing quote');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUsername;
+var
+  Value: String;
+begin
+  Value := 'Alice';
+  Self.A.Username := Value;
+  CheckEquals(Value,
+              Self.A.Username,
+              'Username');
 end;
 
 //******************************************************************************

@@ -76,6 +76,7 @@ type
   published
     procedure TestAckForEstablishingDialog;
     procedure TestAckFor;
+    procedure TestAckForWithAuthentication;
     procedure TestAckForWithRoute;
     procedure TestAddressOfRecord;
     procedure TestAssign;
@@ -911,6 +912,30 @@ begin
     CheckEquals(MethodAck,
                 Ack.Cseq.Method,
                 'CSeq method');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestAckForWithAuthentication;
+var
+  Ack: TIdSipRequest;
+begin
+  Self.Request.Method := MethodInvite;
+  Self.Request.AddHeader(AuthorizationHeader).Value := 'foo';
+  Self.Request.AddHeader(ProxyAuthorizationHeader).Value := 'foo';
+
+  Ack := Self.Request.AckFor(Self.Response);
+  try
+    Check(Ack.HasHeader(AuthorizationHeader),
+          'No Authorization header');
+    Check(Ack.FirstHeader(AuthorizationHeader).Equals(Self.Request.FirstHeader(AuthorizationHeader)),
+          'Authorization');
+
+    Check(Ack.HasHeader(ProxyAuthorizationHeader),
+          'No Proxy-Authorization header');
+    Check(Ack.FirstHeader(ProxyAuthorizationHeader).Equals(Self.Request.FirstHeader(ProxyAuthorizationHeader)),
+          'Proxy-Authorization');
   finally
     Ack.Free;
   end;
