@@ -280,13 +280,13 @@ begin
   Self.Log(R.AsString, dirOut);
   Self.fResponses.AddCopy(R);
 
+  Inc(Self.fSentResponseCount);
+
   if Assigned(Self.FailWith) then
     raise EIdSipTransport.Create(Self,
                                  R,
                                  'TIdSipMockTransport.SendResponse ('
                                + Self.FailWith.ClassName + ')');
-
-  Inc(Self.fSentResponseCount);
 
   Self.DispatchResponse(R);
 end;
