@@ -46,6 +46,7 @@ type
     function  SentAckCount: Cardinal;
     function  SentRequestCount: Cardinal;
     function  SentResponseCount: Cardinal;
+    function  ThirdLastSentRequest: TIdSipRequest;
     procedure ReceiveAck;
     procedure ReceiveAckFor(Request: TIdSipRequest;
                              Response: TIdSipResponse);
@@ -54,13 +55,18 @@ type
     procedure ReceiveInvite;
 
     procedure ReceiveOk(Invite: TIdSipRequest);
+    procedure ReceiveOkFrom(Invite: TIdSipRequest;
+                            const Contact: String);
     procedure ReceiveMovedPermanently(const SipUrl: String);
     procedure ReceiveResponse(StatusCode: Cardinal); overload;
     procedure ReceiveRinging(Invite: TIdSipRequest);
     procedure ReceiveTrying(Invite: TIdSipRequest);
+    procedure ReceiveTryingFrom(Invite: TIdSipRequest;
+                                const Contact: String);
     procedure ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
     procedure ReceiveUnauthorized(const AuthHeaderName: String;
                                   const Qop: String);
+    function  SentRequestAt(Index: Integer): TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -1154,6 +1160,11 @@ begin
   Result := Self.Dispatcher.Transport.SentResponseCount;
 end;
 
+function TTestCaseTU.ThirdLastSentRequest: TIdSipRequest;
+begin
+  Result := Self.Dispatcher.Transport.ThirdLastRequest;
+end;
+
 procedure TTestCaseTU.ReceiveAck;
 var
   Ack: TIdSipRequest;
@@ -1191,6 +1202,23 @@ begin
   // WILL have a To tag.
   Response := Self.CreateRemoteOk(Invite);
   try
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TTestCaseTU.ReceiveOkFrom(Invite: TIdSipRequest;
+                                    const Contact: String);
+var
+  Response: TIdSipResponse;
+begin
+  // This message appears to originate from the network. Invite originates from
+  // us so presumably has no To tag. Having come from the network, the response
+  // WILL have a To tag.
+  Response := Self.CreateRemoteOk(Invite);
+  try
+    Response.FirstContact.Value := Contact;
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
@@ -1266,8 +1294,29 @@ begin
 end;
 
 procedure TTestCaseTU.ReceiveTrying(Invite: TIdSipRequest);
+var
+  Response: TIdSipResponse;
 begin
-  Self.ReceiveResponse(SIPTrying);
+  Response := Self.Core.CreateResponse(Invite, SIPTrying);
+  try
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TTestCaseTU.ReceiveTryingFrom(Invite: TIdSipRequest;
+                                        const Contact: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Invite, SIPTrying);
+  try
+    Response.FirstContact.Value := Contact;
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TTestCaseTU.ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
@@ -1306,6 +1355,11 @@ begin
   finally
     Challenge.Free;
   end;
+end;
+
+function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
+begin
+  Result := Self.Dispatcher.Transport.RequestAt(Index);
 end;
 
 //* TTestCaseTU Private methods ************************************************
@@ -7023,6 +7077,8 @@ procedure TestTIdSipOutboundSession.SetUp;
 begin
   inherited SetUp;
 
+  Self.Dispatcher.Transport.WriteLog := true;
+
   SDP :='v=0'#13#10
       + 'o=franks 123456 123456 IN IP4 127.0.0.1'#13#10
       + 's=-'#13#10
@@ -7793,15 +7849,39 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.TestRedirectMultipleOks;
+const
+  FirstInvite    = 0;
+  FirstRedirect  = 1;
+  SecondRedirect = 2;
+  ThirdRedirect  = 3;
+  Bye            = 4;
+  Cancel         = 5;
 var
   Contacts: array of String;
 begin
-  SetLength(Contacts, 2);
+  //                               Request number:
+  //  ---       INVITE        ---> #0
+  // <---   302 (foo,bar,baz) ---
+  //  ---        ACK          --->
+  //  ---     INVITE(foo)     ---> #1
+  //  ---     INVITE(bar)     ---> #2
+  //  ---     INVITE(baz)     ---> #3
+  // <---      200 (bar)      ---
+  //  ---        ACK          --->
+  // <---      200 (foo)      ---
+  //  ---        ACK          --->
+  //  ---        BYE          ---> #4 (because we've already established a session)
+  // <---    200 (foo,BYE)    ---
+  // <---      100 (baz)      ---
+  //  ---       CANCEL        ---> #5
+  // <---  200 (baz,CANCEL)   ---
+
+  SetLength(Contacts, 3);
   Contacts[0] := 'sip:foo@bar.org';
   Contacts[1] := 'sip:bar@bar.org';
+  Contacts[2] := 'sip:baz@bar.org';
 
   Self.MarkSentRequestCount;
-
   Self.ReceiveMovedTemporarily(Contacts);
 
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
@@ -7810,12 +7890,31 @@ begin
               'Session didn''t attempt to contact all Contacts');
 
   Self.MarkSentRequestCount;
-  Self.ReceiveOk(Self.SecondLastSentRequest);
-  Self.ReceiveOk(Self.LastSentRequest);
-  CheckRequestSent('We expect the session to send a BYE');
+  Self.ReceiveOkFrom(Self.SentRequestAt(SecondRedirect), Contacts[1]);
+  Self.ReceiveOkFrom(Self.SentRequestAt(FirstRedirect), Contacts[0]);
+  Self.ReceiveTryingFrom(Self.SentRequestAt(ThirdRedirect), Contacts[2]);
+
+  // We expect a BYE in response to the 1st UA's 2xx and a CANCEL to the 2nd
+  // UA's 1xx.
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts) - 1),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t try to kill all but one of the redirected INVITEs');
+
+  CheckRequestSent('We expect the session to send _something_');
   CheckEquals(MethodBye,
-              Self.LastSentRequest.Method,
-              'Unexpected request sent');
+              Self.SentRequestAt(Bye).Method,
+              'Unexpected first request sent');
+  CheckEquals(Contacts[0],
+              Self.SentRequestAt(Bye).RequestUri.Uri,
+              'Unexpected target for the first BYE');
+  CheckEquals(MethodCancel,
+              Self.SentRequestAt(Cancel).Method,
+              'Unexpected second request sent');
+  CheckEquals(Contacts[2],
+              Self.SentRequestAt(Cancel).RequestUri.Uri,
+              'Unexpected target for the second BYE');
 end;
 
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
