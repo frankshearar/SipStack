@@ -75,6 +75,16 @@ var
   Msg:          TIdSipMessage;
   ReceivedFrom: TIdSipConnectionBindings;
 begin
+  // Note that if AData contains a fragment of a message we don't care to
+  // reassemble the packet. RFC 3261 section 18.3 tells us:
+
+  //   If the transport packet ends before the end of the
+  //   message body, this is considered an error.  If the message is a
+  //   response, it MUST be discarded.  If the message is a request, the
+  //   element SHOULD generate a 400 (Bad Request) response.  If the message
+  //   has no Content-Length header field, the message body is assumed to
+  //   end at the end of the transport packet.
+
   inherited DoUDPRead(AData, ABinding);
 
   ReceivedFrom.LocalIP   := ABinding.IP;
