@@ -14,7 +14,7 @@
   buttons not en/disabling etc. The unit does provide you with some examples of
   how to use the SIP stack, and a fairly decent testing User Agent for fiddling
   with the call control SIP provides.
-  
+
   CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING
 }
 unit Spike;
@@ -23,9 +23,9 @@ interface
 
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
-  IdObservable, IdRTPDiagnostics, IdSipCore, IdRTP, IdSdp, IdSipMessage,
-  IdSipTransaction, IdSipTransport, IdSocketHandle, IdTimerQueue, StdCtrls,
-  SyncObjs, SysUtils;
+  IdObservable, IdRTPDiagnostics, IdRTP, IdSdp, IdSipCore, IdSipMockLocator,
+  IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle, IdTimerQueue,
+  StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpike = class(TForm,
@@ -105,6 +105,7 @@ type
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     LatestSession:  TIdSipSession;
+    Locator:        TIdSipMockLocator;
     RTPByteCount:   Integer;
     RTPProfile:     TIdRTPProfile;
     RunningPort:    Cardinal;
@@ -244,8 +245,11 @@ begin
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
   Self.Dispatch.Timer := Self.Timer;
 
+  Self.Locator := TIdSipMockLocator.Create;
+
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
+  Self.UA.Locator    := Self.Locator;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
   Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
@@ -277,6 +281,7 @@ begin
   Self.PayloadProcessor.Free;
 
   Self.UA.Free;
+  Self.Locator.Free;
   Self.Dispatch.Free;
 
   Self.TextLock.Free;
