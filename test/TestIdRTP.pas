@@ -506,6 +506,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAdd;
+    procedure TestClone;
     procedure TestFirstPacket;
     procedure TestHasBye;
     procedure TestHasSourceDescription;
@@ -541,6 +542,7 @@ type
 
   TestTIdRTPMemberTable = class(TTestCase)
   private
+    Binding: TIdSocketHandle;
     Host:    String;
     Members: TIdRTPMemberTable;
     Port:    Cardinal;
@@ -561,6 +563,8 @@ type
     procedure TestRemoveTimedOutMembers;
     procedure TestRemoveTimedOutSenders;
     procedure TestSenderCount;
+    procedure TestSetControlBinding;
+    procedure TestSetDataBinding;
   end;
 
   TestTIdRTPSenderTable = class(TTestCase)
@@ -693,7 +697,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-//    procedure TestCollisionTriggersBye;
+    procedure TestCollisionTriggersBye;
     procedure TestInitialState;
     procedure TestInitialDeterministicSendInterval;
     procedure TestReceiveRTPAddsMembers;
@@ -5925,6 +5929,34 @@ begin
   CheckEquals(5, Self.Packet.PacketCount, 'APPDEF + BYE + RR + SR + SDES');
 end;
 
+procedure TestTIdCompoundRTCPPacket.TestClone;
+var
+  Clone: TIdCompoundRTCPPacket;
+  I:     Integer;
+begin
+  Self.Packet.AddReceiverReport;
+  Self.Packet.AddReceiverReport;
+  Self.Packet.AddApplicationDefined;
+
+  Clone := Self.Packet.Clone as TIdCompoundRTCPPacket;
+  try
+    CheckEquals(Self.Packet.ClassType,
+                Clone.ClassType,
+                'Unexpected type for a clone');
+
+    CheckEquals(Self.Packet.PacketCount,
+                Clone.PacketCount,
+                'Packet count');
+
+    for I := 0 to Self.Packet.PacketCount - 1 do
+      CheckEquals(Self.Packet.PacketAt(I).ClassType,
+                  Clone.PacketAt(I).ClassType,
+                  'Report #' + IntToStr(I + 1));
+  finally
+    Clone.Free;
+  end;
+end;
+
 procedure TestTIdCompoundRTCPPacket.TestFirstPacket;
 var
   RR: TIdRTCPReceiverReport;
@@ -6304,6 +6336,10 @@ procedure TestTIdRTPMemberTable.SetUp;
 begin
   inherited SetUp;
 
+  Self.Binding := TIdSocketHandle.Create(nil);
+  Self.Binding.IP   := '127.0.0.1';
+  Self.Binding.Port := 5000;
+
   Self.Host    := '127.0.0.1';
   Self.Members := TIdRTPMemberTable.Create;
   Self.Port    := 6060;
@@ -6313,6 +6349,7 @@ end;
 procedure TestTIdRTPMemberTable.TearDown;
 begin
   Self.Members.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -6510,6 +6547,34 @@ begin
 
   Self.Members.Find(Self.SSRC).IsSender := true;
   CheckEquals(2, Self.Members.SenderCount, 'Two members; both senders');
+end;
+
+procedure TestTIdRTPMemberTable.TestSetControlBinding;
+var
+  Member: TIdRTPMember;
+begin
+  Member := Self.Members.Add(Self.SSRC);
+  Check(not Member.SentControl, 'A new member can''t have sent control');
+
+  Self.Members.SetControlBinding(Self.SSRC, Self.Binding);
+  Check(Member.SentControl, 'Control binding not set');
+
+  // We can't check the binding itself becausewe can't change the Peer(IP|Port)
+  // of the TIdSocketHandle
+end;
+
+procedure TestTIdRTPMemberTable.TestSetDataBinding;
+var
+  Member: TIdRTPMember;
+begin
+  Member := Self.Members.Add(Self.SSRC);
+  Check(not Member.SentData, 'A new member can''t have sent Data');
+
+  Self.Members.SetDataBinding(Self.SSRC, Self.Binding);
+  Check(Member.SentData, 'Data binding not set');
+
+  // We can't check the binding itself becausewe can't change the Peer(IP|Port)
+  // of the TIdSocketHandle
 end;
 
 //******************************************************************************
@@ -7559,24 +7624,26 @@ begin
 end;
 
 //* TestSessionSendReceiveRules Published methods ******************************
-{
+
 procedure TestSessionSendReceiveRules.TestCollisionTriggersBye;
 begin
+  Self.SR.ReceptionReportCount := 0;
+  Self.Data.CsrcCount          := 0;
+
   // We need at least one other person in the session
-//  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  Self.Session.ReceiveData(Self.Data,  Self.Binding);
+  Self.Session.ReceiveControl(Self.SR, Self.Binding);
 
   Self.Data.CsrcCount  := 1;
   Self.Data.CsrcIDs[0] := Self.Session.SyncSrcID;
   Self.Session.ReceiveData(Self.Data, Self.Binding);
 
-  Check(Self.Agent.RTCPCount > 1,
+  Check(Self.Agent.RTCPCount > 0,
         'No control stuff sent');
-  Check(Self.Agent.SecondLastRTCP.IsBye,
+  Check(Self.Agent.LastRTCP.IsBye,
         'No BYE sent');
-  Check(Self.Agent.LastRTCP.IsReceiverReport,
-        'No RR sent (which tells the members of our new SSRC)');
 end;
-}
+
 procedure TestSessionSendReceiveRules.TestInitialState;
 begin
   CheckEquals(1, Self.Session.MemberCount, 'New initialised, session');

@@ -666,6 +666,8 @@ type
     function  AddReceiverReport: TIdRTCPReceiverReport;
     function  AddSenderReport: TIdRTCPSenderReport;
     function  AddSourceDescription: TIdRTCPSourceDescription;
+    procedure Assign(Src: TPersistent); override;
+    function  Clone: TIdRTPBasePacket; override;
     function  FirstPacket: TIdRTCPPacket;
     function  HasBye: Boolean;
     function  HasSourceDescription: Boolean;
@@ -3666,6 +3668,31 @@ begin
   Result := Self.Add(TIdRTCPSourceDescription) as TIdRTCPSourceDescription;
 end;
 
+procedure TIdCompoundRTCPPacket.Assign(Src: TPersistent);
+var
+  I:      Integer;
+  Other:  TIdCompoundRTCPPacket;
+  Report: TIdRTCPPacket;
+begin
+  if (Src is TIdCompoundRTCPPacket) then begin
+    Other := Src as TIdCompoundRTCPPacket;
+
+    // This doesn't look very pleasant!
+    for I := 0 to Other.PacketCount - 1 do begin
+      Report := Other.PacketAt(I);
+      Self.Add(TIdRTCPPacketClass(Report.ClassType)).Assign(Report);
+    end;
+  end
+  else
+    inherited Assign(Src);
+end;
+
+function TIdCompoundRTCPPacket.Clone: TIdRTPBasePacket;
+begin
+  Result := TIdCompoundRTCPPacket.Create;
+  Result.Assign(Self);
+end;
+
 function TIdCompoundRTCPPacket.FirstPacket: TIdRTCPPacket;
 begin
   if (Self.PacketCount > 0) then
@@ -4332,18 +4359,19 @@ end;
 procedure TIdRTPMemberTable.SetControlBindings(SSRCs: TCardinalDynArray;
                                                Binding: TIdSocketHandle);
 var
-  I:         Cardinal;
-  NewMember: TIdRTPMember;
+  I:      Cardinal;
+  Member: TIdRTPMember;
 begin
   for I := Low(SSRCs) to High(SSRCs) do begin
-    NewMember := Self.Find(SSRCs[I]);
-    if not Assigned(NewMember) then
-      NewMember := Self.Add(SSRCs[I]);
+    Member := Self.Find(SSRCs[I]);
+    
+    if not Assigned(Member) then
+      Member := Self.Add(SSRCs[I]);
 
-    if not NewMember.SentControl then begin
-      NewMember.ControlAddress := Binding.PeerIP;
-      NewMember.ControlPort    := Binding.PeerPort;
-      NewMember.SentControl    := true;
+    if not Member.SentControl then begin
+      Member.ControlAddress := Binding.PeerIP;
+      Member.ControlPort    := Binding.PeerPort;
+      Member.SentControl    := true;
     end;
   end;
 end;
@@ -4351,18 +4379,18 @@ end;
 procedure TIdRTPMemberTable.SetDataBinding(SSRC: Cardinal;
                                            Binding: TIdSocketHandle);
 var
-  NewMember: TIdRTPMember;
+  Member: TIdRTPMember;
 begin
-  NewMember := Self.Find(SSRC);
-  if not Assigned(NewMember) then
-    NewMember := Self.AddSender(SSRC)
+  Member := Self.Find(SSRC);
+  if not Assigned(Member) then
+    Member := Self.AddSender(SSRC)
   else
-    NewMember.IsSender := true;
+    Member.IsSender := true;
 
-  if not NewMember.SentControl then begin
-    NewMember.SourceAddress := Binding.PeerIP;
-    NewMember.SourcePort    := Binding.PeerPort;
-    NewMember.SentControl   := true;
+  if not Member.SentData then begin
+    Member.SourceAddress := Binding.PeerIP;
+    Member.SourcePort    := Binding.PeerPort;
+    Member.SentData      := true;
   end;
 end;
 
@@ -4738,8 +4766,12 @@ begin
   // TODO: RFC 3550 section 6.3.7 - if a session contains more than 50 members
   // then there's a low-bandwidth algorithm for sending BYEs that prevents a
   // "storm".
+  //
+  // We don't need to add our own SSRC - PrepareTransmission will do that.
   Bye := TIdRTCPBye.Create;
   try
+    Bye.Reason := Reason;
+
     Self.SendControl(Bye);
   finally
     Bye.Free;
@@ -5094,13 +5126,13 @@ begin
   // transport) we should send several sets of RRs/SRs covering (more or
   // less disjoint) subsets of the session members.
 
-  Report := Self.AddAppropriateReportTo(Packet);
-
   Members := Self.LockMembers;
   try
     Senders := TIdRTPSenderTable.Create(Members);
     try
-      I := 0;
+      I      := 0;
+      Report := Self.AddAppropriateReportTo(Packet);
+      
       while (I < Senders.Count) do begin
 
         J := 0;
