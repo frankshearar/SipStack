@@ -6014,7 +6014,7 @@ end;
 
 procedure TIdSipParser.CheckCSeqMethod(Request: TIdSipRequest);
 begin
-  if (Request.CSeq.Method <> Request.Method) then
+  if not Request.HasHeader(CSeqHeader) or (Request.CSeq.Method <> Request.Method) then
     Self.FailParse(Request, CSeqMethodMismatch);
 end;
 
