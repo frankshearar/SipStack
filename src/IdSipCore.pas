@@ -344,6 +344,7 @@ type
     fAllowedSchemeList:      TStrings;
     fContact:                TIdSipContactHeader;
     fFrom:                   TIdSipFromHeader;
+    fKeyring:                TIdKeyRing;
     ModuleLock:              TCriticalSection;
     Modules:                 TObjectList;
 
@@ -469,6 +470,7 @@ type
 
     property Contact:  TIdSipContactHeader read GetContact write SetContact;
     property From:     TIdSipFromHeader    read GetFrom write SetFrom;
+    property Keyring:  TIdKeyRing          read fKeyring;
   end;
 
   TIdSipInviteModule = class;
@@ -604,8 +606,6 @@ type
     SentRequest:     Boolean;
     UA:              TIdSipAbstractUserAgent;
 
-    function  AddAuthorizationHeader(ReAttempt: TIdSipRequest;
-                                     Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
     function  AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
     procedure Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
     procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
@@ -2093,6 +2093,7 @@ begin
   Self.fActions                := TIdSipActions.Create;
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
+  Self.fKeyring                := TIdKeyRing.Create;
   Self.KnownRegistrars         := TIdSipRegistrations.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
@@ -2112,7 +2113,10 @@ begin
   Self.From.Free;
 
   Self.KnownRegistrars.Free;
-
+  Self.Keyring.Free;
+  Self.AllowedSchemeList.Free;
+  Self.AllowedLanguageList.Free;
+  Self.AllowedContentTypeList.Free;
   Self.Actions.Free;
 
   Self.ModuleLock.Acquire;
@@ -2122,10 +2126,6 @@ begin
     Self.ModuleLock.Release;
   end;
   Self.ModuleLock.Free;
-
-  Self.AllowedSchemeList.Free;
-  Self.AllowedLanguageList.Free;
-  Self.AllowedContentTypeList.Free;
 
   inherited Destroy;
 end;
@@ -3595,17 +3595,6 @@ end;
 
 //* TIdSipAction Private methods ***********************************************
 
-function TIdSipAction.AddAuthorizationHeader(ReAttempt: TIdSipRequest;
-                                             Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
-begin
-  if Challenge.HasProxyAuthenticate then
-    Result := ReAttempt.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader
-  else if Challenge.HasWWWAuthenticate then
-    Result := ReAttempt.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
-  else
-    Result := nil;
-end;
-
 function TIdSipAction.AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
 begin
   if Challenge.HasProxyAuthenticate then
@@ -3618,65 +3607,33 @@ end;
 
 procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
 var
-  A1:              String;
-  A2:              String;
   AuthHeader:      TIdSipAuthorizationHeader;
-  ChallengeHeader: TIdSipHttpAuthHeader;
-  H:               TIdHashFunction;
+  ChallengeHeader: TIdSipAuthenticateHeader;
   Password:        String;
+  RealmInfo:       TIdRealmInfo;
   ReAttempt:       TIdSipRequest;
   Username:        String;
 begin
   Inc(Self.NonceCount);
   Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
 
+  ChallengeHeader := Self.AuthenticateHeader(Challenge);
+
   ReAttempt := Self.CreateNewAttempt(Challenge);
   try
     ReAttempt.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
 
-    AuthHeader      := Self.AddAuthorizationHeader(ReAttempt, Challenge);
-    ChallengeHeader := Self.AuthenticateHeader(Challenge);
+    Self.UA.Keyring.AddKey(ChallengeHeader, ReAttempt.RequestUri.AsString, Username, Password);
+    RealmInfo := Self.UA.Keyring.Find(ChallengeHeader.Realm,
+                                      ReAttempt.RequestUri.AsString);
 
-    AuthHeader.AuthorizationScheme := ChallengeHeader.AuthorizationScheme;
-    AuthHeader.DigestUri           := ReAttempt.RequestUri.AsString;
-    AuthHeader.Nonce               := ChallengeHeader.Nonce;
-    AuthHeader.Opaque              := ChallengeHeader.Opaque;
-    AuthHeader.Realm               := ChallengeHeader.Realm;
-    AuthHeader.Username            := Self.Username;
-
-    H := HashFor(ChallengeHeader.Algorithm);
-
-    if    IsEqual(ChallengeHeader.Algorithm, MD5Name)
-      or (ChallengeHeader.Algorithm = '') then
-      A1 := AuthHeader.Username + ':' + AuthHeader.Realm + ':' + Password
-    else begin
-      A1 := 'completely wrong';
-      Assert(false, 'Implement non-MD5 digests');
-    end;
-
-    if (ChallengeHeader.Qop <> '') then begin
-      AuthHeader.CNonce     := GRandomNumber.NextHexString;
-      AuthHeader.NonceCount := Self.NonceCount;
-
-      A2 := ReAttempt.Method + ':'
-          + AuthHeader.DigestUri + ':'
-          + MD5(ReAttempt.Body);
-
-      AuthHeader.Response := KD(H(A1),
-                                AuthHeader.Nonce + ':'
-                              + AuthHeader.NC + ':'
-                              + AuthHeader.CNonce + ':'
-                              + AuthHeader.Qop + ':'
-                              + H(A2),
-                                H);
-    end
-    else begin
-      // For compatibility with RFC 2069. cf RFC 2617, section 3.2.2.1
-      A2 := ReAttempt.Method + ':' + AuthHeader.DigestUri;
-
-      AuthHeader.Response := KD(H(A1),
-                                ChallengeHeader.Nonce + ':' + H(A2),
-                                H);
+    AuthHeader := RealmInfo.CreateAuthorization(ChallengeHeader,
+                                                Self.Method,
+                                                Self.InitialRequest.Body);
+    try
+      ReAttempt.AddHeader(AuthHeader);
+    finally
+      AuthHeader.Free;
     end;
 
     Self.InitialRequest.Assign(ReAttempt);
