@@ -101,6 +101,12 @@ type
                                      R: TIdSipRequest);
     procedure CheckSendResponseFromNonStandardPort(Sender: TObject;
                                                    R: TIdSipResponse);
+    procedure CheckServerNotOnPort(const Host: String;
+                                   Port: Cardinal;
+                                   const Msg: String);
+    procedure CheckServerOnPort(const Host: String;
+                                Port: Cardinal;
+                                const Msg: String); virtual; abstract;
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
@@ -124,6 +130,7 @@ type
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
     procedure TestCanReceiveUnsolicitedResponse;
+    procedure TestChangePort;
     procedure TestIsNull; virtual;
     procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
@@ -143,6 +150,9 @@ type
 
   TestTIdSipTCPTransport = class(TestTIdSipTransport)
   protected
+    procedure CheckServerOnPort(const Host: String;
+                                Port: Cardinal;
+                                const Msg: String); override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   published
@@ -191,6 +201,9 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
   protected
+    procedure CheckServerOnPort(const Host: String;
+                                Port: Cardinal;
+                                const Msg: String); override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   public
@@ -301,8 +314,8 @@ type
 implementation
 
 uses
-  IdGlobal, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack, IdTcpClient,
-  IdUdpClient, IdUDPServer, TestMessages, TestFrameworkSip;
+  IdException, IdGlobal, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack,
+  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -358,7 +371,7 @@ begin
   Self.ReceivedResponse := false;
   Self.Request          := TIdSipRequest.Create;
   Self.Response         := TIdSipResponse.Create;
-  Self.Transport        := TIdSipTransportSubclass.Create(0);
+  Self.Transport        := TIdSipTransportSubclass.Create;
 end;
 
 procedure TestTIdSipTransportEventNotifications.TearDown;
@@ -541,7 +554,7 @@ begin
 
   Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
-  Self.HighPortTransport := Self.TransportType.Create(Self.DefaultPort + 10000);
+  Self.HighPortTransport := Self.TransportType.Create;
   Self.HighPortTransport.AddTransportListener(Self);
   Self.HighPortTransport.Timeout  := 500;
   Self.HighPortTransport.HostName := IndyGetHostName;
@@ -549,7 +562,7 @@ begin
   Self.HighPortTransport.Port     := Self.DefaultPort + 10000;
   Self.HighPortTransport.Start;
 
-  Self.LowPortTransport := Self.TransportType.Create(Self.DefaultPort);
+  Self.LowPortTransport := Self.TransportType.Create;
   Self.LowPortTransport.AddTransportListener(Self);
   Self.LowPortTransport.Timeout  := 500;
   Self.LowPortTransport.HostName := 'localhost';
@@ -558,7 +571,7 @@ begin
   Self.LowPortTransport.Start;
 
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
-  Self.Request.LastHop.SentBy     := Self.LowPortTransport.Address;
+  Self.Request.LastHop.SentBy  := Self.LowPortTransport.Address;
   Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
   Self.Request.RequestUri.Port := Self.HighPortTransport.Port;
 
@@ -723,6 +736,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.CheckServerNotOnPort(const Host: String;
+                                                      Port: Cardinal;
+                                                      const Msg: String);
+var
+  ServerRunning: Boolean;
+begin
+  ServerRunning := true;
+  try
+    Self.CheckServerOnPort(Host, Port, Msg);
+  except
+    on ETestFailure do
+      ServerRunning := false;
+  end;
+
+  if ServerRunning then
+    Fail('Server running on ' + Host + ':' + IntToStr(Port) + '; ' + Msg);
+end;
+
 procedure TestTIdSipTransport.CheckUseRport(Sender: TObject;
                                             R: TIdSipRequest);
 begin
@@ -841,6 +872,24 @@ begin
 
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
+end;
+
+procedure TestTIdSipTransport.TestChangePort;
+var
+  OriginalPort: Cardinal;
+begin
+  OriginalPort := Self.LowPortTransport.Port;
+  Self.CheckServerOnPort(Self.LowPortTransport.Address,
+                         OriginalPort,
+                         'Sanity check');
+
+  Self.LowPortTransport.Port := OriginalPort + 1;
+  Self.CheckServerOnPort(Self.LowPortTransport.Address,
+                         Self.LowPortTransport.Port,
+                         'Port changed');
+  Self.CheckServerNotOnPort(Self.LowPortTransport.Address,
+                            OriginalPort,
+                            'Port changed but still listening on old port');
 end;
 
 procedure TestTIdSipTransport.TestIsNull;
@@ -1053,6 +1102,32 @@ end;
 //******************************************************************************
 //* TestTIdSipTCPTransport Protected methods ***********************************
 
+procedure TestTIdSipTCPTransport.CheckServerOnPort(const Host: String;
+                                                   Port: Cardinal;
+                                                   const Msg: String);
+var
+  Client: TIdTcpClient;
+begin
+  try
+    Client := TIdTcpClient.Create(nil);
+    try
+      Client.Host := Host;
+      Client.Port := Port;
+      Client.Connect;
+      try
+        // Do nothing
+      finally
+        Client.Disconnect;
+      end;
+    finally
+      Client.Free;
+    end;
+  except
+    on EIdSocketError do
+      Fail('No server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+  end;
+end;
+
 procedure TestTIdSipTCPTransport.SendMessage(Msg: String);
 var
   Client: TIdTcpClient;
@@ -1202,7 +1277,7 @@ var
 begin
   inherited SetUp;
 
-  Self.MaddrTransport := Self.TransportType.Create(IdPORT_SIP);
+  Self.MaddrTransport := Self.TransportType.Create;
   Self.MaddrTransport.AddTransportListener(Self);
   Self.MaddrTransport.HostName := 'localhost';
   Self.MaddrTransport.Address  := '127.0.0.2';
@@ -1220,6 +1295,34 @@ begin
 end;
 
 //* TestTIdSipUDPTransport Protected methods ***********************************
+
+procedure TestTIdSipUDPTransport.CheckServerOnPort(const Host: String;
+                                                   Port: Cardinal;
+                                                   const Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUdpServer;
+begin
+  try
+    Server := TIdUdpServer.Create(nil);
+    try
+      Binding := Server.Bindings.Add;
+      Binding.IP    := Host;
+      Binding.Port  := Port;
+      Server.Active := true;
+      try
+        // Do nothing
+      finally
+        Server.Active := false;
+      end;
+    finally
+      Server.Free;
+    end;
+    Fail('No server running on ' + Host + ': ' + IntToStr(Port) + '; ' + Msg);
+  except
+    on EIdCouldNotBindSocket do;
+  end;
+end;
 
 procedure TestTIdSipUDPTransport.SendMessage(Msg: String);
 var
@@ -1540,7 +1643,7 @@ procedure TTransportMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Transport := TIdSipNullTransport.Create(IdPORT_SIP);
+  Self.Transport := TIdSipNullTransport.Create;
 end;
 
 procedure TTransportMethodTestCase.TearDown;

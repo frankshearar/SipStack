@@ -18,24 +18,28 @@ type
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:           Cardinal;
+    fAddress:            String;
     fBindings:           TIdSocketHandles;
     fFailWith:           ExceptClass;
     fLastACK:            TIdSipRequest;
     fLastRequest:        TIdSipRequest;
     fLastResponse:       TIdSipResponse;
     fLocalEchoMessages:  Boolean;
+    fPort:               Cardinal;
     fSecondLastResponse: TIdSipResponse;
     fSentRequestCount:   Cardinal;
     fSentResponseCount:  Cardinal;
     fTransportType:      TIdSipTransportType;
   protected
+    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
+    function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
-    constructor Create(Port: Cardinal); override;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure FireOnRequest(R: TIdSipRequest);
@@ -69,9 +73,9 @@ implementation
 //******************************************************************************
 //* TIdSipMockTransport Public methods *****************************************
 
-constructor TIdSipMockTransport.Create(Port: Cardinal);
+constructor TIdSipMockTransport.Create;
 begin
-  inherited Create(Port);
+  inherited Create;
 
   Self.ResetSentRequestCount;
   Self.fBindings           := TIdSocketHandles.Create(nil);
@@ -153,6 +157,17 @@ end;
 
 //* TIdSipMockTransport Protected methods **************************************
 
+procedure TIdSipMockTransport.ChangeBinding(const Address: String; Port: Cardinal);
+begin
+  Self.fAddress := Address;
+  Self.fPort    := Port;
+end;
+
+function TIdSipMockTransport.GetAddress: String;
+begin
+  Result := Self.fAddress;
+end;
+
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.fBindings;
@@ -160,7 +175,7 @@ end;
 
 function TIdSipMockTransport.GetPort: Cardinal;
 begin
-  Result := Self.DefaultPort;
+  Result := Self.fPort;
 end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);

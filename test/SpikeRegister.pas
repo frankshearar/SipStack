@@ -93,7 +93,7 @@ begin
 
   Self.Lock := TCriticalSection.Create;
 
-  Self.Transport := TIdSipUDPTransport.Create(IdPORT_SIP);
+  Self.Transport := TIdSipUDPTransport.Create;
   if (GStack.LocalAddress <> LocalHostName) then
     Self.Transport.HostName := GStack.LocalAddress
   else

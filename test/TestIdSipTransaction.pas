@@ -541,7 +541,7 @@ begin
 
   Self.Core.Dispatcher := Self.D;
 
-  Self.MockTransport := TIdSipMockTransport.Create(IdPORT_SIP);
+  Self.MockTransport := TIdSipMockTransport.Create;
 
   Self.MockTransport.TransportType := sttTCP;
   Self.D.AddTransport(Self.MockTransport);
@@ -734,12 +734,12 @@ var
 begin
   OriginalCount := Self.D.TransportCount;
 
-  T1 := TIdSipMockTransport.Create(IdPORT_SIP);
+  T1 := TIdSipMockTransport.Create;
   try
     Self.D.AddTransport(T1);
     CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
 
-    T2 := TIdSipMockTransport.Create(IdPORT_SIP);
+    T2 := TIdSipMockTransport.Create;
     try
       Self.D.AddTransport(T1);
       CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
@@ -783,11 +783,11 @@ procedure TestTIdSipTransactionDispatcher.TestClearTransports;
 var
   T1, T2: TIdSipMockTransport;
 begin
-  T1 := TIdSipMockTransport.Create(IdPORT_SIP);
+  T1 := TIdSipMockTransport.Create;
   try
     Self.D.AddTransport(T1);
 
-    T2 := TIdSipMockTransport.Create(IdPORT_SIP);
+    T2 := TIdSipMockTransport.Create;
     try
       Self.D.AddTransport(T1);
 
@@ -1022,7 +1022,7 @@ var
   UdpResponseCount: Cardinal;
   UdpTran:          TIdSipMockTransport;
 begin
-  UdpTran := TIdSipMockTransport.Create(IdPORT_SIP);
+  UdpTran := TIdSipMockTransport.Create;
   try
     UdpTran.TransportType := sttUDP;
 
@@ -1052,7 +1052,7 @@ begin
   Self.MockTransport.TransportType := sttTCP;
   Self.MockTransport.FailWith      := EIdConnectTimeout;
 
-  UdpTran := TIdSipMockTransport.Create(IdPORT_SIP);
+  UdpTran := TIdSipMockTransport.Create;
   try
     UdpTran.TransportType := sttUDP;
 
@@ -1084,7 +1084,7 @@ var
 begin
   Self.MockTransport.TransportType := sttTCP;
 
-  UdpTran := TIdSipMockTransport.Create(IdPORT_SIP);
+  UdpTran := TIdSipMockTransport.Create;
   try
     UdpTran.TransportType := sttUDP;
 
@@ -4145,7 +4145,7 @@ procedure TUnhandledMessageListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipNullTransport.Create(IdPORT_SIP);
+  Self.Receiver := TIdSipNullTransport.Create;
 end;
 
 procedure TUnhandledMessageListenerMethodTestCase.TearDown;

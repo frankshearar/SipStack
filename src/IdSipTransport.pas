@@ -79,13 +79,13 @@ type
     procedure SendResponse(R: TIdSipResponse); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetAddress(const Value: String); virtual;
-    procedure SetPort(Value: Cardinal); virtual;
+    procedure SetPort(Value: Cardinal);
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
     class function TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
 
-    constructor Create(Port: Cardinal); virtual;
+    constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
@@ -134,9 +134,8 @@ type
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
-    procedure SetPort(Value: Cardinal); override;
   public
-    constructor Create(Port: Cardinal); override;
+    constructor Create; override;
     destructor  Destroy; override;
 
     function  GetTransportType: TIdSipTransportType; override;
@@ -188,9 +187,8 @@ type
                                ReceivedFrom: TIdSipConnectionBindings); override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
-    procedure SetPort(Value: Cardinal); override;
   public
-    constructor Create(Port: Cardinal); override;
+    constructor Create; override;
     destructor  Destroy; override;
 
     function  GetTransportType: TIdSipTransportType; override;
@@ -205,9 +203,8 @@ type
   protected
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
-    procedure SetPort(Value: Cardinal); override;
   public
-    constructor Create(Port: Cardinal); override;
+    constructor Create; override;
     destructor  Destroy; override;
 
     function GetTransportType: TIdSipTransportType; override;
@@ -321,7 +318,7 @@ begin
   end;
 end;
 
-constructor TIdSipTransport.Create(Port: Cardinal);
+constructor TIdSipTransport.Create;
 begin
   inherited Create;
 
@@ -612,15 +609,17 @@ end;
 //******************************************************************************
 //* TIdSipTCPTransport Public methods ******************************************
 
-constructor TIdSipTCPTransport.Create(Port: Cardinal);
+constructor TIdSipTCPTransport.Create;
 begin
-  inherited Create(Port);
+  inherited Create;
 
   Self.Clients    := TObjectList.Create(true);
   Self.ClientLock := TCriticalSection.Create;
   Self.Transport  := Self.ServerType.Create(nil);
-  Self.SetPort(Port);
   Self.Transport.AddMessageListener(Self);
+
+  Self.Bindings.Add;
+  Self.SetPort(Port);
 end;
 
 destructor TIdSipTCPTransport.Destroy;
@@ -654,11 +653,14 @@ var
   Binding: TIdSocketHandle;
 begin
   Self.Stop;
-  Self.Transport.Bindings.Clear;
 
+  Self.Transport.Bindings.Clear;
+  Self.Bindings.DefaultPort := Port;
   Binding := Self.Bindings.Add;
   Binding.IP   := Address;
   Binding.Port := Port;
+
+  Self.Start;
 end;
 
 function TIdSipTCPTransport.GetAddress: String;
@@ -720,16 +722,6 @@ end;
 function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.Transport.Bindings;
-end;
-
-procedure TIdSipTCPTransport.SetPort(Value: Cardinal);
-var
-  I: Integer;
-begin
-  Self.Transport.DefaultPort := Value;
-
-  for I := 0 to Self.Bindings.Count - 1 do
-    Self.Bindings[I].Port := Value;
 end;
 
 //* TIdSipTCPTransport Private methods *****************************************
@@ -878,14 +870,15 @@ end;
 //******************************************************************************
 //* TIdSipUDPTransport Public methods ******************************************
 
-constructor TIdSipUDPTransport.Create(Port: Cardinal);
+constructor TIdSipUDPTransport.Create;
 begin
-  inherited Create(Port);
+  inherited Create;
 
   Self.Transport := TIdSipUdpServer.Create(nil);
-  Self.SetPort(Port);
   Self.Transport.AddMessageListener(Self);
   Self.Transport.ThreadedEvent := true;
+
+  Self.Bindings.Add;
 end;
 
 destructor TIdSipUDPTransport.Destroy;
@@ -922,11 +915,14 @@ var
   Binding: TIdSocketHandle;
 begin
   Self.Stop;
-  Self.Transport.Bindings.Clear;
 
+  Self.Transport.Bindings.Clear;
+  Self.Bindings.DefaultPort := Port;
   Binding := Self.Bindings.Add;
   Binding.IP   := Address;
   Binding.Port := Port;
+
+  Self.Start;
 end;
 
 function TIdSipUDPTransport.GetAddress: String;
@@ -997,24 +993,14 @@ begin
   Self.Transport.Send(Host, Port, R.AsString);
 end;
 
-procedure TIdSipUDPTransport.SetPort(Value: Cardinal);
-var
-  I: Integer;
-begin
-  Self.Transport.DefaultPort := Value;
-
-  for I := 0 to Self.Bindings.Count - 1 do
-    Self.Bindings[I].Port := Value;
-end;
-
 //******************************************************************************
 //* TIdSipNullTransport                                                        *
 //******************************************************************************
 //* TIdSipNullTransport Public methods *****************************************
 
-constructor TIdSipNullTransport.Create(Port: Cardinal);
+constructor TIdSipNullTransport.Create;
 begin
-  inherited Create(Port);
+  inherited Create;
 
   Self.FakeBindings := TIdSocketHandles.Create(nil);
 end;
@@ -1046,10 +1032,6 @@ end;
 function TIdSipNullTransport.GetPort: Cardinal;
 begin
   Result := 0;
-end;
-
-procedure TIdSipNullTransport.SetPort(Value: Cardinal);
-begin
 end;
 
 //******************************************************************************

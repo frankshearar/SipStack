@@ -5289,7 +5289,7 @@ procedure TestTIdSipUserAgentDroppedUnmatchedResponseMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Receiver := TIdSipMockTransport.Create(0);
+  Self.Receiver := TIdSipMockTransport.Create;
   Self.Response := TIdSipResponse.Create;
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;

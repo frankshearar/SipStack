@@ -84,12 +84,13 @@ begin
 
   Self.DB := TIdSipMockBindingDatabase.Create;
 
-  Self.Transport := TIdSipUDPTransport.Create(StrToInt(Self.Port.Text));
+  Self.Transport := TIdSipUDPTransport.Create;
   if (GStack.LocalAddress <> LocalHostName) then
     Self.Transport.HostName := GStack.LocalAddress
   else
     Self.Transport.HostName := LocalHostName;
   Self.Transport.Address := Self.Transport.HostName;
+  Self.Transport.Port    := StrToInt(Self.Port.Text);
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
 

@@ -41,8 +41,10 @@ constructor TIdSipMockTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.fTransport := TIdSipMockTransport.Create(IdPORT_SIP);
+  Self.fTransport := TIdSipMockTransport.Create;
+  Self.fTransport.Address  := '127.0.0.1';
   Self.fTransport.HostName := 'mocktransport';
+  Self.fTransport.Port     := IdPORT_SIP;
 
   Self.AddTransport(Self.fTransport);
 end;

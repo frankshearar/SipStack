@@ -285,7 +285,7 @@ function TrnidSpike.AddTransport(TransportType: TIdSipTransportClass): TIdSipTra
 var
   Binding: TIdSocketHandle;
 begin
-  Result := TransportType.Create(IdPORT_SIP);
+  Result := TransportType.Create;
   Self.Transports.Add(Result);
   Result.HostName := Self.HostName.Text;
   Result.Port     := RunningPort;
