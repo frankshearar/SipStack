@@ -3089,7 +3089,6 @@ procedure TIdSipCSeqHeader.SetValue(const Value: String);
 var
   S:     String;
   Token: String;
-  E:     Integer;
   N:     Cardinal;
 begin
   S := Trim(Value);
@@ -3097,9 +3096,16 @@ begin
   // about other kinds of whitespace? Best to be sure!
   Token := Trim(Fetch(S, ' '));
 
-  Val(Token, N, E);
-  if (E <> 0) then
-    Self.FailParse;
+  N := 0;
+  try
+    N := StrToInt(Token)
+  except
+    on EConvertError do
+      Self.FailParse;
+    on ERangeError do
+      Self.FailParse;
+    else raise;
+  end;
 
   Self.SequenceNo := N;
 

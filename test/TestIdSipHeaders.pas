@@ -192,6 +192,7 @@ type
   published
     procedure TestIncrement;
     procedure TestValue; override;
+    procedure TestVeryLargeValue; 
   end;
 
   TestTIdSipDateHeader = class(THeaderTestCase)
@@ -2233,6 +2234,16 @@ begin
   try
     Self.C.Value := '42 "INVITE"';
     Fail('Failed to bail out with a non-method, ''42 "INVITE"');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipCSeqHeader.TestVeryLargeValue;
+begin
+  try
+    Self.C.Value := '4294967297 INVITE';
+    Fail('Failed to bail out with a ridiculously large CSeq sequence number');
   except
     on EBadHeader do;
   end;
