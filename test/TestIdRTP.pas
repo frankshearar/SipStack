@@ -824,13 +824,10 @@ begin
   Result := TTestSuite.Create('IdRTP unit tests');
   Result.AddTest(TestUnicodeFunctions.Suite);
   Result.AddTest(TestFunctions.Suite);
-{
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdRTPTelephoneEventPayload.Suite);
-}
   Result.AddTest(TestTIdRTPT140Payload.Suite);
-{
   Result.AddTest(TestTIdRTPProfile.Suite);
   Result.AddTest(TestTIdAudioVisualProfile.Suite);
   Result.AddTest(TestTIdRTPHeaderExtension.Suite);
@@ -867,7 +864,6 @@ begin
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
-}
 end;
 
 function ShowEncoded(S: String): String;
