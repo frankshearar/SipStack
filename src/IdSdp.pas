@@ -17,9 +17,14 @@ type
                          mtText);
 
   TIdPrintable = class(TPersistent)
+  public
+    constructor Create; virtual;
+
     function  AsString: String;
     procedure PrintOn(Dest: TStream); virtual; abstract;
   end;
+
+  TIdPrintableClass = class of TIdPrintable;
 
   TIdSdpAttribute = class(TIdPrintable)
   private
@@ -33,7 +38,7 @@ type
   public
     class function CreateAttribute(Value: String): TIdSdpAttribute;
 
-    constructor Create; virtual;
+    constructor Create; override;
 
     procedure Assign(Src: TPersistent); override;
     function  Copy: TIdSdpAttribute; virtual;
@@ -140,7 +145,7 @@ type
     procedure PrintMediaField(Dest: TStream);
 
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure AddAttribute(const Name, Value: String);
@@ -238,10 +243,15 @@ type
   TIdSdpList = class(TIdPrintable)
   protected
     List: TObjectList;
+
+    function AddItem: TIdPrintable; overload;
+    function AddItem(ToBeCopied: TIdPrintable): TIdPrintable; overload;
+    function ItemType: TIdPrintableClass; virtual; abstract;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
 
+    procedure Assign(Src: TPersistent); override;
     procedure Clear;
     function  Count: Integer;
     function  Contains(O: TObject): Boolean;
@@ -254,12 +264,13 @@ type
   TIdSdpAttributes = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpAttribute;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpAttribute; overload;
     function  Add(Att: TIdSdpAttribute): TIdSdpAttribute; overload;
     procedure Add(A: TIdSdpAttributes); overload;
     procedure Add(const NameAndValue: String); overload;
-    procedure Assign(Src: TPersistent); override;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
@@ -268,12 +279,13 @@ type
   TIdSdpRTPMapAttributes = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpRTPMapAttribute;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpRTPMapAttribute; overload;
     function  Add(Att: TIdSdpRTPMapAttribute): TIdSdpRTPMapAttribute; overload;
     procedure Add(A: TIdSdpRTPMapAttributes); overload;
     function  Add(const Value: String): TIdSdpRTPMapAttribute; overload;
-    procedure Assign(Src: TPersistent); override;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
     property Items[Index: Integer]: TIdSdpRTPMapAttribute read GetItems; default;
@@ -282,11 +294,12 @@ type
   TIdSdpBandwidths = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpBandwidth;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpBandwidth; overload;
     function  Add(BW: TIdSdpBandwidth): TIdSdpBandwidth; overload;
     procedure Add(B: TIdSdpBandwidths); overload;
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpBandwidth read GetItems; default;
   end;
@@ -294,6 +307,8 @@ type
   TIdSdpConnections = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpConnection;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpConnection; overload;
     function  Add(C: TIdSdpConnection): TIdSdpConnection; overload;
@@ -302,7 +317,6 @@ type
                             AddrType: TIdIPVersion;
                             Addr: String;
                             TTL: Byte);
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpConnection read GetItems; default;
   end;
@@ -310,11 +324,12 @@ type
   TIdSdpMediaDescriptions = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpMediaDescription;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpMediaDescription; overload;
     function  Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
     function  AllDescriptionsHaveConnections: Boolean;
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpMediaDescription read GetItems; default;
   end;
@@ -322,10 +337,11 @@ type
   TIdSdpRepeats = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpRepeat;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpRepeat; overload;
     function  Add(R: TIdSdpRepeat): TIdSdpRepeat; overload;
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpRepeat read GetItems; default;
   end;
@@ -333,10 +349,11 @@ type
   TIdSdpTimes = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpTime;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpTime; overload;
     function  Add(T: TIdSdpTime): TIdSdpTime; overload;
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpTime read GetItems; default;
   end;
@@ -344,10 +361,11 @@ type
   TIdSdpZoneAdjustments = class(TIdSdpList)
   private
     function GetItems(Index: Integer): TIdSdpZoneAdjustment;
+  protected
+    function ItemType: TIdPrintableClass; override;
   public
     function  Add: TIdSdpZoneAdjustment; overload;
     function  Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment; overload;
-    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpZoneAdjustment read GetItems; default;
   end;
@@ -783,6 +801,11 @@ end;
 //* TIdPrintable                                                               *
 //******************************************************************************
 //* TIdPrintable Public methods ************************************************
+
+constructor TIdPrintable.Create;
+begin
+  inherited Create;
+end;
 
 function TIdPrintable.AsString: String;
 var
@@ -1416,7 +1439,7 @@ begin
   Dest.Write(PChar(S)^, Length(S));
 
   Self.Repeats.PrintOn(Dest);
-  Self.ZoneAdjustments.PrintOn(Dest); 
+  Self.ZoneAdjustments.PrintOn(Dest);
 end;
 
 //* TIdSdpTime Private methods *************************************************
@@ -1459,6 +1482,20 @@ end;
 procedure TIdSdpList.Clear;
 begin
   Self.List.Clear;
+end;
+
+procedure TIdSdpList.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdSdpList;
+begin
+  if (Src.ClassType = Self.ClassType) then begin
+    Other := Src as TIdSdpList;
+    Self.Clear;
+    for I := 0 to Other.Count - 1 do
+      Self.AddItem(Other.ItemAt(I));
+  end
+  else inherited Assign(Src);
 end;
 
 function TIdSdpList.Count: Integer;
@@ -1516,6 +1553,20 @@ begin
   Self.List.Remove(O);
 end;
 
+//* TIdSdpList Protected methods ***********************************************
+
+function TIdSdpList.AddItem: TIdPrintable;
+begin
+  Result := Self.ItemType.Create;
+  Self.List.Add(Result);
+end;
+
+function TIdSdpList.AddItem(ToBeCopied: TIdPrintable): TIdPrintable;
+begin
+  Result := Self.AddItem;
+  Result.Assign(ToBeCopied);
+end;
+
 //******************************************************************************
 //* TIdSdpAttributes                                                           *
 //******************************************************************************
@@ -1523,8 +1574,7 @@ end;
 
 function TIdSdpAttributes.Add: TIdSdpAttribute;
 begin
-  Result := TIdSdpAttribute.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpAttribute;
 end;
 
 function TIdSdpAttributes.Add(Att: TIdSdpAttribute): TIdSdpAttribute;
@@ -1553,19 +1603,6 @@ begin
   end;
 end;
 
-procedure TIdSdpAttributes.Assign(Src: TPersistent);
-var
-  Other: TIdSdpAttributes;
-begin
-  if Src is TIdSdpAttributes then begin
-    Other := Src as TIdSdpAttributes;
-
-    Self.Clear;
-    Self.Add(Other);
-  end
-  else inherited Assign(Src);
-end;
-
 function TIdSdpAttributes.HasAttribute(Att: TIdSdpAttribute): Boolean;
 var
   I: Integer;
@@ -1577,6 +1614,13 @@ begin
 
     Inc(I);
   end;
+end;
+
+//* TIdSdpAttributes Protected methods *****************************************
+
+function TIdSdpAttributes.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpAttribute;
 end;
 
 //* TIdSdpAttributes Private methods *******************************************
@@ -1593,8 +1637,7 @@ end;
 
 function TIdSdpRTPMapAttributes.Add: TIdSdpRTPMapAttribute;
 begin
-  Result := TIdSdpRTPMapAttribute.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpRTPMapAttribute;
 end;
 
 function TIdSdpRTPMapAttributes.Add(Att: TIdSdpRTPMapAttribute): TIdSdpRTPMapAttribute;
@@ -1617,19 +1660,6 @@ begin
   Result.Value := Value;
 end;
 
-procedure TIdSdpRTPMapAttributes.Assign(Src: TPersistent);
-var
-  Other: TIdSdpRTPMapAttributes;
-begin
-  if Src is TIdSdpRTPMapAttributes then begin
-    Other := Src as TIdSdpRTPMapAttributes;
-
-    Self.Clear;
-    Self.Add(Other);
-  end
-  else inherited Assign(Src);
-end;
-
 function TIdSdpRTPMapAttributes.HasAttribute(Att: TIdSdpAttribute): Boolean;
 var
   I: Integer;
@@ -1641,6 +1671,13 @@ begin
 
     Inc(I);
   end;
+end;
+
+//* TIdSdpRTPMapAttributes Protected methods ***********************************
+
+function TIdSdpRTPMapAttributes.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpRTPMapAttribute;
 end;
 
 //* TIdSdpRTPMapAttributes Private methods *************************************
@@ -1657,8 +1694,7 @@ end;
 
 function TIdSdpBandwidths.Add: TIdSdpBandwidth;
 begin
-  Result := TIdSdpBandwidth.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpBandwidth;
 end;
 
 function TIdSdpBandwidths.Add(BW: TIdSdpBandwidth): TIdSdpBandwidth;
@@ -1675,19 +1711,11 @@ begin
     Self.Add(B[I]);
 end;
 
-procedure TIdSdpBandwidths.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpBandwidths;
-begin
-  if Src is TIdSdpBandwidths then begin
-    Other := Src as TIdSdpBandwidths;
+//* TIdSdpBandwidths Protected methods *****************************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpBandwidths.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpBandwidth;
 end;
 
 //* TIdSdpBandwidths Private methods *******************************************
@@ -1704,8 +1732,7 @@ end;
 
 function TIdSdpConnections.Add: TIdSdpConnection;
 begin
-  Result := TIdSdpConnection.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpConnection;
 end;
 
 function TIdSdpConnections.Add(C: TIdSdpConnection): TIdSdpConnection;
@@ -1737,19 +1764,11 @@ begin
   NewConnection.TTL         := TTL;
 end;
 
-procedure TIdSdpConnections.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpConnections;
-begin
-  if Src is TIdSdpConnections then begin
-    Other := Src as TIdSdpConnections;
+//* TIdSdpConnections Protected methods ****************************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpConnections.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpConnection;
 end;
 
 //* TIdSdpConnections Private methods ******************************************
@@ -1766,8 +1785,7 @@ end;
 
 function TIdSdpMediaDescriptions.Add: TIdSdpMediaDescription;
 begin
-  Result := TIdSdpMediaDescription.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpMediaDescription;
 end;
 
 function TIdSdpMediaDescriptions.Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription;
@@ -1787,19 +1805,11 @@ begin
       Result := Result and Self[I].HasConnection;
 end;
 
-procedure TIdSdpMediaDescriptions.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpMediaDescriptions;
-begin
-  if Src is TIdSdpMediaDescriptions then begin
-    Other := Src as TIdSdpMediaDescriptions;
+//* TIdSdpMediaDescriptions Protected methods **********************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpMediaDescriptions.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpMediaDescription;
 end;
 
 //* TIdSdpMediaDescriptions Private methods ************************************
@@ -1816,8 +1826,7 @@ end;
 
 function TIdSdpRepeats.Add: TIdSdpRepeat;
 begin
-  Result := TIdSdpRepeat.Create;
-  Self.List.Add(Result)
+  Result := Self.AddItem as TIdSdpRepeat;
 end;
 
 function TIdSdpRepeats.Add(R: TIdSdpRepeat): TIdSdpRepeat;
@@ -1826,19 +1835,11 @@ begin
   Result.Assign(R);
 end;
 
-procedure TIdSdpRepeats.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpRepeats;
-begin
-  if Src is TIdSdpRepeats then begin
-    Other := Src as TIdSdpRepeats;
+//* TIdSdpRepeats Protected methods ********************************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpRepeats.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpRepeat;
 end;
 
 //* TIdSdpRepeats Private methods **********************************************
@@ -1855,8 +1856,7 @@ end;
 
 function TIdSdpTimes.Add: TIdSdpTime;
 begin
-  Result := TIdSdpTime.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpTime;
 end;
 
 function TIdSdpTimes.Add(T: TIdSdpTime): TIdSdpTime;
@@ -1865,19 +1865,11 @@ begin
   Result.Assign(T);
 end;
 
-procedure TIdSdpTimes.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpTimes;
-begin
-  if Src is TIdSdpTimes then begin
-    Other := Src as TIdSdpTimes;
+//* TIdSdpTimes Protected methods **********************************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpTimes.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpTime;
 end;
 
 //* TIdSdpTimes Private methods ************************************************
@@ -1894,8 +1886,7 @@ end;
 
 function TIdSdpZoneAdjustments.Add: TIdSdpZoneAdjustment;
 begin
-  Result := TIdSdpZoneAdjustment.Create;
-  Self.List.Add(Result);
+  Result := Self.AddItem as TIdSdpZoneAdjustment;
 end;
 
 function TIdSdpZoneAdjustments.Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment;
@@ -1904,19 +1895,11 @@ begin
   Result.Assign(Adj);
 end;
 
-procedure TIdSdpZoneAdjustments.Assign(Src: TPersistent);
-var
-  I:     Integer;
-  Other: TIdSdpZoneAdjustments;
-begin
-  if Src is TIdSdpZoneAdjustments then begin
-    Other := Src as TIdSdpZoneAdjustments;
+//* TIdSdpZoneAdjustments Protected methods ************************************
 
-    Self.Clear;
-    for I := 0 to Other.Count - 1 do
-      Self.Add(Other[I]);
-  end
-  else inherited Assign(Src);
+function TIdSdpZoneAdjustments.ItemType: TIdPrintableClass;
+begin
+  Result := TIdSdpZoneAdjustment;
 end;
 
 //* TIdSdpZoneAdjustments Private methods **************************************
