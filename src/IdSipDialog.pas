@@ -387,6 +387,7 @@ begin
       Result.Route := Self.RouteSet;
     end
     else begin
+      // Strict routing
       Result.RequestUri := FirstRoute.Address;
       // RFC 3261 section 12.2.1.1; 19.1.5
       Result.RequestUri.Headers.Clear;
