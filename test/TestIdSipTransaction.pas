@@ -27,13 +27,13 @@ type
 
     function  CreateAck(const Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
-    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
+    procedure OnNewSession(Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
                                const Transport: TIdSipTransport);
@@ -460,11 +460,11 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnEndedSession(const Session: TIdSipSession);
+procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession);
 begin
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(const Session: TIdSipSession);
+procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(Session: TIdSipSession);
 begin
 end;
 
@@ -473,12 +473,12 @@ procedure TestTIdSipTransactionDispatcher.OnFail(const Transaction: TIdSipTransa
 begin
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnModifiedSession(const Session: TIdSipSession;
-                                                            const Invite: TIdSipRequest);
+procedure TestTIdSipTransactionDispatcher.OnModifiedSession(Session: TIdSipSession;
+                                                            Invite: TIdSipRequest);
 begin
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnNewSession(const Session: TIdSipSession);
+procedure TestTIdSipTransactionDispatcher.OnNewSession(Session: TIdSipSession);
 begin
   Self.Session := Session;
 end;
