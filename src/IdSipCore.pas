@@ -110,16 +110,14 @@ type
   TIdSipSession = class;
 
   // I am the protocol of things that listen for Sessions:
-  // * OnNewSession tells us that someone wants to talk to us - we may refuse or
-  //   allow the session.
-  // * OnSessionEstablished tells us when a session has been fully established.
-  // * OnSessionEnded tells us when the session's finished. This could be
+  // * OnEndedSession tells us when the session's finished. This could be
   //   because someone hung up, or because the outbound call failed (the request
   //   timed out, a transport error occurec, etc). OnSessionEnded lets us clean
   //   up. The Session referenced becomes invalid after this point. In other
   //   words, you'd better say goodbye to the Session in your implementation of
   //   this method. Accessing your reference to the Session will probably fail
   //   with an access violation.
+  // * OnEstablishedSession tells us when a session has been fully established.
   // * OnModifySession fires when we receive an in-dialog INVITE - an INVITE
   //   that offers a modified session description.
   // * OnModifiedSession tells us the answer the remote side gave us for an
