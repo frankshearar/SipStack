@@ -52,18 +52,20 @@ type
   end;
 
   TIdSipTestActionListener = class(TIdSipMockListener,
-                               IIdSipActionListener)
+                                   IIdSipActionListener)
   private
     fActionParam:             TIdSipAction;
     fAuthenticationChallenge: Boolean;
+    fPassword:                String;
     fRedirect:                Boolean;
     fResponseParam:           TIdSipResponse;
-    fPassword:                String;
+    fUsername:                String;
   public
     constructor Create; override;
 
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
+                                        var Username: String;
                                         var Password: String);
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
@@ -73,6 +75,7 @@ type
     property Password:                String         read fPassword write fPassword;
     property Redirect:                Boolean        read fRedirect;
     property ResponseParam:           TIdSipResponse read fResponseParam;
+    property Username:                String         read fUsername write fUsername;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -233,17 +236,23 @@ type
   TIdSipTestSessionListener = class(TIdSipMockListener,
                                     IIdSipSessionListener)
   private
+    fAnswerParam:             TIdSipResponse;
     fAuthenticationChallenge: Boolean;
     fEndedSession:            Boolean;
     fEstablishedSession:      Boolean;
     fModifiedSession:         Boolean;
+    fModifySession:           Boolean;
     fNewSession:              Boolean;
+    fModifyParam:             TIdSipInboundInvite;
+    fReasonParam:             String;
     fRedirect:                Boolean;
+    fSessionParam:            TIdSipSession;
   public
     constructor Create; override;
 
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
+                                        var Username: String;
                                         var Password: String);
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
@@ -251,15 +260,21 @@ type
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
-                                Invite: TIdSipRequest);
+                                Answer: TIdSipResponse);
+    procedure OnModifySession(Modify: TIdSipInboundInvite);
     procedure OnNewSession(Session: TIdSipSession);
 
-    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
-    property EndedSession:            Boolean read fEndedSession;
-    property EstablishedSession:      Boolean read fEstablishedSession;
-    property ModifiedSession:         Boolean read fModifiedSession;
-    property NewSession:              Boolean read fNewSession;
-    property Redirect:                Boolean read fRedirect;
+    property AnswerParam:             TIdSipResponse      read fAnswerParam;
+    property AuthenticationChallenge: Boolean             read fAuthenticationChallenge;
+    property EndedSession:            Boolean             read fEndedSession;
+    property EstablishedSession:      Boolean             read fEstablishedSession;
+    property ModifiedSession:         Boolean             read fModifiedSession;
+    property ModifySession:           Boolean             read fModifySession;
+    property NewSession:              Boolean             read fNewSession;
+    property ModifyParam:             TIdSipInboundInvite read fModifyParam;
+    property Redirect:                Boolean             read fRedirect;
+    property ReasonParam:             String              read fReasonParam;
+    property SessionParam:            TIdSipSession       read fSessionParam;
   end;
 
   TIdSipTestTransactionListener = class(TIdSipMockListener,
@@ -561,6 +576,7 @@ end;
 
 procedure TIdSipTestActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
                                                              Response: TIdSipResponse;
+                                                             var Username: String;
                                                              var Password: String);
 begin
   Self.fActionParam             := Action;
@@ -569,6 +585,7 @@ begin
 
   // We set the var parameter, not our instance variable!
   Password := Self.Password;
+  Username := Self.Username;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
@@ -865,6 +882,7 @@ end;
 
 procedure TIdSipTestSessionListener.OnAuthenticationChallenge(Action: TIdSipAction;
                                                               Response: TIdSipResponse;
+                                                              var Username: String;
                                                               var Password: String);
 begin
   Self.fAuthenticationChallenge := true;
@@ -886,6 +904,8 @@ procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;
                                                    const Reason: String);
 begin
   Self.fEndedSession := true;
+  Self.fReasonParam  := Reason;
+  Self.fSessionParam := Session;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnEndedSession');
@@ -894,15 +914,27 @@ end;
 procedure TIdSipTestSessionListener.OnEstablishedSession(Session: TIdSipSession);
 begin
   Self.fEstablishedSession := true;
+  Self.fSessionParam       := Session;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnEstablishedSession');
 end;
 
 procedure TIdSipTestSessionListener.OnModifiedSession(Session: TIdSipSession;
-                                                      Invite: TIdSipRequest);
+                                                      Answer: TIdSipResponse);
 begin
+  Self.fAnswerParam     := Answer;
   Self.fModifiedSession := true;
+  Self.fSessionParam    := Session;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestSessionListener.OnModifiedSession');
+end;
+
+procedure TIdSipTestSessionListener.OnModifySession(Modify: TIdSipInboundInvite);
+begin
+  Self.fModifySession := true;
+  Self.fModifyParam   := Modify;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnModifiedSession');
@@ -910,7 +942,8 @@ end;
 
 procedure TIdSipTestSessionListener.OnNewSession(Session: TIdSipSession);
 begin
-  Self.fNewSession := true;
+  Self.fNewSession   := true;
+  Self.fSessionParam := Session;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnNewSession');

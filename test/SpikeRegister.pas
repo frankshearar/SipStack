@@ -40,6 +40,7 @@ type
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
+                                        var Username: String;
                                         var Password: String);
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -148,6 +149,7 @@ end;
 
 procedure TrnidSpikeRegister.OnAuthenticationChallenge(Action: TIdSipAction;
                                                        Response: TIdSipResponse;
+                                                       var Username: String;
                                                        var Password: String);
 begin
   Self.Log.Lines.Add('---- Authentication challenge for registration ----');

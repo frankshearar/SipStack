@@ -107,6 +107,7 @@ type
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
+                                        var Username: String;
                                         var Password: String);
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
@@ -121,7 +122,8 @@ type
                         const Reason: String); overload;
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
-                                Invite: TIdSipRequest);
+                                Answer: TIdSipResponse);
+    procedure OnModifySession(Modify: TIdSipInboundInvite);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
@@ -328,8 +330,10 @@ end;
 
 procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
                                                Response: TIdSipResponse;
+                                               var Username: String;
                                                var Password: String);
 begin
+  Username := 'rnid01';
   Password := 'rnid01';
 end;
 
@@ -422,7 +426,11 @@ begin
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
-                                       Invite: TIdSipRequest);
+                                       Answer: TIdSipResponse);
+begin
+end;
+
+procedure TrnidSpike.OnModifySession(Modify: TIdSipInboundInvite);
 begin
 end;
 
