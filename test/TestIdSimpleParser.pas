@@ -339,9 +339,13 @@ begin
   Check(    TIdIPAddressParser.IsIPv6Address('00:01:02:f0:90:84'),          '00:01:02:f0:90:84');
   Check(    TIdIPAddressParser.IsIPv6Address('FE80::201:2FF:FEF0'),         'FE80::201:2FF:FEF0');
   Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:200C:417A'), '1080:0:0:0:8:800:200C:417A');
-  Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
-  Check(    TIdIPAddressParser.IsIPv6Address('::13.1.68.3'),                '::13.1.68.3');
-  Check(    TIdIPAddressParser.IsIPv6Address('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
+
+  // IPv4 stuff
+  Check(not TIdIPAddressParser.IsIPv6Address('127.0.0.1'),                '127.0.0.1');
+  Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'), '1080:0:0:0:8:800:1.2.3.4');
+  Check(    TIdIPAddressParser.IsIPv6Address('::13.1.68.3'),              '::13.1.68.3');
+  Check(    TIdIPAddressParser.IsIPv6Address('::FFFF:129.144.52.38'),     '::FFFF:129.144.52.38');
+  Check(    TIdIPAddressParser.IsIPv6Address('1::1:129.144.52.38'),       '1::1:129.144.52.38');
 end;
 
 procedure TestTIdIPAddressParser.TestParseIpv6Address;

@@ -401,9 +401,13 @@ begin
     // xxx::
     // xxx::yyy
     // Additionally, there may be an IPv4 address as the last 2 words, like
-    // 2002:dead:beef:feed:babe:f00d:192.168.0.1
+    // 2002:dead:beef:feed:babe:f00d:192.168.0.1 or
+    // ::127.0.0.1
 
   if (IPv6Address = '') then
+    raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
+
+  if Self.IsIPv4Address(IPv6Address) then
     raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
 
   FillChar(Address, SizeOf(Address), 0);
