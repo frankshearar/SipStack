@@ -447,7 +447,7 @@ type
   // answers.
   TIdSipAction = class(TIdInterfacedObject)
   private
-    fCurrentRequest: TIdSipRequest;
+    fInitialRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
     NonceCount:      Cardinal;
     UA:              TIdSipUserAgentCore;
@@ -502,7 +502,7 @@ type
                               UsingSecureTransport: Boolean); virtual;
     procedure Terminate; virtual;
 
-    property CurrentRequest: TIdSipRequest read fCurrentRequest;
+    property InitialRequest: TIdSipRequest read fInitialRequest;
     property IsTerminated:   Boolean       read fIsTerminated;
     property Username:       String        read GetUsername write SetUsername;
   end;
@@ -2444,7 +2444,7 @@ begin
 
   Self.UA := UA;
 
-  Self.fCurrentRequest := TIdSipRequest.Create;
+  Self.fInitialRequest := TIdSipRequest.Create;
   Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
 end;
@@ -2452,7 +2452,7 @@ end;
 destructor TIdSipAction.Destroy;
 begin
   Self.Listeners.Free;
-  Self.CurrentRequest.Free;
+  Self.InitialRequest.Free;
 
   inherited Destroy;
 end;
@@ -2475,9 +2475,9 @@ end;
 function TIdSipAction.Match(Msg: TIdSipMessage): Boolean;
 begin
   if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
-    Result := Self.CurrentRequest.MatchCancel(Msg as TIdSipRequest)
+    Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
   else
-    Result := Self.CurrentRequest.Match(Msg);
+    Result := Self.InitialRequest.Match(Msg);
 end;
 
 procedure TIdSipAction.ReceiveRequest(Request: TIdSipRequest);
@@ -2729,7 +2729,7 @@ begin
 
   ReAttempt := Self.CreateNewAttempt(Challenge);
   try
-    ReAttempt.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
+    ReAttempt.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
 
     AuthHeader      := Self.AddAuthorizationHeader(ReAttempt, Challenge);
     ChallengeHeader := Self.AuthenticateHeader(Challenge);
@@ -2771,7 +2771,7 @@ begin
                                 MD5);
     end;
 
-    Self.CurrentRequest.Assign(ReAttempt);
+    Self.InitialRequest.Assign(ReAttempt);
     Self.SendRequest(ReAttempt);
   finally
     ReAttempt.Free;
@@ -2821,7 +2821,7 @@ var
 begin
   TempTo := TIdSipToHeader.Create;
   try
-    TempTo.Address := Self.CurrentRequest.RequestUri;
+    TempTo.Address := Self.InitialRequest.RequestUri;
 
     Result := Self.UA.CreateOptions(TempTo);
   finally
@@ -2839,7 +2839,7 @@ constructor TIdSipInboundOptions.Create(UA: TIdSipUserAgentCore;
 begin
   inherited Create(UA);
 
-  Self.CurrentRequest.Assign(Options);
+  Self.InitialRequest.Assign(Options);
 end;
 
 //* TIdSipInboundOptions Protected methods *************************************
@@ -2887,7 +2887,7 @@ var
 begin
   Options := Self.UA.CreateOptions(Server);
   try
-    Self.CurrentRequest.Assign(Options);
+    Self.InitialRequest.Assign(Options);
     Self.SendRequest(Options);
   finally
     Options.Free;
@@ -2948,7 +2948,7 @@ var
 begin
   TempTo := TIdSipToHeader.Create;
   try
-    TempTo.Address := Self.CurrentRequest.RequestUri;
+    TempTo.Address := Self.InitialRequest.RequestUri;
 
     Result := Self.UA.CreateRegister(TempTo);
   finally
@@ -2966,7 +2966,7 @@ constructor TIdSipInboundRegistration.Create(UA: TIdSipUserAgentCore;
 begin
   inherited Create(UA);
 
-  Self.CurrentRequest.Assign(Reg);
+  Self.InitialRequest.Assign(Reg);
 end;
 
 //* TIdSipInboundRegistration Protected methods ********************************
@@ -3256,15 +3256,15 @@ begin
   if Result then begin
     case Response.StatusCode of
       SIPIntervalTooBrief: begin
-        Self.ReissueRequest(Self.CurrentRequest.RequestUri,
+        Self.ReissueRequest(Self.InitialRequest.RequestUri,
                             Response.FirstMinExpires.NumericValue);
         Result := true;
       end;
 
       SIPBadExtension: begin
-        Result := Self.CurrentRequest.HasHeader(RequireHeader);
+        Result := Self.InitialRequest.HasHeader(RequireHeader);
         if Result then
-          Self.RetryWithoutExtensions(Self.CurrentRequest.RequestUri,
+          Self.RetryWithoutExtensions(Self.InitialRequest.RequestUri,
                                       Response);
       end;
     else
@@ -3287,7 +3287,7 @@ end;
 
 procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
 begin
-  Self.CurrentRequest.Assign(Request);
+  Self.InitialRequest.Assign(Request);
 
   inherited SendRequest(Request);
 end;
@@ -3539,14 +3539,14 @@ var
   DialogID: TIdSipDialogID;
 begin
   if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
-    Result := Self.CurrentRequest.MatchCancel(Msg as TIdSipRequest)
+    Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
   else begin
     DialogID := Self.CreateDialogIDFrom(Msg);
     try
      if Self.DialogEstablished then
        Result := Self.Dialog.ID.Equals(DialogID)
      else
-       Result := Self.CurrentRequest.Match(Msg);
+       Result := Self.InitialRequest.Match(Msg);
     finally
       DialogID.Free;
     end;
@@ -3606,8 +3606,8 @@ end;
 function TIdSipSession.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
 begin
   Result := Self.UA.CreateInvite(Challenge.ToHeader,
-                                 Self.CurrentRequest.Body,
-                                 Self.CurrentRequest.ContentType);
+                                 Self.InitialRequest.Body,
+                                 Self.InitialRequest.ContentType);
 end;
 
 function TIdSipSession.GetDialog: TIdSipDialog;
@@ -3617,7 +3617,7 @@ end;
 
 function TIdSipSession.GetInvite: TIdSipRequest;
 begin
-  Result := Self.CurrentRequest;
+  Result := Self.InitialRequest;
 end;
 
 procedure TIdSipSession.MarkAsTerminated;
@@ -3705,7 +3705,7 @@ begin
   Bye := Self.UA.CreateBye(Self.Dialog);
   try
     // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
-    Bye.LastHop.Transport := Self.CurrentRequest.LastHop.Transport;
+    Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
 
     // We don't listen to the new transaction because we assume the BYE
     // succeeds immediately.
@@ -3782,7 +3782,7 @@ begin
 
   Self.TimerLock := TCriticalSection.Create;
 
-  Self.CurrentRequest.Assign(Invite);
+  Self.InitialRequest.Assign(Invite);
 
   Self.UsingSecureTransport := UsingSecureTransport;
 
@@ -3810,7 +3810,7 @@ var
   OkResponse: TIdSipResponse;
 begin
   // The type of payload processor depends on the ContentType passed in!
-  OkResponse := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
+  OkResponse := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
   try
     OkResponse.Body := Offer;
     Result := OkResponse.Body;
@@ -3826,7 +3826,7 @@ begin
         Self.NotifyOfEstablishedSession;
       end;
 
-      Self.Dialog.ReceiveRequest(Self.CurrentRequest);
+      Self.Dialog.ReceiveRequest(Self.InitialRequest);
       Self.Dialog.ReceiveResponse(OkResponse);
     finally
       Self.DialogLock.Release;
@@ -3850,7 +3850,7 @@ procedure TIdSipInboundSession.ForwardCall(NewDestination: TIdSipAddressHeader);
 var
   RedirectResponse: TIdSipResponse;
 begin
-  RedirectResponse := Self.UA.CreateResponse(Self.CurrentRequest,
+  RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
                                              SIPMovedTemporarily);
   try
     RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
@@ -3941,7 +3941,7 @@ begin
   inherited ReceiveCancel(Cancel);
 
   if not Self.FullyEstablished then begin
-    Self.RejectRequest(Self.CurrentRequest);
+    Self.RejectRequest(Self.InitialRequest);
     Self.NotifyOfEndedSession(RemoteCancel);
     Self.MarkAsTerminated;
   end;
@@ -3951,7 +3951,7 @@ end;
 
 function TIdSipInboundSession.CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
 begin
-  Result := TIdSipDialog.CreateInboundDialog(Self.CurrentRequest,
+  Result := TIdSipDialog.CreateInboundDialog(Self.InitialRequest,
                                              Response,
                                              Self.UsingSecureTransport);
 
@@ -3963,7 +3963,7 @@ procedure TIdSipInboundSession.SendSimpleResponse(StatusCode: Cardinal);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.UA.CreateResponse(Self.CurrentRequest,
+  Response := Self.UA.CreateResponse(Self.InitialRequest,
                                      StatusCode);
   try
     Self.SendResponse(Response);
@@ -3996,8 +3996,8 @@ begin
 
   Self.Initialize;
 
-  Self.CurrentRequest.Assign(Invite);
-  Self.CurrentRequest.ToHeader.Tag := '';
+  Self.InitialRequest.Assign(Invite);
+  Self.InitialRequest.ToHeader.Tag := '';
 end;
 
 destructor TIdSipOutboundSession.Destroy;
@@ -4019,8 +4019,8 @@ begin
 
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
-      Self.CurrentRequest.Assign(Invite);
-      Self.SendRequest(Self.CurrentRequest);
+      Self.InitialRequest.Assign(Invite);
+      Self.SendRequest(Self.InitialRequest);
     finally
       Invite.Free;
     end;
@@ -4044,8 +4044,8 @@ end;
 
 function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
 begin
-  Result := (Self.CurrentRequest.CallID = Response.CallID)
-        and (Self.CurrentRequest.From.Tag = Response.From.Tag);
+  Result := (Self.InitialRequest.CallID = Response.CallID)
+        and (Self.InitialRequest.From.Tag = Response.From.Tag);
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;
@@ -4091,7 +4091,7 @@ begin
 
   if not Result
     and Self.Cancelling
-    and Self.CurrentRequest.Match(Response) then
+    and Self.InitialRequest.Match(Response) then
     Self.TerminateAfterSendingCancel;
 end;
 
@@ -4180,7 +4180,7 @@ function TIdSipOutboundSession.CreateOutboundDialog(Response: TIdSipResponse;
 begin
   Self.UsingSecureTransport := UsingSecureTransport;
 
-  Result := TIdSipDialog.CreateOutboundDialog(Self.CurrentRequest,
+  Result := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                               Response,
                                               Self.UsingSecureTransport);
 
@@ -4201,13 +4201,13 @@ var
   NewInvite: TIdSipRequest;
 begin
   NewInvite := Self.UA.CreateInvite(Dest,
-                                    Self.CurrentRequest.Body,
-                                    Self.CurrentRequest.ContentType);
+                                    Self.InitialRequest.Body,
+                                    Self.InitialRequest.ContentType);
   try
-    NewInvite.CallID   := Self.CurrentRequest.CallID;
-    NewInvite.From.Tag := Self.CurrentRequest.From.Tag;
+    NewInvite.CallID   := Self.InitialRequest.CallID;
+    NewInvite.From.Tag := Self.InitialRequest.From.Tag;
 
-    Self.CurrentRequest.Assign(NewInvite);
+    Self.InitialRequest.Assign(NewInvite);
     
     Self.SendRequest(NewInvite);
   finally
@@ -4223,15 +4223,15 @@ begin
 
   Ack := Self.UA.CreateAck(Self.Dialog);
   try
-    Ack.Body := Self.CurrentRequest.Body;
+    Ack.Body := Self.InitialRequest.Body;
     Ack.ContentDisposition.Value := DispositionSession;
     Ack.ContentLength := Length(Ack.Body);
-    Ack.ContentType := Self.CurrentRequest.ContentType;
+    Ack.ContentType := Self.InitialRequest.ContentType;
 
-    if Self.CurrentRequest.HasAuthorization then
-      Ack.FirstAuthorization.Value := Self.CurrentRequest.FirstAuthorization.FullValue;
-    if Self.CurrentRequest.HasProxyAuthorization then
-      Ack.FirstProxyAuthorization.Value := Self.CurrentRequest.FirstProxyAuthorization.FullValue;
+    if Self.InitialRequest.HasAuthorization then
+      Ack.FirstAuthorization.Value := Self.InitialRequest.FirstAuthorization.FullValue;
+    if Self.InitialRequest.HasProxyAuthorization then
+      Ack.FirstProxyAuthorization.Value := Self.InitialRequest.FirstProxyAuthorization.FullValue;
 
     Self.SendRequest(Ack);
   finally
@@ -4243,7 +4243,7 @@ procedure TIdSipOutboundSession.SendCancel;
 begin
   Assert(not Self.SentCancel, 'SendCancel already invoked');
   Self.SentCancel := true;
-  Self.CancelRequest := Self.CurrentRequest.CreateCancel;
+  Self.CancelRequest := Self.InitialRequest.CreateCancel;
   Self.SendRequest(Self.CancelRequest);
 end;
 

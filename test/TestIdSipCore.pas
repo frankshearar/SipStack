@@ -1315,7 +1315,7 @@ begin
   Ack := Self.Core.CreateRequest(Self.Session.Dialog);
   try
     Ack.Method          := MethodAck;
-    Ack.CSeq.SequenceNo := Self.Session.CurrentRequest.CSeq.SequenceNo;
+    Ack.CSeq.SequenceNo := Self.Session.InitialRequest.CSeq.SequenceNo;
     Ack.CSeq.Method     := Ack.Method;
     // We have to swop the tags because CreateAck returns a LOCALLY created ACK,
     // so the remote tag is actually the far end's local tag.
@@ -2846,7 +2846,7 @@ begin
   Options := Self.Core.QueryOptions(Self.Core.From);
 
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Options.CurrentRequest.CSeq.SequenceNo;
+  SequenceNo   := Options.InitialRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized;
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
@@ -3187,7 +3187,7 @@ var
   RequestCount: Cardinal;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Reg.CurrentRequest.CSeq.SequenceNo;
+  SequenceNo   := Self.Reg.InitialRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized;
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
@@ -4593,7 +4593,7 @@ end;
 
 procedure TestTIdSipOutboundSession.TestPendingTransactionCount;
 begin
-  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
+  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
   CheckEquals(0,
               Self.Session.PendingTransactionCount,
               'Session should have no pending transactions');
@@ -4610,7 +4610,7 @@ var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
 begin
-  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
+  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
 
  CheckEquals(1,
               Self.Dispatcher.Transport.ACKCount,
@@ -4623,7 +4623,7 @@ begin
 
   Ack := Self.Dispatcher.Transport.LastRequest;
   CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-  Invite := Self.Session.CurrentRequest;
+  Invite := Self.Session.InitialRequest;
   CheckEquals(Invite.CSeq.SequenceNo,
               Ack.CSeq.SequenceNo,
               'CSeq numerical portion');
@@ -4850,7 +4850,7 @@ var
   RequestCount: Cardinal;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
+  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized;
   CheckEquals(RequestCount + 1,
@@ -4959,7 +4959,7 @@ var
   Response:     TIdSipResponse;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
+  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized;
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,

@@ -405,7 +405,7 @@ var
   I:      Integer;
   SDP:    TIdSdpPayload;
 begin
-  SDP := TIdSdpPayload.CreateFrom(Session.CurrentRequest.Body);
+  SDP := TIdSdpPayload.CreateFrom(Session.InitialRequest.Body);
   try
     SDP.Origin.Address := Self.Address;
     for I := 0 to SDP.MediaDescriptionCount - 1 do
@@ -426,7 +426,7 @@ begin
   // port 8000's already bound. We thus try to honour the offer as closely as
   // possible.
   Self.PayloadProcessor.StartListening(Answer);
-  Self.PayloadProcessor.SetRemoteDescription(Session.CurrentRequest.Body);
+  Self.PayloadProcessor.SetRemoteDescription(Session.InitialRequest.Body);
 //  Session.RejectCallBusy;
 
   Session.AcceptCall(Answer, SdpMimeType);
