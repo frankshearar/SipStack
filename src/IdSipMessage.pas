@@ -206,6 +206,7 @@ type
     destructor  Destroy; override;
 
     function EncodeQuotedStr(const S: String): String;
+    function HasLr: Boolean;
 
     property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
@@ -213,7 +214,7 @@ type
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
   protected
-    function  GetName: String; override;
+    function GetName: String; override;
   end;
 
   TIdSipTimestamp = class(TObject)
@@ -367,6 +368,7 @@ type
     procedure Delete(const I: Integer);
     function  Count: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
+    function  IsEmpty: Boolean;
     procedure Remove(const Header: TIdSipHeader);
 
     property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
@@ -385,6 +387,7 @@ type
 
     procedure Add(Header: TIdSipHeader);
     function  Count: Integer;
+    function  IsEmpty: Boolean;
     procedure Remove(Header: TIdSipHeader);
 
     property Items[const Index: Integer]: TIdSipHeader read GetItems;
@@ -945,7 +948,7 @@ end;
 
 procedure TIdSipAddressHeader.SetAddress(const Value: TIdURI);
 begin
-  fAddress.URI := Value.URI;
+  fAddress.URI := Value.GetFullURI;
 end;
 
 //******************************************************************************
@@ -1396,6 +1399,11 @@ begin
   Result := S;
   Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
+end;
+
+function TIdSipRouteHeader.HasLr: Boolean;
+begin
+  Result := Pos(LrParam, Self.Address.GetFullURI) > 0;
 end;
 
 //* TIdSipRouteHeader Protected methods ****************************************
@@ -2089,6 +2097,11 @@ begin
   Result := Self.IndexOf(HeaderName) <> -1;
 end;
 
+function TIdSipHeaders.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
 procedure TIdSipHeaders.Remove(const Header: TIdSipHeader);
 begin
   Self.List.Remove(Header);
@@ -2248,6 +2261,11 @@ begin
   for I := 0 to Self.Headers.Count - 1 do
     if (Self.Headers.Items[I].Name = Self.HeaderName) then
       Inc(Result);
+end;
+
+function TIdSipHeadersFilter.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
 end;
 
 procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);

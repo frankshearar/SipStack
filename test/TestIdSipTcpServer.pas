@@ -33,7 +33,7 @@ type
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
     procedure OnServerDisconnect(AThread: TIdPeerThread);
-    function ReadResponse: String;
+    function  ReadResponse: String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -95,25 +95,24 @@ begin
 
   Self.Client := TIdTcpClient.Create(nil);
   Self.Server := TIdSipTcpServer.Create(nil);
+  Self.Parser := TIdSipParser.Create;
 
   Self.Client.Host := '127.0.0.1';
   Self.Client.Port := Self.Server.DefaultPort;
 
-  Self.MethodCallCount := 0;
-  Self.Server.Active := true;
-
-  Self.Parser := TIdSipParser.Create;
-
   Self.ConnectionDropped := false;
+  Self.MethodCallCount := 0;
+
+  Self.Server.Active := true;
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
-  Self.Parser.Free;
   Self.Server.Active := false;
-
-  Client.Free;
-  Server.Free;
+  
+  Self.Parser.Free;
+  Self.Client.Free;
+  Self.Server.Free;
 
   inherited TearDown;
 end;

@@ -6,7 +6,7 @@ uses
   IdURI, IdSipMessage;
 
 type
-  TIdSipDialogState = (sdsEarly, sdsConfirmed);
+  TIdSipDialogState = (sdsNotInitialised, sdsEarly, sdsConfirmed);
 
   // Within this specification, only 2xx and 101-199 responses with a To tag,
   // where the request was INVITE, will establish a dialog.
@@ -26,6 +26,7 @@ type
   TIdSipDialog = class(TObject)
   private
     fID:               TIdSipDialogID;
+    fInitialRequest:   TIdSipRequest;
     fIsSecure:         Boolean;
     fLocalSequenceNo:  Cardinal;
     fLocalURI:         TIdURI;
@@ -33,8 +34,16 @@ type
     fRemoteTarget:     TIdURI;
     fRemoteURI:        TIdURI;
     fRouteSet:         TIdSipHeaders;
+    fState:            TIdSipDialogState;
 
     procedure SetIsSecure(const Value: Boolean);
+  protected
+    procedure InitialiseNewRequest(const R: TIdSipRequest); virtual;
+    procedure SetLocalSequenceNo(const Value: Cardinal);
+    procedure SetRemoteSequenceNo(const Value: Cardinal);
+    procedure SetState(const Value: TIdSipDialogState);
+
+    property InitialRequest: TIdSipRequest read fInitialRequest;
   public
     constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); virtual;
     destructor  Destroy; override;
@@ -43,14 +52,14 @@ type
     procedure HandleMessage(const Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(const Response: TIdSipResponse); overload; virtual;
 
-    property ID:               TIdSipDialogID    read fID;
-    property IsSecure:         Boolean           read fIsSecure write fIsSecure;
-    property LocalSequenceNo:  Cardinal          read fLocalSequenceNo write fLocalSequenceNo;
-    property LocalURI:         TIdURI            read fLocalURI;
-    property RemoteSequenceNo: Cardinal          read fRemoteSequenceNo write fRemoteSequenceNo;
-    property RemoteTarget:     TIdURI            read fRemoteTarget;
-    property RemoteURI:        TIdURI            read fRemoteURI;
-    property RouteSet:         TIdSipHeaders     read fRouteSet;
+    property ID:               TIdSipDialogID read fID;
+    property IsSecure:         Boolean        read fIsSecure write fIsSecure;
+    property LocalSequenceNo:  Cardinal       read fLocalSequenceNo write SetLocalSequenceNo;
+    property LocalURI:         TIdURI         read fLocalURI;
+    property RemoteSequenceNo: Cardinal       read fRemoteSequenceNo write SetRemoteSequenceNo;
+    property RemoteTarget:     TIdURI         read fRemoteTarget;
+    property RemoteURI:        TIdURI         read fRemoteURI;
+    property RouteSet:         TIdSipHeaders  read fRouteSet;
   end;
 
   //   When a UAC sends a request that can establish a dialog (such as an
@@ -62,6 +71,8 @@ type
   //
   // So when do we check this?
   TIdSipUACDialog = class(TIdSipDialog)
+  protected
+    procedure InitialiseNewRequest(const R: TIdSipRequest); override;
   public
     constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); override;
 
@@ -81,20 +92,20 @@ type
   //   MUST be a SIPS URI.
   TIdSipUASDialog = class(TIdSipDialog)
   private
-    fIsEarly: Boolean;
+    function  GetIsEarly: Boolean;
     procedure SetIsEarly(const Value: Boolean);
   public
     constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); override;
 
     procedure HandleMessage(const Response: TIdSipResponse); overload; override;
 
-    property IsEarly: Boolean read fIsEarly;
+    property IsEarly: Boolean read GetIsEarly;
   end;
 
 implementation
 
 uses
-  IdSipParser, SysUtils;
+  IdSipParser, IdSipRandom, SysUtils;
 
 //******************************************************************************
 //* TIdSipDialogID                                                             *
@@ -105,8 +116,8 @@ constructor TIdSipDialogID.Create(const CallID, LocalTag, RemoteTag: String);
 begin
   inherited Create;
 
-  fCallID   := CallID;
-  fLocalTag := LocalTag;
+  fCallID    := CallID;
+  fLocalTag  := LocalTag;
   fRemoteTag := RemoteTag;
 end;
 
@@ -119,7 +130,10 @@ constructor TIdSipDialog.Create(const Request: TIdSipRequest; const SentOverTLS:
 begin
   inherited Create;
 
+  Self.fInitialRequest := Request;
+
   Self.SetIsSecure(Request.HasSipsUri and SentOverTLS);
+  Self.SetState(sdsNotInitialised);
 end;
 
 destructor TIdSipDialog.Destroy;
@@ -137,10 +151,9 @@ function TIdSipDialog.CreateRequest: TIdSipRequest;
 begin
   Result := TIdSipRequest.Create;
   try
+    Self.InitialiseNewRequest(Result);
   except
-    Result.Free;
-    Result := nil;
-
+    FreeAndNil(Result);
     raise;
   end;
 end;
@@ -151,6 +164,27 @@ end;
 
 procedure TIdSipDialog.HandleMessage(const Response: TIdSipResponse);
 begin
+end;
+
+//* TIdSipDialog Protected methods *********************************************
+
+procedure TIdSipDialog.InitialiseNewRequest(const R: TIdSipRequest);
+begin
+end;
+
+procedure TIdSipDialog.SetLocalSequenceNo(const Value: Cardinal);
+begin
+  Self.fLocalSequenceNo := Value;
+end;
+
+procedure TIdSipDialog.SetRemoteSequenceNo(const Value: Cardinal);
+begin
+  Self.fRemoteSequenceNo := Value;
+end;
+
+procedure TIdSipDialog.SetState(const Value: TIdSipDialogState);
+begin
+  Self.fState := Value;
 end;
 
 //* TIdSipDialog Private methods ***********************************************
@@ -181,7 +215,7 @@ begin
 
   Self.RemoteSequenceNo := 0;
 
-  fRemoteTarget := TIdURI.Create('');
+  Self.fRemoteTarget := TIdURI.Create('');
 
   fRemoteURI := TIdURI.Create(Request.ToHeader.Address.GetFullURI);
 
@@ -198,7 +232,52 @@ end;
 procedure TIdSipUACDialog.HandleMessage(const Response: TIdSipResponse);
 begin
   if (Self.RemoteTarget.GetFullUri = '') then
-    Self.RemoteTarget.URI := (Response.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI;
+    Self.RemoteTarget.URI := (Response.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullUri;
+
+  if (Self.RemoteSequenceNo = 0) then
+    Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
+end;
+
+//* TIdSipUACDialog Protected methods ******************************************
+
+procedure TIdSipUACDialog.InitialiseNewRequest(const R: TIdSipRequest);
+var
+  FirstRoute: TIdSipRouteHeader;
+  I:          Integer;
+begin
+  R.ToHeader.Address := Self.RemoteURI;
+  R.ToHeader.Tag     := Self.ID.RemoteTag;
+  R.From.Address     := Self.LocalURI;
+  R.From.Tag         := Self.ID.LocalTag;
+  R.CallID           := Self.ID.CallID;
+
+  R.CSeq.Method     := Self.InitialRequest.Method;
+  R.CSeq.SequenceNo := TIdSipRandomNumber.Next;
+
+  if (Self.RouteSet.IsEmpty) then begin
+    R.RequestUri := Self.RemoteTarget.GetFullURI;
+  end
+  else begin
+    FirstRoute := Self.RouteSet.Items[0] as TIdSipRouteHeader;
+
+    if FirstRoute.HasLr then begin
+      R.RequestUri := Self.RemoteTarget.GetFullURI;
+
+      for I := 0 to Self.RouteSet.Count - 1 do
+        R.Headers.Add(RouteHeader).Assign(Self.RouteSet.Items[I]);
+    end
+    else begin
+      R.RequestUri := (FirstRoute).Address.GetFullUri;
+
+      // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
+      // remember?
+      for I := 1 to Self.RouteSet.Count - 1 do begin
+        R.Headers.Add(RouteHeader).Assign(Self.RouteSet.Items[I]);
+      end;
+
+      R.Headers.Add(RouteHeader).Value := '<' + Self.RemoteURI.GetFullURI + '>';
+    end;
+  end;
 end;
 
 //******************************************************************************
@@ -222,7 +301,7 @@ begin
 
   Self.RemoteSequenceNo := Request.CSeq.SequenceNo;
 
-  fRemoteTarget := TIdURI.Create((Request.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI);
+  Self.fRemoteTarget := TIdURI.Create((Request.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI);
 
   fRemoteURI := TIdURI.Create(Request.From.Address.GetFullURI);
 
@@ -234,23 +313,32 @@ begin
   finally
     RouteFilter.Free;
   end;
-
-  Self.SetIsEarly(true);
 end;
 
 procedure TIdSipUASDialog.HandleMessage(const Response: TIdSipResponse);
 begin
   inherited HandleMessage(Response);
 
-  if Response.IsFinal and Self.IsEarly then
+  if Response.IsFinal then 
     Self.SetIsEarly(false);
+
+  if Response.IsProvisional then
+    Self.SetIsEarly(true);
 end;
 
 //* TIdSipUASDialog Private methods ********************************************
 
+function TIdSipUASDialog.GetIsEarly: Boolean;
+begin
+  Result := Self.fState = sdsEarly;
+end;
+
 procedure TIdSipUASDialog.SetIsEarly(const Value: Boolean);
 begin
-  Self.fIsEarly := Value;
+  if Value then
+    Self.SetState(sdsEarly)
+  else
+    Self.SetState(sdsConfirmed);
 end;
 
 end.

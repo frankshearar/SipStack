@@ -19,8 +19,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestIsSecure;
     procedure TestCreateRequest;
+    procedure TestIsSecure;
   end;
 
   TestTIdSipUACDialog = class(TestTIdSipDialog)
@@ -30,6 +30,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateRequest;
+    procedure TestCreateRequestRouteSetEmpty;
+    procedure TestCreateRequestRouteSetWithLrParam;
+    procedure TestCreateRequestRouteSetWithoutLrParam;
+    procedure TestCreateRequestWithNullTags;
     procedure TestDialogID;
     procedure TestDialogIDToHasNoTag;
     procedure TestRecordRouteHeaders;
@@ -144,6 +149,18 @@ end;
 
 //* TestTIdSipDialog Published methods *****************************************
 
+procedure TestTIdSipDialog.TestCreateRequest;
+var
+  D: TIdSipDialog;
+begin
+  Self.Req.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+  D := TIdSipDialog.Create(Self.Req, false);
+  try
+  finally
+    D.Free;
+  end;
+end;
+
 procedure TestTIdSipDialog.TestIsSecure;
 var
   D: TIdSipDialog;
@@ -181,18 +198,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipDialog.TestCreateRequest;
-var
-  D: TIdSipDialog;
-begin
-  Self.Req.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, false);
-  try
-  finally
-    D.Free;
-  end;
-end;
-
 //******************************************************************************
 //* TestTIdSipUACDialog                                                        *
 //******************************************************************************
@@ -213,6 +218,141 @@ begin
 end;
 
 //* TestTIdSipUACDialog Published methods **************************************
+
+procedure TestTIdSipUACDialog.TestCreateRequest;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.D.CreateRequest;
+  try
+    CheckEquals(Self.D.RemoteURI.GetFullURI, R.ToHeader.Address.GetFullURI, 'To URI');
+    CheckEquals(Self.D.ID.RemoteTag,         R.ToHeader.Tag,                'To tag');
+    CheckEquals(Self.D.LocalURI.GetFullURI,  R.From.Address.GetFullURI,     'From URI');
+    CheckEquals(Self.D.ID.LocalTag,          R.From.Tag,                    'From tag');
+    CheckEquals(Self.D.ID.CallID,            R.CallID,                      'Call-ID');
+    CheckEquals(Self.Req.CSeq.Method,        R.CSeq.Method,                 'CSeq method');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipUACDialog.TestCreateRequestRouteSetEmpty;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.Res.StatusCode := SIPTrying;
+  Self.D.HandleMessage(Self.Res);
+
+  Self.D.RouteSet.Clear;
+
+  R := Self.D.CreateRequest;
+  try
+    CheckEquals(Self.D.RemoteTarget.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    try
+      Check(Routes.IsEmpty, 'Route headers are present');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipUACDialog.TestCreateRequestRouteSetWithLrParam;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com;lr>';
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com>';
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
+
+  R := Self.D.CreateRequest;
+  try
+    CheckEquals(Self.D.RemoteTarget.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    try
+      CheckEquals(3, Routes.Count, 'Route header count');
+      CheckEquals('<sip:server10.biloxi.com;lr>', Routes.Items[0].Value, '1st Route');
+      CheckEquals('<sip:server9.biloxi.com>',     Routes.Items[1].Value, '2nd Route');
+      CheckEquals('<sip:server8.biloxi.com;lr>',  Routes.Items[2].Value, '3rd Route');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipUACDialog.TestCreateRequestRouteSetWithoutLrParam;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com>';
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com;tag=nine>;tag=ten';
+  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
+
+  Self.Res.StatusCode := SIPTrying;
+  Self.D.HandleMessage(Self.Res);
+
+  R := Self.D.CreateRequest;
+  try
+    CheckEquals((Self.D.RouteSet.Items[0] as TIdSipRouteHeader).Address.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    try
+      CheckEquals(3, Routes.Count, 'Route header count');
+      CheckEquals(RouteHeader,
+                  Routes.Items[0].Name,
+                  '1st Route name');
+      CheckEquals('<sip:server9.biloxi.com;tag=nine>',
+                  Routes.Items[0].Value,
+                  '1st Route');
+      CheckEquals(';tag=ten',
+                  Routes.Items[0].ParamsAsString,
+                  '1st Route params');
+
+      CheckEquals(RouteHeader,
+                  Routes.Items[0].Name,
+                  '2nd Route name');
+      CheckEquals('<sip:server8.biloxi.com;lr>',
+                  Routes.Items[1].Value,
+                  '2nd Route');
+      CheckEquals('',
+                  Routes.Items[1].ParamsAsString,
+                  '2nd Route params');
+
+      CheckEquals(RouteHeader,
+                  Routes.Items[2].Name,
+                  '3rd Route name');
+      CheckEquals(Self.D.RemoteTarget.GetFullUri,
+                  (Routes.Items[2] as TIdSipRouteHeader).Address.GetFullUri,
+                  '3rd Route');
+      CheckEquals('',
+                  Routes.Items[2].ParamsAsString,
+                  '3rd Route params');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipUACDialog.TestCreateRequestWithNullTags;
+begin
+end;
 
 procedure TestTIdSipUACDialog.TestDialogID;
 begin
@@ -269,6 +409,12 @@ procedure TestTIdSipUACDialog.TestSequenceNo;
 begin
   CheckEquals(Self.Req.CSeq.SequenceNo, Self.D.LocalSequenceNo,  'LocalSequenceNo');
   CheckEquals(0,                        Self.D.RemoteSequenceNo, 'RemoteSequenceNo');
+
+  Self.Res.StatusCode := SIPTrying;
+  Self.D.HandleMessage(Self.Res);
+  CheckEquals(Self.Res.CSeq.SequenceNo,
+              Self.D.RemoteSequenceNo,
+              'RemoteSequenceNo after receiving a response');
 end;
 
 procedure TestTIdSipUACDialog.TestUri;
@@ -325,8 +471,8 @@ end;
 
 procedure TestTIdSipUASDialog.TestEarlyState;
 begin
-  Check(Self.D.IsEarly,
-        'Response initial state: ' + IntToStr(Self.Res.StatusCode));
+  Check(not Self.D.IsEarly,
+        'Before any response is received');
 
   Self.Res.StatusCode := SIPTrying;
   Self.D.HandleMessage(Self.Res);

@@ -43,6 +43,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
+    procedure TestSetAddress;
     procedure TestValue;
     procedure TestValueEmptyDisplayName;
     procedure TestValueFolded;
@@ -167,6 +168,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestHasLr;
     procedure TestName;
     procedure TestValue;
     procedure TestValueWithParamsAndHeaderParams;
@@ -286,6 +288,7 @@ type
     procedure TestIsContact;
     procedure TestIsContentLength;
     procedure TestIsCSeq;
+    procedure TestIsEmpty;
     procedure TestIsErrorInfo;
     procedure TestIsFrom;
     procedure TestIsMaxForwards;
@@ -309,6 +312,7 @@ type
   published
     procedure TestAdd;
     procedure TestCount;
+    procedure TestIsEmpty;
     procedure TestItems;
     procedure TestRemove;
   end;
@@ -785,6 +789,21 @@ begin
   CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
+end;
+
+procedure TestTIdSipAddressHeader.TestSetAddress;
+var
+  Addy: TIdSipAddressHeader;
+begin
+  Addy := TIdSipAddressHeader.Create;
+  try
+    Addy.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+    Self.A.Address := Addy.Address;
+
+    CheckEquals(Addy.Address.GetFullURI, Self.A.Address.GetFullURI, 'SetAddress');
+  finally
+    Addy.Free;
+  end;
 end;
 
 procedure TestTIdSipAddressHeader.TestValue;
@@ -1661,6 +1680,18 @@ begin
 end;
 
 //* TestTIdSipRouteHeader Published methods ************************************
+
+procedure TestTIdSipRouteHeader.TestHasLr;
+begin
+  Self.R.Value := '<sip:127.0.0.1>';
+  Check(not Self.R.HasLr, 'With no lr param');
+
+  Self.R.Value := '<sip:127.0.0.1;lr>';
+  Check(Self.R.HasLr, 'With lr param');
+
+  Self.R.Value := '<sip:127.0.0.1>;lr';
+  Check(not Self.R.HasLr, 'With no lr param for header, not URI');
+end;
 
 procedure TestTIdSipRouteHeader.TestName;
 begin
@@ -3150,6 +3181,14 @@ begin
   Check(    TIdSipHeaders.IsCSeq(CSeqHeader), 'CSeqHeader constant');
 end;
 
+procedure TestTIdSipHeaders.TestIsEmpty;
+begin
+  CheckEquals(0, Self.H.Count, 'Sanity check on test entry');
+  Check(Self.H.IsEmpty, 'IsEmpty with 0 headers');
+  Self.H.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Check(not Self.H.IsEmpty, 'IsEmpty after Add');
+end;
+
 procedure TestTIdSipHeaders.TestIsErrorInfo;
 begin
   Check(not TIdSipHeaders.IsErrorInfo(''),              '''''');
@@ -3321,6 +3360,20 @@ begin
   Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
   Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
   CheckEquals(4, Self.Filter.Count, 'Count with newly added headers');
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEmpty;
+begin
+  Check(not Self.Filter.IsEmpty, 'IsEmpty with 2 Route headers');
+  Self.Headers.Remove(Self.Headers[RouteHeader]);
+  Self.Headers.Remove(Self.Headers[RouteHeader]);
+  Check(Self.Filter.IsEmpty, 'IsEmpty with no Route headers');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Check(not Self.Filter.IsEmpty, 'IsEmpty after Headers.Add(RouteHeader)');
+
+  Self.Headers.Clear;
+  Check(Self.Filter.IsEmpty, 'IsEmpty after Headers.Clear');
 end;
 
 procedure TestTIdSipHeadersFilter.TestItems;

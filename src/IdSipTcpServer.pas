@@ -39,7 +39,7 @@ type
   published
     property DefaultPort default IdPORT_SIP;
     property OnMethod:        TIdSipTcpMessageEvent read fOnMethod write fOnMethod;
-    property ReadBodyTimeout: Cardinal          read fReadBodyTimeout write fReadBodyTimeout;
+    property ReadBodyTimeout: Cardinal              read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
 implementation

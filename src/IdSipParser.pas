@@ -128,6 +128,7 @@ const
   FromHeaderFull             = 'From';
   FromHeaderShort            = 'f';
   InReplyToHeader            = 'In-Reply-To';
+  LrParam                    = 'lr';
   MaddrParam                 = 'maddr';
   MaxForwardsHeader          = 'Max-Forwards';
   MethodAck                  = 'ACK';
