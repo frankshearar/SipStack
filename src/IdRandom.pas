@@ -98,6 +98,8 @@ function TIdRandomNumber.NextHighestPowerOf2(N: Cardinal): Cardinal;
 begin
   Result := 1;
 
+  // We don't shl because the below will (correctly) raise an EIntOverflow
+  // where shl wouldn't.
   while (Result < N) do
     Result := MultiplyCardinal(Result, 2);
 end;
@@ -109,7 +111,18 @@ begin
   // Cryptography". If peer review shows it to be decent, that is. Or we trust
   // Schneier & Ferguson blindly.
 
-  Result := Random(Self.NextHighestPowerOf2(NumBits));
+  // This function lies a bit. You can easily ask for a number with 64 bits,
+  // but you'll only get a 32 bit value.
+  // We have a funny typecast because Random returns an Integer less than or
+  // equal to High(Cardinal). What that means is that instead of
+  // 0 <= N < High(Cardinal) you actually get a number
+  // -High(Cardinal) <= N < High(Cardinal). Typecasting reinterprets these bits
+  // as a Cardinal, giving us a full 32-bit value & not a 31-bit value.
+
+  if (NumBits >= 32) then
+    Result := Cardinal(Random(High(Cardinal)))
+  else
+    Result := Random(2 shl NumBits);
 end;
 
 function TIdRandomNumber.NumBitsNeeded(N: Cardinal): Cardinal;
