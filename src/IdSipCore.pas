@@ -534,6 +534,7 @@ type
     procedure NotifyOfSuccess(Response: TIdSipResponse);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
+    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; override;
@@ -2953,6 +2954,22 @@ end;
 procedure TIdSipOutboundInvite.ActionSucceeded(Response: TIdSipResponse);
 begin
   Self.NotifyOfSuccess(Response);
+end;
+
+function TIdSipOutboundInvite.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.InitialRequest.RequestUri;
+
+    Result := Self.UA.CreateInvite(TempTo,
+                                   Self.InitialRequest.Body,
+                                   Self.InitialRequest.ContentType);
+  finally
+    TempTo.Free;
+  end;
 end;
 
 procedure TIdSipOutboundInvite.NotifyOfFailure(Response: TIdSipResponse);
