@@ -940,27 +940,7 @@ begin
     Host := R.LastHop.SentBy;
     Port := R.LastHop.Port;
   end;
-{
-  if R.LastHop.HasMaddr then begin
-    Host := R.LastHop.Maddr;
-    Port := R.LastHop.Port;
-  end
-  else if R.LastHop.HasReceived then begin
-    Host := R.LastHop.Received;
 
-    // cf RFC 3581 section 4.
-    // TODO: this isn't quite right. We have to send the response
-    // from the ip/port that the request was received on.
-    if R.LastHop.HasRport then
-      Port := R.LastHop.RPort
-    else
-      Port := R.LastHop.Port;
-  end
-  else begin
-    Host := R.LastHop.SentBy;
-    Port := R.LastHop.Port;
-  end;
-}
   Self.Transport.Send(Host, Port, R.AsString);
 end;
 

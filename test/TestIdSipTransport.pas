@@ -167,6 +167,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestDiscardMalformedMessage; override;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -191,15 +192,15 @@ implementation
 
 uses
   IdGlobal, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack, IdTcpClient,
-  IdUDPServer, TestMessages, TestFrameworkSip;
+  IdUdpClient, IdUDPServer, TestMessages, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-//  Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
+  Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
-//  Result.AddTest(TestTIdSipUDPTransport.Suite);
+  Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
 end;
 
@@ -523,7 +524,8 @@ procedure TestTIdSipTransport.CheckReceivedParamFQDNSentBy(Sender: TObject;
 begin
   try
     Check(Request.LastHop.HasReceived,
-          'Received param not appended by transport layer');
+          Self.HighPortTransport.ClassName
+        + ': Received param not appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -539,7 +541,8 @@ procedure TestTIdSipTransport.CheckReceivedParamIPv4SentBy(Sender: TObject;
 begin
   try
     Check(not Request.LastHop.HasReceived,
-          'Received param appended by transport layer');
+          Self.HighPortTransport.ClassName
+        + ': Received param appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -555,13 +558,11 @@ procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
 begin
   try
     Check(Self.HighPortTransport.GetTransportType = R.LastHop.Transport,
-          'Incorrect transport specified');
+          Self.HighPortTransport.ClassName
+       + ': Incorrect transport specified');
 
-    Check(R.LastHop.HasBranch, 'Branch parameter missing');
-
-//    CheckEquals(Self.LowPortTransport.HostName,
-//                R.Las.Hop.SentBy,
-//                'SentBy incorrect');
+    Check(R.LastHop.HasBranch,
+          Self.HighPortTransport.ClassName + ': Branch parameter missing');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -582,8 +583,6 @@ procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Transport, Request);
-
-//  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
@@ -591,8 +590,6 @@ procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Transport, Response);
-
-//  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
@@ -638,7 +635,8 @@ begin
 
   Self.WaitForSignaled;
 
-  Check(Self.ReceivedRequest, 'Request not received');
+  Check(Self.ReceivedRequest,
+        Self.HighPortTransport.ClassName + ': Request not received');
 end;
 
 procedure TestTIdSipTransport.TestCanReceiveResponse;
@@ -653,7 +651,8 @@ begin
 
   Self.WaitForSignaled;
 
-  Check(Self.ReceivedResponse, 'Response not received');
+  Check(Self.ReceivedResponse,
+        Self.HighPortTransport.ClassName + ': Response not received');
 end;
 
 procedure TestTIdSipTransport.TestCanReceiveUnsolicitedResponse;
@@ -664,7 +663,8 @@ begin
 
   Self.WaitForSignaled;
 
-  Check(Self.ReceivedResponse, 'Response not received');
+  Check(Self.ReceivedResponse,
+        Self.HighPortTransport.ClassName + ': Response not received');
 end;
 
 procedure TestTIdSipTransport.TestTransportFor;
@@ -687,8 +687,11 @@ begin
   Self.LowPortTransport.Send(Self.Response);
 
   Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
-        'Response not silently discarded');
-  Check(Self.RejectedMessage, 'Rejected message event didn''t fire');
+        Self.HighPortTransport.ClassName
+      + ': Response not silently discarded');
+  Check(Self.RejectedMessage,
+        Self.HighPortTransport.ClassName
+      + ': Rejected message event didn''t fire');
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
@@ -731,7 +734,8 @@ begin
 
   Self.WaitForSignaled;
 
-  Check(Self.ReceivedRequest, 'Request not received');
+  Check(Self.ReceivedRequest,
+        Self.HighPortTransport.ClassName + ': Request not received');
 end;
 
 procedure TestTIdSipTransport.TestSendRequestTopVia;
@@ -750,7 +754,8 @@ begin
 
   Self.WaitForSignaled;
 
-  Check(Self.ReceivedResponse, 'Response not received');
+  Check(Self.ReceivedResponse,
+        Self.HighPortTransport.ClassName + ': Response not received');
 end;
 
 procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
@@ -767,7 +772,8 @@ begin
         Self.LowPortTransport.AddTransportListener(LowPortListener);
         try
           Check(Self.LowPortTransport.Bindings.Count > 0,
-                'Sanity check on LowPortTransport''s bindings');
+                Self.HighPortTransport.ClassName
+              + ': Sanity check on LowPortTransport''s bindings');
 
           Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
           Self.HighPortTransport.Send(Self.Response);
@@ -778,7 +784,8 @@ begin
 
           Check(LowPortListener.ReceivedResponse
                 and not HighPortListener.ReceivedResponse,
-                'Received param in top Via header ignored - '
+                Self.HighPortTransport.ClassName
+              + ': Received param in top Via header ignored - '
               + 'wrong server got the message');
         finally
           Self.LowPortTransport.RemoveTransportListener(LowPortListener);
@@ -945,11 +952,7 @@ var
 begin
   inherited SetUp;
 
-  (Self.LowPortTransport  as TIdSipUDPTransport).CleanerThreadPollTime := 10;
-  (Self.HighPortTransport as TIdSipUDPTransport).CleanerThreadPollTime := 10;
-
   Self.MaddrTransport := Self.TransportType.Create(IdPORT_SIP);
-  (Self.MaddrTransport as TIdSipUDPTransport).CleanerThreadPollTime := 10;
   Self.MaddrTransport.AddTransportListener(Self);
   Self.MaddrTransport.HostName := 'localhost';
   Binding := Self.MaddrTransport.Bindings.Add;
@@ -1054,6 +1057,38 @@ begin
 end;
 
 //* TestTIdSipUDPTransport Published methods ***********************************
+
+procedure TestTIdSipUDPTransport.TestDiscardMalformedMessage;
+var
+  Client:            TIdUdpClient;
+  MangledSipVersion: String;
+begin
+  Client := TIdUdpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortTransport.Bindings[0].IP;
+    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+
+    MangledSipVersion := 'SIP/;2.0';
+    Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+              + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+              + 'Max-Forwards: 70'#13#10
+              + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+              + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+              + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+              + 'CSeq: 314159 INVITE'#13#10
+              + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+              + 'Content-Type: text/plain'#13#10
+              + 'Content-Length: 29'#13#10
+              + #13#10
+              + 'I am a message. Hear me roar!');
+
+    Self.WaitForTimeout('Somehow we received a mangled message');
+    Check(Self.RejectedMessage,
+          'Notification of message rejection not received');
+  finally
+    Client.Free;
+  end;
+end;
 
 procedure TestTIdSipUDPTransport.TestGetTransportType;
 begin
