@@ -3125,10 +3125,10 @@ var
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
-  Session.AddSessionListener(Self);
 
   Self.SimulateRemoteReInvite(Session);
-  Check(Self.OnModifySessionFired, 'OnModifySession didn''t fire');
+  Check(Self.OnModifySessionFired,
+        Session.ClassName + ': OnModifySession didn''t fire');
 end;
 
 procedure TestTIdSipSession.TestIsSession;
