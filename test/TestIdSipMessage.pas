@@ -62,6 +62,7 @@ type
     procedure TestFirstHeader;
     procedure TestFirstMinExpires;
     procedure TestFirstRequire;
+    procedure TestHasBody;
     procedure TestHasExpiry;
     procedure TestIsMalformedContentLength;
     procedure TestIsMalformedMalformedHeader;
@@ -707,6 +708,18 @@ begin
   Self.Msg.AddHeader(RequireHeader);
 
   Check(R = Self.Msg.FirstRequire, 'Wrong Require');
+end;
+
+procedure TestTIdSipMessage.TestHasBody;
+begin
+  Self.Msg.Body := '';
+  Check(not Self.Msg.HasBody, 'No body present');
+
+  Self.Msg.Body := 'foo';
+  Check(Self.Msg.HasBody, 'Body present');
+
+  Self.Msg.Body := '';
+  Check(not Self.Msg.HasBody, 'Body cleared');  
 end;
 
 procedure TestTIdSipMessage.TestHasExpiry;

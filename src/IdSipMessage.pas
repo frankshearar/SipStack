@@ -999,6 +999,7 @@ type
     function  FirstMinExpires: TIdSipNumericHeader;
     function  FirstRequire: TIdSipCommaSeparatedHeader;
     function  FirstRetryAfter: TIdSipRetryAfterHeader;
+    function  HasBody: Boolean;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  InSameDialogAs(Msg: TIdSipMessage): Boolean;
@@ -5756,6 +5757,11 @@ end;
 function TIdSipMessage.FirstRetryAfter: TIdSipRetryAfterHeader;
 begin
   Result := Self.FirstHeader(RetryAfterHeader) as TIdSipRetryAfterHeader;
+end;
+
+function TIdSipMessage.HasBody: Boolean;
+begin
+  Result := Self.Body <> '';
 end;
 
 function TIdSipMessage.HasExpiry: Boolean;
