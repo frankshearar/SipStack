@@ -35,6 +35,8 @@ type
     procedure TearDown; override;
   published
     procedure Test200After180DoesntRecomputeRouteSet;
+    procedure TestCopy;
+    procedure TestCopyConfirmed;
     procedure TestCreateAck;
     procedure TestCreateFromAnotherDialog;
     procedure TestCreateInboundDialog;
@@ -203,6 +205,77 @@ begin
     end;
   finally
     RouteSet180.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCopy;
+var
+  D: TIdSipDialog;
+begin
+  D := Self.Dlg.Copy;
+  try
+    Check(Self.Dlg.ID.Equals(D.ID),
+          'ID');
+    CheckEquals(Self.Dlg.LocalSequenceNo,
+                D.LocalSequenceNo,
+                'LocalSequenceNo');
+    CheckEquals(Self.Dlg.RemoteSequenceNo,
+                D.RemoteSequenceNo,
+                'RemoteSequenceNo');
+    CheckEquals(Self.Dlg.LocalUri,
+                D.LocalUri,
+                'LocalUri');
+    CheckEquals(Self.Dlg.RemoteUri,
+                D.RemoteUri,
+                'RemoteUri');
+    CheckEquals(Self.Dlg.RemoteTarget,
+                D.RemoteTarget,
+                'RemoteTarget');
+    Check(Self.Dlg.IsEarly = D.IsEarly,
+          'State');
+    Check(Self.Dlg.IsSecure = D.IsSecure,
+          'IsSecure');
+    Check(Self.Dlg.RouteSet.Equals(D.RouteSet),
+          'RouteSet');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCopyConfirmed;
+var
+  D: TIdSipDialog;
+begin
+  Self.Res.StatusCode := SIPOK;
+  Self.Dlg.ReceiveResponse(Self.Res);
+
+  D := Self.Dlg.Copy;
+  try
+    Check(Self.Dlg.ID.Equals(D.ID),
+          'ID');
+    CheckEquals(Self.Dlg.LocalSequenceNo,
+                D.LocalSequenceNo,
+                'LocalSequenceNo');
+    CheckEquals(Self.Dlg.RemoteSequenceNo,
+                D.RemoteSequenceNo,
+                'RemoteSequenceNo');
+    CheckEquals(Self.Dlg.LocalUri,
+                D.LocalUri,
+                'LocalUri');
+    CheckEquals(Self.Dlg.RemoteUri,
+                D.RemoteUri,
+                'RemoteUri');
+    CheckEquals(Self.Dlg.RemoteTarget,
+                D.RemoteTarget,
+                'RemoteTarget');
+    Check(Self.Dlg.IsEarly = D.IsEarly,
+          'State');
+    Check(Self.Dlg.IsSecure = D.IsSecure,
+          'IsSecure');
+    Check(Self.Dlg.RouteSet.Equals(D.RouteSet),
+          'RouteSet');
+  finally
+    D.Free;
   end;
 end;
 

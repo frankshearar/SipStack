@@ -12,7 +12,7 @@ unit IdSipDialog;
 interface
 
 uses
-  Contnrs, IdSipDialogID, IdSipMessage, SyncObjs;
+  Classes, Contnrs, IdSipDialogID, IdSipMessage, SyncObjs;
 
 type
   TIdSipDialog = class;
@@ -22,7 +22,7 @@ type
   // cf RFC 3261, section 12.1
   // Within this specification, only 2xx and 101-199 responses with a To tag,
   // where the request was INVITE, will establish a dialog.
-  TIdSipDialog = class(TObject)
+  TIdSipDialog = class(TPersistent)
   private
     fCanBeEstablished:   Boolean;
     fID:                 TIdSipDialogID;
@@ -95,6 +95,7 @@ type
     constructor Create(Dialog: TIdSipDialog); overload;
     destructor  Destroy; override;
 
+    function  Copy: TIdSipDialog;
     function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
     procedure ReceiveRequest(Request: TIdSipRequest); virtual;
@@ -294,6 +295,13 @@ begin
   Self.InitialRequest.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipDialog.Copy: TIdSipDialog;
+begin
+  Result := TIdSipDialog.Create(Self);
+  // TODO: This is mildly evil!
+  Result.SetIsEarly(Self.IsEarly);
 end;
 
 function TIdSipDialog.CreateAck: TIdSipRequest;
