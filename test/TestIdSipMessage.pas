@@ -122,19 +122,6 @@ type
     procedure TestCreateCancelWithProxyRequire;
     procedure TestCreateCancelWithRequire;
     procedure TestCreateCancelWithRoute;
-    procedure TestFirstAuthorization;
-    procedure TestFirstProxyAuthorization;
-    procedure TestFirstProxyRequire;
-    procedure TestHasSipsUri;
-    procedure TestInSameDialogAsRequest;
-    procedure TestInSameDialogAsResponse;
-    procedure TestIsMalformedCSeqMethod;
-    procedure TestIsMalformedSipVersion;
-    procedure TestIsMalformedMethod;
-    procedure TestIsMalformedMissingVia;
-    procedure TestIsAck;
-    procedure TestIsBye;
-    procedure TestIsCancel;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentMethod;
@@ -143,11 +130,24 @@ type
     procedure TestEqualsFromAssign;
     procedure TestEqualsResponse;
     procedure TestEqualsTrivial;
+    procedure TestFirstAuthorization;
+    procedure TestFirstProxyAuthorization;
+    procedure TestFirstProxyRequire;
     procedure TestHasAuthorization;
     procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
     procedure TestHasProxyAuthorizationFor;
+    procedure TestHasSipsUri;
+    procedure TestInSameDialogAsRequest;
+    procedure TestInSameDialogAsResponse;
+    procedure TestIsAck;
+    procedure TestIsBye;
+    procedure TestIsCancel;
     procedure TestIsInvite;
+    procedure TestIsMalformedCSeqMethod;
+    procedure TestIsMalformedSipVersion;
+    procedure TestIsMalformedMethod;
+    procedure TestIsMalformedMissingVia;
     procedure TestIsOptions;
     procedure TestIsRegister;
     procedure TestIsRequest;
@@ -1532,249 +1532,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestFirstAuthorization;
-var
-  A: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstAuthorization, 'Authorization not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Authorization not auto-added');
-
-  A := Self.Request.FirstHeader(AuthorizationHeader);
-  Self.Request.AddHeader(AuthorizationHeader);
-
-  Check(A = Self.Request.FirstAuthorization, 'Wrong Authorization');
-end;
-
-procedure TestTIdSipRequest.TestFirstProxyAuthorization;
-var
-  A: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstProxyAuthorization, 'Proxy-Authorization not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Authorization not auto-added');
-
-  A := Self.Request.FirstHeader(ProxyAuthorizationHeader);
-  Self.Request.AddHeader(AuthorizationHeader);
-
-  Check(A = Self.Request.FirstProxyAuthorization, 'Wrong Proxy-Authorization');
-end;
-
-procedure TestTIdSipRequest.TestFirstProxyRequire;
-var
-  P: TIdSipHeader;
-begin
-  Self.Request.ClearHeaders;
-
-  CheckNotNull(Self.Request.FirstProxyRequire, 'Proxy-Require not present');
-  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Require not auto-added');
-
-  P := Self.Request.FirstHeader(ProxyRequireHeader);
-  Self.Request.AddHeader(ProxyRequireHeader);
-
-  Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
-end;
-
-procedure TestTIdSipRequest.TestHasSipsUri;
-begin
-  Self.Request.RequestUri.URI := 'tel://999';
-  Check(not Self.Request.HasSipsUri, 'tel URI');
-
-  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-  Check(not Self.Request.HasSipsUri, 'sip URI');
-
-  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-  Check(Self.Request.HasSipsUri, 'sips URI');
-end;
-
-procedure TestTIdSipRequest.TestInSameDialogAsRequest;
-var
-  Req: TIdSipRequest;
-begin
-  Req := TIdSipRequest.Create;
-  try
-    Req.Assign(Self.Request);
-    Check(Req.InSameDialogAs(Self.Request),
-          'Req not in same dialog as Self.Request');
-    Check(Self.Request.InSameDialogAs(Req),
-          'Self.Request not in same dialog as Req');
-
-    Req.From.Tag := Self.Request.From.Tag + '1';
-    Check(not Self.Request.InSameDialogAs(Req),
-          'From tag differs');
-
-     Req.From.Tag := Self.Request.From.Tag;
-     Req.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
-     Check(not Self.Request.InSameDialogAs(Req),
-           'To tag differs');
-
-     Req.ToHeader.Tag := Self.Request.ToHeader.Tag;
-     Req.CallID := '1' + Self.Request.CallID;
-     Check(not Self.Request.InSameDialogAs(Req),
-           'Call-ID tag differs');
-  finally
-    Req.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestInSameDialogAsResponse;
-begin
-  Self.Response.CallID       := Self.Request.CallID;
-  Self.Response.From.Tag     := Self.Request.From.Tag;
-  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag;
-
-  Check(Self.Request.InSameDialogAs(Self.Response),
-        'Response not in same dialog as request');
-
-  Self.Response.CallID := '1' + Self.Request.CallID;
-  Check(not Self.Request.InSameDialogAs(Self.Response),
-        'Call-ID differs');
-
-  Self.Response.CallID   := Self.Request.CallID;
-  Self.Response.From.Tag := Self.Request.From.Tag + '1';
-  Check(not Self.Request.InSameDialogAs(Self.Response),
-        'From tag differs');
-
-  Self.Response.From.Tag     := Self.Request.From.Tag;
-  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
-  Check(not Self.Request.InSameDialogAs(Self.Response),
-        'To tag differs');
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedCSeqMethod;
-begin
-  Self.Request.Method := MethodInvite;
-  Self.Request.CSeq.Method := Self.Request.Method;
-  Check(not Self.Request.IsMalformed,
-       'CSeq method matches request method');
-
-  Self.Request.CSeq.Method := Self.Request.CSeq.Method + '1';;
-  Check(Self.Request.IsMalformed,
-       'CSeq method matches request method');
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedSipVersion;
-const
-  MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
-                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
-                   + 'Max-Forwards:     70'#13#10
-                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
-                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
-                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
-                   + 'CSeq:    1 INVITE'#13#10
-                   + #13#10;
-var
-  ExpectedReason: String;
-  Msg:            TIdSipMessage;
-begin
-  ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
-
-  Msg := TIdSipMessage.ReadMessageFrom(MalformedMessage);
-  try
-    Check(Msg.IsMalformed,
-          'Msg has invalid SIP-Version, but not branded as such');
-    CheckEquals(ExpectedReason,
-                Msg.ParseFailReason,
-                'Unexpected parse error reason');
-    CheckEquals(Copy(MalformedMessage, 1, 255),
-                Copy(Msg.RawMessage, 1, 255),
-                'Unexpected raw message');
-  finally
-    Msg.Free;
-  end;
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedMethod;
-begin
-  Self.Request.ClearHeaders;
-  Self.AddRequiredHeaders(Self.Request);
-  Self.Request.Method := 'Bad"Method';
-
-  Check(Self.Msg.IsMalformed, 'Bad Method');
-end;
-
-procedure TestTIdSipRequest.TestIsMalformedMissingVia;
-begin
-  Self.AddRequiredHeaders(Self.Msg);
-  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
-
-  Check(Self.Msg.IsMalformed, 'Missing Via header');
-end;
-
-procedure TestTIdSipRequest.TestIsAck;
-begin
-  Self.Request.Method := MethodAck;
-  Check(Self.Request.IsAck, MethodAck);
-
-  Self.Request.Method := MethodBye;
-  Check(not Self.Request.IsAck, MethodBye);
-
-  Self.Request.Method := MethodCancel;
-  Check(not Self.Request.IsAck, MethodCancel);
-
-  Self.Request.Method := MethodInvite;
-  Check(not Self.Request.IsAck, MethodInvite);
-
-  Self.Request.Method := MethodOptions;
-  Check(not Self.Request.IsAck, MethodOptions);
-
-  Self.Request.Method := MethodRegister;
-  Check(not Self.Request.IsAck, MethodRegister);
-
-  Self.Request.Method := 'XXX';
-  Check(not Self.Request.IsAck, 'XXX');
-end;
-
-procedure TestTIdSipRequest.TestIsBye;
-begin
-  Self.Request.Method := MethodAck;
-  Check(not Self.Request.IsBye, MethodAck);
-
-  Self.Request.Method := MethodBye;
-  Check(Self.Request.IsBye, MethodBye);
-
-  Self.Request.Method := MethodCancel;
-  Check(not Self.Request.IsBye, MethodCancel);
-
-  Self.Request.Method := MethodInvite;
-  Check(not Self.Request.IsBye, MethodInvite);
-
-  Self.Request.Method := MethodOptions;
-  Check(not Self.Request.IsBye, MethodOptions);
-
-  Self.Request.Method := MethodRegister;
-  Check(not Self.Request.IsBye, MethodRegister);
-
-  Self.Request.Method := 'XXX';
-  Check(not Self.Request.IsBye, 'XXX');
-end;
-
-procedure TestTIdSipRequest.TestIsCancel;
-begin
-  Self.Request.Method := MethodAck;
-  Check(not Self.Request.IsCancel, MethodAck);
-
-  Self.Request.Method := MethodBye;
-  Check(not Self.Request.IsCancel, MethodBye);
-
-  Self.Request.Method := MethodCancel;
-  Check(Self.Request.IsCancel, MethodCancel);
-
-  Self.Request.Method := MethodInvite;
-  Check(not Self.Request.IsCancel, MethodInvite);
-
-  Self.Request.Method := MethodOptions;
-  Check(not Self.Request.IsCancel, MethodOptions);
-
-  Self.Request.Method := MethodRegister;
-  Check(not Self.Request.IsCancel, MethodRegister);
-
-  Self.Request.Method := 'XXX';
-  Check(not Self.Request.IsCancel, 'XXX');
-end;
-
 procedure TestTIdSipRequest.TestEqualsComplexMessages;
 var
   R: TIdSipRequest;
@@ -1922,6 +1679,51 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestFirstAuthorization;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstAuthorization, 'Authorization not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Authorization not auto-added');
+
+  A := Self.Request.FirstHeader(AuthorizationHeader);
+  Self.Request.AddHeader(AuthorizationHeader);
+
+  Check(A = Self.Request.FirstAuthorization, 'Wrong Authorization');
+end;
+
+procedure TestTIdSipRequest.TestFirstProxyAuthorization;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstProxyAuthorization, 'Proxy-Authorization not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Authorization not auto-added');
+
+  A := Self.Request.FirstHeader(ProxyAuthorizationHeader);
+  Self.Request.AddHeader(AuthorizationHeader);
+
+  Check(A = Self.Request.FirstProxyAuthorization, 'Wrong Proxy-Authorization');
+end;
+
+procedure TestTIdSipRequest.TestFirstProxyRequire;
+var
+  P: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstProxyRequire, 'Proxy-Require not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Require not auto-added');
+
+  P := Self.Request.FirstHeader(ProxyRequireHeader);
+  Self.Request.AddHeader(ProxyRequireHeader);
+
+  Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
+end;
+
 procedure TestTIdSipRequest.TestHasAuthorization;
 begin
   Check(not Self.Request.HasHeader(AuthorizationHeader),
@@ -1984,6 +1786,144 @@ begin
         'Cannot find existing Proxy-Authorization');
 end;
 
+procedure TestTIdSipRequest.TestHasSipsUri;
+begin
+  Self.Request.RequestUri.URI := 'tel://999';
+  Check(not Self.Request.HasSipsUri, 'tel URI');
+
+  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
+  Check(not Self.Request.HasSipsUri, 'sip URI');
+
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
+  Check(Self.Request.HasSipsUri, 'sips URI');
+end;
+
+procedure TestTIdSipRequest.TestInSameDialogAsRequest;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipRequest.Create;
+  try
+    Req.Assign(Self.Request);
+    Check(Req.InSameDialogAs(Self.Request),
+          'Req not in same dialog as Self.Request');
+    Check(Self.Request.InSameDialogAs(Req),
+          'Self.Request not in same dialog as Req');
+
+    Req.From.Tag := Self.Request.From.Tag + '1';
+    Check(not Self.Request.InSameDialogAs(Req),
+          'From tag differs');
+
+     Req.From.Tag := Self.Request.From.Tag;
+     Req.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+     Check(not Self.Request.InSameDialogAs(Req),
+           'To tag differs');
+
+     Req.ToHeader.Tag := Self.Request.ToHeader.Tag;
+     Req.CallID := '1' + Self.Request.CallID;
+     Check(not Self.Request.InSameDialogAs(Req),
+           'Call-ID tag differs');
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestInSameDialogAsResponse;
+begin
+  Self.Response.CallID       := Self.Request.CallID;
+  Self.Response.From.Tag     := Self.Request.From.Tag;
+  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag;
+
+  Check(Self.Request.InSameDialogAs(Self.Response),
+        'Response not in same dialog as request');
+
+  Self.Response.CallID := '1' + Self.Request.CallID;
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'Call-ID differs');
+
+  Self.Response.CallID   := Self.Request.CallID;
+  Self.Response.From.Tag := Self.Request.From.Tag + '1';
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'From tag differs');
+
+  Self.Response.From.Tag     := Self.Request.From.Tag;
+  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'To tag differs');
+end;
+
+procedure TestTIdSipRequest.TestIsAck;
+begin
+  Self.Request.Method := MethodAck;
+  Check(Self.Request.IsAck, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsAck, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsAck, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsAck, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsAck, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsAck, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsAck, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsBye;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsBye, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(Self.Request.IsBye, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsBye, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsBye, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsBye, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsBye, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsBye, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsCancel;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsCancel, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsCancel, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(Self.Request.IsCancel, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsCancel, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsCancel, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsCancel, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsCancel, 'XXX');
+end;
+
 procedure TestTIdSipRequest.TestIsInvite;
 begin
   Self.Request.Method := MethodAck;
@@ -2006,6 +1946,66 @@ begin
 
   Self.Request.Method := 'XXX';
   Check(not Self.Request.IsInvite, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedCSeqMethod;
+begin
+  Self.Request.Method := MethodInvite;
+  Self.Request.CSeq.Method := Self.Request.Method;
+  Check(not Self.Request.IsMalformed,
+       'CSeq method matches request method');
+
+  Self.Request.CSeq.Method := Self.Request.CSeq.Method + '1';;
+  Check(Self.Request.IsMalformed,
+       'CSeq method matches request method');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedSipVersion;
+const
+  MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
+                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                   + 'Max-Forwards:     70'#13#10
+                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                   + 'CSeq:    1 INVITE'#13#10
+                   + #13#10;
+var
+  ExpectedReason: String;
+  Msg:            TIdSipMessage;
+begin
+  ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
+
+  Msg := TIdSipMessage.ReadMessageFrom(MalformedMessage);
+  try
+    Check(Msg.IsMalformed,
+          'Msg has invalid SIP-Version, but not branded as such');
+    CheckEquals(ExpectedReason,
+                Msg.ParseFailReason,
+                'Unexpected parse error reason');
+    CheckEquals(Copy(MalformedMessage, 1, 255),
+                Copy(Msg.RawMessage, 1, 255),
+                'Unexpected raw message');
+  finally
+    Msg.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedMethod;
+begin
+  Self.Request.ClearHeaders;
+  Self.AddRequiredHeaders(Self.Request);
+  Self.Request.Method := 'Bad"Method';
+
+  Check(Self.Msg.IsMalformed, 'Bad Method');
+end;
+
+procedure TestTIdSipRequest.TestIsMalformedMissingVia;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
+
+  Check(Self.Msg.IsMalformed, 'Missing Via header');
 end;
 
 procedure TestTIdSipRequest.TestIsOptions;
