@@ -497,6 +497,17 @@ implementation
 uses
   IdException, IdRandom, IdSipConsts, IdSipDialogID, Math;
 
+const
+  AtLeastOneVia         = 'Messages must have at least one Via header';
+  CantFindTransport     = 'The dispatcher cannot find a %s transport for a '
+                        + 'message';
+  ExceptionRaised       = '%s raised an %s: %s';
+  MustHaveAuthorization = 'You must supply an Authorization or '
+                        + 'Proxy-Authorization header';
+  OnlyRemoveTranWhenTerminated
+                        = 'Transactions must only be removed when they''re '
+                        + 'terminated';
+
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
 //******************************************************************************
@@ -813,7 +824,7 @@ end;
 
 function TIdSipTransactionDispatcher.WillUseReliableTranport(R: TIdSipMessage): Boolean;
 begin
-  Assert(R.Path.Length > 0, 'Messages must have at least one Via header');
+  Assert(R.Path.Length > 0, AtLeastOneVia);
 
   Result := R.LastHop.Transport <> sttUDP;
 
@@ -842,9 +853,8 @@ begin
     if (I < Self.Transports.Count) then
       Result := Self.TransportAt(I)
     else
-      raise EUnknownTransport.Create('The dispatcher cannot find a '
-                                   + TransportToStr(Msg.LastHop.Transport)
-                                   + ' transport for a message');
+      raise EUnknownTransport.Create(Format(CantFindTransport,
+                                            [TransportToStr(Msg.LastHop.Transport)]));
   finally
     Self.TransportLock.Release;
   end;
@@ -1116,7 +1126,7 @@ begin
   // ClientInviteTransactionTimerA etc.; 2xx terminate client INVITE transactions.
 
   Assert(TerminatedTransaction.IsTerminated,
-         'Transactions must only be removed when they''re terminated');
+         OnlyRemoveTranWhenTerminated);
 
   Self.TransactionLock.Acquire;
   try
@@ -1148,7 +1158,8 @@ begin
     ReAttempt.Assign(Transaction.InitialRequest);
     Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
 
-    // Todo: What if no listener gave us an authentication token?
+    Assert(ReAttempt.HasAuthorization or ReAttempt.HasProxyAuthorization,
+           MustHaveAuthorization);
 
     if TryAgain then begin
       NewAttempt := Self.AddClientTransaction(ReAttempt);
@@ -1214,8 +1225,8 @@ end;
 
 procedure TIdSipTransaction.ExceptionRaised(E: Exception);
 begin
-  Self.NotifyOfFailure(Self.ClassName + 'raised an '
-                     + E.ClassName + ': ' + E.Message);
+  Self.NotifyOfFailure(Format(ExceptionRaised,
+                              [Self.ClassName, E.ClassName, E.Message]));
 end;
 
 function TIdSipTransaction.IsServer: Boolean;
