@@ -83,9 +83,11 @@ type
                                 Invite: TIdSipRequest);
   end;
 
+  TIdSipInboundSession = class;
+
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
-    procedure OnInboundCall(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
   end;
 
   TIdSipUserAgentReaction =
@@ -239,6 +241,8 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
+  TIdSipOutboundSession = class;
+
   // I (usually) represent a human being in the SIP network. I:
   // * inform any listeners when new sessions become established, modified or
   //   terminated;
@@ -261,11 +265,11 @@ type
 
     function  AddInboundSession(Invite: TIdSipRequest;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport): TIdSipSession;
+                                Receiver: TIdSipTransport): TIdSipInboundSession;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
-    function  AddOutboundSession: TIdSipSession;
+    function  AddOutboundSession: TIdSipOutboundSession;
     function  AddRegistration: TIdSipRegistration;
     function  CallIDFor(Registrar: TIdSipUri): String;
     function  DefaultFrom: String;
@@ -275,7 +279,7 @@ type
     function  GetContact: TIdSipContactHeader;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-    procedure NotifyOfInboundCall(Session: TIdSipSession);
+    procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure NotifyOfChange;
     procedure ProcessAck(Ack: TIdSipRequest;
                          Transaction: TIdSipTransaction;
@@ -311,7 +315,7 @@ type
     procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
-                   const MimeType: String): TIdSipSession;
+                   const MimeType: String): TIdSipOutboundSession;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipToHeader;
                            const Body: String;
@@ -477,12 +481,8 @@ type
   public
     destructor  Destroy; override;
 
-    function  AcceptCall(const Offer, ContentType: String): String; virtual;
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
-    procedure Call(Dest: TIdSipToHeader;
-                   const InitialOffer: String;
-                   const MimeType: String);
     function  DialogEstablished: Boolean;
     function  IsInboundCall: Boolean; virtual; abstract;
     procedure Terminate;
@@ -507,7 +507,7 @@ type
                        InitialTransaction: TIdSipTransaction;
                        Receiver: TIdSipTransport); reintroduce;
 
-    function AcceptCall(const Offer, ContentType: String): String; override;
+    function AcceptCall(const Offer, ContentType: String): String;
     function IsInboundCall: Boolean; override;
   end;
 
@@ -515,7 +515,10 @@ type
   public
     constructor Create(UA: TIdSipUserAgentCore); overload; override;
 
-    function IsInboundCall: Boolean; override;
+    procedure Call(Dest: TIdSipToHeader;
+                   const InitialOffer: String;
+                   const MimeType: String);
+    function  IsInboundCall: Boolean; override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -1131,7 +1134,7 @@ end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipToHeader;
                                   const InitialOffer: String;
-                                  const MimeType: String): TIdSipSession;
+                                  const MimeType: String): TIdSipOutboundSession;
 begin
   Result := Self.AddOutboundSession;
   Result.Call(Dest, InitialOffer, MimeType);
@@ -1415,7 +1418,7 @@ end;
 
 function TIdSipUserAgentCore.AddInboundSession(Invite: TIdSipRequest;
                                                Transaction: TIdSipTransaction;
-                                               Receiver: TIdSipTransport): TIdSipSession;
+                                               Receiver: TIdSipTransport): TIdSipInboundSession;
 begin
   Result := TIdSipInboundSession.Create(Self, Invite, Transaction, Receiver);
   try
@@ -1450,7 +1453,7 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddOutboundSession: TIdSipSession;
+function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
 begin
   Result := TIdSipOutboundSession.Create(Self);
   try
@@ -1571,7 +1574,7 @@ begin
   Result := Self.IndexOfRegistrar(Registrar) <> -1;
 end;
 
-procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipSession);
+procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
   I: Integer;
 begin
@@ -1947,16 +1950,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipSession.AcceptCall(const Offer, ContentType: String): String;
-begin
-  // Offer contains a description of what data we expect to receive. Sometimes
-  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
-  // port 8000's already bound. We thus try to honour the offer as closely as
-  // possible, and return the _actual_ offer sent.
-
-  Result := '';
-end;
-
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
   Self.SessionListenerLock.Acquire;
@@ -1969,26 +1962,6 @@ end;
 
 procedure TIdSipSession.Cancel;
 begin
-end;
-
-procedure TIdSipSession.Call(Dest: TIdSipToHeader;
-                             const InitialOffer: String;
-                             const MimeType: String);
-var
-  Invite: TIdSipRequest;
-begin
-  if not Self.IsInboundCall and not Assigned(Self.InitialTran) then begin
-    Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
-    try
-      Self.CurrentRequest.Assign(Invite);
-
-      Self.InitialTran := Self.UA.Dispatcher.AddClientTransaction(Self.CurrentRequest);
-      Self.InitialTran.AddTransactionListener(Self);
-      Self.InitialTran.SendRequest;
-    finally
-      Invite.Free;
-    end;
-  end;
 end;
 
 procedure TIdSipSession.Terminate;
@@ -2411,6 +2384,11 @@ function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): Stri
 var
   Response: TIdSipResponse;
 begin
+  // Offer contains a description of what data we expect to receive. Sometimes
+  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
+  // port 8000's already bound. We thus try to honour the offer as closely as
+  // possible, and return the _actual_ offer sent.
+
   // The type of payload processor depends on the ContentType passed in!
   Self.PayloadProcessor.StartListening(Offer);
 
@@ -2453,6 +2431,26 @@ begin
   inherited Create(UA);
 
   Self.CreateInternal;
+end;
+
+procedure TIdSipOutboundSession.Call(Dest: TIdSipToHeader;
+                                     const InitialOffer: String;
+                                     const MimeType: String);
+var
+  Invite: TIdSipRequest;
+begin
+  if not Self.IsInboundCall and not Assigned(Self.InitialTran) then begin
+    Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
+    try
+      Self.CurrentRequest.Assign(Invite);
+
+      Self.InitialTran := Self.UA.Dispatcher.AddClientTransaction(Self.CurrentRequest);
+      Self.InitialTran.AddTransactionListener(Self);
+      Self.InitialTran.SendRequest;
+    finally
+      Invite.Free;
+    end;
+  end;
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;

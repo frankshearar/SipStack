@@ -3,8 +3,9 @@ unit Spike;
 interface
 
 uses
-  audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdRTP, IdSdp,
-  IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle,
+  audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdRTP,
+  IdRTPTimerQueue, IdSdp, IdSipCore, IdSipMessage, IdSipTransaction,
+  IdSipTransport, IdSocketHandle,
   StdCtrls, SyncObjs, SysUtils;
 
 type
@@ -81,7 +82,7 @@ type
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
-    procedure OnInboundCall(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
@@ -126,6 +127,7 @@ type
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
     fSession:         TIdRTPSession;
+    Timer:            TIdRTPTimerQueue;
 
     procedure AddRow(Buttons: array of TColourButton);
     function  CreateButton(Name: String;
@@ -361,7 +363,7 @@ procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipRegistration;
 begin
 end;
 
-procedure TrnidSpike.OnInboundCall(Session: TIdSipSession);
+procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
 begin
   if (Session.Invite.ContentLength > 0) then
     Self.StartReadingData(Session.Invite.Body);
@@ -569,6 +571,8 @@ constructor TIdDTMFPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.Timer := TIdRTPTimerQueue.Create(false);
+
   Self.ButtonHeight     := 25;
   Self.Height           := 120;
   Self.OnResize         := Self.DoOnResize;
@@ -602,6 +606,8 @@ begin
   for I := Low(Self.Buttons) to High(Self.Buttons) do
     Self.Buttons[I].Free;
 
+  Self.Timer.TerminateAndWaitFor;
+  Self.Timer.Free;
 
   inherited Destroy;
 end;

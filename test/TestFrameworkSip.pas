@@ -201,7 +201,7 @@ type
   private
     fInboundCall: Boolean;
 
-    procedure OnInboundCall(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
   public
     constructor Create;
 
@@ -535,7 +535,7 @@ end;
 
 //* TIdSipTestUserAgentListener Private methods ********************************
 
-procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipSession);
+procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipInboundSession);
 begin
   fInboundCall := true;
 end;

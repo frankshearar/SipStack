@@ -77,7 +77,7 @@ type
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
-    procedure OnInboundCall(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure SimulateRemoteAck(Response: TIdSipResponse);
@@ -174,7 +174,7 @@ type
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
-    procedure OnInboundCall(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
@@ -736,7 +736,7 @@ begin
   Self.SessionEstablished := true;
 end;
 
-procedure TestTIdSipUserAgentCore.OnInboundCall(Session: TIdSipSession);
+procedure TestTIdSipUserAgentCore.OnInboundCall(Session: TIdSipInboundSession);
 begin
   if Assigned(Self.CheckOnInboundCall) then
     Self.CheckOnInboundCall(Session);
@@ -1134,7 +1134,7 @@ end;
 procedure TestTIdSipUserAgentCore.TestDispatchToCorrectSession;
 var
   SessionOne: TIdSipSession;
-  SessionTwo: TIdSipSession;
+  SessionTwo: TIdSipInboundSession;
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
@@ -1145,7 +1145,7 @@ begin
   Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
   Self.SimulateRemoteInvite;
   Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
-  SessionTwo := Self.Session;
+  SessionTwo := Self.Session as TIdSipInboundSession;
   CheckEquals(2,
               Self.Core.SessionCount,
               'Number of sessions after two INVITEs');
@@ -1158,19 +1158,19 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestDispatchAckToSession;
 var
-  SessionOne: TIdSipSession;
-  SessionTwo: TIdSipSession;
+  SessionOne: TIdSipInboundSession;
+  SessionTwo: TIdSipInboundSession;
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  SessionOne := Self.Session;
+  SessionOne := Self.Session as TIdSipInboundSession;
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
   Self.SimulateRemoteInvite;
   Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
-  SessionTwo := Self.Session;
+  SessionTwo := Self.Session as TIdSipInboundSession;
   CheckEquals(2,
               Self.Core.SessionCount,
               'Number of sessions after two INVITEs');
@@ -1328,7 +1328,7 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -1740,18 +1740,18 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestHangUpAllCalls;
 var
-  FirstSession:  TIdSipSession;
-  SecondSession: TIdSipSession;
+  FirstSession:  TIdSipInboundSession;
+  SecondSession: TIdSipInboundSession;
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  FirstSession := Self.Session;
+  FirstSession := Self.Session as TIdSipInboundSession;
   FirstSession.AcceptCall('', '');
   Self.Session := nil;
 
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  SecondSession := Self.Session;
+  SecondSession := Self.Session as TIdSipInboundSession;
   SecondSession.AcceptCall('', '');
 
   CheckEquals(2,
@@ -2034,7 +2034,7 @@ procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession);
 begin
 end;
 
-procedure TestTIdSipSession.OnInboundCall(Session: TIdSipSession);
+procedure TestTIdSipSession.OnInboundCall(Session: TIdSipInboundSession);
 begin
   Self.Session := Session;
   Self.Session.AddSessionListener(Self);
@@ -2114,7 +2114,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
   Self.Dispatcher.Transport.ResetSentResponseCount;
   Self.Session.ResendLastResponse;
   CheckEquals(1,
@@ -2136,7 +2136,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
@@ -2168,8 +2168,8 @@ begin
 
     Self.SimulateRemoteInvite;
     Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-    Offer := Self.Session.AcceptCall(Self.SimpleSdp.AsString,
-                                     SdpMimeType);
+    Offer := (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
+                                                               SdpMimeType);
     Check(Offer <> Self.SimpleSdp.AsString,
           'Actual offer identical to suggested offer');
 
@@ -2197,7 +2197,8 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Self.Session.AcceptCall(Self.SimpleSdp.AsString, SdpMimeType);
+  (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
+                                                    SdpMimeType);
 
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
@@ -2216,8 +2217,8 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  Self.Session.AcceptCall(Self.SimpleSdp.AsString,
-                          SdpMimeType);
+  (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
+                                                    SdpMimeType);
 
   Udp := TIdUDPServer.Create(nil);
   try
@@ -2239,7 +2240,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2322,7 +2323,7 @@ end;
 procedure TestTIdSipSession.TestCallTwice;
 var
   SessCount: Integer;
-  Session:   TIdSipSession;
+  Session:   TIdSipOutboundSession;
   TranCount: Integer;
 begin
   SessCount := Self.Core.SessionCount;
@@ -2361,7 +2362,7 @@ end;
 procedure TestTIdSipSession.TestCallNetworkFailure;
 var
   Response: TIdSipResponse;
-  Session:  TIdSipSession;
+  Session:  TIdSipOutboundSession;
 begin
   Session := TIdSipOutboundSession.Create(Self.Core);
   try
@@ -2502,7 +2503,7 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
   Self.Session.AddSessionListener(Self);
 
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -2540,7 +2541,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   Invite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
@@ -2568,7 +2569,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
@@ -2586,7 +2587,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2618,7 +2619,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Self.Session.AcceptCall('', '');
+  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
