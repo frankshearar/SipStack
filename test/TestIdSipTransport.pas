@@ -69,8 +69,12 @@ type
                                       R: TIdSipResponse) of object;
 
   TestTransportRegistry = class(TTestCase)
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestDefaultPortFor;
+    procedure TestIsSecure;
     procedure TestRegisterTransport;
     procedure TestTransportFor;
     procedure TestUriSchemeFor;
@@ -587,31 +591,50 @@ end;
 //******************************************************************************
 //* TestTransportRegistry                                                      *
 //******************************************************************************
+//* TestTransportRegistry Public methods ***************************************
+
+procedure TestTransportRegistry.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+end;
+
+procedure TestTransportRegistry.TearDown;
+begin
+  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+
+  inherited TearDown;
+end;
+
 //* TestTransportRegistry Published methods ************************************
 
 procedure TestTransportRegistry.TestDefaultPortFor;
 begin
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
-  try
-    TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
-    try
-      CheckEquals(TIdSipUDPTransport.DefaultPort,
-                  TIdSipTransportRegistry.DefaultPortFor(UdpTransport),
-                  UdpTransport);
+    CheckEquals(TIdSipUDPTransport.DefaultPort,
+                TIdSipTransportRegistry.DefaultPortFor(UdpTransport),
+                UdpTransport);
 
-      CheckEquals(TIdSipTLSTransport.DefaultPort,
-                  TIdSipTransportRegistry.DefaultPortFor(TlsTransport),
-                  TlsTransport);
+    CheckEquals(TIdSipTLSTransport.DefaultPort,
+                TIdSipTransportRegistry.DefaultPortFor(TlsTransport),
+                TlsTransport);
 
-      CheckEquals(TIdSipTransport.DefaultPort,
-                  TIdSipTransportRegistry.DefaultPortFor('unknown transport'),
-                  'unknown transport');
-    finally
-      TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
-    end;
-  finally
-    TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
-  end;
+    CheckEquals(TIdSipTransport.DefaultPort,
+                TIdSipTransportRegistry.DefaultPortFor('unknown transport'),
+                'unknown transport');
+end;
+
+procedure TestTransportRegistry.TestIsSecure;
+begin
+  Check(TIdSipUDPTransport.IsSecure
+      = TIdSipTransportRegistry.IsSecure(TIdSipUDPTransport.GetTransportType),
+        TIdSipUDPTransport.GetTransportType);
+
+  Check(TIdSipTLSTransport.IsSecure
+      = TIdSipTransportRegistry.IsSecure(TIdSipTLSTransport.GetTransportType),
+        TIdSipTLSTransport.GetTransportType);
 end;
 
 procedure TestTransportRegistry.TestRegisterTransport;
@@ -658,27 +681,17 @@ end;
 
 procedure TestTransportRegistry.TestUriSchemeFor;
 begin
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
-  try
-    TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
-    try
-      CheckEquals(TIdSipUDPTransport.UriScheme,
-                  TIdSipTransportRegistry.UriSchemeFor(UdpTransport),
-                  UdpTransport);
+  CheckEquals(TIdSipUDPTransport.UriScheme,
+              TIdSipTransportRegistry.UriSchemeFor(UdpTransport),
+              UdpTransport);
 
-      CheckEquals(TIdSipTLSTransport.UriScheme,
-                  TIdSipTransportRegistry.UriSchemeFor(TlsTransport),
-                  TlsTransport);
+  CheckEquals(TIdSipTLSTransport.UriScheme,
+              TIdSipTransportRegistry.UriSchemeFor(TlsTransport),
+              TlsTransport);
 
-      CheckEquals(TIdSipTransport.UriScheme,
-                  TIdSipTransportRegistry.UriSchemeFor('unknown transport'),
-                  'unknown transport');
-    finally
-      TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
-    end;
-  finally
-    TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
-  end;
+  CheckEquals(TIdSipTransport.UriScheme,
+              TIdSipTransportRegistry.UriSchemeFor('unknown transport'),
+              'unknown transport');
 end;
 
 //******************************************************************************
