@@ -7341,8 +7341,9 @@ begin
     Self.MarkSentRequestCount;
 
     Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
-    Invite.Assign(Self.LastSentRequest);
+
     CheckRequestSent('No resend of INVITE with Authorization');
+    Invite.Assign(Self.LastSentRequest);
     Check(Invite.HasAuthorization,
           'Resend INVITE has no Authorization header');
 
@@ -7359,6 +7360,9 @@ begin
     CheckEquals(Invite.FirstAuthorization.Value,
                 Modify.FirstAuthorization.Value,
                 'Authorization header');
+    CheckEquals(Invite.CSeq.SequenceNo + 1,
+                Modify.CSeq.SequenceNo,
+                'Unexpected sequence number in the modify');
   finally
     Invite.Free;
   end;
