@@ -303,9 +303,13 @@ type
   TIdSipMessageWait = class(TIdNotifyEventWait)
   private
     fMessage: TIdSipMessage;
-  public
 
-    property Message: TIdSipMessage read fMessage write fMessage;
+    procedure SetMessage(Value: TIdSipMessage);
+  public
+    constructor Create; virtual;
+    destructor  Destroy; override;
+
+    property Message: TIdSipMessage read fMessage write SetMessage;
   end;
 
   // I maintain a list of Actions. You may query me for various statistics, as
@@ -336,17 +340,17 @@ type
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
-    procedure FindActionAndPerform(Event: TIdSipMessageWait;
+    procedure FindActionAndPerform(Msg: TIdSipMessage;
                                    Proc: TIdSipActionProc); overload;
-    procedure FindActionAndPerform(Event: TIdSipMessageWait;
+    procedure FindActionAndPerform(Msg: TIdSipMessage;
                                    Block: TIdSipActionClosure); overload;
-    procedure FindActionAndPerformOr(Event: TIdSipMessageWait;
+    procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundProc: TIdSipActionProc;
                                      NotFoundProc: TIdSipActionProc); overload;
-    procedure FindActionAndPerformOr(Event: TIdSipMessageWait;
+    procedure FindActionAndPerformOr(Msg: TIdSipMessage;
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure); overload;
-    procedure FindSessionAndPerform(Event: TIdSipMessageWait;
+    procedure FindSessionAndPerform(Msg: TIdSipMessage;
                                     Proc: TIdSipSessionProc);
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
@@ -537,13 +541,12 @@ type
                              Reason: Cardinal);
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
-                            Copy: TIdSipMessage); overload;
+                            Msg: TIdSipMessage); overload;
     function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
     // Move to UserAgent:
     function  AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
-    function  AddOutboundInitialInvite: TIdSipOutboundInitialInvite;
     function  AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
     function  AddOutboundRegister: TIdSipOutboundRegister;
     function  AddOutboundRegistrationQuery: TIdSipOutboundRegistrationQuery;
@@ -1934,6 +1937,32 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipMessageWait                                                          *
+//******************************************************************************
+//* TIdSipMessageWait Public methods *******************************************
+
+constructor TIdSipMessageWait.Create;
+begin
+  inherited Create;
+
+  Self.fMessage := TIdSipRequest.Create;
+end;
+
+destructor TIdSipMessageWait.Destroy;
+begin
+  Self.Message.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipMessageWait Private methods ******************************************
+
+procedure TIdSipMessageWait.SetMessage(Value: TIdSipMessage);
+begin
+  Self.Message.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipActions                                                              *
 //******************************************************************************
 //* TIdSipActions Public methods ***********************************************
@@ -2071,97 +2100,79 @@ begin
   end;
 end;
 
-procedure TIdSipActions.FindActionAndPerform(Event: TIdSipMessageWait;
+procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
                                              Proc: TIdSipActionProc);
 begin
-  Self.FindActionAndPerformOr(Event, Proc, Self.NullProc);
+  Self.FindActionAndPerformOr(Msg, Proc, Self.NullProc);
 end;
 
-procedure TIdSipActions.FindActionAndPerform(Event: TIdSipMessageWait;
+procedure TIdSipActions.FindActionAndPerform(Msg: TIdSipMessage;
                                              Block: TIdSipActionClosure);
 var
   NullBlock: TIdSipActionClosure;
 begin
   NullBlock := TIdSipActionClosure.Create;
   try
-    Self.FindActionAndPerformOr(Event, Block, NullBlock);
+    Self.FindActionAndPerformOr(Msg, Block, NullBlock);
   finally
     NullBlock.Free;
   end;
 end;
 
-procedure TIdSipActions.FindActionAndPerformOr(Event: TIdSipMessageWait;
+procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
                                                FoundProc: TIdSipActionProc;
                                                NotFoundProc: TIdSipActionProc);
 var
   Action: TIdSipAction;
-  Msg:    TIdSipMessage;
 begin
-  Msg := Event.Message;
+  Self.ActionLock.Acquire;
   try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(Msg);
+    Action := Self.FindAction(Msg);
 
-      if Assigned(Action) then
-        FoundProc(Action)
-      else
-        NotFoundProc(Action);
-    finally
-      Self.ActionLock.Release;
-    end;
+    if Assigned(Action) then
+      FoundProc(Action)
+    else
+      NotFoundProc(Action);
   finally
-    Msg.Free;
+    Self.ActionLock.Release;
   end;
 
   Self.CleanOutTerminatedActions;
 end;
 
-procedure TIdSipActions.FindActionAndPerformOr(Event: TIdSipMessageWait;
+procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
                                                FoundBlock: TIdSipActionClosure;
                                                NotFoundBlock: TIdSipActionClosure);
 var
   Action: TIdSipAction;
-  Msg:    TIdSipMessage;
 begin
-  Msg := Event.Message;
+  Self.ActionLock.Acquire;
   try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(Msg);
+    Action := Self.FindAction(Msg);
 
-      if Assigned(Action) then
-        FoundBlock.Execute(Action)
-      else
-        NotFoundBlock.Execute(nil);
+    if Assigned(Action) then
+      FoundBlock.Execute(Action)
+    else
+      NotFoundBlock.Execute(nil);
 
-    finally
-      Self.ActionLock.Release;
-    end;
   finally
-    Msg.Free;
+    Self.ActionLock.Release;
   end;
 
   Self.CleanOutTerminatedActions;
 end;
 
-procedure TIdSipActions.FindSessionAndPerform(Event: TIdSipMessageWait;
+procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
                                               Proc: TIdSipSessionProc);
 var
-  Invite:  TIdSipRequest;
   Session: TIdSipSession;
 begin
   Self.ActionLock.Acquire;
   try
-    Invite := Event.Message as TIdSipRequest;
-    try
-      Session := Self.FindSession(Invite);
+    Session := Self.FindSession(Msg);
 
-      if Assigned(Session) then
-        Proc(Session, Invite);
-    finally
-      Invite.Free;
-    end;
+    if Assigned(Session) then
+      Proc(Session, Msg as TIdSipRequest);
   finally
     Self.ActionLock.Release;
   end;
@@ -2173,6 +2184,9 @@ procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
 var
   Action: TIdSipAction;
 begin
+  // Find the action, and execute Block regardless of whether we found the
+  // action. FindAction returns nil in this case.
+
   Self.ActionLock.Acquire;
   try
     Action := Self.FindAction(Msg);
@@ -2308,7 +2322,7 @@ var
 begin
   Block := Self.BlockType.Create;
   try
-    Self.Actions.FindActionAndPerform(Self, Block);
+    Self.Actions.FindActionAndPerform(Self.Message, Block);
   finally
     Block.Free;
   end;
@@ -2476,13 +2490,6 @@ end;
 function TIdSipAbstractUserAgent.AddOutboundOptions: TIdSipOutboundOptions;
 begin
   Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundOptions) as TIdSipOutboundOptions;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundInitialInvite: TIdSipOutboundInitialInvite;
-begin
-  // Do not call this directly. Modules call this method.
-
-  Result := Self.AddOutboundAction(TIdSipOutboundInitialInvite) as TIdSipOutboundInitialInvite;
 end;
 
 function TIdSipAbstractUserAgent.AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
@@ -2792,16 +2799,15 @@ var
   Request: TIdSipRequest;
 begin
   Request := (Event as TIdSipMessageWait).Message as TIdSipRequest;
-  try
-    Self.RegisterWith(Request.RequestUri).Send;
-  finally
-    Request.Free;
-  end;
+  Self.RegisterWith(Request.RequestUri).Send;
 end;
 
 procedure TIdSipAbstractUserAgent.OnResendReInvite(Event: TObject);
+var
+  Msg: TIdSipMessage;
 begin
-  Self.Actions.FindSessionAndPerform(Event as TIdSipMessageWait,
+  Msg := (Event as TIdSipMessageWait).Message;
+  Self.Actions.FindSessionAndPerform(Msg,
                                      Self.ResendReInvite);
 end;
 
@@ -2874,7 +2880,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                                 WaitTime: Cardinal;
-                                                Copy: TIdSipMessage);
+                                                Msg: TIdSipMessage);
 var
   Event: TIdSipActionsWait;
 begin
@@ -2884,7 +2890,7 @@ begin
       Event := TIdSipActionsWait.Create;
       Event.Actions   := Self.Actions;
       Event.BlockType := BlockType;
-      Event.Message   := Copy;
+      Event.Message   := Msg;
       Self.Timer.AddEvent(WaitTime, Event);
     end;
   finally
@@ -3409,7 +3415,6 @@ end;
 procedure TIdSipAbstractUserAgent.UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
                                                                   NewRequest: TIdSipRequest);
 var
-  FakeEvent:            TIdSipMessageWait;
   UpdateAffectedAction: TIdSipUserAgentUpdateAction;
 begin
   UpdateAffectedAction := TIdSipUserAgentUpdateAction.Create;
@@ -3417,14 +3422,7 @@ begin
     UpdateAffectedAction.UserAgent := Self;
     UpdateAffectedAction.Request   := NewRequest;
 
-    FakeEvent := TIdSipMessageWait.Create;
-    try
-      FakeEvent.Message := FindMsg.Copy;
-
-      Self.Actions.FindActionAndPerform(FakeEvent, UpdateAffectedAction);
-    finally
-      FakeEvent.Free;
-    end;
+    Self.Actions.FindActionAndPerform(FindMsg, UpdateAffectedAction);
   finally
     UpdateAffectedAction.Free;
   end;
