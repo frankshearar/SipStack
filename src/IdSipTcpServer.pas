@@ -61,15 +61,15 @@ type
     procedure UnlockList;
   end;
 
-  // ReadBodyTimeout = -1 implies that we never timeout the body wait. We do not
-  // recommend this. ReadBodyTimeout = n implies we wait n milliseconds for
+  // ReadTimeout = -1 implies that we never timeout the body wait. We do not
+  // recommend this. ReadTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
     ConnectionMap:      TIdSipConnectionTableLock;
     fConnectionTimeout: Integer;
-    fReadBodyTimeout:   Integer;
+    fReadTimeout:   Integer;
     Notifier:           TIdSipServerNotifier;
 
     procedure AddConnection(Connection: TIdTCPConnection;
@@ -99,7 +99,7 @@ type
   published
     property ConnectionTimeout: Integer read fConnectionTimeout write fConnectionTimeout;
     property DefaultPort default IdPORT_SIP;
-    property ReadBodyTimeout:   Integer read fReadBodyTimeout write fReadBodyTimeout;
+    property ReadTimeout:       Integer read fReadTimeout write fReadTimeout;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
@@ -255,6 +255,7 @@ begin
   Self.ConnectionTimeout := Self.DefaultTimeout;
   Self.DefaultPort       := IdPORT_SIP;
   Self.Notifier          := TIdSipServerNotifier.Create;
+  Self.ReadTimeout   := Self.DefaultTimeout;
 end;
 
 destructor TIdSipTcpServer.Destroy;
@@ -349,7 +350,7 @@ begin
   ReceivedFrom.PeerPort := AThread.Connection.Socket.Binding.PeerPort;
 
   while AThread.Connection.Connected do begin
-    AThread.Connection.ReadTimeout := Self.ReadBodyTimeout;
+    AThread.Connection.ReadTimeout := Self.ReadTimeout;
 
     S := Self.ReadMessage(AThread.Connection);
     try
@@ -423,9 +424,10 @@ begin
   try
     Str := Result as TStringStream;
 
-    // we skip any leading CRLFs
+    // We skip any leading CRLFs, and read up to the first blank line.
     while (Str.DataString = '') do
       Connection.Capture(Str, '');
+      
     Str.Seek(0, soFromBeginning);
   except
     Result.Free;

@@ -65,6 +65,7 @@ type
     function  GetAddress: String; virtual; abstract;
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual; abstract;
+    procedure InstantiateServer; virtual;
     procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
     procedure NotifyTransportListenersOfException(E: Exception;
@@ -82,12 +83,13 @@ type
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
-                               Target: TIdSipConnectionBindings); virtual; abstract;
+                               Target: TIdSipConnectionBindings);
     procedure SendRequest(R: TIdSipRequest); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetAddress(const Value: String); virtual;
     procedure SetPort(Value: Cardinal);
+    procedure SetTimeout(Value: Cardinal); virtual;
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
@@ -115,7 +117,7 @@ type
     property Address:  String   read GetAddress write SetAddress;
     property HostName: String   read fHostName write fHostName;
     property Port:     Cardinal read GetPort write SetPort;
-    property Timeout:  Cardinal read fTimeout write fTimeout;
+    property Timeout:  Cardinal read fTimeout write SetTimeout;
     property UseRport: Boolean  read fUseRport write fUseRport;
   end;
 
@@ -141,9 +143,11 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
+    procedure InstantiateServer; override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
+    procedure SetTimeout(Value: Cardinal); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -199,10 +203,9 @@ type
     function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
+    procedure InstantiateServer; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings); override;
-    procedure ReturnBadRequest(Request: TIdSipRequest;
-                               Target: TIdSipConnectionBindings); override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
   public
@@ -344,6 +347,8 @@ begin
   Self.TransportListeners        := TIdNotificationList.Create;
   Self.TransportSendingListeners := TIdNotificationList.Create;
 
+  Self.InstantiateServer;
+
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;
 end;
@@ -432,6 +437,10 @@ begin
 end;
 
 //* TIdSipTransport Protected methods ******************************************
+
+procedure TIdSipTransport.InstantiateServer;
+begin
+end;
 
 procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
 var
@@ -572,7 +581,7 @@ begin
   if Response.IsMalformed then begin
     Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
                                                    Response.ParseFailReason);
-    // Drop the malformed response.                                               
+    // Drop the malformed response.
     Exit;
   end;
 
@@ -584,6 +593,21 @@ begin
   else
     Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
                                                    ResponseNotSentFromHere);
+end;
+
+procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
+                                           Target: TIdSipConnectionBindings);
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
+  try
+    Res.StatusText := Request.ParseFailReason;
+
+    Self.SendResponse(Res);
+  finally
+    Res.Free;
+  end;
 end;
 
 procedure TIdSipTransport.SendRequest(R: TIdSipRequest);
@@ -625,6 +649,11 @@ begin
   Self.ChangeBinding(Self.Address, Value);
 end;
 
+procedure TIdSipTransport.SetTimeout(Value: Cardinal);
+begin
+  Self.fTimeout := Value;
+end;
+
 //* TIdSipTransport Private methods ********************************************
 
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
@@ -652,8 +681,6 @@ begin
 
   Self.Clients    := TObjectList.Create(true);
   Self.ClientLock := TCriticalSection.Create;
-  Self.Transport  := Self.ServerType.Create(nil);
-  Self.Transport.AddMessageListener(Self);
 
   Self.Bindings.Add;
   Self.SetPort(Port);
@@ -719,6 +746,12 @@ begin
   Result := Self.Transport.DefaultPort;
 end;
 
+procedure TIdSipTCPTransport.InstantiateServer;
+begin
+  Self.Transport  := Self.ServerType.Create(nil);
+  Self.Transport.AddMessageListener(Self);
+end;
+
 procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest);
 var
   Client: TIdSipTcpClient;
@@ -747,6 +780,14 @@ begin
   Result := TIdSipTcpServer;
 end;
 
+procedure TIdSipTCPTransport.SetTimeout(Value: Cardinal);
+begin
+  inherited SetTimeout(Value);
+
+  Self.Transport.ReadTimeout       := Value;
+  Self.Transport.ConnectionTimeout := Value;
+end;
+
 procedure TIdSipTCPTransport.DestroyClient(Client: TIdSipTcpClient);
 begin
   // Precondition: Self.ClientLock has been acquired.
@@ -772,7 +813,11 @@ begin
       Self.Clients.Add(Result);
     except
       // Remember, Self.Clients owns the object and will free it.
-      Self.Clients.Remove(Result);
+      if (Self.Clients.IndexOf(Result) <> -1) then
+        Self.Clients.Remove(Result)
+      else
+        Result.Free;
+
       Result := nil;
 
       raise;
@@ -911,10 +956,6 @@ constructor TIdSipUDPTransport.Create;
 begin
   inherited Create;
 
-  Self.Transport := TIdSipUdpServer.Create(nil);
-  Self.Transport.AddMessageListener(Self);
-  Self.Transport.ThreadedEvent := true;
-
   Self.Bindings.Add;
 end;
 
@@ -977,6 +1018,13 @@ begin
   Result := Self.Transport.DefaultPort;
 end;
 
+procedure TIdSipUDPTransport.InstantiateServer;
+begin
+  Self.Transport := TIdSipUdpServer.Create(nil);
+  Self.Transport.AddMessageListener(Self);
+  Self.Transport.ThreadedEvent := true;
+end;
+
 procedure TIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
@@ -989,23 +1037,6 @@ begin
   end;
 
   inherited OnReceiveRequest(Request, ReceivedFrom);
-end;
-
-procedure TIdSipUDPTransport.ReturnBadRequest(Request: TIdSipRequest;
-                                              Target: TIdSipConnectionBindings);
-var
-  Res: TIdSipResponse;
-begin
-  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
-  try
-    Res.StatusText := Request.ParseFailReason;
-
-    Self.Transport.Send(Target.PeerIP,
-                        Target.PeerPort,
-                        Res.AsString);
-  finally
-    Res.Free;
-  end;
 end;
 
 procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest);

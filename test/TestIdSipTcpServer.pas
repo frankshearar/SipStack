@@ -812,7 +812,7 @@ end;
 procedure TestTIdSipTcpServer.TestTruncatedBodyClosesConnection;
 begin
   Self.LowPortServer.OnDisconnect := Self.OnServerDisconnect;
-  Self.LowPortServer.ReadBodyTimeout := 50;
+  Self.LowPortServer.ReadTimeout  := 50;
 
   Self.Client.Connect(DefaultTimeout);
 

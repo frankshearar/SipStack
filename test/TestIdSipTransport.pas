@@ -17,9 +17,6 @@ uses
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
-  protected
-    procedure ReturnBadRequest(Request: TIdSipRequest;
-                               Target: TIdSipConnectionBindings); override;
   public
     procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
@@ -71,7 +68,15 @@ type
                                       R: TIdSipResponse) of object;
 
   TestTIdSipTransport = class(TThreadingTestCase,
-                              IIdSipTransportListener)
+                              IIdSipTransportListener,
+                              IIdSipTransportSendingListener)
+  private
+    LastSentResponse: TIdSipResponse;
+
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport);
   protected
     CheckingRequestEvent:  TTestIdSipRequestEvent;
     CheckingResponseEvent: TTestIdSipResponseEvent;
@@ -118,6 +123,10 @@ type
                                 const Msg: String); virtual; abstract;
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest);
+    procedure ConfigureTransport(Transport: TIdSipTransport;
+                                 const HostName: String;
+                                 const Address: String;
+                                 Port: Cardinal); virtual;
     function  DefaultPort: Cardinal; virtual;
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -392,13 +401,6 @@ begin
   inherited NotifyTransportSendingListeners(Response);
 end;
 
-//* TIdSipTransportSubclass Protected methods **********************************
-
-procedure TIdSipTransportSubclass.ReturnBadRequest(Request: TIdSipRequest;
-                                                   Target: TIdSipConnectionBindings);
-begin
-end;
-
 //******************************************************************************
 //* TestTIdSipTransportEventNotifications                                      *
 //******************************************************************************
@@ -597,20 +599,20 @@ begin
 
   Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
+  Self.LastSentResponse := TIdSipResponse.Create;  
+
   Self.HighPortTransport := Self.TransportType.Create;
-  Self.HighPortTransport.AddTransportListener(Self);
-  Self.HighPortTransport.Timeout  := 500;
-  Self.HighPortTransport.HostName := IndyGetHostName;
-  Self.HighPortTransport.Address  := GStack.LocalAddress;
-  Self.HighPortTransport.Port     := Self.DefaultPort + 10000;
+  Self.ConfigureTransport(Self.HighPortTransport,
+                          IndyGetHostName,
+                          GStack.LocalAddress,
+                          Self.DefaultPort + 10000);
   Self.HighPortTransport.Start;
 
   Self.LowPortTransport := Self.TransportType.Create;
-  Self.LowPortTransport.AddTransportListener(Self);
-  Self.LowPortTransport.Timeout  := 500;
-  Self.LowPortTransport.HostName := 'localhost';
-  Self.LowPortTransport.Address  := '127.0.0.1';
-  Self.LowPortTransport.Port     := Self.DefaultPort;
+  Self.ConfigureTransport(Self.LowPortTransport,
+                          'localhost',
+                          '127.0.0.1',
+                          Self.DefaultPort);
   Self.LowPortTransport.Start;
 
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
@@ -640,6 +642,8 @@ begin
 
   Self.LowPortTransport.Free;
   Self.HighPortTransport.Free;
+
+  Self.LastSentResponse.Free;  
 
   inherited TearDown;
 end;
@@ -841,6 +845,19 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.ConfigureTransport(Transport: TIdSipTransport;
+                                                 const HostName: String;
+                                                 const Address: String;
+                                                 Port: Cardinal);
+begin
+  Transport.AddTransportListener(Self);
+  Transport.AddTransportSendingListener(Self);
+  Transport.Timeout  := Self.DefaultTimeout div 10;
+  Transport.HostName := HostName;
+  Transport.Address  := Address;
+  Transport.Port     := Port;
+end;
+
 function TestTIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
@@ -919,6 +936,19 @@ begin
   raise Exception.Create('TestTIdSipTransport.TransportType: override for '
                        + Self.ClassName + '!');
   Result := nil;
+end;
+
+//* TestTIdSipTransport Private methods ****************************************
+
+procedure TestTIdSipTransport.OnSendRequest(Request: TIdSipRequest;
+                                            Sender: TIdSipTransport);
+begin
+end;
+
+procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
+                                             Sender: TIdSipTransport);
+begin
+  Self.LastSentResponse.Assign(Response);
 end;
 
 //* TestTIdSipTransport Published methods **************************************
@@ -1043,12 +1073,16 @@ begin
   Check(Self.RejectedMessage,
         Self.HighPortTransport.ClassName
       + ': Notification of message rejection not received');
+
+  // Check that the transport sends the 400 Bad Request.
+  CheckEquals(SIPBadRequest,
+              Self.LastSentResponse.StatusCode,
+              Self.HighPortTransport.ClassName
+            + ': "Bad Request" response');      
 end;
 
 procedure TestTIdSipTransport.TestDiscardUnknownSipVersion;
 begin
-  // Unknown SIP-Version.
-
   Self.ExceptionMessage := 'Waiting for request to arrive';
   Self.SendMessage(TortureTest41);
   Self.WaitForTimeout(Self.ClassName
@@ -1187,6 +1221,8 @@ end;
 procedure TestTIdSipTransport.TestTortureTest16;
 begin
   // Content-Length much larger than message body
+
+  Self.DefaultTimeout := Self.HighPortTransport.Timeout * 2;
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
   Self.SendFromLowTransport(TortureTest16);
