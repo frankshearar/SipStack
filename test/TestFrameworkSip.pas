@@ -53,29 +53,6 @@ type
 
   TIdSipTestActionListener = class(TIdSipMockListener,
                                    IIdSipActionListener)
-  private
-    fActionParam:             TIdSipAction;
-    fAuthenticationChallenge: Boolean;
-    fPassword:                String;
-    fRedirect:                Boolean;
-    fResponseParam:           TIdSipResponse;
-    fUsername:                String;
-  public
-    constructor Create; override;
-
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
-    procedure OnRedirect(Action: TIdSipAction;
-                         Redirect: TIdSipResponse);
-
-    property ActionParam:             TIdSipAction   read fActionParam;
-    property AuthenticationChallenge: Boolean        read fAuthenticationChallenge;
-    property Password:                String         read fPassword write fPassword;
-    property Redirect:                Boolean        read fRedirect;
-    property ResponseParam:           TIdSipResponse read fResponseParam;
-    property Username:                String         read fUsername write fUsername;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -601,48 +578,6 @@ end;
 constructor TIdSipMockListener.Create;
 begin
   Self.FailWith := nil;
-end;
-
-//******************************************************************************
-//* TIdSipTestActionListener                                                   *
-//******************************************************************************
-//* TIdSipTestActionListener Public methods ************************************
-
-constructor TIdSipTestActionListener.Create;
-begin
-  inherited Create;
-
-  Self.fAuthenticationChallenge := false;
-  Self.fRedirect                := false;
-  Self.Password                 := '';
-end;
-
-procedure TIdSipTestActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                             Response: TIdSipResponse;
-                                                             var Username: String;
-                                                             var Password: String);
-begin
-  Self.fActionParam             := Action;
-  Self.fAuthenticationChallenge := true;
-  Self.fResponseParam           := Response;
-
-  // We set the var parameter, not our instance variable!
-  Password := Self.Password;
-  Username := Self.Username;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
-end;
-
-procedure TIdSipTestActionListener.OnRedirect(Action: TIdSipAction;
-                                              Redirect: TIdSipResponse);
-begin
-  Self.fActionParam   := Action;
-  Self.fRedirect      := true;
-  Self.fResponseParam := Redirect;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
 end;
 
 //******************************************************************************
