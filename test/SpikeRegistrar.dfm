@@ -50,7 +50,7 @@ object rnidSpikeRegistrar: TrnidSpikeRegistrar
       Width = 37
       Height = 21
       TabOrder = 0
-      Text = '20560'
+      Text = '25060'
       OnChange = PortChange
     end
   end

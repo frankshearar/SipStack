@@ -4,7 +4,8 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipMessage,
-  IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs, SysUtils;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs,
+  SysUtils;
 
 type
   TrnidSpikeRegistrar = class(TForm,
@@ -18,6 +19,7 @@ type
     Label1: TLabel;
     procedure PortChange(Sender: TObject);
   private
+    DB:         TIdSipAbstractBindingDatabase;
     Dispatcher: TIdSipTransactionDispatcher;
     Lock:       TCriticalSection;
     Transport:  TIdSipTransport;
@@ -49,7 +51,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdStack, IdSipConsts, IdSocketHandle;
+  IdSipMockBindingDatabase, IdStack, IdSipConsts, IdSocketHandle;
 
 const
   LocalHostName = '127.0.0.1';
@@ -68,6 +70,8 @@ begin
   inherited Create(AOwner);
 
   Self.Lock := TCriticalSection.Create;
+
+  Self.DB := TIdSipMockBindingDatabase.Create;
 
   Self.Transport := TIdSipUDPTransport.Create(StrToInt(Self.Port.Text));
   if (GStack.LocalAddress <> LocalHostName) then begin
@@ -89,6 +93,8 @@ begin
   Self.Dispatcher.AddTransport(Self.Transport);
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
+  Self.UA.AddAllowedMethod(MethodRegister);
+  Self.UA.BindingDB := Self.DB;
   Self.UA.HostName := 'wsfrank';
   Self.UA.UserAgentName := 'Frank''s Registration Spike';
 
@@ -117,6 +123,7 @@ begin
   Self.Dispatcher.Free;
   Self.Transport.Free;
   Self.Lock.Free;
+  Self.DB.Free;
 
   inherited Destroy;
 end;
