@@ -309,6 +309,27 @@ type
     procedure TestValueMalformed;
   end;
 
+  TestTIdSipHeadersFilter = class(TTestCase)
+  private
+    Headers: TIdSipHeaders;
+    Filter:  TIdSipHeadersFilter;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAdd;
+    procedure TestCount;
+    procedure TestFirst;
+    procedure TestIsEmpty;
+    procedure TestIsEqualToFilter;
+    procedure TestIsEqualToHeaders;
+    procedure TestIsEqualToOrderIrrelevant;
+    procedure TestItems;
+    procedure TestIteratorVisitsAllHeaders;
+    procedure TestRemove;
+    procedure TestRemoveAll;
+  end;
+
   TestTIdSipHeaders = class(TTestCase)
   private
     H: TIdSipHeaders;
@@ -354,27 +375,6 @@ type
     procedure TestRemove;
     procedure TestRemoveAll;
     procedure TestSetMaxForwards;
-  end;
-
-  TestTIdSipHeadersFilter = class(TTestCase)
-  private
-    Headers: TIdSipHeaders;
-    Filter:  TIdSipHeadersFilter;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAdd;
-    procedure TestCount;
-    procedure TestFirst;
-    procedure TestIsEmpty;
-    procedure TestIsEqualToFilter;
-    procedure TestIsEqualToHeaders;
-    procedure TestIsEqualToOrderIrrelevant;
-    procedure TestItems;
-    procedure TestIteratorVisitsAllHeaders;
-    procedure TestRemove;
-    procedure TestRemoveAll;
   end;
 
   TestTIdSipExpiresHeaders = class(TTestCase)
@@ -441,8 +441,8 @@ begin
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
-  Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
+  Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipContacts.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
 end;
@@ -2992,6 +2992,234 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipHeadersFilter                                                    *
+//******************************************************************************
+//* TestTIdSipHeadersFilter Public methods *************************************
+
+procedure TestTIdSipHeadersFilter.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers := TIdSipHeaders.Create;
+
+  Self.Headers.Add(MaxForwardsHeader).Value       := '70';
+  Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
+  Self.Headers.Add(ContentLengthHeaderFull).Value := '29';
+  Self.Headers.Add(RouteHeader).Value             := 'localhost <sip:127.0.0.1>';
+
+  Self.Filter := TIdSipHeadersFilter.Create(Self.Headers, RouteHeader);
+end;
+
+procedure TestTIdSipHeadersFilter.TearDown;
+begin
+  Self.Filter.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipHeadersFilter Published methods **********************************
+
+procedure TestTIdSipHeadersFilter.TestAdd;
+var
+  Route: TIdSipRouteHeader;
+  OriginalCount: Cardinal;
+begin
+  OriginalCount := Self.Filter.Count;
+
+  Route := TIdSipRouteHeader.Create;
+  try
+    Route.Value := '<sip:127.0.0.1>';
+
+    Self.Filter.Add(Route);
+    CheckEquals(OriginalCount + 1, Self.Filter.Count, 'Count after Add');
+  finally
+    Route.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestCount;
+begin
+  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+  CheckEquals(4, Self.Filter.Count, 'Count with newly added headers');
+end;
+
+procedure TestTIdSipHeadersFilter.TestFirst;
+begin
+  Self.Headers.Clear;
+  Self.Headers.First;
+  CheckNull(Self.Filter.CurrentHeader,
+            'First element of an empty collection');
+
+  Self.Headers.Add(Self.Filter.HeaderName);
+  Self.Headers.First;
+  Self.Filter.First;
+  Check(Self.Headers.CurrentHeader = Self.Filter.CurrentHeader,
+  'First element of a non-empty collection');
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEmpty;
+begin
+  Check(not Self.Filter.IsEmpty, 'IsEmpty with 2 Route headers');
+  Self.Headers.Remove(Self.Headers[RouteHeader]);
+  Self.Headers.Remove(Self.Headers[RouteHeader]);
+  Check(Self.Filter.IsEmpty, 'IsEmpty with no Route headers');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Check(not Self.Filter.IsEmpty, 'IsEmpty after Headers.Add(RouteHeader)');
+
+  Self.Headers.Clear;
+  Check(Self.Filter.IsEmpty, 'IsEmpty after Headers.Clear');
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEqualToFilter;
+var
+  H: TIdSipHeaders;
+  F: TIdSipHeadersFilter;
+begin
+  Self.Filter.RemoveAll;
+
+  H := TIdSipHeaders.Create;
+  try
+    F := TIdSipHeadersFilter.Create(H, RouteHeader);
+    try
+      Check(Self.Filter.IsEqualTo(F), 'Empty path = Empty path');
+
+      H.Add(F.HeaderName).Value := '<127.0.0.1:1>';
+
+      Check(not Self.Filter.IsEqualTo(F), 'Empty path <> non-empty path');
+
+      H.Add(RouteHeader).Value := '<127.0.0.1:2>';
+
+      Self.Filter.Add(F);
+      Check(Self.Filter.IsEqualTo(F), 'Identical paths');
+
+      Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
+      Check(not Self.Filter.IsEqualTo(F), 'Last header differs');
+    finally
+      F.Free;
+    end;
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEqualToHeaders;
+var
+  H: TIdSipHeaders;
+begin
+  Self.Filter.RemoveAll;
+
+  H := TIdSipHeaders.Create;
+  try
+    Check(Self.Filter.IsEqualTo(H), 'Empty set = Empty set');
+
+    H.Add(RouteHeader).Value := '<127.0.0.1:1>';
+
+    Check(not Self.Filter.IsEqualTo(H), 'Empty set <> non-empty set');
+
+    H.Add(RouteHeader).Value := '<127.0.0.1:2>';
+
+    Self.Filter.Add(H);
+    Check(Self.Filter.IsEqualTo(H), 'Identical sets');
+
+    Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
+    Check(not Self.Filter.IsEqualTo(H), 'Last header differs');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEqualToOrderIrrelevant;
+var
+  H: TIdSipHeaders;
+begin
+  Self.Filter.RemoveAll;
+
+  H := TIdSipHeaders.Create;
+  try
+    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:1>';
+    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:2>';
+
+    H.AddInReverseOrder(Self.Filter);
+
+    Check(Self.Filter.IsEqualTo(H),
+          'Identical sets but in reverse order');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestItems;
+begin
+  CheckEquals('wsfrank <sip:192.168.1.43>', Self.Filter.Items[0].Value, '1st Route');
+  CheckEquals('localhost <sip:127.0.0.1>',  Self.Filter.Items[1].Value, '2nd Route');
+
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+  CheckEquals('<sip:127.0.0.2>',  Self.Filter.Items[2].Value, '3rd Route');
+  CheckEquals('<sip:127.0.0.3>',  Self.Filter.Items[3].Value, '4h Route');
+end;
+
+procedure TestTIdSipHeadersFilter.TestIteratorVisitsAllHeaders;
+var
+  Expected: TIdSipHeaders;
+begin
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+
+  Self.Filter.First;
+  while Self.Filter.HasNext do begin
+    Self.Filter.CurrentHeader.Params['foo'] := 'bar';
+    Self.Filter.Next;
+  end;
+
+  Expected := TIdSipHeaders.Create;
+  try
+    Expected.Add(MaxForwardsHeader).Value := '70';
+    Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>;foo=bar';
+    Expected.Add(ContentLengthHeaderFull).Value := '29';
+    Expected.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>;foo=bar';
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.2>;foo=bar';
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.3>;foo=bar';
+    Check(Expected.IsEqualTo(Self.Headers), 'Not all (Route) headers visited');
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestRemove;
+var
+  Route: TIdSipRouteHeader;
+begin
+  Route := TIdSipRouteHeader.Create;
+  try
+    Route.Value := '<sip:127.0.0.1>';
+    CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+
+    Self.Filter.Add(Route);
+    CheckEquals(3, Self.Filter.Count, 'Count after Add');
+
+    Self.Filter.Remove(Self.Headers[Self.Filter.HeaderName]);
+    CheckEquals(2, Self.Filter.Count, 'Count after Remove');
+
+    Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
+    CheckEquals(2, Self.Filter.Count, 'Count after Remove''ing a non-Route header');
+  finally
+    Route.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestRemoveAll;
+begin
+  Self.Filter.RemoveAll;
+  CheckEquals(0, Self.Filter.Count, 'Route headers not removed');
+end;
+
+//******************************************************************************
 //* TestTIdSipHeaders                                                          *
 //******************************************************************************
 //* TestTIdSipHeaders Public methods *******************************************
@@ -3804,234 +4032,6 @@ begin
   except
     on EBadHeader do;
   end;
-end;
-
-//******************************************************************************
-//* TestTIdSipHeadersFilter                                                    *
-//******************************************************************************
-//* TestTIdSipHeadersFilter Public methods *************************************
-
-procedure TestTIdSipHeadersFilter.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Headers := TIdSipHeaders.Create;
-
-  Self.Headers.Add(MaxForwardsHeader).Value       := '70';
-  Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
-  Self.Headers.Add(ContentLengthHeaderFull).Value := '29';
-  Self.Headers.Add(RouteHeader).Value             := 'localhost <sip:127.0.0.1>';
-
-  Self.Filter := TIdSipHeadersFilter.Create(Self.Headers, RouteHeader);
-end;
-
-procedure TestTIdSipHeadersFilter.TearDown;
-begin
-  Self.Filter.Free;
-  Self.Headers.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipHeadersFilter Published methods **********************************
-
-procedure TestTIdSipHeadersFilter.TestAdd;
-var
-  Route: TIdSipRouteHeader;
-  OriginalCount: Cardinal;
-begin
-  OriginalCount := Self.Filter.Count;
-
-  Route := TIdSipRouteHeader.Create;
-  try
-    Route.Value := '<sip:127.0.0.1>';
-
-    Self.Filter.Add(Route);
-    CheckEquals(OriginalCount + 1, Self.Filter.Count, 'Count after Add');
-  finally
-    Route.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestCount;
-begin
-  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
-
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
-  CheckEquals(4, Self.Filter.Count, 'Count with newly added headers');
-end;
-
-procedure TestTIdSipHeadersFilter.TestFirst;
-begin
-  Self.Headers.Clear;
-  Self.Headers.First;
-  CheckNull(Self.Filter.CurrentHeader,
-            'First element of an empty collection');
-
-  Self.Headers.Add(Self.Filter.HeaderName);
-  Self.Headers.First;
-  Self.Filter.First;
-  Check(Self.Headers.CurrentHeader = Self.Filter.CurrentHeader,
-  'First element of a non-empty collection');
-end;
-
-procedure TestTIdSipHeadersFilter.TestIsEmpty;
-begin
-  Check(not Self.Filter.IsEmpty, 'IsEmpty with 2 Route headers');
-  Self.Headers.Remove(Self.Headers[RouteHeader]);
-  Self.Headers.Remove(Self.Headers[RouteHeader]);
-  Check(Self.Filter.IsEmpty, 'IsEmpty with no Route headers');
-
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
-  Check(not Self.Filter.IsEmpty, 'IsEmpty after Headers.Add(RouteHeader)');
-
-  Self.Headers.Clear;
-  Check(Self.Filter.IsEmpty, 'IsEmpty after Headers.Clear');
-end;
-
-procedure TestTIdSipHeadersFilter.TestIsEqualToFilter;
-var
-  H: TIdSipHeaders;
-  F: TIdSipHeadersFilter;
-begin
-  Self.Filter.RemoveAll;
-
-  H := TIdSipHeaders.Create;
-  try
-    F := TIdSipHeadersFilter.Create(H, RouteHeader);
-    try
-      Check(Self.Filter.IsEqualTo(F), 'Empty path = Empty path');
-
-      H.Add(F.HeaderName).Value := '<127.0.0.1:1>';
-
-      Check(not Self.Filter.IsEqualTo(F), 'Empty path <> non-empty path');
-
-      H.Add(RouteHeader).Value := '<127.0.0.1:2>';
-
-      Self.Filter.Add(F);
-      Check(Self.Filter.IsEqualTo(F), 'Identical paths');
-
-      Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
-      Check(not Self.Filter.IsEqualTo(F), 'Last header differs');
-    finally
-      F.Free;
-    end;
-  finally
-    H.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestIsEqualToHeaders;
-var
-  H: TIdSipHeaders;
-begin
-  Self.Filter.RemoveAll;
-
-  H := TIdSipHeaders.Create;
-  try
-    Check(Self.Filter.IsEqualTo(H), 'Empty set = Empty set');
-
-    H.Add(RouteHeader).Value := '<127.0.0.1:1>';
-
-    Check(not Self.Filter.IsEqualTo(H), 'Empty set <> non-empty set');
-
-    H.Add(RouteHeader).Value := '<127.0.0.1:2>';
-
-    Self.Filter.Add(H);
-    Check(Self.Filter.IsEqualTo(H), 'Identical sets');
-
-    Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
-    Check(not Self.Filter.IsEqualTo(H), 'Last header differs');
-  finally
-    H.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestIsEqualToOrderIrrelevant;
-var
-  H: TIdSipHeaders;
-begin
-  Self.Filter.RemoveAll;
-
-  H := TIdSipHeaders.Create;
-  try
-    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:1>';
-    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:2>';
-
-    H.AddInReverseOrder(Self.Filter);
-
-    Check(Self.Filter.IsEqualTo(H),
-          'Identical sets but in reverse order');
-  finally
-    H.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestItems;
-begin
-  CheckEquals('wsfrank <sip:192.168.1.43>', Self.Filter.Items[0].Value, '1st Route');
-  CheckEquals('localhost <sip:127.0.0.1>',  Self.Filter.Items[1].Value, '2nd Route');
-
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
-  CheckEquals('<sip:127.0.0.2>',  Self.Filter.Items[2].Value, '3rd Route');
-  CheckEquals('<sip:127.0.0.3>',  Self.Filter.Items[3].Value, '4h Route');
-end;
-
-procedure TestTIdSipHeadersFilter.TestIteratorVisitsAllHeaders;
-var
-  Expected: TIdSipHeaders;
-begin
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
-  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
-
-  Self.Filter.First;
-  while Self.Filter.HasNext do begin
-    Self.Filter.CurrentHeader.Params['foo'] := 'bar';
-    Self.Filter.Next;
-  end;
-
-  Expected := TIdSipHeaders.Create;
-  try
-    Expected.Add(MaxForwardsHeader).Value := '70';
-    Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>;foo=bar';
-    Expected.Add(ContentLengthHeaderFull).Value := '29';
-    Expected.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>;foo=bar';
-    Expected.Add(RouteHeader).Value := '<sip:127.0.0.2>;foo=bar';
-    Expected.Add(RouteHeader).Value := '<sip:127.0.0.3>;foo=bar';
-    Check(Expected.IsEqualTo(Self.Headers), 'Not all (Route) headers visited');
-  finally
-    Expected.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestRemove;
-var
-  Route: TIdSipRouteHeader;
-begin
-  Route := TIdSipRouteHeader.Create;
-  try
-    Route.Value := '<sip:127.0.0.1>';
-    CheckEquals(2, Self.Filter.Count, 'Count with two headers');
-
-    Self.Filter.Add(Route);
-    CheckEquals(3, Self.Filter.Count, 'Count after Add');
-
-    Self.Filter.Remove(Self.Headers[Self.Filter.HeaderName]);
-    CheckEquals(2, Self.Filter.Count, 'Count after Remove');
-
-    Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
-    CheckEquals(2, Self.Filter.Count, 'Count after Remove''ing a non-Route header');
-  finally
-    Route.Free;
-  end;
-end;
-
-procedure TestTIdSipHeadersFilter.TestRemoveAll;
-begin
-  Self.Filter.RemoveAll;
-  CheckEquals(0, Self.Filter.Count, 'Route headers not removed');
 end;
 
 //******************************************************************************
