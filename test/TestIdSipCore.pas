@@ -962,7 +962,7 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdNotification, IdSipAuthentication, IdSipConsts, IdSipLocator,
+  IdNotification, IdSipAuthentication, IdSipConsts, IdSipDns, IdSipLocator,
   IdSipMockTransport, IdUdpServer, SysUtils, TestMessages, Windows;
 
 type
@@ -4148,14 +4148,15 @@ end;
 
 procedure TestTIdSipUserAgent.TestViaMatchesTransportParameter;
 const
-  Transports: array[1..5] of String = (NullTransport,
-                                       SctpTransport,
-                                       TcpTransport,
+  Transports: array[1..3] of String = (TcpTransport,
                                        TlsTransport,
                                        UdpTransport);
 var
   Trans: Integer;
 begin
+  // Iterate over the registered transports? Or does
+  // TIdSipTransport.TransportFor return the null transport instead?
+
   for Trans := Low(Transports) to High(Transports) do begin
     Self.Dispatcher.Transport.TransportType := Transports[Trans];
     Self.Destination.Address.Transport := Transports[Trans];

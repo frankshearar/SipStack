@@ -3,8 +3,8 @@ unit TestIdSipIndyLocator;
 interface
 
 uses
-  Classes, IdSipIndyLocator, IdSipLocator, IdSocketHandle, IdUdpServer,
-  TestFramework;
+  Classes, IdSipDns, IdSipIndyLocator, IdSipLocator, IdSocketHandle,
+  IdUdpServer, TestFramework;
 
 type
   // The NameServer provides hard-coded answers to the questions. The important

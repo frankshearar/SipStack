@@ -3,7 +3,7 @@ unit IdSipMockLocator;
 interface
 
 uses
-  Classes, Contnrs, IdSipLocator, IdSipMessage;
+  Classes, Contnrs, IdSipDns, IdSipLocator, IdSipMessage;
 
 type
   TIdSipMockLocator = class(TIdSipAbstractLocator)

@@ -323,7 +323,7 @@ const
 implementation
 
 uses
-  IdSipConsts, IdSipLocator, IdTCPServer;
+  IdSipConsts, IdSipDns, IdTCPServer;
 
 var
   GTransportTypes: TStrings;

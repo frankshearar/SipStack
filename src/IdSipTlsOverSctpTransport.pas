@@ -20,7 +20,7 @@ type
 implementation
 
 uses
-  IdSipLocator;
+  IdSipDns;
 
 class function TIdSipTlsOverSctpTransport.IsSecure: Boolean;
 begin

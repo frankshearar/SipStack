@@ -3,7 +3,7 @@ unit IdSipIndyLocator;
 interface
 
 uses
-  IdDNSResolver, IdSipLocator, IdSipMessage;
+  IdDNSResolver, IdSipDns, IdSipLocator, IdSipMessage;
 
 type
   // I try resolve names using the Indy stack. I try resolve names and regard

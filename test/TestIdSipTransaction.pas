@@ -12,8 +12,8 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipLocator, IdSipMessage,
-  IdSipMockCore, IdSipMockLocator, IdSipMockTransactionDispatcher,
+  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipDns, IdSipLocator,
+  IdSipMessage, IdSipMockCore, IdSipMockLocator, IdSipMockTransactionDispatcher,
   IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue,
   TestFramework, TestFrameworkSip;
 
