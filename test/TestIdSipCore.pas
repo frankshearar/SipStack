@@ -81,6 +81,9 @@ type
                                          const Msg: String);
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
@@ -186,6 +189,9 @@ type
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
@@ -234,6 +240,9 @@ type
     OnModifiedSessionFired: Boolean;
     Session:                TIdSipOutboundSession;
 
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
@@ -324,8 +333,9 @@ type
     Request:     TIdSipRequest;
     Succeeded:   Boolean;
 
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -943,6 +953,12 @@ begin
         'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
   Check(sttTCP = Request.LastHop.Transport,
         'TCP should be the default transport');
+end;
+
+procedure TestTIdSipUserAgentCore.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                            Challenge: TIdSipResponse;
+                                                            var Password: String);
+begin
 end;
 
 procedure TestTIdSipUserAgentCore.OnChanged(Observed: TObject);
@@ -2339,6 +2355,12 @@ begin
   Connection.Address     := '127.0.0.1';
 end;
 
+procedure TestTIdSipInboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                             Challenge: TIdSipResponse;
+                                                             var Password: String);
+begin
+end;
+
 procedure TestTIdSipInboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                        Receiver: TIdSipTransport);
 begin
@@ -2800,6 +2822,12 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
+
+procedure TestTIdSipOutboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                              Challenge: TIdSipResponse;
+                                                              var Password: String);
+begin
+end;
 
 procedure TestTIdSipOutboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                                Receiver: TIdSipTransport);
@@ -3558,8 +3586,9 @@ end;
 
 //*  TestTIdSipRegistration Private methods ************************************
 
-procedure TestTIdSipRegistration.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                                           Response: TIdSipResponse);
+procedure TestTIdSipRegistration.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                           Challenge: TIdSipResponse;
+                                                           var Password: String);
 begin
   Self.Challenged := true;
 end;

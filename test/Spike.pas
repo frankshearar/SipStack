@@ -72,8 +72,9 @@ type
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse;
+                                        var Password: String);
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
@@ -282,8 +283,9 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                               Response: TIdSipResponse);
+procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
+                                               Response: TIdSipResponse;
+                                               var Password: String);
 begin
 end;
 

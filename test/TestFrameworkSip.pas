@@ -83,8 +83,9 @@ type
   public
     constructor Create;
 
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse;
+                                        var Password: String);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -99,13 +100,17 @@ type
   TIdSipTestSessionListener = class(TIdInterfacedObject,
                                     IIdSipSessionListener)
   private
-    fEndedSession:       Boolean;
-    fEstablishedSession: Boolean;
-    fModifiedSession:    Boolean;
-    fNewSession:         Boolean;
+    fAuthenticationChallenge: Boolean;
+    fEndedSession:            Boolean;
+    fEstablishedSession:      Boolean;
+    fModifiedSession:         Boolean;
+    fNewSession:              Boolean;
   public
     constructor Create;
 
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse;
+                                        var Password: String);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -113,10 +118,11 @@ type
                                 Invite: TIdSipRequest);
     procedure OnNewSession(Session: TIdSipSession);
 
-    property EndedSession:       Boolean read fEndedSession;
-    property EstablishedSession: Boolean read fEstablishedSession;
-    property ModifiedSession:    Boolean read fModifiedSession;
-    property NewSession:         Boolean read fNewSession;
+    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
+    property EndedSession:            Boolean read fEndedSession;
+    property EstablishedSession:      Boolean read fEstablishedSession;
+    property ModifiedSession:         Boolean read fModifiedSession;
+    property NewSession:              Boolean read fNewSession;
   end;
 
   TIdSipTestTransactionListener = class(TIdInterfacedObject,
@@ -413,8 +419,9 @@ begin
   Self.fSuccess                 := false;
 end;
 
-procedure TIdSipTestRegistrationListener.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                                                   Response: TIdSipResponse);
+procedure TIdSipTestRegistrationListener.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                                   Response: TIdSipResponse;
+                                                                   var Password: String);
 begin
   Self.fAuthenticationChallenge := true;
 end;
@@ -442,10 +449,18 @@ constructor TIdSipTestSessionListener.Create;
 begin
   inherited Create;
 
-  Self.fEndedSession       := false;
-  Self.fEstablishedSession := false;
-  Self.fModifiedSession    := false;
-  Self.fNewSession         := false;
+  Self.fAuthenticationChallenge := true;
+  Self.fEndedSession            := false;
+  Self.fEstablishedSession      := false;
+  Self.fModifiedSession         := false;
+  Self.fNewSession              := false;
+end;
+
+procedure TIdSipTestSessionListener.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                              Response: TIdSipResponse;
+                                                              var Password: String);
+begin
+  Self.fAuthenticationChallenge := true;
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;

@@ -26,6 +26,9 @@ type
 
     function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -478,6 +481,12 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                                    Challenge: TIdSipResponse;
+                                                                    var Password: String);
+begin
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession;

@@ -63,10 +63,8 @@ type
   // OnFailure and OnSuccess, apart from the obvious, tell you that the
   // registration agent has terminated, and that you should remove all
   // of your references to it.
-  IIdSipRegistrationListener = interface
+  IIdSipRegistrationListener = interface(IIdSipActionListener)
     ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -85,7 +83,7 @@ type
   //   words, you'd better say goodbye to the Session in your implementation of
   //   this method. Accessing your reference to the Session will probably fail
   //   with an access violation.
-  IIdSipSessionListener = interface
+  IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
@@ -386,6 +384,9 @@ type
     UA:              TIdSipUserAgentCore;
 
   protected
+    ListenerLock: TCriticalSection;
+    Listeners:    TList;
+
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     procedure ApplyTo(List: TList;
                       Lock: TCriticalSection;
@@ -394,6 +395,7 @@ type
                        Lock: TCriticalSection;
                        Copy: TList);
     procedure MarkAsTerminated; virtual;
+    function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; virtual;
     function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean; virtual;
@@ -464,8 +466,6 @@ type
     fReceivedAck:         Boolean;
     OpenTransactionLock:  TCriticalSection;
     OpenTransactions:     TObjectList;
-    SessionListenerLock:  TCriticalSection;
-    SessionListeners:     TList;
     UsingSecureTransport: Boolean;
 
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
@@ -575,13 +575,10 @@ type
   // erase your references to me.
   TIdSipRegistration = class(TIdSipAction)
   private
-    Bindings:     TIdSipContacts;
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    Bindings: TIdSipContacts;
 
     function  CreateRegister(Registrar: TIdSipUri;
                              Bindings: TIdSipContacts): TIdSipRequest;
-    procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Response: TIdSipResponse);
     procedure ReissueRequest(Registrar: TIdSipUri;
                              MinimumExpiry: Cardinal);
@@ -1984,10 +1981,14 @@ begin
   Self.UA := UA;
 
   Self.fCurrentRequest := TIdSipRequest.Create;
+  Self.ListenerLock    := TCriticalSection.Create;
+  Self.Listeners       := TList.Create;
 end;
 
 destructor TIdSipAction.Destroy;
 begin
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
   Self.CurrentRequest.Free;
 
   inherited Destroy;
@@ -2098,6 +2099,34 @@ end;
 procedure TIdSipAction.MarkAsTerminated;
 begin
   Self.fIsTerminated := true;
+end;
+
+function TIdSipAction.NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
+var
+  Copy:              TList;
+  DiscardedPassword: String;
+  I:                 Integer;
+begin
+  // We present the authentication challenge to all listeners but only accept
+  // the first listener. The responsibility of listener order rests firmly on
+  // your own shoulders.
+
+  Copy := TList.Create;
+  try
+    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
+
+    DiscardedPassword := '';
+    Result            := '';
+
+    for I := 0 to Copy.Count - 1 do begin
+      if (Result = '') then
+        IIdSipActionListener(Copy[I]).OnAuthenticationChallenge(Self, Response, Result)
+      else
+        IIdSipActionListener(Copy[I]).OnAuthenticationChallenge(Self, Response, DiscardedPassword);
+    end;
+  finally
+    Copy.Free;
+  end;
 end;
 
 procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
@@ -2244,17 +2273,11 @@ begin
   Self.OpenTransactionLock := TCriticalSection.Create;
   Self.OpenTransactions    := TObjectList.Create(true);
 
-  Self.SessionListenerLock := TCriticalSection.Create;
-  Self.SessionListeners    := TList.Create;
-
   Self.FullyEstablished := false;
 end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.SessionListeners.Free;
-  Self.SessionListenerLock.Free;
-
   Self.OpenTransactions.Free;
   Self.OpenTransactionLock.Free;
 
@@ -2267,11 +2290,11 @@ end;
 
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.ListenerLock.Acquire;
   try
-    Self.SessionListeners.Add(Pointer(Listener));
+    Self.Listeners.Add(Pointer(Listener));
   finally
-    Self.SessionListenerLock.Release;
+    Self.ListenerLock.Release;
   end;
 end;
 
@@ -2356,11 +2379,11 @@ end;
 
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.ListenerLock.Acquire;
   try
-    Self.SessionListeners.Remove(Pointer(Listener));
+    Self.Listeners.Remove(Pointer(Listener));
   finally
-    Self.SessionListenerLock.Release;
+    Self.ListenerLock.Release;
   end;
 end;
 
@@ -2407,7 +2430,7 @@ var
 begin
   Copy := TList.Create;
   try
-    Self.CopyList(Self.SessionListeners, Self.SessionListenerLock, Copy);
+    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
 
     for I := 0 to Copy.Count - 1 do
         IIdSipSessionListener(Copy[I]).OnEndedSession(Self, Reason);
@@ -2425,7 +2448,7 @@ var
 begin
   Copy := TList.Create;
   try
-    Self.CopyList(Self.SessionListeners, Self.SessionListenerLock, Copy);
+    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
 
     for I := 0 to Copy.Count - 1 do
       IIdSipSessionListener(Copy[I]).OnEstablishedSession(Self);
@@ -2468,7 +2491,7 @@ var
 begin
   Copy := TList.Create;
   try
-    Self.CopyList(Self.SessionListeners, Self.SessionListenerLock, Copy);
+    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
 
     for I := 0 to Copy.Count - 1 do
         IIdSipSessionListener(Copy[I]).OnModifiedSession(Self, Invite);
@@ -2958,15 +2981,11 @@ constructor TIdSipRegistration.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create(UA);
 
-  Self.Bindings     := TIdSipContacts.Create;
-  Self.ListenerLock := TCriticalSection.Create;
-  Self.Listeners    := TList.Create;
+  Self.Bindings := TIdSipContacts.Create;
 end;
 
 destructor TIdSipRegistration.Destroy;
 begin
-  Self.Listeners.Free;
-  Self.ListenerLock.Free;
   Self.Bindings.Free;
 
   inherited Destroy;
@@ -3165,22 +3184,6 @@ begin
     Result.AddHeaders(Bindings);
   finally
     ToHeader.Free;
-  end;
-end;
-
-procedure TIdSipRegistration.NotifyOfAuthenticationChallenge(Response: TIdSipResponse);
-var
-  Copy: TList;
-  I:    Integer;
-begin
-  Copy := TList.Create;
-  try
-    Self.CopyList(Self.Listeners, Self.ListenerLock, Copy);
-
-    for I := 0 to Copy.Count - 1 do
-      IIdSipRegistrationListener(Copy[I]).OnAuthenticationChallenge(Self, Response);
-  finally
-    Copy.Free;
   end;
 end;
 

@@ -29,8 +29,9 @@ type
     UA:         TIdSipUserAgentCore;
 
     procedure LogMessage(Msg: TIdSipMessage);
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse;
+                                        var Password: String);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
@@ -143,8 +144,9 @@ begin
   Self.Log.Lines.Add('----');
 end;
 
-procedure TrnidSpikeRegister.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                               Response: TIdSipResponse);
+procedure TrnidSpikeRegister.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                       Response: TIdSipResponse;
+                                                       var Password: String);
 begin
   Self.Log.Lines.Add('---- Authentication challenge for registration ----');
 end;
