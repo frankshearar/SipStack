@@ -432,11 +432,24 @@ begin
 end;
 
 procedure TIdSipMessage.ReadBody(const S: TStream);
+const
+  BufLen = 100;
+var
+  Buf:  PChar;
+  Read: Integer;
 begin
   // It is the responsibility of the transport to ensure that
   // Content-Length is set before this method is called.
-  SetLength(fBody, Self.ContentLength);
-  S.Read(PChar(fBody)^, Self.ContentLength);
+
+  Buf := AllocMem(BufLen);
+  try
+    repeat
+      Read := S.Read(Buf, BufLen);
+      Self.Body := Self.Body + Buf;
+    until (Read < BufLen);
+  finally
+    FreeMem(Buf);
+  end;
 end;
 
 procedure TIdSipMessage.RemoveHeader(const Header: TIdSipHeader);
