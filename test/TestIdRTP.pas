@@ -7047,6 +7047,12 @@ begin
   Data := Self.Profile.EncodingFor(Self.T140PT).Clone;
   try
     Check(not Self.Session.IsSender, 'New session');
+
+    // This seems silly, but remember that the session expects you to set the
+    // start time of the payload - it comes from the time the data was
+    // generated/stored, not the time the session sends the packet.
+    Data.StartTime := Now;
+
     Self.Session.SendData(Data);
     Check(Self.Session.IsSender, 'Sent data');
   finally
