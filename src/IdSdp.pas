@@ -180,6 +180,7 @@ type
     fSessionVersion: String;
     fUsername:       String;
   public
+    procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
     property Address:        String       read fAddress write fAddress;
@@ -194,6 +195,7 @@ type
   private
     fValue: String;
   public
+    procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
     property Value: String read fValue write fValue;
@@ -203,6 +205,7 @@ type
   private
     fValue: String;
   public
+    procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
     property Value: String read fValue write fValue;
@@ -223,6 +226,7 @@ type
   public
     destructor Destroy; override;
 
+    procedure Assign(Src: TPersistent); override;
     procedure PrintOn(Dest: TStream); override;
 
     property EndTime:         TIdNtpTimestamp       read fEndTime write fEndTime;
@@ -241,6 +245,8 @@ type
     procedure Clear;
     function  Count: Integer;
     function  Contains(O: TObject): Boolean;
+    function  Equals(Other: TIdSdpList): Boolean;
+    function  ItemAt(Index: Integer): TIdPrintable;
     procedure PrintOn(Dest: TStream); override;
     procedure Remove(O: TObject);
   end;
@@ -268,7 +274,6 @@ type
     procedure Add(A: TIdSdpRTPMapAttributes); overload;
     function  Add(const Value: String): TIdSdpRTPMapAttribute; overload;
     procedure Assign(Src: TPersistent); override;
-    function  Equals(Other: TIdSdpRTPMapAttributes): Boolean;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
     property Items[Index: Integer]: TIdSdpRTPMapAttribute read GetItems; default;
@@ -306,8 +311,10 @@ type
   private
     function GetItems(Index: Integer): TIdSdpMediaDescription;
   public
-    procedure Add(Desc: TIdSdpMediaDescription);
+    function  Add: TIdSdpMediaDescription; overload;
+    function  Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
     function  AllDescriptionsHaveConnections: Boolean;
+    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpMediaDescription read GetItems; default;
   end;
@@ -316,7 +323,9 @@ type
   private
     function GetItems(Index: Integer): TIdSdpRepeat;
   public
-    procedure Add(R: TIdSdpRepeat);
+    function  Add: TIdSdpRepeat; overload;
+    function  Add(R: TIdSdpRepeat): TIdSdpRepeat; overload;
+    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpRepeat read GetItems; default;
   end;
@@ -325,7 +334,9 @@ type
   private
     function GetItems(Index: Integer): TIdSdpTime;
   public
-    procedure Add(T: TIdSdpTime);
+    function  Add: TIdSdpTime; overload;
+    function  Add(T: TIdSdpTime): TIdSdpTime; overload;
+    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpTime read GetItems; default;
   end;
@@ -334,7 +345,9 @@ type
   private
     function GetItems(Index: Integer): TIdSdpZoneAdjustment;
   public
-    procedure Add(Adj: TIdSdpZoneAdjustment);
+    function  Add: TIdSdpZoneAdjustment; overload;
+    function  Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment; overload;
+    procedure Assign(Src: TPersistent); override;
 
     property Items[Index: Integer]: TIdSdpZoneAdjustment read GetItems; default;
   end;
@@ -382,12 +395,14 @@ type
 
     procedure AddConnection(NewConnection: TIdSdpConnection); overload;
     function  AddConnection: TIdSdpConnection; overload;
-    procedure AddMediaDescription(NewDesc: TIdSdpMediaDescription); overload;
+    function  AddMediaDescription(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
     function  AddMediaDescription: TIdSdpMediaDescription; overload;
     function  AllDescriptionsHaveConnections: Boolean;
     function  AsString: String;
     function  ConnectionAt(Index: Integer): TIdSdpConnection;
     function  ConnectionCount: Integer;
+    function  Equals(Other: TIdSdpPayload; IgnoreTimestamps: Boolean = false): Boolean; overload;
+    function  Equals(Other: String; IgnoreTimestamps: Boolean = false): Boolean; overload;
     procedure GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
     function  HasKey: Boolean;
@@ -955,7 +970,7 @@ begin
   if (Src is TIdSdpBandwidth) then begin
     Other := Src as TIdSdpBandwidth;
 
-    Self.Bandwidth := Other.Bandwidth;
+    Self.Bandwidth     := Other.Bandwidth;
     Self.BandwidthType := Other.BandwidthType;
   end
   else inherited Assign(Src);
@@ -1279,6 +1294,23 @@ end;
 //******************************************************************************
 //* TIdSdpOrigin Public methods ************************************************
 
+procedure TIdSdpOrigin.Assign(Src: TPersistent);
+var
+  Other: TIdSdpOrigin;
+begin
+  if (Src is TIdSdpOrigin) then begin
+    Other := Src as TIdSdpOrigin;
+
+    Self.Address        := Other.Address;
+    Self.AddressType    := Other.AddressType;
+    Self.NetType        := Other.NetType;
+    Self.SessionID      := Other.SessionID;
+    Self.SessionVersion := Other.SessionVersion;
+    Self.Username       := Other.Username;
+  end
+  else inherited Assign(Src);
+end;
+
 procedure TIdSdpOrigin.PrintOn(Dest: TStream);
 var
   S: String;
@@ -1299,6 +1331,18 @@ end;
 //******************************************************************************
 //* TIdSdpRepeat Public methods ************************************************
 
+procedure TIdSdpRepeat.Assign(Src: TPersistent);
+var
+  Other: TIdSdpRepeat;
+begin
+  if (Src is TIdSdpRepeat) then begin
+    Other := Src as TIdSdpRepeat;
+    Self.Value := Other.Value;
+  end
+  else
+    inherited Assign(Src);
+end;
+
 procedure TIdSdpRepeat.PrintOn(Dest: TStream);
 var
   S: String;
@@ -1313,6 +1357,18 @@ end;
 //* TIdSdpZoneAdjustment                                                       *
 //******************************************************************************
 //* TIdSdpZoneAdjustment Public methods ****************************************
+
+procedure TIdSdpZoneAdjustment.Assign(Src: TPersistent);
+var
+  Other: TIdSdpZoneAdjustment;
+begin
+  if (Src is TIdSdpZoneAdjustment) then begin
+    Other := Src as TIdSdpZoneAdjustment;
+    Self.Value := Other.Value;
+  end
+  else
+    inherited Assign(Src);
+end;
 
 procedure TIdSdpZoneAdjustment.PrintOn(Dest: TStream);
 var
@@ -1335,6 +1391,21 @@ begin
   fZoneAdjustments.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSdpTime.Assign(Src: TPersistent);
+var
+  Other: TIdSdpTime;
+begin
+  if (Src is TIdSdpTime) then begin
+    Other := Src as TIdSdpTime;
+
+    Self.EndTime := Other.EndTime;
+    Self.Repeats.Assign(Other.Repeats);
+    Self.StartTime := Other.StartTime;
+    Self.ZoneAdjustments.Assign(Other.ZoneAdjustments);
+  end
+  else inherited Assign(Src);
 end;
 
 procedure TIdSdpTime.PrintOn(Dest: TStream);
@@ -1398,6 +1469,38 @@ end;
 function TIdSdpList.Contains(O: TObject): Boolean;
 begin
   Result := Self.List.IndexOf(O) <> -1;
+end;
+
+function TIdSdpList.Equals(Other: TIdSdpList): Boolean;
+var
+  I:            Integer;
+  Ours, Theirs: TStringList;
+begin
+  Ours := TStringList.Create;
+  try
+    Theirs := TStringList.Create;
+    try
+      for I := 0 to Self.Count - 1 do
+        Ours.Add(Self.ItemAt(I).AsString);
+
+      for I := 0 to Other.Count - 1 do
+        Theirs.Add(Other.ItemAt(I).AsString);
+
+      Ours.Sort;
+      Theirs.Sort;
+
+      Result := Ours.Text = Theirs.Text;
+    finally
+      Theirs.Free;
+    end;
+  finally
+    Ours.Free;
+  end;
+end;
+
+function TIdSdpList.ItemAt(Index: Integer): TIdPrintable;
+begin
+  Result := Self.List[Index] as TIdPrintable;
 end;
 
 procedure TIdSdpList.PrintOn(Dest: TStream);
@@ -1525,33 +1628,6 @@ begin
     Self.Add(Other);
   end
   else inherited Assign(Src);
-end;
-
-function TIdSdpRTPMapAttributes.Equals(Other: TIdSdpRTPMapAttributes): Boolean;
-var
-  I:            Integer;
-  Ours, Theirs: TStringList;
-begin
-  Ours := TStringList.Create;
-  try
-    Theirs := TStringList.Create;
-    try
-      for I := 0 to Self.Count - 1 do
-        Ours.Add(Self[I].AsString);
-
-      for I := 0 to Other.Count - 1 do
-        Theirs.Add(Other[I].AsString);
-
-      Ours.Sort;
-      Theirs.Sort;
-
-      Result := Ours.Text = Theirs.Text;
-    finally
-      Theirs.Free;
-    end;
-  finally
-    Ours.Free;
-  end;
 end;
 
 function TIdSdpRTPMapAttributes.HasAttribute(Att: TIdSdpAttribute): Boolean;
@@ -1688,9 +1764,16 @@ end;
 //******************************************************************************
 //* TIdSdpMediaDescriptions Public methods *************************************
 
-procedure TIdSdpMediaDescriptions.Add(Desc: TIdSdpMediaDescription);
+function TIdSdpMediaDescriptions.Add: TIdSdpMediaDescription;
 begin
-  Self.List.Add(Desc);
+  Result := TIdSdpMediaDescription.Create;
+  Self.List.Add(Result);
+end;
+
+function TIdSdpMediaDescriptions.Add(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription;
+begin
+  Result := Self.Add;
+  Result.Assign(Desc);
 end;
 
 function TIdSdpMediaDescriptions.AllDescriptionsHaveConnections: Boolean;
@@ -1702,6 +1785,21 @@ begin
   if Result then
     for I := 0 to Self.Count - 1 do
       Result := Result and Self[I].HasConnection;
+end;
+
+procedure TIdSdpMediaDescriptions.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdSdpMediaDescriptions;
+begin
+  if Src is TIdSdpMediaDescriptions then begin
+    Other := Src as TIdSdpMediaDescriptions;
+
+    Self.Clear;
+    for I := 0 to Other.Count - 1 do
+      Self.Add(Other[I]);
+  end
+  else inherited Assign(Src);
 end;
 
 //* TIdSdpMediaDescriptions Private methods ************************************
@@ -1716,9 +1814,31 @@ end;
 //******************************************************************************
 //* TIdSdpRepeats Public methods ***********************************************
 
-procedure TIdSdpRepeats.Add(R: TIdSdpRepeat);
+function TIdSdpRepeats.Add: TIdSdpRepeat;
 begin
-  Self.List.Add(R);
+  Result := TIdSdpRepeat.Create;
+  Self.List.Add(Result)
+end;
+
+function TIdSdpRepeats.Add(R: TIdSdpRepeat): TIdSdpRepeat;
+begin
+  Result := Self.Add;
+  Result.Assign(R);
+end;
+
+procedure TIdSdpRepeats.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdSdpRepeats;
+begin
+  if Src is TIdSdpRepeats then begin
+    Other := Src as TIdSdpRepeats;
+
+    Self.Clear;
+    for I := 0 to Other.Count - 1 do
+      Self.Add(Other[I]);
+  end
+  else inherited Assign(Src);
 end;
 
 //* TIdSdpRepeats Private methods **********************************************
@@ -1733,9 +1853,31 @@ end;
 //******************************************************************************
 //* TIdSdpTimes Public methods *************************************************
 
-procedure TIdSdpTimes.Add(T: TIdSdpTime);
+function TIdSdpTimes.Add: TIdSdpTime;
 begin
-  Self.List.Add(T);
+  Result := TIdSdpTime.Create;
+  Self.List.Add(Result);
+end;
+
+function TIdSdpTimes.Add(T: TIdSdpTime): TIdSdpTime;
+begin
+  Result := Self.Add;
+  Result.Assign(T);
+end;
+
+procedure TIdSdpTimes.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdSdpTimes;
+begin
+  if Src is TIdSdpTimes then begin
+    Other := Src as TIdSdpTimes;
+
+    Self.Clear;
+    for I := 0 to Other.Count - 1 do
+      Self.Add(Other[I]);
+  end
+  else inherited Assign(Src);
 end;
 
 //* TIdSdpTimes Private methods ************************************************
@@ -1750,9 +1892,31 @@ end;
 //******************************************************************************
 //* TIdSdpZoneAdjustments Public methods ***************************************
 
-procedure TIdSdpZoneAdjustments.Add(Adj: TIdSdpZoneAdjustment);
+function TIdSdpZoneAdjustments.Add: TIdSdpZoneAdjustment;
 begin
-  Self.List.Add(Adj);
+  Result := TIdSdpZoneAdjustment.Create;
+  Self.List.Add(Result);
+end;
+
+function TIdSdpZoneAdjustments.Add(Adj: TIdSdpZoneAdjustment): TIdSdpZoneAdjustment;
+begin
+  Result := Self.Add;
+  Result.Assign(Adj);
+end;
+
+procedure TIdSdpZoneAdjustments.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdSdpZoneAdjustments;
+begin
+  if Src is TIdSdpZoneAdjustments then begin
+    Other := Src as TIdSdpZoneAdjustments;
+
+    Self.Clear;
+    for I := 0 to Other.Count - 1 do
+      Self.Add(Other[I]);
+  end
+  else inherited Assign(Src);
 end;
 
 //* TIdSdpZoneAdjustments Private methods **************************************
@@ -1826,23 +1990,24 @@ begin
     Self.MediaDescriptionAt(I).Connections.Add(Result);
 end;
 
-procedure TIdSdpPayload.AddMediaDescription(NewDesc: TIdSdpMediaDescription);
+function TIdSdpPayload.AddMediaDescription(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription;
 begin
-  Self.MediaDescriptions.Add(NewDesc);
-  NewDesc.Attributes.Add(Self.Attributes);
-  NewDesc.Connections.Add(Self.Connections);
+  // Note the absence of rtpmap attributes below. rtpmap attributes make no
+  // sense at a session level.
+  Result := Self.MediaDescriptions.Add(Desc);
+  Result.Attributes.Add(Self.Attributes);
+  Result.Connections.Add(Self.Connections);
 end;
 
 function TIdSdpPayload.AddMediaDescription: TIdSdpMediaDescription;
+var
+  Desc: TIdSdpMediaDescription;
 begin
-  Result := TIdSdpMediaDescription.Create;
+  Desc := TIdSdpMediaDescription.Create;
   try
-    Self.AddMediaDescription(Result);
-  except
-    Self.MediaDescriptions.Remove(Result);
-    FreeAndNil(Result);
-
-    raise;
+    Result := Self.AddMediaDescription(Desc);
+  finally
+    Desc.Free;
   end;
 end;
 
@@ -1875,6 +2040,38 @@ end;
 function TIdSdpPayload.ConnectionCount: Integer;
 begin
   Result := Self.Connections.Count;
+end;
+
+function TIdSdpPayload.Equals(Other: TIdSdpPayload; IgnoreTimestamps: Boolean = false): Boolean;
+begin
+  Result :=  Self.Attributes.Equals(Other.Attributes)
+        and  Self.Bandwidths.Equals(Other.Bandwidths)
+        and (Self.EmailAddress.Text = Other.EmailAddress.Text)
+        and (Self.Info = Other.Info)
+        and (Self.Key.AsString = Other.Key.AsString)
+        and (Self.Origin.AsString = Other.Origin.AsString)
+        and (Self.PhoneNumber = Other.PhoneNumber)
+        and  Self.RTPMapAttributes.Equals(Other.RTPMapAttributes)
+        and (Self.SessionName = Other.SessionName)
+        and  Self.Times.Equals(Other.Times)
+        and (Self.Uri = Other.Uri)
+        and (Self.Version = Other.Version)
+end;
+
+function TIdSdpPayload.Equals(Other: String; IgnoreTimestamps: Boolean = false): Boolean;
+var
+  OtherPayload: TIdSdpPayload;
+begin
+  try
+    OtherPayload := TIdSdpPayload.CreateFrom(Other);
+    try
+      Result := Self.Equals(OtherPayload, IgnoreTimestamps)
+    finally
+      OtherPayload.Free;
+    end;
+  except
+    Result := false;
+  end;
 end;
 
 procedure TIdSdpPayload.GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);

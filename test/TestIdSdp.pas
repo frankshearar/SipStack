@@ -127,6 +127,19 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
+    procedure TestPrintOn;
+  end;
+
+  TestTIdSdpRepeat = class(TTestCase)
+  private
+    R: TIdSdpRepeat;
+    S: TStringStream;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAssign;
     procedure TestPrintOn;
   end;
 
@@ -138,6 +151,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
     procedure TestPrintOn;
     procedure TestPrintOnWithRepeats;
     procedure TestPrintOnWithZoneAdjustments;
@@ -154,8 +168,9 @@ type
     procedure TestAddMultipleAttributes;
     procedure TestAddUsingString;
     procedure TestAssign;
-    procedure TestHasAttribute;
     procedure TestClear;
+    procedure TestEquals;
+    procedure TestHasAttribute;
     procedure TestPrintOn;
   end;
 
@@ -168,6 +183,7 @@ type
   published
     procedure TestAddAndCount;
     procedure TestAddMultipleAttributes;
+    procedure TestAssign;
     procedure TestClear;
     procedure TestEquals;
     procedure TestPrintOn;
@@ -184,6 +200,7 @@ type
     procedure TestAddMultipleBandwidths;
     procedure TestAssign;
     procedure TestClear;
+    procedure TestPrintOn;
   end;
 
   TestTIdSdpConnections = class(TTestCase)
@@ -198,6 +215,7 @@ type
     procedure TestAddMultipleConnections;
     procedure TestAssign;
     procedure TestClear;
+    procedure TestPrintOn;
   end;
 
   TestTIdSdpMediaDescriptions = class(TTestCase)
@@ -208,9 +226,10 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAssign;
     procedure TestAllDescriptionsHaveConnections;
     procedure TestClear;
-    procedure TestContains;
+    procedure TestPrintOn;
   end;
 
   TestTIdSdpRepeats = class(TTestCase)
@@ -221,8 +240,8 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAssign;
     procedure TestClear;
-    procedure TestContains;
     procedure TestPrintOn;
   end;
 
@@ -234,8 +253,8 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAssign;
     procedure TestClear;
-    procedure TestContains;
     procedure TestPrintOn;
   end;
 
@@ -247,8 +266,8 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAssign;
     procedure TestClear;
-    procedure TestContains;
     procedure TestPrintOn;
   end;
 
@@ -267,6 +286,19 @@ type
     procedure TestConnectionCount;
     procedure TestCreateFromStream;
     procedure TestCreateFromStreamString;
+    procedure TestEquals;
+    procedure TestEqualsDifferentAttributes;
+    procedure TestEqualsDifferentBandwidths;
+    procedure TestEqualsDifferentEmailAddress;
+    procedure TestEqualsDifferentInfo;
+    procedure TestEqualsDifferentKey;
+    procedure TestEqualsDifferentOrigin;
+    procedure TestEqualsDifferentPhoneNumber;
+    procedure TestEqualsDifferentRTPMapAttributes;
+    procedure TestEqualsDifferentSessionName;
+    procedure TestEqualsDifferentTimes;
+    procedure TestEqualsDifferentUri;
+    procedure TestEqualsDifferentVersion;
     procedure TestGetRtpMapAttributes;
     procedure TestInitializeOnEmptySdpPayload;
     procedure TestInitializeOnSingleMediaSdp;
@@ -495,6 +527,7 @@ begin
   Result.AddTest(TestTIdSdpKey.Suite);
   Result.AddTest(TestTIdSdpMediaDescription.Suite);
   Result.AddTest(TestTIdSdpOrigin.Suite);
+  Result.AddTest(TestTIdSdpRepeat.Suite);
   Result.AddTest(TestTIdSdpTime.Suite);
   Result.AddTest(TestTIdSdpAttributes.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttributes.Suite);
@@ -1219,15 +1252,15 @@ end;
 procedure TestTIdSdpMediaDescription.ConfigureComplicatedly(Desc: TIdSdpMediaDescription);
 begin
   Desc.AddRTPMapAttribute('foo/42', 1);
-  Desc.Bandwidths.Add(TIdSdpBandwidth.Create);
+  Desc.Bandwidths.Add;
   Desc.Bandwidths[0].Bandwidth := 666;
   Desc.Bandwidths[0].BandwidthType := btConferenceTotal;
-  Desc.Connections.Add(TIdSdpConnection.Create);
+  Desc.Connections.Add;
   Desc.Connections[0].AddressType := Id_IPv4;
   Desc.Connections[0].Address := '127.0.0.1';
   Desc.Connections[0].NetType := Id_SDP_IN;
   Desc.Connections[0].NumberOfAddresses := 2;
-  Desc.Connections.Add(TIdSdpConnection.Create);
+  Desc.Connections.Add;
   Desc.Connections[1].AddressType := Id_IPv4;
   Desc.Connections[1].Address := '::1';
   Desc.Connections[1].NetType := Id_SDP_IN;
@@ -1419,15 +1452,15 @@ begin
 
   Self.M.AddAttribute(RTPMapAttribute, '100 T140/1000');
 
-  Self.M.Bandwidths.Add(TIdSdpBandwidth.Create);
+  Self.M.Bandwidths.Add;
   Self.M.Bandwidths[0].Bandwidth := 666;
   Self.M.Bandwidths[0].BandwidthType := btRS;
 
-  Self.M.Bandwidths.Add(TIdSdpBandwidth.Create);
+  Self.M.Bandwidths.Add;
   Self.M.Bandwidths[1].Bandwidth := 42;
   Self.M.Bandwidths[1].BandwidthType := btConferenceTotal;
 
-  Self.M.Connections.Add(TIdSdpConnection.Create);
+  Self.M.Connections.Add;
   Conn := Self.M.Connections[0];
   Conn.Address           := '127.0.0.1';
   Conn.AddressType       := Id_IPv4;
@@ -1505,6 +1538,31 @@ end;
 
 //* TestTIdSdpOrigin Published methods *****************************************
 
+procedure TestTIdSdpOrigin.TestAssign;
+var
+  NewO: TIdSdpOrigin;
+begin
+  Self.O.Address := 'tessier-ashpool.co.luna';
+  Self.O.AddressType := Id_IPv6;
+  Self.O.NetType := 'IN';
+  Self.O.SessionID := 'rock-the-casbah';
+  Self.O.SessionVersion := '1';
+  Self.O.Username := 'wintermute';
+
+  NewO := TIdSdpOrigin.Create;
+  try
+    NewO.Assign(Self.O);
+    CheckEquals(Self.O.Address,        NewO.Address,        'Address');
+    Check(      Self.O.AddressType =   NewO.AddressType,    'AddressType');
+    CheckEquals(Self.O.NetType,        NewO.NetType,        'NetType');
+    CheckEquals(Self.O.SessionID,      NewO.SessionID,      'SessionID');
+    CheckEquals(Self.O.SessionVersion, NewO.SessionVersion, 'SessionVersion');
+    CheckEquals(Self.O.Username,       NewO.Username,       'Username');
+  finally
+    NewO.Free;
+  end;
+end;
+
 procedure TestTIdSdpOrigin.TestPrintOn;
 begin
   Self.O.Address        := 'www.example.com';
@@ -1518,6 +1576,61 @@ begin
 
   CheckEquals(#13#10'o=Holy_Cow side0f beef IN IP6 www.example.com',
               S.DataString,
+              'PrintOn');
+end;
+
+//******************************************************************************
+//* TestTIdSdpRepeat                                                           *
+//******************************************************************************
+//* TestTIdSdpRepeat Public methods ********************************************
+
+procedure TestTIdSdpRepeat.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := TIdSdpRepeat.Create;
+  Self.S := TStringStream.Create('');
+end;
+
+procedure TestTIdSdpRepeat.TearDown;
+begin
+  Self.S.Free;
+  Self.R.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpRepeat Published methods *****************************************
+
+procedure TestTIdSdpRepeat.TestAssign;
+var
+  OrigValue: String;
+  NewR:      TIdSdpRepeat;
+begin
+  OrigValue := '604800 3600 0 90000';
+  Self.R.Value := OrigValue;
+
+  NewR := TIdSdpRepeat.Create;
+  try
+    NewR.Assign(Self.R);
+    CheckEquals(Self.R.Value,
+                NewR.Value,
+                'Assign');
+  finally
+    NewR.Free;
+  end;
+end;
+
+procedure TestTIdSdpRepeat.TestPrintOn;
+var
+  OrigValue: String;
+begin
+  OrigValue := '604800 3600 0 90000';
+  Self.R.Value := OrigValue;
+  Self.R.PrintOn(Self.S);
+
+  CheckEquals(#13#10'r=' + OrigValue,
+              Self.S.DataString,
               'PrintOn');
 end;
 
@@ -1544,6 +1657,34 @@ end;
 
 //* TestTIdSdpTime Published methods *******************************************
 
+procedure TestTIdSdpTime.TestAssign;
+var
+  Other: TIdSdpTime;
+begin
+  Other := TIdSdpTime.Create;
+  try
+    Self.T.EndTime := $cafebabe;
+    Self.T.StartTime := $deadbeef;
+    Self.T.Repeats.Add.Value := '604800 3600 0 90000';
+    Self.T.ZoneAdjustments.Add;
+
+    Other.Assign(Self.T);
+
+    CheckEquals(IntToHex(Self.T.EndTime, 16),
+                IntToHex(Other.EndTime, 16),
+                'EndTime');
+    Check(Other.Repeats.Equals(Self.T.Repeats), 'Repeats');
+    CheckEquals(IntToHex(Self.T.StartTime, 16),
+                IntToHex(Other.StartTime, 16),
+                'StartTime');
+    Check(Other.ZoneAdjustments.Equals(Self.T.ZoneAdjustments),
+          'ZoneAdjustments');
+  finally
+
+    Other.Free;
+  end;
+end;
+
 procedure TestTIdSdpTime.TestPrintOn;
 begin
   Self.T.EndTime   := $deadbeef;
@@ -1560,7 +1701,7 @@ procedure TestTIdSdpTime.TestPrintOnWithRepeats;
 begin
   Self.T.EndTime   := $deadbeef;
   Self.T.StartTime := $cafebabe;
-  Self.T.Repeats.Add(TIdSdpRepeat.Create);
+  Self.T.Repeats.Add;
   Self.T.Repeats[0].Value := '1d';
 
   Self.T.PrintOn(S);
@@ -1576,8 +1717,7 @@ procedure TestTIdSdpTime.TestPrintOnWithZoneAdjustments;
 begin
   Self.T.EndTime   := $deadbeef;
   Self.T.StartTime := $cafebabe;
-  Self.T.ZoneAdjustments.Add(TIdSdpZoneAdjustment.Create);
-  Self.T.ZoneAdjustments[0].Value := '3735928559 -2h';
+  Self.T.ZoneAdjustments.Add.Value := '3735928559 -2h';
 
   Self.T.PrintOn(S);
 
@@ -1671,17 +1811,13 @@ procedure TestTIdSdpAttributes.TestAssign;
 var
   Other: TIdSdpAttributes;
 begin
-  Self.A.Add(TIdSdpAttribute.Create);
-  Self.A[0].Name := '1';
+  Self.A.Add.Name := '1';
 
   Other := TIdSdpAttributes.Create;
   try
-    Other.Add;
-    Other.Add;
-    Other.Add;
-    Other[0].Name := '4';
-    Other[1].Name := '5';
-    Other[2].Name := '6';
+    Other.Add.Name := '4';
+    Other.Add.Name := '5';
+    Other.Add.Name := '6';
 
     Self.A.Assign(Other);
 
@@ -1689,6 +1825,41 @@ begin
     CheckEquals('4', Self.A[0].Name, 'First Attribute');
     CheckEquals('5', Self.A[1].Name, 'Second Attribute');
     CheckEquals('6', Self.A[2].Name, 'Third Attribute');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpAttributes.TestClear;
+begin
+  Self.A.Add;
+  Self.A.Add;
+  Self.A.Add;
+
+  Self.A.Clear;
+  CheckEquals(0, Self.A.Count, 'Count after clear');
+end;
+
+procedure TestTIdSdpAttributes.TestEquals;
+var
+  Other: TIdSdpAttributes;
+begin
+  Other := TIdSdpAttributes.Create;
+  try
+    Check(Self.A.Equals(Other), 'Self.A = Other; empty list');
+    Check(Self.A.Equals(Other), 'Other = Self.A; empty list');
+
+    Self.A.Add.Name := '2';
+    Self.A.Add.Name := '4';
+
+    Other.Add(Self.A[1]);
+    Check(not Self.A.Equals(Other), 'Self.A <> Other');
+    Check(not Self.A.Equals(Other), 'Other <> Self.A');
+
+    Other.Add(Self.A[0]);
+
+    Check(Self.A.Equals(Other), 'Self.A = Other; non-empty list');
+    Check(Self.A.Equals(Other), 'Other = Self.A; non-empty list');
   finally
     Other.Free;
   end;
@@ -1713,16 +1884,6 @@ begin
   finally
     Att.Free;
   end;
-end;
-
-procedure TestTIdSdpAttributes.TestClear;
-begin
-  Self.A.Add;
-  Self.A.Add;
-  Self.A.Add;
-
-  Self.A.Clear;
-  CheckEquals(0, Self.A.Count, 'Count after clear');
 end;
 
 procedure TestTIdSdpAttributes.TestPrintOn;
@@ -1772,12 +1933,20 @@ end;
 //* TestTIdSdpRTPMapAttributes Published methods *******************************
 
 procedure TestTIdSdpRTPMapAttributes.TestAddAndCount;
+var
+  Att: TIdSdpRTPMapAttribute;
 begin
   CheckEquals(0, Self.A.Count, 'Count on new list');
-  Self.A.Add(TIdSdpRTPMapAttribute.Create);
-  CheckEquals(1, Self.A.Count, 'Count after Add()');
-  Self.A.Add(TIdSdpRTPMapAttribute.Create);
-  CheckEquals(2, Self.A.Count, 'Count after 2nd Add()');
+  Self.A.Add;
+  CheckEquals(1, Self.A.Count, 'Count after Add');
+
+  Att := TIdSdpRTPMapAttribute.Create;
+  try
+    Self.A.Add(Att);
+    CheckEquals(2, Self.A.Count, 'Count after Add(TIdSdpRTPMapAttribute)');
+  finally
+    Att.Free;
+  end;
 end;
 
 procedure TestTIdSdpRTPMapAttributes.TestAddMultipleAttributes;
@@ -1805,6 +1974,29 @@ begin
                   'PayloadType of RTPMapAttribute ' + IntToStr(I));
   finally
     Atts.Free;
+  end;
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestAssign;
+var
+  Other: TIdSdpRTPMapAttributes;
+begin
+  Self.A.Add.Value := '1 PCMU/1';
+
+  Other := TIdSdpRTPMapAttributes.Create;
+  try
+    Other.Add.Value := '4 PCMU/4';
+    Other.Add.Value := '5 PCMU/5';
+    Other.Add.Value := '6 PCMU/6';
+
+    Self.A.Assign(Other);
+
+    CheckEquals(3,          Self.A.Count,    'Not all rtpmap attributes copied across');
+    CheckEquals('4 PCMU/4', Self.A[0].Value, 'First rtpmap attribute');
+    CheckEquals('5 PCMU/5', Self.A[1].Value, 'Second rtpmap attribute');
+    CheckEquals('6 PCMU/6', Self.A[2].Value, 'Third rtpmap attribute');
+  finally
+    Other.Free;
   end;
 end;
 
@@ -1847,8 +2039,8 @@ procedure TestTIdSdpRTPMapAttributes.TestPrintOn;
 var
   S: TStringStream;
 begin
-  Self.A.Add(TIdSdpRTPMapAttribute.Create);
-  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  Self.A.Add;
+  Self.A.Add;
 
   Self.A[0].Name  := 'rtpmap';
   Self.A[0].Value := '98 T140/1000';
@@ -1938,17 +2130,13 @@ procedure TestTIdSdpBandwidths.TestAssign;
 var
   Other: TIdSdpBandwidths;
 begin
-  Self.B.Add(TIdSdpBandwidth.Create);
-  Self.B[0].Bandwidth := 1;
+  Self.B.Add.Bandwidth := 1;
 
   Other := TIdSdpBandwidths.Create;
   try
-    Other.Add;
-    Other.Add;
-    Other.Add;
-    Other[0].Bandwidth := 4;
-    Other[1].Bandwidth := 5;
-    Other[2].Bandwidth := 6;
+    Other.Add.Bandwidth := 4;
+    Other.Add.Bandwidth := 5;
+    Other.Add.Bandwidth := 6;
 
     Self.B.Assign(Other);
 
@@ -1969,6 +2157,31 @@ begin
 
   Self.B.Clear;
   CheckEquals(0, Self.B.Count, 'Count after clear');
+end;
+
+procedure TestTIdSdpBandwidths.TestPrintOn;
+var
+  S: TStringStream;
+begin
+  Self.B.Add;
+  Self.B.Add;
+
+  Self.B[0].Bandwidth  := 666;
+  Self.B[0].BandwidthType := btConferenceTotal;
+  Self.B[1].Bandwidth  := 13;
+  Self.B[1].BandwidthType := btApplicationSpecific;
+
+  S := TStringStream.Create('');
+  try
+    Self.B.PrintOn(S);
+    CheckEquals(#13#10
+              + 'b=CT:666'#13#10
+              + 'b=AS:13',
+                S.DataString,
+                'PrintOn');
+  finally
+    S.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2027,9 +2240,9 @@ var
 begin
   NewConnections := TIdSdpConnections.Create;
   try
-    NewConnections.Add(TIdSdpConnection.Create);
-    NewConnections.Add(TIdSdpConnection.Create);
-    NewConnections.Add(TIdSdpConnection.Create);
+    NewConnections.Add;
+    NewConnections.Add;
+    NewConnections.Add;
 
     for I := 0 to NewConnections.Count - 1 do
       NewConnections[I].TTL := I;
@@ -2059,7 +2272,7 @@ begin
 
   Other := TIdSdpConnections.Create;
   try
-    Other.Add(TIdSdpConnection.Create);
+    Other.Add;
     Other[0].Address           := 'FF80::1';
     Other[0].AddressType       := Id_IPv6;
     Other[0].NetType           := Id_SDP_IN;
@@ -2100,6 +2313,37 @@ begin
   CheckEquals(0, Self.C.Count, 'Count after clear');
 end;
 
+procedure TestTIdSdpConnections.TestPrintOn;
+var
+  S: TStringStream;
+begin
+  Self.C.Add;
+  Self.C.Add;
+
+  Self.C[0].Address := '127.0.0.1';
+  Self.C[0].AddressType := Id_IPv4;
+  Self.C[0].NetType := 'IN';
+  Self.C[0].NumberOfAddresses := 1;
+  Self.C[0].TTL := 0;
+  Self.C[1].Address := '::1';
+  Self.C[1].AddressType := Id_IPv6;
+  Self.C[1].NetType := 'IN';
+  Self.C[1].NumberOfAddresses := 2;
+  Self.C[1].TTL := 1;
+
+  S := TStringStream.Create('');
+  try
+    Self.C.PrintOn(S);
+    CheckEquals(#13#10
+              + 'c=IN IP4 127.0.0.1'#13#10
+              + 'c=IN IP6 ::1/1/2',
+                S.DataString,
+                'PrintOn');
+  finally
+    S.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSdpMediaDescriptions                                                *
 //******************************************************************************
@@ -2122,53 +2366,105 @@ end;
 //* TestTIdSdpMediaDescriptions Published methods ******************************
 
 procedure TestTIdSdpMediaDescriptions.TestAddAndCount;
+var
+  Desc: TIdSdpMediaDescription;
 begin
   CheckEquals(0, Self.M.Count, 'Count on new list');
-  Self.M.Add(TIdSdpMediaDescription.Create);
-  CheckEquals(1, Self.M.Count, 'Count after Add()');
-  Self.M.Add(TIdSdpMediaDescription.Create);
-  CheckEquals(2, Self.M.Count, 'Count after 2nd Add()');
+  Self.M.Add;
+  CheckEquals(1, Self.M.Count, 'Count after Add');
+
+  Desc := TIdSdpMediaDescription.Create;
+  try
+    Self.M.Add(Desc);
+    CheckEquals(2, Self.M.Count, 'Count after Add(TIdSdpMediaDescription)');
+  finally
+    Desc.Free;
+  end;
+end;
+
+procedure TestTIdSdpMediaDescriptions.TestAssign;
+var
+  Other: TIdSdpMediaDescriptions;
+begin
+  Self.M.Add.Info := '1';
+
+  Other := TIdSdpMediaDescriptions.Create;
+  try
+    Other.Add.Info := '4';
+    Other.Add.Info := '5';
+    Other.Add.Info := '6';
+
+    Self.M.Assign(Other);
+
+    CheckEquals(3,   Self.M.Count,   'Not all media descriptions copied across');
+    CheckEquals('4', Self.M[0].Info, 'First media description');
+    CheckEquals('5', Self.M[1].Info, 'Second media description');
+    CheckEquals('6', Self.M[2].info, 'Third media description');
+  finally
+    Other.Free;
+  end;
 end;
 
 procedure TestTIdSdpMediaDescriptions.TestAllDescriptionsHaveConnections;
 begin
   Check(Self.M.AllDescriptionsHaveConnections, 'Trivial case - empty list');
 
-  Self.M.Add(TIdSdpMediaDescription.Create);
+  Self.M.Add;
   Check(not Self.M.AllDescriptionsHaveConnections,
         'One item with no connection');
 
-  Self.M[0].Connections.Add(TIdSdpConnection.Create);
+  Self.M[0].Connections.Add;
   Check(Self.M.AllDescriptionsHaveConnections,
         'One item now has a connection');
 
-  Self.M.Add(TIdSdpMediaDescription.Create);
+  Self.M.Add;
   Check(not Self.M.AllDescriptionsHaveConnections,
         'A second item, with no connection');
 
-  Self.M[1].Connections.Add(TIdSdpConnection.Create);
+  Self.M[1].Connections.Add;
   Check(Self.M.AllDescriptionsHaveConnections,
         'Both items now have connections');
 end;
 
 procedure TestTIdSdpMediaDescriptions.TestClear;
 begin
-  Self.M.Add(TIdSdpMediaDescription.Create);
-  Self.M.Add(TIdSdpMediaDescription.Create);
-  Self.M.Add(TIdSdpMediaDescription.Create);
+  Self.M.Add;
+  Self.M.Add;
+  Self.M.Add;
 
   Self.M.Clear;
   CheckEquals(0, Self.M.Count, 'Count after clear');
 end;
 
-procedure TestTIdSdpMediaDescriptions.TestContains;
+procedure TestTIdSdpMediaDescriptions.TestPrintOn;
 var
-  O: TIdSdpMediaDescription;
+  S: TStringStream;
 begin
-  O := TIdSdpMediaDescription.Create;
-  Check(not Self.M.Contains(O), 'Contains object when it shouldn''t');
-  Self.M.Add(O);
-  Check(Self.M.Contains(O), 'Doesn''t contain object when it should');
+  Self.M.Add;
+  Self.M.Add;
+
+  Self.M[0].MediaType := mtAudio;
+  Self.M[0].AddFormat('0');
+  Self.M[0].Port := 0;
+  Self.M[0].Transport := 'TCP';
+  Self.M[1].MediaType := mtText;
+  Self.M[1].Port := 1;
+  Self.M[1].Transport := 'RTP/AVP';
+  Self.M[1].AddFormat('1');
+  Self.M[1].AddFormat('2');
+  Self.M[1].AddFormat('3');
+
+  S := TStringStream.Create('');
+  try
+    Self.M.PrintOn(S);
+    CheckEquals(#13#10
+              + 'm=audio 0 TCP 0'#13#10
+              + 'm=text 1 RTP/AVP 1 2 3',
+                S.DataString,
+                'PrintOn');
+  finally
+    S.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2193,32 +2489,53 @@ end;
 //* TestTIdSdpRepeats Published methods ****************************************
 
 procedure TestTIdSdpRepeats.TestAddAndCount;
+var
+  Rpt: TIdSdpRepeat;
 begin
   CheckEquals(0, Self.R.Count, 'Count on new list');
-  Self.R.Add(TIdSdpRepeat.Create);
-  CheckEquals(1, Self.R.Count, 'Count after Add()');
-  Self.R.Add(TIdSdpRepeat.Create);
-  CheckEquals(2, Self.R.Count, 'Count after 2nd Add()');
+  Self.R.Add;
+  CheckEquals(1, Self.R.Count, 'Count after Add');
+
+  Rpt := TIdSdpRepeat.Create;
+  try
+    Self.R.Add(Rpt);
+    CheckEquals(2, Self.R.Count, 'Count after Add(TIdSdpBandwidth)');
+  finally
+    Rpt.Free;
+  end;
+end;
+
+procedure TestTIdSdpRepeats.TestAssign;
+var
+  Other: TIdSdpRepeats;
+begin
+  Self.R.Add.Value := '1';
+
+  Other := TIdSdpRepeats.Create;
+  try
+    Other.Add.Value := '4';
+    Other.Add.Value := '5';
+    Other.Add.Value := '6';
+
+    Self.R.Assign(Other);
+
+    CheckEquals(3,   Self.R.Count,    'Not all repeats copied across');
+    CheckEquals('4', Self.R[0].Value, 'First repeat');
+    CheckEquals('5', Self.R[1].Value, 'Second repeat');
+    CheckEquals('6', Self.R[2].Value, 'Third repeat');
+  finally
+    Other.Free;
+  end;
 end;
 
 procedure TestTIdSdpRepeats.TestClear;
 begin
-  Self.R.Add(TIdSdpRepeat.Create);
-  Self.R.Add(TIdSdpRepeat.Create);
-  Self.R.Add(TIdSdpRepeat.Create);
+  Self.R.Add;
+  Self.R.Add;
+  Self.R.Add;
 
   Self.R.Clear;
   CheckEquals(0, Self.R.Count, 'Count after clear');
-end;
-
-procedure TestTIdSdpRepeats.TestContains;
-var
-  O: TIdSdpRepeat;
-begin
-  O := TIdSdpRepeat.Create;
-  Check(not Self.R.Contains(O), 'Contains object when it shouldn''t');
-  Self.R.Add(O);
-  Check(Self.R.Contains(O), 'Doesn''t contain object when it should');
 end;
 
 procedure TestTIdSdpRepeats.TestPrintOn;
@@ -2227,8 +2544,8 @@ var
 begin
   S := TStringStream.Create('');
   try
-    Self.R.Add(TIdSdpRepeat.Create);
-    Self.R.Add(TIdSdpRepeat.Create);
+    Self.R.Add;
+    Self.R.Add;
 
     Self.R[0].Value := '1w';
     Self.R[1].Value := '1h 1d 1w';
@@ -2267,32 +2584,59 @@ end;
 //* TestTIdSdpTimes Published methods ******************************************
 
 procedure TestTIdSdpTimes.TestAddAndCount;
+var
+  Time: TIdSdpTime;
 begin
   CheckEquals(0, Self.T.Count, 'Count on new list');
-  Self.T.Add(TIdSdpTime.Create);
-  CheckEquals(1, Self.T.Count, 'Count after Add()');
-  Self.T.Add(TIdSdpTime.Create);
-  CheckEquals(2, Self.T.Count, 'Count after 2nd Add()');
+  Self.T.Add;
+  CheckEquals(1, Self.T.Count, 'Count after Add');
+
+  Time := TIdSdpTime.Create;
+  try
+    Self.T.Add(Time);
+    CheckEquals(2, Self.T.Count, 'Count after Add(TIdSdpTime)');
+  finally
+    Time.Free;
+  end;
+end;
+
+procedure TestTIdSdpTimes.TestAssign;
+var
+  Other: TIdSdpTimes;
+begin
+  Self.T.Add.StartTime := 1;
+
+  Other := TIdSdpTimes.Create;
+  try
+    Other.Add.StartTime := 4;
+    Other.Add.StartTime := 5;
+    Other.Add.StartTime := 6;
+
+    Self.T.Assign(Other);
+
+    CheckEquals(3, Self.T.Count, 'Not all times copied across');
+    CheckEquals(IntToHex(4, Sizeof(Int64)*2),
+                IntToHex(Self.T[0].StartTime, Sizeof(Int64)*2),
+                'First time');
+    CheckEquals(IntToHex(5, Sizeof(Int64)*2),
+                IntToHex(Self.T[1].StartTime,
+                Sizeof(Int64)*2), 'Second time');
+    CheckEquals(IntToHex(6, Sizeof(Int64)*2),
+                IntToHex(Self.T[2].StartTime,
+                Sizeof(Int64)*2), 'Third time');
+  finally
+    Other.Free;
+  end;
 end;
 
 procedure TestTIdSdpTimes.TestClear;
 begin
-  Self.T.Add(TIdSdpTime.Create);
-  Self.T.Add(TIdSdpTime.Create);
-  Self.T.Add(TIdSdpTime.Create);
+  Self.T.Add;
+  Self.T.Add;
+  Self.T.Add;
 
   Self.T.Clear;
   CheckEquals(0, Self.T.Count, 'Count after clear');
-end;
-
-procedure TestTIdSdpTimes.TestContains;
-var
-  O: TIdSdpTime;
-begin
-  O := TIdSdpTime.Create;
-  Check(not Self.T.Contains(O), 'Contains object when it shouldn''t');
-  Self.T.Add(O);
-  Check(Self.T.Contains(O), 'Doesn''t contain object when it should');
 end;
 
 procedure TestTIdSdpTimes.TestPrintOn;
@@ -2301,8 +2645,8 @@ var
 begin
   S := TStringStream.Create('');
   try
-    Self.T.Add(TIdSdpTime.Create);
-    Self.T.Add(TIdSdpTime.Create);
+    Self.T.Add;
+    Self.T.Add;
     Self.T[0].StartTime := $cafebabe;
     Self.T[0].EndTime   := $deadbeef;
     Self.T[1].StartTime := 1000000000;
@@ -2342,32 +2686,53 @@ end;
 //* TestTIdSdpZoneAdjustments Published methods ********************************
 
 procedure TestTIdSdpZoneAdjustments.TestAddAndCount;
+var
+  Zone: TIdSdpZoneAdjustment;
 begin
   CheckEquals(0, Self.Z.Count, 'Count on new list');
-  Self.Z.Add(TIdSdpZoneAdjustment.Create);
-  CheckEquals(1, Self.Z.Count, 'Count after Add()');
-  Self.Z.Add(TIdSdpZoneAdjustment.Create);
-  CheckEquals(2, Self.Z.Count, 'Count after 2nd Add()');
+  Self.Z.Add;
+  CheckEquals(1, Self.Z.Count, 'Count after Add');
+
+  Zone := TIdSdpZoneAdjustment.Create;
+  try
+    Self.Z.Add(Zone);
+    CheckEquals(2, Self.Z.Count, 'Count after Add(TIdSdpZoneAdjustment)');
+  finally
+    Zone.Free;
+  end;
+end;
+
+procedure TestTIdSdpZoneAdjustments.TestAssign;
+var
+  Other: TIdSdpZoneAdjustments;
+begin
+  Self.Z.Add.Value := '1';
+
+  Other := TIdSdpZoneAdjustments.Create;
+  try
+    Other.Add.Value := '4';
+    Other.Add.Value := '5';
+    Other.Add.Value := '6';
+
+    Self.Z.Assign(Other);
+
+    CheckEquals(3,   Self.Z.Count,    'Not all zone adjustments copied across');
+    CheckEquals('4', Self.Z[0].Value, 'First zone adjustment');
+    CheckEquals('5', Self.Z[1].Value, 'Second zone adjustment');
+    CheckEquals('6', Self.Z[2].Value, 'Third zone adjustment');
+  finally
+    Other.Free;
+  end;
 end;
 
 procedure TestTIdSdpZoneAdjustments.TestClear;
 begin
-  Self.Z.Add(TIdSdpZoneAdjustment.Create);
-  Self.Z.Add(TIdSdpZoneAdjustment.Create);
-  Self.Z.Add(TIdSdpZoneAdjustment.Create);
+  Self.Z.Add;
+  Self.Z.Add;
+  Self.Z.Add;
 
   Self.Z.Clear;
   CheckEquals(0, Self.Z.Count, 'Count after clear');
-end;
-
-procedure TestTIdSdpZoneAdjustments.TestContains;
-var
-  O: TIdSdpZoneAdjustment;
-begin
-  O := TIdSdpZoneAdjustment.Create;
-  Check(not Self.Z.Contains(O), 'Contains object when it shouldn''t');
-  Self.Z.Add(O);
-  Check(Self.Z.Contains(O), 'Doesn''t contain object when it should');
 end;
 
 procedure TestTIdSdpZoneAdjustments.TestPrintOn;
@@ -2376,10 +2741,8 @@ var
 begin
   S := TStringStream.Create('');
   try
-    Self.Z.Add(TIdSdpZoneAdjustment.Create);
-    Self.Z.Add(TIdSdpZoneAdjustment.Create);
-    Self.Z[0].Value := '3405691582 -2s';
-    Self.Z[1].Value := '3735928559 5d';
+    Self.Z.Add.Value := '3405691582 -2s';
+    Self.Z.Add.Value := '3735928559 5d';
 
     Self.Z.PrintOn(S);
 
@@ -2537,6 +2900,207 @@ begin
   end;
 end;
 
+procedure TestTIdSdpPayload.TestEquals;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Check(Self.Payload.Equals(Other), 'Empty payloads, Payload = Other');
+    Check(Other.Equals(Self.Payload), 'Empty payloads, Other = Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentAttributes;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Other.Attributes.Add;
+
+    Check(not Self.Payload.Equals(Other), 'Different attributes, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different attributes, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentBandwidths;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Other.Bandwidths.Add;
+
+    Check(not Self.Payload.Equals(Other), 'Different Bandwidths, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Bandwidths, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentEmailAddress;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.EmailAddress.Address := 'foo@bar';
+    Other.EmailAddress.Address := Self.Payload.EmailAddress.Address + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different EmailAddress, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different EmailAddress, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentInfo;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.Info := 'foo@bar';
+    Other.Info := Self.Payload.Info + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different Info, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Info, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentKey;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.Key.Value := 'foo@bar';
+    Other.Key.Value := Self.Payload.Key.Value + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different Key, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Key, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentOrigin;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.Origin.Address := 'foo@bar';
+    Other.Origin.Address := Self.Payload.Origin.Address + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different Origin, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Origin, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentPhoneNumber;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.PhoneNumber := 'foo@bar';
+    Other.PhoneNumber := Self.Payload.PhoneNumber + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different PhoneNumber, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different PhoneNumber, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentRTPMapAttributes;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Other.RTPMapAttributes.Add;
+
+    Check(not Self.Payload.Equals(Other), 'Different RTPMapAttributes, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different RTPMapAttributes, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentSessionName;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.SessionName := 'foo@bar';
+    Other.SessionName := Self.Payload.SessionName + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different SessionName, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different SessionName, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentTimes;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Other.Times.Add;
+
+    Check(not Self.Payload.Equals(Other), 'Different Times, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Times, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentUri;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.Uri := 'foo@bar';
+    Other.Uri := Self.Payload.Uri + '1';
+
+    Check(not Self.Payload.Equals(Other), 'Different Uri, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Uri, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestEqualsDifferentVersion;
+var
+  Other: TIdSdpPayload;
+begin
+  Other := TIdSdpPayload.Create;
+  try
+    Self.Payload.Version := 1;
+    Other.Version := Self.Payload.Version + 1;
+
+    Check(not Self.Payload.Equals(Other), 'Different Version, Payload <> Other');
+    Check(not Other.Equals(Self.Payload), 'Different Version, Other <> Payload');
+  finally
+    Other.Free;
+  end;
+end;
+
 procedure TestTIdSdpPayload.TestGetRtpMapAttributes;
 var
   Attributes: TIdSdpRTPMapAttributes;
@@ -2674,7 +3238,7 @@ var
   MD: TIdSdpMediaDescription;
 begin
   MD := Self.Payload.AddMediaDescription;
-  Self.Payload.AddConnection(TIdSdpConnection.Create);
+  Self.Payload.AddConnection;
 
   CheckEquals(1,
               MD.Connections.Count,
@@ -2727,7 +3291,7 @@ begin
   S := TStringStream.Create('');
   try
     Self.SetToMinimumPayload(Self.Payload);
-    Self.Payload.Bandwidths.Add(TIdSdpBandwidth.Create);
+    Self.Payload.Bandwidths.Add;
     Self.Payload.Bandwidths[0].Bandwidth := 13;
     Self.Payload.Bandwidths[0].BandwidthType := btApplicationSpecific;
 
@@ -2876,7 +3440,7 @@ begin
   S := TStringStream.Create('');
   try
     Self.SetToMinimumPayload(Self.Payload);
-    Self.Payload.Times.Add(TIdSdpTime.Create);
+    Self.Payload.Times.Add;
     Self.Payload.Times[0].StartTime := 1000000000;
     Self.Payload.Times[0].EndTime   := 1000000001;
 
