@@ -20,7 +20,7 @@ type
   TIdSipTransport = class;
   TIdSipTransportClass = class of TIdSipTransport;
 
-  // I listen for incoming messages.
+  // I provide a protocol for objects that want tolisten for incoming messages.
   IIdSipTransportListener = interface
     ['{D3F0A0D5-A4E9-42BD-B337-D5B3C652F340}']
     procedure OnException(E: Exception;
@@ -33,8 +33,8 @@ type
                                 const Reason: String);
   end;
 
-  // I listen for when messages are sent, rather than received. I'm most useful
-  // as a logger/debugging tool.
+  // I listen for when messages are sent, rather than received. You could use
+  // me as a logger/debugging tool, for instance.
   IIdSipTransportSendingListener = interface
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -43,6 +43,12 @@ type
                              Sender: TIdSipTransport);
   end;
 
+  // I provide functionality common to all transports.
+  // Instances of my subclasses may bind to a single IP/port. (Of course,
+  // UDP/localhost/5060 != TCP/localhost/5060.). I receive messages from
+  // the network through means defined in my subclasses, process them
+  // in various ways, and present them to my listeners. Together, all the
+  // instances of my subclasses form the Transport layer of the SIP stack.
   TIdSipTransport = class(TIdInterfacedObject,
                           IIdSipMessageVisitor,
                           IIdSipMessageListener)
@@ -113,6 +119,8 @@ type
     property UseRport: Boolean          read fUseRport write fUseRport;
   end;
 
+  // I implement the Transmission Control Protocol (RFC 793) connections for the
+  // SIP stack.
   TIdSipTCPTransport = class(TIdSipTransport)
   private
     Clients:    TObjectList;
@@ -145,6 +153,8 @@ type
     procedure Stop; override;
   end;
 
+  // I implement the Transport Layer Security (RFC 2249) connections for the SIP
+  // stack.
   TIdSipTLSTransport = class(TIdSipTCPTransport)
   private
     function  GetOnGetPassword: TPasswordEvent;
@@ -171,11 +181,15 @@ type
     property ServerKey:         TFileName read GetServerKey write SetServerKey;
   end;
 
+  // I implement the Stream Control Transmission Protocol (RFC 3286) connections
+  // for the SIP stack.
   TIdSipSCTPTransport = class(TIdSipTransport)
   public
     function GetTransportType: TIdSipTransportType; override;
   end;
 
+  // I implement the User Datagram Protocol (RFC 768) connections for the SIP
+  // stack.
   TIdSipUDPTransport = class(TIdSipTransport)
   private
     Transport: TIdSipUdpServer;
@@ -201,6 +215,7 @@ type
     procedure Stop; override;
   end;
 
+  // I provide a transport that does nothing.
   TIdSipNullTransport = class(TIdSipTransport)
   private
     FakeBindings: TIdSocketHandles;
