@@ -8,6 +8,7 @@ uses
 type
   TIdSipDialogState = (sdsNotInitialised, sdsEarly, sdsConfirmed);
 
+  // cf RFC 3261, section 12.1
   // Within this specification, only 2xx and 101-199 responses with a To tag,
   // where the request was INVITE, will establish a dialog.
   TIdSipDialogID = class(TObject)

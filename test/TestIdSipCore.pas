@@ -3,8 +3,8 @@ unit TestIdSipCore;
 interface
 
 uses
-  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdURI, TestFramework,
-  TestFrameworkSip;
+  IdSipCore, IdSipHeaders, IdSipMessage, IdSipMockTransactionDispatcher,
+  IdSipTransaction, IdURI, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -70,8 +70,8 @@ type
     procedure TestRejectUnknownContentLanguage;
     procedure TestRejectUnknownContentType;
     procedure TestRejectUnknownExtension;
-    procedure TestRejectUnknownMethod;
     procedure TestRejectUnknownScheme;
+    procedure TestRejectUnsupportedMethod;
     procedure TestRinging;
     procedure TestSessionEstablished;
     procedure TestSessionTornDown;
@@ -160,6 +160,9 @@ begin
   inherited SetUp;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatch.Transport.LocalEchoMessages := false;
+  Self.Dispatch.Transport.TransportType := sttTCP;
+
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
   Self.Core.HostName := 'wsfrank';
@@ -210,7 +213,6 @@ end;
 
 procedure TestTIdSipUserAgentCore.CheckAcceptCall(Sender: TObject; const Session: TIdSipSession);
 var
-  Dlg:               TIdSipDialog;
   I:                 Integer;
   RecordRouteFilter: TIdSipHeadersFilter;
   ReqContact:        TIdSipContactHeader;
@@ -219,26 +221,23 @@ var
 begin
   Response := Self.Dispatch.Transport.LastResponse;
 
-  CheckEquals(1, Session.Dialogs.Count, 'Dialog count');
-  Dlg := Session.Dialogs.Items[0];
-
-  CheckEquals(Response.CallID,              Dlg.ID.CallID,        'Call-ID');
-  CheckEquals(Response.ToHeader.Tag,        Dlg.ID.LocalTag,      'Local tag');
-  CheckEquals(Response.From.Tag,            Dlg.ID.RemoteTag,     'Remote tag');
-  CheckEquals(0,                            Dlg.LocalSequenceNo,  'Local sequence no');
-  CheckEquals(Self.Request.CSeq.SequenceNo, Dlg.RemoteSequenceNo, 'Remote sequence no');
+  CheckEquals(Response.CallID,              Session.Dialog.ID.CallID,        'Call-ID');
+  CheckEquals(Response.ToHeader.Tag,        Session.Dialog.ID.LocalTag,      'Local tag');
+  CheckEquals(Response.From.Tag,            Session.Dialog.ID.RemoteTag,     'Remote tag');
+  CheckEquals(0,                            Session.Dialog.LocalSequenceNo,  'Local sequence no');
+  CheckEquals(Self.Request.CSeq.SequenceNo, Session.Dialog.RemoteSequenceNo, 'Remote sequence no');
   CheckEquals(Response.ToHeader.Address,
-              Dlg.LocalURI,
+              Session.Dialog.LocalURI,
               'Local URI');
   CheckEquals(Response.From.Address,
-              Dlg.RemoteURI,
+              Session.Dialog.RemoteURI,
               'Remote URI');
   ReqContact := Self.Request.FirstContact;
   CheckEquals(ReqContact.Address,
-              Dlg.RemoteURI,
+              Session.Dialog.RemoteURI,
               'Remote Target');
 
-  Check(not Dlg.IsSecure, 'A secure dialog shouldn''t be created from a SIP URI');
+  Check(not Session.Dialog.IsSecure, 'A secure dialog shouldn''t be created from a SIP URI');
 
   RecordRouteFilter := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
   try
@@ -257,13 +256,8 @@ begin
 end;
 
 procedure TestTIdSipUserAgentCore.CheckAcceptSecureCall(Sender: TObject; const Session: TIdSipSession);
-var
-  Dlg: TIdSipDialog;
 begin
-  CheckEquals(1, Session.Dialogs.Count, 'Dialog count');
-  Dlg := Session.Dialogs.Items[0];
-
-  Check(Dlg.IsSecure, 'A secure dialog MUST be created from a SIPS URI');
+  Check(Session.Dialog.IsSecure, 'A secure dialog MUST be created from a SIPS URI');
 end;
 
 procedure TestTIdSipUserAgentCore.CheckOnEndedSessionFired(Sender: TObject; const Session: TIdSipSession);
@@ -319,7 +313,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.HangUpSessionImmediately(Sender: TObject; const Session: TIdSipSession);
 begin
-  Self.Core.HangUp(Session);
+  Session.HangUp;
 end;
 
 procedure TestTIdSipUserAgentCore.RecordNewSession(Sender: TObject; const Session: TIdSipSession);
@@ -340,7 +334,8 @@ begin
 
   Self.Core.OnInvite := Self.AcceptCallImmediately;
   Self.Core.OnNewSession := Self.CheckAcceptCall;
-  Self.Core.HandleRequest(Self.Request);
+
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -355,16 +350,19 @@ begin
               Self.Core.SessionCount,
               'No new session was created');
 
-  // check dialog settings - local tag, remote tag, etc.
-end;
+              end;
 
 procedure TestTIdSipUserAgentCore.TestAcceptSecureCall;
 begin
+  Self.Core.OnInvite     := Self.AcceptCallImmediately;
+  Self.Core.OnNewSession := Self.CheckAcceptSecureCall;
+
+  Self.Dispatch.Transport.TransportType := sttTLS;
+  Self.Request.LastHop.Transport := sttTLS;
   Self.Core.AddAllowedScheme(SipsScheme);
   Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
-  Self.Core.OnInvite := Self.AcceptCallImmediately;
-  Self.Core.OnNewSession := Self.CheckAcceptSecureCall;
-  Self.Core.HandleRequest(Self.Request);
+
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
 end;
 
 procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
@@ -793,10 +791,12 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  Self.Dispatch.AddTransaction(TIdSipClientInviteTransaction, Self.Request);
+  // cf. RFC 3261, section 8.2.2.2
+  Self.Dispatch.AddClientTransaction(Self.Request);
 
-  // wipe out the tag
+  // wipe out the tag & give a different branch
   Self.Request.ToHeader.Value := Self.Request.ToHeader.Address.GetFullURI;
+  Self.Request.LastHop.Branch := Self.Request.LastHop.Branch + '1';
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
@@ -836,11 +836,11 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestOnEndedSessionFired;
 begin
-  Self.Core.OnNewSession := Self.HangUpSessionImmediately;
-
   Self.Core.OnEndedSession := Self.CheckOnEndedSessionFired;
+  Self.Core.OnInvite       := Self.AcceptCallImmediately;
+  Self.Core.OnNewSession   := Self.HangUpSessionImmediately;
 
-  Self.Core.AcceptCall(Self.Request);
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
 end;
@@ -966,7 +966,24 @@ begin
               'Unexpected Unsupported header value');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownMethod;
+procedure TestTIdSipUserAgentCore.TestRejectUnknownScheme;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+
+  Self.Request.RequestUri.URI := 'tel://1';
+  Self.Core.HandleRequest(Self.Request);
+
+  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnsupportedMethod;
 var
   Allow:         TIdSipCommaSeparatedHeader;
   I:             Integer;
@@ -975,6 +992,7 @@ var
   ResponseCount: Cardinal;
 begin
   Self.Request.Method := MethodRegister;
+  Self.Request.CSeq.Method := Self.Request.Method;
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
@@ -997,23 +1015,6 @@ begin
   finally
     Methods.Free;
   end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestRejectUnknownScheme;
-var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
-begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
-
-  Self.Request.RequestUri.URI := 'tel://1';
-  Self.Core.HandleRequest(Self.Request);
-
-  Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
-        'No response sent');
-
-  Response := Self.Dispatch.Transport.LastResponse;
-  CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRinging;
@@ -1074,11 +1075,15 @@ procedure TestTIdSipUserAgentCore.TestSessionTornDown;
 var
   SessionCount: Cardinal;
 begin
+  Self.Core.OnInvite     := Self.AcceptCallImmediately;
   Self.Core.OnNewSession := Self.RecordNewSession;
-  Self.Core.AcceptCall(Self.Request);
+
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+
   SessionCount := Self.Core.SessionCount;
 
   Self.Core.HangUp(Session);
+  
   Check(SessionCount > Self.Core.SessionCount,
         'Ended session not removed from UA');
 end;

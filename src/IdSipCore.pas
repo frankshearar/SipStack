@@ -113,8 +113,8 @@ type
 
   TIdSipSession = class(TPersistent)
   private
-    fCore:    TIdSipUserAgentCore;
-    fDialogs: TIdSipDialogs;
+    fCore:   TIdSipUserAgentCore;
+    fDialog: TIdSipDialog;
 
     property Core: TIdSipUserAgentCore read fCore;
   public
@@ -126,27 +126,10 @@ type
     procedure HangUp;
     procedure Modify;
 
-    property Dialogs: TIdSipDialogs read fDialogs;
+    property Dialog: TIdSipDialog read fDialog;
   end;
 
   EIdSipBadSyntax = class(EIdException);
-
-  TIdSipMockCore = class(TIdSipAbstractCore)
-  private
-    fHandleRequestCalled: Boolean;
-    fHandleResponseCalled: Boolean;
-  public
-    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
-    function  CreateResponse(const Request:      TIdSipRequest;
-                             const ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure HandleRequest(const Request: TIdSipRequest); override;
-    procedure HandleResponse(const Response: TIdSipResponse); override;
-
-    procedure Reset;
-
-    property HandleRequestCalled:  Boolean read fHandleRequestCalled;
-    property HandleResponseCalled: Boolean read fHandleResponseCalled;
-  end;
 
 const
   MissingContactHeader = 'Missing Contact Header';
@@ -237,54 +220,13 @@ end;
 
 procedure TIdSipUserAgentCore.AcceptCall(const Request: TIdSipRequest);
 var
-  ID:          TIdSipDialogID;
-  NewDialog:   TIdSipDialog;
-  Response:    TIdSipResponse;
-  RouteFilter: TIdSipHeadersFilter;
-  Session:     TIdSipSession;
+  Response: TIdSipResponse;
 begin
   Response := Self.CreateResponse(Request, SIPOK);
   try
     Response.ToHeader.Tag := Self.NextTag;
 
-    RouteFilter := TIdSipHeadersFilter.Create(Request.Headers, RouteHeader);
-    try
-      ID := TIdSipDialogID.Create(Request.CallID, Response.ToHeader.Tag, Request.From.Tag);
-      try
-        NewDialog := TIdSipDialog.Create(ID,
-                                         0,
-                                         Request.CSeq.SequenceNo,
-                                         Request.ToHeader.Address,
-                                         Request.From.Address,
-                                         Request.FirstContact.Address,
-                                         Request.HasSipsUri,
-                                         RouteFilter);
-        try
-          Self.SessionLock.Acquire;
-          try
-            Session := TIdSipSession.Create(NewDialog, Self);
-            try
-              Self.Sessions.Add(Session);
-
-              Self.Dispatcher.Send(Response);
-              Self.DoOnNewSession(Session);
-            except
-              Self.RemoveSession(Session);
-
-              raise;
-            end;
-          finally
-            Self.SessionLock.Release;
-          end;
-        finally
-          NewDialog.Free;
-        end;
-      finally
-        ID.Free;
-      end;
-    finally
-      RouteFilter.Free;
-    end;
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -338,7 +280,7 @@ var
 begin
   Invite := Self.CreateInvite(Dest);
   try
-    Self.Dispatcher.AddTransaction(TIdSipClientInviteTransaction, Invite);
+    Self.Dispatcher.AddClientTransaction(Invite);
   finally
     Invite.Free;
   end;
@@ -440,7 +382,7 @@ end;
 
 procedure TIdSipUserAgentCore.HandleRequest(const Request: TIdSipRequest);
 begin
-  Self.SendRinging(Request);
+  Self.Dispatcher.AddServerTransaction(Request);
 
   // cf RFC 3261 section 8.2
   // inspect the method - 8.2.1
@@ -584,7 +526,7 @@ var
 begin
   Response := Self.CreateResponse(Request, Reason);
   try
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -598,14 +540,26 @@ end;
 //* TIdSipUserAgentCore Protected methods **************************************
 
 procedure TIdSipUserAgentCore.DoOnNewDialog(Sender: TObject; const Dialog: TIdSipDialog);
+var
+  Session: TIdSipSession;
 begin
-  Self.Sessions.Add(TIdSipSession.Create(Dialog, Self));
+  Self.SessionLock.Acquire;
+  try
+    Session := TIdSipSession.Create(Dialog, Self);
+    Self.Sessions.Add(Session);
+  finally
+    Self.SessionLock.Release;
+  end;
+
+  Self.DoOnNewSession(Session);  
 end;
 
 //* TIdSipUserAgentCore Private methods ****************************************
 
 procedure TIdSipUserAgentCore.DoOnInvite(const Request: TIdSipRequest);
 begin
+  Self.SendRinging(Request);
+
   if Assigned(Self.OnInvite) then
     Self.OnInvite(Self, Request);
 end;
@@ -647,7 +601,7 @@ begin
   try
     Response.StatusText := Reason;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -661,7 +615,7 @@ begin
   try
     Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -675,7 +629,7 @@ begin
   try
     Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -689,7 +643,7 @@ begin
   try
     Response.AddHeader(AcceptEncodingHeader).Value := '';
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -703,7 +657,7 @@ begin
   try
     Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -717,7 +671,7 @@ begin
   try
     Response.AddHeader(AcceptHeader).Value := SdpMimeType;
 
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -744,7 +698,7 @@ var
 begin
   Response := Self.CreateResponse(Request, SIPRinging);
   try
-    Self.Dispatcher.Send(Response);
+    Self.Dispatcher.SendToTransaction(Response);
   finally
     Response.Free;
   end;
@@ -780,13 +734,12 @@ begin
   inherited Create;
 
   Self.fCore := UA;
-  Self.fDialogs := TIdSipDialogs.Create;
-  Self.Dialogs.Add(Dialog);
+  Self.fDialog := TIdSipDialog.Create(Dialog);
 end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.Dialogs.Free;
+  Self.Dialog.Free;
 
   inherited Destroy;
 end;
@@ -798,50 +751,11 @@ end;
 
 procedure TIdSipSession.HangUp;
 begin
-//  Self.Core.HangUp(Self);
+  Self.Core.HangUp(Self);
 end;
 
 procedure TIdSipSession.Modify;
 begin
-end;
-
-//******************************************************************************
-//* TIdSipMockCore                                                             *
-//******************************************************************************
-//* TIdSipMockCore Public methods **********************************************
-
-function TIdSipMockCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
-var
-  UA: TIdSipUserAgentCore;
-begin
-  UA := TIdSipUserAgentCore.Create;
-  try
-    Result := UA.CreateRequest(Dest);
-  finally
-    UA.Free;
-  end;
-end;
-
-function TIdSipMockCore.CreateResponse(const Request:      TIdSipRequest;
-                                       const ResponseCode: Cardinal): TIdSipResponse;
-begin
-  Result := nil;
-end;
-
-procedure TIdSipMockCore.HandleRequest(const Request: TIdSipRequest);
-begin
-  fHandleRequestCalled := true;
-end;
-
-procedure TIdSipMockCore.HandleResponse(const Response: TIdSipResponse);
-begin
-  fHandleResponseCalled := true;
-end;
-
-procedure TIdSipMockCore.Reset;
-begin
-  fHandleRequestCalled  := true;
-  fHandleResponseCalled := true;
 end;
 
 end.

@@ -279,7 +279,7 @@ type
 
   TIdSipViaHeader = class(TIdSipHeader)
   private
-    fSentBy:       String;
+    fSentBy:     String;
     fSipVersion: String;
     fPort:       Cardinal;
     fTransport:  TIdSipTransportType;
@@ -617,6 +617,11 @@ end;
 
 constructor TIdSipHeader.Create;
 begin
+  // This has no functional meaning. It just makes inspecting variables a bit
+  // more sane for the developer. For instance, TIdSipViaHeader.fName will be
+  // 'Via', even though a TIdSipViaHeader's fName cannot be read because GetName
+  // is overridden.
+  Self.Name := Self.GetName;
 end;
 
 destructor TIdSipHeader.Destroy;
@@ -1668,7 +1673,6 @@ begin
     // avoid the parse checking that the setters normally do. For instance,
     // a blank or RFC 2543 style branch is invalid in RFC 3261, but we still
     // need to be able to work with the (malformed) Via.
-//    fBranch     := V.Branch;
     fSentBy     := V.SentBy;
     fSipVersion := V.SipVersion;
     fPort       := V.Port;
