@@ -227,9 +227,9 @@ type
 
     procedure OnTimer(Sender: TObject);
   public
-    constructor Create(const Session: TIdSipSession;
-                       const T1: Cardinal;
-                       const T2: Cardinal);
+    constructor Create(Session: TIdSipSession;
+                       T1: Cardinal;
+                       T2: Cardinal);
     destructor  Destroy; override;
 
     procedure Fire;
@@ -269,19 +269,21 @@ type
     SessionListenerLock: TCriticalSection;
     SessionListeners:    TList;
 
-    procedure AddOpenTransaction(const Transaction: TIdSipTransaction);
-    procedure ApplyTo(const List: TList; const Lock: TCriticalSection; Proc: TIdSipProcedure);
-    procedure CreateInternal(const UA: TIdSipUserAgentCore);
-    function  CreateInboundDialog(const Response: TIdSipResponse): TIdSipDialog;
-    function  CreateOutboundDialog(const Response: TIdSipResponse;
-                                   const Receiver: TIdSipTransport): TIdSipDialog;
+    procedure AddOpenTransaction(Transaction: TIdSipTransaction);
+    procedure ApplyTo(List: TList;
+                      Lock: TCriticalSection;
+                      Proc: TIdSipProcedure);
+    procedure CreateInternal(UA: TIdSipUserAgentCore);
+    function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
+    function  CreateOutboundDialog(Response: TIdSipResponse;
+                                   Receiver: TIdSipTransport): TIdSipDialog;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEndedSession;
     procedure NotifyOfEndedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
-    procedure NotifyOfModifiedSession(const Invite: TIdSipRequest);
+    procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
     procedure NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
@@ -289,34 +291,34 @@ type
                                 const Transaction: TIdSipTransaction;
                                 const Receiver: TIdSipTransport);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
-    procedure RejectOutOfOrderRequest(const Request: TIdSipRequest;
-                                      const Transaction: TIdSipTransaction);
-    procedure RejectRequest(const Request: TIdSipRequest;
-                            const Transaction: TIdSipTransaction);
-    procedure RemoveTransaction(const Transaction: TIdSipTransaction);
-    procedure SendAck(const Final: TIdSipResponse);
+    procedure RejectOutOfOrderRequest(Request: TIdSipRequest;
+                                      Transaction: TIdSipTransaction);
+    procedure RejectRequest(Request: TIdSipRequest;
+                            Transaction: TIdSipTransaction);
+    procedure RemoveTransaction(Transaction: TIdSipTransaction);
+    procedure SendAck(Final: TIdSipResponse);
     procedure SendBye;
     procedure SendCancel;
-    procedure TerminateOpenTransaction(const Transaction: TIdSipTransaction);
+    procedure TerminateOpenTransaction(Transaction: TIdSipTransaction);
 
     property Core:          TIdSipUserAgentCore read fCore;
     property IsEstablished: Boolean             read fIsEstablished write fIsEstablished;
   public
-    constructor Create(const UA: TIdSipUserAgentCore); overload;
-    constructor Create(const UA: TIdSipUserAgentCore;
-                       const Invite: TIdSipRequest;
-                       const InitialTransaction: TIdSipTransaction;
-                       const Receiver: TIdSipTransport); overload;
+    constructor Create(UA: TIdSipUserAgentCore); overload;
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Invite: TIdSipRequest;
+                       InitialTransaction: TIdSipTransaction;
+                       Receiver: TIdSipTransport); overload;
     destructor  Destroy; override;
 
     function  AcceptCall(const Offer, ContentType: String): String;
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
-    procedure Call(const Dest: TIdSipToHeader;
+    procedure Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String);
     function  CreateAck: TIdSipRequest;
-    function  CreateCancel(const Invite: TIdSipRequest): TIdSipRequest;
+    function  CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
     function  DialogEstablished: Boolean;
     procedure Terminate;
     procedure Modify;
@@ -1276,9 +1278,9 @@ end;
 //******************************************************************************
 //* TIdSipSessionTimer Public methods ******************************************
 
-constructor TIdSipSessionTimer.Create(const Session: TIdSipSession;
-                                      const T1: Cardinal;
-                                      const T2: Cardinal);
+constructor TIdSipSessionTimer.Create(Session: TIdSipSession;
+                                      T1: Cardinal;
+                                      T2: Cardinal);
 begin
   inherited Create;
 
@@ -1347,7 +1349,7 @@ end;
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
 
-constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore);
+constructor TIdSipSession.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create;
 
@@ -1355,10 +1357,10 @@ begin
   Self.IsInboundCall := false;
 end;
 
-constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
-                                 const Invite: TIdSipRequest;
-                                 const InitialTransaction: TIdSipTransaction;
-                                 const Receiver: TIdSipTransport);
+constructor TIdSipSession.Create(UA: TIdSipUserAgentCore;
+                                 Invite: TIdSipRequest;
+                                 InitialTransaction: TIdSipTransaction;
+                                 Receiver: TIdSipTransport);
 begin
   inherited Create;
 
@@ -1444,7 +1446,7 @@ procedure TIdSipSession.Cancel;
 begin
 end;
 
-procedure TIdSipSession.Call(const Dest: TIdSipToHeader;
+procedure TIdSipSession.Call(Dest: TIdSipToHeader;
                              const InitialOffer: String;
                              const MimeType: String);
 var
@@ -1542,7 +1544,7 @@ end;
 
 //* TIdSipSession Private methods **********************************************
 
-procedure TIdSipSession.AddOpenTransaction(const Transaction: TIdSipTransaction);
+procedure TIdSipSession.AddOpenTransaction(Transaction: TIdSipTransaction);
 begin
   Self.OpenTransactionLock.Acquire;
   try
@@ -1552,8 +1554,8 @@ begin
   end;
 end;
 
-procedure TIdSipSession.ApplyTo(const List: TList;
-                                const Lock: TCriticalSection;
+procedure TIdSipSession.ApplyTo(List: TList;
+                                Lock: TCriticalSection;
                                 Proc: TIdSipProcedure);
 var
   Copy: TList;
@@ -1576,7 +1578,7 @@ begin
   end;
 end;
 
-procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore);
+procedure TIdSipSession.CreateInternal(UA: TIdSipUserAgentCore);
 begin
   Self.fIsEstablished := false;
   Self.fIsTerminated  := false;
@@ -1599,7 +1601,7 @@ begin
   Self.SessionListeners    := TList.Create;
 end;
 
-function TIdSipSession.CreateInboundDialog(const Response: TIdSipResponse): TIdSipDialog;
+function TIdSipSession.CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
 var
   ID:       TIdSipDialogID;
   RouteSet: TIdSipHeadersFilter;
@@ -1636,8 +1638,8 @@ begin
   end;
 end;
 
-function TIdSipSession.CreateOutboundDialog(const Response: TIdSipResponse;
-                                           const Receiver: TIdSipTransport): TIdSipDialog;
+function TIdSipSession.CreateOutboundDialog(Response: TIdSipResponse;
+                                            Receiver: TIdSipTransport): TIdSipDialog;
 var
   ID:       TIdSipDialogID;
   RouteSet: TIdSipHeadersFilter;
@@ -1680,7 +1682,7 @@ begin
   end;
 end;
 
-function TIdSipSession.CreateCancel(const Invite: TIdSipRequest): TIdSipRequest;
+function TIdSipSession.CreateCancel(Invite: TIdSipRequest): TIdSipRequest;
 var
   RouteHeaders: TIdSipHeadersFilter;
 begin
@@ -1758,7 +1760,7 @@ begin
   IIdSipSessionListener(ObjectOrIntf).OnEstablishedSession(Self);
 end;
 
-procedure TIdSipSession.NotifyOfModifiedSession(const Invite: TIdSipRequest);
+procedure TIdSipSession.NotifyOfModifiedSession(Invite: TIdSipRequest);
 begin
   Self.ApplyTo(Self.SessionListeners,
                Self.SessionListenerLock,
@@ -1811,8 +1813,8 @@ begin
     Self.NotifyOfEndedSession;
 end;
 
-procedure TIdSipSession.RejectOutOfOrderRequest(const Request: TIdSipRequest;
-                                                const Transaction: TIdSipTransaction);
+procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest;
+                                                Transaction: TIdSipTransaction);
 var
   Response: TIdSipResponse;
 begin
@@ -1826,8 +1828,8 @@ begin
   end;
 end;
 
-procedure TIdSipSession.RejectRequest(const Request: TIdSipRequest;
-                                      const Transaction: TIdSipTransaction);
+procedure TIdSipSession.RejectRequest(Request: TIdSipRequest;
+                                      Transaction: TIdSipTransaction);
 var
   Response: TIdSipResponse;
 begin
@@ -1840,7 +1842,7 @@ begin
   end;
 end;
 
-procedure TIdSipSession.RemoveTransaction(const Transaction: TIdSipTransaction);
+procedure TIdSipSession.RemoveTransaction(Transaction: TIdSipTransaction);
 begin
   Self.OpenTransactionLock.Acquire;
   try
@@ -1850,7 +1852,7 @@ begin
   end;
 end;
 
-procedure TIdSipSession.SendAck(const Final: TIdSipResponse);
+procedure TIdSipSession.SendAck(Final: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
@@ -1886,7 +1888,7 @@ begin
   end;
 end;
 
-procedure TIdSipSession.TerminateOpenTransaction(const Transaction: TIdSipTransaction);
+procedure TIdSipSession.TerminateOpenTransaction(Transaction: TIdSipTransaction);
 begin
   if not Transaction.IsClient then
     Self.RejectRequest(Transaction.InitialRequest, Transaction);
