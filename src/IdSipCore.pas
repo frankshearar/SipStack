@@ -5243,7 +5243,7 @@ end;
 function TIdSipInboundSession.ModifyWaitTime: Cardinal;
 begin
   // 0s <= WaitTime <= 2s, in 10ms units
-  Result := GRandomNumber.NextCardinal(21)*10;
+  Result := GRandomNumber.NextCardinal(20)*10;
 end;
 
 procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
