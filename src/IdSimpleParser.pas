@@ -566,9 +566,15 @@ begin
 
   if (not Self.Eof) then begin
     C := Self.ReadOctet;
-    Assert(C = #13, Format(DamagedLineEnd, [Self.CurrentLine, '#$0D', '#$' + IntToHex(Ord(C), 2)]));
+    Assert(C = #13, Format(DamagedLineEnd,
+                           [Self.CurrentLine,
+                            '#$0D',
+                            '#$' + IntToHex(Ord(C), 2)]));
     C := Self.ReadOctet;
-    Assert(C = #10, Format(DamagedLineEnd, [Self.CurrentLine, '#$0A', '#$' + IntToHex(Ord(C), 2)]));
+    Assert(C = #10, Format(DamagedLineEnd,
+                           [Self.CurrentLine,
+                            '#$0A',
+                            '#$' + IntToHex(Ord(C), 2)]));
   end;
 
   Self.IncCurrentLine;
