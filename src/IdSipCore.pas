@@ -6269,9 +6269,6 @@ begin
       Self.InitialInvite.InitialRequest.ToHeader.Tag := Self.Dialog.ID.LocalTag;
 
       Self.InitialInvite.Ring;
-
-      Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
-                                      Self.InitialInvite.InitialRequest.ContentType);
     end;
   finally
     Self.DialogLock.Release;
@@ -6316,6 +6313,9 @@ begin
      and (Self.RemoteSessionDescription = '') then begin
     Self.RemoteSessionDescription := Ack.Body;
     Self.RemoteMimeType           := Ack.ContentType;
+
+    Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
+                                     Self.InitialInvite.InitialRequest.ContentType);
   end;
 end;
 
