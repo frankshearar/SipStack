@@ -1347,20 +1347,8 @@ end;
 procedure TIdSipTransaction.DoOnTransportError(Transport: TIdSipTransport;
                                                Request: TIdSipRequest;
                                                const Reason: String);
-var
-  Error: TIdSipResponse;
 begin
   Self.NotifyOfFailure(Reason);
-
-  // A network error looks the same as receiving a Service Unavailable from
-  // the network.
-  Error := TIdSipResponse.InResponseTo(Request, SIPServiceUnavailable);
-  try
-    Self.NotifyOfResponse(Error, Transport);
-  finally
-    Error.Free;
-  end;
-
   Self.ChangeToTerminated(false);
 end;
 
@@ -1451,10 +1439,12 @@ begin
   try
     Self.Dispatcher.SendToTransport(R);
   except
-    on E: EIdSipTransport do
+    on E: EIdSipTransport do begin
       Self.DoOnTransportError(E.Transport,
                               E.SipMessage as TIdSipRequest,
                               E.Message);
+      raise;
+    end;
   end;
 end;
 
@@ -1463,10 +1453,12 @@ begin
   try
     Self.Dispatcher.SendToTransport(R);
   except
-    on E: EIdSipTransport do
+    on E: EIdSipTransport do begin
       Self.DoOnTransportError(E.Transport,
                               E.SipMessage as TIdSipResponse,
                               E.Message);
+      raise;
+    end;
   end;
 end;
 

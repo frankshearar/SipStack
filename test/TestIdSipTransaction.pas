@@ -2606,7 +2606,11 @@ end;
 procedure TestTIdSipServerInviteTransaction.Terminate(Tran: TIdSipTransaction);
 begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Tran.SendResponse(Self.Response);
+  try
+    Tran.SendResponse(Self.Response);
+  except
+    on EIdSipTransport do;
+  end;
   Self.MockTransport.FailWith := nil;
 end;
 
@@ -2753,7 +2757,13 @@ begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
 
   Self.Response.StatusCode := SIPRinging;
-  Self.Tran.SendResponse(Self.Response);
+
+  try
+    Self.Tran.SendResponse(Self.Response);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3155,7 +3165,13 @@ begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
 
   Self.Response.StatusCode := SIPRinging;
-  Self.Tran.SendResponse(Self.Response);
+
+  try
+    Self.Tran.SendResponse(Self.Response);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3170,7 +3186,13 @@ begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
 
   Self.Response.StatusCode := SIPRinging;
-  Self.Tran.SendResponse(Self.Response);
+
+  try
+    Self.Tran.SendResponse(Self.Response);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3578,7 +3600,13 @@ begin
   Self.MoveToCompletedState(Self.Tran);
 
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+
+  try
+    Self.Tran.ReceiveRequest(Self.Request, Self.MockTransport);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3593,7 +3621,13 @@ begin
 
   Self.MockTransport.FailWith := EIdConnectTimeout;
   Self.Response.StatusCode := SIPTrying;
-  Self.Tran.SendResponse(Self.Response);
+
+  try
+    Self.Tran.SendResponse(Self.Response);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -3630,7 +3664,11 @@ end;
 procedure TestTIdSipClientInviteTransaction.Terminate(Tran: TIdSipTransaction);
 begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.ClientTran.FireTimerA;
+  try
+    Self.ClientTran.FireTimerA;
+  except
+    on EIdSipTransport do;
+  end;
   Self.MockTransport.FailWith := nil;
 end;
 
@@ -3849,7 +3887,12 @@ begin
 
     Self.MockTransport.FailWith := EIdConnectTimeout;
 
-    Tran.SendRequest;
+    try
+      Tran.SendRequest;
+      Fail('No exception raised');
+    except
+      on EIdSipTransport do;
+    end;
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
@@ -3964,7 +4007,12 @@ begin
 
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+  try
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -4303,7 +4351,13 @@ begin
   try
     Tran.AddTransactionListener(Self);
     Self.MockTransport.FailWith := EIdConnectTimeout;
-    Tran.SendRequest;
+
+    try
+      Tran.SendRequest;
+      Fail('No exception raised');
+    except
+      on EIdSipTransport do;
+    end;
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
@@ -4322,7 +4376,13 @@ begin
   // This makes the transaction try send an ACK, which fails.
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+
+  try
+    Self.Tran.ReceiveResponse(Self.Response, Self.MockTransport);
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -4352,7 +4412,11 @@ end;
 procedure TestTIdSipClientNonInviteTransaction.Terminate(Tran: TIdSipTransaction);
 begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.ClientTran.FireTimerE;
+  try
+    Self.ClientTran.FireTimerE;
+  except
+    on EIdSipTransport do;
+  end;
   Self.MockTransport.FailWith := nil;
 end;
 
@@ -4809,7 +4873,12 @@ begin
   Self.MockTransport.FailWith := EIdConnectTimeout;
 
   // When Timer E fires, the transaction resends the request.
-  Self.ClientTran.FireTimerE;
+  try
+    Self.ClientTran.FireTimerE;
+    Fail('No exception raised');
+  except
+    on EIdSipTransport do;
+  end;
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.ClientTran.State),
@@ -4828,7 +4897,12 @@ begin
     Tran.AddTransactionListener(Self);
     Self.MockTransport.FailWith := EIdConnectTimeout;
 
-    Tran.SendRequest;
+    try
+      Tran.SendRequest;
+      Fail('No exception raised');
+    except
+      on EIdSipTransport do;
+    end;
 
     CheckEquals(Transaction(itsTerminated),
                 Transaction(Tran.State),
