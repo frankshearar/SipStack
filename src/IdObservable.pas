@@ -12,7 +12,7 @@ unit IdObservable;
 interface
 
 uses
-  Classes, IdInterfacedObject, SyncObjs;
+  Classes, IdInterfacedObject, IdNotification, SyncObjs;
 
 type
   // I watch other objects for changes. When they change (in their arbitrary
@@ -26,8 +26,7 @@ type
 
   TIdObservable = class(TIdInterfacedObject)
   private
-    Observers:    TList;
-    ObserverLock: TCriticalSection;
+    Observers:    TIdNotificationList;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -37,6 +36,15 @@ type
     procedure NotifyListenersOfChange(Data: TObject); overload;
     function  ObserverCount: Integer;
     procedure RemoveObserver(const Listener: IIdObserver);
+  end;
+
+  TIdObserverChangedMethod = class(TIdMethod)
+  private
+    fObserved: TObject;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Observed: TObject read fObserved write fObserved;
   end;
 
 implementation
@@ -50,13 +58,11 @@ constructor TIdObservable.Create;
 begin
   inherited Create;
 
-  Self.Observers    := TList.Create;
-  Self.ObserverLock := TCriticalSection.Create;
+  Self.Observers := TIdNotificationList.Create;
 end;
 
 destructor TIdObservable.Destroy;
 begin
-  Self.ObserverLock.Free;
   Self.Observers.Free;
 
   inherited Destroy;
@@ -64,12 +70,7 @@ end;
 
 procedure TIdObservable.AddObserver(const Listener: IIdObserver);
 begin
-  Self.ObserverLock.Acquire;
-  try
-    Self.Observers.Add(Pointer(Listener));
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Self.Observers.AddListener(Listener);
 end;
 
 procedure TIdObservable.NotifyListenersOfChange;
@@ -79,48 +80,36 @@ end;
 
 procedure TIdObservable.NotifyListenersOfChange(Data: TObject);
 var
-  I:    Integer;
-  Copy: TList;
+  Notification: TIdObserverChangedMethod;
 begin
-  // We copy the list because the observers could choose to remove themselves
-  // as listeners from Self.
-
-  Self.ObserverLock.Acquire;
+  Notification := TIdObserverChangedMethod.Create;
   try
-    Copy := TList.Create;
-    try
-      for I := 0 to Self.Observers.Count - 1 do
-        Copy.Add(Self.Observers[I]);
+    Notification.Observed := Data;
 
-      for I := 0 to Copy.Count - 1 do
-        IIdObserver(Copy[I]).OnChanged(Data);
-    finally
-      Copy.Free;
-    end;
-
+    Self.Observers.Notify(Notification);
   finally
-    Self.ObserverLock.Release;
+    Notification.Free;
   end;
 end;
 
 function TIdObservable.ObserverCount: Integer;
 begin
-  Self.ObserverLock.Acquire;
-  try
-    Result := Self.Observers.Count;
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Result := Self.Observers.Count;
 end;
 
 procedure TIdObservable.RemoveObserver(const Listener: IIdObserver);
 begin
-  Self.ObserverLock.Acquire;
-  try
-    Self.Observers.Remove(Pointer(Listener));
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Self.Observers.RemoveListener(Listener);
+end;
+
+//******************************************************************************
+//* TIdObserverChangedMethod                                                   *
+//******************************************************************************
+//* TIdObserverChangedMethod Public methods ************************************
+
+procedure TIdObserverChangedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdObserver).OnChanged(Self.Observed);
 end;
 
 end.
