@@ -13,7 +13,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure Send(const Msg: TIdSipMessage); override;
+    procedure Send(Msg: TIdSipMessage); override;
 
     property Transport: TIdSipMockTransport read fTransport;
   end;
@@ -44,7 +44,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransactionDispatcher.Send(const Msg: TIdSipMessage);
+procedure TIdSipMockTransactionDispatcher.Send(Msg: TIdSipMessage);
 begin
   Self.Transport.Send(Msg);
 end;
