@@ -12,7 +12,7 @@ unit IdSipLocator;
 interface
 
 uses
-  Contnrs, IdSipMessage;
+  Classes, Contnrs, IdSipMessage;
 
 type
   TIdSipLocation = class(TObject)
@@ -25,7 +25,7 @@ type
                        const Address:   String;
                              Port: Cardinal); overload;
     constructor Create(Via: TIdSipViaHeader); overload;
-    
+
     function Copy: TIdSipLocation;
 
     property Transport: String   read fTransport;
@@ -67,6 +67,8 @@ type
     function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; overload; virtual; abstract;
     function FindServersFor(const AddressOfRecord: String): TIdSipLocations; overload;
     function FindServersFor(Response: TIdSipResponse): TIdSipLocations; overload;
+    function ResolveNAPTR(const DomainName: String): TStrings; virtual; abstract;
+    function TransportFor(Uri: TIdSipUri): String;
   end;
 
   // I take an address-of-record SIP/SIPS URI and return a URL at which
@@ -74,7 +76,18 @@ type
   TIdSipLocator = class(TIdSipAbstractLocator)
   public
     function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; override;
+    function ResolveNAPTR(const DomainName: String): TStrings; override;
   end;
+
+const
+  SipSctpService = 'SIP+D2S';
+  SipsTlsService = 'SIPS+D2T';
+  SipTcpService  = 'SIP+D2T';
+  SipUdpService  = 'SIP+D2U';
+  SrvSctpPrefix  = '_sip._sctp';
+  SrvTcpPrefix   = '_sip._tcp';
+  SrvUdpPrefix   = '_sip._udp';
+  SrvTlsPrefix   = '_sips._tcp';
 
 implementation
 
@@ -219,6 +232,11 @@ begin
   end;
 end;
 
+function TIdSipAbstractLocator.TransportFor(Uri: TIdSipUri): String;
+begin
+  Result := 'You''re wrong';
+end;
+
 //* TIdSipAbstractLocator Protected methods ************************************
 
 procedure TIdSipAbstractLocator.AddUriLocation(AddressOfRecord: TIdSipUri;
@@ -273,6 +291,11 @@ begin
   Result := TIdSipLocations.Create;
 
   Self.AddUriLocation(AddressOfRecord, Result);
+end;
+
+function TIdSipLocator.ResolveNAPTR(const DomainName: String): TStrings;
+begin
+  raise Exception.Create('TIdSipLocator doesn''t know how to ResolveNAPTR');
 end;
 
 end.

@@ -72,6 +72,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddLocation;
+    procedure TestResolveNAPTR;
   end;
 
 implementation
@@ -481,6 +482,15 @@ begin
   CheckEquals(Address,   Location.Address,   'IPAddress');
   CheckEquals(Port,      Location.Port,      'Port');
   CheckEquals(Transport, Location.Transport, 'Transport');
+end;
+
+procedure TestTIdSipMockLocator.TestResolveNAPTR;
+const
+  AOR = 'bar';
+begin
+  Self.Loc.AddNAPTR(AOR, 10, 10, '_sip._tls.bar');
+  Self.Loc.AddNAPTR(AOR, 20, 10, '_sip._tcp.bar');
+  Self.Loc.AddNAPTR(AOR, 30, 10, '_sip._udp.bar');
 end;
 
 initialization
