@@ -1717,7 +1717,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSipDialog, IdSipLocator, IdUnicode;
+  IdGlobal, IdSipDialog, IdSipLocator, IdSipTransport, IdUnicode;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
@@ -4681,6 +4681,8 @@ begin
   // Return the query name to use in an SRV (RFC 2782) lookup, as part of the
   // SIP server location algorithms of RFC 3263.
 
+  // TODO: use a transport registry or something!
+
   Result := '_';
 
   if Self.UsesSecureTransport then
@@ -4698,7 +4700,7 @@ end;
 
 function TIdSipViaHeader.UsesSecureTransport: Boolean;
 begin
-  Result := (Self.Transport = TlsTransport) or (Self.Transport = TlsOverSctpTransport);
+  Result := TIdSipTransport.TransportFor(Self.Transport).IsSecure;
 end;
 
 //* TIdSipViaHeader Protected methods ******************************************

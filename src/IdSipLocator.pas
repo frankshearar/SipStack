@@ -128,6 +128,7 @@ type
     procedure ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
                                                   SRV: TIdSrvRecords);
     procedure SupportedTransports(TargetUri: TIdUri; Transports: TStrings);
+    function  TransportIsSecure(const Transport: String): Boolean;
   protected
     procedure AddUriLocation(AddressOfRecord: TIdSipUri;
                              List: TIdSipLocations);
@@ -359,7 +360,7 @@ function SrvSort(Item1, Item2: Pointer): Integer;
 implementation
 
 uses
-  IdGlobal, IdSimpleParser, SysUtils;
+  IdGlobal, IdSimpleParser, IdSipTransport, SysUtils;
 
 const
   NoRecordFound = 'No record found: %s';
@@ -655,7 +656,7 @@ begin
         end;
 
         if AddressOfRecord.TransportIsSpecified then begin
-          Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSecure,
+          Self.ResolveSRV(Self.SrvTarget(Self.TransportIsSecure(Transport),
                                          Transport,
                                          Target),
                           Srv);
@@ -843,7 +844,17 @@ begin
   else
     Service := SrvSipService;
 
-  Result := '_' + Service + '._' + Lowercase(Protocol) + '.' + Domain;
+  // This fails for TLS!
+  Result := '_' + Service + '._';
+
+  if IsEqual(Protocol, TlsTransport) then
+    Result := Result + 'tcp'
+  else if IsEqual(Protocol, TlsOverSctpTransport) then
+    Result := Result + 'sctp'
+  else
+    Result := Result + Lowercase(Protocol);
+
+   Result := Result + '.' + Domain;
 end;
 
 function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
@@ -1109,10 +1120,10 @@ begin
   end;
 end;
 
-//******************************************************************************
-//* TIdSipLocator                                                              *
-//******************************************************************************
-//* TIdSipLocator Public methods ***********************************************
+function TIdSipAbstractLocator.TransportIsSecure(const Transport: String): Boolean;
+begin
+  Result := TIdSipTransport.TransportFor(Transport).IsSecure;
+end;
 
 //******************************************************************************
 //* TIdDomainNameRecord                                                        *
