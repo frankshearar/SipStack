@@ -26,20 +26,6 @@ type
     procedure TestOnChanged;
   end;
 
-  TIdObserverListener = class(TIdInterfacedObject,
-                              IIdObserver)
-  private
-    fChanged: Boolean;
-    fData:    TObject;
-  public
-    constructor Create;
-
-    procedure OnChanged(Observed: TObject);
-
-    property Changed: Boolean read fChanged;
-    property Data:    TObject read fData;
-  end;
-
 implementation
 
 function Suite: ITestSuite;
@@ -107,25 +93,6 @@ begin
   finally
     L1.Free;
   end;
-end;
-
-//******************************************************************************
-//* TIdObserverListener                                                        *
-//******************************************************************************
-//* TIdObserverListener Public methods *****************************************
-
-constructor TIdObserverListener.Create;
-begin
-  inherited Create;
-
-  Self.fChanged := false;
-  Self.fData    := nil;
-end;
-
-procedure TIdObserverListener.OnChanged(Observed: TObject);
-begin
-  Self.fChanged := true;
-  Self.fData    := Observed;
 end;
 
 initialization

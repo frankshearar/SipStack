@@ -24,9 +24,11 @@ type
     procedure OnChanged(Observed: TObject);
   end;
 
+  // I provide the basic functionality necessary to maintain a list of
+  // Observers.
   TIdObservable = class(TIdInterfacedObject)
   private
-    Observers:    TIdNotificationList;
+    Observers: TIdNotificationList;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -38,6 +40,8 @@ type
     procedure RemoveObserver(const Listener: IIdObserver);
   end;
 
+  // I represent a reified Method that you use to tell listeners when
+  // Subject has changed in some way.
   TIdObserverChangedMethod = class(TIdMethod)
   private
     fObserved: TObject;
@@ -45,6 +49,21 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Observed: TObject read fObserved write fObserved;
+  end;
+
+  // Use me for debugging purposes.
+  TIdObserverListener = class(TIdInterfacedObject,
+                              IIdObserver)
+  private
+    fChanged: Boolean;
+    fData:    TObject;
+  public
+    constructor Create;
+
+    procedure OnChanged(Observed: TObject);
+
+    property Changed: Boolean read fChanged;
+    property Data:    TObject read fData;
   end;
 
 implementation
@@ -110,6 +129,25 @@ end;
 procedure TIdObserverChangedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdObserver).OnChanged(Self.Observed);
+end;
+
+//******************************************************************************
+//* TIdObserverListener                                                        *
+//******************************************************************************
+//* TIdObserverListener Public methods *****************************************
+
+constructor TIdObserverListener.Create;
+begin
+  inherited Create;
+
+  Self.fChanged := false;
+  Self.fData    := nil;
+end;
+
+procedure TIdObserverListener.OnChanged(Observed: TObject);
+begin
+  Self.fChanged := true;
+  Self.fData    := Observed;
 end;
 
 end.
