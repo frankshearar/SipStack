@@ -697,8 +697,8 @@ type
 
   TIdActionMethod = class(TIdMethod)
   private
-    fAction:        TIdSipAction;
-    fResponse:      TIdSipResponse;
+    fAction:   TIdSipAction;
+    fResponse: TIdSipResponse;
   public
     property Action:   TIdSipAction   read fAction write fAction;
     property Response: TIdSipResponse read fResponse write fResponse;
@@ -773,7 +773,7 @@ type
 
   TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
   private
-    fReason:  String;
+    fReason: String;
   public
     procedure Run(const Subject: IInterface); override;
 
