@@ -573,11 +573,12 @@ begin
     end;
 
     // cf RFC 3261 section 8.2.6.2
-    Result.CallID   := Request.CallID;
-    Result.CSeq     := Request.CSeq;
-    Result.From     := Request.From;
-    Result.ToHeader := Request.ToHeader;
-    Result.Path     := Request.Path;
+    Result.CallID       := Request.CallID;
+    Result.CSeq         := Request.CSeq;
+    Result.From         := Request.From;
+    Result.ToHeader     := Request.ToHeader;
+    Result.ToHeader.Tag := Self.NextTag;
+    Result.Path         := Request.Path;
 
     // cf RFC 3261 section 12.1.1
     ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
@@ -594,7 +595,7 @@ begin
         Self.Contact.Address.Protocol := SipsScheme;
 
       Result.AddHeader(Self.Contact);
-      Result.AddHeader(Self.From);
+//      Result.AddHeader(Self.From);
 
       if (Self.UserAgentName <> '') then
         Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
@@ -1138,7 +1139,9 @@ begin
       Response.ToHeader.Tag := Self.Core.NextTag;
 
       if not Assigned(Self.Dialog) then begin
-        ID := Response.CreateDialogID;
+        ID := TIdSipDialogID.Create(Response.CallID,
+                                    Response.ToHeader.Tag,
+                                    Self.Invite.From.Tag);
         try
           RouteSet := TIdSipHeadersFilter.Create(Invite.Headers,
                                                  RecordRouteHeader);
@@ -1229,8 +1232,6 @@ procedure TIdSipSession.OnReceiveRequest(const Request: TIdSipRequest;
 var
   OK: TIdSipResponse;
 begin
-  Self.AddOpenTransaction(Transaction);
-
   if Self.IsTerminated then begin
     Self.RejectRequest(Request, Transaction);
     Exit;
@@ -1249,6 +1250,7 @@ begin
     Self.NotifyOfEndedSession;
   end
   else if Request.IsInvite then begin
+    Self.AddOpenTransaction(Transaction);
     Self.NotifyOfModifiedSession(Request);
   end;
 end;
@@ -1374,18 +1376,20 @@ var
   RouteSet: TIdSipHeadersFilter;
 begin
   if not Assigned(Self.Dialog) then begin
-    ID := Invite.CreateDialogID;
+    ID := TIdSipDialogID.Create(Self.Invite.CallID,
+                                Self.Invite.From.Tag,
+                                Response.ToHeader.Tag);
     try
-      RouteSet := TIdSipHeadersFilter.Create(Invite.Headers,
+      RouteSet := TIdSipHeadersFilter.Create(Self.Invite.Headers,
                                              RecordRouteHeader);
       try
         fDialog := TIdSipDialog.Create(ID,
-                                       Invite.CSeq.SequenceNo,
+                                       Self.Invite.CSeq.SequenceNo,
                                        0,
-                                       Invite.From.Address,
-                                       Invite.ToHeader.Address,
+                                       Self.Invite.From.Address,
+                                       Self.Invite.ToHeader.Address,
                                        Response.FirstContact.Address,
-                                       Receiver.IsSecure and Invite.FirstContact.HasSipsUri,
+                                       Receiver.IsSecure and Self.Invite.FirstContact.HasSipsUri,
                                        RouteSet);
         Self.NotifyOfEstablishedSession;
       finally

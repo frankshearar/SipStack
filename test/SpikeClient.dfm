@@ -29,6 +29,15 @@ object Spike: TSpike
       TabOrder = 0
       OnClick = InviteClick
     end
+    object Bye: TButton
+      Left = 75
+      Top = 0
+      Width = 75
+      Height = 25
+      Caption = 'Bye'
+      TabOrder = 1
+      OnClick = ByeClick
+    end
   end
   object Log: TMemo
     Left = 0

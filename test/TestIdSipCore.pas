@@ -719,11 +719,11 @@ var
 begin
   R := Self.Core.CreateRequest(Dlg);
   try
-    CheckEquals(Self.Dlg.RemoteURI,    R.ToHeader.Address, 'To URI');
-    CheckEquals(Self.Dlg.ID.RemoteTag, R.ToHeader.Tag,     'To tag');
-    CheckEquals(Self.Dlg.LocalURI,     R.From.Address,     'From URI');
-    CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,         'From tag');
-    CheckEquals(Self.Dlg.ID.CallID,    R.CallID,           'Call-ID');
+    CheckEquals(Self.Dlg.RemoteURI,    R.ToHeader.Address,   'To URI');
+    CheckEquals(Self.Dlg.ID.RemoteTag, R.ToHeader.Tag,       'To tag');
+    CheckEquals(Self.Dlg.LocalURI,     R.From.Address,       'From URI');
+    CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,           'From tag');
+    CheckEquals(Self.Dlg.ID.CallID,    R.CallID,             'Call-ID');
 
     // we should somehow check that CSeq.SequenceNo has been (randomly) generated. How?
   finally
@@ -755,9 +755,7 @@ begin
 
   R := Self.Core.CreateRequest(Self.Dlg);
   try
-    CheckEquals(Self.Dlg.RemoteTarget,
-                R.RequestUri,
-                'Request-URI');
+    CheckEquals(Self.Dlg.RemoteTarget, R.RequestUri, 'Request-URI');
 
     Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
     try
@@ -892,15 +890,29 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestCreateResponse;
 var
-  Response: TIdSipResponse;
+  FromFilter: TIdSipHeadersFilter;
+  Response:   TIdSipResponse;
 begin
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
+    FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
+    try
+      CheckEquals(1, FromFilter.Count, 'Number of From headers');
+    finally
+      FromFilter.Free;
+    end;
+
     CheckEquals(SIPOK, Response.StatusCode,                  'StatusCode mismatch');
     Check(Response.CSeq.IsEqualTo(Self.Invite.CSeq),         'Cseq header mismatch');
     Check(Response.From.IsEqualTo(Self.Invite.From),         'From header mismatch');
-    Check(Response.ToHeader.IsEqualTo(Self.Invite.ToHeader), 'To header mismatch');
     Check(Response.Path.IsEqualTo(Self.Invite.Path),         'Via headers mismatch');
+
+    CheckEquals(Response.ToHeader.Address,
+                Self.Invite.ToHeader.Address,
+                'To header mismatch');
+    CheckNotEquals('',
+                Response.ToHeader.Tag,
+                'To is missing a Tag');
 
     Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
 
@@ -1696,14 +1708,23 @@ begin
     Self.Dispatch.Transport.FireOnResponse(Response);
 
     Check(Session.Dialog.IsEarly,
-          'Dialog in incorrect state');
+          'Dialog in incorrect state: should be Early');
     Check(not Session.Dialog.IsSecure,
           'Dialog secure when TLS not used');
 
     Response.StatusCode := SIPOK;
     Dispatch.Transport.FireOnResponse(Response);
 
-    Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state');
+    Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
+    CheckEquals(Response.CallID,
+                Session.Dialog.ID.CallID,
+                'Dialog''s Call-ID');
+    CheckEquals(Response.From.Tag,
+                Session.Dialog.ID.LocalTag,
+                'Dialog''s Local Tag');
+    CheckEquals(Response.ToHeader.Tag,
+                Session.Dialog.ID.RemoteTag,
+                'Dialog''s Remote Tag');
   finally
     Response.Free;
   end;

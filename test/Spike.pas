@@ -84,7 +84,7 @@ begin
 
   Contact := TIdSipContactHeader.Create;
   try
-    Contact.Value := 'sip:franks@wsfrank';
+    Contact.Value := 'sip:franks@127.0.0.1';
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -92,7 +92,7 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@wsfrank';
+    From.Value := 'sip:franks@127.0.0.1';
     Self.UA.From := From;
   finally
     From.Free;

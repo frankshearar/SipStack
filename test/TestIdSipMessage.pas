@@ -11,7 +11,6 @@ type
   protected
     function FirstLine: String; override;
   public
-    function  CreateDialogID: TIdSipDialogID; override;
     function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
@@ -60,7 +59,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
-    procedure TestCreateDialogID;
+    procedure TestNewRequestHasContentLength;
     procedure TestHasSipsUri;
     procedure TestIsAck;
     procedure TestIsBye;
@@ -95,7 +94,6 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
-    procedure TestCreateDialogID;
     procedure TestIsEqualToComplexMessages;
     procedure TestIsEqualToDifferentHeaders;
     procedure TestIsEqualToDifferentSipVersion;
@@ -153,11 +151,6 @@ end;
 //* TIdSipTrivialMessage                                                       *
 //******************************************************************************
 //* TIdSipTrivialMessage Public methods ****************************************
-
-function TIdSipTrivialMessage.CreateDialogID: TIdSipDialogID;
-begin
-  Result := nil;
-end;
 
 function TIdSipTrivialMessage.IsEqualTo(const Msg: TIdSipMessage): Boolean;
 begin
@@ -634,17 +627,16 @@ begin
   Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
 end;
 
-procedure TestTIdSipRequest.TestCreateDialogID;
+procedure TestTIdSipRequest.TestNewRequestHasContentLength;
 var
-  ID: TIdSipDialogID;
+  R: TIdSipRequest;
 begin
-  ID := Self.Request.CreateDialogID;
+  R := TIdSipRequest.Create;
   try
-    CheckEquals(Self.Request.CallID,       ID.CallID,    'Call-ID');
-    CheckEquals(Self.Request.From.Tag,     ID.LocalTag,  'Local tag');
-    CheckEquals(Self.Request.ToHeader.Tag, ID.RemoteTag, 'Remote tag');
+    Check(Pos(ContentLengthHeaderFull, R.AsString) > 0,
+          'Content-Length missing from new request');
   finally
-    ID.Free;
+    R.Free;
   end;
 end;
 
@@ -1145,20 +1137,6 @@ begin
     end;
   finally
     Expected.Free;
-  end;
-end;
-
-procedure TestTIdSipResponse.TestCreateDialogID;
-var
-  ID: TIdSipDialogID;
-begin
-  ID := Self.Response.CreateDialogID;
-  try
-    CheckEquals(Self.Response.CallID,       ID.CallID,    'Call-ID');
-    CheckEquals(Self.Response.From.Tag,     ID.RemoteTag, 'Remote tag');
-    CheckEquals(Self.Response.ToHeader.Tag, ID.LocalTag,  'Local tag');
-  finally
-    ID.Free;
   end;
 end;
 

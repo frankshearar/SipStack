@@ -62,6 +62,8 @@ end;
 //* TestTIdRTPClient Public methods ********************************************
 
 procedure TestTIdRTPClient.SetUp;
+var
+  S: String;
 begin
   inherited SetUp;
 
@@ -70,7 +72,12 @@ begin
 
   Self.Server := TIdRTPServer.Create(nil);
 
-  Self.SendBuffer := TFileStream.Create(TargetFile, fmOpenRead or fmShareDenyWrite);
+
+  S := 'abcdefghijklmonpqrstuvwxyz0123456789';
+  Self.SendBuffer := TMemoryStream.Create;
+  while (Self.SendBuffer.Size < 5000) do
+    Self.SendBuffer.Write(PChar(S)^, Length(S));
+
   Self.ReceiveBuffer := TStringStream.Create('');
 
   Self.Packet := TIdRTPPacket.Create(Self.Server.Profile);

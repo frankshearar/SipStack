@@ -28,6 +28,7 @@ uses
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
+  SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestMessages in 'test\TestMessages.pas',
@@ -64,6 +65,8 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+  Application.CreateForm(TIdSpikeT140, IdSpikeT140);
+  Application.CreateForm(TIdSpikeT140, IdSpikeT140);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

@@ -14,10 +14,13 @@ type
     Panel1: TPanel;
     Invite: TButton;
     Log: TMemo;
+    Bye: TButton;
     procedure InviteClick(Sender: TObject);
+    procedure ByeClick(Sender: TObject);
   private
-    UA:   TIdSipUserAgentCore;
-    Tran: TIdSipTransport;
+    UA:      TIdSipUserAgentCore;
+    Session: TIdSipSession;
+    Tran:    TIdSipTransport;
 
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnEstablishedSession(const Session: TIdSipSession);
@@ -52,6 +55,8 @@ constructor TSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+//  Self.Bye.Enabled := false;
+
   UA := TIdSipUserAgentCore.Create;
   UA.Dispatcher := TIdSipTransactionDispatcher.Create;
 
@@ -83,19 +88,19 @@ end;
 
 procedure TSpike.InviteClick(Sender: TObject);
 var
-  Client:   TIdTcpClient;
-  Line:     String;
-  Request:  TIdSipRequest;
   ToHeader: TIdSipToHeader;
 begin
   ToHeader := TIdSipToHeader.Create;
   try
     ToHeader.Value := 'sip:franks@127.0.0.1';
 
-    UA.Call(ToHeader);
+    Self.Session := UA.Call(ToHeader);
   finally
     ToHeader.Free;
   end;
+
+//  Self.Invite.Enabled := false;
+//  Self.Bye.Enabled := true;
 end;
 
 procedure TSpike.LogMessage(const Msg: TIdSipMessage);
@@ -106,21 +111,22 @@ end;
 
 procedure TSpike.OnEstablishedSession(const Session: TIdSipSession);
 begin
-  ShowMessage('Session established');
+//  Self.Bye.Enabled := true;
 end;
 
 procedure TSpike.OnEndedSession(const Session: TIdSipSession);
 begin
-  ShowMessage('Session ended');
+  Self.Session := nil;
 end;
 
 procedure TSpike.OnModifiedSession(const Session: TIdSipSession;
                                    const Invite: TIdSipRequest);
 begin
-end;                                   
+end;
 
 procedure TSpike.OnNewSession(const Session: TIdSipSession);
 begin
+//  Self.Bye.Enabled := true;
 end;
 
 procedure TSpike.OnReceiveRequest(const Request: TIdSipRequest;
@@ -145,6 +151,15 @@ procedure TSpike.OnSendResponse(const Response: TIdSipResponse;
                                 const Transport: TIdSipTransport);
 begin
   Self.LogMessage(Response);
+end;
+
+procedure TSpike.ByeClick(Sender: TObject);
+begin
+  if Assigned(Self.Session) then
+    Self.Session.Terminate;
+
+//  Self.Bye.Enabled := false;
+//  Self.Invite.Enabled := true;
 end;
 
 end.
