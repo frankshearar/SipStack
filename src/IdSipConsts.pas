@@ -238,6 +238,60 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
+const
+  WarningIncompatibleNetworkProtocol              = 300;
+  WarningIncompatibleNetworkAddressFormats        = 301;
+  WarningIncompatibleTransportProtocol            = 302;
+  WarningIncompatibleBandwidthUnits               = 303;
+  WarningMediaTypeNotAvailable                    = 304;
+  WarningIncompatibleMediaFormat                  = 305;
+  WarningAttributeNotUnderstood                   = 306;
+  WarningSessionDescriptionParameterNotUnderstood = 307;
+  WarningMulticastNotAvailable                    = 330;
+  WarniningUnicastNotAvailable                    = 331;
+  WarningInsufficientBandwidth                    = 370;
+  WarningMisc                                     = 399;
+
+const
+  RSWarningIncompatibleNetworkProtocol =
+      'Incompatible network protocol: One or more network protocols contained '
+    + 'in the session description are not available.';
+  RSWarningIncompatibleNetworkAddressFormats =
+      'Incompatible network address formats: One or more network address '
+    + 'formats contained in the session description are not available.';
+  RSWarningIncompatibleTransportProtocol =
+      'Incompatible transport protocol: One or more transport protocols '
+    + 'described in the session description are not available.';
+  RSWarningIncompatibleBandwidthUnits =
+      'Incompatible bandwidth units: One or more bandwidth measurement units '
+    + 'contained in the session description were not understood.';
+  RSWarningMediaTypeNotAvailable =
+      'Media type not available: One or more media types contained in the '
+    + 'session description are not available.';
+  RSWarningIncompatibleMediaFormat =
+      'Incompatible media format: One or more media formats contained in the '
+    + 'session description are not available.';
+  RSWarningAttributeNotUnderstood =
+      'Attribute not understood: One or more of the media attributes in the '
+    + 'session description are not supported.';
+  RSWarningSessionDescriptionParameterNotUnderstood =
+      'Session description parameter not understood: A parameter other than '
+    + 'those listed above was not understood.';
+  RSWarningMulticastNotAvailable =
+      'Multicast not available: The site where the user is located does not '
+    + 'support multicast.';
+  RSWarniningUnicastNotAvailable =
+      'Unicast not available: The site where the user is located does not '
+    + 'support unicast communication (usually due to the presence of a '
+    + 'firewall).';
+  RSWarningInsufficientBandwidth =
+      'Insufficient bandwidth: The bandwidth specified in the session '
+    + 'description or defined by the media exceeds that known to be '
+    + 'available.';
+  RSWarningMisc =
+      'Miscellaneous warning';
+
+
 implementation
 
 end.
