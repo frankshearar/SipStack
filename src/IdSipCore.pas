@@ -3522,7 +3522,12 @@ end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.OpenTransactions.Free;
+  Self.OpenTransactionLock.Acquire;
+  try
+    Self.OpenTransactions.Free;
+  finally
+    Self.OpenTransactionLock.Release;
+  end;
   Self.OpenTransactionLock.Free;
 
   Self.DialogLock.Acquire;
