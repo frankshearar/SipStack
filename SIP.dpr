@@ -27,7 +27,7 @@ uses
   Spike in 'test\Spike.pas' {rnidSpike},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
-  TestMessages in 'test\TestMessages.pas',
+  TestMessages in 'test\TestMessages.pas'{,
   TestIdSdpParser in 'test\TestIdSdpParser.pas',                 // pass
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',           // pass
   TestIdSipCore in 'test\TestIdSipCore.pas',                     // check
@@ -42,10 +42,11 @@ uses
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',           // pass (3rd party moans)
-  TestIdUri in 'test\TestIdUri.pas';                             // pass
+  TestIdUri in 'test\TestIdUri.pas'},                             // pass
+  TestIdSipUri in 'test\TestIdSipUri.pas';
 
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

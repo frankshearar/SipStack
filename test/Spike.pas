@@ -27,6 +27,8 @@ type
     procedure OnChanged(const Observed: TObject);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -125,6 +127,11 @@ end;
 procedure TrnidSpike.OnEndedSession(const Session: TIdSipSession);
 begin
 end;
+
+procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
+                                       const Invite: TIdSipRequest);
+begin
+end;                                       
 
 procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
 begin

@@ -4,8 +4,8 @@ interface
 
 uses
   IdSipCore, IdSipDialog, IdSipDialogID, IdSipHeaders, IdSipMessage,
-  IdSipMockTransactionDispatcher, IdSipTransaction, IdURI, TestFramework,
-  TestFrameworkSip;
+  IdSipMockTransactionDispatcher, IdSipTransaction, IdSipTransport, IdURI,
+  TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -18,13 +18,28 @@ type
     procedure TestNextCallID;
   end;
 
-  TestTIdSipUserAgentCore = class(TTestCaseSip, IIdSipSessionListener)
+  TTestCaseTU = class(TTestCaseSip)
+  private
+    procedure RemoveBody(Msg: TIdSipMessage);
+  protected
+    Core:        TIdSipUserAgentCore;
+    Destination: TIdSipToHeader;
+    Dispatch:    TIdSipMockTransactionDispatcher;
+    Invite:      TIdSipRequest;
+    Session:     TIdSipSession;
+
+    function  CreateRemoteBye(const LocalDialog: TIdSipDialog): TIdSipRequest;
+    procedure SimulateRemoteInvite;
+    procedure SimulateRemoteBye(const LocalDialog: TIdSipDialog);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipUserAgentCore = class(TTestCaseTU, IIdSipSessionListener)
   private
     CheckOnNewSession:         TIdSipSessionEvent;
-    Core:                      TIdSipUserAgentCore;
     Dlg:                       TIdSipDialog;
-    Destination:               TIdSipToHeader;
-    Dispatch:                  TIdSipMockTransactionDispatcher;
     ID:                        TIdSipDialogID;
     LocalSequenceNo:           Cardinal;
     LocalUri:                  TIdURI;
@@ -34,14 +49,15 @@ type
     RemoteSequenceNo:          Cardinal;
     RemoteTarget:              TIdURI;
     RemoteUri:                 TIdURI;
-    Request:                   TIdSipRequest;
     RouteSet:                  TIdSipHeaders;
-    Session:                   TIdSipSession;
 
     procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
+    procedure SimulateRemoteBye(const Dialog: TIdSipDialog);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -98,23 +114,29 @@ type
     procedure TestSetFromMailto;
   end;
 
-  TestTIdSipSession = class(TTestCaseSip, IIdSipSessionListener)
+  TestTIdSipSession = class(TTestCaseTU,
+                            IIdSipSessionListener,
+                            IIdSipTransportSendingListener)
   private
-    Core:                TIdSipUserAgentCore;
-    Dest:                TIdSipToHeader;
-    Dispatch:            TIdSipMockTransactionDispatcher;
-    Invite:              TIdSipRequest;
-    OnEndedSessionFired: Boolean;
-    Session:             TIdSipSession;
+    OnEndedSessionFired:    Boolean;
+    OnModifiedSessionFired: Boolean;
+    SentRequestTerminated:  Boolean;
 
+    function  CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnSendRequest(const Request: TIdSipRequest;
+                            const Transport: TIdSipTransport);
+    procedure OnSendResponse(const Response: TIdSipResponse;
+                             const Transport: TIdSipTransport);
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAcceptCall;
+    procedure TestAddSessionListener;
     procedure TestCall;
     procedure TestCallTwice;
     procedure TestCallRemoteRefusal;
@@ -124,6 +146,8 @@ type
     procedure TestCallSipUriOverTls;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
+    procedure TestReceiveReInvite;
+    procedure TestRemoveSessionListener;
     procedure TestTerminate;
   end;
 
@@ -131,7 +155,7 @@ implementation
 
 uses
   Classes, IdException, IdGlobal, IdHttp, IdSipConsts, SysUtils,
-  TestMessages, IdSipTransport, IdSipMockTransport;
+  TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
@@ -179,6 +203,95 @@ begin
 end;
 
 //******************************************************************************
+//* TTestCaseTU                                                                *
+//******************************************************************************
+//* TTestCaseTU Public methods *************************************************
+
+procedure TTestCaseTU.SetUp;
+var
+  P: TIdSipParser;
+begin
+  inherited SetUp;
+
+  Self.Destination := TIdSipToHeader.Create;
+  Self.Destination.Value := 'sip:franks@localhost';
+
+  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatch.Transport.LocalEchoMessages := false;
+  Self.Dispatch.Transport.TransportType := sttTCP;
+
+  Self.Core := TIdSipUserAgentCore.Create;
+  Self.Core.Dispatcher := Self.Dispatch;
+
+  P := TIdSipParser.Create;
+  try
+    Self.Invite := P.ParseAndMakeRequest(BasicRequest);
+    Self.RemoveBody(Self.Invite);
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestCaseTU.TearDown;
+begin
+  Self.Invite.Free;
+  Self.Core.Free;
+  Self.Dispatch.Free;
+  Self.Destination.Free;
+
+  inherited TearDown;
+end;
+
+//* TTestCaseTU Protected methods **********************************************
+
+function TTestCaseTU.CreateRemoteBye(const LocalDialog: TIdSipDialog): TIdSipRequest;
+var
+  Temp: String;
+begin
+  Result := Self.Core.CreateBye(LocalDialog);
+  try
+    // Because this BYE actually comes from the network, its from/to headers will
+    // be the REVERSE of a locally generated BYE
+    Temp := Result.ToHeader.Value + Result.ToHeader.ParamsAsString;
+    Result.ToHeader.Value := Result.From.Value + Result.From.ParamsAsString;
+    Result.From.Value := Temp;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+procedure TTestCaseTU.SimulateRemoteInvite;
+begin
+  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+end;
+
+procedure TTestCaseTU.SimulateRemoteBye(const LocalDialog: TIdSipDialog);
+var
+  Bye: TIdSipRequest;
+begin
+  Bye := Self.CreateRemoteBye(LocalDialog);
+  try
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+  finally
+    Bye.Free;
+  end;
+end;
+
+//* TTestCaseTU Private methods ************************************************
+
+procedure TTestCaseTU.RemoveBody(Msg: TIdSipMessage);
+begin
+  Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+  Msg.Body := '';
+  Msg.ToHeader.Value := Msg.ToHeader.DisplayName
+                               + ' <' + Msg.ToHeader.Address.GetFullURI + '>';
+  Msg.ContentType   := SdpMimeType;
+  Msg.ContentLength := 0;
+end;
+
+//******************************************************************************
 //* TestTIdSipUserAgentCore                                                    *
 //******************************************************************************
 //* TestTIdSipUserAgentCore Public methods *************************************
@@ -187,9 +300,10 @@ procedure TestTIdSipUserAgentCore.SetUp;
 var
   C: TIdSipContactHeader;
   F: TIdSipFromHeader;
-  P: TIdSipParser;
 begin
   inherited SetUp;
+
+  Self.Core.AddSessionListener(Self);
 
   Self.CheckOnNewSession := nil;
 
@@ -215,17 +329,6 @@ begin
                                   false,
                                   Self.RouteSet);
 
-  Self.Destination := TIdSipToHeader.Create;
-  Self.Destination.Value := 'sip:franks@localhost';
-
-  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatch.Transport.LocalEchoMessages := false;
-  Self.Dispatch.Transport.TransportType := sttTCP;
-
-  Self.Core := TIdSipUserAgentCore.Create;
-  Self.Core.Dispatcher := Self.Dispatch;
-  Self.Core.AddSessionListener(Self);
-
   C := TIdSipContactHeader.Create;
   try
     C.Value := 'sip:wintermute@tessier-ashpool.co.lu';
@@ -242,28 +345,12 @@ begin
     F.Free;
   end;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Request := P.ParseAndMakeRequest(BasicRequest);
-    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-    Self.Request.Body := '';
-    Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
-                                 + ' <' + Self.Request.ToHeader.Address.GetFullURI + '>';
-  finally
-    P.Free;
-  end;
-  Self.Request.ContentType := SdpMimeType;
-
   Self.OnNewSessionFired         := false;
   Self.OnEstablishedSessionFired := false;
 end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
 begin
-  Self.Request.Free;
-  Self.Core.Free;
-  Self.Dispatch.Free;
-  Self.Destination.Free;
   Self.Dlg.Free;
   Self.RouteSet.Free;
   Self.RemoteUri.Free;
@@ -327,6 +414,11 @@ begin
   Self.OnEstablishedSessionFired := true;
 end;
 
+procedure TestTIdSipUserAgentCore.OnModifiedSession(const Session: TIdSipSession;
+                                                    const Invite: TIdSipRequest);
+begin
+end;                                                    
+
 procedure TestTIdSipUserAgentCore.OnNewSession(const Session: TIdSipSession);
 begin
   if Assigned(Self.CheckOnNewSession) then
@@ -335,6 +427,18 @@ begin
   Self.OnNewSessionFired := true;
 
   Self.Session := Session;
+end;
+
+procedure TestTIdSipUserAgentCore.SimulateRemoteBye(const Dialog: TIdSipDialog);
+var
+  Bye: TIdSipRequest;
+begin
+  Bye := Self.CreateRemoteBye(Dialog);
+  try
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+  finally
+    Bye.Free;
+  end;
 end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************
@@ -475,7 +579,6 @@ end;
 procedure TestTIdSipUserAgentCore.TestAddObserver;
 var
   L1, L2: TIdSipTestObserver;
-  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestObserver.Create;
   try
@@ -484,8 +587,7 @@ begin
       Self.Core.AddObserver(L1);
       Self.Core.AddObserver(L2);
 
-      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
-      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+      Self.SimulateRemoteInvite;
 
       Check(L1.Changed and L2.Changed, 'Not all Listeners notified, hence not added');
     finally
@@ -499,7 +601,6 @@ end;
 procedure TestTIdSipUserAgentCore.TestAddSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
-  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -508,8 +609,7 @@ begin
       Self.Core.AddSessionListener(L1);
       Self.Core.AddSessionListener(L2);
 
-      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
-      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+      Self.SimulateRemoteInvite;
 
       Check(L1.NewSession and L2.NewSession, 'Not all Listeners notified, hence not added');
     finally
@@ -776,13 +876,13 @@ procedure TestTIdSipUserAgentCore.TestCreateResponse;
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
-    CheckEquals(SIPOK, Response.StatusCode,              'StatusCode mismatch');
-    Check(Response.CSeq.IsEqualTo(Request.CSeq),         'Cseq header mismatch');
-    Check(Response.From.IsEqualTo(Request.From),         'From header mismatch');
-    Check(Response.ToHeader.IsEqualTo(Request.ToHeader), 'To header mismatch');
-    Check(Response.Path.IsEqualTo(Request.Path),         'Via headers mismatch');
+    CheckEquals(SIPOK, Response.StatusCode,                  'StatusCode mismatch');
+    Check(Response.CSeq.IsEqualTo(Self.Invite.CSeq),         'Cseq header mismatch');
+    Check(Response.From.IsEqualTo(Self.Invite.From),         'From header mismatch');
+    Check(Response.ToHeader.IsEqualTo(Self.Invite.ToHeader), 'To header mismatch');
+    Check(Response.Path.IsEqualTo(Self.Invite.Path),         'Via headers mismatch');
 
     Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
 
@@ -799,13 +899,13 @@ var
   Response:             TIdSipResponse;
   ResponseRecordRoutes: TIdSipHeadersFilter;
 begin
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
+  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
+  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
 
-  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
+  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Invite.Headers, RecordRouteHeader);
   try
-    Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+    Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
     try
       ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
       try
@@ -827,9 +927,9 @@ var
   Contact:  TIdSipContactHeader;
   Response: TIdSipResponse;
 begin
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
+  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
 
-  Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     Contact := Response.FirstContact;
     CheckEquals(SipsScheme, Contact.Address.Protocol,
@@ -844,9 +944,9 @@ var
   Contact:  TIdSipContactHeader;
   Response: TIdSipResponse;
 begin
-  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+  Self.Invite.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
 
-  Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     Contact := Response.FirstContact;
     CheckEquals(SipsScheme, Contact.Address.Protocol,
@@ -860,9 +960,9 @@ procedure TestTIdSipUserAgentCore.TestCreateResponseTryingWithTimestamps;
 var
   Response: TIdSipResponse;
 begin
-  Self.Request.AddHeader(TimestampHeader).Value := '1';
+  Self.Invite.AddHeader(TimestampHeader).Value := '1';
 
-  Response := Self.Core.CreateResponse(Self.Request, SIPTrying);
+  Response := Self.Core.CreateResponse(Self.Invite, SIPTrying);
   try
     Check(Response.HasHeader(TimestampHeader),
           'Timestamp header(s) not copied');
@@ -876,9 +976,9 @@ var
   Response: TIdSipResponse;
 begin
   Self.Core.UserAgentName := 'SATAN/1.0';
-  Self.Request.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
 
-  Response := Self.Core.CreateResponse(Self.Request, SIPOK);
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     CheckEquals(Self.Core.UserAgentName,
                 Response.FirstHeader(UserAgentHeader).Value,
@@ -912,30 +1012,30 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
 begin
-  Self.Request.Headers.Remove(Self.Request.FirstHeader(ContentEncodingHeaderFull));
+  Self.Invite.Headers.Remove(Self.Invite.FirstHeader(ContentEncodingHeaderFull));
 
-  Check(not Self.Core.HasUnknownContentEncoding(Self.Request),
+  Check(not Self.Core.HasUnknownContentEncoding(Self.Invite),
         'Vacuously true');
 
-  Self.Request.AddHeader(ContentEncodingHeaderFull);
-  Check(Self.Core.HasUnknownContentEncoding(Self.Request),
+  Self.Invite.AddHeader(ContentEncodingHeaderFull);
+  Check(Self.Core.HasUnknownContentEncoding(Self.Invite),
         'No encodings are supported');
 end;
 
 procedure TestTIdSipUserAgentCore.TestHasUnknownContentType;
 begin
-  Self.Request.RemoveHeader(Self.Request.FirstHeader(ContentTypeHeaderFull));
+  Self.Invite.RemoveHeader(Self.Invite.FirstHeader(ContentTypeHeaderFull));
 
-  Check(not Self.Core.HasUnknownContentType(Self.Request),
+  Check(not Self.Core.HasUnknownContentType(Self.Invite),
         'Vacuously true');
 
-  Self.Request.AddHeader(ContentTypeHeaderFull).Value := SdpMimeType;
-  Check(not Self.Core.HasUnknownContentType(Self.Request),
+  Self.Invite.AddHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+  Check(not Self.Core.HasUnknownContentType(Self.Invite),
         SdpMimeType + ' MUST supported');
 
-  Self.Request.RemoveHeader(Self.Request.FirstHeader(ContentTypeHeaderFull));
-  Self.Request.AddHeader(ContentTypeHeaderFull);
-  Check(Self.Core.HasUnknownContentType(Self.Request),
+  Self.Invite.RemoveHeader(Self.Invite.FirstHeader(ContentTypeHeaderFull));
+  Self.Invite.AddHeader(ContentTypeHeaderFull);
+  Check(Self.Core.HasUnknownContentType(Self.Invite),
         'Nothing else is supported');
 end;
 
@@ -972,15 +1072,15 @@ var
   Tran:          TIdSipTransaction;
 begin
   // cf. RFC 3261, section 8.2.2.2
-  Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+  Tran := Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
 
   // wipe out the tag & give a different branch
-  Self.Request.ToHeader.Value := Self.Request.ToHeader.Address.GetFullURI;
-  Self.Request.LastHop.Branch := Self.Request.LastHop.Branch + '1';
+  Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.GetFullURI;
+  Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Core.ReceiveRequest(Self.Request, Tran, Self.Dispatch.Transport);
+  Self.Core.ReceiveRequest(Self.Invite, Tran, Self.Dispatch.Transport);
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
 
@@ -1015,11 +1115,8 @@ begin
 end;
 
 procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;
-var
-  Tran: TIdSipTransaction;
 begin
-  Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
-  Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+  Self.SimulateRemoteInvite;
 
   Check(Self.OnNewSessionFired, 'UI not notified of new session');
 end;
@@ -1055,30 +1152,17 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestReceiveByeForDialog;
 var
-  Bye:           TIdSipRequest;
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
-  Temp:          String;
 begin
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
   Self.Session.AcceptCall;
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
-  Bye := Self.Core.CreateBye(Self.Session.Dialog);
-  try
-    // Because this BYE actually comes from the network, its from/to headers will
-    // be the REVERSE of a locally generated BYE
-    Temp := Bye.ToHeader.Value + Bye.ToHeader.ParamsAsString;
-    Bye.ToHeader.Value := Bye.From.Value + Bye.From.ParamsAsString;
-    Bye.From.Value := Temp;
-
-    Self.Dispatch.Transport.FireOnRequest(Bye);
-  finally
-    Bye.Free;
-  end;
+  Self.SimulateRemoteBye(Self.Session.Dialog);
 
   CheckEquals(ResponseCount + 1,
               Self.Dispatch.Transport.SentResponseCount,
@@ -1123,7 +1207,6 @@ end;
 procedure TestTIdSipUserAgentCore.TestRemoveObserver;
 var
   L1, L2: TIdSipTestObserver;
-  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestObserver.Create;
   try
@@ -1133,8 +1216,7 @@ begin
       Self.Core.AddObserver(L2);
       Self.Core.RemoveObserver(L2);
 
-      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
-      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+      Self.SimulateRemoteInvite;
 
       Check(L1.Changed and not L2.Changed,
             'Listener notified, hence not removed');
@@ -1150,7 +1232,7 @@ procedure TestTIdSipUserAgentCore.TestRemoveSession;
 var
   SessionCount: Cardinal;
 begin
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
   SessionCount := Self.Core.SessionCount;
@@ -1163,7 +1245,6 @@ end;
 procedure TestTIdSipUserAgentCore.TestRemoveSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
-  Tran:   TIdSipTransaction;
 begin
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -1173,8 +1254,7 @@ begin
       Self.Core.AddSessionListener(L2);
       Self.Core.RemoveSessionListener(L2);
 
-      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
-      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+      Self.SimulateRemoteInvite;
 
       Check(L1.NewSession and not L2.NewSession,
             'Listener notified, hence not removed');
@@ -1191,11 +1271,11 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  Self.Request.RemoveHeader(Self.Request.FirstContact);
+  Self.Invite.RemoveHeader(Self.Invite.FirstContact);
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1210,13 +1290,13 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  Self.Request.FirstHeader(ContentTypeHeaderFull).Value := SdpMimeType;
+  Self.Invite.FirstHeader(ContentTypeHeaderFull).Value := SdpMimeType;
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Request.AddHeader(ContentEncodingHeaderFull).Value := 'gzip';
+  Self.Invite.AddHeader(ContentEncodingHeaderFull).Value := 'gzip';
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1236,11 +1316,11 @@ var
 begin
   Self.Core.AddAllowedLanguage('fr');
 
-  Self.Request.AddHeader(ContentLanguageHeader).Value := 'en_GB';
+  Self.Invite.AddHeader(ContentLanguageHeader).Value := 'en_GB';
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1260,9 +1340,9 @@ var
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Request.ContentType := 'text/xml';
+  Self.Invite.ContentType := 'text/xml';
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1282,9 +1362,9 @@ var
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Request.AddHeader(RequireHeader).Value := '100rel';
+  Self.Invite.AddHeader(RequireHeader).Value := '100rel';
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1292,7 +1372,7 @@ begin
   Response := Self.Dispatch.Transport.LastResponse;
   CheckEquals(SIPBadExtension, Response.StatusCode, 'Status-Code');
   Check(Response.HasHeader(UnsupportedHeader), 'No Unsupported header');
-  CheckEquals(Self.Request.FirstHeader(RequireHeader).Value,
+  CheckEquals(Self.Invite.FirstHeader(RequireHeader).Value,
               Response.FirstHeader(UnsupportedHeader).Value,
               'Unexpected Unsupported header value');
 end;
@@ -1304,8 +1384,8 @@ var
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Request.RequestUri.URI := 'tel://1';
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.Invite.RequestUri.URI := 'tel://1';
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1322,12 +1402,12 @@ var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
 begin
-  Self.Request.Method := MethodRegister;
-  Self.Request.CSeq.Method := Self.Request.Method;
+  Self.Invite.Method := MethodRegister;
+  Self.Invite.CSeq.Method := Self.Invite.Method;
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.SimulateRemoteInvite;
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -1439,41 +1519,32 @@ end;
 //* TestTIdSipSession Public methods *******************************************
 
 procedure TestTIdSipSession.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
-  Self.Dest            := TIdSipToHeader.Create;
-  Self.Dispatch        := TIdSipMockTransactionDispatcher.Create;
-  Self.Core            := TIdSipUserAgentCore.Create;
-  Self.Core.Dispatcher := Self.Dispatch;
   Self.Core.AddSessionListener(Self);
 
-  Self.Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
-
-  P := TIdSipParser.Create;
-  try
-    Self.Invite := P.ParseAndMakeRequest(LocalLoopRequest);
-    Self.Invite.Headers.RemoveAll(ContentTypeHeaderFull);
-  finally
-    P.Free;
-  end;
-
-  Self.OnEndedSessionFired := false;
-end;
-
-procedure TestTIdSipSession.TearDown;
-begin
-  Self.Invite.Free;
-  Self.Core.Free;
-  Self.Dispatch.Free;
-  Self.Dest.Free;
-
-  inherited TearDown;
+  Self.OnEndedSessionFired    := false;
+  Self.OnModifiedSessionFired := false;
+  Self.SentRequestTerminated  := false;
 end;
 
 //* TestTIdSipSession Private methods ******************************************
+
+function TestTIdSipSession.CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
+var
+  Temp: String;
+begin
+  Result := Self.Core.CreateRequest(LocalDialog);
+  try
+    Result.Assign(Self.Invite);
+    Result.ToHeader.Tag := LocalDialog.ID.LocalTag;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
 
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
 begin
@@ -1485,9 +1556,28 @@ procedure TestTIdSipSession.OnEstablishedSession(const Session: TIdSipSession);
 begin
 end;
 
+procedure TestTIdSipSession.OnModifiedSession(const Session: TIdSipSession;
+                                              const Invite: TIdSipRequest);
+begin
+  Self.OnModifiedSessionFired := true;
+end;
+
 procedure TestTIdSipSession.OnNewSession(const Session: TIdSipSession);
 begin
   Self.Session := Session;
+  Self.Session.AddSessionListener(Self);
+end;
+
+procedure TestTIdSipSession.OnSendRequest(const Request: TIdSipRequest;
+                                          const Transport: TIdSipTransport);
+begin
+end;
+
+procedure TestTIdSipSession.OnSendResponse(const Response: TIdSipResponse;
+                                           const Transport: TIdSipTransport);
+begin
+  if (Response.StatusCode = SIPRequestTerminated) then
+    Self.SentRequestTerminated := true;                  
 end;
 
 //* TestTIdSipSession Published methods ****************************************
@@ -1500,7 +1590,7 @@ begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+  Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
 
   Self.Session.AcceptCall;
@@ -1516,6 +1606,28 @@ begin
   Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
 end;
 
+procedure TestTIdSipSession.TestAddSessionListener;
+var
+  L1, L2: TIdSipTestSessionListener;
+begin
+  L1 := TIdSipTestSessionListener.Create;
+  try
+    L2 := TIdSipTestSessionListener.Create;
+    try
+      Self.Core.AddSessionListener(L1);
+      Self.Core.AddSessionListener(L2);
+
+      Self.SimulateRemoteInvite;
+
+      Check(L1.NewSession and L2.NewSession, 'Not all Listeners notified, hence not added');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestCall;
 var
   RequestCount: Cardinal;
@@ -1528,7 +1640,7 @@ begin
   SessCount    := Self.Core.SessionCount;
   TranCount    := Self.Dispatch.TransactionCount;
 
-  Session := Self.Core.Call(Self.Dest);
+  Session := Self.Core.Call(Self.Destination);
 
   CheckEquals(RequestCount + 1,
               Self.Dispatch.Transport.SentRequestCount,
@@ -1570,8 +1682,8 @@ begin
   SessCount := Self.Core.SessionCount;
   TranCount := Self.Dispatch.TransactionCount;
 
-  Session := Self.Core.Call(Self.Dest);
-  Session.Call(Self.Dest);
+  Session := Self.Core.Call(Self.Destination);
+  Session.Call(Self.Destination);
 
   CheckEquals(SessCount + 1,
               Self.Core.SessionCount,
@@ -1586,7 +1698,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Session := Self.Core.Call(Self.Dest);
+  Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SIPForbidden);
@@ -1609,7 +1721,7 @@ begin
   try
     Session.AddSessionListener(Self);
     Self.Dispatch.Transport.FailWith := EIdConnectTimeout;
-    Session.Call(Self.Dest);
+    Session.Call(Self.Destination);
 
     Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                          SIPForbidden);
@@ -1632,8 +1744,8 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTLS;
 
-  Self.Dest.Address.Protocol := SipsScheme;
-  Session := Self.Core.Call(Self.Dest);
+  Self.Destination.Address.Protocol := SipsScheme;
+  Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SIPTrying);
@@ -1654,8 +1766,8 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Self.Dest.Address.Protocol := SipsScheme;
-  Session := Self.Core.Call(Self.Dest);
+  Self.Destination.Address.Protocol := SipsScheme;
+  Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SipTrying);
@@ -1676,7 +1788,7 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Session := Self.Core.Call(Self.Dest);
+  Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SipTrying);
@@ -1692,37 +1804,83 @@ begin
 end;
 
 procedure TestTIdSipSession.TestReceiveBye;
-var
-  Bye:  TIdSipRequest;
-  Temp: String;
 begin
-  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+  Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
   Self.Session.AcceptCall;
   Self.Session.AddSessionListener(Self);
 
-  Bye := Self.Core.CreateBye(Self.Session.Dialog);
-  try
-    // Because this BYE actually comes from the network, its from/to headers will
-    // be the REVERSE of a locally generated BYE
-    Temp := Bye.ToHeader.Value + Bye.ToHeader.ParamsAsString;
-    Bye.ToHeader.Value := Bye.From.Value + Bye.From.ParamsAsString;
-    Bye.From.Value := Temp;
-
-    Self.Dispatch.Transport.FireOnRequest(Bye);
-  finally
-    Bye.Free;
-  end;
+  Self.SimulateRemoteBye(Self.Session.Dialog);
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
 end;
 {
 procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
+var
+  ReInvite: TIdSipRequest;
+  Session:  TIdSipSession;
 begin
-  Fail('How do we make a pending request for the soon-to-be-terminated dialog?');
+  Fail('Can''t be done until Session can modify a session');
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession wasn''t fired');
+  Self.Session.AcceptCall;
+
+  // This must be a CLIENT transaction!
+  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
+  try
+    Self.Dispatch.Transport.FireOnRequest(ReInvite);
+    Self.SimulateRemoteBye(Self.Session.Dialog);
+
+    Check(Self.SentRequestTerminated,
+          'Pending request wasn''t responded to with a 481 Request Terminated');
+  finally
+    ReInvite.Free;
+  end;
 end;
 }
+procedure TestTIdSipSession.TestReceiveReInvite;
+var
+  ReInvite: TIdSipRequest;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession wasn''t fired');
+  Self.Session.AcceptCall;
+
+  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
+  try
+    Self.Dispatch.Transport.FireOnRequest(ReInvite);
+
+    Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
+  finally
+    ReInvite.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestRemoveSessionListener;
+var
+  L1, L2: TIdSipTestSessionListener;
+begin
+  L1 := TIdSipTestSessionListener.Create;
+  try
+    L2 := TIdSipTestSessionListener.Create;
+    try
+      Self.Core.AddSessionListener(L1);
+      Self.Core.AddSessionListener(L2);
+      Self.Core.RemoveSessionListener(L2);
+
+      Self.SimulateRemoteInvite;
+
+      Check(L1.NewSession and not L2.NewSession,
+            'Listener notified, hence not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestTerminate;
 var
   Request:      TIdSipRequest;
@@ -1730,7 +1888,7 @@ var
 begin
   RequestCount := Self.Dispatch.Transport.SentRequestCount;
 
-  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+  Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
 
   Self.Session.AcceptCall;

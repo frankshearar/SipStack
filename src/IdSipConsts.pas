@@ -35,7 +35,7 @@ const
   FromHeaderFull             = 'From';
   FromHeaderShort            = 'f';
   InReplyToHeader            = 'In-Reply-To';
-  LrParam                    = 'lr';
+  LooseRoutableParam         = 'lr';
   MaddrParam                 = 'maddr';
   MaxForwardsHeader          = 'Max-Forwards';
   MethodAck                  = 'ACK';
@@ -43,6 +43,7 @@ const
   MethodCancel               = 'CANCEL';
   MethodInvite               = 'INVITE';
   MethodOptions              = 'OPTIONS';
+  MethodParam                = 'method';
   MethodRegister             = 'REGISTER';
   MIMEVersionHeader          = 'MIME-Version';
   MinExpiresHeader           = 'Min-Expires';
@@ -70,9 +71,17 @@ const
   TimestampHeader            = 'Timestamp';
   ToHeaderFull               = 'To';
   ToHeaderShort              = 't';
+  TransportParam             = 'transport';
+  TransportParamSCTP         = 'sctp';
+  TransportParamTCP          = 'tcp';
+  TransportParamTLS          = 'tls';
+  TransportParamUDP          = 'udp';
   TTLParam                   = 'ttl';
   UnsupportedHeader          = 'Unsupported';
   UserAgentHeader            = 'User-Agent';
+  UserParam                  = 'user';
+  UserParamIp                = 'ip';
+  UserParamPhone             = 'phone';
   ViaHeaderFull              = 'Via';
   ViaHeaderShort             = 'v';
   WarningHeader              = 'Warning';
@@ -194,8 +203,10 @@ const
 
 // MIME types
 const
-  SdpMimeType  = 'application/sdp';
-  T140MimeType = 'text/t140';
+  InterleavedT140MimeType = 'audio/t140';
+  RedundantT140MimeType   = 'text/RED';
+  SdpMimeType             = 'application/sdp';
+  T140MimeType            = 'text/t140';
 
 implementation
 

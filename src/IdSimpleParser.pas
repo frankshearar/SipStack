@@ -50,8 +50,10 @@ const
   MalformedToken   = 'Malformed %s: ''%s''';
 
 const
-  Alphabet = ['a'..'z', 'A'..'Z'];
-  Digits   = ['0'..'9'];
+  Alphabet        = ['a'..'z', 'A'..'Z'];
+  Digits          = ['0'..'9'];
+  MarkChars       = ['-', '_', '.', '!', '~', '*', '''', '(', ')'];
+  UnreservedChars = Alphabet + Digits + MarkChars;
 
 implementation
 

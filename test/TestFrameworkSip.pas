@@ -36,20 +36,25 @@ type
     property Changed: Boolean read fChanged;
   end;
 
-  TIdSipTestSessionListener = class(TIdSipInterfacedObject, IIdSipSessionListener)
+  TIdSipTestSessionListener = class(TIdSipInterfacedObject,
+                                    IIdSipSessionListener)
   private
     fEndedSession:       Boolean;
     fEstablishedSession: Boolean;
+    fModifiedSession:    Boolean;
     fNewSession:         Boolean;
   public
     constructor Create;
 
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnModifiedSession(const Session: TIdSipSession;
+                                const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
 
     property EndedSession:       Boolean read fEndedSession;
     property EstablishedSession: Boolean read fEstablishedSession;
+    property ModifiedSession:    Boolean read fModifiedSession;
     property NewSession:         Boolean read fNewSession;
   end;
 
@@ -175,9 +180,10 @@ constructor TIdSipTestSessionListener.Create;
 begin
   inherited Create;
 
-  Self.fNewSession         := false;
-  Self.fEstablishedSession := false;
   Self.fEndedSession       := false;
+  Self.fEstablishedSession := false;
+  Self.fModifiedSession    := false;
+  Self.fNewSession         := false;
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(const Session: TIdSipSession);
@@ -188,6 +194,12 @@ end;
 procedure TIdSipTestSessionListener.OnEstablishedSession(const Session: TIdSipSession);
 begin
   Self.fEstablishedSession := true;
+end;
+
+procedure TIdSipTestSessionListener.OnModifiedSession(const Session: TIdSipSession;
+                                                      const Invite: TIdSipRequest);
+begin
+  Self.fModifiedSession := true;
 end;
 
 procedure TIdSipTestSessionListener.OnNewSession(const Session: TIdSipSession);
