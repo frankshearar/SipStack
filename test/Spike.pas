@@ -63,7 +63,6 @@ type
     DTMFPanel:      TIdDTMFPanel;
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
-    Media:          TIdSdpPayloadProcessor;
     RTPByteCount:   Integer;
     RunningPort:    Cardinal;
     SendBuffer:     String;
@@ -184,10 +183,6 @@ begin
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
-  Self.Media      := TIdSdpPayloadProcessor.Create;
-  Self.Media.Host := (Self.Transports[0] as TIdSipTransport).HostName;
-  Self.Media.AddDataListener(Self);
-
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddUserAgentListener(Self);
@@ -230,7 +225,6 @@ begin
 
   Self.UA.Free;
   Self.Dispatch.Free;
-  Self.Media.Free;
 
   Self.TextLock.Free;
   Self.CounterLock.Free;
@@ -318,7 +312,6 @@ end;
 
 procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
-  Self.Media.RemoteSessionDescription := Session.PayloadProcessor.RemoteSessionDescription;
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -489,8 +482,6 @@ begin
   Self.Invite.Enabled := false;
   Self.RTPByteCount   := 0;
   Self.UDPByteCount   := 0;
-
-  Self.Media.StartListening(SDP);
 end;
 
 procedure TrnidSpike.StartTransports;
@@ -503,8 +494,6 @@ end;
 
 procedure TrnidSpike.StopReadingData;
 begin
-  Self.Media.StopListening;
-
   Self.Invite.Enabled := true;
 end;
 
@@ -584,6 +573,7 @@ procedure TrnidSpike.TextTimerTimer(Sender: TObject);
 var
   Text: TIdRTPT140Payload;
 begin
+{
   Self.TextLock.Acquire;
   try
     if (Self.SendBuffer <> '') then begin
@@ -599,6 +589,7 @@ begin
   finally
     Self.TextLock.Release;
   end;
+}
 end;
 
 procedure TrnidSpike.InputTextKeyPress(Sender: TObject; var Key: Char);
