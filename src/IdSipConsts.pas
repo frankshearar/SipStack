@@ -124,7 +124,7 @@ const
 
 const
   SIPVersion  = SipName + '/2.0';
-  SIPVersion1 = SipName + '/1.0';
+  SIPVersion1 = SIPVersion;
 
 // for IdAssignedNumbers
 const
