@@ -121,6 +121,7 @@ type
     procedure TestUnquotedResponse;
     procedure TestUsername;
     procedure TestValue; override;
+    procedure TestValueQuotedNonceCount;
     procedure TestValueSingleParam;
   end;
 
@@ -1564,7 +1565,7 @@ begin
   Self.A.Username := 'Wintermute';
   Self.A.UnknownResponses['paranoid'] := '\very';
 
-  CheckEquals('foo nonce="aefbb",nc="0000f00f",algorithm="sha1-512",'
+  CheckEquals('foo nonce="aefbb",nc=0000f00f,algorithm="sha1-512",'
             + 'realm="tessier-ashpool.co.luna",username="Wintermute",'
             + 'paranoid="\\very"',
               Self.A.Value,
@@ -1730,7 +1731,7 @@ begin
                 + 'algorithm="MD5", '
                 + 'cnonce="f00f00", '
                 + 'nonce="84a4cc6f3082121f32b42a2187831a9e", '
-                + 'nc="8f", '
+                + 'nc=8f, '
                 + 'opaque="aaaabbbb", '
                 + 'otherparam=foo,'
                 + 'qop=" token",'
@@ -1771,6 +1772,19 @@ begin
   CheckEquals('foo',
               Self.A.UnknownResponses['otherparam'],
               'otherparam');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestValueQuotedNonceCount;
+begin
+  // RFC 2617 section 3.2.2 tells us that we mustn't quote the nc param.
+  // However, it seems likely that at least some servers will quote the value.
+  // And it causes no harm for us to accept these quoted values.
+
+  Self.A.Value := 'Digest nc="0000f00f"';
+
+  CheckEquals(IntToHex($f00f, 8),
+              IntToHex(Self.A.NonceCount, 8),
+              'Quoted NonceCount param');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestValueSingleParam;

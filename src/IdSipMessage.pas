@@ -289,6 +289,7 @@ type
     function  GetValue: String; override;
     function  KnownResponse(const Name: String): Boolean; virtual;
     procedure Parse(const Value: String); override;
+    function  QuoteIfNecessary(const ParamName, ParamValue: String): String; virtual;
   public
     class function IsNonce(const Token: String): Boolean;
 
@@ -321,7 +322,9 @@ type
   protected
     procedure CheckDigestResponses(Responses: TStrings); override;
     function  GetName: String; override;
+    function  GetValue: String; override;
     function  KnownResponse(const Name: String): Boolean; override;
+    function  QuoteIfNecessary(const ParamName, ParamValue: String): String; override;
   public
     function IsBasic: Boolean;
     function IsDigest: Boolean;
@@ -2660,7 +2663,7 @@ begin
     Value := Self.DigestResponses.Values[Name];
 
     Result := Result + Name
-            + '="' + EncodeQuotedStr(Value) + '",';
+            + '=' + Self.QuoteIfNecessary(Name, Value) + ',';
   end;
 
   for I := 0 to Self.fUnknownResponses.Count - 1 do begin
@@ -2697,6 +2700,11 @@ begin
 
   Self.ParseDigestResponses(S);
   Self.CheckDigestResponses(Self.DigestResponses);
+end;
+
+function TIdSipHttpAuthHeader.QuoteIfNecessary(const ParamName, ParamValue: String): String;
+begin
+  Result := '"' + EncodeQuotedStr(ParamValue) + '"';
 end;
 
 //* TIdSipHttpAuthHeader Private methods ***************************************
@@ -2830,6 +2838,11 @@ begin
   Result := AuthorizationHeader;
 end;
 
+function TIdSipAuthorizationHeader.GetValue: String;
+begin
+  Result := inherited GetValue;
+end;
+
 //* TIdSipAuthorizationHeader Private methods **********************************
 
 function TIdSipAuthorizationHeader.GetCNonce: String;
@@ -2865,6 +2878,14 @@ begin
          or (Name = DigestUriParam)
          or (Name = NonceCountParam)
          or (Name = UsernameParam);
+end;
+
+function TIdSipAuthorizationHeader.QuoteIfNecessary(const ParamName, ParamValue: String): String;
+begin
+  if IsEqual(ParamName, NonceCountParam) then
+    Result := ParamValue // We don't need to EncodeQuotedStr
+  else
+    Result := inherited QuoteIfNecessary(ParamName, ParamValue);
 end;
 
 procedure TIdSipAuthorizationHeader.SetCNonce(const Value: String);
