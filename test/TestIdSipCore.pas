@@ -149,6 +149,7 @@ type
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream;
+                        const Port: Integer;
                         const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
@@ -1830,8 +1831,8 @@ begin
   Self.SimpleSdp      := Self.CreateSimpleSdp;
 
   Self.RTPClient := TIdRTPClient.Create(nil);
-  Self.RTPClient.Host := Self.SimpleSdp.Connection.Address;
-  Self.RTPClient.Port := Self.SimpleSdp.MediaDescriptions[0].Port;
+  Self.RTPClient.Host := Self.SimpleSdp.MediaDescriptionAt(0).Connections[0].Address;
+  Self.RTPClient.Port := Self.SimpleSdp.MediaDescriptionAt(0).Port;
 
   Self.Invite.ContentType := SdpMimeType;
   Self.Invite.Body        := Self.SimpleSdp.AsString;
@@ -1866,6 +1867,9 @@ begin
 end;
 
 function TestTIdSipSession.CreateMultiStreamSdp: TIdSdpPayload;
+var
+  Connection: TIdSdpConnection;
+  MD:         TIdSdpMediaDescription;
 begin
   Result := TIdSdpPayload.Create;
   Result.Version                := 0;
@@ -1879,50 +1883,54 @@ begin
 
   Result.SessionName            := 'Minimum Session Info';
 
-  Result.Connection.NetType     := Id_SDP_IN;
-  Result.Connection.AddressType := Id_IPv4;
-  Result.Connection.Address     := '127.0.0.1';
+  Connection := Result.AddConnection;
+  Connection.NetType     := Id_SDP_IN;
+  Connection.AddressType := Id_IPv4;
+  Connection.Address     := '127.0.0.1';
 
-  Result.MediaDescriptions.Add(TIdSdpMediaDescription.Create);
-  Result.MediaDescriptions[0].MediaType := mtAudio;
-  Result.MediaDescriptions[0].Port      := 10000;
-  Result.MediaDescriptions[0].Transport := AudioVisualProfile;
-  Result.MediaDescriptions[0].AddFormat('0');
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtAudio;
+  MD.Port      := 10000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('0');
 
-  Result.MediaDescriptions.Add(TIdSdpMediaDescription.Create);
-  Result.MediaDescriptions[1].MediaType := mtText;
-  Result.MediaDescriptions[1].Port      := 11000;
-  Result.MediaDescriptions[1].Transport := AudioVisualProfile;
-  Result.MediaDescriptions[1].AddFormat('98');
-  Result.MediaDescriptions[1].Attributes.Add(TIdSdpRTPMapAttribute.Create);
-  Result.MediaDescriptions[1].Attributes[0].Value := '98 t140/1000';
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtText;
+  MD.Port      := 11000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('98');
+  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
 end;
 
 function TestTIdSipSession.CreateSimpleSdp: TIdSdpPayload;
+var
+  Connection: TIdSdpConnection;
+  MD:         TIdSdpMediaDescription;
 begin
   Result := TIdSdpPayload.Create;
-  Result.Version                := 0;
+  Result.Version               := 0;
 
-  Result.Origin.Username        := 'wintermute';
-  Result.Origin.SessionID       := '2890844526';
-  Result.Origin.SessionVersion  := '2890842807';
-  Result.Origin.NetType         := Id_SDP_IN;
-  Result.Origin.AddressType     := Id_IPv4;
-  Result.Origin.Address         := '127.0.0.1';
+  Result.Origin.Username       := 'wintermute';
+  Result.Origin.SessionID      := '2890844526';
+  Result.Origin.SessionVersion := '2890842807';
+  Result.Origin.NetType        := Id_SDP_IN;
+  Result.Origin.AddressType    := Id_IPv4;
+  Result.Origin.Address        := '127.0.0.1';
 
-  Result.SessionName            := 'Minimum Session Info';
+  Result.SessionName           := 'Minimum Session Info';
 
-  Result.Connection.NetType     := Id_SDP_IN;
-  Result.Connection.AddressType := Id_IPv4;
-  Result.Connection.Address     := '127.0.0.1';
+  MD := Result.AddMediaDescription;
+  MD.MediaType := mtText;
+  MD.Port      := 11000;
+  MD.Transport := AudioVisualProfile;
+  MD.AddFormat('98');
+  MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
 
-  Result.MediaDescriptions.Add(TIdSdpMediaDescription.Create);
-  Result.MediaDescriptions[0].MediaType := mtText;
-  Result.MediaDescriptions[0].Port      := 11000;
-  Result.MediaDescriptions[0].Transport := AudioVisualProfile;
-  Result.MediaDescriptions[0].AddFormat('98');
-  Result.MediaDescriptions[0].Attributes.Add(TIdSdpRTPMapAttribute.Create);
-  Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
+  MD.Connections.Add(TIdSdpConnection.Create);
+  Connection := MD.Connections[0];
+  Connection.NetType     := Id_SDP_IN;
+  Connection.AddressType := Id_IPv4;
+  Connection.Address     := '127.0.0.1';
 end;
 
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
@@ -1942,6 +1950,7 @@ begin
 end;
 
 procedure TestTIdSipSession.OnNewData(const Data: TStream;
+                                      const Port: Integer;
                                       const Format: TIdRTPEncoding);
 begin
   Self.ThreadEvent.SetEvent;
@@ -2091,9 +2100,9 @@ begin
       CheckEquals(Self.Core.Username,
                   SDP.Origin.Username,
                   'Origin Username');
-      Check(SDP.MediaDescriptions.Count > 0,
+      Check(SDP.MediaDescriptionCount > 0,
             'No media descriptions');
-      Check(Self.SimpleSdp.MediaDescriptions[0].Port <> 0,
+      Check(Self.SimpleSdp.MediaDescriptionAt(0).Port <> 0,
             'Media description port');
     finally
       SDP.Free;

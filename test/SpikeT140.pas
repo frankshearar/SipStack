@@ -162,7 +162,7 @@ begin
       BytesRead := S.CopyFrom(Data, Min(BufLen, BytesLeft));
       Dec(BytesLeft, BytesRead);
       Self.Client.Send(S.DataString);
-      Sleep(100);
+      IdGlobal.Sleep(100);
     until (BytesRead < BufLen);
   finally
     S.Free;

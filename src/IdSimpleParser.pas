@@ -9,6 +9,24 @@ type
   // for IdCore or whatever. Indy10 defines these but Indy9 doesn't
   TIdIPVersion = (Id_IPv4, Id_IPv6);
 
+  // Indy10 defines this in IdStackBSDBase
+  TIdIPv6AddressRec = packed array[0..7] of Word;
+
+  TIdIPAddressParser = class(TObject)
+    class function  ExpandIPv6Address(IPAddress: String): String;
+    class function  IncIPAddress(IPAddress: String;
+                                 N: Cardinal = 1): String;
+    class function  IncIPv4Address(IPAddress: String;
+                                   N: Cardinal = 1): String;
+    class procedure IncIPv6Address(var Address: TIdIPv6AddressRec;
+                                   N: Cardinal = 1);
+    class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
+    class function  IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+    class function  IsIPv4Address(const Token: String): Boolean;
+    class function  IsIPv6Address(const Token: String): Boolean;
+    class procedure ParseIPv6Address(IPv6Address: String; var Address: TIdIPv6AddressRec);
+  end;
+
   TIdSimpleParser = class(TObject)
   private
     fCurrentLine: Cardinal;
@@ -17,16 +35,13 @@ type
   protected
     procedure ResetCurrentLine;
   public
-    class function IsAlphaNumeric(const Token: String): Boolean;
-    class function IsByte(const Token: String): Boolean;
-    class function IsDigit(const C: Char): Boolean;
-    class function IsFQDN(const Token: String): Boolean;
-    class function IsHexNumber(const Number: String): Boolean;
-    class function IsLetter(const C: Char): Boolean;
-    class function IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
-    class function IsIPv4Address(const Token: String): Boolean;
-    class function IsIPv6Address(const Token: String): Boolean;
-    class function IsNumber(const Number: String): Boolean;
+    class function  IsAlphaNumeric(const Token: String): Boolean;
+    class function  IsByte(const Token: String): Boolean;
+    class function  IsDigit(const C: Char): Boolean;
+    class function  IsFQDN(const Token: String): Boolean;
+    class function  IsHexNumber(const Number: String): Boolean;
+    class function  IsLetter(const C: Char): Boolean;
+    class function  IsNumber(const Number: String): Boolean;
     constructor Create; virtual;
 
     function  CurrentLine: Cardinal;
@@ -47,6 +62,10 @@ const
   BadSyntax        = 'Bad syntax';
   DamagedLineEnd   = 'Damaged line end at line %d, expected %s but was %s';
   EmptyInputStream = 'Empty input stream';
+  HexToIntError    = '''%s'' is not a valid hex value';
+  IPAddrError      = '''%s'' is not a valid IP address';
+  IPv4AddrError    = '''%s'' is not a valid IPv4 address';
+  IPv6AddrError    = '''%s'' is not a valid IPv6 address';
   MalformedToken   = 'Malformed %s: ''%s''';
 
 const
@@ -55,10 +74,311 @@ const
   MarkChars       = ['-', '_', '.', '!', '~', '*', '''', '(', ')'];
   UnreservedChars = Alphabet + Digits + MarkChars;
 
+function HexDigitToInt(Digit: Char): Cardinal;
+function HexToInt(HexValue: String): Cardinal;
+
 implementation
 
 uses
   IdGlobal;
+
+//******************************************************************************
+//* Unit Public Functions and Procedures                                       *
+//******************************************************************************
+
+function HexDigitToInt(Digit: Char): Cardinal;
+begin
+  case Digit of
+    '0':      Result := 0;
+    '1':      Result := 1;
+    '2':      Result := 2;
+    '3':      Result := 3;
+    '4':      Result := 4;
+    '5':      Result := 5;
+    '6':      Result := 6;
+    '7':      Result := 7;
+    '8':      Result := 8;
+    '9':      Result := 9;
+    'a', 'A': Result := 10;
+    'b', 'B': Result := 11;
+    'c', 'C': Result := 12;
+    'd', 'D': Result := 13;
+    'e', 'E': Result := 14;
+    'f', 'F': Result := 15;
+  else
+    raise EConvertError.Create(Format(HexToIntError, [Digit]));
+  end;
+end;
+
+function HexToInt(HexValue: String): Cardinal;
+var
+  I:     Cardinal;
+  Shift: Cardinal;
+begin
+  if (HexValue = '') then
+    raise EConvertError.Create(Format(HexToIntError, [HexValue]));
+
+  try
+    Result := 0;
+    Shift  := 0;
+
+    for I := Length(HexValue) downto 1 do begin
+      Result := Result + (HexDigitToInt(HexValue[I]) shl Shift);
+      Inc(Shift, 4);
+    end;
+  except
+    on EConvertError do
+      raise EConvertError.Create(Format(HexToIntError, [HexValue]));
+  end;
+end;
+
+//******************************************************************************
+//* TIdIPAddressParser                                                         *
+//******************************************************************************
+//* TIdIPAddressParser Public methods ******************************************
+
+class function TIdIPAddressParser.ExpandIPv6Address(IPAddress: String): String;
+var
+  Address: TIdIPv6AddressRec;
+begin
+  if not TIdIPAddressParser.IsIPv6Address(IPAddress) then
+    raise EConvertError.Create(Format(IPv6AddrError, [IPAddress]));
+
+  Self.ParseIPv6Address(IPAddress, Address);
+  Result := Self.IPv6AddressToStr(Address);
+end;
+
+class function TIdIPAddressParser.IncIPAddress(IPAddress: String;
+                                            N: Cardinal = 1): String;
+var
+  IPv6: TIdIPv6AddressRec;
+begin
+  if TIdIPAddressParser.IsIPv4Address(IPAddress) then
+    Result := IncIPv4Address(IPAddress, N)
+  else if TIdIPAddressParser.IsIPv6Address(IPAddress) then begin
+    Self.ParseIPv6Address(IPAddress, IPv6);
+    IncIPv6Address(IPv6, N);
+    Result := Self.IPv6AddressToStr(IPv6);
+  end
+  else
+    raise EConvertError.Create(Format(IPAddrError, [IPAddress]));
+end;
+
+class function TIdIPAddressParser.IncIPv4Address(IPAddress: String;
+                                              N: Cardinal = 1): String;
+var
+  B1, B2, B3, B4: Byte;
+  Addy:           Cardinal;
+  Work:           String;
+begin
+  Work := IPAddress;
+  try
+    B1 := StrToInt(Fetch(Work, '.'));
+    B2 := StrToInt(Fetch(Work, '.'));
+    B3 := StrToInt(Fetch(Work, '.'));
+    B4 := StrToInt(Work);
+
+    Addy := (B1 shl 24)
+         or (B2 shl 16)
+         or (B3 shl 8)
+         or  B4;
+
+    if (Addy > High(Cardinal) - N) then
+      Addy := N - (High(Cardinal) - Addy) - 1
+    else
+      Inc(Addy, N);
+
+    Result := IntToStr((Addy shr 24) and $ff) + '.'
+            + IntToStr((Addy shr 16) and $ff) + '.'
+            + IntToStr((Addy shr 8) and $ff) + '.'
+            + IntToStr(Addy and $ff);
+  except
+    raise EConvertError.Create(Format(IPv4AddrError, [IPAddress]));
+  end;
+end;
+
+class procedure TIdIPAddressParser.IncIPv6Address(var Address: TIdIPv6AddressRec;
+                                               N: Cardinal = 1);
+var
+  Carry: Cardinal;
+  I:     Integer;
+  Max:   Cardinal;
+begin
+  // [0]  [1]  [2]  [3]  [4]  [5]  [6]  [7] <-- indices
+  // f00d:f00d:f00d:f00d:f00d:f00d:f00d:f00d
+  Max := High(Word) + 1;
+
+  Carry := Address[7] + (N and $ffff);
+  Address[7] := Carry mod Max;
+  Carry := Carry div Max;
+
+  Carry := Carry + Address[6] + ((N and $ffff0000) shr 16);
+  Address[6] := Carry mod Max;
+  Carry := Carry div Max;
+
+  for I := 5 downto 0 do begin
+    Carry := Carry + Address[I];
+    Address[I] := Carry mod Max;
+    Carry := Carry div Max;
+  end;
+
+  if (Carry > 0) then
+    Address[7] := Carry - 1;
+end;
+
+class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
+  function StripLeadingZeroes(Digits: String): String;
+  var
+    I: Integer;
+  begin
+    I := 1;
+    while (I <= Length(Digits)) and (Digits[I] = '0') do
+      Inc(I);
+    Result := Copy(Digits, I, Length(Digits));
+
+    if (Result = '') then Result := '0';
+  end;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := Low(Address) to High(Address) do
+    Result := Result + StripLeadingZeroes(IntToHex(Address[I], 4)) + ':';
+
+  Result := Copy(Result, 1, Length(Result) - 1);
+end;
+
+class function TIdIPAddressParser.IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+begin
+  case IpVersion of
+    Id_IPv4: Result := Self.IsIPV4Address(Token);
+    Id_IPv6: Result := Self.IsIPv6Address(Token);
+  else
+    raise EParser.Create('Unknown TIdIPVersion in IsIPAddress');
+  end;
+end;
+
+class function TIdIPAddressParser.IsIPv4Address(const Token: String): Boolean;
+var
+  Address: String;
+begin
+  Address := Token;
+  Result := TIdSimpleParser.IsByte(Fetch(Address, '.'))
+        and TIdSimpleParser.IsByte(Fetch(Address, '.'))
+        and TIdSimpleParser.IsByte(Fetch(Address, '.'))
+        and TIdSimpleParser.IsByte(Address);
+end;
+
+class function TIdIPAddressParser.IsIPv6Address(const Token: String): Boolean;
+var
+  Addy: TIdIPv6AddressRec;
+begin
+  try
+    ParseIPv6Address(Token, Addy);
+    Result := true;
+  except
+    Result := false;
+  end;
+end;
+
+class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Address: TIdIPv6AddressRec);
+  procedure Reverse(var Address: TIdIPv6AddressRec);
+  var
+    Temp: Word;
+  begin
+    Temp := Address[0];
+    Address[0] := Address[1];
+    Address[1] := Address[2];
+    Address[2] := Address[3];
+    Address[3] := Address[4];
+    Address[4] := Address[5];
+    Address[5] := Address[6];
+    Address[6] := Address[7];
+    Address[7] := Temp;
+
+  end;
+  procedure ParseChunk(Chunk: String;
+                       var Address: TIdIPv6AddressRec;
+                       var WordCount: Integer;
+                       AllowTrailingIPv4: Boolean);
+  var
+    W: String;
+    I: Cardinal;
+  begin
+    FillChar(Address, SizeOf(Address), 0);
+    I         := 0;
+    WordCount := 0;
+
+    if (Chunk = '') then Exit;
+
+    while (Chunk <> '') and (IndyPos(':', Chunk) > 0) do begin
+      W := Fetch(Chunk, ':');
+
+      if (Length(W) > 4) or not TIdSimpleParser.IsHexNumber(W) then
+        raise EConvertError.Create('');
+
+      Address[I] := HexToInt(W);
+      Inc(WordCount);
+      Inc(I);
+    end;
+
+    if AllowTrailingIPv4 and (IndyPos('.', Chunk) > 0) then begin
+      if (Chunk <> '') then begin
+        Address[I] := (StrToInt(Fetch(Chunk, '.')) shl 8) or StrToInt(Fetch(Chunk, '.'));
+        Inc(I);
+        Address[I] := (StrToInt(Fetch(Chunk, '.')) shl 8) or StrToInt(Chunk);
+        Inc(WordCount, 2);
+      end
+    end
+    else begin
+      Address[I] := HexToInt(Chunk);
+      Inc(WordCount);
+    end;
+  end;
+var
+  FirstAddy:   TIdIPv6AddressRec;
+  FirstChunk:  String;
+  FirstIndex:  Integer;
+  I:           Integer;
+  SecondAddy:  TIdIPv6AddressRec;
+  SecondChunk: String;
+  SecondIndex: Integer;
+begin
+    // There are 5 possible kinds of IPv6 addresses:
+    // no ::
+    // ::
+    // ::xxx
+    // xxx::
+    // xxx::yyy
+    // Additionally, there may be an IPv4 address as the last 2 words, like
+    // 2002:dead:beef:feed:babe:f00d:192.168.0.1
+
+  if (IPv6Address = '') then
+    raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
+
+  FillChar(Address, SizeOf(Address), 0);
+  try
+    SecondChunk := IPv6Address;
+    FirstChunk := Fetch(SecondChunk, '::');
+
+    ParseChunk(FirstChunk, FirstAddy, FirstIndex, IndyPos('.', FirstChunk) > 0);
+    ParseChunk(SecondChunk, SecondAddy, SecondIndex, true);
+
+    for I := 0 to FirstIndex - 1 do
+      Address[I] := FirstAddy[I];
+
+    Reverse(SecondAddy);
+    I := High(Address);
+    while (SecondIndex > 0) do begin
+      Address[I] := SecondAddy[I];
+      Dec(I);
+      Dec(SecondIndex);
+    end;
+  except
+    on EConvertError do
+      raise EConvertError.Create(Format(IPv6AddrError, [IPv6Address]));
+  end;
+end;
 
 //******************************************************************************
 //* TIdSimpleParser                                                            *
@@ -122,16 +442,6 @@ begin
   end;
 end;
 
-class function TIdSimpleParser.IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
-begin
-  case IpVersion of
-    Id_IPv4: Result := Self.IsIPV4Address(Token);
-    Id_IPv6: Result := Self.IsIPv6Address(Token);
-  else
-    raise EParser.Create('Unknown TIdIPVersion in IsIPAddress');
-  end;
-end;
-
 class function TIdSimpleParser.IsHexNumber(const Number: String): Boolean;
 var
   I: Integer;
@@ -149,62 +459,6 @@ end;
 class function TIdSimpleParser.IsLetter(const C: Char): Boolean;
 begin
   Result := C in Alphabet;
-end;
-
-class function TIdSimpleParser.IsIPv4Address(const Token: String): Boolean;
-var
-  Address: String;
-begin
-  Address := Token;
-  Result := Self.IsByte(Fetch(Address, '.'))
-        and Self.IsByte(Fetch(Address, '.'))
-        and Self.IsByte(Fetch(Address, '.'))
-        and Self.IsByte(Address);
-end;
-
-class function TIdSimpleParser.IsIPv6Address(const Token: String): Boolean;
-  function IsIPv6Chunk(Words: String): Boolean;
-  var
-    Word: String;
-  begin
-    Result := Words <> '';
-
-    while (Words <> '') and (IndyPos(':', Words) > 0) do begin
-      Word := Fetch(Words, ':');
-      Result := Result and Self.IsHexNumber(Word) and (Length(Word) <= 4);
-    end;
-
-    if (Words <> '') then begin
-      if (IndyPos('.', Words) = 0) then
-        Result := Result and Self.IsHexNumber(Words) and (Length(Words) <= 4)
-      else
-        Result := Result and Self.IsIPv4Address(Words);
-    end;
-  end;
-var
-  S:     String;
-  Words: String;
-begin
-  Result := Token <> '';
-
-  if Result then begin
-    Result := true;
-    S := Token;
-
-    // There are 5 possible kinds of IPv6 addresses:
-    // no ::
-    // ::
-    // ::xxx
-    // xxx::
-    // xxx::yyy
-
-    Words := Fetch(S, '::');
-    if (Words <> '') then
-      Result := Result and IsIPv6Chunk(Words);
-
-    if (S <> '') then
-      Result := Result and IsIPv6Chunk(S);
-  end;
 end;
 
 class function TIdSimpleParser.IsNumber(const Number: String): Boolean;

@@ -6,6 +6,29 @@ uses
   IdSimpleParser, TestFramework;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestHexDigitToInt;
+    procedure TestHexToInt;
+  end;
+
+  TestTIdIPAddressParser = class(TTestCase)
+  private
+    procedure CheckIncIPv6Address(Expected: String;
+                                  Address: String;
+                                  Increment: Cardinal = 1);
+    procedure Clear(var Address: TIdIPv6AddressRec);
+  published
+    procedure TestExpandIPv6Address;
+    procedure TestIncIPAddress;
+    procedure TestIncIPv4Address;
+    procedure TestIncIPv6Address;
+    procedure TestIPv6AddressToStr;
+    procedure TestIsIpv4Address;
+    procedure TestIsIpv6Address;
+    procedure TestParseIpv6Address;
+  end;
+
   TestTIdSimpleParser = class(TTestCase)
   private
     P: TIdSimpleParser;
@@ -18,8 +41,6 @@ type
     procedure TestIsDigit;
     procedure TestIsFQDN;
     procedure TestIsHexNumber;
-    procedure TestIsIpv4Address;
-    procedure TestIsIpv6Address;
     procedure TestIsLetter;
     procedure TestIsNumber;
     procedure TestPeek;
@@ -34,12 +55,406 @@ type
 implementation
 
 uses
-  Classes;
+  Classes, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSimpleParser unit tests');
+  Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdIPAddressParser.Suite);
   Result.AddTest(TestTIdSimpleParser.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.TestHexDigitToInt;
+var
+  C: Char;
+begin
+  CheckEquals(0,  HexDigitToInt('0'), '0');
+  CheckEquals(1,  HexDigitToInt('1'), '1');
+  CheckEquals(2,  HexDigitToInt('2'), '2');
+  CheckEquals(3,  HexDigitToInt('3'), '3');
+  CheckEquals(4,  HexDigitToInt('4'), '4');
+  CheckEquals(5,  HexDigitToInt('5'), '5');
+  CheckEquals(6,  HexDigitToInt('6'), '6');
+  CheckEquals(7,  HexDigitToInt('7'), '7');
+  CheckEquals(8,  HexDigitToInt('8'), '8');
+  CheckEquals(9,  HexDigitToInt('9'), '9');
+  CheckEquals(10, HexDigitToInt('a'), 'a');
+  CheckEquals(10, HexDigitToInt('A'), 'A');
+  CheckEquals(11, HexDigitToInt('b'), 'b');
+  CheckEquals(11, HexDigitToInt('B'), 'B');
+  CheckEquals(12, HexDigitToInt('c'), 'c');
+  CheckEquals(12, HexDigitToInt('C'), 'C');
+  CheckEquals(13, HexDigitToInt('d'), 'd');
+  CheckEquals(13, HexDigitToInt('D'), 'D');
+  CheckEquals(14, HexDigitToInt('e'), 'e');
+  CheckEquals(14, HexDigitToInt('E'), 'E');
+  CheckEquals(15, HexDigitToInt('f'), 'f');
+  CheckEquals(15, HexDigitToInt('F'), 'F');
+
+  for C := Low(Char) to High(Char) do
+    if not TIdSimpleParser.IsHexNumber(C) then begin
+      try
+        HexDigitToInt(C);
+        Fail('Failed to bail out on non-hex digit with Ord ' + IntToStr(Ord(C)));
+      except
+        on EConvertError do
+      end;
+    end;
+end;
+
+procedure TestFunctions.TestHexToInt;
+begin
+  CheckEquals($00,       HexToInt('0'),        '0');
+  CheckEquals($0f,       HexToInt('f'),        'f');
+  CheckEquals($0f,       HexToInt('F'),        'F');
+  CheckEquals($ff,       HexToInt('ff'),       'ff');
+  CheckEquals($fad,      HexToInt('fad'),      'fad');
+  CheckEquals($1234,     HexToInt('1234'),     '1234');
+  CheckEquals(Integer($decafbad),
+              Integer(HexToInt('dEcAfBaD')),
+              'dEcAfBaD');
+
+  try
+    HexToInt('');
+    Fail('Failed to bail out on ''''');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    HexToInt('food');
+    Fail('Failed to bail out on ''food''');
+  except
+    on EConvertError do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdIPAddressParser                                                     *
+//******************************************************************************
+//* TestTIdIPAddressParser Public methods **************************************
+
+procedure TestTIdIPAddressParser.TestExpandIPv6Address;
+begin
+  CheckEquals('2001:200:0:8002:203:47FF:FEA5:3085',
+              TIdIPAddressParser.ExpandIPv6Address('2001:200:0:8002:203:47FF:FEA5:3085'),
+              '2001:200:0:8002:203:47FF:FEA5:3085');
+  CheckEquals('0:0:0:0:0:0:0:0',
+              TIdIPAddressParser.ExpandIPv6Address('::'),
+              '::');
+  CheckEquals('1:0:0:0:0:0:0:2',
+              TIdIPAddressParser.ExpandIPv6Address('1::2'),
+              '1::2');
+  CheckEquals('1:0:0:0:0:0:0:2',
+              TIdIPAddressParser.ExpandIPv6Address('1:000::2'),
+              '1:000::2');
+  try
+     TIdIPAddressParser.ExpandIPv6Address('not-an-address');
+     Fail('Failed to bail out on ''not-an-address''');
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestTIdIPAddressParser.TestIncIPAddress;
+begin
+  CheckEquals('0.0.0.1',
+              TIdIPAddressParser.IncIPAddress('0.0.0.0'),
+              '0.0.0.0');
+  CheckEquals('0:0:0:0:0:0:0:1',
+              TIdIPAddressParser.IncIPAddress('0:0:0:0:0:0:0:0'),
+              '0:0:0:0:0:0:0:0');
+end;
+
+procedure TestTIdIPAddressParser.TestIncIPv4Address;
+begin
+  CheckEquals('0.0.0.1', TIdIPAddressParser.IncIPv4Address('0.0.0.0'),         '0.0.0.0');
+  CheckEquals('0.0.1.0', TIdIPAddressParser.IncIPv4Address('0.0.0.255'),       '0.0.0.255');
+  CheckEquals('0.1.0.0', TIdIPAddressParser.IncIPv4Address('0.0.255.255'),     '0.0.255.255');
+  CheckEquals('1.0.0.0', TIdIPAddressParser.IncIPv4Address('0.255.255.255'),   '0.255.255.255');
+  CheckEquals('0.0.0.0', TIdIPAddressParser.IncIPv4Address('255.255.255.255'), '255.255.255.255');
+
+  CheckEquals('0.0.0.25',
+              TIdIPAddressParser.IncIPv4Address('0.0.0.0', 25),
+              '0.0.0.0, 25');
+
+  CheckEquals('0.0.0.25',
+              TIdIPAddressParser.IncIPv4Address('255.255.255.255', 26),
+              '255.255.255.255, 26');
+  CheckEquals('0.0.0.4',
+              TIdIPAddressParser.IncIPv4Address('255.255.255.230', 30),
+              '255.255.255.230, 26');
+
+  try
+    TIdIPAddressParser.IncIPv4Address('');
+    Fail('Failed to bail out on ''''');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    TIdIPAddressParser.IncIPv4Address('1.2.3.a');
+    Fail('Failed to bail out on ''1.2.3.a''');
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestTIdIPAddressParser.TestIncIPv6Address;
+var
+  Addy: TIdIPv6AddressRec;
+begin
+  CheckIncIPv6Address('0:0:0:0:0:0:0:1',
+                      '0:0:0:0:0:0:0:0');
+  CheckIncIPv6Address('0:0:0:0:0:0:1:0',
+                      '0:0:0:0:0:0:0:FFFF');
+  CheckIncIPv6Address('0:0:0:0:0:1:0:0',
+                      '0:0:0:0:0:0:FFFF:FFFF');
+  CheckIncIPv6Address('0:0:0:0:1:0:0:0',
+                      '0:0:0:0:0:FFFF:FFFF:FFFF');
+  CheckIncIPv6Address('0:0:0:1:0:0:0:0',
+                      '0:0:0:0:FFFF:FFFF:FFFF:FFFF');
+  CheckIncIPv6Address('0:0:1:0:0:0:0:0',
+                      '0:0:0:FFFF:FFFF:FFFF:FFFF:FFFF');
+  CheckIncIPv6Address('0:1:0:0:0:0:0:0',
+                      '0:0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+  CheckIncIPv6Address('1:0:0:0:0:0:0:0',
+                      '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+  CheckIncIPv6Address('0:0:0:0:0:0:0:0',
+                      'FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+
+  CheckIncIPv6Address('0:0:0:0:DEAD:BEEF:FFFF:FFFF',
+                      '0:0:0:0:DEAD:BEEF:0:0',
+                      High(Cardinal));
+  CheckIncIPv6Address('1:0:0:0:0:0:0:0',
+                      '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF');
+
+  TIdIPAddressParser.ParseIPv6Address('0:0:0:0:dead:beee:0:0', Addy);
+  TIdIPAddressParser.IncIPv6Address(Addy, High(Cardinal));
+  TIdIPAddressParser.IncIPv6Address(Addy, 1);
+  CheckEquals('0:0:0:0:DEAD:BEEF:0:0',
+              TIdIPAddressParser.IPv6AddressToStr(Addy),
+              '0:0:0:0:DEAD:BEEF:0:0, High(Cardinal) + 1');
+
+  CheckIncIPv6Address('1:0:0:0:0:0:FFFF:FFFE',
+                      '0:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF',
+                      High(Cardinal));
+end;
+
+procedure TestTIdIPAddressParser.TestIPv6AddressToStr;
+var
+  Address: TIdIPv6AddressRec;
+  I:       Integer;
+begin
+  FillChar(Address, Sizeof(Address), 0);
+  CheckEquals('0:0:0:0:0:0:0:0', TIdIPAddressParser.IPv6AddressToStr(Address));
+
+  for I := Low(Address) to High(Address) do
+    Address[I] := I + 1;
+  CheckEquals('1:2:3:4:5:6:7:8', TIdIPAddressParser.IPv6AddressToStr(Address));
+
+  for I := Low(Address) to High(Address) do
+    Address[I] := 8 + I;
+  CheckEquals('8:9:A:B:C:D:E:F', TIdIPAddressParser.IPv6AddressToStr(Address));
+
+  for I := Low(Address) to High(Address) do
+    Address[I] := (I + 1) shl 4;
+  CheckEquals('10:20:30:40:50:60:70:80', TIdIPAddressParser.IPv6AddressToStr(Address));
+end;
+
+procedure TestTIdIPAddressParser.TestIsIpv4Address;
+begin
+  Check(not TIdIPAddressParser.IsIPv4Address(''),                '''''');
+  Check(not TIdIPAddressParser.IsIPv4Address('1'),               '1');
+  Check(not TIdIPAddressParser.IsIPv4Address('abcd'),            'abcd');
+  Check(not TIdIPAddressParser.IsIPv4Address('224.'),            '224.');
+  Check(not TIdIPAddressParser.IsIPv4Address('-1.0.0.0'),        '-1.0.0.0');
+  Check(not TIdIPAddressParser.IsIPv4Address('224.255.255.256'), '224.255.255.256');
+  Check(    TIdIPAddressParser.IsIPv4Address('127.2.17.12'),     '127.2.17.12');
+  Check(    TIdIPAddressParser.IsIPv4Address('224.2.17.12'),     '224.2.17.12');
+  Check(    TIdIPAddressParser.IsIPv4Address('0.0.0.0'),         '0.0.0.0');
+  Check(    TIdIPAddressParser.IsIPv4Address('224.0.0.0'),       '224.0.0.0');
+  Check(    TIdIPAddressParser.IsIPv4Address('224.255.255.255'), '224.255.255.255');
+  Check(    TIdIPAddressParser.IsIPv4Address('255.255.255.255'), '255.255.255.255');
+end;
+
+procedure TestTIdIPAddressParser.TestIsIpv6Address;
+begin
+  Check(not TIdIPAddressParser.IsIPv6Address(''),                           '''''');
+  Check(not TIdIPAddressParser.IsIPv6Address('x'),                          'x');
+  Check(not TIdIPAddressParser.IsIPv6Address('ffef1::'),                    'ffef1::');
+  Check(    TIdIPAddressParser.IsIPv6Address('::'),                         '::');
+  Check(    TIdIPAddressParser.IsIPv6Address('::1'),                        '::1');
+  Check(    TIdIPAddressParser.IsIPv6Address('1::'),                        '1::');
+  Check(    TIdIPAddressParser.IsIPv6Address('2002:C058:6301::'),           '2002:C058:6301::');
+  Check(    TIdIPAddressParser.IsIPv6Address('00:01:02:f0:90:84'),          '00:01:02:f0:90:84');
+  Check(    TIdIPAddressParser.IsIPv6Address('FE80::201:2FF:FEF0'),         'FE80::201:2FF:FEF0');
+  Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:200C:417A'), '1080:0:0:0:8:800:200C:417A');
+  Check(    TIdIPAddressParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
+  Check(    TIdIPAddressParser.IsIPv6Address('::13.1.68.3'),                '::13.1.68.3');
+  Check(    TIdIPAddressParser.IsIPv6Address('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
+end;
+
+procedure TestTIdIPAddressParser.TestParseIpv6Address;
+var
+  Address: TIdIPv6AddressRec;
+  I:       Integer;
+begin
+  TIdIPAddressParser.ParseIPv6Address('0:0:0:0:0:0:0:0', Address);
+  for I := Low(Address) to High(Address) do
+    CheckEquals(0, Address[I], '0:0:0:0:0:0:0:0, Index ' + IntToStr(I));
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('1:2:3:4:5:6:7:8', Address);
+  for I := Low(Address) to High(Address) do
+    CheckEquals(IntToHex(I + 1, 2),
+                IntToHex(Address[I], 2),
+                '1:2:3:4:5:6:7:8, Index ' + IntToStr(I));
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('10:20:30:40:50:60:70:80', Address);
+  for I := Low(Address) to High(Address) do
+    CheckEquals(IntToHex((I + 1) shl 4, 2),
+                IntToHex(Address[I], 2),
+                '10:20:30:40:50:60:70:80, Index ' + IntToStr(I));
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('::', Address);
+  for I := Low(Address) to High(Address) do
+    CheckEquals(0, Address[I], '0:0:0:0:0:0:0:0, Index ' + IntToStr(I));
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('::1', Address);
+  for I := Low(Address) to High(Address) - 1 do
+    CheckEquals(0, Address[I], '::1, Index ' + IntToStr(I));
+  CheckEquals(1, Address[7], '::1, Index 7');
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('1::2', Address);
+  CheckEquals(IntToHex($0001, 4),
+              IntToHex(Address[0], 4),
+              '1::2, Index 0');
+  for I := Low(Address) + 1 to High(Address) - 1 do
+    CheckEquals(0, Address[I], '1::2, Index ' + IntToStr(I));
+  CheckEquals(IntToHex($0002, 4),
+              IntToHex(Address[7], 4),
+              '1::2, Index 7');
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('2002:5156:4019:1::1', Address);
+  CheckEquals(IntToHex($2002, 4),
+              IntToHex(Address[0], 4),
+              '2002:5156:4019:1::1, Index 0');
+  CheckEquals(IntToHex($5156, 4),
+              IntToHex(Address[1], 4),
+              '2002:5156:4019:1::1, Index 1');
+  CheckEquals(IntToHex($4019, 4),
+              IntToHex(Address[2], 4),
+              '2002:5156:4019:1::1, Index 2');
+  CheckEquals(IntToHex($0001, 4),
+              IntToHex(Address[3], 4),
+              '2002:5156:4019:1::1, Index 3');
+  CheckEquals(IntToHex($0000, 4),
+              IntToHex(Address[4], 4),
+              '2002:5156:4019:1::1, Index 4');
+  CheckEquals(IntToHex($0000, 4),
+              IntToHex(Address[5], 4),
+              '2002:5156:4019:1::1, Index 5');
+  CheckEquals(IntToHex($0000, 4),
+              IntToHex(Address[6], 4),
+              '2002:5156:4019:1::1, Index 6');
+  CheckEquals(IntToHex($0001, 4),
+              IntToHex(Address[7], 4),
+              '2002:5156:4019:1::1, Index 7');
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1', Address);
+  CheckEquals(IntToHex($2002, 4),
+              IntToHex(Address[0], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 0');
+  CheckEquals(IntToHex($dead, 4),
+              IntToHex(Address[1], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 1');
+  CheckEquals(IntToHex($beef, 4),
+              IntToHex(Address[2], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 2');
+  CheckEquals(IntToHex($feed, 4),
+              IntToHex(Address[3], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 3');
+  CheckEquals(IntToHex($babe, 4),
+              IntToHex(Address[4], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 4');
+  CheckEquals(IntToHex($f00d, 4),
+              IntToHex(Address[5], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 5');
+  CheckEquals(IntToHex($c0a8, 4),
+              IntToHex(Address[6], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 6');
+  CheckEquals(IntToHex($0001, 4),
+              IntToHex(Address[7], 4),
+              '2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1, Index 7');
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('2002:dead:beef:feed:babe:f00d:192.168.0.1', Address);
+  CheckEquals(IntToHex($2002, 4),
+              IntToHex(Address[0], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 0');
+  CheckEquals(IntToHex($dead, 4),
+              IntToHex(Address[1], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 1');
+  CheckEquals(IntToHex($beef, 4),
+              IntToHex(Address[2], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 2');
+  CheckEquals(IntToHex($feed, 4),
+              IntToHex(Address[3], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 3');
+  CheckEquals(IntToHex($babe, 4),
+              IntToHex(Address[4], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 4');
+  CheckEquals(IntToHex($f00d, 4),
+              IntToHex(Address[5], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 5');
+  CheckEquals(IntToHex($c0a8, 4),
+              IntToHex(Address[6], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 6');
+  CheckEquals(IntToHex($0001, 4),
+              IntToHex(Address[7], 4),
+              '2002:dead:beef:feed:babe:f00d:192.168.0.1, Index 7');
+
+  try
+    TIdIPAddressParser.ParseIPv6Address('', Address);
+    Fail('Failed to bail out on ''''');
+  except
+    on EConvertError do;
+  end;
+end;
+
+//* TestTIdIPAddressParser Private methods *************************************
+
+procedure TestTIdIPAddressParser.CheckIncIPv6Address(Expected: String;
+                                                     Address: String;
+                                                     Increment: Cardinal = 1);
+var
+  Addy: TIdIPv6AddressRec;
+begin
+  TIdIPAddressParser.ParseIPv6Address(Address, Addy);
+  TIdIPAddressParser.IncIPv6Address(Addy, Increment);
+
+  CheckEquals(Expected, TIdIPAddressParser.IPv6AddressToStr(Addy), Address);
+end;
+
+procedure TestTIdIPAddressParser.Clear(var Address: TIdIPv6AddressRec);
+var
+  I: Integer;
+begin
+  for I := Low(Address) to High(Address) do
+    Address[I] := 0;
 end;
 
 //******************************************************************************
@@ -68,18 +483,18 @@ var
   I: Integer;
   S: String;
 begin
-  Check(not P.IsAlphaNumeric(''),           '''''');
-  Check(not P.IsAlphaNumeric(#0),           '#0');
-  Check(not P.IsAlphaNumeric(#13),          '#13');
-  Check(not P.IsAlphaNumeric(#$FF),         '#$FF');
-  Check(    P.IsAlphaNumeric('a'),          'a');
-  Check(not P.IsAlphaNumeric('a'#13#10'b'), 'a#13#10b');
-  Check(    P.IsAlphaNumeric('a1b2c3d4'),   'a1b2c3d4');
+  Check(not Self.P.IsAlphaNumeric(''),           '''''');
+  Check(not Self.P.IsAlphaNumeric(#0),           '#0');
+  Check(not Self.P.IsAlphaNumeric(#13),          '#13');
+  Check(not Self.P.IsAlphaNumeric(#$FF),         '#$FF');
+  Check(    Self.P.IsAlphaNumeric('a'),          'a');
+  Check(not Self.P.IsAlphaNumeric('a'#13#10'b'), 'a#13#10b');
+  Check(    Self.P.IsAlphaNumeric('a1b2c3d4'),   'a1b2c3d4');
 
   S := '';
   for I := 1 to 1000000 do
     S := S + 'a';
-  Check(P.IsAlphaNumeric(S), '1 000 000 a''s');
+  Check(Self.P.IsAlphaNumeric(S), '1 000 000 a''s');
 end;
 
 procedure TestTIdSimpleParser.TestIsByte;
@@ -98,13 +513,13 @@ var
   C: Char;
 begin
   for C := '0' to '9' do
-    Check(P.IsNumber(C), C);
+    Check(Self.P.IsNumber(C), C);
 
   for C := Chr(0) to Chr(Ord('0') - 1) do
-    Check(not P.IsNumber(C), C);
+    Check(not Self.P.IsNumber(C), C);
 
   for C := Chr(Ord('9') + 1) to Chr(255) do
-    Check(not P.IsNumber(C), C);
+    Check(not Self.P.IsNumber(C), C);
 end;
 
 procedure TestTIdSimpleParser.TestIsFQDN;
@@ -133,72 +548,39 @@ var
 begin
   for C := Low(Char) to High(Char) do
     if (C in ['0'..'9', 'a'..'f', 'A'..'F']) then
-      Check(P.IsHexNumber(C), C)
+      Check(Self.P.IsHexNumber(C), C)
     else
-      Check(not P.IsHexNumber(C), C);
+      Check(not Self.P.IsHexNumber(C), C);
 
-  Check(not P.IsHexNumber(''),             '''''');
-  Check(not P.IsHexNumber('x'),            'x');
-  Check(not P.IsHexNumber('cafex'),        'cafex');
-  Check(    P.IsHexNumber('cafe'),         'cafe');
-  Check(    P.IsHexNumber('CaFe'),         'CaFe');
-  Check(    P.IsHexNumber('cafef00dbabe'), 'cafef00dbabe');
-end;
-
-procedure TestTIdSimpleParser.TestIsIpv4Address;
-begin
-  Check(not TIdSimpleParser.IsIPv4Address(''),                '''''');
-  Check(not TIdSimpleParser.IsIPv4Address('1'),               '1');
-  Check(not TIdSimpleParser.IsIPv4Address('abcd'),            'abcd');
-  Check(not TIdSimpleParser.IsIPv4Address('224.'),            '224.');
-  Check(not TIdSimpleParser.IsIPv4Address('-1.0.0.0'),        '-1.0.0.0');
-  Check(not TIdSimpleParser.IsIPv4Address('224.255.255.256'), '224.255.255.256');
-  Check(    TIdSimpleParser.IsIPv4Address('127.2.17.12'),     '127.2.17.12');
-  Check(    TIdSimpleParser.IsIPv4Address('224.2.17.12'),     '224.2.17.12');
-  Check(    TIdSimpleParser.IsIPv4Address('0.0.0.0'),         '0.0.0.0');
-  Check(    TIdSimpleParser.IsIPv4Address('224.0.0.0'),       '224.0.0.0');
-  Check(    TIdSimpleParser.IsIPv4Address('224.255.255.255'), '224.255.255.255');
-  Check(    TIdSimpleParser.IsIPv4Address('255.255.255.255'), '255.255.255.255');
-end;
-
-procedure TestTIdSimpleParser.TestIsIpv6Address;
-begin
-  Check(not TIdSimpleParser.IsIPv6Address(''),                           '''''');
-  Check(not TIdSimpleParser.IsIPv6Address('x'),                          'x');
-  Check(not TIdSimpleParser.IsIPv6Address('ffef1::'),                    'ffef1::');
-  Check(    TIdSimpleParser.IsIPv6Address('::'),                         '::');
-  Check(    TIdSimpleParser.IsIPv6Address('::1'),                        '::1');
-  Check(    TIdSimpleParser.IsIPv6Address('1::'),                        '1::');
-  Check(    TIdSimpleParser.IsIPv6Address('2002:c058:6301::'),           '2002:c058:6301::');
-  Check(    TIdSimpleParser.IsIPv6Address('00:01:02:f0:90:84'),          '00:01:02:f0:90:84');
-  Check(    TIdSimpleParser.IsIPv6Address('fe80::201:2ff:fef0'),         'fe80::201:2ff:fef0');
-  Check(    TIdSimpleParser.IsIPv6Address('1080:0:0:0:8:800:200C:417A'), '1080:0:0:0:8:800:200C:417A');
-  Check(    TIdSimpleParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
-  Check(    TIdSimpleParser.IsIPv6Address('::13.1.68.3'),                '::13.1.68.3');
-  Check(    TIdSimpleParser.IsIPv6Address('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
+  Check(not Self.P.IsHexNumber(''),             '''''');
+  Check(not Self.P.IsHexNumber('x'),            'x');
+  Check(not Self.P.IsHexNumber('cafex'),        'cafex');
+  Check(    Self.P.IsHexNumber('cafe'),         'cafe');
+  Check(    Self.P.IsHexNumber('CaFe'),         'CaFe');
+  Check(    Self.P.IsHexNumber('caFEF00dbabe'), 'caFEF00dbabe');
 end;
 
 procedure TestTIdSimpleParser.TestIsLetter;
 var
   C: Char;
 begin
-  Check(not P.IsLetter('_'), '_');
-  Check(not P.IsLetter('1'), '1');
+  Check(not Self.P.IsLetter('_'), '_');
+  Check(not Self.P.IsLetter('1'), '1');
 
   for C := Low(Char) to High(Char) do
     if (C in ['a'..'z', 'A'..'Z']) then
-      Check(P.IsLetter(C), C)
+      Check(Self.P.IsLetter(C), C)
     else
-      Check(not P.IsLetter(C), C)
+      Check(not Self.P.IsLetter(C), C)
 end;
 
 procedure TestTIdSimpleParser.TestIsNumber;
 begin
-  Check(not P.IsNumber(''),                     '''''');
-  Check(not P.IsNumber('a'),                    'a');
-  Check(not P.IsNumber(#0),                     '#0');
-  Check(    P.IsNumber('13'),                   '13');
-  Check(    P.IsNumber('98765432109876543210'), '98765432109876543210');
+  Check(not Self.P.IsNumber(''),                     '''''');
+  Check(not Self.P.IsNumber('a'),                    'a');
+  Check(not Self.P.IsNumber(#0),                     '#0');
+  Check(    Self.P.IsNumber('13'),                   '13');
+  Check(    Self.P.IsNumber('98765432109876543210'), '98765432109876543210');
 end;
 
 procedure TestTIdSimpleParser.TestPeek;

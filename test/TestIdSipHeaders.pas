@@ -133,6 +133,7 @@ type
     procedure TestValueAbsoluteTime;
     procedure TestValueMalformedAbsoluteTime;
     procedure TestValueRelativeTime;
+    procedure TestValueZeroTime;
   end;
 
   TestTIdSipFromToHeader = class(TTestCase)
@@ -1549,6 +1550,13 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+procedure TestTIdSipDateHeader.TestValueZeroTime;
+begin
+  // A degenerate case.
+  Self.D.Value := 'Wed, 30 Dec 1899 00:00:00 GMT';
+  CheckEquals(0, Self.D.Time.AsTDateTime, 'Zero Time');
 end;
 
 //******************************************************************************

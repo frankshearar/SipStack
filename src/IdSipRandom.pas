@@ -13,7 +13,7 @@ implementation
 
 class function TIdSipRandomNumber.Next: Cardinal;
 begin
-  // TODO: This is CRAP. When we have time we shall implement
+  // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
   // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
   // Cryptography". If peer review shows it to be decent, that is. Or we trust
   // Schneier & Ferguson blindly.

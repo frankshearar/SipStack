@@ -85,6 +85,7 @@ type
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream;
+                        const Port: Integer;
                         const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
@@ -223,7 +224,7 @@ end;
 procedure TrnidSpike.Flash(const Btn: TButton);
 begin
   Btn.Font.Color := clGreen;
-  Sleep(100);
+  IdGlobal.Sleep(100);
   Btn.Font.Color := clBlack;
 end;
 
@@ -253,6 +254,7 @@ begin
 end;
 
 procedure TrnidSpike.OnNewData(const Data: TStream;
+                               const Port: Integer;
                                const Format: TIdRTPEncoding);
 begin
   if (Format.Name = PCMMuLawEncoding) then begin

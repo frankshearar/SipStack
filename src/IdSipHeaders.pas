@@ -297,6 +297,8 @@ type
   public
     destructor Destroy; override;
 
+    function ZeroDateTime: String;
+
     property Time: TIdDateTimeStamp read GetAbsoluteTime;
   end;
 
@@ -765,10 +767,8 @@ end;
 
 function TIdUri.IsSipUri: Boolean;
 begin
-  // TODO: This is a stopgap
   Result := (Lowercase(Self.Scheme) = SipScheme)
          or (Lowercase(Self.Scheme) = SipsScheme);
-//  Result := false;
 end;
 
 //******************************************************************************
@@ -1105,8 +1105,8 @@ end;
 function TIdSipUri.HasValidHostInfo: Boolean;
 begin
   Result := TIdSimpleParser.IsFQDN(Self.Host)
-         or TIdSimpleParser.IsIPv4Address(Self.Host)
-         or TIdSimpleParser.IsIPv6Address(Self.Host);
+         or TIdIPAddressParser.IsIPv4Address(Self.Host)
+         or TIdIPAddressParser.IsIPv6Address(Self.Host);
 end;
 
 function TIdSipUri.HasValidParameters: Boolean;
@@ -1364,9 +1364,9 @@ end;
 constructor TIdSipHeader.Create;
 begin
   // This has no functional meaning. It just makes inspecting variables a bit
-  // more sane for the developer. For instance, TIdSipViaHeader.fName will be
-  // 'Via', even though a TIdSipViaHeader's fName cannot be read because GetName
-  // is overridden.
+  // more sane for the developer. For instance, TIdSipViaHeader.fName will have
+  // the value 'Via', even though a TIdSipViaHeader's fName cannot be read
+  // because TIdSipViaHeader overrides GetName.
   Self.Name := Self.GetName;
 end;
 
@@ -2042,6 +2042,11 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipDateHeader.ZeroDateTime: String;
+begin
+  Result := '30 Dec 1899 00:00:00 GMT';
+end;
+
 //* TIdSipDateHeader Protected methods *****************************************
 
 function TIdSipDateHeader.GetName: String;
@@ -2073,10 +2078,18 @@ end;
 
 procedure TIdSipDateHeader.SetAbsoluteTime(Value: String);
 begin
+  // We cannot differentiate between a malformed date (which returns a zero)
+  // and the date Self.ZeroTime
   Self.Time.SetFromRFC822(Value);
 
-  // todo: this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
-  if (Self.Time.AsTDateTime = 0) then
+  // Therefore we try inspect the string manually. Yes, this method can be
+  // fooled - "00:00:00 GMT hahahahahaha 1899-30Dec" will not raise a parse
+  // error.
+  if ((IndyPos('Dec', Value) = 0)
+    or (IndyPos('30', Value) = 0)
+    or (IndyPos('1899', Value) = 0)
+    or (IndyPos('00:00:00 GMT', Value) = 0))
+    and (Self.Time.AsTDateTime = 0) then
     Self.FailParse;
 end;
 
@@ -2543,7 +2556,7 @@ procedure TIdSipViaHeader.AssertMaddrWellFormed;
 begin
   if (Self.Parameters.IndexOfName(MaddrParam) > -1) then begin
     if    not TIdSipParser.IsFQDN(Self.Parameters.Values[MaddrParam])
-      and not TIdSipParser.IsIPv4Address(Self.Parameters.Values[MaddrParam])
+      and not TIdIPAddressParser.IsIPv4Address(Self.Parameters.Values[MaddrParam])
       and not TIdSipParser.IsIPv6Reference(Self.Parameters.Values[MaddrParam]) then
       Self.FailParse;
   end;
@@ -2552,8 +2565,8 @@ end;
 procedure TIdSipViaHeader.AssertReceivedWellFormed;
 begin
   if (Self.IndexOfParam(ReceivedParam) > -1)
-    and not TIdSipParser.IsIPv4Address(Self.Params[ReceivedParam])
-    and not TIdSipParser.IsIPv6Address(Self.Params[ReceivedParam]) then
+    and not TIdIPAddressParser.IsIPv4Address(Self.Params[ReceivedParam])
+    and not TIdIPAddressParser.IsIPv6Address(Self.Params[ReceivedParam]) then
     Self.FailParse;
 end;
 

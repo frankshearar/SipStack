@@ -414,8 +414,7 @@ var
   BytesToRead: Integer;
   Read:        Integer;
 begin
-  // It is the responsibility of the transport to ensure that
-  // Content-Length is set before this method is called!
+  // The transport must set Content-Length before this method gets called!
 
   if (Self.ContentLength > 0) then begin
     BytesToRead := Self.ContentLength;
@@ -830,7 +829,7 @@ class function TIdSipParser.IsIPv6Reference(const Token: String): Boolean;
 begin
   Result := (Copy(Token, 1, 1) = '[')
         and (Copy(Token, Length(Token), 1) = ']')
-        and Self.IsIPv6Address(Copy(Token, 2, Length(Token) - 2));
+        and TIdIPAddressParser.IsIPv6Address(Copy(Token, 2, Length(Token) - 2));
 end;
 
 class function TIdSipParser.IsMethod(Method: String): Boolean;
@@ -971,8 +970,8 @@ begin
     FirstToken := Fetch(FirstLine);
     FirstToken := Fetch(FirstToken, '/');
 
-    // It's safe to do this because we know a SIP response starts with "SIP/",
-    // and the "/" is not allowed in a Method.
+    // We can do this safely because we know a SIP response starts with "SIP/",
+    // and a Method can't contain the character "/".
     Result := Self.CreateResponseOrRequest(FirstToken);
     try
       Self.ParseMessage(Result);

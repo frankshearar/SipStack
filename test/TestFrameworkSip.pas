@@ -20,6 +20,7 @@ type
     constructor Create;
 
     procedure OnNewData(const Data: TStream;
+                        const Port: Integer;
                         const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
 
@@ -190,6 +191,7 @@ begin
 end;
 
 procedure TIdSipTestDataListener.OnNewData(const Data: TStream;
+                                           const Port: Integer;
                                            const Format: TIdRTPEncoding);
 begin
   Self.fNewData := true;

@@ -25,7 +25,7 @@ type
 implementation
 
 uses
-  SyncObjs, TestFramework;
+  IdGlobal, SyncObjs, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -101,11 +101,11 @@ begin
   Self.Timer.OnTimer := Self.OnTickTimer;
   Self.Timer.Interval := 1000;
   Self.Timer.Start;
-  Sleep(500);
+  IdGlobal.Sleep(500);
 
   Check(not Self.Tick, 'Ticked prematurely before Reset');
   Self.Timer.Reset;
-  Sleep(500);
+  IdGlobal.Sleep(500);
   Check(not Self.Tick, 'Ticked prematurely after Reset');
 end;
 

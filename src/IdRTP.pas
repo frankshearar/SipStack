@@ -3,14 +3,20 @@ unit IdRTP;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, Contnrs, SysUtils;
 
 type
   TIdCardinalArray        = array of Cardinal;
   TIdTelephoneEventVolume = 0..63;
-  TIdNTPTimestamp         = Cardinal;
-  TIdRTCPSourceCount      = 0..31;
-  TIdRTCPSubType          = 0..31;
+  TIdNTPTimestamp         = record
+    IntegerPart:    Cardinal;
+    FractionalPart: Cardinal;
+  end;
+  TIdLoss                 = 0..16777215; // 3-byte integer: 2^24 - 1
+  TIdFiveBitInt           = 0..31;
+  TIdRTCPSourceCount      = TIdFiveBitInt;
+  TIdRTCPSubType          = TIdFiveBitInt;
+  TIdRTCPReceptionCount   = TIdFiveBitInt;
   TIdRTPCsrcCount         = 0..15;
   TIdRTPPayloadType       = 0..127;
   TIdRTPSequenceNo        = Word;
@@ -61,8 +67,7 @@ type
     function PayloadType: TIdRTPPayloadClass; override;
   end;
 
-  // I am the Null Encoding. I represent the fact that there is no defined
-  // encoding.
+  // I represent the Null Encoding.
   TIdRTPNullEncoding = class(TIdRTPEncoding)
   public
     constructor Create(const Name: String;
@@ -89,8 +94,8 @@ type
     function IsReserved: Boolean; override;
   end;
 
-  // I am the payload in an RTP packet. My subclasses implement appropriate
-  // parsing and outputting.
+  // I represent the payload in an RTP packet. My subclasses implement
+  // appropriate parsing and outputting.
   //
   // I offer a Flyweight Null Payload.
   TIdRTPPayload = class(TObject)
@@ -101,23 +106,25 @@ type
     class function NullPayload: TIdRTPPayload;
 
     function  IsNull: Boolean; virtual;
+    function  Length: Cardinal; virtual;
     procedure ReadFrom(Src: TStream); virtual;
     procedure PrintOn(Dest: TStream); virtual;
   end;
 
-  // I am the Null payload - a Null Object representing the absence of a
+  // I represent the Null payload - a Null Object representing the absence of a
   // payload.
   TIdNullPayload = class(TIdRTPPayload)
   public
     function IsNull: Boolean; override;
   end;
 
-  // I am the Raw payload. That means that my content is completely unparsed.
-  // I'm mostly a fallback case for a malconfigured RTP server.
+  // I represent a raw (i.e., unparsed) payload.
+  // I typically provide a fallback case for a malconfigured RTP server.
   TIdRawPayload = class(TIdRTPPayload)
   private
     fData: String;
   public
+    function  Length: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
     procedure PrintOn(Dest: TStream); override;
 
@@ -158,10 +165,11 @@ type
 
   TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPEncoding;
 
-  // I am a 1-1 association map between encodings and RTP Payload Types. RTP
-  // packets use me to determine how their payload should be interpreted.
-  // Because I am 1-1, you cannot add the same encoding to me twice. If you try,
-  // the payload type you try will remain unchanged.
+  // I represent a 1-1 association map between encodings and RTP Payload Types.
+  // RTP packets use me to determine how their payload should be interpreted.
+  // Because I represent a  1-1 relation, you cannot add the same encoding to
+  // me twice. If you try, the payload type you try to overwrite will remain
+  // unchanged.
   TIdRTPProfile = class(TPersistent)
   private
     Encodings:    TIdPayloadArray;
@@ -195,10 +203,9 @@ type
     function  TransportDesc: String; virtual;
   end;
 
-  // I am the profile defined in RFC 3551. As such, don't bother trying to
-  // change the encodings of any reserved or assigned payload types. The
-  // only payload types I allow to be altered are the dynamic payload types -
-  // 96-127.
+  // I represent the profile defined in RFC 3551. As such, don't bother trying
+  // to change the encodings of any reserved or assigned payload types. I only
+  // allow the alteration of the dynamic payload types - 96-127.
   TIdAudioVisualProfile = class(TIdRTPProfile)
   private
     procedure ReserveRange(const LowPT, HighPT: TIdRTPPayloadType);
@@ -209,9 +216,9 @@ type
     function  TransportDesc: String; override;
   end;
 
-  // I'm a Header Extension. RFC 3550 doesn't define an interpretation for my
-  // data beyond the length field, so it's up to my subclasses to provide more
-  // meaningful properties.
+  // I represent a Header Extension. RFC 3550 doesn't define an interpretation
+  // for my data beyond the length field, so my subclasses must provide more
+  // meaningful properties for this data.
   TIdRTPHeaderExtension = class(TObject)
   private
     fData:                array of Cardinal;
@@ -222,6 +229,7 @@ type
     procedure SetData(Index: Word; const Value: Cardinal);
     procedure SetLength(const Value: Word);
   public
+    function  OctetCount: Cardinal;
     procedure ReadFrom(Src: TStream);
     procedure PrintOn(Dest: TStream);
 
@@ -230,12 +238,37 @@ type
     property Data[Index: Word]:   Cardinal read GetData write SetData;
   end;
 
+  TIdRTCPReportBlock = class(TObject)
+  private
+    fCumulativeLoss:     TIdLoss;
+    fDelaySinceLastSR:   Cardinal;
+    fFractionLost:       Byte;
+    fHighestSeqNo:       Cardinal;
+    fInterArrivalJitter: Cardinal;
+    fLastSenderReport:   Cardinal;
+    fSyncSrcID:          Cardinal;
+  public
+    procedure PrintOn(Dest: TStream);
+    procedure ReadFrom(Src: TStream);
+
+    property CumulativeLoss:     TIdLoss  read fCumulativeLoss write fCumulativeLoss;
+    property DelaySinceLastSR:   Cardinal read fDelaySinceLastSR write fDelaySinceLastSR;
+    property FractionLost:       Byte     read fFractionLost write fFractionLost;
+    property HighestSeqNo:       Cardinal read fHighestSeqNo write fHighestSeqNo;
+    property InterArrivalJitter: Cardinal read fInterArrivalJitter write fInterArrivalJitter;
+    property LastSenderReport:   Cardinal read fLastSenderReport write fLastSenderReport;
+    property SyncSrcID:          Cardinal read fSyncSrcID write fSyncSrcID;
+  end;
+
   TIdRTPBasePacket = class(TObject)
   private
-    fSyncSrcID: Cardinal;
-    fVersion:   TIdRTPVersion;
+    fHasPadding: Boolean;
+    fLength:     Word;
+    fSyncSrcID:  Cardinal;
+    fVersion:    TIdRTPVersion;
   protected
     function  GetSyncSrcID: Cardinal; virtual;
+    procedure PrintPadding(Dest: TStream);
     procedure SetSyncSrcID(const Value: Cardinal); virtual;
   public
     class function IsRTCPPayloadType(const PayloadType: Byte): Boolean;
@@ -247,28 +280,27 @@ type
     function IsRTCP: Boolean; virtual; abstract;
     function IsRTP: Boolean; virtual; abstract;
     procedure ReadFrom(Src: TStream); virtual; abstract;
+    function  RealLength: Word; virtual; abstract;
     procedure PrintOn(Dest: TStream); virtual; abstract;
 
-    property SyncSrcID: Cardinal      read GetSyncSrcID write SetSyncSrcID;
-    property Version:   TIdRTPVersion read fVersion write fVersion;
+    property HasPadding: Boolean       read fHasPadding write fHasPadding;
+    property Length:     Word          read fLength write fLength;
+    property SyncSrcID:  Cardinal      read GetSyncSrcID write SetSyncSrcID;
+    property Version:    TIdRTPVersion read fVersion write fVersion;
   end;
 
-  // I am a packet of the Real-time Transport Protocol.
-  //
-  // I currently do not support the Header Extension as defined in RFC 3550,
-  // section 5.3.1, nor do I have timestamp (either RTP or NTP) information.
+  // I represent a packet of the Real-time Transport Protocol.
   TIdRTPPacket = class(TIdRTPBasePacket)
   private
     fCsrcCount:       TIdRTPCsrcCount;
     fCsrcIDs:         TIdCardinalArray;
     fHasExtension:    Boolean;
-    fHasPadding:      Boolean;
     fHeaderExtension: TIdRTPHeaderExtension;
     fIsMarker:        Boolean;
     fPayload:         TIdRTPPayload;
     fPayloadType:     TIdRTPPayloadType;
     fSequenceNo:      TIdRTPSequenceNo;
-    fTimestamp:       TIdNTPTimestamp;
+    fTimestamp:       Cardinal;
     Profile:          TIdRTPProfile;
 
     procedure CreatePayload(const Encoding: TIdRTPEncoding);
@@ -287,23 +319,23 @@ type
     procedure PrintOn(Dest: TStream); override;
     procedure ReadPayload(Src: TStream); overload;
     procedure ReadPayload(Src: String); overload;
+    function  RealLength: Word; override;
 
     property CsrcCount:                       TIdRTPCsrcCount       read GetCsrcCount write SetCsrcCount;
     property CsrcIDs[Index: TIdRTPCsrcCount]: Cardinal              read GetCsrcID write SetCsrcID;
     property HasExtension:                    Boolean               read fHasExtension write fHasExtension;
-    property HasPadding:                      Boolean               read fHasPadding write fHasPadding;
     property HeaderExtension:                 TIdRTPHeaderExtension read fHeaderExtension;
     property IsMarker:                        Boolean               read fIsMarker write fIsMarker;
     property Payload:                         TIdRTPPayload         read fPayload;
     property PayloadType:                     TIdRTPPayloadType     read fPayloadType write fPayloadType;
     property SequenceNo:                      TIdRTPSequenceNo      read fSequenceNo write fSequenceNo;
-    property Timestamp:                       TIdNTPTimestamp       read fTimestamp write fTimestamp;
+    property Timestamp:                       Cardinal              read fTimestamp write fTimestamp;
   end;
 
   TIdRTCPPacket = class;
   TIdRTCPPacketClass = class of TIdRTCPPacket;
 
-  // I am a packet in the Real-time Transport Control Protocol, as defined in
+  // I represent a packet in the Real-time Transport Control Protocol, as defined in
   // RFC 3550 section 6.
   TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
@@ -319,15 +351,53 @@ type
     property PacketType: Cardinal read GetPacketType;
   end;
 
-  TIdRTCPSenderReportPacket = class(TIdRTCPPacket);
+  // I represent an SR RTCP packet. Please note that I clobber my report
+  // objects when you change my ReceptionReportCount property - I free all
+  // my existing reports and create new instances. I guarantee that you
+  // won't get a nil pointer from ReportAt.
+  // Active senders of data in an RTP session send me to give transmission
+  // and reception statistics.
+  TIdRTCPSenderReportPacket = class(TIdRTCPPacket)
+  private
+    fExtension:        String;
+    fNTPTimestamp:     TIdNTPTimestamp;
+    fOctetCount:       Cardinal;
+    fPacketCount:      Cardinal;
+    fReceptionReports: array of TIdRTCPReportBlock;
+    fRTPTimestamp:     Cardinal;
+
+    procedure ClearReportBlocks;
+    function  GetReceptionReportCount: TIdRTCPReceptionCount;
+    procedure ReadAllReportBlocks(Src: TStream);
+    procedure ReInitialiseReportBlocks;
+    procedure SetReceptionReportCount(const Value: TIdRTCPReceptionCount);
+  protected
+    function  GetPacketType: Cardinal; override;
+  public
+    destructor Destroy; override;
+
+    function  ReportAt(const Index: Integer): TIdRTCPReportBlock;
+    procedure PrintOn(Dest: TStream); override;
+    procedure ReadFrom(Src: TStream); override;
+    function  RealLength: Word; override;
+
+    property Extension:            String                read fExtension write fExtension;
+    property NTPTimestamp:         TIdNTPTimestamp       read fNTPTimestamp write fNTPTimestamp;
+    property OctetCount:           Cardinal              read fOctetCount write fOctetCount;
+    property PacketCount:          Cardinal              read fPacketCount write fPacketCount;
+    property ReceptionReportCount: TIdRTCPReceptionCount read GetReceptionReportCount write SetReceptionReportCount;
+    property RTPTimestamp:         Cardinal              read fRTPTimestamp write fRTPTimestamp;
+  end;
+
   TIdRTCPReceiverReportPacket = class(TIdRTCPPacket);
   TIdRTCPSourceDescriptionPacket = class(TIdRTCPPacket);
 
+  // I represent an RTCP Bye packet. You use me to remove yourself from an RTP
+  // session. RTP servers that receive me remove the SSRC that sent me from
+  // their member tables.
   TIdRTCPByePacket = class(TIdRTCPPacket)
   private
     fSources:      TIdCardinalArray;
-    fHasPadding:   Boolean;
-    fLength:       Word;
     fReason:       String;
     fReasonLength: Word;
 
@@ -346,9 +416,8 @@ type
 
     procedure PrintOn(Dest: TStream); override;
     procedure ReadFrom(Src: TStream); override;
+    function  RealLength: Word; override;
 
-    property HasPadding:                         Boolean            read fHasPadding write fHasPadding;
-    property Length:                             Word               read fLength write fLength;
     property Reason:                             String             read fReason write SetReason;
     property ReasonLength:                       Word               read fReasonLength write fReasonLength;
     property SourceCount:                        TIdRTCPSourceCount read GetSourceCount write SetSourceCount;
@@ -357,13 +426,10 @@ type
 
   TIdRTCPApplicationDefinedPacket = class(TIdRTCPPacket)
   private
-    fData:       String;
-    fHasPadding: Boolean;
-    fLength:     Word;
-    fName:       String;
-    fSubType:    TIdRTCPSubType;
+    fData:    String;
+    fName:    String;
+    fSubType: TIdRTCPSubType;
 
-    procedure ResetLength;
     procedure SetData(const Value: String);
     procedure SetName(const Value: String);
   protected
@@ -373,33 +439,56 @@ type
 
     procedure PrintOn(Dest: TStream); override;
     procedure ReadFrom(Src: TStream); override;
+    function  RealLength: Word; override;
 
-    property Data:       String         read fData write SetData;
-    property HasPadding: Boolean        read fHasPadding write fHasPadding;
-    property Length:     Word           read fLength write fLength;
-    property Name:       String         read fName write SetName;
-    property SubType:    TIdRTCPSubType read fSubType write fSubType;
+    property Data:    String         read fData write SetData;
+    property Name:    String         read fName write SetName;
+    property SubType: TIdRTCPSubType read fSubType write fSubType;
+  end;
+
+  // I provide a buffer to objects that receive RTP packets. I assemble these
+  // packets, making sure I assemble the RTP stream in the correct order.
+  TIdRTPPacketBuffer = class(TObject)
+  private
+    List: TObjectList;
+
+    function  AppropriateIndex(const Pkt: TIdRTPPacket): Integer;
+    procedure Clear;
+    function  PacketAt(const Index: Integer): TIdRTPPacket;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(const Pkt: TIdRTPPacket);
+    function  Last: TIdRTPPacket;
+    procedure RemoveLast;
   end;
 
   ENoPayloadTypeFound = class(Exception);
 
+function DateTimeToNTPSeconds(const DT: TDateTime): Cardinal;
+function DateTimeToNTPTimestamp(const DT: TDateTime): TIdNTPTimestamp;
 function EncodeAsString(Value: Cardinal): String; overload;
 function EncodeAsString(Value: Word): String; overload;
 function HtoNL(Value: Cardinal): Cardinal;
 function HtoNS(Value: Word): Word;
+function MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 function NtoHL(Value: Cardinal): Cardinal;
 function NtoHS(Value: Word): Cardinal;
 
 function  ReadCardinal(Src: TStream): Cardinal;
+procedure ReadNTPTimestamp(Src: TStream; var Timestamp: TIdNTPTimestamp);
 function  ReadRemainderOfStream(Src: TStream): String;
 function  ReadString(Src: TStream; const Length: Cardinal): String;
 function  ReadWord(Src: TStream): Word;
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
+procedure WriteNTPTimestamp(Dest: TStream; Value: TIdNTPTimestamp);
 procedure WriteWord(Dest: TStream; Value: Word);
 
+// From RFC 3550 and 3551
 const
-  RFC3550Version = 2;
-  AudioVisualProfile = 'RTP/AVP'; // defined in RFC 3551
+  RFC3550Version     = 2;
+  AudioVisualProfile = 'RTP/AVP';
 
   CelBEncoding                = 'CelB';
   CNEncoding                  = 'CN';
@@ -422,34 +511,6 @@ const
   PCMMuLawEncoding            = 'PCMU';
   PCMALawEncoding             = 'PCMA';
   QCELPEncoding               = 'QCELP';
-  RedundancyEncoding          = 'RED';
-  TelephoneEventEncoding      = 'telephone-event';
-  RedundancyEncodingParameter = 'RED';
-  T140ClockRate               = 1000;
-  T140Encoding                = 'T140';
-
-  TelephoneEventMimeType  = 'audio/' + TelephoneEventEncoding;
-  InterleavedT140MimeType = 'audio/' + T140Encoding;
-  RedundantT140MimeType   = 'text/' + RedundancyEncoding;
-  T140MimeType            = 'text/' + T140Encoding;
-
-  DTMF0     = 0;
-  DTMF1     = 1;
-  DTMF2     = 2;
-  DTMF3     = 3;
-  DTMF4     = 4;
-  DTMF5     = 5;
-  DTMF6     = 6;
-  DTMF7     = 7;
-  DTMF8     = 8;
-  DTMF9     = 9;
-  DTMFStar  = 10;
-  DTMFHash  = 11;
-  DTMFA     = 12;
-  DTMFB     = 13;
-  DTMFC     = 14;
-  DTMFD     = 15;
-  DTMFFlash = 16;
 
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
@@ -467,17 +528,90 @@ const
   SDESNote  = 7;
   SDESPriv  = 8;
 
+// From RFC 2793
+const
+  RedundancyEncoding          = 'RED';
+  RedundancyEncodingParameter = 'RED';
+  T140ClockRate               = 1000;
+  T140Encoding                = 'T140';
+  InterleavedT140MimeType     = 'audio/' + T140Encoding;
+  RedundantT140MimeType       = 'text/' + RedundancyEncoding;
+  T140MimeType                = 'text/' + T140Encoding;
+
+// From RFC 2833
+const
+  DTMF0                  = 0;
+  DTMF1                  = 1;
+  DTMF2                  = 2;
+  DTMF3                  = 3;
+  DTMF4                  = 4;
+  DTMF5                  = 5;
+  DTMF6                  = 6;
+  DTMF7                  = 7;
+  DTMF8                  = 8;
+  DTMF9                  = 9;
+  DTMFStar               = 10;
+  DTMFHash               = 11;
+  DTMFA                  = 12;
+  DTMFB                  = 13;
+  DTMFC                  = 14;
+  DTMFD                  = 15;
+  DTMFFlash              = 16;
+  TelephoneEventEncoding = 'telephone-event';
+  TelephoneEventMimeType = 'audio/' + TelephoneEventEncoding;
+
 implementation
 
 uses
-  IdGlobal;
+  DateUtils, IdGlobal;
 
 var
   GNullPayload: TIdRTPPayload;
 
+const
+  JanOne1900 = 2;
+
 //******************************************************************************
 //* Unit public functions & procedures                                         *
 //******************************************************************************
+
+function DateTimeToNTPSeconds(const DT: TDateTime): Cardinal;
+var
+  Days: Cardinal;
+begin
+  Days := Trunc(DT) - JanOne1900;
+
+  Result := MultiplyCardinal(Days, SecsPerDay) + SecondOfTheDay(DT);
+end;
+
+// Caveat Programmer: TDateTime has the floating point nature. Don't expect
+// enormous precision.
+function DateTimeToNTPTimestamp(const DT: TDateTime): TIdNTPTimestamp;
+var
+  Divisor:         Int64;
+  Fraction:        Double;
+  FractionBit:     Cardinal;
+  PartOfOneSecond: Double;
+begin
+  if (DT < 2) then
+    raise EConvertError.Create('DT < 1900/01/01');
+
+  Result.IntegerPart := DateTimeToNTPSeconds(DT);
+
+  PartOfOneSecond       := MilliSecondOfTheSecond(DT)/1000;
+  Result.FractionalPart := 0;
+  Divisor               := 2;
+  FractionBit           := $80000000;
+  while (Divisor <= $40000000) and (PartOfOneSecond > 0) do begin
+    Fraction := 1/Divisor;
+    if ((PartOfOneSecond - Fraction) >= 0) then begin
+      Result.FractionalPart := Result.FractionalPart or FractionBit;
+      PartOfOneSecond := PartOfOneSecond - Fraction;
+    end;
+    FractionBit := FractionBit div 2;
+    Divisor := MultiplyCardinal(2, Divisor);
+  end;
+end;
 
 function EncodeAsString(Value: Cardinal): String;
 begin
@@ -506,6 +640,19 @@ begin
   Result := ((Value and $00FF) shl 8) or ((Value  and $FF00) shr 8);
 end;
 
+// Delphi 6 & 7 both compile FirstValue*SecondValue as an imul
+// opcode. imul performs a SIGNED integer multiplication, and so if
+// FirstValue * SecondValue > $7fffffff then the overflow flag gets set. If you
+// have overflow checking on, that means that FOR A PERFECTLY VALID
+// multiplication (e.g., $7f000000 * 2) you will get an EIntOverflow.
+function MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
+asm
+  mul edx
+  jno @end
+  call System.@IntOver
+ @end:
+end;
+
 function NtoHL(Value: Cardinal): Cardinal;
 begin
   Result := HtoNL(Value);
@@ -520,6 +667,12 @@ function ReadCardinal(Src: TStream): Cardinal;
 begin
   Src.Read(Result, SizeOf(Result));
   Result := NtoHL(Result);
+end;
+
+procedure ReadNTPTimestamp(Src: TStream; var Timestamp: TIdNTPTimestamp);
+begin
+  Timestamp.IntegerPart    := ReadCardinal(Src);
+  Timestamp.FractionalPart := ReadCardinal(Src);
 end;
 
 function ReadRemainderOfStream(Src: TStream): String;
@@ -567,6 +720,12 @@ procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 begin
   Value := HtoNL(Value);
   Dest.Write(Value, SizeOf(Value));
+end;
+
+procedure WriteNTPTimestamp(Dest: TStream; Value: TIdNTPTimestamp);
+begin
+  WriteCardinal(Dest, Value.IntegerPart);
+  WriteCardinal(Dest, Value.FractionalPart);
 end;
 
 procedure WriteWord(Dest: TStream; Value: Word);
@@ -791,6 +950,11 @@ begin
   Result := false;
 end;
 
+function TIdRTPPayload.Length: Cardinal;
+begin
+  Result := 0;
+end;
+
 procedure TIdRTPPayload.ReadFrom(Src: TStream);
 begin
 end;
@@ -814,6 +978,11 @@ end;
 //******************************************************************************
 //* TIdRawPayload Public methods ***********************************************
 
+function TIdRawPayload.Length: Cardinal;
+begin
+  Result := System.Length(Self.Data);
+end;
+
 procedure TIdRawPayload.ReadFrom(Src: TStream);
 begin
   Self.Data := ReadRemainderOfStream(Src);
@@ -821,7 +990,7 @@ end;
 
 procedure TIdRawPayload.PrintOn(Dest: TStream);
 begin
-  Dest.Write(PChar(Self.Data)^, Length(Self.Data));
+  Dest.Write(PChar(Self.Data)^, System.Length(Self.Data));
 end;
 
 //******************************************************************************
@@ -841,7 +1010,7 @@ begin
   WriteWord(Dest, Self.BlockCount);
 
   if (Self.Block <> '') then
-    Dest.Write(PChar(Self.Block)^, Length(Self.Block));
+    Dest.Write(PChar(Self.Block)^, System.Length(Self.Block));
 end;
 
 //******************************************************************************
@@ -1131,6 +1300,11 @@ end;
 //******************************************************************************
 //* TIdRTPHeaderExtension Public methods ***************************************
 
+function TIdRTPHeaderExtension.OctetCount: Cardinal;
+begin
+  Result := 4*Self.Length + 4;
+end;
+
 procedure TIdRTPHeaderExtension.ReadFrom(Src: TStream);
 var
   I: Integer;
@@ -1175,6 +1349,37 @@ begin
   System.SetLength(fData, Value);
 end;
 
+//******************************************************************************
+//* TIdRTCPReportBlock                                                         *
+//******************************************************************************
+//* TIdRTCPReportBlock Public methods ******************************************
+
+procedure TIdRTCPReportBlock.PrintOn(Dest: TStream);
+var
+  Loss: Cardinal;
+begin
+  WriteCardinal(Dest, Self.SyncSrcID);
+  Loss := (Self.FractionLost shl 24) or Self.CumulativeLoss;
+  WriteCardinal(Dest, Loss);
+  WriteCardinal(Dest, Self.HighestSeqNo);
+  WriteCardinal(Dest, Self.InterArrivalJitter);
+  WriteCardinal(Dest, Self.LastSenderReport);
+  WriteCardinal(Dest, Self.DelaySinceLastSR);
+end;
+
+procedure TIdRTCPReportBlock.ReadFrom(Src: TStream);
+var
+  Loss: Cardinal;
+begin
+  Self.SyncSrcID          := ReadCardinal(Src);
+  Loss                    := ReadCardinal(Src);
+  Self.FractionLost       := Loss shr 24;
+  Self.CumulativeLoss     := Loss and $00ffffff;
+  Self.HighestSeqNo       := ReadCardinal(Src);
+  Self.InterArrivalJitter := ReadCardinal(Src);
+  Self.LastSenderReport   := ReadCardinal(Src);
+  Self.DelaySinceLastSR   := ReadCardinal(Src);
+end;
 
 //******************************************************************************
 //* TIdRTPBasePacket                                                           *
@@ -1215,6 +1420,33 @@ end;
 function TIdRTPBasePacket.GetSyncSrcID: Cardinal;
 begin
   Result := fSyncSrcID;
+end;
+
+procedure TIdRTPBasePacket.PrintPadding(Dest: TStream);
+var
+  B:         Byte;
+  I:         Integer;
+  PadLength: Byte;
+begin
+  //   padding (P): 1 bit
+  //      If the padding bit is set, this individual RTCP packet contains
+  //      some additional padding octets at the end which are not part of
+  //      the control information but are included in the length field.  The
+  //      last octet of the padding is a count of how many padding octets
+  //      should be ignored, including itself (it will be a multiple of
+  //      four).
+  Assert(Self.Length > Self.RealLength,
+         'Length must be set before padding is printed');
+  Assert((Self.Length - Self.RealLength) mod 4 = 0,
+         'Padding must be a multiple of 4');
+
+  B := 0;
+  PadLength := Self.Length - Self.RealLength;
+  for I := 1 to PadLength - 1 do
+    Dest.Write(B, 1);
+
+  // The written padding length includes itself
+  Dest.Write(PadLength, 1);
 end;
 
 procedure TIdRTPBasePacket.SetSyncSrcID(const Value: Cardinal);
@@ -1335,6 +1567,16 @@ begin
   end;
 end;
 
+function TIdRTPPacket.RealLength: Word;
+begin
+  Result := 12
+          + Self.CsrcCount*4
+          + Self.Payload.Length;
+
+  if Self.HasExtension then
+    Result := Result + Self.HeaderExtension.OctetCount;
+end;
+
 //* TIdRTPPacket Private methods ***********************************************
 
 procedure TIdRTPPacket.CreatePayload(const Encoding: TIdRTPEncoding);
@@ -1398,6 +1640,129 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTCPSenderReportPacket                                                  *
+//******************************************************************************
+//* TIdRTCPSenderReportPacket Public methods ***********************************
+
+destructor TIdRTCPSenderReportPacket.Destroy;
+begin
+  Self.ClearReportBlocks;
+
+  inherited Destroy;
+end;
+
+function TIdRTCPSenderReportPacket.ReportAt(const Index: Integer): TIdRTCPReportBlock;
+begin
+  if (Index < 0) or (Index >= Self.ReceptionReportCount) then
+    raise EListError.Create('List index out of bounds (' + IntToStr(Index) + ')');
+
+  Result := fReceptionReports[Index];
+end;
+
+procedure TIdRTCPSenderReportPacket.PrintOn(Dest: TStream);
+var
+  B: Byte;
+  I: Integer;
+begin
+  // Calculate length for real here? Hard-code RTP version too?
+  B := Self.Version shl 6;
+  if Self.HasPadding then B := B or $20;
+  B := B or Self.ReceptionReportCount;
+  Dest.Write(B, 1);
+
+  B := Self.GetPacketType;
+  Dest.Write(B, 1);
+
+  WriteWord(Dest, Self.Length);
+  WriteCardinal(Dest, Self.SyncSrcID);
+  WriteNTPTimestamp(Dest, Self.NTPTimestamp);
+  WriteCardinal(Dest, Self.RTPTimestamp);
+  WriteCardinal(Dest, Self.PacketCount);
+  WriteCardinal(Dest, Self.OctetCount);
+
+  for I := 0 to Self.ReceptionReportCount - 1 do
+    Self.ReportAt(I).PrintOn(Dest);
+
+  if Self.HasPadding then
+    Self.PrintPadding(Dest);
+end;
+
+procedure TIdRTCPSenderReportPacket.ReadFrom(Src: TStream);
+var
+  B: Byte;
+  T: TIdNTPTimestamp;
+begin
+  Src.Read(B, 1);
+  Self.Version              := B shr 6;
+  Self.HasPadding           := (B and $20) > 0;
+  Self.ReceptionReportCount := B and $1F;
+  Src.Read(B, 1);
+
+  Self.Length       := ReadWord(Src);
+  Self.SyncSrcID    := ReadCardinal(Src);
+  T.IntegerPart     := ReadCardinal(Src);
+  T.FractionalPart  := ReadCardinal(Src);
+  Self.NTPTimestamp := T;
+  Self.RTPTimestamp := ReadCardinal(Src);
+  Self.PacketCount  := ReadCardinal(Src);
+  Self.OctetCount   := ReadCardinal(Src);
+
+  Self.ReadAllReportBlocks(Src);
+end;
+
+function TIdRTCPSenderReportPacket.RealLength: Word;
+begin
+  // I contain at minimum 28 octets, and another 24 octets per report block.
+  // And I sometimes contain header extensions.
+  Result := 7*4 + Self.ReceptionReportCount*6*4 + System.Length(Self.Extension);
+end;
+
+//* TIdRTCPSenderReportPacket Protected methods ********************************
+
+function TIdRTCPSenderReportPacket.GetPacketType: Cardinal;
+begin
+  Result := RTCPSenderReport;
+end;
+
+//* TIdRTCPSenderReportPacket Private methods **********************************
+
+procedure TIdRTCPSenderReportPacket.ClearReportBlocks;
+var
+  I: Integer;
+begin
+  for I := Low(fReceptionReports) to High(fReceptionReports) do
+    fReceptionReports[I].Free;
+end;
+
+procedure TIdRTCPSenderReportPacket.ReadAllReportBlocks(Src: TStream);
+var
+  I: Integer;
+begin
+  for I := Low(fReceptionReports) to High(fReceptionReports) do
+    fReceptionReports[I].ReadFrom(Src);
+end;
+
+procedure TIdRTCPSenderReportPacket.ReInitialiseReportBlocks;
+var
+  I: Integer;
+begin
+  for I := Low(fReceptionReports) to High(fReceptionReports) do
+    fReceptionReports[I] := TIdRTCPReportBlock.Create;
+end;
+
+function TIdRTCPSenderReportPacket.GetReceptionReportCount: TIdRTCPReceptionCount;
+begin
+  Result := System.Length(fReceptionReports);
+end;
+
+procedure TIdRTCPSenderReportPacket.SetReceptionReportCount(const Value: TIdRTCPReceptionCount);
+begin
+  Self.ClearReportBlocks;
+  SetLength(fReceptionReports, Value);
+  Self.ReInitialiseReportBlocks;
+end;
+
+//******************************************************************************
 //* TIdRTCPByePacket                                                           *
 //******************************************************************************
 //* TIdRTCPByePacket Public methods ********************************************
@@ -1416,8 +1781,7 @@ var
 begin
   B := Self.Version shl 6;
 
-  if Self.HasPadding then
-    B := B or $40;
+  if Self.HasPadding then B := B or $20;
   Dest.Write(B, 1);
 
   B := Self.GetPacketType;
@@ -1432,6 +1796,9 @@ begin
     WriteWord(Dest, Self.ReasonLength);
     Dest.Write(Self.Reason[1], System.Length(Self.Reason));
   end;
+
+  if Self.HasPadding then
+    Self.PrintPadding(Dest);
 end;
 
 procedure TIdRTCPByePacket.ReadFrom(Src: TStream);
@@ -1456,6 +1823,14 @@ begin
   Self.ReasonLength := ReadWord(Src);
 
   Self.Reason := ReadString(Src, Self.ReasonLength);
+end;
+
+function TIdRTCPByePacket.RealLength: Word;
+begin
+  Result := 4 + Self.SourceCount*4;
+
+  if (Self.Reason <> '') then
+    Result := Result + SizeOf(Self.ReasonLength) + System.Length(Self.Reason);
 end;
 
 //* TIdRTCPByePacket Protected methods *****************************************
@@ -1524,8 +1899,7 @@ var
 begin
   B := Self.Version shl 6;
 
-  if Self.HasPadding then
-    B := B or $40;
+  if Self.HasPadding then B := B or $20;
   Dest.Write(B, 1);
 
   B := Self.GetPacketType;
@@ -1539,6 +1913,9 @@ begin
 
   if (Self.Data <> '') then
     Dest.Write(Self.Data[1], SizeOf(Self.Data));
+
+  if Self.HasPadding then
+    Self.PrintPadding(Dest);  
 end;
 
 procedure TIdRTCPApplicationDefinedPacket.ReadFrom(Src: TStream);
@@ -1566,6 +1943,13 @@ begin
   Self.Data := ReadString(Src, Self.Length - DataOffset);
 end;
 
+function TIdRTCPApplicationDefinedPacket.RealLength: Word;
+begin
+  Result := 8
+            + System.Length(Self.Name)
+            + System.Length(Self.Data);
+end;
+
 //* TIdRTCPApplicationDefinedPacket Protected methods **************************
 
 function TIdRTCPApplicationDefinedPacket.GetPacketType: Cardinal;
@@ -1574,11 +1958,6 @@ begin
 end;
 
 //* TIdRTCPApplicationDefinedPacket Private methods ****************************
-
-procedure TIdRTCPApplicationDefinedPacket.ResetLength;
-begin
-  Self.Length := 12 + System.Length(Self.Data);
-end;
 
 procedure TIdRTCPApplicationDefinedPacket.SetData(const Value: String);
 var
@@ -1604,6 +1983,62 @@ begin
   end
   else
     fName := Value;
+end;
+
+//******************************************************************************
+//* TIdRTPPacketBuffer                                                         *
+//******************************************************************************
+//* TIdRTPPacketBuffer Public methods ******************************************
+
+constructor TIdRTPPacketBuffer.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create;
+end;
+
+destructor TIdRTPPacketBuffer.Destroy;
+begin
+  Self.Clear;
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdRTPPacketBuffer.Add(const Pkt: TIdRTPPacket);
+begin
+
+  Self.List.Insert(Self.AppropriateIndex(Pkt), Pkt);
+end;
+
+function TIdRTPPacketBuffer.Last: TIdRTPPacket;
+begin
+  Result := TIdRTPPacket(Self.List[0]);
+end;
+
+procedure TIdRTPPacketBuffer.RemoveLast;
+begin
+  Self.List.Remove(Self.Last);
+end;
+
+//* TIdRTPPacketBuffer Private methods *****************************************
+
+function TIdRTPPacketBuffer.AppropriateIndex(const Pkt: TIdRTPPacket): Integer;
+begin
+  Result := 0;
+  while (Result < Self.List.Count)
+    and (Self.PacketAt(Result).Timestamp < Pkt.Timestamp) do
+    Inc(Result);
+end;
+
+procedure TIdRTPPacketBuffer.Clear;
+begin
+  Self.List.Clear;
+end;
+
+function TIdRTPPacketBuffer.PacketAt(const Index: Integer): TIdRTPPacket;
+begin
+  Result := TIdRTPPacket(Self.List[Index]);
 end;
 
 initialization

@@ -24,10 +24,10 @@ type
   TIdSipTransaction = class;
   TIdSipTransactionClass = class of TIdSipTransaction;
 
-  // OnTerminated is a signal to the Listener that Transaction has terminated,
+  // OnTerminated signals to the Listener that Transaction has terminated,
   // and the Listener must remove any references to Transaction - after this
-  // notification the transaction is dead, gone, finished and you're asking
-  // for an access violation if you don't remove the reference.
+  // notification the transaction reference becomes invalid. If you don't clean
+  // up your reference you will have a dangling pointer.
   IIdSipTransactionListener = interface
     ['{77B97FA0-7073-40BC-B3F0-7E53ED02213F}']
     procedure OnFail(const Transaction: TIdSipTransaction;
@@ -51,10 +51,10 @@ type
                                          const Receiver: TIdSipTransport);
   end;
 
-  // I am the single connection point between the transport layer and the
-  // transaction layer. It is my responsibility to manage transactions, dispatch
-  // messages to the appropriate transaction or fire events on messages that
-  // don't match any transactions.
+  // I represent the single connection point between the transport layer and the
+  // transaction layer. I manage transactions, dispatch messages to the
+  // appropriate transaction or fire events on messages that don't match any
+  // transactions.
   //
   // I do not manage any transports that may be given to me.
   TIdSipTransactionDispatcher = class(TIdSipInterfacedObject,
@@ -134,7 +134,7 @@ type
   // Should I be terminated, for instance by a transport failure, my owning
   // Dispatcher immediately destroys me. Therefore, be sure that if you call
   // TrySendRequest it is the last call in a method as I could be dead before
-  // the next line of the method is executed!
+  // the next line of the method is reached!
   TIdSipTransaction = class(TIdSipInterfacedObject)
   private
     fInitialRequest:  TIdSipRequest;

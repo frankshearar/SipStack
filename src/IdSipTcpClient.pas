@@ -19,8 +19,8 @@ type
                                   const R: TIdSipResponse;
                                   const ReceivedFrom: TIdSipConnectionBindings) of object;
 
-  // Note that the Timeout property is not a global timeout - it's the maximum
-  // length of time to wait for the next line of data to arrive.
+  // Note that the Timeout property determines the maximum length of time to
+  // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fOnFinished: TIdSipClientEvent;

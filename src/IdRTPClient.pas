@@ -3,7 +3,7 @@ unit IdRTPClient;
 interface
 
 uses
-  Classes, IdUDPClient, IdRTP;
+  Classes, IdUDPClient, IdRTP, IdGlobal;
 
 type
   TIdRTPClient = class(TIdUDPClient)
@@ -21,6 +21,7 @@ type
     destructor  Destroy; override;
 
     function  DefaultMaximumPayloadSize: Cardinal; virtual;
+    function  NewSSRC: Cardinal;
     procedure Send(Data: String; PayloadType: TIdRTPPayloadType); overload;
     procedure Send(Data: TStream; PayloadType: TIdRTPPayloadType); overload;
     procedure Send(Packet: TIdRTPPayload); overload;
@@ -32,7 +33,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  IdHash, IdHashMessageDigest, IdSipRandom, SysUtils;
 
 //******************************************************************************
 //* TIdRTPClient                                                               *
@@ -44,7 +45,7 @@ begin
   inherited Create(AOwner);
 
   Self.FirstPacketSent := true;
-  Self.DefaultProfile := TIdAudioVisualProfile.Create;
+  Self.DefaultProfile  := TIdAudioVisualProfile.Create;
 
   Self.MaximumPayloadSize := Self.DefaultMaximumPayloadSize;
 end;
@@ -59,6 +60,30 @@ end;
 function TIdRTPClient.DefaultMaximumPayloadSize: Cardinal;
 begin
   Result := 1000;
+end;
+
+function TIdRTPClient.NewSSRC: Cardinal;
+var
+  Hash:   T4x4LongWordRecord;
+  Hasher: TIdHash128;
+  I:      Integer;
+begin
+  // This implementation's largely stolen from Appendix A.6 of RFC 3550.
+  Hasher := TIdHashMessageDigest5.Create;
+  try
+    // TODO: We should add more stuff here. RFC 3550's uses: pid, uid, gid and
+    // hostid (but hostid is deprecated according to FreeBSD's gethostid(3)
+    // manpage).
+    Hash := Hasher.HashValue(DateTimeToStr(Now)
+                           + IntToHex(TIdSipRandomNumber.Next, 8));
+
+    Result := 0;
+    for I := Low(Hash) to High(Hash) do
+      Result := Result xor Hash[I];
+
+  finally
+    Hasher.Free;
+  end;
 end;
 
 procedure TIdRTPClient.Send(Data: String; PayloadType: TIdRTPPayloadType);

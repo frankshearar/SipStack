@@ -761,7 +761,7 @@ begin
 
           // It's not perfect, but anyway. We need to wait long enough for
           // LowPortTransport to get its response.
-          Sleep(500);
+          IdGlobal.Sleep(500);
 
           Check(LowPortListener.ReceivedResponse
                 and not HighPortListener.ReceivedResponse,

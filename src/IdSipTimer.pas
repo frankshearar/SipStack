@@ -29,7 +29,7 @@ type
 implementation
 
 uses
-  DateUtils, SysUtils;
+  DateUtils, IdGlobal, SysUtils;
 
 //******************************************************************************
 //* TIdSipTimer                                                                *
@@ -63,7 +63,7 @@ begin
   Self.Reset;
   while not Self.Terminated do begin
     if Self.CoarseTiming then begin
-      Sleep(Self.Resolution);
+      IdGlobal.Sleep(Self.Resolution);
 
       if (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
         Self.Reset;
@@ -71,7 +71,7 @@ begin
       end;
     end
     else begin
-      Sleep(Self.Interval);
+      IdGlobal.Sleep(Self.Interval);
       Self.OnTimer(Self);
     end;
   end;

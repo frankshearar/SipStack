@@ -205,7 +205,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdUdpClient;
+  IdGlobal, IdSipConsts, IdUdpClient;
 
 //******************************************************************************
 //* TIdSipTransport                                                            *
@@ -739,7 +739,7 @@ end;
 procedure TIdServerCleanupThread.Run;
 begin
   while not Terminated do begin
-    Sleep(Self.PollTime);
+    IdGlobal.Sleep(Self.PollTime);
 
     Self.CleanOutTerminatedClients;
   end;
@@ -850,9 +850,9 @@ begin
   if not R.RequiresResponse then
     Self.SendResponseNotExpectingResponses(R)
   else begin
-    // Really, this behaviour is expected from an RFC 3581 compliant agent.
-    // X-Lite is braindead though, and assumes blithely that anything that
-    // calls it is RFC 3581 compliant.
+    // Really, this we expect this behaviour from an RFC 3581 compliant agent.
+    // X-Lite behaves in a braindead fashion though, and assumes blithely that
+    // anything that calls it implements RFC 3581.
     Client := Self.AddClient;
 
     Client.Active := true;

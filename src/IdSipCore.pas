@@ -2,19 +2,19 @@ unit IdSipCore;
 
 // Some overarching principles followed in this implementation of a SIP/2.0
 // (RFC 3261) stack:
-// * The lifetime of all objects is manually managed. Objects that implement
-//   interfaces are NOT reference counted.
-// * Value Objects are used when possible.
-// * If an object A receives some object B that it is expected to store as data
+// * We manually manage the lifetime of all objects. We do NOT use reference
+//   counting for objects that implement interfaces.
+// * We use Value Objects when possible.
+// * If an object A receives some object B that it expects to store as data
 //   then A must store a COPY of B. Typical objects are: TIdSipURI,
 //   TIdSipDialogID, TIdSipMessage.
-// * Each layer is aware of the layers beneath it. We try to make each layer
+// * Each layer has references to the layers beneath it. We try to make each layer
 //   aware of ONLY the layer immediately below it, but that's not always
 //   possible.
-// * Events or Listeners are used to propogate messages up the stack, and method
-//   calls to propogate messages down the stack. Preference is given to Listeners
-//   as they're more flexible.
-// * Typecasting is avoided as much as possible by using polymorphism and, in
+// * We propogate messages up the stack using Events or Listeners, and method
+//   calls to propogate messages down the stack. We give preference to the more
+//   flexible Listeners.
+// * We avoid typecasting as much as possible by using polymorphism and, in
 //   certain situations where polymorphism can't cut it, the Visitor pattern.
 // * TObjectLists always manage the lifetime of the objects they contain. Except
 //   in the case of Transports in the Dispatcher.
@@ -32,21 +32,20 @@ type
 
   // I watch other objects for changes. When they change (in their arbitrary
   // fashion) they tell me, and I update my own state accordingly.
-  // It's unfortunate that I never know the type of Observed and have to
-  // typecast the Observed, but c'est la vie.
+  // Unfortunately I never know the type of Observed and have to typecast
+  // the Observed, but c'est la vie.
   IIdSipObserver = interface
     ['{665CFE94-8EFD-4710-A5CC-ED01BCF7961E}']
     procedure OnChanged(const Observed: TObject);
   end;
 
   // I am the protocol of things that listen for Sessions:
-  // * OnNewSession tells us that someone is calling us - we may refuse or
+  // * OnNewSession tells us that someone wants to talk to us - we may refuse or
   //   allow the session.
-  // * OnSessionEstablished tells us when a session is fully up and running.
-  // * OnSessionEnded lets us clean up. The Session referenced is no longer
-  //   valid after this point, and its very existence is not guaranteed. In
-  //   other words, you'd better say goodbye to the Session in this method,
-  //   because it's the last time you'll see it.
+  // * OnSessionEstablished tells us when a session has been fully established.
+  // * OnSessionEnded lets us clean up. The Session referenced becomes invalid
+  //   after this point, and its very existence is not guaranteed. In
+  //   other words, you'd better say goodbye to the Session in this method.
   IIdSipSessionListener = interface
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(const Session: TIdSipSession);
@@ -91,11 +90,11 @@ type
     property HostName:   String                      read fHostName write fHostName;
   end;
 
-  // I am a User Agent. I (usually) represent a human being in the SIP network.
-  // It is my responsibility to:
-  // * inform any listeners when new sessions are established, modified or ended;
+  // I (usually) represent a human being in the SIP network. I:
+  // * inform any listeners when new sessions become established, modified or
+  //   terminated;
   // * allow my users to make outgoing "calls";
-  // * clean up Sessions that are established
+  // * clean up established Sessions
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
     BranchLock:              TCriticalSection;
@@ -569,7 +568,7 @@ begin
     Result.MaxForwards := Result.DefaultMaxForwards;
     Result.ToHeader    := Dest;
 
-    // This is a lie, but anyway. Pure hack to get X-Lite talking
+    // Lies. Pure hack to get X-Lite talking
     if (Pos(TransportParam, Dest.AsString) > 0) then
       Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
     else
@@ -797,7 +796,7 @@ begin
   else if Request.IsCancel then
     raise Exception.Create('Handling CANCELs not implemented yet');
 
-  // Generating the response - 8.2.6 - is handled by a TIdSipSession
+  // TIdSipSession generates the response - 8.2.6
 end;
 
 procedure TIdSipUserAgentCore.ReceiveResponse(const Response: TIdSipResponse;
@@ -807,7 +806,7 @@ var
   Session: TIdSipSession;
 begin
   // User Agents drop unmatched responses on the floor.
-  // Except for 2xx's on a client INVITE, that is. And these no longer belong to
+  // Except for 2xx's on a client INVITE. And these no longer belong to
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately. Hence the unusual clause below.
   if Response.IsOK and not Assigned(Transaction) then begin

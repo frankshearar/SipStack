@@ -39,7 +39,7 @@ type
     destructor  Destroy; override;
 
     function  Add(const SSRC: Cardinal): TIdRTPMember;
-    function  Contains(Source: Cardinal): Boolean;
+    function  Contains(SSRC: Cardinal): Boolean;
     function  Count: Integer;
     function  Member(const SSRC: Cardinal): TIdRTPMember;
     procedure Remove(const SSRC: Cardinal);
@@ -127,9 +127,9 @@ begin
   end;
 end;
 
-function TIdRTPMembers.Contains(Source: Cardinal): Boolean;
+function TIdRTPMembers.Contains(SSRC: Cardinal): Boolean;
 begin
-  Result := Assigned(Self.Find(Source));
+  Result := Assigned(Self.Find(SSRC));
 end;
 
 function TIdRTPMembers.Count: Integer;

@@ -31,6 +31,7 @@ uses
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
+  SysUtils,
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',

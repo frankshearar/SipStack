@@ -61,7 +61,7 @@ const
 implementation
 
 uses
-  Classes, IdSipConsts, IdStack, SyncObjs, SysUtils, TestFramework,
+  Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, SysUtils, TestFramework,
   TestMessages;
 
 function Suite: ITestSuite;
@@ -242,7 +242,7 @@ end;
 procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject;
                                                      const Request: TIdSipRequest);
 begin
-  Sleep(200);
+  IdGlobal.Sleep(200);
   Self.SendOkResponse(Sender, Request);
 end;
 
@@ -273,7 +273,7 @@ begin
   Threads := Self.Server.Threads.LockList;
   try
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Trying);
-    Sleep(500);
+    IdGlobal.Sleep(500);
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(OK);
   finally
     Self.Server.Threads.UnlockList;

@@ -143,8 +143,8 @@ const
 implementation
 
 uses
-  Classes, IdSocketHandle, IdSipConsts, IdSipHeaders, IdSimpleParser, IdStack,
-  TestFrameworkSip, TestMessages;
+  Classes, IdGlobal, IdSocketHandle, IdSipConsts, IdSipHeaders, IdSimpleParser,
+  IdStack, TestFrameworkSip, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -853,7 +853,7 @@ begin
 
     // I can't say WHY we need to pause here, but it seems to work...
     // Not exactly an ideal situation.
-    Sleep(500);
+    IdGlobal.Sleep(500);
 
     Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
     try
@@ -909,7 +909,7 @@ begin
             // I can't say WHY we need to pause here, but it seems to work...
             // Not exactly an ideal situation. We're waiting for the connection
             // to be completely torn down.
-            Sleep(500);
+            IdGlobal.Sleep(500);
 
             Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
             try
@@ -985,7 +985,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
 
   Self.Client.Write(TortureTest16);
-  Sleep(100);
+  IdGlobal.Sleep(100);
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest17;

@@ -22,9 +22,10 @@ type
     property Connection: TIdTCPConnection read fConnection write fConnection;
   end;
 
-  // I am an entry in a Connection Table. I relate a request with a TCP
-  // connection. A quirk in my setup is that I store a COPY of a request
-  // while storing a REFERENCE to a connection.
+  // I relate a request with a TCP connection. I store a COPY of a request
+  // while storing a REFERENCE to a connection. Transports construct requests
+  // and so are responsible for destroying them, and I need to remember these
+  // requests.
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;
@@ -65,8 +66,8 @@ type
     procedure UnlockList;
   end;
 
-  // ReadBodyTimeout = 0 implies that we never timeout the body wait. This is
-  // not recommended. ReadBodyTimeout = n implies we wait n milliseconds for
+  // ReadBodyTimeout = 0 implies that we never timeout the body wait. We do not
+  // recommend this. ReadBodyTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)

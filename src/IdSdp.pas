@@ -11,7 +11,7 @@ type
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR);
   TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
   // Technically, Text doesn't exist. However, it will once
-  // draft-ietf-sip-callee-caps is accepted as an RFC.
+  // draft-ietf-sip-callee-caps gets an RFC number.
   TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl,
                          mtText);
 
@@ -32,7 +32,7 @@ type
 
     constructor Create; virtual;
 
-    function  Clone: TIdSdpAttribute;
+    function  Copy: TIdSdpAttribute;
     function  IsRTPMap: Boolean; virtual;
     procedure PrintOn(Dest: TStream); override;
 
@@ -59,7 +59,7 @@ type
 
     property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
     property Encoding:    TIdRTPEncoding    read fEncoding;
-  end;  
+  end;
 
   TIdSdpBandwidth = class(TIdPrintable)
   private
@@ -80,6 +80,7 @@ type
     fNumberOfAddresses: Cardinal;
     fTTL:               Byte;
   public
+    function  Copy: TIdSdpConnection;
     procedure PrintOn(Dest: TStream); override;
 
     property AddressType:       TIdIPVersion read fAddressType write fAddressType;
@@ -102,30 +103,36 @@ type
 
   TIdSdpAttributes = class;
   TIdSdpBandwidths = class;
+  TIdSdpConnections = class;
 
   TIdSdpMediaDescription = class(TIdPrintable)
   private
-    fAttributes: TIdSdpAttributes;
-    fBandwidths: TIdSdpBandwidths;
-    fConnection: TIdSdpConnection;
-    fInfo:       String;
-    fKey:        TIdSdpKey;
-    fMediaType:  TIdSdpMediaType;
-    FormatList:  array of String;
-    fPort:       Cardinal;
-    fPortCount:  Cardinal;
-    fTransport:  String;
+    fAttributes:  TIdSdpAttributes;
+    fBandwidths:  TIdSdpBandwidths;
+    fConnections: TIdSdpConnections;
+    fInfo:        String;
+    fKey:         TIdSdpKey;
+    fMediaType:   TIdSdpMediaType;
+    FormatList:   array of String;
+    fPort:        Cardinal;
+    fPortCount:   Cardinal;
+    fTransport:   String;
 
     function  GetAttributes: TIdSdpAttributes;
     function  GetBandwidths: TIdSdpBandwidths;
-    function  GetConnection: TIdSdpConnection;
+    function  GetConnections: TIdSdpConnections;
     function  GetFormats(Index: Integer): String;
     function  GetKey: TIdSdpKey;
     procedure PrintInfoField(Dest: TStream);
     procedure PrintMediaField(Dest: TStream);
+
+    property Attributes: TIdSdpAttributes read GetAttributes;
   public
     destructor Destroy; override;
 
+    procedure AddAttribute(const Name, Value: String);
+    function  AttributeAt(const Index: Integer): TIdSdpAttribute;
+    function  AttributeCount: Integer;
     procedure AddFormat(const Fmt: String);
     function  FormatCount: Integer;
     procedure ClearFormats;
@@ -133,16 +140,15 @@ type
     function  HasKey: Boolean;
     procedure PrintOn(Dest: TStream); override;
 
-    property Attributes:              TIdSdpAttributes read GetAttributes;
-    property Bandwidths:              TIdSdpBandwidths read GetBandwidths;
-    property Connection:              TIdSdpConnection read GetConnection;
-    property Formats[Index: Integer]: String           read GetFormats;
-    property Info:                    String           read fInfo write fInfo;
-    property Key:                     TIdSdpKey        read GetKey;
-    property MediaType:               TIdSdpMediaType  read fMediaType write fMediaType;
-    property Port:                    Cardinal         read fPort write fPort;
-    property PortCount:               Cardinal         read fPortCount write fPortCount;
-    property Transport:               String           read fTransport write fTransport;
+    property Bandwidths:              TIdSdpBandwidths  read GetBandwidths;
+    property Connections:             TIdSdpConnections read GetConnections;
+    property Formats[Index: Integer]: String            read GetFormats;
+    property Info:                    String            read fInfo write fInfo;
+    property Key:                     TIdSdpKey         read GetKey;
+    property MediaType:               TIdSdpMediaType   read fMediaType write fMediaType;
+    property Port:                    Cardinal          read fPort write fPort;
+    property PortCount:               Cardinal          read fPortCount write fPortCount;
+    property Transport:               String            read fTransport write fTransport;
   end;
 
   TIdSdpOrigin = class(TIdPrintable)
@@ -216,6 +222,7 @@ type
     function  Count: Integer;
     function  Contains(const O: TObject): Boolean;
     procedure PrintOn(Dest: TStream); override;
+    procedure Remove(O: TObject);
   end;
 
   TIdSdpAttributes = class(TIdSdpList)
@@ -244,6 +251,16 @@ type
     procedure Add(BW: TIdSdpBandwidth);
 
     property Items[Index: Integer]: TIdSdpBandwidth read GetItems; default;
+  end;
+
+  TIdSdpConnections = class(TIdSdpList)
+  private
+    function GetItems(Index: Integer): TIdSdpConnection;
+  public
+    procedure Add(C: TIdSdpConnection); overload;
+    procedure Add(C: TIdSdpConnections); overload;
+
+    property Items[Index: Integer]: TIdSdpConnection read GetItems; default;
   end;
 
   TIdSdpMediaDescriptions = class(TIdSdpList)
@@ -287,7 +304,7 @@ type
   private
     fAttributes:        TIdSdpAttributes;
     fBandwidths:        TIdSdpBandwidths;
-    fConnection:        TIdSdpConnection;
+    fConnections:       TIdSdpConnections;
     fEmailAddress:      TIdEmailAddressItem;
     fInfo:              String;
     fKey:               TIdSdpKey;
@@ -301,7 +318,7 @@ type
 
     function  GetAttributes: TIdSdpAttributes;
     function  GetBandwidths: TIdSdpBandwidths;
-    function  GetConnection: TIdSdpConnection;
+    function  GetConnections: TIdSdpConnections;
     function  GetEmailAddress: TIdEmailAddressItem;
     function  GetKey: TIdSdpKey;
     function  GetMediaDescriptions: TIdSdpMediaDescriptions;
@@ -313,35 +330,54 @@ type
     procedure PrintSessionNameField(Dest: TStream);
     procedure PrintUriField(Dest: TStream);
     procedure PrintVersionField(Dest: TStream);
+
+    property Attributes:        TIdSdpAttributes        read GetAttributes;
+    property Connections:       TIdSdpConnections       read GetConnections;
+    property MediaDescriptions: TIdSdpMediaDescriptions read GetMediaDescriptions;
   public
     class function CreateFrom(Src: TStream): TIdSdpPayload;
 
     destructor Destroy; override;
 
+    procedure AddAttribute(const Name, Value: String);
+    procedure AddConnection(NewConnection: TIdSdpConnection); overload;
+    function  AddConnection: TIdSdpConnection; overload;
+    procedure AddMediaDescription(NewDesc: TIdSdpMediaDescription); overload;
+    function  AddMediaDescription: TIdSdpMediaDescription; overload;
     function  AllDescriptionsHaveConnections: Boolean;
+    function  AttributeAt(const Index: Integer): TIdSdpAttribute;
+    function  AttributeCount: Integer;
     function  AsString: String;
+    function  ConnectionAt(const Index: Integer): TIdSdpConnection;
+    function  ConnectionCount: Integer;
     procedure GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
-    function  HasConnection: Boolean;
     function  HasKey: Boolean;
     procedure InitializeProfile(Profile: TIdRTPProfile);
+    function  MediaDescriptionAt(const Index: Integer): TIdSdpMediaDescription;
+    function  MediaDescriptionCount: Integer;
     procedure PrintOn(Dest: TStream);
     procedure ReadFrom(Src: TStream);
 
-    property Attributes:        TIdSdpAttributes        read GetAttributes;
-    property Bandwidths:        TIdSdpBandwidths        read GetBandwidths;
-    property Connection:        TIdSdpConnection        read GetConnection;
-    property EmailAddress:      TIdEMailAddressItem     read GetEmailAddress;
-    property Info:              String                  read fInfo write fInfo;
-    property Key:               TIdSdpKey               read GetKey;
-    property MediaDescriptions: TIdSdpMediaDescriptions read GetMediaDescriptions;
-    property Origin:            TIdSdpOrigin            read GetOrigin;
-    property PhoneNumber:       String                  read fPhoneNumber write fPhoneNumber;
-    property SessionName:       String                  read fSessionName write fSessionName;
-    property Times:             TIdSdpTimes             read GetTimes;
-    property URI:               String                  read fUri write fUri;
-    property Version:           Cardinal                read fVersion write fVersion;
+    property Bandwidths:   TIdSdpBandwidths    read GetBandwidths;
+    property EmailAddress: TIdEMailAddressItem read GetEmailAddress;
+    property Info:         String              read fInfo write fInfo;
+    property Key:          TIdSdpKey           read GetKey;
+    property Origin:       TIdSdpOrigin        read GetOrigin;
+    property PhoneNumber:  String              read fPhoneNumber write fPhoneNumber;
+    property SessionName:  String              read fSessionName write fSessionName;
+    property Times:        TIdSdpTimes         read GetTimes;
+    property URI:          String              read fUri write fUri;
+    property Version:      Cardinal            read fVersion write fVersion;
   end;
 
+  // I implement RFCs 2327 and 3266.
+  // I canonicalise header information in the following way:
+  // * If session-level connections or attributes exist, I copy these into
+  //   each media description.
+  // * If a connection contains multiple (multicast) addresses, then I add
+  //   multiple connection headers, one for each of the multicast addresses;
+  //   e.g., I convert the address 224.0.0.1/127/2 into two addresses,
+  //   viz., 224.0.0.1/127 and 224.0.0.2/127.
   TIdSdpParser = class(TIdSimpleParser)
   private
     LastMediaHeader:       Char;
@@ -352,7 +388,7 @@ type
     function  GetAndCheckInfo: String;
     procedure ParseAttribute(const Attributes: TIdSdpAttributes);
     procedure ParseBandwidth(const Bandwidths: TIdSdpBandwidths);
-    procedure ParseConnection(const Connection: TIdSdpConnection);
+    procedure ParseConnection(const Connections: TIdSdpConnections);
     procedure ParseEmail(const Payload: TIdSdpPayload);
     procedure ParseHeader(var Name, Value: String);
     procedure ParseInfo(const MediaDescription: TIdSdpMediaDescription); overload;
@@ -389,11 +425,12 @@ type
     procedure Parse(const Payload: TIdSdpPayload);
   end;
 
-  // I am the protocol of things that listen for Data - for instance, RTP
+  // I provide a protocol for things that listen for Data - for instance, RTP
   // streams.
   IIdSipDataListener = interface
     ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
     procedure OnNewData(const Data: TStream;
+                        const Port: Integer;
                         const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
   end;
@@ -414,6 +451,7 @@ type
     procedure ActivateServerOnFreePort(const Server: TIdRTPServer);
     procedure AddRTCPServer(const RTP: TIdRTPServer);
     procedure NotifyOfNewRTPData(Data: TStream;
+                                 const Port: Cardinal;
                                  const Format: TIdRTPEncoding);
     procedure NotifyOfNewUdpData(Data: TStream);
     procedure OnReceiveRTP(Sender: TObject;
@@ -438,6 +476,7 @@ type
     function  MediaType: String;
     function  LocalSessionDescription: String;
     procedure RemoveDataListener(const Listener: IIdSipDataListener);
+    function  ServerFor(const Port: Cardinal): TIdRTPServer;
     procedure StartListening(const RemoteSessionDescription: String);
     procedure StopListening;
 
@@ -464,8 +503,6 @@ const
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
   IllegalByteStringChars = [#0, #10, #13];
-  SessionHeaderOrder = 'vosiuepcbtka';
-  MediaHeaderOrder   = 'micbka';
   RTPMapAttribute    = 'rtpmap';
   TimeTypes          = ['d', 'h', 'm', 's'];
 
@@ -493,6 +530,7 @@ const
   Id_SDP_Prompt = 'prompt';
   // IANA assigned protos
   Id_SDP_RTPAVP = 'RTP/AVP';
+  Id_SDP_udp    = 'udp';
   Id_SDP_vat    = 'vat';
   Id_SDP_rtp    = 'rtp';
   Id_SDP_UDPTL  = 'UDPTL';
@@ -536,6 +574,10 @@ implementation
 
 uses
   IdGlobal, IdRTPClient, SysUtils;
+
+const
+  SessionHeaderOrder = 'vosiuepcbtka';
+  MediaHeaderOrder   = 'micbka';  
 
 //******************************************************************************
 //* Unit public functions and procedures                                       *
@@ -676,7 +718,7 @@ begin
   inherited Create;
 end;
 
-function TIdSdpAttribute.Clone: TIdSdpAttribute;
+function TIdSdpAttribute.Copy: TIdSdpAttribute;
 begin
   Result := TIdSdpAttributeClass(Self.ClassType).Create;
   try
@@ -753,12 +795,18 @@ procedure TIdSdpRTPMapAttribute.SetValue(const Value: String);
 var
   EncodingDesc: String;
   PayloadType:  String;
+  E, N:         Integer;
 begin
   inherited SetValue(Value);
 
   EncodingDesc := Value;
-  PayloadType := Fetch(EncodingDesc);
-  Self.PayloadType := StrToInt(PayloadType);
+  PayloadType := Fetch(EncodingDesc, ' ');
+
+  Val(PayloadType, N, E);
+  if (E <> 0) then
+    raise EParser.Create(Format(MalformedToken, [Value]));
+  Self.PayloadType := N;
+  
   Self.SetEncoding(TIdRTPEncoding.CreateEncoding(EncodingDesc));
 end;
 
@@ -789,6 +837,22 @@ end;
 //* TIdSdpConnection                                                           *
 //******************************************************************************
 //* TIdSdpConnection Public methods ********************************************
+
+function TIdSdpConnection.Copy: TIdSdpConnection;
+begin
+  Result := TIdSdpConnection.Create;
+  try
+    Result.AddressType       := Self.AddressType;
+    Result.Address           := Self.Address;
+    Result.NetType           := Self.NetType;
+    Result.NumberOfAddresses := Self.NumberOfAddresses;
+    Result.TTL               := Self.TTL;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
 
 procedure TIdSdpConnection.PrintOn(Dest: TStream);
 var
@@ -835,10 +899,25 @@ destructor TIdSdpMediaDescription.Destroy;
 begin
   fAttributes.Free;
   fBandwidths.Free;
-  fConnection.Free;
+  fConnections.Free;
   fKey.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSdpMediaDescription.AddAttribute(const Name, Value: String);
+begin
+  Self.Attributes.Add(Name + ':' + Value);
+end;
+
+function TIdSdpMediaDescription.AttributeAt(const Index: Integer): TIdSdpAttribute;
+begin
+  Result := Self.Attributes[Index];
+end;
+
+function TIdSdpMediaDescription.AttributeCount: Integer;
+begin
+  Result := Self.Attributes.Count;
 end;
 
 procedure TIdSdpMediaDescription.AddFormat(const Fmt: String);
@@ -862,7 +941,7 @@ end;
 
 function TIdSdpMediaDescription.HasConnection: Boolean;
 begin
-  Result := Assigned(fConnection);
+  Result := Self.Connections.Count > 0;
 end;
 
 function TIdSdpMediaDescription.HasKey: Boolean;
@@ -876,7 +955,7 @@ begin
   Self.PrintInfoField(Dest);
 
   if Self.HasConnection then
-    Self.Connection.PrintOn(Dest);
+    Self.Connections.PrintOn(Dest);
 
   Self.Bandwidths.PrintOn(Dest);
 
@@ -904,12 +983,12 @@ begin
   Result := fBandwidths;
 end;
 
-function TIdSdpMediaDescription.GetConnection: TIdSdpConnection;
+function TIdSdpMediaDescription.GetConnections: TIdSdpConnections;
 begin
-  if not Assigned(fConnection) then
-    fConnection := TIdSdpConnection.Create;
+  if not Assigned(fConnections) then
+    fConnections := TIdSdpConnections.Create;
 
-  Result := fConnection;
+  Result := fConnections;
 end;
 
 function TIdSdpMediaDescription.GetFormats(Index: Integer): String;
@@ -1090,6 +1169,11 @@ begin
     (Self.List[I] as TIdPrintable).PrintOn(Dest);
 end;
 
+procedure TIdSdpList.Remove(O: TObject);
+begin
+  Self.List.Remove(O);
+end;
+
 //******************************************************************************
 //* TIdSdpAttributes                                                           *
 //******************************************************************************
@@ -1144,6 +1228,45 @@ end;
 function TIdSdpBandwidths.GetItems(Index: Integer): TIdSdpBandwidth;
 begin
   Result := Self.List[Index] as TIdSdpBandwidth;
+end;
+
+//******************************************************************************
+//* TIdSdpConnections                                                          *
+//******************************************************************************
+//* TIdSdpConnections Public methods *******************************************
+
+procedure TIdSdpConnections.Add(C: TIdSdpConnection);
+begin
+  Self.List.Add(C);
+end;
+
+procedure TIdSdpConnections.Add(C: TIdSdpConnections);
+var
+  I:       Integer;
+  NewConn: TIdSdpConnection;
+begin
+  for I := 0 to C.Count - 1 do begin
+    NewConn := TIdSdpConnection.Create;
+    try
+      Self.Add(NewConn);
+      NewConn.AddressType       := C[I].AddressType;
+      NewConn.Address           := C[I].Address;
+      NewConn.NetType           := C[I].NetType;
+      NewConn.NumberOfAddresses := C[I].NumberOfAddresses;
+      NewConn.TTL               := C[I].TTL;
+    except
+      Self.Remove(NewConn);
+      FreeAndNil(NewConn);
+      raise;
+    end;
+  end;
+end;
+
+//* TIdSdpConnections Private methods ******************************************
+
+function TIdSdpConnections.GetItems(Index: Integer): TIdSdpConnection;
+begin
+  Result := Self.List[Index] as TIdSdpConnection;
 end;
 
 //******************************************************************************
@@ -1246,7 +1369,7 @@ destructor TIdSdpPayload.Destroy;
 begin
   fAttributes.Free;
   fBandwidths.Free;
-  fConnection.Free;
+  fConnections.Free;
   fEmailAddress.Free;
   fKey.Free;
   fMediaDescriptions.Free;
@@ -1256,9 +1379,65 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSdpPayload.AddAttribute(const Name, Value: String);
+begin
+  Self.Attributes.Add(Name + ':' + Value);
+end;
+
+procedure TIdSdpPayload.AddConnection(NewConnection: TIdSdpConnection);
+var
+  I: Integer;
+begin
+  Self.Connections.Add(NewConnection);
+  for I := 0 to Self.MediaDescriptionCount - 1 do
+    Self.MediaDescriptionAt(I).Connections.Add(NewConnection.Copy);
+end;
+
+function TIdSdpPayload.AddConnection: TIdSdpConnection;
+begin
+  Result := TIdSdpConnection.Create;
+  try
+    Self.AddConnection(Result);
+  except
+    Self.Connections.Remove(Result);
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+procedure TIdSdpPayload.AddMediaDescription(NewDesc: TIdSdpMediaDescription);
+begin
+  Self.MediaDescriptions.Add(NewDesc);
+  NewDesc.Connections.Add(Self.Connections);
+end;
+
+function TIdSdpPayload.AddMediaDescription: TIdSdpMediaDescription;
+begin
+  Result := TIdSdpMediaDescription.Create;
+  try
+    Self.AddMediaDescription(Result);
+  except
+    Self.MediaDescriptions.Remove(Result);
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSdpPayload.AllDescriptionsHaveConnections: Boolean;
 begin
   Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
+end;
+
+function TIdSdpPayload.AttributeAt(const Index: Integer): TIdSdpAttribute;
+begin
+  Result := Self.Attributes[Index];
+end;
+
+function TIdSdpPayload.AttributeCount: Integer;
+begin
+  Result := Self.Attributes.Count;
 end;
 
 function TIdSdpPayload.AsString: String;
@@ -1274,24 +1453,32 @@ begin
   end;
 end;
 
+function TIdSdpPayload.ConnectionAt(const Index: Integer): TIdSdpConnection;
+begin
+  if (Index >= 0) and (Index < Self.ConnectionCount) then
+    Result := Self.Connections[Index]
+  else
+    Result := nil;
+end;
+
+function TIdSdpPayload.ConnectionCount: Integer;
+begin
+  Result := Self.Connections.Count;
+end;
+
 procedure TIdSdpPayload.GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
 var
   I: Integer;
   J: Integer;
 begin
-  for I := 0 to Self.Attributes.Count - 1 do
-    if (Self.Attributes[I].IsRTPMap) then
-      Atts.Add(Self.Attributes[I].Clone as TIdSdpRTPMapAttribute);
+  for I := 0 to Self.AttributeCount - 1 do
+    if (Self.AttributeAt(I).IsRTPMap) then
+      Atts.Add(Self.AttributeAt(I).Copy as TIdSdpRTPMapAttribute);
 
-  for I := 0 to Self.MediaDescriptions.Count - 1 do
-    for J := 0 to Self.MediaDescriptions[I].Attributes.Count - 1 do
-      if (Self.MediaDescriptions[I].Attributes[J].IsRTPMap) then
-        Atts.Add(Self.MediaDescriptions[I].Attributes[J].Clone as TIdSdpRTPMapAttribute);
-end;
-
-function TIdSdpPayload.HasConnection: Boolean;
-begin
-  Result := Assigned(fConnection);
+  for I := 0 to Self.MediaDescriptionCount - 1 do
+    for J := 0 to Self.MediaDescriptionAt(I).AttributeCount - 1 do
+      if (Self.MediaDescriptionAt(I).AttributeAt(J).IsRTPMap) then
+        Atts.Add(Self.MediaDescriptionAt(I).AttributeAt(J).Copy as TIdSdpRTPMapAttribute);
 end;
 
 function TIdSdpPayload.HasKey: Boolean;
@@ -1317,6 +1504,19 @@ begin
   end;
 end;
 
+function TIdSdpPayload.MediaDescriptionAt(const Index: Integer): TIdSdpMediaDescription;
+begin
+  if (Index >= 0) and (Index < Self.MediaDescriptionCount) then
+    Result := Self.MediaDescriptions[Index]
+  else
+    Result := nil;
+end;
+
+function TIdSdpPayload.MediaDescriptionCount: Integer;
+begin
+  Result := Self.MediaDescriptions.Count;
+end;
+
 procedure TIdSdpPayload.PrintOn(Dest: TStream);
 begin
   Self.PrintVersionField(Dest);
@@ -1327,8 +1527,8 @@ begin
   Self.PrintEmailAddressField(Dest);
   Self.PrintPhoneNumber(Dest);
 
-  if Self.HasConnection then
-    Self.Connection.PrintOn(Dest);
+  if (Self.MediaDescriptionCount = 0) then
+    Self.Connections.PrintOn(Dest);
 
   Self.Bandwidths.PrintOn(Dest);
   Self.Times.PrintOn(Dest);
@@ -1372,12 +1572,12 @@ begin
   Result := fBandwidths;
 end;
 
-function TIdSdpPayload.GetConnection: TIdSdpConnection;
+function TIdSdpPayload.GetConnections: TIdSdpConnections;
 begin
-  if not Assigned(fConnection) then
-    fConnection := TIdSdpConnection.Create;
+  if not Assigned(fConnections) then
+    fConnections := TIdSdpConnections.Create;
 
-  Result := fConnection;
+  Result := fConnections;
 end;
 
 function TIdSdpPayload.GetEmailAddress: TIdEmailAddressItem;
@@ -1561,12 +1761,12 @@ begin
 
   case IpVersion of
     Id_IPv4: begin
-      Result := Self.IsIPv4Address(Address);
+      Result := TIdIPAddressParser.IsIPv4Address(Address);
       N := Fetch(Address, '.');
       Result := Result and (StrToInt(N) = 224);
     end;
     Id_IPv6: begin
-      Result := Self.IsIPv6Address(Address);
+      Result := TIdIPAddressParser.IsIPv6Address(Address);
       Result := Result and (Lowercase(Copy(Address, 1, 2)) = 'ff');
     end;
   else
@@ -1682,8 +1882,8 @@ begin
   while not Self.Eof do
     Self.ParseMediaDescription(Payload);
 
-  if not Payload.HasConnection
-     and not ((Payload.MediaDescriptions.Count > 0)
+  if (Payload.Connections.Count = 0)
+     and not ((Payload.MediaDescriptionCount > 0)
               and Payload.AllDescriptionsHaveConnections) then
     raise EParser.Create(MissingConnection);
 end;
@@ -1696,7 +1896,7 @@ var
   HeaderOrder:   String;
   LastHeader:    Char;
 begin
-  // Self.PeekChar is the header we have. Call this CurrentHeader.
+  // Self.PeekChar gives us the current header. Call this the CurrentHeader.
   // Let's look in the appropriate header order to see if this header
   // occurs in the wrong place. The "wrong place" means that we have
   // already processed a successor header. Call this header LastSessionHeader
@@ -1727,7 +1927,8 @@ begin
     raise EParser.Create(BadHeaderOrder);
 
   if not Self.IsText(Value) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPInformationName, Name + '=' + Value]));
+    raise EParser.Create(Format(MalformedToken,
+                                [RSSDPInformationName, Name + '=' + Value]));
   Result := Value;
 
   if Self.ParsingSessionHeaders then
@@ -1750,10 +1951,12 @@ begin
   Att := TIdSdpAttribute.CreateAttribute(Value);
   try
     if not Self.IsAlphaNumeric(Att.Name) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPAttributeName, Name + '=' + OriginalValue]));
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPAttributeName, Name + '=' + OriginalValue]));
 
     if (Att.Value <> '') and not Self.IsByteString(Att.Value) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPAttributeName, Name + '=' + OriginalValue]));
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPAttributeName, Name + '=' + OriginalValue]));
 
     Attributes.Add(Att);
   except
@@ -1781,7 +1984,8 @@ begin
     Token := Fetch(Value, ':');
 
     if not Self.IsBandwidthType(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPBandwidthName, Name + '=' + OriginalValue]));
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPBandwidthName, Name + '=' + OriginalValue]));
 
     BW.BandwidthType := StrToBandwidthType(Token);
 
@@ -1790,7 +1994,8 @@ begin
     // bandwidth. Bastards.
     Token := Fetch(Value, ' ');
     if not Self.IsNumber(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPBandwidthName, Name + '=' + OriginalValue]));
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPBandwidthName, Name + '=' + OriginalValue]));
     BW.Bandwidth := StrToInt(Token);
 
     Bandwidths.Add(BW);
@@ -1807,59 +2012,101 @@ begin
     Self.LastMediaHeader := RSSDPBandwidthName;
 end;
 
-procedure TIdSdpParser.ParseConnection(const Connection: TIdSdpConnection);
+procedure TIdSdpParser.ParseConnection(const Connections: TIdSdpConnections);
+  procedure AddConnection(Connections: TIdSdpConnections;
+                          NetType: String;
+                          AddrType: TIdIPVersion;
+                          Addr: String;
+                          TTL: Byte);
+  var
+    NewConnection: TIdSdpConnection;
+  begin
+    NewConnection := TIdSdpConnection.Create;
+    try
+      NewConnection.NetType     := NetType;
+      NewConnection.AddressType := AddrType;
+
+      NewConnection.Address := Addr;
+      NewConnection.TTL := TTL;
+      Connections.Add(NewConnection);
+    except
+      Connections.Remove(NewConnection);
+      FreeAndNil(NewConnection);
+      raise;
+    end;
+  end;
 var
+  Addr:          String;
+  AddrType:      String;
+  I:             Integer;
+  Multicast:     Boolean;
   Name:          String;
+  NetType:       String;
+  NumAddrs:      String;
   OriginalValue: String;
-  Token:         String;
+  TTL:           String;
   Value:         String;
 begin
   Self.AssertHeaderOrder;
   Self.ParseHeader(Name, Value);
   OriginalValue := Value;
 
-  Token := Fetch(Value, ' ');
-  if not Self.IsNetType(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
-  Connection.NetType := Token;
+  NetType := Fetch(Value, ' ');
+  if not Self.IsNetType(NetType) then
+    raise EParser.Create(Format(MalformedToken,
+                                [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
-  Token := Fetch(Value, ' ');
-  if not Self.IsAddressType(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
+  AddrType := Fetch(Value, ' ');
+  if not Self.IsAddressType(AddrType) then
+    raise EParser.Create(Format(MalformedToken,
+                                [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
-  Connection.AddressType := StrToAddressType(Token);
+  Multicast := IndyPos('/', Value) > 0;
 
-  // need to check that unicast addies never have '/'
-  if (IndyPos('/', Value) > 0) then begin
-    // multicast
-    Token := Fetch(Value, '/');
-    if not Self.IsMulticastAddress(Connection.AddressType, Token) and not Self.IsFQDN(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
-    Connection.Address := Token;
+  if Multicast then begin
+    Addr := Fetch(Value, '/');
+    if not Self.IsMulticastAddress(StrToAddressType(AddrType), Addr)
+      and not Self.IsFQDN(Addr) then
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
-    Token := Fetch(Value, '/');
-    if not Self.IsByte(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
-    Connection.TTL := StrToInt(Token);
+    TTL := Fetch(Value, '/');
+    if not Self.IsByte(TTL) then
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
-    if (Value <> '') then begin
-      if not Self.IsByte(Value) then
-        raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
-      Connection.NumberOfAddresses := StrToInt(Value);
-    end;
+    NumAddrs := Value;
   end
   else begin
-    // unicast
-    if not Self.IsIPAddress(Connection.AddressType, Value) and not Self.IsFQDN(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, Name + '=' + OriginalValue]));
+    Addr     := Value;
+    NumAddrs := '';
+    TTL      := '0';    
 
-    Connection.Address := Value;
+    if not TIdIPAddressParser.IsIPAddress(StrToAddressType(AddrType), Value)
+      and not Self.IsFQDN(Value) then
+      raise EParser.Create(Format(MalformedToken,
+                                  [RSSDPConnectionName, Name + '=' + OriginalValue]));
   end;
+
+  if (NumAddrs <> '') then begin
+    for I := 0 to StrToInt(NumAddrs) - 1 do
+      AddConnection(Connections,
+                    NetType,
+                    StrToAddressType(AddrType),
+                    TIdIPAddressParser.IncIPAddress(Addr, I),
+                    StrToInt(TTL))
+  end
+  else
+    AddConnection(Connections,
+                  NetType,
+                  StrToAddressType(AddrType),
+                  Addr,
+                  StrToInt(TTL));
 
   if Self.ParsingSessionHeaders then
     Self.LastSessionHeader := RSSDPConnectionName
   else
-    Self.LastMediaHeader := RSSDPConnectionName
+    Self.LastMediaHeader := RSSDPConnectionName;
 end;
 
 procedure TIdSdpParser.ParseEmail(const Payload: TIdSdpPayload);
@@ -1892,8 +2139,8 @@ begin
 
   // Technically speaking we should throw out the header, but we don't because
   // we can't answer the question "Can an Origin header have an empty string
-  // as the username?" That is, 'o= 467752 467752 IN IP4 192.168.1.41' might be
-  // legal - the BNF is silent on this.
+  // as the username?" 'o= 467752 467752 IN IP4 192.168.1.41' might be legal -
+  // the BNF says nothing on this.
 //  if (Name <> Trim(Name)) or (Value <> Trim(Value)) then
 //    raise EParser.Create(Format(MalformedToken, [Trim(Name), Line]));
 end;
@@ -2004,10 +2251,10 @@ begin
 
     Self.ParseMediaOptionalHeaders(NewMediaDesc);
 
-    Payload.MediaDescriptions.Add(NewMediaDesc);
+    Payload.AddMediaDescription(NewMediaDesc);
   except
-    if not Payload.MediaDescriptions.Contains(NewMediaDesc) then
-      NewMediaDesc.Free;
+    Payload.MediaDescriptions.Remove(NewMediaDesc);
+    FreeAndNil(NewMediaDesc);
 
     raise;
   end;
@@ -2026,7 +2273,7 @@ begin
         and (NextHeader[1] <> RSSDPMediaDescriptionName) do begin
     case NextHeader[1] of
       RSSDPInformationName: Self.ParseInfo(MediaDescription);
-      RSSDPConnectionName:  Self.ParseConnection(MediaDescription.Connection);
+      RSSDPConnectionName:  Self.ParseConnection(MediaDescription.Connections);
       RSSDPBandwidthName:   Self.ParseBandwidth(MediaDescription.Bandwidths);
       RSSDPKeyName:         Self.ParseKey(MediaDescription.Key);
       RSSDPAttributeName:   Self.ParseAttribute(MediaDescription.Attributes);
@@ -2053,12 +2300,11 @@ begin
 
   Payload.Origin.Username := Fetch(Value, ' ');
 
-  // Cf RFC 2327 Appendix A and meditate on "username = safe" where safe is a
-  // set of legal characters. Note, please, that the SDP examples clearly show
-  // that username has more than one character, normally, so username SHOULD be
-  // either 1*(safe) or *(safe). We don't know, ergo
-  // 'o= 467752 467752 IN IP4 192.168.1.41' might be legal (meaning
-  // username = '').
+  // Cf RFC 2327 Appendix A and meditate on the production "username = safe".
+  // Note, please, that the SDP examples clearly show that username has more
+  // than one character, normally, so username SHOULD be either 1*(safe) or
+  // *(safe). We don't know, ergo 'o= 467752 467752 IN IP4 192.168.1.41' might
+  // be legal (meaning username = '').
 //  if (Payload.Origin.Username = '') then
 //    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
 
@@ -2165,7 +2411,7 @@ begin
     case NextHeader[1] of
       RSSDPAttributeName:   Self.ParseAttribute(Payload.Attributes);
       RSSDPBandwidthName:   Self.ParseBandwidth(Payload.Bandwidths);
-      RSSDPConnectionName:  Self.ParseConnection(Payload.Connection);
+      RSSDPConnectionName:  Self.ParseConnection(Payload.Connections);
       RSSDPEmailName:       Self.ParseEmail(Payload);
       RSSDPKeyName:         Self.ParseKey(Payload.Key);
       RSSDPInformationName: Self.ParseInfo(Payload);
@@ -2376,7 +2622,7 @@ var
   I: Integer;
 begin
   Result := 'v=0'#13#10
-          + 'o=' + Self.Username + ' 1 1 IN IP4 ' + Self.Host + #13#10
+          + 'o=' + Self.Username + ' ' + IntToStr(DateTimeToNtpSeconds(Now)) + ' ' + IntToStr(DateTimeToNtpSeconds(Now)) + ' IN IP4 ' + Self.Host + #13#10
           + 's=-'#13#10
           + 'c=IN IP4 ' + Self.Host + #13#10;
 
@@ -2404,6 +2650,27 @@ begin
     Self.DataListeners.Remove(Pointer(Listener));
   finally
     Self.DataListenerLock.Release;
+  end;
+end;
+
+function TIdSdpPayloadProcessor.ServerFor(const Port: Cardinal): TIdRTPServer;
+var
+  I: Integer;
+begin
+  Self.RTPServerLock.Acquire;
+  try
+    Result := nil;
+    I      := 0;
+    // We force the result of Abs() to Cardinal because Delphi's brain-dead
+    // enough to think that the result of Abs() could be signed and so
+    // issues a warning.
+    while (I < Self.RTPServers.Count) and not Assigned(Result) do
+      if (Port = Cardinal(Abs(Self.ServerAt(I).DefaultPort))) then
+        Result := Self.ServerAt(I)
+      else
+        Inc(I);
+  finally
+    Self.RTPServerLock.Release;
   end;
 end;
 
@@ -2495,6 +2762,7 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TStream;
+                                                    const Port: Cardinal;
                                                     const Format: TIdRTPEncoding);
 var
   I: Integer;
@@ -2502,7 +2770,7 @@ begin
   Self.DataListenerLock.Acquire;
   try
     for I := 0 to Self.DataListeners.Count - 1 do
-      IIdSipDataListener(Self.DataListeners[I]).OnNewData(Data, Format);
+      IIdSipDataListener(Self.DataListeners[I]).OnNewData(Data, Port, Format);
   finally
     Self.DataListenerLock.Release;
   end;
@@ -2531,6 +2799,7 @@ begin
   try
     APacket.Payload.PrintOn(Data);
     Self.NotifyOfNewRTPData(Data,
+                            ABinding.Port,
                             Self.Profile.EncodingFor(APacket.PayloadType));
   finally
     Data.Free;
@@ -2558,9 +2827,9 @@ procedure TIdSdpPayloadProcessor.SetUpMediaStreams(const RemoteDescription: TIdS
 var
   I: Integer;
 begin
-  for I := 0 to RemoteDescription.MediaDescriptions.Count - 1 do
-    Self.SetUpSingleStream(RemoteDescription.Connection.Address,
-                           RemoteDescription.MediaDescriptions[I].Port);
+  for I := 0 to RemoteDescription.MediaDescriptionCount - 1 do
+    Self.SetUpSingleStream(RemoteDescription.MediaDescriptionAt(I).Connections[0].Address,
+                           RemoteDescription.MediaDescriptionAt(I).Port);
 end;
 
 procedure TIdSdpPayloadProcessor.SetUpSingleStream(const Address: String;
