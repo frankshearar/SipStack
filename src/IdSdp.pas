@@ -558,7 +558,6 @@ type
     DataListeners:             TList;
     fBasePort:                 Integer;
     fHost:                     String;
-    Filters:                   TObjectList;
     fUsername:                 String;
     fProfile:                  TIdRTPProfile;
     fRemoteSessionDescription: String;
@@ -3372,7 +3371,6 @@ begin
   Self.RTPListenerLock := TCriticalSection.Create;
 
   Self.RTPServers    := TObjectList.Create(true);
-  Self.Filters       := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
 
   Self.fProfile      := TIdAudioVisualProfile.Create;
@@ -3383,7 +3381,6 @@ destructor TIdSdpPayloadProcessor.Destroy;
 begin
   Self.Profile.Free;
 
-  Self.Filters.Free;
   Self.RTPServers.Free;
   Self.RTPServerLock.Free;
 
@@ -3699,7 +3696,7 @@ end;
 
 function TIdSdpPayloadProcessor.PeerAt(Index: Integer): TIdFilteredRTPPeer;
 begin
-  Result := Self.Filters[Index] as TIdFilteredRTPPeer;
+//  Result := Self.Filters[Index] as TIdFilteredRTPPeer;
 end;
 
 function TIdSdpPayloadProcessor.ServerAt(Index: Integer): TIdRTPServer;
@@ -3753,7 +3750,7 @@ end;
 
 procedure TIdSdpPayloadProcessor.SetUpSingleStream(MediaDesc: TIdSdpMediaDescription);
 var
-  NewPeer: TIdFilteredRTPPeer;
+  NewPeer: TIdRTPServer;
 begin
   // Realise that the MediaDesc contains a Port value. We TRY to allocate that
   // port, but if that port's already bound we just bind to the lowest free
@@ -3761,18 +3758,18 @@ begin
 
   Self.RTPServerLock.Acquire;
   try
-    NewPeer := TIdFilteredRTPPeer.Create(Self.AddPeer(MediaDesc,
-                                                      Self.RTPServers),
-                                         MediaDesc,
-                                         MediaDesc);
+    NewPeer := TIdRTPServer.Create(nil);
     try
+      Self.RTPServers.Add(NewPeer);
+
       NewPeer.Profile := Self.Profile;
+      NewPeer.Session.AddListener(Self);
       NewPeer.AddListener(Self);
-      NewPeer.AddFilteredListener(Self);
-      Self.Filters.Add(NewPeer);
+
+      Self.ActivateServerOnNextFreePort(NewPeer, MediaDesc.Port);
     except
-      if (Self.Filters.IndexOf(NewPeer) <> -1) then
-        Self.Filters.Remove(NewPeer)
+      if (Self.RTPServers.IndexOf(NewPeer) <> -1) then
+        Self.RTPServers.Remove(NewPeer)
       else
         FreeAndNil(NewPeer);
 
