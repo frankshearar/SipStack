@@ -5,6 +5,7 @@ uses
   GuiTestRunner,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
+  IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
@@ -74,9 +75,7 @@ uses
 begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
-//  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-//  Forms.Application.CreateForm(TIdSpikeT140, IdSpikeT140);
-  Application.CreateForm(TrnidSpikeRegister, rnidSpikeRegister);
+  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}
