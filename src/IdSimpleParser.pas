@@ -64,6 +64,7 @@ type
     function  ReadOctets(Count: Cardinal): String;
     function  ReadLn: String;
     function  ReadFirstNonBlankLine: String;
+    procedure SkipBlankLines;
 
     property  Source: TStream read fSource write fSource;
   end;
@@ -609,9 +610,14 @@ end;
 
 function TIdSimpleParser.ReadFirstNonBlankLine: String;
 begin
+  Self.SkipBlankLines;
   Result := Self.ReadLn;
-  while (Result = '') and not Self.Eof do
-    Result := Self.ReadLn;
+end;
+
+procedure TIdSimpleParser.SkipBlankLines;
+begin
+  while not Self.Eof and (Self.PeekLine = '') do
+    Self.ReadLn;
 end;
 
 //* TIdSimpleParser Protected methods ******************************************

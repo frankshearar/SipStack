@@ -60,6 +60,9 @@ type
     procedure TestReadln;
     procedure TestReadlnDoubleCrLf;
     procedure TestReadlnWithNoCrLf;
+    procedure TestSkipBlankLinesDoubleCrLf;
+    procedure TestSkipBlankLinesLeadingCrLf;
+    procedure TestSkipBlankLinesWithNoCrLf;
   end;
 
 implementation
@@ -773,7 +776,55 @@ begin
   end;
 end;
 
-initialization
+procedure TestTIdSimpleParser.TestSkipBlankLinesDoubleCrLf;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('one'#13#10#13#10'three');
+  try
+    Self.P.Source := Str;
 
+    Self.P.SkipBlankLines;
+
+    CheckEquals('one',   Self.P.ReadLn, '1st line');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSimpleParser.TestSkipBlankLinesLeadingCrLf;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(#13#10#13#10'one'#13#10'three');
+  try
+    Self.P.Source := Str;
+
+    Self.P.SkipBlankLines;
+
+    CheckEquals('one',   Self.P.ReadLn, '1st line');
+    CheckEquals('three', Self.P.ReadLn, '2nd line');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSimpleParser.TestSkipBlankLinesWithNoCrLf;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('new');
+  try
+    Self.P.Source := Str;
+
+    Self.P.SkipBlankLines;
+
+    CheckEquals('new', Self.P.ReadLn, 'ReadLn');
+  finally
+    Str.Free;
+  end;
+end;
+
+initialization
   RegisterTest('IdSimpleParser', Suite);
 end.
