@@ -15,6 +15,8 @@ uses
   IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
 
 type
+  TIdMessageDirection = (dirIn, dirOut);
+
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
@@ -29,6 +31,11 @@ type
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
     fTransportType:     TIdSipTransportType;
+    fWriteLog:          Boolean;
+
+    procedure Log(Msg: String;
+                  Direction: TIdMessageDirection);
+    procedure SetWriteLog(const Value: Boolean);
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     function  GetAddress: String; override;
@@ -63,9 +70,19 @@ type
     property SentRequestCount:  Cardinal            read fSentRequestCount;
     property SentResponseCount: Cardinal            read fSentResponseCount;
     property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
+    property WriteLog:          Boolean             read fWriteLog write SetWriteLog;
   end;
 
+const
+  DebugLogName = 'MessageDump.log';
+
 implementation
+
+uses
+  Classes, IdRTP;
+
+var
+  GLog: TFileStream;
 
 //******************************************************************************
 //* TIdSipMockTransport                                                        *
@@ -100,6 +117,8 @@ begin
   Self.NotifyTransportListeners(R);
 
   Self.LastRequest.Assign(R);
+
+  Self.Log(R.AsString, dirIn);
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
@@ -107,6 +126,8 @@ begin
   Self.NotifyTransportListeners(R);
 
   Self.fResponses.AddCopy(R);
+
+  Self.Log(R.AsString, dirIn);
 end;
 
 function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
@@ -207,6 +228,8 @@ begin
 
   if Self.LocalEchoMessages then
     Self.NotifyTransportListeners(R);
+
+  Self.Log(R.AsString, dirOut);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
@@ -225,6 +248,8 @@ begin
     Self.NotifyTransportListeners(R);
 
   inherited SendResponse(R);
+
+  Self.Log(R.AsString, dirOut);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
@@ -232,4 +257,37 @@ begin
   Result := true;
 end;
 
+//* TIdSipMockTransport Private methods ****************************************
+
+procedure TIdSipMockTransport.Log(Msg: String;
+                                  Direction: TIdMessageDirection);
+var
+  Date: String;
+begin
+  if not Self.WriteLog then Exit;
+
+  case Direction of
+    dirIn:  Date := '<<<';
+    dirOut: Date := '>>>';
+  end;
+
+  Date := Date + ' ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now) + #13#10;
+
+  WriteString(GLog, Date);
+  WriteString(GLog, Msg);
+  WriteString(GLog, #13#10);
+end;
+
+procedure TIdSipMockTransport.SetWriteLog(const Value: Boolean);
+begin
+  if Value and not Assigned(GLog) then
+    GLog := TFileStream.Create(DebugLogName,
+                               fmCreate or fmShareDenyWrite);
+
+  Self.fWriteLog := Value;                             
+end;
+
+initialization
+finalization
+  GLog.Free;
 end.
