@@ -3671,7 +3671,7 @@ end;
 procedure TIdSipSession.ActionSucceeded(Response: TIdSipResponse);
 begin
   if Self.DialogEstablished then
-    Self.Dialog.HandleMessage(Response);
+    Self.Dialog.ReceiveResponse(Response);
 end;
 
 procedure TIdSipSession.AddOpenTransaction(Request: TIdSipRequest);
@@ -3795,7 +3795,7 @@ var
   OK: TIdSipResponse;
 begin
   Self.MarkAsTerminated;
-  Self.Dialog.HandleMessage(Request);
+  Self.Dialog.ReceiveRequest(Request);
 
   OK := Self.UA.CreateResponse(Request, SIPOK);
   try
@@ -3900,8 +3900,8 @@ begin
         Self.NotifyOfEstablishedSession;
       end;
 
-      Self.Dialog.HandleMessage(Self.CurrentRequest);
-      Self.Dialog.HandleMessage(OkResponse);
+      Self.Dialog.ReceiveRequest(Self.CurrentRequest);
+      Self.Dialog.ReceiveResponse(OkResponse);
     finally
       Self.DialogLock.Release;
     end;

@@ -181,7 +181,7 @@ begin
         Self.Res.RecordRoute.Clear;
         Self.Res.RecordRoute.AddInReverseOrder(RouteSet200);
 
-        OutDlg.HandleMessage(Self.Res);
+        OutDlg.ReceiveResponse(Self.Res);
 
         OutDlg.RouteSet.First;
         RouteSet180.First;
@@ -354,7 +354,7 @@ begin
   Response := TIdSipTestResources.CreateLocalLoopResponse;
   try
     Response.StatusCode := SIPTrying;
-    Self.Dlg.HandleMessage(Response);
+    Self.Dlg.ReceiveResponse(Response);
   finally
     Response.Free;
   end;
@@ -414,7 +414,7 @@ begin
   Response := TIdSipTestResources.CreateLocalLoopResponse;
   try
     Response.StatusCode := SIPTrying;
-    Self.Dlg.HandleMessage(Response);
+    Self.Dlg.ReceiveResponse(Response);
   finally
     Response.Free;
   end;
@@ -527,12 +527,12 @@ begin
         'Before any response is received');
 
   Self.Res.StatusCode := SIPTrying;
-  Self.Dlg.HandleMessage(Self.Res);
+  Self.Dlg.ReceiveResponse(Self.Res);
   Check(Self.Dlg.IsEarly,
         'Received provisional Response: ' + IntToStr(Self.Res.StatusCode));
 
   Self.Res.StatusCode := SIPOK;
-  Self.Dlg.HandleMessage(Self.Res);
+  Self.Dlg.ReceiveResponse(Self.Res);
   Check(not Self.Dlg.IsEarly,
         'Received final Response: ' + IntToStr(Self.Res.StatusCode));
 end;
@@ -555,7 +555,7 @@ begin
                              false,
                              Self.RouteSet);
     try
-      D.HandleMessage(Self.Res);
+      D.ReceiveResponse(Self.Res);
       CheckEquals((Self.Res.Headers[ContactHeaderFull] as TIdSipContactHeader).Address,
                   D.RemoteTarget,
                   'RemoteTarget after response received');
@@ -629,7 +629,7 @@ begin
   Invite := TIdSipRequest.Create;
   try
     Invite.Method := MethodInvite;
-    Self.Dlg.HandleMessage(Invite);
+    Self.Dlg.ReceiveRequest(Invite);
   finally
     Invite.Free;
   end;
@@ -641,7 +641,7 @@ begin
   try
     OK.StatusCode := SIPOK;
 
-    Self.Dlg.HandleMessage(OK);
+    Self.Dlg.ReceiveResponse(OK);
   finally
     OK.Free;
   end;

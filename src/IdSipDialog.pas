@@ -97,8 +97,8 @@ type
 
     function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
-    procedure HandleMessage(Request: TIdSipRequest); overload; virtual;
-    procedure HandleMessage(Response: TIdSipResponse); overload; virtual;
+    procedure ReceiveRequest(Request: TIdSipRequest); overload; virtual;
+    procedure ReceiveResponse(Response: TIdSipResponse); overload; virtual;
     function  IsNull: Boolean; virtual;
     function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
     function  NextLocalSequenceNo: Cardinal;
@@ -406,13 +406,13 @@ begin
   end;
 end;
 
-procedure TIdSipDialog.HandleMessage(Request: TIdSipRequest);
+procedure TIdSipDialog.ReceiveRequest(Request: TIdSipRequest);
 begin
   if Request.IsInvite then
     Self.SetCanBeEstablished(true);
 end;
 
-procedure TIdSipDialog.HandleMessage(Response: TIdSipResponse);
+procedure TIdSipDialog.ReceiveResponse(Response: TIdSipResponse);
 begin
   if (Self.RemoteTarget.Uri = '') then
     Self.RemoteTarget.URI := Response.FirstContact.Address.URI;
