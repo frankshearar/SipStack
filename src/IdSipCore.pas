@@ -1517,8 +1517,8 @@ const
   LocalHangUp                    = 'Local end hung up';
   InboundActionFailed            = 'An inbound %s failed because: %s';
   ItemNotFoundIndex              = -1;
-  NoLocationFound                = 'No destination addresses found';
-  NoLocationSucceeded            = 'Attempted message sends to all destination addresses failed';
+  NoLocationFound                = 'No destination addresses found for URI %s';
+  NoLocationSucceeded            = 'Attempted message sends to all destination addresses failed for URI %s';
   NoSuchRegistrar                = 'No such registrar known: %s';
   OutboundActionFailed           = 'An outbound %s failed because: %s';
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
@@ -3958,6 +3958,7 @@ end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
 var
+  FailReason:      String;
   TargetLocations: TIdSipLocations;
 begin
   Self.SentRequest := true;
@@ -3965,20 +3966,25 @@ begin
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
-  // cf RFC 3263, section 4.3  
+  // cf RFC 3263, section 4.3
   TargetLocations := Self.UA.Locator.FindServersFor(Request.DestinationUri);
   try
     if TargetLocations.IsEmpty then begin
       // The Locator should at the least return a location based on the
       // Request-URI. Thus this clause should never execute. Still, this
       // clause protects the code that follows.
-      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed, [Self.Method, NoLocationFound]));
+
+      FailReason := Format(NoLocationFound, [Request.DestinationUri]);
+      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed,
+                                         [Self.Method, FailReason]));
       Exit;
     end;
 
-    if not Self.TrySendRequest(Request, TargetLocations) then
+    if not Self.TrySendRequest(Request, TargetLocations) then begin
+      FailReason := Format(NoLocationSucceeded, [Request.DestinationUri]);
       Self.NotifyOfNetworkFailure(Format(OutboundActionFailed,
-                                         [Self.Method, NoLocationSucceeded]));
+                                         [Self.Method, FailReason]));
+    end;
   finally
     TargetLocations.Free;
   end;
