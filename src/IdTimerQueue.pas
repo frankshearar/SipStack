@@ -12,7 +12,7 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdBaseThread, SyncObjs;
+  Classes, Contnrs, IdBaseThread, SyncObjs, SysUtils;
 
 type
   // I represent something that will happen in the future. If you want an alarm
@@ -71,10 +71,11 @@ type
   //  adds or removes events. Or when something's Terminated me.
   TIdTimerQueue = class(TObject)
   private
-    fEventList:  TObjectList;
-    fLock:       TCriticalSection;
-    fTerminated: Boolean;
-    WaitEvent:   TEvent;
+    fCreateSuspended: Boolean;
+    fEventList:       TObjectList;
+    fLock:            TCriticalSection;
+    fTerminated:      Boolean;
+    WaitEvent:        TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
                   Event: TIdWait;
@@ -87,9 +88,10 @@ type
   protected
     function  IndexOfEvent(Event: Pointer): Integer;
 
-    property EventList:  TObjectList      read fEventList;
-    property Lock:       TCriticalSection read fLock;
-    property Terminated: Boolean          read fTerminated write fTerminated;
+    property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
+    property EventList:       TObjectList      read fEventList;
+    property Lock:            TCriticalSection read fLock;
+    property Terminated:      Boolean          read fTerminated write fTerminated;
   public
     constructor Create(CreateSuspended: Boolean = True); virtual;
     destructor  Destroy; override;
@@ -126,9 +128,7 @@ type
 
     procedure Run;
   public
-    constructor Create(CreateSuspended: Boolean = True); override;
-    destructor  Destroy; override;
-
+    procedure Resume; override;
     procedure Terminate; override;
   end;
 
@@ -152,7 +152,7 @@ function AddModuloWord(Addend, Augend: Word): Word;
 implementation
 
 uses
-  IdGlobal, SysUtils;
+  IdGlobal;
 
 const
   DefaultSleepTime      = 10000;
@@ -238,16 +238,17 @@ begin
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
 
-  if not CreateSuspended then
+  Self.CreateSuspended := CreateSuspended;
+
+  if not Self.CreateSuspended then
     Self.Resume;
 end;
 
 destructor TIdTimerQueue.Destroy;
 begin
-  Self.WaitEvent.Free;
-
   Self.Lock.Acquire;
   try
+    Self.WaitEvent.Free;
     Self.EventList.Free;
   finally
     Self.Lock.Release;
@@ -305,8 +306,13 @@ end;
 
 procedure TIdTimerQueue.Terminate;
 begin
-  Self.Terminated := true;
-  Self.WaitEvent.SetEvent;
+  Self.Lock.Acquire;
+  try
+    Self.Terminated := true;
+    Self.WaitEvent.SetEvent;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 //* TIdTimerQueue Protected methods ********************************************
@@ -356,10 +362,11 @@ begin
 
       raise;
     end;
+
+    Self.WaitEvent.SetEvent;
   finally
     Self.Lock.Release;
   end;
-  Self.WaitEvent.SetEvent;
 end;
 
 function TIdTimerQueue.EarliestEvent: TIdWait;
@@ -397,10 +404,11 @@ begin
           Self.EventList.Delete(I)
         else
           Inc(I);
+
+    Self.WaitEvent.SetEvent;
   finally
     Self.Lock.Release;
   end;
-  Self.WaitEvent.SetEvent;
 end;
 
 function TIdTimerQueue.ShortestWait: Cardinal;
@@ -465,16 +473,14 @@ end;
 //******************************************************************************
 //* TIdThreadedTimerQueue Public methods ***************************************
 
-constructor TIdThreadedTimerQueue.Create(CreateSuspended: Boolean = True);
+procedure TIdThreadedTimerQueue.Resume;
 begin
-  inherited Create(CreateSuspended);
+  inherited Resume;
 
-  Self.BlockRunner := TIdBlockRunnerThread.Create(Self.Run, CreateSuspended);
-end;
+  if not Assigned(Self.BlockRunner) then
+    Self.BlockRunner := TIdBlockRunnerThread.Create(Self.Run, Self.CreateSuspended);
 
-destructor TIdThreadedTimerQueue.Destroy;
-begin
-  inherited Destroy;
+  Self.BlockRunner.Resume;
 end;
 
 procedure TIdThreadedTimerQueue.Terminate;

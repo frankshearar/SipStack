@@ -185,7 +185,6 @@ begin
   inherited SetUp;
 
   Self.DefaultTimeout   := 100;
-  Self.ExceptionType    := nil;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.Notified         := false;
   Self.OrderOfFire      := '';
@@ -352,9 +351,7 @@ procedure TestTIdThreadedTimerQueue.TestNotifyEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout, Self.CheckNotifyEvent);
 
-  Self.ExceptionMessage := 'Event didn''t fire';
-
-  Self.WaitForSignaled(Self.ThreadEvent);
+  Self.WaitForSignaled(Self.ThreadEvent, 'Event didn''t fire');
   Check(Self.Notified, 'TNotifyEvent didn''t fire');
 end;
 
@@ -364,10 +361,8 @@ begin
                       Self.CheckNotifyEventWithData,
                       Self.Data);
 
-  Self.WaitForSignaled(Self.ThreadEvent);
+  Self.WaitForSignaled(Self.ThreadEvent, 'Event didn''t fire');
 
-  if Assigned(Self.ExceptionType) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
   Check(Self.Notified, 'TNotifyEvent didn''t fire');
 end;
 
