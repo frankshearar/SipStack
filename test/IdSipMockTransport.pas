@@ -8,16 +8,17 @@ uses
 type
   TIdSipMockTransport = class(TIdSipTransport)
   private
-    fACKCount:          Cardinal;
-    fBindings:          TIdSocketHandles;
-    fFailWith:          ExceptClass;
-    fLastACK:           TIdSipRequest;
-    fLastRequest:       TIdSipRequest;
-    fLastResponse:      TIdSipResponse;
-    fLocalEchoMessages: Boolean;
-    fSentRequestCount:  Cardinal;
-    fSentResponseCount: Cardinal;
-    fTransportType:     TIdSipTransportType;
+    fACKCount:           Cardinal;
+    fBindings:           TIdSocketHandles;
+    fFailWith:           ExceptClass;
+    fLastACK:            TIdSipRequest;
+    fLastRequest:        TIdSipRequest;
+    fLastResponse:       TIdSipResponse;
+    fLocalEchoMessages:  Boolean;
+    fSecondLastResponse: TIdSipResponse;
+    fSentRequestCount:   Cardinal;
+    fSentResponseCount:  Cardinal;
+    fTransportType:      TIdSipTransportType;
   protected
     function  GetBindings: TIdSocketHandles; override;
     procedure SendRequest(R: TIdSipRequest); override;
@@ -39,15 +40,16 @@ type
     procedure Start; override;
     procedure Stop; override;
 
-    property ACKCount:          Cardinal            read fACKCount;
-    property FailWith:          ExceptClass         read fFailWith write fFailWith;
-    property LastACK:           TIdSipRequest       read fLastACK;
-    property LastRequest:       TIdSipRequest       read fLastRequest;
-    property LastResponse:      TIdSipResponse      read fLastResponse;
-    property LocalEchoMessages: Boolean             read fLocalEchoMessages write fLocalEchoMessages;
-    property SentRequestCount:  Cardinal            read fSentRequestCount;
-    property SentResponseCount: Cardinal            read fSentResponseCount;
-    property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
+    property ACKCount:           Cardinal            read fACKCount;
+    property FailWith:           ExceptClass         read fFailWith write fFailWith;
+    property LastACK:            TIdSipRequest       read fLastACK;
+    property LastRequest:        TIdSipRequest       read fLastRequest;
+    property LastResponse:       TIdSipResponse      read fLastResponse;
+    property LocalEchoMessages:  Boolean             read fLocalEchoMessages write fLocalEchoMessages;
+    property SecondLastResponse: TIdSipResponse      read fSecondLastResponse;
+    property SentRequestCount:   Cardinal            read fSentRequestCount;
+    property SentResponseCount:  Cardinal            read fSentResponseCount;
+    property TransportType:      TIdSipTransportType read fTransportType write fTransportType;
   end;
 
 implementation
@@ -62,16 +64,18 @@ begin
   inherited Create(Port);
 
   Self.ResetSentRequestCount;
-  Self.fBindings     := TIdSocketHandles.Create(nil);
-  Self.fLastACK      := TIdSipRequest.Create;
-  Self.fLastRequest  := TIdSipRequest.Create;
-  Self.fLastResponse := TIdSipResponse.Create;
+  Self.fBindings           := TIdSocketHandles.Create(nil);
+  Self.fLastACK            := TIdSipRequest.Create;
+  Self.fLastRequest        := TIdSipRequest.Create;
+  Self.fLastResponse       := TIdSipResponse.Create;
+  Self.fSecondLastResponse := TIdSipResponse.Create;
 
   Self.LocalEchoMessages := false;
 end;
 
 destructor TIdSipMockTransport.Destroy;
 begin
+  Self.SecondLastResponse.Free;
   Self.LastResponse.Free;
   Self.LastRequest.Free;
   Self.LastACK.Free;
@@ -169,6 +173,7 @@ procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
   inherited SendResponse(R);
 
+  Self.SecondLastResponse.Assign(Self.LastResponse);
   Self.LastResponse.Assign(R);
 
   if Assigned(Self.FailWith) then

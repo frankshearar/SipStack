@@ -3055,9 +3055,18 @@ procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
 var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
+  Trying:       TIdSipResponse;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
+  // We don't actually send CANCELs when we've not received a provisional
+  // response.
+  Trying := TIdSipResponse.InResponseTo(Self.Session.Invite, SIPTrying);
+  try
+    Self.Dispatcher.Transport.FireOnResponse(Trying);
+  finally
+    Trying.Free;
+  end;
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,

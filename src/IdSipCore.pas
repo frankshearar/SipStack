@@ -1433,9 +1433,7 @@ begin
   else if Request.IsAck then
     Self.ProcessAck(Request, Transaction, Receiver)
   else if Request.IsBye then
-    Self.SendByeToAppropriateSession(Request, Transaction, Receiver)
-  else if Request.IsCancel then
-    raise Exception.Create('Handling CANCELs not implemented yet');
+    Self.SendByeToAppropriateSession(Request, Transaction, Receiver);
 
   // TIdSipSession generates the response - 8.2.6
 end;
@@ -2264,6 +2262,9 @@ end;
 procedure TIdSipSession.OnTerminated(Transaction: TIdSipTransaction);
 begin
   inherited OnTerminated(Transaction);
+
+  if (Transaction = Self.InitialTran) then
+    Self.InitialTran := nil;
 
   Self.RemoveTransaction(Transaction);
 end;

@@ -79,6 +79,8 @@ type
                                    Receiver: TIdSipTransport); overload;
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
+    procedure RejectUnmatchedCancel(Request: TIdSipRequest;
+                                    Receiver: TIdSipTransport);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
@@ -207,6 +209,8 @@ type
     function  IsServer: Boolean;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
+    procedure ReceiveCancel(Cancel: TIdSipRequest;
+                            T: TIdSipTransport); virtual;
     procedure ReceiveRequest(R: TIdSipRequest;
                              T: TIdSipTransport); virtual;
     procedure ReceiveResponse(R: TIdSipResponse;
@@ -294,6 +298,8 @@ type
     procedure FireTimerI;
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
+    procedure ReceiveCancel(Cancel: TIdSipRequest;
+                            T: TIdSipTransport); override;
     procedure ReceiveRequest(R: TIdSipRequest;
                              T: TIdSipTransport); override;
     procedure SendResponse(R: TIdSipResponse); override;
@@ -766,7 +772,7 @@ end;
 procedure TIdSipTransactionDispatcher.OnException(E: Exception;
                                                   const Reason: String);
 begin
-end;                                                  
+end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                        Receiver: TIdSipTransport);
@@ -806,6 +812,8 @@ begin
         NullTran.Free;
       end;
     end
+    else if Request.IsCancel then
+      Self.RejectUnmatchedCancel(Request, Receiver)
     else begin
       Tran := Self.AddServerTransaction(Request, Receiver);
 
@@ -851,6 +859,20 @@ begin
        Inc(I);
   finally
     Self.TransactionLock.Release;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.RejectUnmatchedCancel(Request: TIdSipRequest;
+                                                            Receiver: TIdSipTransport);
+var
+  NoTranResponse: TIdSipResponse;
+begin
+  NoTranResponse := TIdSipResponse.InResponseTo(Request,
+                                                SIPCallLegOrTransactionDoesNotExist);
+  try
+    Receiver.Send(NoTranResponse);
+  finally
+    NoTranResponse.Free;
   end;
 end;
 
@@ -952,18 +974,34 @@ begin
     and not Self.Match(Request);
 end;
 
+procedure TIdSipTransaction.ReceiveCancel(Cancel: TIdSipRequest;
+                                          T: TIdSipTransport);
+var
+  OkResponse: TIdSipResponse;
+begin
+  OkResponse := TIdSipResponse.InResponseTo(Cancel, SIPOK);
+  try
+    T.Send(OkResponse);
+  finally
+    OkResponse.Free;
+  end;
+end;
+
 procedure TIdSipTransaction.ReceiveRequest(R: TIdSipRequest;
                                            T: TIdSipTransport);
 begin
+  // By default we do nothing
 end;
 
 procedure TIdSipTransaction.ReceiveResponse(R: TIdSipResponse;
                                             T: TIdSipTransport);
 begin
+  // By default we do nothing
 end;
 
 procedure TIdSipTransaction.SendRequest;
 begin
+  // By default we do nothing
 end;
 
 procedure TIdSipTransaction.SendResponse(R: TIdSipResponse);
@@ -1411,6 +1449,24 @@ end;
 function TIdSipServerInviteTransaction.IsNull: Boolean;
 begin
   Result := false;
+end;
+
+procedure TIdSipServerInviteTransaction.ReceiveCancel(Cancel: TIdSipRequest;
+                                                      T: TIdSipTransport);
+var
+  TerminateResponse: TIdSipResponse;
+begin
+  inherited ReceiveCancel(Cancel, T);
+
+  if (Self.State = itsProceeding) then begin
+    TerminateResponse := TIdSipResponse.InResponseTo(Self.InitialRequest,
+                                                     SIPRequestTerminated);
+    try
+      Self.SendResponse(TerminateResponse);
+    finally
+      TerminateResponse.Free;
+    end;
+  end;
 end;
 
 procedure TIdSipServerInviteTransaction.ReceiveRequest(R: TIdSipRequest;

@@ -67,6 +67,7 @@ type
     procedure TestSendVeryBigRequest;
     procedure TestServerInviteTransactionGetsAck;
     procedure TestTransactionsCleanedUp;
+    procedure TestUnmatchableCancel;
     procedure TestWillUseReliableTransport;
   end;
 
@@ -152,6 +153,7 @@ type
     procedure TearDown; override;
   published
     procedure TestIsNull;
+    procedure TestReceiveCancel; virtual;
   end;
 
   TestTIdSipServerInviteTransaction = class(TTestTransaction)
@@ -175,6 +177,9 @@ type
     procedure TestIsServer;
     procedure TestReceive2xxFromTUInProceedingState;
     procedure TestReceiveAckInCompletedState;
+    procedure TestReceiveCancel; override;
+    procedure TestReceiveCancelAfterFinalResponse;
+    procedure TestReceiveCancelTwice;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
     procedure TestReceiveInviteInCompletedState;
     procedure TestReceiveInviteInConfirmedState;
@@ -969,6 +974,28 @@ begin
         'Terminated transaction wasn''t cleaned up');
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestUnmatchableCancel;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.MockTransport.SentResponseCount;
+
+  Cancel := Self.TranRequest.CreateCancel;
+  try
+    Self.MockTransport.FireOnRequest(Cancel);
+
+    Check(ResponseCount < Self.MockTransport.SentResponseCount,
+          'No response sent');
+
+    CheckEquals(SIPCallLegOrTransactionDoesNotExist,
+                Self.MockTransport.LastResponse.StatusCode,
+                'Wrong response sent');
+  finally
+    Cancel.Free;
+  end;
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestWillUseReliableTransport;
 const
   ViaValue = 'SIP/2.0/%s gw1.leo-ix.org;branch=z9hG4bK776asdhds';
@@ -1683,6 +1710,31 @@ begin
   Check(not Self.Tran.IsNull, 'IsNull');
 end;
 
+procedure TTestTransaction.TestReceiveCancel;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+begin
+  // We ignore all CANCELs to anything other than a server INVITE transaction.
+
+  ResponseCount := Self.MockDispatcher.Transport.SentResponseCount;
+
+  Cancel := Self.Tran.InitialRequest.CreateCancel;
+  try
+    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+
+    CheckEquals(ResponseCount + 1,
+                Self.MockDispatcher.Transport.SentResponseCount,
+                Self.Tran.ClassName
+              + ': UAS didn''t sent a response to a CANCEL');
+    CheckEquals(SIPOK,
+                Self.MockDispatcher.Transport.LastResponse.StatusCode,
+                Self.Tran.ClassName + ': Wrong response sent');
+  finally
+    Cancel.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipServerInviteTransaction                                          *
 //******************************************************************************
@@ -1854,6 +1906,94 @@ begin
   CheckEquals(Transaction(itsConfirmed),
               Transaction(Self.Tran.State),
               '200 from TU');
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestReceiveCancel;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.MockDispatcher.Transport.SentResponseCount;
+
+  Cancel := Self.Tran.InitialRequest.CreateCancel;
+  try
+    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+
+    CheckEquals(ResponseCount +2,
+                Self.MockDispatcher.Transport.SentResponseCount,
+                'Either the CANCEL transaction or the INVITE transaction '
+              + 'didn''t send a response');
+    CheckEquals(SIPRequestTerminated,
+                Self.MockDispatcher.Transport.LastResponse.StatusCode,
+                'Transaction sent wrong response');
+
+    CheckEquals(SIPOK,
+                Self.MockDispatcher.Transport.SecondLastResponse.StatusCode,
+                'CANCEL transaction sent wrong response');
+
+    CheckEquals(Transaction(itsCompleted),
+                Transaction(Self.Tran.State),
+                'CANCEL should complete the transaction');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestReceiveCancelAfterFinalResponse;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+begin
+  Self.MoveToCompletedState;
+  ResponseCount := Self.MockDispatcher.Transport.SentResponseCount;
+
+  Cancel := Self.Tran.InitialRequest.CreateCancel;
+  try
+    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+
+    CheckEquals(ResponseCount + 1,
+                Self.MockDispatcher.Transport.SentResponseCount,
+                'A transaction can''t be CANCELled once its sent a '
+              + 'final response');
+    CheckEquals(MethodCancel,
+                Self.MockDispatcher.Transport.LastResponse.CSeq.Method,
+                'The transaction shouldn''t send another response');
+    CheckEquals(SIPOK,
+                Self.MockDispatcher.Transport.LastResponse.StatusCode,
+                'The UAS MUST send an OK in response to the CANCEL');
+
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestReceiveCancelTwice;
+var
+  Cancel:        TIdSipRequest;
+  ResponseCount: Cardinal;
+begin
+  Self.MoveToCompletedState;
+  ResponseCount := Self.MockDispatcher.Transport.SentResponseCount;
+
+  Cancel := Self.Tran.InitialRequest.CreateCancel;
+  try
+    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+    Self.Tran.ReceiveCancel(Cancel, Self.MockDispatcher.Transport);
+
+    CheckEquals(ResponseCount + 2,
+                Self.MockDispatcher.Transport.SentResponseCount,
+                'A transaction can''t be CANCELled once its sent a '
+              + 'final response');
+    CheckEquals(SIPOK,
+                Self.MockDispatcher.Transport.LastResponse.StatusCode,
+                'The UAS MUST send an OK in response to the CANCEL (1st)');
+    CheckEquals(SIPOK,
+                Self.MockDispatcher.Transport.SecondLastResponse.StatusCode,
+                'The UAS MUST send an OK in response to the CANCEL (2nd)');
+
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestReceiveInviteInCompletedState;
