@@ -73,6 +73,7 @@ type
     function  MalformedException: ExceptClass; virtual; abstract;
     procedure ReadBody(const S: TStream);
     procedure RemoveHeader(const Header: TIdSipHeader);
+    procedure RemoveAllHeadersNamed(const Name: String);
 
     property Body:          String           read fBody write fBody;
     property CallID:        String           read GetCallID write SetCallID;
@@ -189,7 +190,6 @@ type
     function  GetHeaderName(Header: String): String;
     function  GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
     function  GetHeaderValue(Header: String): String;
-//    function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
     function  ParseAndMakeMessage: TIdSipMessage; overload;
     function  ParseAndMakeMessage(const Src: String): TIdSipMessage; overload;
     function  ParseAndMakeMessage(const Src: String; const MessageType: TIdSipMessageClass): TIdSipMessage; overload;
@@ -444,6 +444,11 @@ end;
 procedure TIdSipMessage.RemoveHeader(const Header: TIdSipHeader);
 begin
   Self.Headers.Remove(Header);
+end;
+
+procedure TIdSipMessage.RemoveAllHeadersNamed(const Name: String);
+begin
+  Self.Headers.RemoveAll(Name);
 end;
 
 //* TIdSipMessage Private methods **********************************************
@@ -947,19 +952,7 @@ begin
     Result := Trim(Result);
   end;
 end;
-{
-function TIdSipParser.MakeBadRequestResponse(const Reason: String): TIdSipResponse;
-begin
-  // This is wrong. We need the original request's details - via headers, etc.
-  // Sometimes we cannot get this information, though, especially if the
-  // original message we malformed and unparseable.
 
-  Result := TIdSipResponse.Create;
-  Result.StatusCode := SIPBadRequest;
-  Result.StatusText := Reason;
-  Result.SipVersion := SIPVersion;
-end;
-}
 function TIdSipParser.ParseAndMakeMessage: TIdSipMessage;
 var
   FirstLine: String;

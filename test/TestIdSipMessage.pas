@@ -3,21 +3,30 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipHeaders, IdSipMessage, IdURI, TestFramework, TestFrameworkEx;
+  IdSipHeaders, IdSipDialogID, IdSipMessage, IdURI, SysUtils, TestFramework,
+  TestFrameworkSip;
 
 type
-  TestTIdSipMessage = class(TExtendedTestCase)
-  private
-    procedure CheckEquals(Expected, Received: TIdURI; Message: String); overload;
+  TIdSipTrivialMessage = class(TIdSipMessage)
   protected
-    Message: TIdSipMessage;
+    function FirstLine: String; override;
   public
+    function  CreateDialogID: TIdSipDialogID; override;
+    function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
+    function  IsRequest: Boolean; override;
+    function  MalformedException: ExceptClass; override;
+  end;
+
+  TestTIdSipMessage = class(TTestCaseSip)
+  private
+    Msg: TIdSipMessage;
+  public
+    procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
-    procedure TestAsStringNoMaxForwardsSet;
     procedure TestClearHeaders;
     procedure TestFirstContact;
     procedure TestFirstHeader;
@@ -26,6 +35,7 @@ type
     procedure TestLastHop;
     procedure TestReadBody;
     procedure TestRemoveHeader;
+    procedure TestRemoveHeaders;
     procedure TestSetCallID;
     procedure TestSetContentLength;
     procedure TestSetContentType;
@@ -36,7 +46,7 @@ type
     procedure TestSetTo;
   end;
 
-  TestTIdSipRequest = class(TestTIdSipMessage)
+  TestTIdSipRequest = class(TTestCaseSip)
   private
     ReceivedRequest: TIdSipRequest;
     Request:         TIdSipRequest;
@@ -48,6 +58,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestAsStringNoMaxForwardsSet;
     procedure TestCreateDialogID;
     procedure TestHasSipsUri;
     procedure TestIsAck;
@@ -73,11 +84,12 @@ type
     procedure TestSetPath;
   end;
 
-  TestTIdSipResponse = class(TestTIdSipMessage)
+  TestTIdSipResponse = class(TTestCaseSip)
   private
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestAssign;
     procedure TestAssignBad;
@@ -124,15 +136,48 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipDialogID, SysUtils, TestFrameworkSip, TestMessages;
+  Classes, IdSipConsts, TestMessages;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
 
+  Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
   Result.AddTest(TestTIdSipMessageSubject.Suite);
+end;
+
+//******************************************************************************
+//* TIdSipTrivialMessage                                                       *
+//******************************************************************************
+//* TIdSipTrivialMessage Public methods ****************************************
+
+function TIdSipTrivialMessage.CreateDialogID: TIdSipDialogID;
+begin
+  Result := nil;
+end;
+
+function TIdSipTrivialMessage.IsEqualTo(const Msg: TIdSipMessage): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipTrivialMessage.IsRequest: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipTrivialMessage.MalformedException: ExceptClass;
+begin
+  Result := nil;
+end;
+
+//* TIdSipTrivialMessage Protected methods *************************************
+
+function TIdSipTrivialMessage.FirstLine: String;
+begin
+  Result := '';
 end;
 
 //******************************************************************************
@@ -140,18 +185,18 @@ end;
 //******************************************************************************
 //* TestTIdSipMessage Public methods *******************************************
 
-procedure TestTIdSipMessage.TearDown;
+procedure TestTIdSipMessage.SetUp;
 begin
-  Self.Message.Free;
+  inherited SetUp;
 
-  inherited TearDown;
+  Self.Msg := TIdSipTrivialMessage.Create;
 end;
 
-//* TestTIdSipMessage Private methods ******************************************
-
-procedure TestTIdSipMessage.CheckEquals(Expected, Received: TIdURI; Message: String);
+procedure TestTIdSipMessage.TearDown;
 begin
-  CheckEquals(Expected.GetFullURI, Received.GetFullURI, Message);
+  Self.Msg.Free;
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
@@ -160,48 +205,48 @@ procedure TestTIdSipMessage.TestAddHeader;
 var
   H: TIdSipHeader;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
   H := TIdSipHeader.Create;
   try
     H.Name := UserAgentHeader;
     H.Value := 'Dog''s breakfast v0.1';
 
-    Self.Message.AddHeader(H);
+    Self.Msg.AddHeader(H);
 
-    Check(Self.Message.HasHeader(UserAgentHeader), 'No header added');
+    Check(Self.Msg.HasHeader(UserAgentHeader), 'No header added');
 
     CheckEquals(H.Name,
-                Self.Message.Headers.Items[0].Name,
+                Self.Msg.Headers.Items[0].Name,
                 'Name not copied');
 
     CheckEquals(H.Value,
-                Self.Message.Headers.Items[0].Value,
+                Self.Msg.Headers.Items[0].Value,
                 'Value not copied');
   finally
     H.Free;
   end;
 
   CheckEquals(UserAgentHeader,
-              Self.Message.Headers.Items[0].Name,
+              Self.Msg.Headers.Items[0].Name,
               'And we check that the header was copied & we''re not merely '
             + 'storing a reference');
 end;
 
 procedure TestTIdSipMessage.TestAddHeaderName;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
-  CheckNotNull(Self.Message.AddHeader(UserAgentHeader), 'Nil returned');
+  CheckNotNull(Self.Msg.AddHeader(UserAgentHeader), 'Nil returned');
 
-  Check(Self.Message.HasHeader(UserAgentHeader), 'No header added');
+  Check(Self.Msg.HasHeader(UserAgentHeader), 'No header added');
 end;
 
 procedure TestTIdSipMessage.TestAddHeaders;
 var
   Headers: TIdSipHeaders;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
   Headers := TIdSipHeaders.Create;
   try
@@ -210,60 +255,55 @@ begin
     Headers.Add(UserAgentHeader).Value := '2';
     Headers.Add(UserAgentHeader).Value := '3';
 
-    Self.Message.AddHeaders(Headers);
-    Self.Message.Headers.IsEqualTo(Headers);
+    Self.Msg.AddHeaders(Headers);
+    Self.Msg.Headers.IsEqualTo(Headers);
   finally
     Headers.Free;
   end;
 end;
 
-procedure TestTIdSipMessage.TestAsStringNoMaxForwardsSet;
-begin
-  Check(Pos(MaxForwardsHeader, Self.Message.AsString) > 0, 'No Max-Forwards header');
-end;
-
 procedure TestTIdSipMessage.TestClearHeaders;
 begin
-  Self.Message.AddHeader(UserAgentHeader);
-  Self.Message.AddHeader(UserAgentHeader);
-  Self.Message.AddHeader(UserAgentHeader);
-  Self.Message.AddHeader(UserAgentHeader);
+  Self.Msg.AddHeader(UserAgentHeader);
+  Self.Msg.AddHeader(UserAgentHeader);
+  Self.Msg.AddHeader(UserAgentHeader);
+  Self.Msg.AddHeader(UserAgentHeader);
 
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
-  CheckEquals(0, Self.Message.HeaderCount, 'Headers not cleared');
+  CheckEquals(0, Self.Msg.HeaderCount, 'Headers not cleared');
 end;
 
 procedure TestTIdSipMessage.TestFirstContact;
 var
   C: TIdSipHeader;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
-  CheckNotNull(Self.Message.FirstContact, 'Contact not present');
-  CheckEquals(1, Self.Message.HeaderCount, 'Contact not auto-added');
+  CheckNotNull(Self.Msg.FirstContact, 'Contact not present');
+  CheckEquals(1, Self.Msg.HeaderCount, 'Contact not auto-added');
 
-  C := Self.Message.FirstHeader(ContactHeaderFull);
-  Self.Message.AddHeader(ContactHeaderFull);
+  C := Self.Msg.FirstHeader(ContactHeaderFull);
+  Self.Msg.AddHeader(ContactHeaderFull);
 
-  Check(C = Self.Message.FirstContact, 'Wrong Contact');
+  Check(C = Self.Msg.FirstContact, 'Wrong Contact');
 end;
 
 procedure TestTIdSipMessage.TestFirstHeader;
 var
   H: TIdSipHeader;
 begin
-  Self.Message.ClearHeaders;
-  H := Self.Message.AddHeader(UserAgentHeader);
-  Check(H = Self.Message.FirstHeader(UserAgentHeader),
+  Self.Msg.ClearHeaders;
+  H := Self.Msg.AddHeader(UserAgentHeader);
+  Check(H = Self.Msg.FirstHeader(UserAgentHeader),
         'Wrong result returned for first User-Agent');
 
-  H := Self.Message.AddHeader(RouteHeader);
-  Check(H = Self.Message.FirstHeader(RouteHeader),
+  H := Self.Msg.AddHeader(RouteHeader);
+  Check(H = Self.Msg.FirstHeader(RouteHeader),
         'Wrong result returned for first Route');
 
-  H := Self.Message.AddHeader(RouteHeader);
-  Check(H <> Self.Message.FirstHeader(RouteHeader),
+  H := Self.Msg.AddHeader(RouteHeader);
+  Check(H <> Self.Msg.FirstHeader(RouteHeader),
         'Wrong result returned for first Route of two');
 end;
 
@@ -273,33 +313,33 @@ var
   I: TIdSipHeader;
   P: TIdSipHeader;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
-  S := Self.Message.AddHeader(ServerHeader);
-  Self.Message.AddHeader(RouteHeader);
-  I := Self.Message.AddHeader(InReplyToHeader);
-  P := Self.Message.AddHeader(PriorityHeader);
+  S := Self.Msg.AddHeader(ServerHeader);
+  Self.Msg.AddHeader(RouteHeader);
+  I := Self.Msg.AddHeader(InReplyToHeader);
+  P := Self.Msg.AddHeader(PriorityHeader);
 
-  Check(S = Self.Message.HeaderAt(0), 'Wrong header at index 0');
-  Check(I = Self.Message.HeaderAt(2), 'Wrong header at index 2');
-  Check(P = Self.Message.HeaderAt(3), 'Wrong header at index 3');
+  Check(S = Self.Msg.HeaderAt(0), 'Wrong header at index 0');
+  Check(I = Self.Msg.HeaderAt(2), 'Wrong header at index 2');
+  Check(P = Self.Msg.HeaderAt(3), 'Wrong header at index 3');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;
 begin
-  Self.Message.ClearHeaders;
-  Self.Message.AddHeader(UserAgentHeader);
+  Self.Msg.ClearHeaders;
+  Self.Msg.AddHeader(UserAgentHeader);
 
-  CheckEquals(1, Self.Message.HeaderCount, 'HeaderCount not correct');
+  CheckEquals(1, Self.Msg.HeaderCount, 'HeaderCount not correct');
 end;
 
 procedure TestTIdSipMessage.TestLastHop;
 begin
-  Self.Message.ClearHeaders;
-  Check(Self.Message.LastHop = Self.Message.FirstHeader(ViaHeaderFull), 'Unexpected return for empty path');
+  Self.Msg.ClearHeaders;
+  Check(Self.Msg.LastHop = Self.Msg.FirstHeader(ViaHeaderFull), 'Unexpected return for empty path');
 
-  Self.Message.AddHeader(ViaHeaderFull);
-  Check(Self.Message.LastHop = Self.Message.Path.LastHop, 'Unexpected return');
+  Self.Msg.AddHeader(ViaHeaderFull);
+  Check(Self.Msg.LastHop = Self.Msg.Path.LastHop, 'Unexpected return');
 end;
 
 procedure TestTIdSipMessage.TestReadBody;
@@ -308,12 +348,12 @@ var
   S:   String;
   Str: TStringStream;
 begin
-  Self.Message.ContentLength := 8;
+  Self.Msg.ContentLength := 8;
 
   Str := TStringStream.Create('Negotium perambuians in tenebris');
   try
-    Self.Message.ReadBody(Str);
-    CheckEquals('Negotium', Self.Message.Body, 'Body');
+    Self.Msg.ReadBody(Str);
+    CheckEquals('Negotium', Self.Msg.Body, 'Body');
 
     Len := Length(' perambuians in tenebris');
     SetLength(S, Len);
@@ -326,39 +366,53 @@ end;
 
 procedure TestTIdSipMessage.TestRemoveHeader;
 begin
-  Self.Message.ClearHeaders;
+  Self.Msg.ClearHeaders;
 
-  Self.Message.AddHeader(ContentTypeHeaderFull);
-  Check(Self.Message.HasHeader(ContentTypeHeaderFull),
-        'Content-Type wasn''t Add()ed');
+  Self.Msg.AddHeader(ContentTypeHeaderFull);
+  Check(Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Content-Type wasn''t added');
 
-  Self.Message.RemoveHeader(Self.Message.FirstHeader(ContentTypeHeaderFull));
-  Check(not Self.Message.HasHeader(ContentTypeHeaderFull),
-        'Content-Type wasn''t Remove()ed');
+  Self.Msg.RemoveHeader(Self.Msg.FirstHeader(ContentTypeHeaderFull));
+  Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Content-Type wasn''t removeed');
+end;
+
+procedure TestTIdSipMessage.TestRemoveHeaders;
+begin
+  Self.Msg.ClearHeaders;
+
+  Self.Msg.AddHeader(ContentTypeHeaderFull);
+  Self.Msg.AddHeader(ContentTypeHeaderFull);
+  Self.Msg.AddHeader(ContentTypeHeaderFull);
+
+  Self.Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+
+  Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Content-Type wasn''t removeed');
 end;
 
 procedure TestTIdSipMessage.TestSetCallID;
 begin
-  Self.Message.CallID := '999';
+  Self.Msg.CallID := '999';
 
-  Self.Message.CallID := '42';
-  CheckEquals('42', Self.Message.CallID, 'Call-ID not set');
+  Self.Msg.CallID := '42';
+  CheckEquals('42', Self.Msg.CallID, 'Call-ID not set');
 end;
 
 procedure TestTIdSipMessage.TestSetContentLength;
 begin
-  Self.Message.ContentLength := 999;
+  Self.Msg.ContentLength := 999;
 
-  Self.Message.ContentLength := 42;
-  CheckEquals(42, Self.Message.ContentLength, 'Content-Length not set');
+  Self.Msg.ContentLength := 42;
+  CheckEquals(42, Self.Msg.ContentLength, 'Content-Length not set');
 end;
 
 procedure TestTIdSipMessage.TestSetContentType;
 begin
-  Self.Message.ContentType := 'text/plain';
+  Self.Msg.ContentType := 'text/plain';
 
-  Self.Message.ContentType := 'text/t140';
-  CheckEquals('text/t140', Self.Message.ContentType, 'Content-Type not set');
+  Self.Msg.ContentType := 'text/t140';
+  CheckEquals('text/t140', Self.Msg.ContentType, 'Content-Type not set');
 end;
 
 procedure TestTIdSipMessage.TestSetCSeq;
@@ -369,9 +423,9 @@ begin
   try
     C.Value := '314159 INVITE';
 
-    Self.Message.CSeq := C;
+    Self.Msg.CSeq := C;
 
-    Check(Self.Message.CSeq.IsEqualTo(C), 'CSeq not set');
+    Check(Self.Msg.CSeq.IsEqualTo(C), 'CSeq not set');
   finally
     C.Free;
   end;
@@ -381,15 +435,15 @@ procedure TestTIdSipMessage.TestSetFrom;
 var
   From: TIdSipFromHeader;
 begin
-  Self.Message.From.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Msg.From.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
 
   From := TIdSipFromHeader.Create;
   try
     From.Value := 'Case <sip:case@fried.neurons.org>';
 
-    Self.Message.From := From;
+    Self.Msg.From := From;
 
-    CheckEquals(From.Value, Self.Message.From.Value, 'From value not set');
+    CheckEquals(From.Value, Self.Msg.From.Value, 'From value not set');
   finally
     From.Free;
   end;
@@ -399,34 +453,34 @@ procedure TestTIdSipMessage.TestSetMaxForwards;
 var
   OrigMaxForwards: Byte;
 begin
-  OrigMaxForwards := Self.Message.MaxForwards;
+  OrigMaxForwards := Self.Msg.MaxForwards;
 
-  Self.Message.MaxForwards := Self.Message.MaxForwards + 1;
+  Self.Msg.MaxForwards := Self.Msg.MaxForwards + 1;
 
-  CheckEquals(OrigMaxForwards + 1, Self.Message.MaxForwards, 'Max-Forwards not set');
+  CheckEquals(OrigMaxForwards + 1, Self.Msg.MaxForwards, 'Max-Forwards not set');
 end;
 
 procedure TestTIdSipMessage.TestSetSipVersion;
 begin
-  Self.Message.SIPVersion := 'SIP/2.0';
+  Self.Msg.SIPVersion := 'SIP/2.0';
 
-  Self.Message.SIPVersion := 'SIP/7.7';
-  CheckEquals('SIP/7.7', Self.Message.SipVersion, 'SipVersion not set');
+  Self.Msg.SIPVersion := 'SIP/7.7';
+  CheckEquals('SIP/7.7', Self.Msg.SipVersion, 'SipVersion not set');
 end;
 
 procedure TestTIdSipMessage.TestSetTo;
 var
   ToHeader: TIdSipToHeader;
 begin
-  Self.Message.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Self.Msg.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
 
   ToHeader := TIdSipToHeader.Create;
   try
     ToHeader.Value := 'Case <sip:case@fried.neurons.org>';
 
-    Self.Message.ToHeader := ToHeader;
+    Self.Msg.ToHeader := ToHeader;
 
-    CheckEquals(ToHeader.Value, Self.Message.ToHeader.Value, 'To value not set');
+    CheckEquals(ToHeader.Value, Self.Msg.ToHeader.Value, 'To value not set');
   finally
     ToHeader.Free;
   end;
@@ -445,20 +499,19 @@ begin
 
   P := TIdSipParser.Create;
   try
-    Self.Message         := P.ParseAndMakeRequest(BasicRequest);
+    Self.Request         := P.ParseAndMakeRequest(BasicRequest);
     Self.ReceivedRequest := P.ParseAndMakeRequest(BasicRequest);
     Self.Response        := P.ParseAndMakeResponse(BasicResponse);
   finally
     P.Free;
   end;
-
-  Self.Request := Self.Message as TIdSipRequest;
 end;
 
 procedure TestTIdSipRequest.TearDown;
 begin
   Self.Response.Free;
   Self.ReceivedRequest.Free;
+  Self.Request.Free;
 
   inherited TearDown;
 end;
@@ -545,15 +598,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestAsStringNoMaxForwardsSet;
+begin
+  Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
+end;
+
 procedure TestTIdSipRequest.TestCreateDialogID;
 var
   ID: TIdSipDialogID;
 begin
-  ID := Self.Message.CreateDialogID;
+  ID := Self.Request.CreateDialogID;
   try
-    CheckEquals(Self.Message.CallID,       ID.CallID,    'Call-ID');
-    CheckEquals(Self.Message.From.Tag,     ID.LocalTag,  'Local tag');
-    CheckEquals(Self.Message.ToHeader.Tag, ID.RemoteTag, 'Remote tag');
+    CheckEquals(Self.Request.CallID,       ID.CallID,    'Call-ID');
+    CheckEquals(Self.Request.From.Tag,     ID.LocalTag,  'Local tag');
+    CheckEquals(Self.Request.ToHeader.Tag, ID.RemoteTag, 'Remote tag');
   finally
     ID.Free;
   end;
@@ -954,8 +1012,14 @@ procedure TestTIdSipResponse.SetUp;
 begin
   inherited SetUp;
 
-  Self.Message := TIdSipResponse.Create;
-  Self.Response := Self.Message as TIdSipResponse;
+  Self.Response := TIdSipResponse.Create;
+end;
+
+procedure TestTIdSipResponse.TearDown;
+begin
+  Self.Response.Free;
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipResponse Published methods ***************************************
@@ -1058,11 +1122,11 @@ procedure TestTIdSipResponse.TestCreateDialogID;
 var
   ID: TIdSipDialogID;
 begin
-  ID := Self.Message.CreateDialogID;
+  ID := Self.Response.CreateDialogID;
   try
-    CheckEquals(Self.Message.CallID,       ID.CallID,    'Call-ID');
-    CheckEquals(Self.Message.From.Tag,     ID.RemoteTag, 'Remote tag');
-    CheckEquals(Self.Message.ToHeader.Tag, ID.LocalTag,  'Local tag');
+    CheckEquals(Self.Response.CallID,       ID.CallID,    'Call-ID');
+    CheckEquals(Self.Response.From.Tag,     ID.RemoteTag, 'Remote tag');
+    CheckEquals(Self.Response.ToHeader.Tag, ID.LocalTag,  'Local tag');
   finally
     ID.Free;
   end;

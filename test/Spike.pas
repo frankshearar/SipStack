@@ -9,6 +9,9 @@ uses
 type
   TrnidSpike = class(TForm)
     Log: TMemo;
+    Panel1: TPanel;
+    InviteSelf: TButton;
+    procedure InviteSelfClick(Sender: TObject);
   private
     Dispatch:  TIdSipTransactionDispatcher;
     Transport: TIdSipTcpTransport;
@@ -28,7 +31,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts;
+  IdSipConsts, IdSipHeaders;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -36,17 +39,37 @@ uses
 //* TrnidSpike Public methods **************************************************
 
 constructor TrnidSpike.Create(AOwner: TComponent);
+var
+  Contact: TIdSipContactHeader;
+  From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
 
   Self.Transport := TIdSipTcpTransport.Create(IdPORT_SIP);
+  Self.Transport.HostName := 'wsfrank';
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.Transport);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
 
-  Self.UA.OnInvite := Self.OnInvite;
+  Contact := TIdSipContactHeader.Create;
+  try
+    Contact.Value := 'sip:franks@wsfrank';
+    Self.UA.Contact := Contact;
+  finally
+    Contact.Free;
+  end;
+
+  From := TIdSipFromHeader.Create;
+  try
+    From.Value := 'sip:franks@wsfrank';
+    Self.UA.From := From;
+  finally
+    From.Free;
+  end;
+
+//  Self.UA.OnInvite := Self.OnInvite;
 
   Self.Transport.Start;
 end;
@@ -68,7 +91,20 @@ procedure TrnidSpike.OnInvite(Sender: TObject; const Request: TIdSipRequest);
 begin
   Self.Log.Text := Self.Log.Text + Request.AsString;
 
-  Self.UA.AcceptCall(Request);
+//  Self.UA.AcceptCall(Request, Self.Transport);
+end;
+
+procedure TrnidSpike.InviteSelfClick(Sender: TObject);
+var
+  Local: TIdSipToHeader;
+begin
+  Local := TIdSipToHeader.Create;
+  try
+    Local.Value := 'Frank <sip:franks@wsfrank>';
+    Self.UA.Call(Local);
+  finally
+    Local.Free;
+  end;
 end;
 
 end.

@@ -35,7 +35,7 @@ type
     procedure TestRemoveTransportListener;
   end;
 
-  TestTIdSipTransport = class(TThreadingTestCase, IIdSipMessageListener)
+  TestTIdSipTransport = class(TThreadingTestCase, IIdSipTransportListener)
   protected
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -52,8 +52,10 @@ type
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject; const R: TIdSipResponse);
     procedure CheckSendRequestTopVia(Sender: TObject; const R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const Transport: TIdSipTransport);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const Transport: TIdSipTransport);
     procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
     procedure SendOkResponse;
     function  TransportType: TIdSipTransportClass; virtual;
@@ -268,7 +270,7 @@ begin
   Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
   Self.Transport := Self.TransportType.Create(Self.DefaultPort);
-  Self.Transport.AddMessageListener(Self);
+  Self.Transport.AddTransportListener(Self);
   Self.Transport.Timeout := 500;
   Self.Transport.HostName := 'wsfrank';
   Self.Transport.Bindings.Clear;
@@ -277,7 +279,7 @@ begin
   Binding.Port := Self.DefaultPort;
 
   Self.LocalLoopTransport := Self.TransportType.Create(Self.DefaultPort);
-  Self.LocalLoopTransport.AddMessageListener(Self);
+  Self.LocalLoopTransport.AddTransportListener(Self);
   Self.LocalLoopTransport.Timeout := 500;
   Self.LocalLoopTransport.HostName := 'localhost';
   Self.LocalLoopTransport.Bindings.Clear;
@@ -374,7 +376,8 @@ begin
   Result := IdPORT_SIP;
 end;
 
-procedure TestTIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TestTIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
+                                               const Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -382,7 +385,8 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TestTIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
+                                                const Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response);
@@ -531,16 +535,16 @@ end;
 
 procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
 var
-  Listener:      TIdSipTestMessageListener;
-  LocalListener: TIdSipTestMessageListener;
+  Listener:      TIdSipTestTransportListener;
+  LocalListener: TIdSipTestTransportListener;
 begin
-  Listener := TIdSipTestMessageListener.Create;
+  Listener := TIdSipTestTransportListener.Create;
   try
-    Self.Transport.AddMessageListener(Listener);
+    Self.Transport.AddTransportListener(Listener);
     try
-      LocalListener := TIdSipTestMessageListener.Create;
+      LocalListener := TIdSipTestTransportListener.Create;
       try
-        Self.LocalLoopTransport.AddMessageListener(LocalListener);
+        Self.LocalLoopTransport.AddTransportListener(LocalListener);
         try
           Self.Transport.Start;
           try
@@ -567,13 +571,13 @@ begin
             Self.Transport.Stop;
           end;
         finally
-          Self.LocalLoopTransport.RemoveMessageListener(LocalListener);
+          Self.LocalLoopTransport.RemoveTransportListener(LocalListener);
         end;
       finally
         LocalListener.Free;
       end;
     finally
-      Self.Transport.RemoveMessageListener(Listener);
+      Self.Transport.RemoveTransportListener(Listener);
     end;
   finally
     Listener.Free;

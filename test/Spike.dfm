@@ -15,10 +15,28 @@ object rnidSpike: TrnidSpike
   TextHeight = 13
   object Log: TMemo
     Left = 0
-    Top = 0
+    Top = 24
     Width = 688
-    Height = 453
+    Height = 429
     Align = alClient
     TabOrder = 0
+  end
+  object Panel1: TPanel
+    Left = 0
+    Top = 0
+    Width = 688
+    Height = 24
+    Align = alTop
+    BevelOuter = bvNone
+    TabOrder = 1
+    object InviteSelf: TButton
+      Left = 0
+      Top = 0
+      Width = 75
+      Height = 25
+      Caption = 'Invite Self'
+      TabOrder = 0
+      OnClick = InviteSelfClick
+    end
   end
 end

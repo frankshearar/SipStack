@@ -47,6 +47,7 @@ end;
 
 procedure TIdSipMockTransactionDispatcher.FireOnTransactionFail(const Reason: String);
 begin
+  Self.NotifyListenersOfFail(nil, Reason);
   Self.DoOnTransactionFail(Self, Reason);
 end;
 

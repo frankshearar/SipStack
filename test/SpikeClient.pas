@@ -14,7 +14,7 @@ type
     procedure InviteClick(Sender: TObject);
   private
     UA:   TIdSipUserAgentCore;
-    Tran: TIdSipAbstractTransport;
+    Tran: TIdSipTransport;
 
     procedure OnNewSession(Sender: TObject; const Session: TIdSipSession);
   public
@@ -30,7 +30,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts, IdSipHeaders, IdSipMessage, IdTcpClient, IdURI;
+  Dialogs, IdSipConsts, IdSipHeaders, IdSipMessage, IdTcpClient, IdURI;
 
 constructor TForm1.Create(AOwner: TComponent);
 begin

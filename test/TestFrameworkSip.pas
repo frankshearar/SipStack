@@ -35,7 +35,8 @@ type
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction);
+                               const Transaction: TIdSipTransaction;
+                               const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transaction: TIdSipTransaction;
                                 const Transport: TIdSipTransport);
@@ -126,8 +127,8 @@ begin
 end;
 
 procedure TIdSipTestTransactionListener.OnReceiveRequest(const Request: TIdSipRequest;
-                                                         const Transaction: TIdSipTransaction);
-
+                                                         const Transaction: TIdSipTransaction;
+                                                         const Transport: TIdSipTransport);
 begin
   Self.fReceivedRequest := true;
 end;

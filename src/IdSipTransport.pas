@@ -22,7 +22,7 @@ type
                                 const Transport: TIdSipTransport);
   end;
 
-  TIdSipTransport = class(TIdSipMessageSubject,
+  TIdSipTransport = class(TIdSipInterfacedObject,
                           IIdSipMessageVisitor,
                           IIdSipMessageListener)
   private
@@ -307,7 +307,7 @@ end;
 
 procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest);
 begin
-  Self.NotifyMessageListeners(Request);
+  Self.NotifyTransportListeners(Request);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse);
@@ -316,7 +316,7 @@ begin
   // request. cf. RFC 3261 section 18.1.2
 
   if Self.SentByIsRecognised(Response.LastHop) then begin
-    Self.NotifyMessageListeners(Response);
+    Self.NotifyTransportListeners(Response);
   end;
 end;
 

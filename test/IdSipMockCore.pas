@@ -3,24 +3,28 @@ unit IdSipMockCore;
 interface
 
 uses
-  IdSipCore, IdSipHeaders, IdSipMessage;
+  IdSipCore, IdSipHeaders, IdSipMessage, IdSipTransaction, IdSipTransport;
 
 type
   TIdSipMockCore = class(TIdSipAbstractCore)
   private
-    fHandleRequestCalled: Boolean;
-    fHandleResponseCalled: Boolean;
+    fReceiveRequestCalled: Boolean;
+    fReceiveResponseCalled: Boolean;
   public
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
     function  CreateResponse(const Request:      TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
-    procedure HandleRequest(const Request: TIdSipRequest); override;
-    procedure HandleResponse(const Response: TIdSipResponse); override;
+    procedure ReceiveRequest(const Request: TIdSipRequest;
+                             const Transaction: TIdSipTransaction;
+                             const Transport: TIdSipTransport); override;
+    procedure ReceiveResponse(const Response: TIdSipResponse;
+                              const Transaction: TIdSipTransaction;
+                              const Transport: TIdSipTransport); override;
 
     procedure Reset;
 
-    property HandleRequestCalled:  Boolean read fHandleRequestCalled;
-    property HandleResponseCalled: Boolean read fHandleResponseCalled;
+    property ReceiveRequestCalled:  Boolean read fReceiveRequestCalled;
+    property ReceiveResponseCalled: Boolean read fReceiveResponseCalled;
   end;
 
 implementation
@@ -48,20 +52,24 @@ begin
   Result := nil;
 end;
 
-procedure TIdSipMockCore.HandleRequest(const Request: TIdSipRequest);
+procedure TIdSipMockCore.ReceiveRequest(const Request: TIdSipRequest;
+                                        const Transaction: TIdSipTransaction;
+                                        const Transport: TIdSipTransport);
 begin
-  fHandleRequestCalled := true;
+  fReceiveRequestCalled := true;
 end;
 
-procedure TIdSipMockCore.HandleResponse(const Response: TIdSipResponse);
+procedure TIdSipMockCore.ReceiveResponse(const Response: TIdSipResponse;
+                                         const Transaction: TIdSipTransaction;
+                                         const Transport: TIdSipTransport);
 begin
-  fHandleResponseCalled := true;
+  fReceiveResponseCalled := true;
 end;
 
 procedure TIdSipMockCore.Reset;
 begin
-  fHandleRequestCalled  := true;
-  fHandleResponseCalled := true;
+  fReceiveRequestCalled  := true;
+  fReceiveResponseCalled := true;
 end;
 
 end.
