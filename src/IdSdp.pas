@@ -2257,7 +2257,7 @@ begin
 
   if Result then begin
     Val(Token, N, E);
-    Result := Result and (E = 0) and (0 <= N) and (N < 65536);
+    Result := Result and (E = 0) and (0 <= N){ and (N < 65536)};
   end;
 end;
 

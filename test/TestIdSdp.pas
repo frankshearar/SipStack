@@ -4013,8 +4013,23 @@ begin
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionMalformedPort;
+var
+  S: TStringStream;
 begin
-  Self.CheckMalformedMediaDescription('data 65536 RTP/AVP 1');
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'm=data 65536 RTP/AVP 1'#13#10 // Note the port number
+                          + 'i=Information');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals(65536,
+                Self.Payload.MediaDescriptionAt(0).Port,
+                'High port (portnum > 65535)');
+
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionMissingFormatList;
