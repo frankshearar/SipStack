@@ -962,7 +962,7 @@ begin
   Tran := Self.FindTransaction(Request, false);
 
   if Assigned(Tran) then begin
-    Tran.ReceiveRequest(Request, Receiver)
+    Tran.ReceiveRequest(Request, Receiver);
   end
   else begin
     // An ACK does not belong inside a transaction when a UAS sends a 2xx in
@@ -986,6 +986,7 @@ begin
 
   if Assigned(Tran) then begin
     Tran.ReceiveResponse(Response, Receiver);
+
     if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
   end
@@ -1046,6 +1047,12 @@ end;
 
 procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
 begin
+  // Three reasons why a transaction would terminate: one of its timers fired,
+  // or a transport error occurred. Transport errors can only occur in
+  // Self.Send(Request|Response); timers happen in
+  // <transaction type>Transaction<timer name> methods -
+  // ClientInviteTransactionTimerA etc.; 2xx terminate client INVITE transactions.
+
   Assert(TerminatedTransaction.IsTerminated,
          'Transactions must only be removed when they''re terminated');
 
