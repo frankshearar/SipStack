@@ -341,6 +341,7 @@ type
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
+    procedure TransactionComplete(Action: TIdSipAction);
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
                              const Offer: String;
                              const OfferMimeType: String);
@@ -354,7 +355,6 @@ type
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     procedure SetFrom(Value: TIdSipFromHeader);
-    procedure TransactionComplete(Action: TIdSipAction);
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
@@ -2248,12 +2248,6 @@ begin
     raise EBadHeader.Create(Self.From.Name);
 end;
 
-procedure TIdSipUserAgentCore.TransactionComplete(Action: TIdSipAction);
-begin
-  if (Action is TIdSipOutboundInvite) then
-    (Action as TIdSipOutboundInvite).TransactionCompleted;
-end;
-
 function TIdSipUserAgentCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
   Result := inherited WillAcceptRequest(Request);
@@ -2660,6 +2654,12 @@ end;
 procedure TIdSipUserAgentCore.SetProxy(Value: TIdSipUri);
 begin
   Self.Proxy.Uri := Value.Uri;
+end;
+
+procedure TIdSipUserAgentCore.TransactionComplete(Action: TIdSipAction);
+begin
+  if (Action is TIdSipOutboundInvite) then
+    (Action as TIdSipOutboundInvite).TransactionCompleted;
 end;
 
 procedure TIdSipUserAgentCore.TurnIntoInvite(OutboundRequest: TIdSipRequest;
