@@ -7,22 +7,25 @@ uses
   SysUtils, TestFramework, TestFrameworkEx;
 
 type
-  TestTIdSipAbstractTransport = class(TThreadingTestCase)
+  TestTIdSipAbstractTransport = class(TThreadingTestCase, IIdSipMessageListener)
   protected
-    LocalLoopTransport: TIdSipAbstractTransport;
-    ReceivedRequest:    Boolean;
-    ReceivedResponse:   Boolean;
-    Request:            TIdSipRequest;
-    Response:           TIdSipResponse;
-    Transport:          TIdSipAbstractTransport;
-    WrongServer:        Boolean;
+    CheckingRequestEvent:  TIdSipRequestEvent;
+    CheckingResponseEvent: TIdSipResponseEvent;
+    LocalLoopTransport:    TIdSipAbstractTransport;
+    ReceivedRequest:       Boolean;
+    ReceivedResponse:      Boolean;
+    Request:               TIdSipRequest;
+    Response:              TIdSipResponse;
+    Transport:             TIdSipAbstractTransport;
+    WrongServer:           Boolean;
 
     procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
     procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject; const R: TIdSipResponse);
     procedure CheckSendRequestTopVia(Sender: TObject; const R: TIdSipRequest);
-    procedure CheckSendResponseWithReceivedParam(Sender: TObject; const R: TIdSipResponse);
     function  DefaultPort: Cardinal; virtual;
+    procedure OnReceiveRequest(const Request: TIdSipRequest);
+    procedure OnReceiveResponse(const Response: TIdSipResponse);
     procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
     procedure SendOkResponse;
     function  TransportType: TIdSipTransportClass; virtual;
@@ -94,7 +97,7 @@ implementation
 
 uses
   IdSipHeaders, IdSipConsts, IdSSLOpenSSL, IdStack, IdTcpClient, IdUDPServer,
-  TestMessages;
+  TestMessages, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin
@@ -117,9 +120,10 @@ var
 begin
   inherited SetUp;
 
-  Self.ExceptionMessage    := 'Response not received - event didn''t fire';
+  Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
   Self.Transport := Self.TransportType.Create(Self.DefaultPort);
+  Self.Transport.AddMessageListener(Self);
   Self.Transport.Timeout := 500;
   Self.Transport.HostName := 'wsfrank';
   Self.Transport.Bindings.Clear;
@@ -128,6 +132,7 @@ begin
   Binding.Port := Self.DefaultPort;
 
   Self.LocalLoopTransport := Self.TransportType.Create(Self.DefaultPort);
+  Self.LocalLoopTransport.AddMessageListener(Self);
   Self.LocalLoopTransport.Timeout := 500;
   Self.LocalLoopTransport.HostName := 'localhost';
   Self.LocalLoopTransport.Bindings.Clear;
@@ -138,13 +143,11 @@ begin
   P := TIdSipParser.Create;
   try
     Self.Request  := P.ParseAndMakeRequest(LocalLoopRequest);
-
     Self.Response := P.ParseAndMakeResponse(LocalLoopResponse);
   finally
     P.Free;
   end;
   Self.Response.LastHop.Transport := Self.Transport.GetTransportType;
-
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
@@ -221,24 +224,25 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.CheckSendResponseWithReceivedParam(Sender: TObject;
-                                                                   const R:      TIdSipResponse);
-begin
-  try
-    Self.WrongServer := Sender <> Self.LocalLoopTransport;
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
 function TestTIdSipAbstractTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
+end;
+
+procedure TestTIdSipAbstractTransport.OnReceiveRequest(const Request: TIdSipRequest);
+begin
+  if Assigned(Self.CheckingRequestEvent) then
+    Self.CheckingRequestEvent(Self, Request);
+
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipAbstractTransport.OnReceiveResponse(const Response: TIdSipResponse);
+begin
+  if Assigned(Self.CheckingResponseEvent) then
+    Self.CheckingResponseEvent(Self, Response);
+
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipAbstractTransport.ReturnResponse(Sender: TObject;
@@ -270,7 +274,8 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestCanReceiveRequest;
 begin
-  Self.LocalLoopTransport.OnRequest := Self.CheckCanReceiveRequest;
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
   Self.LocalLoopTransport.Start;
   try
     Self.LocalLoopTransport.Send(Self.Request);
@@ -286,8 +291,8 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestCanReceiveResponse;
 begin
-  Self.LocalLoopTransport.OnRequest := Self.ReturnResponse;
-  Self.LocalLoopTransport.OnResponse := Self.CheckCanReceiveResponse;
+  Self.CheckingRequestEvent  := Self.ReturnResponse;
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
   Self.LocalLoopTransport.Start;
   try
@@ -312,7 +317,7 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestDiscardResponseWithUnknownSentBy;
 begin
-  Self.LocalLoopTransport.OnResponse := Self.CheckDiscardResponseWithUnknownSentBy;
+  Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
 
   Self.LocalLoopTransport.Start;
   try
@@ -332,7 +337,7 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestSendRequest;
 begin
-  Self.LocalLoopTransport.OnRequest := Self.CheckCanReceiveRequest;
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
   Self.LocalLoopTransport.Start;
   try
@@ -349,7 +354,7 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestSendRequestTopVia;
 begin
-  Self.LocalLoopTransport.OnRequest := Self.CheckSendRequestTopVia;
+  Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
 
   Self.LocalLoopTransport.Start;
   try
@@ -364,7 +369,7 @@ end;
 
 procedure TestTIdSipAbstractTransport.TestSendResponse;
 begin
-  Self.LocalLoopTransport.OnResponse := Self.CheckCanReceiveResponse;
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
   Self.LocalLoopTransport.Start;
   try
@@ -380,28 +385,53 @@ begin
 end;
 
 procedure TestTIdSipAbstractTransport.TestSendResponseWithReceivedParam;
+var
+  Listener:      TIdSipTestMessageListener;
+  LocalListener: TIdSipTestMessageListener;
 begin
-  Self.Transport.OnResponse          := Self.CheckSendResponseWithReceivedParam;
-  Self.LocalLoopTransport.OnResponse := Self.CheckSendResponseWithReceivedParam;
-
-  Self.Transport.Start;
+  Listener := TIdSipTestMessageListener.Create;
   try
-    Self.LocalLoopTransport.Start;
+    Self.Transport.AddMessageListener(Listener);
     try
-      Self.Response.LastHop.Received := Self.LocalLoopTransport.Bindings[0].IP;
-      Self.Transport.Send(Self.Response);
+      LocalListener := TIdSipTestMessageListener.Create;
+      try
+        Self.LocalLoopTransport.AddMessageListener(LocalListener);
+        try
+          Self.Transport.Start;
+          try
+            Self.LocalLoopTransport.Start;
+            try
+              Check(Self.LocalLoopTransport.Bindings.Count > 0,
+                    'Sanity check on LocalLoop''s bindings');
 
-      if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-        raise Self.ExceptionType.Create('No response received');
+              Self.Response.LastHop.Received := Self.LocalLoopTransport.Bindings[0].IP;
+              Self.Transport.Send(Self.Response);
 
-      Check(not Self.WrongServer,
-            'Received param in top Via header ignored - '
-          + 'wrong server got the message');
+              // It's not perfect, but anyway. We need to wait long enough for
+              // LocalLoopTransport to get its response.
+              Sleep(500);
+
+              Check(LocalListener.ReceivedResponse and not Listener.ReceivedResponse,
+                    'Received param in top Via header ignored - '
+                  + 'wrong server got the message');
+
+            finally
+              Self.LocalLoopTransport.Stop;
+            end;
+          finally
+            Self.Transport.Stop;
+          end;
+        finally
+          Self.LocalLoopTransport.RemoveMessageListener(LocalListener);
+        end;
+      finally
+        LocalListener.Free;
+      end;
     finally
-      Self.LocalLoopTransport.Stop;
+      Self.Transport.RemoveMessageListener(Listener);
     end;
   finally
-    Self.Transport.Stop;
+    Listener.Free;
   end;
 end;
 

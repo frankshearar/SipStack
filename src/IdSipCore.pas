@@ -1,5 +1,22 @@
 unit IdSipCore;
 
+// Some overarching principles followed in this implementation of a SIP/2.0
+// (RFC 3261) stack:
+// * The lifetime of all objects is manually managed. Objects that implement
+//   interfaces are NOT reference counted.
+// * Value Objects are used when possible.
+// * If an object A receives some object B that it is expected to store as data
+//   then A must store a COPY of B. Typical objects are: TIdURI, TIdSipDialogID,
+//   TIdSipMessage.
+// * Each layer is aware of the layers beneath it. We try to make each layer
+//   aware of ONLY the layer immediately below it, but that's not always
+//   possible.
+// * Events or Listeners are used to propogate messages up the stack, and method
+//   calls to propogate messages down the stack.
+// * Typecasting is avoided as much as possible by using polymorphism and, in
+//   certain situations where polymorphism can't cut it, the Visitor pattern.
+// * TObjectLists always manage the lifetime of the objects they contain.
+
 interface
 
 uses
@@ -26,7 +43,7 @@ type
     constructor Create; virtual;
 
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; virtual; abstract;
-    function  CreateResponse(const Request:      TIdSipRequest;
+    function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
     procedure HandleRequest(const Request: TIdSipRequest); virtual; abstract;
     procedure HandleResponse(const Response: TIdSipResponse); virtual; abstract;
@@ -37,6 +54,10 @@ type
     property OnFail:     TIdSipFailEvent             read fOnFail write fOnFail;
   end;
 
+  // I am a User Agent. I (usually) represent a human being in the SIP network.
+  // It is my responsibility to:
+  // * inform any listeners when new sessions are established, modified or ended;
+  // * allow my users to accept incoming "calls", make outgoing "calls"
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
     BranchLock:           TCriticalSection;
@@ -51,8 +72,6 @@ type
     fOnInvite:            TIdSipRequestEvent;
     fUserAgentName:       String;
 
-    function  AddDialog(const Request: TidSipRequest): TIdSipDialog;
-    procedure DialogEstablished(Sender: TIdSipDialog);
     procedure DoOnInvite(const Request: TIdSipRequest);
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -84,7 +103,7 @@ type
     procedure Call(const Dest: TIdSipToHeader);
     function  CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
-    function  CreateResponse(const Request:      TIdSipRequest;
+    function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
     procedure HandleRequest(const Request: TIdSipRequest); override;
     procedure HandleResponse(const Response: TIdSipResponse); override;
@@ -521,29 +540,6 @@ begin
 end;
 
 //* TIdSipUserAgentCore Private methods ****************************************
-
-function TIdSipUserAgentCore.AddDialog(const Request: TidSipRequest): TIdSipDialog;
-begin
-  Self.DialogLock.Acquire;
-  try
-    try
-      Result := TIdSipDialog.Create(nil, 0, 0, '', '', '', false, nil);
-      Self.Dialogs.Add(Result);
-
-      Result.OnEstablished := Self.DialogEstablished;
-    except
-      FreeAndNil(Result);
-
-      raise;
-    end;
-  finally
-    Self.DialogLock.Release;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.DialogEstablished(Sender: TIdSipDialog);
-begin
-end;
 
 procedure TIdSipUserAgentCore.DoOnInvite(const Request: TIdSipRequest);
 begin

@@ -3,7 +3,7 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer;
+  Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdSipIPTarget = record
@@ -16,12 +16,15 @@ type
 
   TIdSipUdpServer = class(TIdUDPServer, IIdSipMessageVisitor)
   private
-    fOnRequest:  TIdSipRequestEvent;
-    fOnResponse: TIdSipResponseEvent;
-    Parser:      TIdSipParser;
+    fOnRequest:   TIdSipRequestEvent;
+    fOnResponse:  TIdSipResponseEvent;
+    ListenerLock: TCriticalSection;
+    Listeners:    TList;
+
     procedure DoOnRequest(const Request: TIdSipRequest);
     procedure DoOnResponse(const Response: TIdSipResponse);
-
+    procedure NotifyListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyListeners(const Response: TIdSipResponse); overload;
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
                          const Reason:  String;
                                Parser:  TIdSipParser);
@@ -31,6 +34,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
+    procedure AddMessageListener(const Listener: IIdSipMessageListener);
+    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
   published
@@ -53,15 +58,37 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort   := IdPORT_SIP;
-  Self.Parser        := TIdSipParser.Create;
+  Self.ListenerLock  := TCriticalSection.Create;
+  Self.Listeners     := TList.Create;
   Self.ThreadedEvent := true;
 end;
 
 destructor TIdSipUdpServer.Destroy;
 begin
-  Self.Parser.Free;
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipUdpServer.AddMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipUdpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdSipUdpServer.VisitRequest(const Request: TIdSipRequest);
@@ -80,36 +107,42 @@ procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
   RemainingBytes: Cardinal;
   Msg:            TIdSipMessage;
+  Parser:         TIdSipParser;
 begin
   inherited DoUDPRead(AData, ABinding);
 
-  Self.Parser.Source := AData;
-
+  Parser := TIdSipParser.Create;
   try
-    Msg := Self.Parser.ParseAndMakeMessage;
+    Parser.Source := AData;
+
     try
-      RemainingBytes := AData.Size - AData.Position;
-      if Msg.HasHeader(ContentLengthHeaderFull) and
-        (RemainingBytes <> Msg.ContentLength) then
-        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
+      Msg := Parser.ParseAndMakeMessage;
+      try
+        RemainingBytes := AData.Size - AData.Position;
+        if Msg.HasHeader(ContentLengthHeaderFull) and
+          (RemainingBytes <> Msg.ContentLength) then
+          raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
 
-      Msg.ReadBody(Self.Parser.Source);
+        Msg.ReadBody(Parser.Source);
 
-      if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
-        or (Msg.LastHop.SentBy <> ABinding.IP) then
-        Msg.LastHop.Received := ABinding.IP;
+        if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
+          or (Msg.LastHop.SentBy <> ABinding.IP) then
+          Msg.LastHop.Received := ABinding.IP;
 
-      Msg.Accept(Self);
-    finally
-      Msg.Free;
+        Msg.Accept(Self);
+      finally
+        Msg.Free;
+      end;
+    except
+      on E: EBadRequest do begin
+        Self.ReturnBadRequest(ABinding, E.Message, Parser);
+      end;
+      on E: EBadResponse do begin
+        // drop it on the floor
+      end;
     end;
-  except
-    on E: EBadRequest do begin
-      Self.ReturnBadRequest(ABinding, E.Message, Parser);
-    end;
-    on E: EBadResponse do begin
-      // drop it on the floor
-    end;
+  finally
+    Parser.Free;
   end;
 end;
 
@@ -119,12 +152,42 @@ procedure TIdSipUdpServer.DoOnRequest(const Request: TIdSipRequest);
 begin
   if Assigned(Self.OnRequest) then
     Self.OnRequest(Self, Request);
+
+  Self.NotifyListeners(Request);
 end;
 
 procedure TIdSipUdpServer.DoOnResponse(const Response: TIdSipResponse);
 begin
   if Assigned(Self.OnResponse) then
     Self.OnResponse(Self, Response);
+
+  Self.NotifyListeners(Response);
+end;
+
+procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipUdpServer.NotifyListeners(const Response: TIdSipResponse);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdSipUdpServer.ReturnBadRequest(Binding: TIdSocketHandle;

@@ -61,13 +61,13 @@ type
   TIdSipTcpServer = class(TIdTCPServer, IIdSipMessageVisitor)
   private
     ConnectionMap:    TIdSipConnectionTableLock;
-    fOnRequest:       TIdSipRequestEvent;
-    fOnResponse:      TIdSipResponseEvent;
     fReadBodyTimeout: Cardinal;
+    ListenerLock:     TCriticalSection;
+    Listeners:        TList;
 
     procedure AddConnection(const Connection: TIdTCPConnection; const Request: TIdSipRequest);
-    procedure DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure NotifyListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyListeners(const Response: TIdSipResponse); overload;
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
@@ -82,17 +82,16 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
+    procedure AddMessageListener(const Listener: IIdSipMessageListener);
     function  CreateClient: TIdSipTcpClient; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
-
+    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure SendResponse(const Response: TIdSipResponse);
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
   published
     property DefaultPort default IdPORT_SIP;
-    property OnRequest:       TIdSipRequestEvent  read fOnRequest write fOnRequest;
-    property OnResponse:      TIdSipResponseEvent read fOnResponse write fOnResponse;
-    property ReadBodyTimeout: Cardinal            read fReadBodyTimeout write fReadBodyTimeout;
+    property ReadBodyTimeout: Cardinal read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
@@ -249,13 +248,27 @@ begin
 
   Self.ConnectionMap := TIdSipConnectionTableLock.Create;
   Self.DefaultPort   := IdPORT_SIP;
+  Self.ListenerLock  := TCriticalSection.Create;
+  Self.Listeners     := TList.Create;
 end;
 
 destructor TIdSipTcpServer.Destroy;
 begin
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
   Self.ConnectionMap.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipTcpServer.AddMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
@@ -266,6 +279,16 @@ end;
 procedure TIdSipTcpServer.DestroyClient(Client: TIdSipTcpClient);
 begin
   Client.Free;
+end;
+
+procedure TIdSipTcpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdSipTcpServer.SendResponse(const Response: TIdSipResponse);
@@ -299,12 +322,12 @@ end;
 
 procedure TIdSipTcpServer.VisitRequest(const Request: TIdSipRequest);
 begin
-  Self.DoOnRequest(Self, Request);
+  Self.NotifyListeners(Request);
 end;
 
 procedure TIdSipTcpServer.VisitResponse(const Response: TIdSipResponse);
 begin
-  Self.DoOnResponse(Self, Response);
+  Self.NotifyListeners(Response);
 end;
 
 //* TIdSipTcpServer Protected methods ******************************************
@@ -393,16 +416,30 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
+procedure TIdSipTcpServer.NotifyListeners(const Request: TIdSipRequest);
+var
+  I: Integer;
 begin
-  if Assigned(Self.OnRequest) then
-    Self.OnRequest(Self, Request);
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
-procedure TIdSipTcpServer.DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TIdSipTcpServer.NotifyListeners(const Response: TIdSipResponse);
+var
+  I: Integer;
 begin
-  if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, Response);
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);

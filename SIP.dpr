@@ -11,6 +11,7 @@ uses
   IdSipDialog in 'src\IdSipDialog.pas',
   IdSipDialogID in 'src\IdSipDialogID.pas',
   IdSipHeaders in 'src\IdSipHeaders.pas',
+  IdSipInterfacedObject in 'src\IdSipInterfacedObject.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',

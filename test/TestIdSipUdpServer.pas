@@ -6,7 +6,7 @@ uses
   Classes, IdSipMessage, IdSipUdpServer, IdUDPClient, SysUtils, TestFrameworkEx;
 
 type
-  TestTIdSipUdpServer = class(TThreadingTestCase)
+  TestTIdSipUdpServer = class(TThreadingTestCase, IIdSipMessageListener)
   private
     Client: TIdUDPClient;
     Parser: TIdSipParser;
@@ -25,16 +25,22 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
+    procedure OnReceiveRequest(const Request: TIdSipRequest);
+    procedure OnReceiveResponse(const Response: TIdSipResponse);
     function ReadResponse: String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddMessageListener;
+    procedure TestListenerReceiveRequest;
+    procedure TestListenerReceiveResponse;
     procedure TestMalformedRequest;
     procedure TestMalformedResponse;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
+    procedure TestRemoveMessageListener;
     procedure TestRequest;
     procedure TestTortureTest16;
     procedure TestTortureTest17;
@@ -69,7 +75,7 @@ implementation
 
 uses
   IdSipConsts, IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework,
-  TestMessages;
+  TestFrameworkSip, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -307,12 +313,70 @@ begin
 end;
 }
 
+procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
 function TestTIdSipUdpServer.ReadResponse: String;
 begin
   Result := Self.Client.ReceiveString(DefaultTimeout);
 end;
 
 //* TestTIdSipUdpServer Published methods ***************************************
+
+procedure TestTIdSipUdpServer.TestAddMessageListener;
+begin
+  Self.Server.AddMessageListener(Self);
+
+  Self.Client.Send(BasicRequest);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestListenerReceiveRequest;
+var
+  Listener: TIdSipTestMessageListener;
+begin
+  Listener := TIdSipTestMessageListener.Create;
+  try
+    Self.Server.AddMessageListener(Listener);
+    Self.Server.AddMessageListener(Self);
+
+    Self.Client.Send(BasicRequest);
+
+    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Check(Listener.ReceivedRequest, 'Not all listeners received the request');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipUdpServer.TestListenerReceiveResponse;
+var
+  Listener: TIdSipTestMessageListener;
+begin
+  Listener := TIdSipTestMessageListener.Create;
+  try
+    Self.Server.AddMessageListener(Listener);
+    Self.Server.AddMessageListener(Self);
+
+    Self.Client.Send(BasicResponse);
+
+    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
+  finally
+    Listener.Free;
+  end;
+end;
 
 procedure TestTIdSipUdpServer.TestMalformedRequest;
 var
@@ -387,6 +451,17 @@ begin
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestRemoveMessageListener;
+begin
+  Self.Server.AddMessageListener(Self);
+  Self.Server.RemoveMessageListener(Self);
+
+  Self.Client.Send(BasicRequest);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrTimeout) then
+    Fail('Listener wasn''t removed');
 end;
 
 procedure TestTIdSipUdpServer.TestRequest;

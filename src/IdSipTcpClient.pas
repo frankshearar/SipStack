@@ -8,9 +8,10 @@ uses
 type
   TIdSipTcpClient = class(TIdTCPClient)
   private
-    fOnFinished: TNotifyEvent;
-    fOnResponse: TIdSipResponseEvent;
-    fTimeout:    Cardinal;
+    fLocalHostName: String;
+    fOnFinished:    TNotifyEvent;
+    fOnResponse:    TIdSipResponseEvent;
+    fTimeout:       Cardinal;
 
     procedure DoOnFinished;
     procedure DoOnResponse(const R: TIdSipResponse);
@@ -24,9 +25,10 @@ type
     procedure Send(const Request: TIdSipRequest); overload;
     procedure Send(const Response: TIdSipResponse); overload;
 
-    property OnFinished: TNotifyEvent        read fOnFinished write fOnFinished;
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
-    property Timeout:    Cardinal            read fTimeout write fTimeout;
+    property LocalHostName: String              read fLocalHostName write fLocalHostName;
+    property OnFinished:    TNotifyEvent        read fOnFinished write fOnFinished;
+    property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property Timeout:       Cardinal            read fTimeout write fTimeout;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
@@ -50,6 +52,11 @@ end;
 
 procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);
 begin
+  if (Self.LocalHostName = '') then
+    Request.LastHop.SentBy := Self.BoundIP
+  else
+    Request.LastHop.SentBy := Self.LocalHostName;
+
   Self.Write(Request.AsString);
   Self.ReadResponses;
 end;

@@ -3,8 +3,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdSipMessage, IdSipTimer, IdSipMockTransport,
-  IdSipTransport, SyncObjs;
+  Classes, Contnrs, IdSipInterfacedObject, IdSipMessage, IdSipTimer,
+  IdSipMockTransport, IdSipTransport, SyncObjs;
 
 const
   InitialT1     = 500;   // ms
@@ -27,6 +27,18 @@ type
 
   TIdSipTransactionEvent = procedure(Sender: TIdSipTransaction) of object;
 
+  TIdSipEventCollator = class(TIdSipInterfacedObject, IIdSipMessageListener)
+  private
+    fOnRequest:  TIdSipRequestEvent;
+    fOnResponse: TIdSipResponseEvent;
+
+    procedure OnReceiveRequest(const Request: TIdSipRequest);
+    procedure OnReceiveResponse(const Response: TIdSipResponse);
+  public
+    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
+    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+  end;
+
   // I am the single connection point between the transport layer and the
   // transaction layer. It is my responsibility to manage transactions, dispatch
   // messages to the appropriate transaction or fire events on messages that
@@ -35,9 +47,8 @@ type
   // I do not manage any transports that may be given to me.
   TIdSipTransactionDispatcher = class(TObject)
   private
+    Collator:             TIdSipEventCollator;
     fOnTransactionFail:   TIdSipFailEvent;
-    fOnUnhandledRequest:  TIdSipRequestEvent;
-    fOnUnhandledResponse: TIdSipResponseEvent;
     Transports:           TObjectList;
     TransportLock:        TCriticalSection;
     Transactions:         TObjectList;
@@ -48,13 +59,15 @@ type
     procedure CheckMessage(const Msg: TIdSipMessage);
     procedure DeliverToTransaction(const Msg: TIdSipMessage; const T: TIdSipAbstractTransport);
     function  FindTransaction(const R: TIdSipMessage): TIdSipTransaction;
+    function  GetOnUnhandledRequest: TIdSipRequestEvent;
+    function  GetOnUnhandledResponse: TIdSipResponseEvent;
+    procedure SetOnUnhandledRequest(const Value: TIdSipRequestEvent);
+    procedure SetOnUnhandledResponse(const Value: TIdSipResponseEvent);
     procedure TerminateTransaction(Sender: TIdSipTransaction);
     function  TransactionAt(const Index: Cardinal): TIdSipTransaction;
     function  TransportAt(const Index: Cardinal): TIdSipAbstractTransport;
   protected
     procedure DoOnTransactionFail(Sender: TObject; const Reason: String);
-    procedure OnTransactionRequest(Sender: TObject; const R: TIdSipRequest);
-    procedure OnTransactionResponse(Sender: TObject; const R: TIdSipResponse);
     procedure OnTransportRequest(Sender: TObject; const R: TIdSipRequest);
     procedure OnTransportResponse(Sender: TObject; const R: TIdSipResponse);
     function  FindAppropriateTransport(const Msg: TIdSipMessage): TIdSipAbstractTransport;
@@ -77,19 +90,17 @@ type
     function  WillUseReliableTranport(const R: TIdSipMessage): Boolean;
 
     property OnTransactionFail:   TIdSipFailEvent     read fOnTransactionFail write fOnTransactionFail;
-    property OnUnhandledRequest:  TIdSipRequestEvent  read fOnUnhandledRequest write fOnUnhandledRequest;
-    property OnUnhandledResponse: TIdSipResponseEvent read fOnUnhandledResponse write fOnUnhandledResponse;
+    property OnUnhandledRequest:  TIdSipRequestEvent  read GetOnUnhandledRequest write SetOnUnhandledRequest;
+    property OnUnhandledResponse: TIdSipResponseEvent read GetOnUnhandledResponse write SetOnUnhandledResponse;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
   // inappropriate messages, and inform my Dispatcher of interesting events.
   // These include the establishment of a new dialog, or my termination.
-  TIdSipTransaction = class(TObject)
+  TIdSipTransaction = class(TIdSipMessageSubject)
   private
     fInitialRequest:    TIdSipRequest;
     fOnFail:            TIdSipFailEvent;
-    fOnReceiveRequest:  TIdSipRequestEvent;
-    fOnReceiveResponse: TIdSipResponseEvent;
     fOnTerminated:      TIdSipTransactionEvent;
     fState:             TIdSipTransactionState;
     fDispatcher:        TIdSipTransactionDispatcher;
@@ -101,8 +112,6 @@ type
     procedure ChangeToTerminated(const R: TIdSipRequest); overload;
     procedure ChangeToTerminated(const R: TIdSipResponse); overload;
     procedure DoOnFail(const Reason: String); virtual;
-    procedure DoOnReceiveRequest(const R: TIdSipRequest);
-    procedure DoOnReceiveResponse(const R: TIdSipResponse);
     procedure DoOnTerminated;
     procedure SetState(const Value: TIdSipTransactionState);
     procedure TryResendInitialRequest;
@@ -127,11 +136,9 @@ type
                          const Timeout:        Cardinal = InitialT1_64); virtual;
     function IsClient: Boolean; virtual; abstract;
 
-    property OnFail:            TIdSipFailEvent        read fOnFail write fOnFail;
-    property OnReceiveRequest:  TIdSipRequestEvent     read fOnReceiveRequest write fOnReceiveRequest;
-    property OnReceiveResponse: TIdSipResponseEvent    read fOnReceiveResponse write fOnReceiveResponse;
-    property OnTerminated:      TIdSipTransactionEvent read fOnTerminated write fOnTerminated;
-    property State:             TIdSipTransactionState read fState;
+    property OnFail:       TIdSipFailEvent        read fOnFail write fOnFail;
+    property OnTerminated: TIdSipTransactionEvent read fOnTerminated write fOnTerminated;
+    property State:        TIdSipTransactionState read fState;
   end;
 
   TIdSipClientInviteTransaction = class(TIdSipTransaction)
@@ -256,15 +263,11 @@ type
   // prevent typecasting in methods like
   // TIdSipTransactionDispatcher.DeliverToTransaction. Therefore I'm a bit of
   // an experiment, in seeing how far we can push this Visitor business.
-  TIdSipTransactionDeliverer = class(TObject, IIdSipMessageVisitor)
+  TIdSipTransactionDeliverer = class(TIdSipInterfacedObject, IIdSipMessageVisitor)
   private
     Dispatcher:  TIdSipTransactionDispatcher;
     Transaction: TIdSipTransaction;
     Transport:   TIdSipAbstractTransport;
-
-    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
-    function _AddRef: Integer; stdcall;
-    function _Release: Integer; stdcall;
   public
     constructor Create(const Tran: TIdSipTransaction;
                        const T: TIdSipAbstractTransport;
@@ -280,6 +283,19 @@ uses
   IdException, IdSipConsts, IdSipDialogID, IdSipHeaders, Math, SysUtils;
 
 //******************************************************************************
+//* TIdSipEventCollator                                                        *
+//******************************************************************************
+//* TIdSipEventCollator Private methods ****************************************
+
+procedure TIdSipEventCollator.OnReceiveRequest(const Request: TIdSipRequest);
+begin
+end;
+
+procedure TIdSipEventCollator.OnReceiveResponse(const Response: TIdSipResponse);
+begin
+end;
+
+//******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
 //******************************************************************************
 //* TIdSipTransactionDispatcher Public methods *********************************
@@ -287,6 +303,8 @@ uses
 constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
+
+  Self.Collator := TIdSipEventCollator.Create;
 
   Self.Transports   := TObjectList.Create(false);
   Self.Transactions := TObjectList.Create(true);
@@ -301,6 +319,7 @@ begin
   Self.TransportLock.Free;
   Self.Transactions.Free;
   Self.Transports.Free;
+  Self.Collator.Free;
 
   inherited Destroy;
 end;
@@ -450,14 +469,6 @@ begin
     Self.OnTransactionFail(Self, Reason);
 end;
 
-procedure TIdSipTransactionDispatcher.OnTransactionRequest(Sender: TObject; const R: TIdSipRequest);
-begin
-end;
-
-procedure TIdSipTransactionDispatcher.OnTransactionResponse(Sender: TObject; const R: TIdSipResponse);
-begin
-end;
-
 procedure TIdSipTransactionDispatcher.OnTransportRequest(Sender: TObject; const R: TIdSipRequest);
 begin
   Self.CheckMessage(R);
@@ -513,9 +524,9 @@ begin
       Index := Self.Transactions.Add(TransactionType.Create);
       Result := Self.TransactionAt(Index);
       Result.OnFail            := Self.DoOnTransactionFail;
-      Result.OnReceiveRequest  := Self.OnTransactionRequest;
-      Result.OnReceiveResponse := Self.OnTransactionResponse;
       Result.OnTerminated      := Self.TerminateTransaction;
+      Result.AddMessageListener(Self.Collator);
+
       Result.Initialise(Self, InitialRequest);
     except
       Self.Transactions.Remove(Result);
@@ -567,6 +578,26 @@ begin
   finally
     Self.TransactionLock.Release;
   end;
+end;
+
+function TIdSipTransactionDispatcher.GetOnUnhandledRequest: TIdSipRequestEvent;
+begin
+  Result := Self.Collator.OnRequest;
+end;
+
+function TIdSipTransactionDispatcher.GetOnUnhandledResponse: TIdSipResponseEvent;
+begin
+  Result := Self.Collator.OnResponse;
+end;
+
+procedure TIdSipTransactionDispatcher.SetOnUnhandledRequest(const Value: TIdSipRequestEvent);
+begin
+  Self.Collator.OnRequest := Value;
+end;
+
+procedure TIdSipTransactionDispatcher.SetOnUnhandledResponse(const Value: TIdSipResponseEvent);
+begin
+  Self.Collator.OnResponse := Value;
 end;
 
 procedure TIdSipTransactionDispatcher.TerminateTransaction(Sender: TIdSipTransaction);
@@ -644,7 +675,7 @@ end;
 procedure TIdSipTransaction.ChangeToCompleted(const R: TIdSipResponse);
 begin
   Self.SetState(itsCompleted);
-  Self.DoOnReceiveResponse(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipTransaction.ChangeToProceeding;
@@ -655,27 +686,27 @@ end;
 procedure TIdSipTransaction.ChangeToProceeding(const R: TIdSipRequest);
 begin
   Self.ChangeToProceeding;
-  Self.DoOnReceiveRequest(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipTransaction.ChangeToProceeding(const R: TIdSipResponse);
 begin
   Self.ChangeToProceeding;
-  Self.DoOnReceiveResponse(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipTransaction.ChangeToTerminated(const R: TIdSipRequest);
 begin
   Self.SetState(itsTerminated);
   Self.DoOnTerminated;
-  Self.DoOnReceiveRequest(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipTransaction.ChangeToTerminated(const R: TIdSipResponse);
 begin
   Self.SetState(itsTerminated);
+  Self.NotifyListeners(R);
   Self.DoOnTerminated;
-  Self.DoOnReceiveResponse(R);
 end;
 
 procedure TIdSipTransaction.DoOnFail(const Reason: String);
@@ -684,18 +715,6 @@ begin
     Self.OnFail(Self, Reason);
 
   Self.SetState(itsTerminated);
-end;
-
-procedure TIdSipTransaction.DoOnReceiveRequest(const R: TIdSipRequest);
-begin
-  if Assigned(Self.OnReceiveRequest) then
-    Self.OnReceiveRequest(Self, R);
-end;
-
-procedure TIdSipTransaction.DoOnReceiveResponse(const R: TIdSipResponse);
-begin
-  if Assigned(Self.OnReceiveResponse) then
-    Self.OnReceiveResponse(Self, R);
 end;
 
 procedure TIdSipTransaction.DoOnTerminated;
@@ -849,7 +868,7 @@ begin
 
   Self.SetState(itsCompleted);
   Self.TrySendACK(R);
-  Self.DoOnReceiveResponse(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipClientInviteTransaction.EstablishDialog(const R: TIdSipResponse;
@@ -1042,7 +1061,7 @@ begin
 
 //  Self.ChangeToProceeding(Self.InitialRequest);
   Self.SetState(itsProceeding);
-  Self.DoOnReceiveRequest(Self.InitialRequest);
+  Self.NotifyListeners(InitialRequest);
 
   Self.TimerH.Interval := Timeout;
 
@@ -1067,7 +1086,7 @@ end;
 procedure TIdSipServerInviteTransaction.ChangeToProceeding(const R: TIdSipRequest);
 begin
   Self.ChangeToProceeding;
-  Self.DoOnReceiveRequest(R)
+  Self.NotifyListeners(R);
 end;
 
 //* TIdSipServerInviteTransaction Private methods ******************************
@@ -1075,7 +1094,7 @@ end;
 procedure TIdSipServerInviteTransaction.ChangeToConfirmed(const R: TIdSipRequest);
 begin
   Self.SetState(itsConfirmed);
-  Self.DoOnReceiveRequest(R);
+  Self.NotifyListeners(R);
 
   Self.TimerG.Stop;
   Self.TimerH.Stop;
@@ -1415,7 +1434,7 @@ procedure TIdSipServerNonInviteTransaction.ChangeToTrying(const R: TIdSipRequest
 begin
   Self.SetState(itsTrying);
 
-  Self.DoOnReceiveRequest(R);
+  Self.NotifyListeners(R);
 end;
 
 procedure TIdSipServerNonInviteTransaction.OnTimerJ(Sender: TObject);
@@ -1464,23 +1483,6 @@ begin
     Self.Transaction.HandleResponse(Response, Self.Transport)
   else
     Self.Dispatcher.DoOnUnhandledResponse(Response);
-end;
-
-//* TIdSipTransactionDeliverer Private methods *********************************
-
-function TIdSipTransactionDeliverer.QueryInterface(const IID: TGUID; out Obj): HResult;
-begin
-  Result := 0;
-end;
-
-function TIdSipTransactionDeliverer._AddRef: Integer;
-begin
-  Result := -1;
-end;
-
-function TIdSipTransactionDeliverer._Release: Integer;
-begin
-  Result := -1;
 end;
 
 end.

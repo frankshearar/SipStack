@@ -3,8 +3,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipDialogID, 
-  IdSipHeaders, IdURI, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipDialogID,
+  IdSipHeaders, IdSipInterfacedObject, IdURI, SyncObjs, SysUtils;
 
 type
   TIdSipRequest = class;
@@ -18,6 +18,12 @@ type
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
+  end;
+
+  IIdSipMessageListener = interface
+    ['{941E4681-89F9-4491-825C-F6458F7E663C}']
+    procedure OnReceiveRequest(const Request: TIdSipRequest);
+    procedure OnReceiveResponse(const Response: TIdSipResponse);
   end;
 
   TIdSipMessage = class(TPersistent)
@@ -196,6 +202,23 @@ type
 
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
+  end;
+
+  // I am the Subject half of the Observer pattern as related to
+  // IIdSipMessageListener (the Observer, naturally enough).
+  TIdSipMessageSubject = class(TIdSipInterfacedObject)
+  private
+    ListenerLock: TCriticalSection;
+    Listeners:    TList;
+  protected
+    procedure NotifyListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyListeners(const Response: TIdSipResponse); overload;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure AddMessageListener(const Listener: IIdSipMessageListener);
+    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
   end;
 
   EBadHeader = class(EParser);
@@ -1273,6 +1296,75 @@ end;
 function TIdSipParser._Release: Integer;
 begin
   Result := -1;
+end;
+
+//******************************************************************************
+//* TIdSipMessageSubject                                                       *
+//******************************************************************************
+//* TIdSipMessageSubject Public methods ****************************************
+
+constructor TIdSipMessageSubject.Create;
+begin
+  inherited Create;
+
+  Self.ListenerLock := TCriticalSection.Create;
+  Self.Listeners    := TList.Create;
+end;
+
+destructor TIdSipMessageSubject.Destroy;
+begin
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipMessageSubject.AddMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipMessageSubject.RemoveMessageListener(const Listener: IIdSipMessageListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+//* TIdSipMessageSubject Protected methods *************************************
+
+procedure TIdSipMessageSubject.NotifyListeners(const Request: TIdSipRequest);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipMessageSubject.NotifyListeners(const Response: TIdSipResponse);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 end.

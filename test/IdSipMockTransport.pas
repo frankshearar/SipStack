@@ -9,6 +9,7 @@ type
   TIdSipMockTransport = class(TIdSipAbstractTransport)
   private
     fACKCount:          Cardinal;
+    fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
     fLastACK:           TIdSipRequest;
     fLastRequest:       TIdSipRequest;
@@ -21,6 +22,7 @@ type
     function  GetBindings: TIdSocketHandles; override;
     procedure SendRequest(const R: TIdSipRequest); override;
     procedure SendResponse(const R: TIdSipResponse); override;
+    function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; override;
   public
     constructor Create(const Port: Cardinal); override;
     destructor  Destroy; override;
@@ -60,8 +62,9 @@ begin
   inherited Create(Port);
 
   Self.ResetSentRequestCount;
-  Self.fLastACK := TIdSipRequest.Create;
-  Self.fLastRequest := TIdSipRequest.Create;
+  Self.fBindings     := TIdSocketHandles.Create(nil);
+  Self.fLastACK      := TIdSipRequest.Create;
+  Self.fLastRequest  := TIdSipRequest.Create;
   Self.fLastResponse := TIdSipResponse.Create;
 
   Self.LocalEchoMessages := false;
@@ -133,7 +136,7 @@ end;
 
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
 begin
-  Result := nil;
+  Result := Self.fBindings;
 end;
 
 procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
@@ -169,6 +172,11 @@ begin
 
   if Self.LocalEchoMessages then
     Self.DoOnResponse(R);
+end;
+
+function TIdSipMockTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;
+begin
+  Result := true;
 end;
 
 end.
