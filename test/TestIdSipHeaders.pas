@@ -396,6 +396,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateOnEmptySet;
     procedure TestCurrentContact;
   end;
 
@@ -3185,9 +3186,8 @@ begin
   CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderShort),            FromHeaderShort);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(InReplyToHeader),            InReplyToHeader);
   CheckType(TIdSipMaxForwardsHeader,            Self.H.Add(MaxForwardsHeader),          MaxForwardsHeader);
-  CheckType(TIdSipNumericHeader,                Self.H.Add(MinExpiresHeader),          MinExpiresHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(MIMEVersionHeader),          MIMEVersionHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
+  CheckType(TIdSipNumericHeader,                Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(OrganizationHeader),         OrganizationHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(PriorityHeader),             PriorityHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
@@ -4104,6 +4104,35 @@ begin
 end;
 
 //* TestTIdSipContacts Published methods ***************************************
+
+procedure TestTIdSipContacts.TestCreateOnEmptySet;
+var
+  Cnts:       TIdSipContacts;
+  NewHeader: TIdSipHeader;
+begin
+  Cnts := TIdSipContacts.Create;
+  try
+    CheckEquals(0, Cnts.Count, 'Initial list');
+
+    NewHeader := TIdSipContactHeader.Create;
+    try
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a new contact');
+    finally
+      NewHeader.Free;
+    end;
+
+    NewHeader := TIdSipCallIdHeader.Create;
+    try
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a non-contact');
+    finally
+      NewHeader.Free;
+    end;
+  finally
+    Cnts.Free;
+  end;
+end;
 
 procedure TestTIdSipContacts.TestCurrentContact;
 var
