@@ -29,6 +29,7 @@ type
     procedure SetName(const Value: String); virtual;
     procedure SetValue(const Value: String); virtual;
   public
+    class function EncodeQuotedStr(const S: String): String;
     constructor Create; virtual;
     destructor  Destroy; override;
 
@@ -59,8 +60,6 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function EncodeQuotedStr(const S: String): String;
-
     property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
@@ -85,16 +84,16 @@ type
   TIdSipWeightedValue = class(TObject)
   private
     fParameters: TStrings;
-    fValue:  String;
-    fWeight: Currency;
+    fValue:      String;
+    fWeight:     TIdSipQValue;
 
     function GetParameters: TStrings;
   public
     destructor  Destroy; override;
 
-    property Parameters: TStrings read GetParameters;
-    property Value:      String   read fValue write fValue;
-    property Weight:     Currency read fWeight write fWeight;
+    property Parameters: TStrings     read GetParameters;
+    property Value:      String       read fValue write fValue;
+    property Weight:     TIdSipQValue read fWeight write fWeight;
   end;
 
   TIdSipWeightedCommaSeparatedHeader = class(TIdSipHeader)
@@ -109,7 +108,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddValue(const Value: String; const Weight: Currency = 1);
+    procedure AddValue(const Value: String; const Weight: TIdSipQValue = High(TIdSipQValue));
     procedure ClearValues;
     function  ValueCount: Integer;
 
@@ -276,6 +275,21 @@ type
     property TTL:        Byte                read GetTTL write SetTTL;
   end;
 
+  TIdSipWarningHeader = class(TIdSipHeader)
+  private
+    fAgent: String;
+    fCode:  Cardinal;
+    fText:  String;
+  protected
+    function  GetName: String; override;
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    property Agent: String   read fAgent write fAgent;
+    property Code:  Cardinal read fCode write fCode;
+    property Text:  String   read fText write fText;
+  end;
+
   TIdSipHeaderMap = class(TObject)
     fHeaderName:  String;
     fHeaderClass: TIdSipHeaderClass;
@@ -433,10 +447,17 @@ type
     property StatusText: String  read fStatusText write fStatusText;
   end;
 
-function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+const
+  ConvertErrorMsg = 'Failed to convert ''%s'' to type %s';
+
 function NeedsQuotes(Name: String): Boolean;
-function QuoteStringIfNecessary(const Name: String): String;
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
+function QuoteStringIfNecessary(const Name: String): String;
+function QValueToStr(const Q: TIdSipQValue): String;
+function StrToQValue(const S: String): TIdSipQValue;
+function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
+function StrToTransport(const S: String): TIdSipTransportType;
+function TransportToStr(const T: TIdSipTransportType): String;
 
 implementation
 
@@ -453,44 +474,6 @@ var
 //******************************************************************************
 //* Unit private procedures & functions ****************************************
 
-function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
-var
-  I: Integer;
-  FoundSlash: Boolean;
-begin
-  Result := true;
-
-  // in summary:
-  // '\' is illegal, '%s\' is illegal.
-
-  Dest := S;
-
-  if (Dest <> '') then begin
-    if (Dest = '\') then
-      Result := false;
-
-    if (Length(Dest) >= 2) and (Dest[Length(Dest)] = '\') and (Dest[Length(Dest) - 1] <> '\') then
-      Result := Result and false;
-
-    // We use "<" and not "<=" because if a \ is the last character we have
-    // a malformed string. Too, this allows use to Dest[I + 1]
-    I := 1;
-    while I < Length(Dest) do begin
-      FoundSlash := Dest[I] = '\';
-      if (FoundSlash) then begin
-        Delete(Dest, I, 1);
-
-        // protect '\\'
-        if (FoundSlash) then begin
-          Inc(I);
-        end;
-      end
-      else
-        Inc(I);
-    end;
-  end;
-end;
-
 function NeedsQuotes(Name: String): Boolean;
 var
   Token: String;
@@ -505,13 +488,6 @@ begin
       Result := Result or not TIdSipParser.IsToken(Token);
     end;
   end;
-end;
-
-function QuoteStringIfNecessary(const Name: String): String;
-begin
-  Result := Name;
-  if NeedsQuotes(Name) then
-    Result := '"' + Result + '"'
 end;
 
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
@@ -548,10 +524,107 @@ begin
   end;
 end;
 
+function QuoteStringIfNecessary(const Name: String): String;
+begin
+  Result := Name;
+  if NeedsQuotes(Name) then
+    Result := '"' + Result + '"'
+end;
+
+function QValueToStr(const Q: TIdSipQValue): String;
+begin
+  Result := IntToStr(Q div 1000);
+
+  if (Q mod 1000 > 0) then begin
+    Result := Result + '.';
+
+    Result := Result + IntToStr(((Q mod 1000) div 100));
+    Result := Result + IntToStr(((Q mod 100)  div 10));
+    Result := Result + IntToStr(((Q mod 10)   div 1));
+
+    while (Result[Length(Result)] = '0') do
+      Delete(Result, Length(Result), 1);
+  end;
+end;
+
+function StrToQValue(const S: String): TIdSipQValue;
+var
+  Fraction, Int: String;
+  Malformed:     Boolean;
+  I:             Cardinal;
+  E:             Integer;
+  F:             Currency;
+begin
+  Result := 0;
+  F      := 0;
+  Fraction := S;
+  Malformed := (Fraction = '') or (Pos(' ', S) > 0);
+
+  if not Malformed then begin
+    Malformed := (IndyPos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
+
+    Int := Fetch(Fraction, '.');
+
+    Val(Int, I, E);
+    Malformed := Malformed or (E <> 0) or (I > 1);
+
+    Malformed := Malformed or (Length(Fraction) > 3);
+    if (Fraction <> '') then begin
+      F := Trunc(StrToCurrDef('0.' + Fraction, -1)*1000);
+
+      Malformed := Malformed or (F = -1);
+    end;
+
+    Result := 1000*I + Trunc(F);
+    Malformed := Malformed or (Result > 1000);
+  end;
+
+  if Malformed then
+    raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipQValue']));
+end;
+
+function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
+begin
+  try
+    Result := StrToQValue(S);
+  except
+    on EConvertError do
+      Result := DefaultValue;
+  end;
+end;
+
+function StrToTransport(const S: String): TIdSipTransportType;
+begin
+       if (Lowercase(S) = 'sctp') then Result := sttSCTP
+  else if (Lowercase(S) = 'tcp')  then Result := sttTCP
+  else if (Lowercase(S) = 'tls')  then Result := sttTLS
+  else if (Lowercase(S) = 'udp')  then Result := sttUDP
+  else raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipTransportType']));
+end;
+
+function TransportToStr(const T: TIdSipTransportType): String;
+begin
+  case T of
+    sttSCTP: Result := 'SCTP';
+    sttTCP:  Result := 'TCP';
+    sttTLS:  Result := 'TLS';
+    sttUDP:  Result := 'UDP';
+  else
+    raise EConvertError.Create(Format(ConvertErrorMsg, ['unknown TIdSipTransportType', 'String']));
+  end;
+end;
+
 //******************************************************************************
 //* TIdSipHeader                                                               *
 //******************************************************************************
 //* TIdSipHeader Public methods ************************************************
+
+class function TIdSipHeader.EncodeQuotedStr(const S: String): String;
+begin
+  Result := S;
+  Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
+end;
 
 constructor TIdSipHeader.Create;
 begin
@@ -769,13 +842,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipAddressHeader.EncodeQuotedStr(const S: String): String;
-begin
-  Result := S;
-  Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
-end;
-
 //* TIdSipAddressHeader Protected methods **************************************
 
 function TIdSipAddressHeader.GetValue: String;
@@ -939,7 +1005,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipWeightedCommaSeparatedHeader.AddValue(const Value: String; const Weight: Currency = 1);
+procedure TIdSipWeightedCommaSeparatedHeader.AddValue(const Value: String; const Weight: TIdSipQValue = High(TIdSipQValue));
 var
   NewValue: TIdSipWeightedValue;
   OldCount: Integer;
@@ -975,6 +1041,7 @@ var
   MediaRange: String;
   Params:     String;
   NewParams:  TStrings;
+  QValue:     String;
 begin
   Self.ClearValues;
 
@@ -994,7 +1061,12 @@ begin
     try
       Self.ParseParameters(Params, NewParams);
 
-      Self.AddValue(MediaRange, StrToCurrDef(NewParams.Values[Qparam], 1));
+      QValue := NewParams.Values[Qparam];
+
+      if (QValue <> '')
+        and not TIdSipParser.IsQValue(QValue) then
+        Self.FailParse;
+      Self.AddValue(MediaRange, StrToQValueDef(QValue, High(TIdSipQValue)));
 
       if (NewParams.IndexOfName(QParam) <> -1) then
         NewParams.Delete(NewParams.IndexOfName(QParam));
@@ -1599,6 +1671,45 @@ end;
 procedure TIdSipViaHeader.SetTTL(const Value: Byte);
 begin
   Self.Params[TTLParam] := IntToStr(Value);
+end;
+
+//******************************************************************************
+//* TIdSipWarningHeader                                                        *
+//******************************************************************************
+//* TIdSipWarningHeader Protected methods **************************************
+
+function TIdSipWarningHeader.GetName: String;
+begin
+  Result := WarningHeader;
+end;
+
+function TIdSipWarningHeader.GetValue: String;
+begin
+  Result := Format('%d %s "%s"', [Self.Code, Self.Agent, Self.EncodeQuotedStr(Self.Text)]);
+end;
+
+procedure TIdSipWarningHeader.SetValue(const Value: String);
+var
+  S: String;
+  Token: String;
+begin
+  S := Value;
+
+  Token := Fetch(S, ' ');
+  if not TIdSipParser.IsNumber(Token) or (Length(Token) <> 3) then
+    Self.FailParse;
+  Self.Code := StrToInt(Token);
+
+  Token := Fetch(S, ' ');
+  if not TIdSipParser.IsToken(Token) then
+    Self.FailParse;
+  Self.Agent := Token;
+
+  if not TIdSipParser.IsQuotedString(S) then
+    Self.FailParse;
+
+  DecodeQuotedStr(Copy(S, 2, Length(S) - 2), S);
+  Self.Text := S;
 end;
 
 //******************************************************************************

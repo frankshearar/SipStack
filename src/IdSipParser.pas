@@ -43,6 +43,7 @@ type
   public
     class function IsIPv6Reference(const Token: String): Boolean;
     class function IsMethod(Method: String): Boolean;
+    class function IsQuotedString(const Token: String): Boolean;
     class function IsQValue(const Token: String): Boolean;
     class function IsSipVersion(Version: String): Boolean;
     class function IsToken(const Token: String): Boolean;
@@ -69,7 +70,7 @@ const
   LegalWordChars = LegalTokenChars
                  + ['(', ')', '<', '>', ':', '\', '"', '/', '[',
                     ']', '?', '{', '}'];
-  LWSChars = [' ', #9, #10, #13];                  
+  LWSChars = [' ', #9, #10, #13];
 
 const
   BadStatusCode             = -1;
@@ -275,12 +276,9 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
+function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
 function IsEqual(const S1, S2: String): Boolean;
-function QValueToStr(const Q: TIdSipQValue): String;
 function ShortMonthToInt(const Month: String): Integer;
-function StrToQValue(const S: String): TIdSipQValue;
-function StrToTransport(const S: String): TIdSipTransportType;
-function TransportToStr(const T: TIdSipTransportType): String;
 
 implementation
 
@@ -291,25 +289,48 @@ uses
 //* Unit public procedures & functions                                         *
 //******************************************************************************
 
+function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+var
+  I: Integer;
+  FoundSlash: Boolean;
+begin
+  Result := true;
+
+  // in summary:
+  // '\' is illegal, '%s\' is illegal.
+
+  Dest := S;
+
+  if (Dest <> '') then begin
+    if (Dest = '\') or (Dest = '"') then
+      Result := false;
+
+    if (Length(Dest) >= 2) and (Dest[Length(Dest)] = '\') and (Dest[Length(Dest) - 1] <> '\') then
+      Result := Result and false;
+
+    // We use "<" and not "<=" because if a \ is the last character we have
+    // a malformed string. Too, this allows use to Dest[I + 1]
+    I := 1;
+    while (I < Length(Dest)) and Result do begin
+      Result := Dest[I] <> '"';
+      FoundSlash := Dest[I] = '\';
+      if (FoundSlash) then begin
+        Delete(Dest, I, 1);
+
+        // protect '\\'
+        if (FoundSlash) then begin
+          Inc(I);
+        end;
+      end
+      else
+        Inc(I);
+    end;
+  end;
+end;
+
 function IsEqual(const S1, S2: String): Boolean;
 begin
   Result := Lowercase(S1) = Lowercase(S2);
-end;
-
-function QValueToStr(const Q: TIdSipQValue): String;
-begin
-  Result := IntToStr(Q div 1000);
-
-  if (Q mod 1000 > 0) then begin
-    Result := Result + '.';
-
-    Result := Result + IntToStr(((Q mod 1000) div 100));
-    Result := Result + IntToStr(((Q mod 100)  div 10));
-    Result := Result + IntToStr(((Q mod 10)   div 1));
-
-    while (Result[Length(Result)] = '0') do
-      Delete(Result, Length(Result), 1);
-  end;
 end;
 
 function ShortMonthToInt(const Month: String): Integer;
@@ -327,61 +348,6 @@ begin
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
 end;
 
-function StrToQValue(const S: String): TIdSipQValue;
-var
-  Fraction, Int: String;
-  Malformed:     Boolean;
-  F, I:          Cardinal;
-  E:             Integer;
-begin
-  Result := 0;
-  F      := 0;
-  Fraction := S;
-  Malformed := (Fraction = '') or (Pos(' ', S) > 0);
-
-  if not Malformed then begin
-    Malformed := (IndyPos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
-
-    Int := Fetch(Fraction, '.');
-
-    Val(Int, I, E);
-    Malformed := Malformed or (E <> 0) or (I > 1);
-
-    Malformed := Malformed or (Length(Fraction) > 3);
-    if (Fraction <> '') then begin
-      Val(Fraction, F, E);
-      Malformed := Malformed or (E <> 0);
-    end;
-
-    Result := 1000*I + F;
-    Malformed := Malformed or (Result > 1000);
-  end;
-
-  if Malformed then
-    raise EConvertError.Create('Failed to convert ''' + S + ''' to type TIdSipQValue');
-end;
-
-function StrToTransport(const S: String): TIdSipTransportType;
-begin
-       if (Lowercase(S) = 'sctp') then Result := sttSCTP
-  else if (Lowercase(S) = 'tcp')  then Result := sttTCP
-  else if (Lowercase(S) = 'tls')  then Result := sttTLS
-  else if (Lowercase(S) = 'udp')  then Result := sttUDP
-  else raise EConvertError.Create('Failed to convert ''' + S + ''' to type TIdSipTransportType');
-end;
-
-function TransportToStr(const T: TIdSipTransportType): String;
-begin
-  case T of
-    sttSCTP: Result := 'SCTP';
-    sttTCP:  Result := 'TCP';
-    sttTLS:  Result := 'TLS';
-    sttUDP:  Result := 'UDP';
-  else
-    raise EConvertError.Create('Failed to convert unknown transport to type string');
-  end;
-end;
-
 //******************************************************************************
 //* TIdSipParser                                                               *
 //******************************************************************************
@@ -397,6 +363,19 @@ end;
 class function TIdSipParser.IsMethod(Method: String): Boolean;
 begin
   Result := Self.IsToken(Method);
+end;
+
+class function TIdSipParser.IsQuotedString(const Token: String): Boolean;
+var
+  S: String;
+begin
+  Result := Token <> '';
+
+  if Result then begin
+    Result := DecodeQuotedStr(Copy(Token, 2, Length(Token) - 2), S)
+              and (Token[1] = '"')
+              and (Token[Length(Token)] = '"');
+  end;
 end;
 
 class function TIdSipParser.IsQValue(const Token: String): Boolean;

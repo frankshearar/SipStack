@@ -8,9 +8,13 @@ uses
 type
   TestFunctions = class(TTestCase)
   published
-    procedure TestDecodeQuotedStr;
     procedure TestNeedsQuotes;
     procedure TestQuoteStringIfNecessary;
+    procedure TestQValueToStr;
+    procedure TestStrToQValue;
+    procedure TestStrToQValueDef;
+    procedure TestStrToTransport;
+    procedure TestTransportToStr;
   end;
 
   TestTIdSipHeader = class(TTestCase)
@@ -21,6 +25,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
+    procedure TestEncodeQuotedStr;
     procedure TestGetSetParam;
     procedure TestIndexOfParam;
     procedure TestParamCount;
@@ -38,7 +43,6 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
-    procedure TestEncodeQuotedStr;
     procedure TestValue;
     procedure TestValueEmptyDisplayName;
     procedure TestValueFolded;
@@ -210,6 +214,19 @@ type
     procedure TestValueWithTTL;
   end;
 
+  TestTIdSipWarningHeader = class(TTestCase)
+  private
+    W: TIdSipWarningHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestGetValue;
+    procedure TestName;
+    procedure TestSetValue;
+    procedure TestSetValueMalformed;
+  end;
+
   TestTIdSipWeightedCommaSeparatedHeader = class(TTestCase)
   private
     W: TIdSipWeightedCommaSeparatedHeader;
@@ -220,6 +237,7 @@ type
     procedure TestAddValue;
     procedure TestClearValues;
     procedure TestValue;
+    procedure TestValueMalformed;
   end;
 
   TestTIdSipHeaders = class(TTestCase)
@@ -334,6 +352,7 @@ begin
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+  Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
@@ -344,32 +363,6 @@ end;
 //* TestFunctions                                                              *
 //******************************************************************************
 //* TestFunctions Published methods ********************************************
-
-procedure TestFunctions.TestDecodeQuotedStr;
-var
-  Q: String;
-begin
-  Check(DecodeQuotedStr('', Q),     'parsing: ''''');
-  CheckEquals('',       Q,          'result: ''''');
-  Check(DecodeQuotedStr('abcd', Q), 'parsing: abcd');
-  CheckEquals('abcd',   Q,          'result: abcd');
-  Check(DecodeQuotedStr('\"', Q),   'parsing: ');
-  CheckEquals('"',      Q,          'result: \"');
-  Check(DecodeQuotedStr('\\', Q),   'parsing: ');
-  CheckEquals('\',      Q,          'result: \\');
-
-  Check(DecodeQuotedStr('\ ', Q),       'parsing: \ SP');
-  CheckEquals(' ',      Q,              'result: \ SP');
-  Check(DecodeQuotedStr('\a\b\c\d', Q), 'parsing: \a\b\c\d');
-  CheckEquals('abcd',   Q,              'result: \a\b\c\d');
-  Check(DecodeQuotedStr('\'#0, Q),      'parsing: \#0');
-  CheckEquals(#0,       Q,              'result: \#0');
-  Check(DecodeQuotedStr('hello\\', Q),  'parsing: hello\\');
-  CheckEquals('hello\', Q,              'result: hello\\');
-
-  Check(not DecodeQuotedStr('\', Q),      '\');
-  Check(not DecodeQuotedStr('hello\', Q), 'hello\');
-end;
 
 procedure TestFunctions.TestNeedsQuotes;
 begin
@@ -398,6 +391,168 @@ begin
       CheckEquals('"ab' + C + 'cd"',
                   QuoteStringIfNecessary('ab' + C + 'cd'),
                   'ab' + C + 'cd');
+end;
+
+procedure TestFunctions.TestQValueToStr;
+begin
+  CheckEquals('0',     QValueToStr(0),    'QValueToStr(0)');
+  CheckEquals('0.001', QValueToStr(1),    'QValueToStr(1)');
+  CheckEquals('0.01',  QValueToStr(10),   'QValueToStr(10)');
+  CheckEquals('0.1',   QValueToStr(100),  'QValueToStr(100)');
+  CheckEquals('0.666', QValueToStr(666),  'QValueToStr(666)');
+  CheckEquals('1',     QValueToStr(1000), 'QValueToStr(1000)');
+end;
+
+procedure TestFunctions.TestStrToQValue;
+begin
+  CheckEquals(0,    StrToQValue('0'),     'StrToQValue(''0'')');
+  CheckEquals(0,    StrToQValue('0.0'),   'StrToQValue(''0.0'')');
+  CheckEquals(0,    StrToQValue('0.00'),  'StrToQValue(''0.00'')');
+  CheckEquals(0,    StrToQValue('0.000'), 'StrToQValue(''0.000'')');
+  CheckEquals(666,  StrToQValue('0.666'), 'StrToQValue(''0.666'')');
+  CheckEquals(700,  StrToQValue('0.7'),   'StrToQValue(''0.7'')');
+  CheckEquals(1000, StrToQValue('1'),     'StrToQValue(''1'')');
+  CheckEquals(1000, StrToQValue('1.0'),   'StrToQValue(''1.0'')');
+  CheckEquals(1000, StrToQValue('1.00'),  'StrToQValue(''1.00'')');
+  CheckEquals(1000, StrToQValue('1.000'), 'StrToQValue(''1.000'')');
+
+  try
+    StrToQValue('.');
+    Fail('Failed to bail out on malformed q (.');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['.', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.');
+    Fail('Failed to bail out on malformed q (0.');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0.', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0. 0');
+    Fail('Failed to bail out on malformed q (0. 0)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0. 0', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('1.');
+    Fail('Failed to bail out on malformed q (1.');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['1.', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.0000');
+    Fail('Failed to bail out on too many digits (0.0000)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0.0000', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.0123');
+    Fail('Failed to bail out on too many digits (0.0123)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0.0123', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.1234');
+    Fail('Failed to bail out on too many digits (0.1234)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0.1234', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('0.a');
+    Fail('Failed to bail out on letters');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['0.a', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('1.1');
+    Fail('Failed to bail out on number too big (1.1)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['1.1', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('3');
+    Fail('Failed to bail out on number too big (3)');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['3', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    StrToQValue('');
+    Fail('Failed to bail out on empty string');
+  except
+    on E: EConvertError do
+      CheckEquals(Format(ConvertErrorMsg, ['', 'TIdSipQValue']),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+end;
+
+procedure TestFunctions.TestStrToQValueDef;
+begin
+  CheckEquals(666, StrToQValueDef('', 666), '''''');
+end;
+
+procedure TestFunctions.TestStrToTransport;
+begin
+  Check(sttSCTP = StrToTransport('SCTP'), 'SCTP');
+  Check(sttTCP  = StrToTransport('TCP'),  'TCP');
+  Check(sttTLS  = StrToTransport('TLS'),  'TLS');
+  Check(sttUDP  = StrToTransport('UDP'),  'UDP');
+
+  try
+    StrToTransport('not a transport');
+    Fail('Failed to bail out on an unknown transport type');
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestFunctions.TestTransportToStr;
+var
+  T: TIdSipTransportType;
+begin
+  for T := Low(TIdSipTransportType) to High(TIdSipTransportType) do
+    Check(T = StrToTransport(TransportToStr(T)), 'Ord(T) = ' + IntToStr(Ord(T)));
 end;
 
 //******************************************************************************
@@ -438,6 +593,28 @@ begin
   CheckEquals('Foo: Fighters;tag=haha;hidden',
               Self.H.AsString,
               '''Foo: Fighters'' with tag & hidden');
+end;
+
+procedure TestTIdSipHeader.TestEncodeQuotedStr;
+begin
+  CheckEquals('I am a ''normal'' string',
+              Self.H.EncodeQuotedStr('I am a ''normal'' string'),
+              '''I am a ''''normal'''' string''');
+  CheckEquals('',
+              Self.H.EncodeQuotedStr(''),
+              '''''');
+  CheckEquals('\\',
+              Self.H.EncodeQuotedStr('\'),
+              '\');
+  CheckEquals('\"',
+              Self.H.EncodeQuotedStr('"'),
+              '"');
+  CheckEquals('\\\"',
+              Self.H.EncodeQuotedStr('\"'),
+              '\"');
+  CheckEquals('\"I am a ''normal'' string\"',
+              Self.H.EncodeQuotedStr('"I am a ''normal'' string"'),
+              '''"I am a ''normal'' string"''');
 end;
 
 procedure TestTIdSipHeader.TestGetSetParam;
@@ -575,28 +752,6 @@ begin
   CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
-end;
-
-procedure TestTIdSipAddressHeader.TestEncodeQuotedStr;
-begin
-  CheckEquals('I am a ''normal'' string',
-              Self.A.EncodeQuotedStr('I am a ''normal'' string'),
-              '''I am a ''''normal'''' string''');
-  CheckEquals('',
-              Self.A.EncodeQuotedStr(''),
-              '''''');
-  CheckEquals('\\',
-              Self.A.EncodeQuotedStr('\'),
-              '\');
-  CheckEquals('\"',
-              Self.A.EncodeQuotedStr('"'),
-              '"');
-  CheckEquals('\\\"',
-              Self.A.EncodeQuotedStr('\"'),
-              '\"');
-  CheckEquals('\"I am a ''normal'' string\"',
-              Self.A.EncodeQuotedStr('"I am a ''normal'' string"'),
-              '''"I am a ''normal'' string"''');
 end;
 
 procedure TestTIdSipAddressHeader.TestValue;
@@ -1957,6 +2112,102 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipWarningHeader                                                    *
+//******************************************************************************
+//* TestTIdSipWarningHeader Public methods *************************************
+
+procedure TestTIdSipWarningHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := TIdSipWarningHeader.Create;
+end;
+
+procedure TestTIdSipWarningHeader.TearDown;
+begin
+  Self.W.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipWarningHeader Published methods **********************************
+
+procedure TestTIdSipWarningHeader.TestGetValue;
+begin
+  Self.W.Code := 302;
+  Self.W.Agent := 'gw1.leo-ix.net';
+  Self.W.Text := 'Case is not home';
+
+  CheckEquals('302 gw1.leo-ix.net "Case is not home"',
+              Self.W.Value,
+              'Value');
+end;
+
+procedure TestTIdSipWarningHeader.TestName;
+begin
+  CheckEquals(WarningHeader, Self.W.Name, 'Name');
+
+  Self.W.Name := 'foo';
+  CheckEquals(WarningHeader, Self.W.Name, 'Name after set');
+end;
+
+procedure TestTIdSipWarningHeader.TestSetValue;
+begin
+  Self.W.Value := '301 wsfrank "I dont know what message goes here"';
+  CheckEquals(301,       Self.W.Code, 'Code');
+  CheckEquals('wsfrank', Self.W.Agent, 'Agent');
+
+  CheckEquals('I dont know what message goes here',
+              Self.W.Text,
+              'Text');
+end;
+
+procedure TestTIdSipWarningHeader.TestSetValueMalformed;
+begin
+  try
+    Self.W.Value := 'a bad "header"';
+    Fail('Failed to bail on a non-numeric warn-code');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := '22 a "bad header"';
+    Fail('Failed to bail on a too-short warn-code');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := '2222 a "bad header"';
+    Fail('Failed to bail on a too-long warn-code');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := '301 a bad header';
+    Fail('Failed to bail on an unquoted warn-text');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := '302 a "bad header';
+    Fail('Failed to bail on a malquoted warn-text');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := '301 a "bad header";tag=xyz';
+    Fail('Failed to bail on a malquoted warn-text (parameters)');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipWeightedCommaSeparatedHeader                                     *
 //******************************************************************************
 //* TestTIdSipWeightedCommaSeparatedHeader Public methods **********************
@@ -1982,14 +2233,14 @@ begin
   CheckEquals(0, Self.W.ValueCount, 'Empty string');
 
   Self.W.AddValue('text/plain');
-  CheckEquals(1, Self.W.ValueCount, 'One Add');
+  CheckEquals(1,            Self.W.ValueCount, 'One Add');
   CheckEquals('text/plain', Self.W.Values[0].Value,  '[0].Value');
-  CheckEquals(1,            Self.W.Values[0].Weight, '[0].Weight');
+  CheckEquals(1000,         Self.W.Values[0].Weight, '[0].Weight');
 
-  Self.W.AddValue('text/xml', 0.7);
-  CheckEquals(2, Self.W.ValueCount, 'Two Adds');
+  Self.W.AddValue('text/xml', 700);
+  CheckEquals(2,          Self.W.ValueCount, 'Two Adds');
   CheckEquals('text/xml', Self.W.Values[1].Value,  '[1].Value');
-  CheckEquals(0.7,        Self.W.Values[1].Weight, '[1].Weight');
+  CheckEquals(700,        Self.W.Values[1].Weight, '[1].Weight');
 end;
 
 procedure TestTIdSipWeightedCommaSeparatedHeader.TestClearValues;
@@ -2012,31 +2263,48 @@ begin
   CheckEquals(1,            Self.W.ValueCount,                 '1: Count');
   CheckEquals(0,            Self.W.Values[0].Parameters.Count, '1: Parameter count');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '1: Value');
-  CheckEquals(1,            Self.W.Values[0].Weight,           '1: Weight');
+  CheckEquals(1000,         Self.W.Values[0].Weight,           '1: Weight');
 
   Self.W.Value := 'text/plain;q=0.7';
   CheckEquals(1,            Self.W.ValueCount,                 '2: Count');
   CheckEquals(0,            Self.W.Values[0].Parameters.Count, '2: Parameter count');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '2: Value');
-  CheckEquals(0.7,          Self.W.Values[0].Weight,           '2: Weight');
+  CheckEquals(700,          Self.W.Values[0].Weight,           '2: Weight');
 
   Self.W.Value := 'text/plain;q=0.7;foo=bar';
   CheckEquals(1,            Self.W.ValueCount,                 '3: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '3: Parameter count');
   CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '3: Parameters[0]');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '3: Value');
-  CheckEquals(0.7,          Self.W.Values[0].Weight,           '3: Weight');
+  CheckEquals(700,          Self.W.Values[0].Weight,           '3: Weight');
 
   Self.W.Value := 'text/plain;q=0.7;foo=bar, text/t140';
   CheckEquals(2,            Self.W.ValueCount,                 '4: Count');
   CheckEquals(1,            Self.W.Values[0].Parameters.Count, '4: [0].Parameter count');
   CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '4: [0].Parameters[0]');
   CheckEquals('text/plain', Self.W.Values[0].Value,            '4: [0].Value');
-  CheckEquals(0.7,          Self.W.Values[0].Weight,           '4: [0].Weight');
+  CheckEquals(700,          Self.W.Values[0].Weight,           '4: [0].Weight');
 
   CheckEquals(0,            Self.W.Values[1].Parameters.Count, '4: [0].Parameter count');
   CheckEquals('text/t140',  Self.W.Values[1].Value,            '4: [1].Value');
-  CheckEquals(1,            Self.W.Values[1].Weight,           '4: [1].Weight');
+  CheckEquals(1000,         Self.W.Values[1].Weight,           '4: [1].Weight');
+end;
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestValueMalformed;
+begin
+  try
+    Self.W.Value := 'text/plain;q=1.7';
+    Fail('Failed to bail out on malformed qvalue (q > 1)');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.W.Value := 'text/plain;q=a';
+    Fail('Failed to bail out on malformed qvalue (q not numeric)');
+  except
+    on EBadHeader do;
+  end;
 end;
 
 //******************************************************************************
