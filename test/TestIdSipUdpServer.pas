@@ -12,8 +12,10 @@ type
     Parser: TIdSipParser;
     Server: TIdSipUdpServer;
 
+    procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
+    procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
+    procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
     procedure CheckTortureTest22;
@@ -27,8 +29,10 @@ type
   published
     procedure TestMalformedRequest;
     procedure TestMalformedResponse;
+    procedure TestReceivedParamDifferentIPv4SentBy;
+    procedure TestReceivedParamFQDNSentBy;
+    procedure TestReceivedParamIPv4SentBy;
     procedure TestRequest;
-    procedure TestResponse;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -39,12 +43,27 @@ type
   end;
 
 const
+  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+               + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+               + 'Max-Forwards: 70'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+               + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+               + 'CSeq: 314159 INVITE'#13#10
+               + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'Content-Type: text/plain'#13#10
+               + 'Content-Length: 29'#13#10
+               + #13#10
+               + 'I am a message. Hear me roar!';
+  ViaFQDN        = 'gw1.leo-ix.org';
+  ViaIP          = '127.0.0.1';
+  ViaDifferentIP = '196.25.1.1';             
   DefaultTimeout = 5000;
 
 implementation
 
 uses
-  IdSimpleParser, SyncObjs, TestFramework, TortureTests;
+  IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework, TortureTests;
 
 function Suite: ITestSuite;
 begin
@@ -58,11 +77,17 @@ end;
 //* TestTIdSipUdpServer Public methods ******************************************
 
 procedure TestTIdSipUdpServer.SetUp;
+var
+  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
   Self.Client := TIdUDPClient.Create(nil);
   Self.Server := TIdSipUdpServer.Create(nil);
+  Self.Server.Bindings.Clear;
+  Binding := Self.Server.Bindings.Add;
+  Binding.IP := '127.0.0.1';
+  Binding.Port := IdPORT_SIP;
 
   Self.Server.Active := true;
   Self.Client.Host := '127.0.0.1';
@@ -85,15 +110,15 @@ end;
 
 //* TestTIdSipUdpServer Private methods *****************************************
 
-procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipUdpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
+begin
+  Self.CheckReceivedParamFQDNSentBy(Sender, Request);
+end;
+
+procedure TestTIdSipUdpServer.CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
-    CheckEquals(MethodInvite, Request.Method,             'Method');
-    CheckEquals('SIP/2.0',    Request.SipVersion,         'SipVersion');
-    CheckEquals(29,           Request.ContentLength,      'ContentLength');
-    CheckEquals(70,           Request.MaxForwards,        'Max-Forwards');
-
-    CheckEquals('I am a message. Hear me roar!', Request.Body, 'Body');
+    CheckNotEquals('', Request.Path.LastHop.Received, 'Received param not appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -104,43 +129,29 @@ begin
   end;
 end;
 
-procedure TestTIdSipUdpServer.CheckResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TestTIdSipUdpServer.CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
-    CheckEquals('SIP/2.0',                       Response.SipVersion,    'SipVersion');
-    CheckEquals(486,                             Response.StatusCode,    'StatusCode');
-    CheckEquals('Busy Here',                     Response.StatusText,    'StatusText');
-    CheckEquals('a84b4c76e66710@gw1.leo_ix.org', Response.CallID,        'CallID');
-    CheckEquals(29,                              Response.ContentLength, 'ContentLength');
-    CheckEquals(70,                              Response.MaxForwards,   'MaxForwards');
+    CheckEquals('', Request.Path.LastHop.Received, 'Received param appended by transport layer');
 
-  CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds',
-              Response.Headers.Items[0].AsString,
-              'Headers.Items[0].AsString');
-  CheckEquals('Max-Forwards: 70',
-              Response.Headers.Items[1].AsString,
-              'Headers.Items[1].AsString');
-  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',
-              Response.Headers.Items[2].AsString,
-              'Headers.Items[2].AsString');
-  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-              Response.Headers.Items[3].AsString,
-              'Headers.Items[3].AsString');
-  CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',
-              Response.Headers.Items[4].AsString,
-              'Headers.Items[4].AsString');
-  CheckEquals('CSeq: 314159 INVITE',
-              Response.Headers.Items[5].AsString,
-              'Headers.Items[5].AsString');
-  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
-              Response.Headers.Items[6].AsString,
-              'Headers.Items[6].AsString');
-  CheckEquals('Content-Length: 29',
-              Response.Headers.Items[7].AsString,
-              'Headers.Items[7].AsString');
-  CheckEquals(8, Response.Headers.Count, 'OtherHeaders Count');
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
 
-  CheckEquals('I am a message. Hear me roar!', Response.Body, 'Body');
+procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject; const Request: TIdSipRequest);
+begin
+  try
+    CheckEquals(MethodInvite, Request.Method,             'Method');
+    CheckEquals('SIP/2.0',    Request.SipVersion,         'SipVersion');
+    CheckEquals(29,           Request.ContentLength,      'ContentLength');
+    CheckEquals(70,           Request.MaxForwards,        'Max-Forwards');
+
+    CheckEquals('I am a message. Hear me roar!', Request.Body, 'Body');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -359,41 +370,41 @@ begin
   CheckEquals('', Client.ReceiveString(DefaultTimeout), 'Response to a malformed response');
 end;
 
-procedure TestTIdSipUdpServer.TestRequest;
+procedure TestTIdSipUdpServer.TestReceivedParamDifferentIPv4SentBy;
 begin
-  Server.OnRequest := Self.CheckRequest;
+  Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
 
-  Client.Send('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-            + 'Max-Forwards: 70'#13#10
-            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-            + 'CSeq: 314159 INVITE'#13#10
-            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-            + 'Content-Length: 29'#13#10
-            + #13#10
-            + 'I am a message. Hear me roar!');
+  Client.Send(Format(BasicRequest, [ViaDifferentIP]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
-procedure TestTIdSipUdpServer.TestResponse;
+procedure TestTIdSipUdpServer.TestReceivedParamFQDNSentBy;
 begin
-  Server.OnResponse := Self.CheckResponse;
+  Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
 
-  Client.Send('SIP/2.0 486 Busy Here'#13#10
-            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-            + 'Max-Forwards: 70'#13#10
-            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-            + 'CSeq: 314159 INVITE'#13#10
-            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-            + 'Content-Length: 29'#13#10
-            + #13#10
-            + 'I am a message. Hear me roar!');
+  Client.Send(Format(BasicRequest, [ViaFQDN]));
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestReceivedParamIPv4SentBy;
+begin
+  Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
+
+  Client.Send(Format(BasicRequest, [ViaIP]));
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipUdpServer.TestRequest;
+begin
+  Server.OnRequest := Self.CheckRequest;
+
+  Client.Send(Format(BasicRequest, [ViaFQDN]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);

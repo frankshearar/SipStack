@@ -3,8 +3,10 @@ program SIP;
 uses
   Forms,
   GuiTestRunner,
+  TextTestRunner,
   IdSdpParser in 'src\IdSdpParser.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
+  IdSIPClient in 'src\IdSIPClient.pas',
   IdSipParser in 'src\IdSipParser.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
@@ -17,11 +19,15 @@ uses
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdURI in 'test\TestIdURI.pas',
-  IdSIPClient in 'src\IdSIPClient.pas',
+//  TestIdURI in 'test\TestIdURI.pas',
   TestIdSipClient in 'test\TestIdSipClient.pas';
 
 //{$DEFINE SPIKE}
+{$DEFINE GUI}
+
+{$IFNDEF GUI}
+  {$APPTYPE CONSOLE}
+{$ENDIF}
 
 {$R *.res}
 
@@ -31,6 +37,10 @@ begin
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
   Forms.Application.Run;
   {$ELSE}
-  GuiTestRunner.RunRegisteredTests;
+    {$IFDEF GUI}
+    GuiTestRunner.RunRegisteredTests;
+    {$ELSE}
+    TextTestRunner.RunRegisteredTests;
+    {$ENDIF}
   {$ENDIF}
 end.

@@ -77,8 +77,13 @@ begin
     Msg := Self.Parser.ParseAndMakeMessage;
     try
       Msg.ReadBody(Self.Parser.Source);
-      if (Msg is TIdSipRequest) then
-        Self.DoOnRequest(Msg as TIdSipRequest)
+      if (Msg is TIdSipRequest) then begin
+        if TIdSipParser.IsFQDN(Msg.Path.LastHop.Host)
+          or (Msg.Path.LastHop.Host <> ABinding.IP) then
+          Msg.Path.LastHop.Received := ABinding.IP;
+
+        Self.DoOnRequest(Msg as TIdSipRequest);
+      end
       else
         Self.DoOnResponse(Msg as TIdSipResponse);
     finally

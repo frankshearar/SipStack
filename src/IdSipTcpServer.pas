@@ -3,7 +3,7 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, IdSipParser, IdTCPConnection, IdTCPServer;
+  Classes, IdSipParser, IdCustomHttpServer, IdTCPConnection, IdTCPServer;
 
 type
   TIdSipMethodEvent = procedure(AThread: TIdPeerThread;
@@ -49,9 +49,9 @@ end;
 
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
-  Parser:  TIdSipParser;
-  Msg: TIdSipMessage;
-  S:       TStream;
+  Msg:    TIdSipMessage;
+  Parser: TIdSipParser;
+  S:      TStream;
 begin
   Result := true;
 
@@ -68,6 +68,10 @@ begin
             if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
               Msg.ContentLength := 0;
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+
+            if TIdSipParser.IsFQDN(Msg.Path.LastHop.Host)
+              or (Msg.Path.LastHop.Host <> AThread.Connection.Socket.Binding.IP) then
+              Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
             Self.DoOnMethod(AThread, Msg)
           finally

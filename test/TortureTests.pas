@@ -57,6 +57,49 @@ const
                + 'm=video 3227 RTP/AVP 31'#13#10
                + 'a=rtpmap:31 LPC';
 
+  //   This message is nearly identical to the Unknown Method message. It is
+  //   a request with a new unknown method, but with a CSeq method tag which
+  //   does not match.
+  //
+  //   A proxy should either respond with an error, or correct the method
+  //   tag. The user agent should reject it with an error, and list the
+  //   available methods in the response.
+  TortureTest8 = 'NEWMETHOD sip:user@comapny.com SIP/2.0'#13#10
+               + 'To: sip:j.user@company.com'#13#10
+               + 'From: sip:caller@university.edu;tag=23411413'#13#10
+               + 'Max-Forwards: 3'#13#10
+               + 'Call-ID: 0ha0isndaksdj@10.0.1.1'#13#10
+               + 'CSeq: 8 INVITE'#13#10
+               + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
+               + 'Content-Type: application/sdp'#13#10
+               + #13#10
+               + 'v=0'#13#10
+               + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+               + 's=-'#13#10
+               + 'c=IN IP4 135.180.130.88'#13#10
+               + 't=0 0'#13#10
+               + 'm=audio 492170 RTP/AVP 0 12'#13#10
+               + 'm=video 3227 RTP/AVP 31'#13#10
+               + 'a=rtpmap:31 LPC';
+
+  //   This message contains no Call-ID, From, or To header.
+  //
+  //   The server should not crash, and ideally should respond with an
+  //   error
+  TortureTest11 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+                + 'CSeq: 0 INVITE'#13#10
+                + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
+                + 'Content-Type: application/sdp'#13#10
+                + #13#10
+                + 'v=0'#13#10
+                + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                + 's=-'#13#10
+                + 'c=IN IP4 135.180.130.88'#13#10
+                + 't=0 0'#13#10
+                + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                + 'm=video 3227 RTP/AVP 31'#13#10
+                + 'a=rtpmap:31 LPC';
+
   //   This message contains an Expires header which has illegal values for
   //   a number of components, but otherwise is syntactically correct.
   TortureTest13 = 'INVITE sip:user@company.com SIP/2.0'#13#10
@@ -77,6 +120,31 @@ const
                 + 'm=audio 492170 RTP/AVP 0 12'#13#10
                 + 'm=video 3227 RTP/AVP 31'#13#10
                 + 'a=rtpmap:31 LPC';
+
+  //   This is a request with the Via and Contact headers incorrect. They
+  //   contain additional semicolons and commas without parameters or
+  //   values.
+  //
+  //   The server should respond with a Bad Request error.
+  TortureTest15 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+                + 'To: sip:j.user@company.com'#13#10
+                + 'From: sip:caller@university.edu;tag=134161461246'#13#10
+                + 'Max-Forwards: 7'#13#10
+                + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
+                + 'CSeq: 8 INVITE'#13#10
+                + 'Via: SIP/2.0/UDP 135.180.130.133;;,;'#13#10
+                + 'Contact: "" <> ;,"Joe" <sip:joe@org.org>;;,,;;'#13#10
+                + 'Content-Type: application/sdp'#13#10
+                + #13#10
+                + 'v=0'#13#10
+                + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                + 's=-'#13#10
+                + 'c=IN IP4 135.180.130.88'#13#10
+                + 't=0 0'#13#10
+                + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                + 'm=video 3227 RTP/AVP 31'#13#10
+                + 'a=rtpmap:31 LPC';
+
 
   //   This is a request with an unterminated quote in the display name of
   //   the To field.

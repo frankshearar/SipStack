@@ -14,7 +14,12 @@ type
     procedure TearDown; override;
   published
     procedure TestIsAlphaNumeric;
+    procedure TestIsByte;
     procedure TestIsDigit;
+    procedure TestIsFQDN;
+    procedure TestIsHexNumber;
+    procedure TestIsIpv4Address;
+    procedure TestIsIpv6Address;
     procedure TestIsNumber;
     procedure TestPeek;
     procedure TestPeekLine;
@@ -76,6 +81,17 @@ begin
   Check(P.IsAlphaNumeric(S), '1 000 000 a''s');
 end;
 
+procedure TestTIdSimpleParser.TestIsByte;
+begin
+  Check(not TIdSimpleParser.IsByte(''),      '''''');
+  Check(not TIdSimpleParser.IsByte('ct'),    'ct');
+  Check(not TIdSimpleParser.IsByte('abc'#0), 'abc#0');
+  Check(    TIdSimpleParser.IsByte('0'),     '0');
+  Check(    TIdSimpleParser.IsByte('13'),    '13');
+  Check(    TIdSimpleParser.IsByte('255'),   '255');
+  Check(not TIdSimpleParser.IsByte('256'),   '256');
+end;
+
 procedure TestTIdSimpleParser.TestIsDigit;
 var
   C: Char;
@@ -88,6 +104,76 @@ begin
 
   for C := Chr(Ord('9') + 1) to Chr(255) do
     Check(not P.IsNumber(C), C);
+end;
+
+procedure TestTIdSimpleParser.TestIsFQDN;
+begin
+  Check(not TIdSimpleParser.IsFQDN(''),        '''''');
+  Check(not TIdSimpleParser.IsFQDN('a.b.c-'),  'No trailing hyphens');
+  Check(not TIdSimpleParser.IsFQDN('a.-b.c'),  'No leading hyphens');
+  Check(not TIdSimpleParser.IsFQDN('a.1b.c'),  'No leading digits');
+  Check(not TIdSimpleParser.IsFQDN('a..1b.c'), 'Empty label');
+  Check(not TIdSimpleParser.IsFQDN('a.b.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz'),
+        'Length(<label>) >= 64');
+
+  Check(TIdSimpleParser.IsFQDN('abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk'),
+        'Length(<label>) = 63');
+
+  Check(    TIdSimpleParser.IsFQDN('a'),        'a');
+  Check(    TIdSimpleParser.IsFQDN('a.b.c'),    'a.b.c');
+  Check(    TIdSimpleParser.IsFQDN('a-a.b.c'),  'a-a.b.c');
+  Check(    TIdSimpleParser.IsFQDN('a1.b2.c3'), 'a1.b2.c3');
+end;
+
+procedure TestTIdSimpleParser.TestIsHexNumber;
+var
+  C: Char;
+begin
+  for C := Low(Char) to High(Char) do
+    if (C in ['0'..'9', 'a'..'f', 'A'..'F']) then
+      Check(P.IsHexNumber(C), C)
+    else
+      Check(not P.IsHexNumber(C), C);
+
+  Check(not P.IsHexNumber(''),             '''''');
+  Check(not P.IsHexNumber('x'),            'x');
+  Check(not P.IsHexNumber('cafex'),        'cafex');
+  Check(    P.IsHexNumber('cafe'),         'cafe');
+  Check(    P.IsHexNumber('CaFe'),         'CaFe');
+  Check(    P.IsHexNumber('cafef00dbabe'), 'cafef00dbabe');
+end;
+
+procedure TestTIdSimpleParser.TestIsIpv4Address;
+begin
+  Check(not TIdSimpleParser.IsIPv4Address(''),                '''''');
+  Check(not TIdSimpleParser.IsIPv4Address('1'),               '1');
+  Check(not TIdSimpleParser.IsIPv4Address('abcd'),            'abcd');
+  Check(not TIdSimpleParser.IsIPv4Address('224.'),            '224.');
+  Check(not TIdSimpleParser.IsIPv4Address('-1.0.0.0'),        '-1.0.0.0');
+  Check(not TIdSimpleParser.IsIPv4Address('224.255.255.256'), '224.255.255.256');
+  Check(    TIdSimpleParser.IsIPv4Address('127.2.17.12'),     '127.2.17.12');
+  Check(    TIdSimpleParser.IsIPv4Address('224.2.17.12'),     '224.2.17.12');
+  Check(    TIdSimpleParser.IsIPv4Address('0.0.0.0'),         '0.0.0.0');
+  Check(    TIdSimpleParser.IsIPv4Address('224.0.0.0'),       '224.0.0.0');
+  Check(    TIdSimpleParser.IsIPv4Address('224.255.255.255'), '224.255.255.255');
+  Check(    TIdSimpleParser.IsIPv4Address('255.255.255.255'), '255.255.255.255');
+end;
+
+procedure TestTIdSimpleParser.TestIsIpv6Address;
+begin
+  Check(not TIdSimpleParser.IsIPv6Address(''),                           '''''');
+  Check(not TIdSimpleParser.IsIPv6Address('x'),                          'x');
+  Check(not TIdSimpleParser.IsIPv6Address('ffef1::'),                    'ffef1::');
+  Check(    TIdSimpleParser.IsIPv6Address('::'),                         '::');
+  Check(    TIdSimpleParser.IsIPv6Address('::1'),                        '::1');
+  Check(    TIdSimpleParser.IsIPv6Address('1::'),                        '1::');
+  Check(    TIdSimpleParser.IsIPv6Address('2002:c058:6301::'),           '2002:c058:6301::');
+  Check(    TIdSimpleParser.IsIPv6Address('00:01:02:f0:90:84'),          '00:01:02:f0:90:84');
+  Check(    TIdSimpleParser.IsIPv6Address('fe80::201:2ff:fef0'),         'fe80::201:2ff:fef0');
+  Check(    TIdSimpleParser.IsIPv6Address('1080:0:0:0:8:800:200C:417A'), '1080:0:0:0:8:800:200C:417A');
+  Check(    TIdSimpleParser.IsIPv6Address('1080:0:0:0:8:800:1.2.3.4'),   '1080:0:0:0:8:800:1.2.3.4');
+  Check(    TIdSimpleParser.IsIPv6Address('::13.1.68.3'),                '::13.1.68.3');
+  Check(    TIdSimpleParser.IsIPv6Address('::FFFF:129.144.52.38'),       '::FFFF:129.144.52.38');
 end;
 
 procedure TestTIdSimpleParser.TestIsNumber;
@@ -104,7 +190,7 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
@@ -121,14 +207,14 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
     CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line');
     CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', Self.P.PeekLine, 'PeekLine 1st line, 2nd time');
     Self.P.ReadLn;
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Self.P.PeekLine, 'PeekLine 2nd line');
+    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds', Self.P.PeekLine, 'PeekLine 2nd line');
     Self.P.ReadLn;
     CheckEquals('', Self.P.PeekLine, 'PeekLine past the EOF');
   finally
@@ -141,7 +227,7 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
@@ -161,7 +247,7 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
@@ -170,7 +256,7 @@ begin
     CheckEquals('NVIT',   Self.P.ReadOctets(4), '2nd ReadOctets(4)');
     CheckEquals('E sip:', Self.P.ReadOctets(6), '3rd ReadOctets(6)');
     CheckEquals('wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-              + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10,
+              + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10,
                 Self.P.ReadOctets(1000), 'ReadOctets(1000)');
   finally
     Str.Free;
@@ -182,12 +268,12 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10);
   try
     Self.P.Source := Str;
 
     CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0',     Self.P.ReadLn, '1st ReadLn');
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Self.P.ReadLn, '2nd ReadLn');
+    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds', Self.P.ReadLn, '2nd ReadLn');
   finally
     Str.Free;
   end;

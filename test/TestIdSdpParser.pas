@@ -123,9 +123,6 @@ type
     procedure TestIsAddressType;
     procedure TestIsBandwidthType;
     procedure TestIsByteString;
-    procedure TestIsDecimalUchar;
-    procedure TestIsFQDN;
-    procedure TestIsIpv4Address;
     procedure TestIsKeyData;
     procedure TestIsKeyType;
     procedure TestIsMediaType;
@@ -1049,52 +1046,6 @@ begin
   Check(TIdSdpParser.IsByteString(S), '1 million a''s');
 end;
 
-procedure TestTIdSdpParser.TestIsDecimalUchar;
-begin
-  Check(not TIdSdpParser.IsDecimalUchar(''),      '''''');
-  Check(not TIdSdpParser.IsDecimalUchar('ct'),    'ct');
-  Check(not TIdSdpParser.IsDecimalUchar('abc'#0), 'abc#0');
-  Check(    TIdSdpParser.IsDecimalUchar('0'),     '0');
-  Check(    TIdSdpParser.IsDecimalUchar('13'),    '13');
-  Check(    TIdSdpParser.IsDecimalUchar('255'),   '255');
-  Check(not TIdSdpParser.IsDecimalUchar('256'),   '256');
-end;
-
-procedure TestTIdSdpParser.TestIsFQDN;
-begin
-  Check(not TIdSdpParser.IsFQDN(''),        '''''');
-  Check(not TIdSdpParser.IsFQDN('a.b.c-'),  'No trailing hyphens');
-  Check(not TIdSdpParser.IsFQDN('a.-b.c'),  'No leading hyphens');
-  Check(not TIdSdpParser.IsFQDN('a.1b.c'),  'No leading digits');
-  Check(not TIdSdpParser.IsFQDN('a..1b.c'), 'Empty label');
-  Check(not TIdSdpParser.IsFQDN('a.b.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz'),
-        'Length(<label>) >= 64');
-
-  Check(TIdSdpParser.IsFQDN('abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijk'),
-        'Length(<label>) = 63');
-
-  Check(    TIdSdpParser.IsFQDN('a'),        'a');
-  Check(    TIdSdpParser.IsFQDN('a.b.c'),    'a.b.c');
-  Check(    TIdSdpParser.IsFQDN('a-a.b.c'),  'a-a.b.c');
-  Check(    TIdSdpParser.IsFQDN('a1.b2.c3'), 'a1.b2.c3');
-end;
-
-procedure TestTIdSdpParser.TestIsIpv4Address;
-begin
-  Check(not TIdSdpParser.IsIPv4Address(''),                '''''');
-  Check(not TIdSdpParser.IsIPv4Address('1'),               '1');
-  Check(not TIdSdpParser.IsIPv4Address('abcd'),            'abcd');
-  Check(not TIdSdpParser.IsIPv4Address('224.'),            '224.');
-  Check(    TIdSdpParser.IsIPv4Address('127.2.17.12'),     '127.2.17.12');
-  Check(    TIdSdpParser.IsIPv4Address('224.2.17.12'),     '224.2.17.12');
-  Check(    TIdSdpParser.IsIPv4Address('0.0.0.0'),         '0.0.0.0');
-  Check(not TIdSdpParser.IsIPv4Address('-1.0.0.0'),        '-1.0.0.0');
-  Check(    TIdSdpParser.IsIPv4Address('224.0.0.0'),       '224.0.0.0');
-  Check(    TIdSdpParser.IsIPv4Address('224.255.255.255'), '224.255.255.255');
-  Check(not TIdSdpParser.IsIPv4Address('224.255.255.256'), '224.255.255.256');
-  Check(    TIdSdpParser.IsIPv4Address('255.255.255.255'), '255.255.255.255');
-end;
-
 procedure TestTIdSdpParser.TestIsKeyData;
 begin
   Check(not TIdSdpParser.IsKeyData(''), '''''');
@@ -1138,17 +1089,26 @@ end;
 procedure TestTIdSdpParser.TestIsMulticastAddress;
 begin
   // ipv4
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, ''),                '''''');
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '1'),               '1');
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, 'abcd'),            'abcd');
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.'),            '224.');
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '127.2.17.12'),     '127.2.17.12');
-  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.2.17.12'),     '224.2.17.12');
-  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.0.0.0'),       '224.0.0.0');
-  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.255'), '224.255.255.255');
-  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.256'), '224.255.255.256');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, ''),                'IPv4: ''''');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '1'),               'IPv4: 1');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, 'abcd'),            'IPv4: abcd');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.'),            'IPv4: 224.');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '127.2.17.12'),     'IPv4: 127.2.17.12');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.2.17.12'),     'IPv4: 224.2.17.12');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.0.0.0'),       'IPv4: 224.0.0.0');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.255'), 'IPv4: 224.255.255.255');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv4, '224.255.255.256'), 'IPv4: 224.255.255.256');
 
   // ipv6
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, ''), 'IPv6: ''''');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, '1'),                          'IPv6: 1');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, '224.'),                       'IPv6: 224.');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, '224.2.17.12'),                'IPv6: 224.2.17.12');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, '2002:c058:6301::'),           'IPv6: 2002:c058:6301::');
+  Check(not TIdSdpParser.IsMulticastAddress(Id_IPv6, '1080:0:0:0:8:800:200C:417A'), 'IPv6: 1080:0:0:0:8:800:200C:417A');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv6, 'FF02:c058:6301::'),           'IPv6: FF02:c058:6301::');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv6, 'Ff00:0:0:0:0:0:0:101'),       'IPv6: Ff00:0:0:0:0:0:0:101');
+  Check(    TIdSdpParser.IsMulticastAddress(Id_IPv6, 'ff01:0:0:0:0:0:0:101'),       'IPv6: ff01:0:0:0:0:0:0:101');
 end;
 
 procedure TestTIdSdpParser.TestIsNetType;

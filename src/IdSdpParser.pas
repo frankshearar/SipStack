@@ -7,9 +7,6 @@ uses
   IdURI;
 
 type
-  // for IdCore or whatever. Indy10 defines these but Indy9 doesn't
-  TIdIPVersion = (Id_IPv4, Id_IPv6);
-
   TIdNtpTimestamp = Int64;
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR);
   TIdSdpKeyType = (ktClear, ktBase64, ktURI, ktPrompt);
@@ -291,11 +288,6 @@ type
     class function IsAddressType(const Token: String): Boolean;
     class function IsBandwidthType(const Token: String): Boolean;
     class function IsByteString(const Token: String): Boolean;
-    class function IsDecimalUchar(const Token: String): Boolean;
-    class function IsFQDN(const Token: String): Boolean;
-    class function IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
-    class function IsIPV4Address(const Token: String): Boolean;
-    class function IsIPv6Address(const Token: String): Boolean;
     class function IsKeyData(const Token: String): Boolean;
     class function IsKeyType(const Token: String): Boolean;
     class function IsMediaType(const Token: String): Boolean;
@@ -883,70 +875,6 @@ begin
       Result := Result and not (Token[I] in IllegalByteStringChars);
 end;
 
-class function TIdSdpParser.IsDecimalUchar(const Token: String): Boolean;
-var
-  N: Integer;
-  E: Integer;
-begin
-  Result := Token <> '';
-
-  if Result then begin
-    Val(Token, N, E);
-    Result := Result and (E = 0) and (N >= 0) and (N < 256);
-  end;
-end;
-
-class function TIdSdpParser.IsFQDN(const Token: String): Boolean;
-var
-  I:    Integer;
-  Name: String;
-  Labl: String;
-begin
-  Result := Token <> '';
-
-  if Result then begin
-    Name := Token;
-    while (Name <> '') do begin
-      Labl := Fetch(Name, '.');
-
-      for I := 1 to Length(Labl) do
-        Result := Result and (Labl[I] in (Alphabet + Digits + ['-']));
-
-      if Result then
-        Result := Result and (Labl <> '')
-                         and (Labl[1] in Alphabet)
-                         and Self.IsAlphaNumeric(Labl[Length(Labl)])
-                         and (Length(Labl) < 64);
-    end;
-  end;
-end;
-
-class function TIdSdpParser.IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
-begin
-  case IpVersion of
-    Id_IPv4: Result := Self.IsIPV4Address(Token);
-    Id_IPv6: Result := Self.IsIPv6Address(Token);
-  else
-    raise EParser.Create('Unknown TIdIPVersion in IsIPAddress');
-  end;
-end;
-
-class function TIdSdpParser.IsIPV4Address(const Token: String): Boolean;
-var
-  Address: String;
-begin
-  Address := Token;
-  Result := Self.IsDecimalUchar(Fetch(Address, '.'))
-        and Self.IsDecimalUchar(Fetch(Address, '.'))
-        and Self.IsDecimalUchar(Fetch(Address, '.'))
-        and Self.IsDecimalUchar(Address);
-end;
-
-class function TIdSdpParser.IsIPv6Address(const Token: String): Boolean;
-begin
-  raise Exception.Create('not implemented yet');
-end;
-
 class function TIdSdpParser.IsKeyData(const Token: String): Boolean;
 var
   I: Integer;
@@ -984,16 +912,16 @@ var
   N:       String;
 begin
   Address := Token;
-  Result := false;
 
   case IpVersion of
     Id_IPv4: begin
-      Result := Self.IsIPV4Address(Address);
+      Result := Self.IsIPv4Address(Address);
       N := Fetch(Address, '.');
       Result := Result and (StrToInt(N) = 224);
     end;
     Id_IPv6: begin
-
+      Result := Self.IsIPv6Address(Address);
+      Result := Result and (Lowercase(Copy(Address, 1, 2)) = 'ff');
     end;
   else
     raise EParser.Create('Unknown TIdIPVersion in IsMulticastAddress');
@@ -1267,7 +1195,7 @@ begin
       raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
     Connection.Address := Token;
 
-    if not Self.IsDecimalUchar(Value) then
+    if not Self.IsByte(Value) then
       raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
     Connection.TTL     := StrToInt(Value);
   end
