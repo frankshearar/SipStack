@@ -4332,7 +4332,6 @@ end;
 function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
                                                    Bindings: TIdSipContacts): TIdSipRequest;
 var
-  OldContacts: TIdSipContacts;
   ToHeader: TIdSipToHeader;
 begin
   ToHeader := TIdSipToHeader.Create;
@@ -4343,12 +4342,7 @@ begin
 
     // Bindings explicitly carries all Contact information. Thus we must remove
     // any Contact information already in Result.
-    OldContacts := TIdSipContacts.Create(Result.Headers);
-    try
-      OldContacts.Clear;
-    finally
-      OldContacts.Free;
-    end;
+    Result.Headers.RemoveAll(ContactHeaderFull);
 
     Result.AddHeaders(Bindings);
   finally
