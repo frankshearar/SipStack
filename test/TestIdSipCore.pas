@@ -642,36 +642,28 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
-}
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
-{
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
-}
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-{
   Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
-}
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteProvisionalMethod.Suite);
   Result.AddTest(TestTIdSipInviteSuccessMethod.Suite);
-{
   Result.AddTest(TestTIdSipOptionsFailureMethod.Suite);
   Result.AddTest(TestTIdSipOptionsSuccessMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
