@@ -1,5 +1,10 @@
 v0.4 ()
 
+* We now use DNS to locate SIP entities. Since Indy 9 only supports
+  IPv4 addresses, the stack doesn't support handling AAAA records even
+  though it doesn't care how addresses look: all layers treat
+  addresses as strings, and only the transport layer knows or cares
+  that those addresses match a particular format.
 * The stack now passes the 3xx STFT tests.
 * The Spike.pas unit used a hardcoded username/password, which of
   course made the torture tests fail.
