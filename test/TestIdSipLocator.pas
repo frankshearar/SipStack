@@ -73,6 +73,28 @@ type
                                   const ExpectedTransport: String;
                                   const MsgPrefix: String);
   published
+    procedure TestSrvTarget;
+    procedure TestTransportFor;
+    procedure TestTransportForNameAndExplicitPort;
+    procedure TestTransportForNumericIPv4;
+    procedure TestTransportForNumericIPv6;
+    procedure TestTransportForWithNaptr;
+    procedure TestTransportForWithoutNaptrAndNoSrv;
+    procedure TestTransportForWithoutNaptrWithSrv;
+    procedure TestFindServersForNameNaptrNoSrv;
+    procedure TestFindServersForNameNaptrSomeSrv;
+    procedure TestFindServersForNameNaptrSrv;
+    procedure TestFindServersForNameNoNaptrManualTransportNoSrv;
+    procedure TestFindServersForNameNoNaptrManualTransportSrv;
+    procedure TestFindServersForNameNoNaptrNoManualTransportNoSrv;
+    procedure TestFindServersForNameNoNaptrNoManualTransportSrv;
+    procedure TestFindServersForNameWithPort;
+    procedure TestFindServersForNumericAddress;
+    procedure TestFindServersForNumericAddressWithPort;
+    procedure TestFindServersForNumericMaddr;
+    procedure TestFindServersForNumericMaddrIPv6;
+    procedure TestFindServersForNumericMaddrSips;
+    procedure TestFindServersForNumericMaddrSipsIPv6;
     procedure TestFindServersForResponseWithMalformedResponse;
     procedure TestFindServersForResponseWithNameAndPort;
     procedure TestFindServersForResponseWithNameNoSrv;
@@ -84,31 +106,9 @@ type
     procedure TestFindServersForResponseWithReceivedParamAndIPv6NumericSentBy;
     procedure TestFindServersForResponseWithRport;
     procedure TestFindServersForResponseWithSrv;
-    procedure TestNameNaptrSomeSrv;
-    procedure TestNumericMaddr;
-    procedure TestNumericMaddrIPv6;
-    procedure TestNumericMaddrSips;
-    procedure TestNumericMaddrSipsIPv6;
-    procedure TestSrvNoNameRecords;
-    procedure TestSrvNotAvailable;
-    procedure TestSrvTarget;
-    procedure TestTransportParamTakesPrecedence;
-    procedure TestTransportFor;
-    procedure TestTransportForNameAndExplicitPort;
-    procedure TestTransportForNumericIPv4;
-    procedure TestTransportForNumericIPv6;
-    procedure TestTransportForWithNaptr;
-    procedure TestTransportForWithoutNaptrAndNoSrv;
-    procedure TestTransportForWithoutNaptrWithSrv;
-    procedure TestFindServersForNameNaptrNoSrv;
-    procedure TestFindServersForNameNaptrSrv;
-    procedure TestFindServersForNameNoNaptrManualTransportNoSrv;
-    procedure TestFindServersForNameNoNaptrManualTransportSrv;
-    procedure TestFindServersForNameNoNaptrNoManualTransportNoSrv;
-    procedure TestFindServersForNameNoNaptrNoManualTransportSrv;
-    procedure TestFindServersForNameWithPort;
-    procedure TestFindServersForNumericAddress;
-    procedure TestFindServersForNumericAddressWithPort;
+    procedure TestFindServersForSrvNoNameRecords;
+    procedure TestFindServersForSrvNotAvailable;
+    procedure TestFindServersForTransportParamTakesPrecedence;
   end;
 
   TestTIdSipMockLocator = class(TLocatorTest)
@@ -404,6 +404,589 @@ begin
 end;
 
 //* TestTIdSipAbstractLocator Published methods ********************************
+
+procedure TestTIdSipAbstractLocator.TestSrvTarget;
+begin
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  CheckEquals('_sip._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'tcp'),
+              'SIP/TCP lookup');
+
+  CheckEquals('_sip._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'TCP'),
+              'Transports all lowercase');
+
+  Self.Target.Scheme := SipsScheme;
+  CheckEquals('_sips._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'tls'),
+              'SIP/TLS lookup');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportFor;
+begin
+  Self.TransportParam := TransportParamSCTP;
+  Self.Target.Uri := 'sip:foo.com;transport=' + Self.TransportParam;
+
+  CheckEquals(ParamToTransport(Self.TransportParam),
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'Transport parameter must take precedence');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForNameAndExplicitPort;
+begin
+  Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Name, explicit port');
+
+  Self.Target.Uri := 'sips:' + Self.Domain + ':' + IntToStr(Self.Port);
+
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Name, explicit port');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv4;
+begin
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Numeric IPv4 address');
+
+  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Numeric IPv4 address, explicit port');
+
+  Self.Target.Scheme := SipsScheme;
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Numeric IPv4 address');
+
+  Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Numeric IPv4 address, explicit port');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv6;
+begin
+  Self.IP := '[::1]';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Numeric IPv6 address');
+
+  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Numeric IPv6 address, port');
+
+  Self.Target.Scheme := SipsScheme;
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Numeric IPv6 address');
+
+  Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Numeric IPv6 address, explicit port');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForWithNaptr;
+begin
+  Self.IP         := 'example.com';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  // Values shamelessly stolen from RFC 3263, section 4.1
+  // ;           order pref flags service      regexp  replacement
+  //    IN NAPTR 50   50  "s"  "SIPS+D2T"     ""  _sips._tcp.example.com.
+  //    IN NAPTR 90   50  "s"  "SIP+D2T"      ""  _sip._tcp.example.com
+  //    IN NAPTR 100  50  "s"  "SIP+D2U"      ""  _sip._udp.example.com.
+  Self.Loc.AddNAPTR(Self.IP,  50, 50, 's', NaptrTlsService, '_sips._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', NaptrTcpService, '_sip._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
+
+  CheckEquals(Self.Loc.NAPTR[0].AsSipTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'Name, NAPTR records');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrAndNoSrv;
+begin
+  Self.IP         := 'example.com';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Name, no NAPTR records, no SRV records');
+
+  Self.Target.Scheme := SipsScheme;
+
+  CheckEquals(TlsTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Name, no NAPTR records, no SRV records');
+end;
+
+procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrWithSrv;
+begin
+  Self.IP         := 'example.com';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  // Values shamelessly stolen from RFC 3263, section 4.1
+  // ;;          Priority Weight Port   Target
+  //     IN SRV  0        1      5060   server1.example.com
+  //     IN SRV  0        2      5060   server2.example.com
+  Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 1, 5060, 'server1.example.com');
+  Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 2, 5060, 'server2.example.com');
+
+  CheckEquals(TcpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIP, Name, no NAPTR records, but SRV records');
+
+  Self.Target.Scheme := SipsScheme;
+  CheckEquals(TcpTransport,
+              Self.Loc.TransportFor(Self.Target,
+                                    Self.Naptr,
+                                    Self.Srv,
+                                    Self.NameRecs),
+              'SIPS, Name, no NAPTR records, but SRV records (none acceptable)');
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNaptrNoSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // The target's a domain name, we've NAPTR records from the transport lookup,
+  // but no SRV RRs.
+  Self.Target.Uri := 'sip:' + Self.Domain;
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService,
+                    '_sip._tcp.' + Self.Domain);
+  Self.AddNameRecords(Self.Target.Host);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Self.CheckAorAAAARecords(Locations,
+                             Self.Loc.NAPTR[0].AsSipTransport,
+                             'NAPTR, no SRV');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNaptrSomeSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // Iterate over SRV records
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  // We have two NAPTR records. Probably as a result of an admin slip-up,
+  // there're no SRV records for the first NAPTR. This test shows that we look
+  // up SRV stuff for NAPTR records at least until we find some SRVs.
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService, SrvTlsPrefix + '.' + Self.Domain);
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService, SrvTcpPrefix + '.' + Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP, 'sip.' + Self.Domain);
+  Self.Loc.AddAAAA('sip.' + Self.Domain, Self.AAAARecord);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(Self.Loc.NameRecords.Count,
+                Locations.Count,
+                'No SRV lookup for NAPTR records beyond the first?');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNaptrSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // The target's a domain name, we've NAPTR records from the transport lookup,
+  // and we've SRV RRs.
+  Self.Target.Uri := 'sip:' + Self.Domain;
+  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService,
+                    SrvTlsPrefix + '.' + Self.Domain);
+  Self.Loc.AddNAPTR(Self.Domain, 1, 0, NaptrDefaultFlags, NaptrTcpService,
+                    SrvTcpPrefix + '.' + Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
+
+  Self.AddNameRecords(Self.Target.Host);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(4,                    Locations.Count,        'Location count');
+    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
+    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
+    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
+
+    CheckEquals(TcpTransport,         Locations[2].Transport, '3rd record Transport');
+    CheckEquals(Self.ARecord,         Locations[2].IPAddress, '3rd record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[2].Port,      '3rd record Port');
+    CheckEquals(TcpTransport,         Locations[3].Transport, '4th record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[3].IPAddress, '4th record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[3].Port,      '4th record Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrManualTransportNoSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // The target's a domain name, we've no NAPTR records from the transport lookup,
+  // we've no SRV RRs, but we've a manually-specified transport.
+  Self.Target.Uri := 'sip:' + Self.Domain + ';transport=' + TransportParamTLS_SCTP;
+  Self.AddNameRecords(Self.Target.Host);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Self.CheckAorAAAARecords(Locations,
+                             ParamToTransport(Self.Target.Transport),
+                             'No NAPTR, no SRV, transport param');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrManualTransportSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // The target's a domain name, we've no NAPTR records from the transport lookup,
+  // we've SRV RRs, and the transport's specified.
+
+  Self.Target.Uri := 'sip:' + Self.Domain + ';transport=tls';
+
+  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
+
+  Self.AddNameRecords(Self.Target.Host);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(2,                    Locations.Count,        'Location count');
+    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
+    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
+    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrNoManualTransportNoSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  // A/AAAA lookup
+  Self.Target.Uri := 'sips:' + Self.Domain;
+
+  Self.Port := IdPORT_SIPS; // default for TLS
+  Self.AddNameRecords(Self.Target.Host);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Self.CheckAorAAAARecords(Locations,
+                             TlsTransport,
+                             'No NAPTR, no SRV, no transport param');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrNoManualTransportSrv;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  Self.AddNameRecords(Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
+
+  // iterate over SRV
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(4,                    Locations.Count,        'Location count');
+    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
+    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
+    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
+
+    CheckEquals(TcpTransport,         Locations[2].Transport, '3rd record Transport');
+    CheckEquals(Self.ARecord,         Locations[2].IPAddress, '3rd record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[2].Port,      '3rd record Port');
+    CheckEquals(TcpTransport,         Locations[3].Transport, '4th record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[3].IPAddress, '4th record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[3].Port,      '4th record Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNameWithPort;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.AddNameRecords(Self.Target.Host);
+
+  Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Self.CheckAorAAAARecords(Locations, UdpTransport, 'SIP URI');
+  finally
+    Locations.Free;
+  end;
+
+  Self.Target.Scheme := SipsScheme;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Self.CheckAorAAAARecords(Locations, TlsTransport, 'SIPS URI');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddress;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIP Location count');
+    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
+    CheckEquals(IdPORT_SIP,   Locations[0].Port,      'SIP Port');
+  finally
+    Locations.Free;
+  end;
+
+  Self.IP := '[::1]';
+  Self.Target.Uri := 'sip:' + Self.IP;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIP IPv6 Location count');
+    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP IPv6 Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPv6 IPAddress');
+    CheckEquals(IdPORT_SIP,   Locations[0].Port,      'SIP IPv6 Port');
+  finally
+    Locations.Free;
+  end;
+
+  Self.Target.Scheme := SipsScheme;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIPS Location count');
+    CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
+    CheckEquals(IdPORT_SIPS,  Locations[0].Port,      'SIPS Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddressWithPort;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIP Location count');
+    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
+    CheckEquals(Self.Port,    Locations[0].Port,      'SIP Port');
+  finally
+    Locations.Free;
+  end;
+
+  Self.Target.Scheme := SipsScheme;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    CheckEquals(1,            Locations.Count,        'SIPS Location count');
+    CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
+    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
+    CheckEquals(Self.Port,    Locations[0].Port,      'SIPS Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericMaddr;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sip:foo.com;maddr=' + Self.IP;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Check(Locations.Count > 0, 'Too few locations');
+
+    CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
+    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericMaddrIPv6;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sip:foo.com;maddr=' + Self.AAAARecord;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Check(Locations.Count > 0, 'Too few locations');
+
+    CheckEquals(UdpTransport,    Locations.First.Transport, 'Transport');
+    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
+    CheckEquals(Self.Port,       Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericMaddrSips;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sips:foo.com;maddr=' + Self.ARecord;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Check(Locations.Count > 0, 'Too few locations');
+
+    CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
+    CheckEquals(Self.ARecord, Locations.First.IPAddress, 'IPAddress');
+    CheckEquals(IdPORT_SIPS,  Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForNumericMaddrSipsIPv6;
+var
+  Locations: TIdSipLocations;
+begin
+  Self.Target.Uri := 'sips:foo.com;maddr=' + Self.AAAARecord;
+
+  Locations := TIdSipLocations.Create;
+  try
+    Self.Loc.FindServersFor(Self.Target, Locations);
+
+    Check(Locations.Count > 0, 'Too few locations');
+
+    CheckEquals(TlsTransport,    Locations.First.Transport, 'Transport');
+    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
+    CheckEquals(IdPORT_SIPS,     Locations.First.Port,      'Port');
+  finally
+    Locations.Free;
+  end;
+end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForResponseWithMalformedResponse;
 var
@@ -787,114 +1370,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractLocator.TestNameNaptrSomeSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // Iterate over SRV records
-  Self.Target.Uri := 'sip:' + Self.Domain;
-
-  // We have two NAPTR records. Probably as a result of an admin slip-up,
-  // there're no SRV records for the first NAPTR. This test shows that we look
-  // up SRV stuff for NAPTR records at least until we find some SRVs.
-  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService, SrvTlsPrefix + '.' + Self.Domain);
-  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService, SrvTcpPrefix + '.' + Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 0, 0, IdPORT_SIP, 'sip.' + Self.Domain);
-  Self.Loc.AddAAAA('sip.' + Self.Domain, Self.AAAARecord);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(Self.Loc.NameRecords.Count,
-                Locations.Count,
-                'No SRV lookup for NAPTR records beyond the first?');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestNumericMaddr;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:foo.com;maddr=' + Self.IP;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Check(Locations.Count > 0, 'Too few locations');
-
-    CheckEquals(UdpTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.IP,      Locations.First.IPAddress, 'IPAddress');
-    CheckEquals(Self.Port,    Locations.First.Port,      'Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestNumericMaddrIPv6;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:foo.com;maddr=' + Self.AAAARecord;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Check(Locations.Count > 0, 'Too few locations');
-
-    CheckEquals(UdpTransport,    Locations.First.Transport, 'Transport');
-    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
-    CheckEquals(Self.Port,       Locations.First.Port,      'Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestNumericMaddrSips;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sips:foo.com;maddr=' + Self.ARecord;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Check(Locations.Count > 0, 'Too few locations');
-
-    CheckEquals(TlsTransport, Locations.First.Transport, 'Transport');
-    CheckEquals(Self.ARecord, Locations.First.IPAddress, 'IPAddress');
-    CheckEquals(IdPORT_SIPS,  Locations.First.Port,      'Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestNumericMaddrSipsIPv6;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sips:foo.com;maddr=' + Self.AAAARecord;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Check(Locations.Count > 0, 'Too few locations');
-
-    CheckEquals(TlsTransport,    Locations.First.Transport, 'Transport');
-    CheckEquals(Self.AAAARecord, Locations.First.IPAddress, 'IPAddress');
-    CheckEquals(IdPORT_SIPS,     Locations.First.Port,      'Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestSrvNoNameRecords;
+procedure TestTIdSipAbstractLocator.TestFindServersForSrvNoNameRecords;
 var
   Locations: TIdSipLocations;
 begin
@@ -914,7 +1390,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractLocator.TestSrvNotAvailable;
+procedure TestTIdSipAbstractLocator.TestFindServersForSrvNotAvailable;
 var
   Locations: TIdSipLocations;
 begin
@@ -943,25 +1419,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractLocator.TestSrvTarget;
-begin
-  Self.Target.Uri := 'sip:' + Self.Domain;
-
-  CheckEquals('_sip._tcp.' + Self.Domain,
-              Self.Loc.SrvTarget(Self.Target, 'tcp'),
-              'SIP/TCP lookup');
-
-  CheckEquals('_sip._tcp.' + Self.Domain,
-              Self.Loc.SrvTarget(Self.Target, 'TCP'),
-              'Transports all lowercase');
-
-  Self.Target.Scheme := SipsScheme;
-  CheckEquals('_sips._tcp.' + Self.Domain,
-              Self.Loc.SrvTarget(Self.Target, 'tls'),
-              'SIP/TLS lookup');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportParamTakesPrecedence;
+procedure TestTIdSipAbstractLocator.TestFindServersForTransportParamTakesPrecedence;
 var
   Locations: TIdSipLocations;
 begin
@@ -977,464 +1435,6 @@ begin
     CheckEquals(ParamToTransport(Self.TransportParam),
                 Locations.First.Transport,
                 'Transport param overrules all');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportFor;
-begin
-  Self.TransportParam := TransportParamSCTP;
-  Self.Target.Uri := 'sip:foo.com;transport=' + Self.TransportParam;
-
-  CheckEquals(ParamToTransport(Self.TransportParam),
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'Transport parameter must take precedence');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForNameAndExplicitPort;
-begin
-  Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
-
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Name, explicit port');
-
-  Self.Target.Uri := 'sips:' + Self.Domain + ':' + IntToStr(Self.Port);
-
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Name, explicit port');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv4;
-begin
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Numeric IPv4 address');
-
-  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Numeric IPv4 address, explicit port');
-
-  Self.Target.Scheme := SipsScheme;
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Numeric IPv4 address');
-
-  Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Numeric IPv4 address, explicit port');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForNumericIPv6;
-begin
-  Self.IP := '[::1]';
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Numeric IPv6 address');
-
-  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Numeric IPv6 address, port');
-
-  Self.Target.Scheme := SipsScheme;
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Numeric IPv6 address');
-
-  Self.Target.Uri := 'sips:' + Self.IP + ':' + IntToStr(Self.Port);
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Numeric IPv6 address, explicit port');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForWithNaptr;
-begin
-  Self.IP         := 'example.com';
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  // Values shamelessly stolen from RFC 3263, section 4.1
-  // ;           order pref flags service      regexp  replacement
-  //    IN NAPTR 50   50  "s"  "SIPS+D2T"     ""  _sips._tcp.example.com.
-  //    IN NAPTR 90   50  "s"  "SIP+D2T"      ""  _sip._tcp.example.com
-  //    IN NAPTR 100  50  "s"  "SIP+D2U"      ""  _sip._udp.example.com.
-  Self.Loc.AddNAPTR(Self.IP,  50, 50, 's', NaptrTlsService, '_sips._tcp.example.com');
-  Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', NaptrTcpService, '_sip._tcp.example.com');
-  Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
-
-  CheckEquals(Self.Loc.NAPTR[0].AsSipTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'Name, NAPTR records');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrAndNoSrv;
-begin
-  Self.IP         := 'example.com';
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  CheckEquals(UdpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Name, no NAPTR records, no SRV records');
-
-  Self.Target.Scheme := SipsScheme;
-
-  CheckEquals(TlsTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Name, no NAPTR records, no SRV records');
-end;
-
-procedure TestTIdSipAbstractLocator.TestTransportForWithoutNaptrWithSrv;
-begin
-  Self.IP         := 'example.com';
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  // Values shamelessly stolen from RFC 3263, section 4.1
-  // ;;          Priority Weight Port   Target
-  //     IN SRV  0        1      5060   server1.example.com
-  //     IN SRV  0        2      5060   server2.example.com
-  Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 1, 5060, 'server1.example.com');
-  Self.Loc.AddSRV('example.com', '_sip._tcp', 0, 2, 5060, 'server2.example.com');
-
-  CheckEquals(TcpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIP, Name, no NAPTR records, but SRV records');
-
-  Self.Target.Scheme := SipsScheme;
-  CheckEquals(TcpTransport,
-              Self.Loc.TransportFor(Self.Target,
-                                    Self.Naptr,
-                                    Self.Srv,
-                                    Self.NameRecs),
-              'SIPS, Name, no NAPTR records, but SRV records (none acceptable)');
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNaptrNoSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // The target's a domain name, we've NAPTR records from the transport lookup,
-  // but no SRV RRs.
-  Self.Target.Uri := 'sip:' + Self.Domain;
-  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTcpService,
-                    '_sip._tcp.' + Self.Domain);
-  Self.AddNameRecords(Self.Target.Host);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Self.CheckAorAAAARecords(Locations,
-                             Self.Loc.NAPTR[0].AsSipTransport,
-                             'NAPTR, no SRV');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNaptrSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // The target's a domain name, we've NAPTR records from the transport lookup,
-  // and we've SRV RRs.
-  Self.Target.Uri := 'sip:' + Self.Domain;
-  Self.Loc.AddNAPTR(Self.Domain, 0, 0, NaptrDefaultFlags, NaptrTlsService,
-                    SrvTlsPrefix + '.' + Self.Domain);
-  Self.Loc.AddNAPTR(Self.Domain, 1, 0, NaptrDefaultFlags, NaptrTcpService,
-                    SrvTcpPrefix + '.' + Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
-
-  Self.AddNameRecords(Self.Target.Host);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(4,                    Locations.Count,        'Location count');
-    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
-    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
-    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
-    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
-
-    CheckEquals(TcpTransport,         Locations[2].Transport, '3rd record Transport');
-    CheckEquals(Self.ARecord,         Locations[2].IPAddress, '3rd record IPAddress');
-    CheckEquals(Self.Loc.SRV[1].Port, Locations[2].Port,      '3rd record Port');
-    CheckEquals(TcpTransport,         Locations[3].Transport, '4th record Transport');
-    CheckEquals(Self.AAAARecord,      Locations[3].IPAddress, '4th record IPAddress');
-    CheckEquals(Self.Loc.SRV[1].Port, Locations[3].Port,      '4th record Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrManualTransportNoSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // The target's a domain name, we've no NAPTR records from the transport lookup,
-  // we've no SRV RRs, but we've a manually-specified transport.
-  Self.Target.Uri := 'sip:' + Self.Domain + ';transport=' + TransportParamTLS_SCTP;
-  Self.AddNameRecords(Self.Target.Host);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Self.CheckAorAAAARecords(Locations,
-                             ParamToTransport(Self.Target.Transport),
-                             'No NAPTR, no SRV, transport param');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrManualTransportSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // The target's a domain name, we've no NAPTR records from the transport lookup,
-  // we've SRV RRs, and the transport's specified.
-
-  Self.Target.Uri := 'sip:' + Self.Domain + ';transport=tls';
-
-  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
-
-  Self.AddNameRecords(Self.Target.Host);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(2,                    Locations.Count,        'Location count');
-    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
-    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
-    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
-    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrNoManualTransportNoSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  // A/AAAA lookup
-  Self.Target.Uri := 'sips:' + Self.Domain;
-
-  Self.Port := IdPORT_SIPS; // default for TLS
-  Self.AddNameRecords(Self.Target.Host);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Self.CheckAorAAAARecords(Locations,
-                             TlsTransport,
-                             'No NAPTR, no SRV, no transport param');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrNoManualTransportSrv;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:' + Self.Domain;
-
-  Self.AddNameRecords(Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
-  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
-
-  // iterate over SRV
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(4,                    Locations.Count,        'Location count');
-    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
-    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
-    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
-    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
-    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
-
-    CheckEquals(TcpTransport,         Locations[2].Transport, '3rd record Transport');
-    CheckEquals(Self.ARecord,         Locations[2].IPAddress, '3rd record IPAddress');
-    CheckEquals(Self.Loc.SRV[1].Port, Locations[2].Port,      '3rd record Port');
-    CheckEquals(TcpTransport,         Locations[3].Transport, '4th record Transport');
-    CheckEquals(Self.AAAARecord,      Locations[3].IPAddress, '4th record IPAddress');
-    CheckEquals(Self.Loc.SRV[1].Port, Locations[3].Port,      '4th record Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNameWithPort;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.AddNameRecords(Self.Target.Host);
-
-  Self.Target.Uri := 'sip:' + Self.Domain + ':' + IntToStr(Self.Port);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Self.CheckAorAAAARecords(Locations, UdpTransport, 'SIP URI');
-  finally
-    Locations.Free;
-  end;
-
-  Self.Target.Scheme := SipsScheme;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    Self.CheckAorAAAARecords(Locations, TlsTransport, 'SIPS URI');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddress;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(1,            Locations.Count,        'SIP Location count');
-    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
-    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
-    CheckEquals(IdPORT_SIP,   Locations[0].Port,      'SIP Port');
-  finally
-    Locations.Free;
-  end;
-
-  Self.IP := '[::1]';
-  Self.Target.Uri := 'sip:' + Self.IP;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(1,            Locations.Count,        'SIP IPv6 Location count');
-    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP IPv6 Transport');
-    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPv6 IPAddress');
-    CheckEquals(IdPORT_SIP,   Locations[0].Port,      'SIP IPv6 Port');
-  finally
-    Locations.Free;
-  end;
-
-  Self.Target.Scheme := SipsScheme;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(1,            Locations.Count,        'SIPS Location count');
-    CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
-    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
-    CheckEquals(IdPORT_SIPS,  Locations[0].Port,      'SIPS Port');
-  finally
-    Locations.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForNumericAddressWithPort;
-var
-  Locations: TIdSipLocations;
-begin
-  Self.Target.Uri := 'sip:' + Self.IP + ':' + IntToStr(Self.Port);
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(1,            Locations.Count,        'SIP Location count');
-    CheckEquals(UdpTransport, Locations[0].Transport, 'SIP Transport');
-    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIP IPAddress');
-    CheckEquals(Self.Port,    Locations[0].Port,      'SIP Port');
-  finally
-    Locations.Free;
-  end;
-
-  Self.Target.Scheme := SipsScheme;
-
-  Locations := TIdSipLocations.Create;
-  try
-    Self.Loc.FindServersFor(Self.Target, Locations);
-
-    CheckEquals(1,            Locations.Count,        'SIPS Location count');
-    CheckEquals(TlsTransport, Locations[0].Transport, 'SIPS Transport');
-    CheckEquals(Self.IP,      Locations[0].IPAddress, 'SIPS IPAddress');
-    CheckEquals(Self.Port,    Locations[0].Port,      'SIPS Port');
   finally
     Locations.Free;
   end;
