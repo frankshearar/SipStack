@@ -911,15 +911,12 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
-}
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
-{
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
@@ -945,7 +942,6 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
