@@ -2142,24 +2142,22 @@ begin
 end;
 
 procedure TestTIdSipResponse.TestIsFinal;
+var
+  I: Integer;
 begin
-  Self.Response.StatusCode := SIPTrying;
-  Check(not Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+  for I := 100 to 199 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsFinal,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
 
-  Self.Response.StatusCode := SIPOK;
-  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPMultipleChoices;
-  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPBadRequest;
-  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPInternalServerError;
-  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPBusyEverywhere;
-  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+  for I := 200 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(Self.Response.IsFinal,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
 end;
 
 procedure TestTIdSipResponse.TestIsOK;
@@ -2186,24 +2184,22 @@ begin
 end;
 
 procedure TestTIdSipResponse.TestIsProvisional;
+var
+  I: Integer;
 begin
-  Self.Response.StatusCode := SIPTrying;
-  Check(Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+  for I := 100 to 199 do begin
+    Self.Response.StatusCode := I;
+    Check(Self.Response.IsProvisional,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
 
-  Self.Response.StatusCode := SIPOK;
-  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPMultipleChoices;
-  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPBadRequest;
-  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPInternalServerError;
-  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
-
-  Self.Response.StatusCode := SIPBusyEverywhere;
-  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+  for I := 200 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsProvisional,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
 end;
 
 procedure TestTIdSipResponse.TestIsRequest;
