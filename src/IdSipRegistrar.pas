@@ -390,7 +390,7 @@ begin
         Exit;
       end;
 
-      if Request.HasExpiry and (Request.MinimumExpiry < Self.MinimumExpiryTime) then begin
+      if Request.HasExpiry and (Request.QuickestExpiry < Self.MinimumExpiryTime) then begin
         Self.RejectExpireTooBrief(Request, Transaction);
         Exit;
       end;

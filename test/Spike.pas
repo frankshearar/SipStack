@@ -15,7 +15,8 @@ type
                      IIdSipObserver,
                      IIdSipSessionListener,
                      IIdSipTransportListener,
-                     IIdSipTransportSendingListener)
+                     IIdSipTransportSendingListener,
+                     IIdSipUserAgentListener)
     UiTimer: TTimer;
     Splitter1: TSplitter;
     IOPanel: TPanel;
@@ -66,11 +67,11 @@ type
     procedure OnChanged(Observed: TObject);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnInboundCall(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
-    procedure OnNewSession(Session: TIdSipSession);
     procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
@@ -215,7 +216,7 @@ begin
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
-  Self.UA.AddSessionListener(Self);
+  Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
   Self.UA.HostName := Self.TransportUDP.HostName;
   Self.UA.UserAgentName := 'X-Lite build 1086';
@@ -296,6 +297,15 @@ begin
   Self.StopReadingData;
 end;
 
+procedure TrnidSpike.OnInboundCall(Session: TIdSipSession);
+begin
+  if (Session.Invite.ContentLength > 0) then
+    Self.StartReadingData(Session.Invite.Body);
+
+  Session.AddSessionListener(Self);
+  Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
+end;
+
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
                                        Invite: TIdSipRequest);
 begin
@@ -317,15 +327,6 @@ begin
   else if (Data is TIdRTPT140Payload) then begin
     Self.ProcessText((Data as TIdRTPT140Payload).Block);
   end;
-end;
-
-procedure TrnidSpike.OnNewSession(Session: TIdSipSession);
-begin
-  if (Session.Invite.ContentLength > 0) then
-    Self.StartReadingData(Session.Invite.Body);
-
-  Session.AddSessionListener(Self);
-  Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
 end;
 
 procedure TrnidSpike.OnPlaybackStopped(Origin: TAudioData);

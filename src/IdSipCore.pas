@@ -42,6 +42,28 @@ type
     procedure OnChanged(Observed: TObject);
   end;
 
+  // I provide a protocol for using a registrar. You send a REGISTER, and
+  // listen for the events below.
+  //
+  // You can use OnAuthenticationChallenge to authenticate to a proxy (or
+  // registrar). Note that we cannot distinguish between (1) you contacting
+  // the proxy/registrar for the first time and it asking for credentials,
+  // and (2) you offering invalid credentials.
+  //
+  // OnFailure and OnSuccess, apart from the obvious, tell you that the
+  // registration agent has terminated, and that you should remove all
+  // of your references to it.
+  IIdSipRegistrationListener = interface
+    ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
+    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                        Response: TIdSipResponse);
+    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        const Reason: String);
+    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts);
+  end;
+
   // I am the protocol of things that listen for Sessions:
   // * OnNewSession tells us that someone wants to talk to us - we may refuse or
   //   allow the session.
@@ -55,17 +77,12 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
-    procedure OnNewSession(Session: TIdSipSession);
   end;
 
-  IIdSipRegistrationListener = interface
-    ['{D3FA9A3D-ED8A-48D3-8068-38E8F9EE2140}']
-    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
-                                        Response: TIdSipResponse);
-    procedure OnFailure(RegisterAgent: TIdSipRegistration;
-                        CurrentBindings: TIdSipContacts;
-                        const Reason: String);
-    procedure OnSuccess(CurrentBindings: TIdSipContacts);
+  IIdSipUserAgentListener = interface
+    ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
+    procedure OnInboundCall(Session: TIdSipSession);
+//    procedure OnRegistrationRequest(Registration: TIdSipRegistration);
   end;
 
   // TODO: there's redundance with this Hostname, and the Hostnames of the
@@ -204,10 +221,10 @@ type
     RegistrationListeners:    TList;
     RegistrationLock:         TCriticalSection;
     Registrations:            TObjectList;
-    SessionListenerLock:      TCriticalSection;
-    SessionListeners:         TList;
     SessionLock:              TCriticalSection;
     Sessions:                 TObjectList;
+    UserAgentListenerLock:    TCriticalSection;
+    UserAgentListeners:       TList;
 
     function  AddInboundSession(Invite: TIdSipRequest;
                                 Transaction: TIdSipTransaction;
@@ -247,7 +264,7 @@ type
     destructor  Destroy; override;
 
     procedure AddObserver(const Listener: IIdSipObserver);
-    procedure AddSessionListener(const Listener: IIdSipSessionListener);
+    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipSession;
@@ -270,7 +287,7 @@ type
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure RemoveRegistration(Registration: TIdSipRegistration);
-    procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
+    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure RemoveSession(Session: TIdSipSession);
     function  SessionCount: Integer;
     procedure HangUpAllCalls;
@@ -409,10 +426,13 @@ type
   TIdSipRegistration = class(TIdInterfacedObject,
                              IIdSipTransactionListener)
   private
+    Bindings:     TIdSipContacts;
     UA:           TIdSipUserAgentCore;
     ListenerLock: TCriticalSection;
     Listeners:    TList;
 
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse);
     procedure NotifyOfFailure(CurrentBindings: TIdSipContacts;
                               const Reason: String);
@@ -426,6 +446,9 @@ type
                                 Transaction: TIdSipTransaction;
                                 Receiver: TIdSipTransport);
     procedure OnTerminated(Transaction: TIdSipTransaction);
+    procedure ReissueRequest(Registrar: TIdSipUri;
+                             MinimumExpiry: Cardinal);
+    procedure Send(Request: TIdSipRequest);
   public
     constructor Create(UA: TIdSipUserAgentCore);
     destructor  Destroy; override;
@@ -936,10 +959,10 @@ begin
   Self.RegistrationListeners    := TList.Create;
   Self.RegistrationLock         := TCriticalSection.Create;
   Self.Registrations            := TObjectList.Create;
-  Self.SessionListenerLock      := TCriticalSection.Create;
-  Self.SessionListeners         := TList.Create;
   Self.SessionLock              := TCriticalSection.Create;
   Self.Sessions                 := TObjectList.Create;
+  Self.UserAgentListenerLock    := TCriticalSection.Create;
+  Self.UserAgentListeners       := TList.Create;
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
@@ -962,10 +985,10 @@ begin
   Self.AllowedContentTypeList.Free;
   Self.Contact.Free;
   Self.From.Free;
+  Self.UserAgentListeners.Free;
+  Self.UserAgentListenerLock.Free;  
   Self.Sessions.Free;
   Self.SessionLock.Free;
-  Self.SessionListeners.Free;
-  Self.SessionListenerLock.Free;
   Self.Registrations.Free;
   Self.RegistrationLock.Free;
   Self.RegistrationListeners.Free;
@@ -987,13 +1010,13 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.AddSessionListener(const Listener: IIdSipSessionListener);
+procedure TIdSipUserAgentCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.UserAgentListenerLock.Acquire;
   try
-    Self.SessionListeners.Add(Pointer(Listener));
+    Self.UserAgentListeners.Add(Pointer(Listener));
   finally
-    Self.SessionListenerLock.Release;
+    Self.UserAgentListenerLock.Release;
   end;
 end;
 
@@ -1049,9 +1072,12 @@ begin
                            Result.CallID,
                            Result.CSeq.SequenceNo);
 
-    Result.Method      := MethodRegister;
-    Result.CSeq.Method := MethodRegister;
+    Result.Method := MethodRegister;
     Result.RequestUri.EraseUserInfo;
+
+    Result.CSeq.Method     := MethodRegister;
+    Result.CSeq.SequenceNo := Self.NextSequenceNoFor(Registrar.Address);
+
     Result.CallID := Self.CallIDFor(Registrar.Address);
 
     Result.ToHeader.Value := Self.Contact.Value;
@@ -1272,13 +1298,13 @@ begin
   Self.NotifyOfChange;
 end;
 
-procedure TIdSipUserAgentCore.RemoveSessionListener(const Listener: IIdSipSessionListener);
+procedure TIdSipUserAgentCore.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.UserAgentListenerLock.Acquire;
   try
-    Self.SessionListeners.Remove(Pointer(Listener));
+    Self.UserAgentListeners.Remove(Pointer(Listener));
   finally
-    Self.SessionListenerLock.Release;
+    Self.UserAgentListenerLock.Release;
   end;
 end;
 
@@ -1398,12 +1424,8 @@ end;
 
 function TIdSipUserAgentCore.CallIDFor(Registrar: TIdSipUri): String;
 begin
-  if Self.KnowsRegistrar(Registrar) then
-    Result := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar)).CallID
-  else begin
-    Result := '';
-    raise Exception.Create('We should never get here');
-  end;
+  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
+  Result := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar)).CallID
 end;
 
 function TIdSipUserAgentCore.DefaultFrom: String;
@@ -1485,12 +1507,12 @@ procedure TIdSipUserAgentCore.NotifyOfNewSession(Session: TIdSipSession);
 var
   I: Integer;
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.UserAgentListenerLock.Acquire;
   try
-    for I := 0 to Self.SessionListeners.Count - 1 do
-      IIdSipSessionListener(Self.SessionListeners[I]).OnNewSession(Session);
+    for I := 0 to Self.UserAgentListeners.Count - 1 do
+      IIdSipUserAgentListener(Self.UserAgentListeners[I]).OnInboundCall(Session);
   finally
-    Self.SessionListenerLock.Release;
+    Self.UserAgentListenerLock.Release;
   end;
 end;
 
@@ -1583,13 +1605,11 @@ function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
 var
   RegInfo: TIdSipRegistrationInfo;
 begin
-  if Self.KnowsRegistrar(Registrar) then begin
-    RegInfo := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar));
-    Result := RegInfo.SequenceNo;
-    RegInfo.SequenceNo := Result + 1;
-  end
-  else
-    Result := 0;
+  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
+
+  RegInfo := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar));
+  Result := RegInfo.SequenceNo;
+  RegInfo.SequenceNo := Result + 1;
 end;
 
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
@@ -2230,6 +2250,7 @@ constructor TIdSipRegistration.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create;
 
+  Self.Bindings     := TIdSipContacts.Create;
   Self.ListenerLock := TCriticalSection.Create;
   Self.Listeners    := TList.Create;
 
@@ -2240,6 +2261,7 @@ destructor TIdSipRegistration.Destroy;
 begin
   Self.Listeners.Free;
   Self.ListenerLock.Free;
+  Self.Bindings.Free;
 
   inherited Destroy;
 end;
@@ -2254,27 +2276,20 @@ begin
   end;
 end;
 
+//  Request := Self.CreateRequest(Registrar, Bindings);
+
 procedure TIdSipRegistration.Register(Registrar: TIdSipUri; Bindings: TIdSipContacts);
 var
-  ToHeader:    TIdSipToHeader;
-  Transaction: TIdSipTransaction;
-  Request:     TIdSipRequest;
+  Request: TIdSipRequest;
 begin
-  ToHeader := TIdSipToHeader.Create;
+  Request := Self.CreateRegister(Registrar, Bindings);
   try
-    ToHeader.Address := Registrar;
+    Self.Bindings.Clear;
+    Self.Bindings.Add(Bindings);
 
-    Request := Self.UA.CreateRegister(ToHeader);
-    try
-      Request.AddHeaders(Bindings);
-      Transaction := Self.UA.Dispatcher.AddClientTransaction(Request);
-      Transaction.AddTransactionListener(Self);
-      Transaction.SendRequest;
-    finally
-      Request.Free;
-    end;
+    Self.Send(Request);
   finally
-    ToHeader.Free;
+    Request.Free;
   end;
 end;
 
@@ -2303,6 +2318,34 @@ begin
 end;
 
 //* TIdSipRegistration Private methods *****************************************
+
+function TIdSipRegistration.CreateRegister(Registrar: TIdSipUri;
+                                           Bindings: TIdSipContacts): TIdSipRequest;
+var
+  OldContacts: TIdSipContacts;
+  ToHeader: TIdSipToHeader;
+begin
+  ToHeader := TIdSipToHeader.Create;
+  try
+    ToHeader.Address := Registrar;
+
+    Result := Self.UA.CreateRegister(ToHeader);
+
+    // Bindings explicitly carries all Contact information. Thus we must remove
+    // any Contact information already in Result.
+    OldContacts := TIdSipContacts.Create(Result.Headers);
+    try
+      OldContacts.Clear;
+    finally
+      OldContacts.Free;
+    end;
+
+    Result.AddHeaders(Bindings);
+  finally
+    ToHeader.Free;
+  end;
+
+end;
 
 procedure TIdSipRegistration.NotifyOfAuthenticationChallenge(Response: TIdSipResponse);
 var
@@ -2340,7 +2383,8 @@ begin
   Self.ListenerLock.Acquire;
   try
     for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipRegistrationListener(Self.Listeners[I]).OnSuccess(CurrentBindings);
+      IIdSipRegistrationListener(Self.Listeners[I]).OnSuccess(Self,
+                                                              CurrentBindings);
   finally
     Self.ListenerLock.Release;
   end;
@@ -2373,6 +2417,8 @@ begin
       SIPUnauthorized,
       SIPProxyAuthenticationRequired:
         Self.NotifyOfAuthenticationChallenge(Response);
+      SIPIntervalTooBrief: Self.ReissueRequest(Transaction.InitialRequest.RequestUri,
+                                               Response.FirstMinExpires.NumericValue);
     else
       Self.NotifyOfFailure(Bindings,
                            IntToStr(Response.StatusCode)
@@ -2386,6 +2432,45 @@ end;
 procedure TIdSipRegistration.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Transaction.RemoveTransactionListener(Self);
+end;
+
+procedure TIdSipRegistration.ReissueRequest(Registrar: TIdSipUri;
+                                            MinimumExpiry: Cardinal);
+var
+  Bindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  // We received a 423 Interval Too Brief from the registrar. Therefore we
+  // make a new REGISTER request with the registrar's minimum expiry.
+  Request := Self.CreateRegister(Registrar, Self.Bindings);
+  try
+    Bindings := TIdSipContacts.Create(Request.Headers);
+    try
+      Bindings.First;
+      while Bindings.HasNext do begin
+        if Bindings.CurrentContact.WillExpire then
+          Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
+                                                     MinimumExpiry);
+        Bindings.Next;
+      end;
+    finally
+      Bindings.Free;
+    end;
+
+    Request.FirstExpires.NumericValue := MinimumExpiry;
+    Self.Send(Request);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipRegistration.Send(Request: TIdSipRequest);
+var
+  Transaction: TIdSipTransaction;
+begin
+  Transaction := Self.UA.Dispatcher.AddClientTransaction(Request);
+  Transaction.AddTransactionListener(Self);
+  Transaction.SendRequest;
 end;
 
 end.

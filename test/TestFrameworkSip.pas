@@ -70,7 +70,8 @@ type
     procedure OnFailure(RegisterAgent: TIdSipRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
-    procedure OnSuccess(CurrentBindings: TIdSipContacts);
+    procedure OnSuccess(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts);
 
     property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
     property Failure:                 Boolean read fSuccess;
@@ -176,6 +177,18 @@ type
 
     property ReceivedUnhandledRequest:  Boolean read fReceivedUnhandledRequest;
     property ReceivedUnhandledResponse: Boolean read fReceivedUnhandledResponse;
+  end;
+
+  TIdSipTestUserAgentListener = class(TIdInterfacedObject,
+                                      IIdSipUserAgentListener)
+  private
+    fInboundCall: Boolean;
+
+    procedure OnInboundCall(Session: TIdSipSession);
+  public
+    constructor Create;
+
+    property InboundCall: Boolean read fInboundCall write fInboundCall;
   end;
 
   // constants used in tests
@@ -296,7 +309,8 @@ begin
   Self.fFailure := true;
 end;
 
-procedure TIdSipTestRegistrationListener.OnSuccess(CurrentBindings: TIdSipContacts);
+procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipRegistration;
+                                                   CurrentBindings: TIdSipContacts);
 begin
   Self.fSuccess := true;
 end;
@@ -462,6 +476,25 @@ procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse(Response
                                                                         Receiver: TIdSipTransport);
 begin
   fReceivedUnhandledResponse := true;
+end;
+
+//******************************************************************************
+//* TIdSipTestUserAgentListener                                                *
+//******************************************************************************
+//* TIdSipTestUserAgentListener Public methods *********************************
+
+constructor TIdSipTestUserAgentListener.Create;
+begin
+  inherited Create;
+
+  fInboundCall := false;
+end;
+
+//* TIdSipTestUserAgentListener Private methods ********************************
+
+procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipSession);
+begin
+  fInboundCall := true;
 end;
 
 end.

@@ -33,8 +33,8 @@ type
     function  GetFrom: TIdSipFromHeader;
     function  GetTo: TIdSipToHeader;
     function  Minimum(A, B: Cardinal): Cardinal;
-    function  MinimumContactExpiry: Cardinal;
-    function  MinimumExpiresHeader: Cardinal;
+    function  QuickestContactExpiry: Cardinal;
+    function  QuickestExpiresHeader: Cardinal;
     procedure SetCallID(const Value: String);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
     procedure SetContentLength(Value: Cardinal);
@@ -64,7 +64,7 @@ type
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  HeaderCount: Integer;
-    function  MinimumExpiry: Cardinal;
+    function  QuickestExpiry: Cardinal;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
@@ -474,13 +474,13 @@ begin
   Result := Self.Headers.Count;
 end;
 
-function TIdSipMessage.MinimumExpiry: Cardinal;
+function TIdSipMessage.QuickestExpiry: Cardinal;
 begin
   if not Self.HasExpiry then
     Result := 0
   else begin
-    Result := Self.Minimum(Self.MinimumContactExpiry,
-                           Self.MinimumExpiresHeader)
+    Result := Self.Minimum(Self.QuickestContactExpiry,
+                           Self.QuickestExpiresHeader)
   end;
 end;
 
@@ -567,7 +567,7 @@ begin
     Result := B;
 end;
 
-function TIdSipMessage.MinimumContactExpiry: Cardinal;
+function TIdSipMessage.QuickestContactExpiry: Cardinal;
 var
   Contacts: TIdSipContacts;
 begin
@@ -588,7 +588,7 @@ begin
   end;
 end;
 
-function TIdSipMessage.MinimumExpiresHeader: Cardinal;
+function TIdSipMessage.QuickestExpiresHeader: Cardinal;
 var
   Expires: TIdSipExpiresHeaders;
 begin
