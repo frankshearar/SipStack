@@ -24,6 +24,7 @@ type
 
     procedure WaitForSignaled; overload;
     procedure WaitForSignaled(Event: TEvent); overload;
+    procedure WaitForSignaled(Event: TEvent; Msg: String); overload;
     procedure WaitForTimeout(Msg: String); overload;
     procedure WaitForTimeout(Event: TEvent; Msg: String); overload;
   public
@@ -86,8 +87,13 @@ end;
 
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent);
 begin
+  Self.WaitForSignaled(Event, Self.ExceptionMessage);
+end;
+
+procedure TThreadingTestCase.WaitForSignaled(Event: TEvent; Msg: String);
+begin
   if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    raise Self.ExceptionType.Create(Msg);
 
   Event.ResetEvent;
 end;
