@@ -17,7 +17,15 @@ type
                                     AMessage: TIdSipMessage);
     procedure CheckMethodEvent(AThread: TIdPeerThread;
                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest19(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
     procedure CheckTortureTest21(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest22(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest23(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
+    procedure CheckTortureTest40(AThread: TIdPeerThread;
                                 AMessage: TIdSipMessage);
   public
     procedure SetUp; override;
@@ -27,7 +35,11 @@ type
     procedure TestMalformedRequest;
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
+    procedure TestTortureTest19;
     procedure TestTortureTest21;
+    procedure TestTortureTest22;
+    procedure TestTortureTest23;
+    procedure TestTortureTest40;
   end;
 
 const
@@ -111,13 +123,35 @@ begin
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.Headers.Items[3].AsString, 'From');
     CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.Headers.Items[4].AsString, 'Call-ID');
     CheckEquals('CSeq: 314159 INVITE',                                     Request.Headers.Items[5].AsString, 'CSeq');
-    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.Headers.Items[6].AsString, 'Contact');
+    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',           Request.Headers.Items[6].AsString, 'Contact');
     CheckEquals('Content-Length: 29',                                      Request.Headers.Items[7].AsString, 'Content-Length');
     CheckEquals(8, Request.Headers.Count, 'Header count');
 
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
 
     Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest19(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion, Response.SipVersion, 'SipVersion');
+    CheckEquals(400,        Response.StatusCode, 'StatusCode');
+
+    CheckEquals(Format(MalformedToken, [ToHeaderFull, '"Mr. J. User <sip:j.user@company.com>']),
+                Response.StatusText,
+                'StatusText');
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -137,6 +171,71 @@ begin
     CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
     CheckEquals(400,                       Response.StatusCode, 'StatusCode');
     CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest22(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest23(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest40(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(400,                Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
+                Response.StatusText,
+                'StatusText');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -268,12 +367,44 @@ begin
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
 end;
 
+procedure TestTIdSipTcpServer.TestTortureTest19;
+begin
+  Server.OnMethod := Self.CheckTortureTest19;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest19);
+end;
+
 procedure TestTIdSipTcpServer.TestTortureTest21;
 begin
   Server.OnMethod := Self.CheckTortureTest21;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest21);
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest22;
+begin
+  Server.OnMethod := Self.CheckTortureTest22;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest22);
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest23;
+begin
+  Server.OnMethod := Self.CheckTortureTest23;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest23);
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest40;
+begin
+  Server.OnMethod := Self.CheckTortureTest40;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest40);
 end;
 
 initialization

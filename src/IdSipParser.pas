@@ -41,13 +41,17 @@ type
     property Params[const Name: String]: String read GetParam write SetParam;
   end;
 
+  TIdSipHeaderClass = class of TIdSipHeader;
+
   TIdSipAddressHeader = class(TIdSipHeader)
   private
     fAddress:     TIdURI;
     fDisplayName: String;
 
+    function  QuoteStringIfNecessary(const Name: String): String;
     procedure SetAddress(const Value: TIdURI);
   protected
+    function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
@@ -58,6 +62,18 @@ type
 
     property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
+  end;
+
+  TIdSipCSeqHeader = class(TIdSipHeader)
+  private
+    fMethod:     String;
+    fSequenceNo: Cardinal;
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    property Method: String       read fMethod     write fMethod;
+    property SequenceNo: Cardinal read fSequenceNo write fSequenceNo;
   end;
 
   TIdSipViaHeader = class(TIdSipHeader)
@@ -80,9 +96,20 @@ type
     property Transport:  TIdSipTransportType read fTransport write fTransport;
   end;
 
+  TIdSipHeaderMap = class(TObject)
+    fHeaderName:  String;
+    fHeaderClass: TIdSipHeaderClass;
+  public
+    constructor Create(HeaderName: String; HeaderClass: TIdSipHeaderClass);
+    property HeaderName:  String            read fHeaderName;
+    property HeaderClass: TIdSipHeaderClass read fHeaderClass;
+  end;
+
   TIdSipHeaders = class(TObject)
   private
     List: TObjectList;
+
+    class function HeaderTypes: TObjectList;
 
     function  ConstructHeader(const HeaderName: String): TIdSipHeader;
     function  GetHeaders(const Name: String): TIdSipHeader;
@@ -95,6 +122,7 @@ type
     class function IsCallID(Header: String): Boolean;
     class function IsContact(Header: String): Boolean;
     class function IsContentLength(Header: String): Boolean;
+    class function IsCSeq(Header: String): Boolean;
     class function IsFrom(Header: String): Boolean;
     class function IsMaxForwards(Header: String): Boolean;
     class function IsTo(Header: String): Boolean;
@@ -138,11 +166,13 @@ type
 
     function  GetCallID: String;
     function  GetContentLength: Cardinal;
+    function  GetCSeq: TIdSipCSeqHeader;
     function  GetFrom: TIdSipAddressHeader;
     function  GetMaxForwards: Byte;
     function  GetTo: TIdSipAddressHeader;
     procedure SetCallID(const Value: String);
     procedure SetContentLength(const Value: Cardinal);
+    procedure SetCSeq(const Value: TIdSipCSeqHeader);
     procedure SetFrom(const Value: TIdSipAddressHeader);
     procedure SetMaxForwards(const Value: Byte);
     procedure SetPath(const Value: TIdSipPath);
@@ -160,6 +190,7 @@ type
     property Body:          String              read fBody write fBody;
     property CallID:        String              read GetCallID write SetCallID;
     property ContentLength: Cardinal            read GetContentLength write SetContentLength;
+    property CSeq:          TIdSipCSeqHeader    read GetCSeq write SetCSeq;
     property From:          TIdSipAddressHeader read GetFrom write SetFrom;
     property Headers:       TIdSipHeaders       read fHeaders;
     property MaxForwards:   Byte                read GetMaxForwards write SetMaxForwards;
@@ -212,6 +243,8 @@ type
     procedure ParseViaHeader(const Msg: TIdSipMessage; ViaParms: String);
     procedure ResetCurrentLine;
   public
+    class function IsMethod(Method: String): Boolean;
+    class function IsToken(const Token: String): Boolean;
     constructor Create;
 
     function  CanonicaliseName(HeaderName: String): String;
@@ -220,7 +253,6 @@ type
     function  GetHeaderName(Header: String): String;
     function  GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
     function  GetHeaderValue(Header: String): String;
-    function  IsMethod(Method: String): Boolean;
     function  IsNumber(Number: String): Boolean;
     function  IsSipVersion(Version: String): Boolean;
     function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
@@ -404,6 +436,10 @@ implementation
 
 uses
   StrUtils;
+
+// class variables
+var
+  GIdSipHeadersMap: TObjectList;
 
 //******************************************************************************
 //* Unit public procedures & functions                                         *
@@ -622,10 +658,10 @@ begin
 
   if (Result <> '') then begin
     if (Result = '\') then
-      raise EBadHeader.Create(Format(MalformedToken, [Self.Name, BadSyntax]));
+      raise EBadHeader.Create(Self.Name);
 
     if (Length(Result) >= 2) and (Result[Length(Result)] = '\') and (Result[Length(Result) - 1] <> '\') then
-      raise EBadHeader.Create(Format(MalformedToken, [Self.Name, BadSyntax]));
+      raise EBadHeader.Create(Self.Name);
 
     // We use "<" and not "<=" because if a \ is the last character we have
     // a malformed string. Too, this allows use to Result[I + 1]
@@ -655,49 +691,139 @@ end;
 
 //* TIdSipAddressHeader Protected methods **************************************
 
+function TIdSipAddressHeader.GetValue: String;
+var
+  URI: String;
+begin
+  Result := Self.DisplayName;
+  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
+    Result := Self.EncodeQuotedStr(Result);
+
+  Result := Self.QuoteStringIfNecessary(Result);
+
+//  if (Pos(' ', Result) > 0) then
+//    Result := '"' + Result + '"';
+
+  URI := Self.Address.GetFullURI;
+  if (Pos(';', URI) > 0) or (Pos(',', URI) > 0) or (Pos('?', URI) > 0) or (Result <> '') then
+    URI := '<' + URI + '>';
+
+  if (Result = '') then
+    Result := URI
+  else
+    Result := Result + ' ' + URI;
+end;
+
 procedure TIdSipAddressHeader.SetValue(const Value: String);
 var
   Name: String;
   S:    String;
+  PreserveSemicolon: Boolean;
 begin
-  inherited SetValue(Value);
-
+  PreserveSemicolon := false;
   Self.DisplayName := '';
   Self.Address.URI := '';
 
-  if (Pos('<', Self.Value) > 0) then begin
-    S := Self.Value;
+  S := Trim(Value);
 
-    Name := Trim(Fetch(S, '<'));
-
-    if (Pos('"', Name) > 0) then begin
+  if (Pos('<', S) > 0) then begin
+    if (S[1] = '"') then begin
+      Name := Trim(Fetch(S, '<'));
       Delete(Name, 1, 1);
 
       if (Pos('"', Name) = 0) then
-        raise EBadHeader.Create(Format(MalformedToken, [Self.Name, UnmatchedQuotes]));
+        raise EBadHeader.Create(Self.Name);
 
       Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
 
       // There was an encoded ", which MUST NOT match the opening "
-      if (Name[Length(Name)] = '\') then
-        raise EBadHeader.Create(Format(MalformedToken, [Self.Name, UnmatchedQuotes]));
+      if (Name <> '') and (Name[Length(Name)] = '\') then
+        raise EBadHeader.Create(Self.Name);
 
-      Name := Self.DecodeQuotedStr(Name);
+        Self.DisplayName := Self.DecodeQuotedStr(Name);
+    end else begin
+      Self.DisplayName := Trim(Fetch(S, '<'));
     end;
 
     Self.Address.URI := Trim(Fetch(S, '>'));
-    Self.DisplayName := Name;
   end
   else begin
-    Self.Address.URI := Self.Value;
-  end
+    // any semicolons in a URI not in angle brackets indicate that the
+    // HEADER has the parameters, not the URI
+    PreserveSemicolon := Pos(';', S) > 0;
+    Self.Address.URI := Trim(Fetch(S, ';'));
+  end;
+
+  // watch out for HEADER parameters versus URI parameters
+
+  if PreserveSemicolon then
+    S := ';' + S;
+  inherited SetValue(S);
 end;
 
 //* TIdSipAddressHeader Private methods ****************************************
 
+function TIdSipAddressHeader.QuoteStringIfNecessary(const Name: String): String;
+var
+  S:     String;
+  Token: String;
+  DontQuote: Boolean;
+begin
+  if (Name = '') then
+    Result := Name
+  else begin
+    DontQuote := true;
+    S := Name;
+    while (S <> '') do begin
+      Token := Fetch(S, ' ');
+      DontQuote := DontQuote and TIdSipParser.IsToken(Token);
+    end;
+
+    Result := Name;
+
+    if not DontQuote then
+      Result := '"' + Result + '"'
+  end;
+end;
+
 procedure TIdSipAddressHeader.SetAddress(const Value: TIdURI);
 begin
   fAddress.URI := Value.URI;
+end;
+
+//******************************************************************************
+//* TIdSipCSeqHeader                                                           *
+//******************************************************************************
+//* TIdSipCSeqHeader Protected methods *****************************************
+
+function TIdSipCSeqHeader.GetValue: String;
+begin
+  Result := IntToStr(Self.SequenceNo) + ' ' + Self.Method;
+end;
+
+procedure TIdSipCSeqHeader.SetValue(const Value: String);
+var
+  S:     String;
+  Token: String;
+  E:     Integer;
+  N:     Cardinal;
+begin
+  S := Trim(Value);
+  // Yes, sure, there will be no spaces returned from Fetch(S, ' '). But what
+  // about whitespace? Best to be sure!
+  Token := Trim(Fetch(S, ' '));
+
+  Val(Token, N, E);
+  if (E <> 0) then
+    raise EBadHeader.Create(Self.Name);
+
+  Self.SequenceNo := N;
+
+  Token := Trim(S);
+  if not TIdSipParser.IsMethod(Token) then
+    raise EBadHeader.Create(Self.Name);
+
+    Self.Method := Token;
 end;
 
 //******************************************************************************
@@ -752,6 +878,7 @@ begin
   inherited SetValue(Value);
 
   S := Value;
+  S := Fetch(S, ';', false);
 
   Token := Trim(Fetch(S, '/')) + '/';
   Token := Token + Trim(Fetch(S, '/'));
@@ -762,11 +889,24 @@ begin
   Self.Transport := StrToTransport(Token);
   Token := Trim(Fetch(S, ';'));
   Self.Host := Fetch(Token, ':');
-  
-  if (Token = '') then 
+
+  if (Token = '') then
     Self.Port := Self.DefaultPortForTransport(Self.Transport)
   else
     Self.Port := StrToInt(Token);
+end;
+
+//******************************************************************************
+//* TIdSipHeaderMap                                                            *
+//******************************************************************************
+//* TIdSipHeaderMap Public methods *********************************************
+
+constructor TIdSipHeaderMap.Create(HeaderName: String; HeaderClass: TIdSipHeaderClass);
+begin
+  inherited Create;
+
+  fHeaderName := HeaderName;
+  fHeaderClass  := HeaderClass;
 end;
 
 //******************************************************************************
@@ -804,6 +944,14 @@ begin
   Name := Self.GetHeaderName(Header);
   Result := IsEqual(Name, ContentLengthHeaderFull)
          or IsEqual(Name, ContentLengthHeaderShort);
+end;
+
+class function TIdSipHeaders.IsCSeq(Header: String): Boolean;
+var
+  Name: String;
+begin
+  Name := Self.GetHeaderName(Header);
+  Result := IsEqual(Name, CSeqHeader);
 end;
 
 class function TIdSipHeaders.IsFrom(Header: String): Boolean;
@@ -890,13 +1038,37 @@ end;
 
 //* TIdSipHeaders Private methods **********************************************
 
-function TIdSipHeaders.ConstructHeader(const HeaderName: String): TIdSipHeader;
+class function TIdSipHeaders.HeaderTypes: TObjectList;
 begin
-       if TIdSipHeaders.IsContact(HeaderName) then Result := TIdSipAddressHeader.Create
-  else if TIdSipHeaders.IsFrom(HeaderName) then    Result := TIdSipAddressHeader.Create
-  else if TIdSipHeaders.IsTo(HeaderName) then      Result := TIdSipAddressHeader.Create
-  else if TIdSipHeaders.IsVia(HeaderName) then     Result := TIdSipViaHeader.Create
-  else
+  if not Assigned(GIdSipHeadersMap) then begin
+    GIdSipHeadersMap := TObjectList.Create(true);
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,  TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort, TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,         TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,     TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,    TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,       TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,      TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,      TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,     TIdSipViaHeader));
+  end;
+
+  Result := GIdSipHeadersMap;
+end;
+
+function TIdSipHeaders.ConstructHeader(const HeaderName: String): TIdSipHeader;
+var
+  I: Integer;
+begin
+  Result := nil;
+  I := 0;
+  while (I < Self.HeaderTypes.Count) and not Assigned(Result) do
+    if IsEqual(TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderName, HeaderName) then
+      Result := TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderClass.Create
+    else
+      Inc(I);
+
+  if not Assigned(Result) then
     Result := TIdSipHeader.Create;
 end;
 
@@ -1070,6 +1242,11 @@ begin
   Result := StrToInt(Self.Headers[ContentLengthHeaderFull].Value);
 end;
 
+function TIdSipMessage.GetCSeq: TIdSipCSeqHeader;
+begin
+  Result := Self.Headers[CSeqHeader] as TIdSipCSeqHeader;
+end;
+
 function TIdSipMessage.GetFrom: TIdSipAddressHeader;
 begin
   Result := Self.Headers[FromHeaderFull] as TIdSipAddressHeader;
@@ -1096,6 +1273,11 @@ end;
 procedure TIdSipMessage.SetContentLength(const Value: Cardinal);
 begin
   Self.Headers[ContentLengthHeaderFull].Value := IntToStr(Value);
+end;
+
+procedure TIdSipMessage.SetCSeq(const Value: TIdSipCSeqHeader);
+begin
+  Self.CSeq.Assign(Value);
 end;
 
 procedure TIdSipMessage.SetFrom(const Value: TIdSipAddressHeader);
@@ -1219,6 +1401,26 @@ end;
 //******************************************************************************
 //* TIdSipParser Public methods ************************************************
 
+class function TIdSipParser.IsMethod(Method: String): Boolean;
+begin
+  Result := Self.IsToken(Method);
+end;
+
+class function TIdSipParser.IsToken(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do begin
+      Result := Result and (Token[I] in ['a'..'z', 'A'..'Z', '0'..'9',
+                                         '-', '.', '!', '%', '*', '_',
+                                       '+', '`', '''', '~']);
+      if not Result then Break;
+    end;
+end;
+
 constructor TIdSipParser.Create;
 begin
   inherited Create;
@@ -1291,38 +1493,18 @@ begin
   end;
 end;
 
-function TIdSipParser.IsMethod(Method: String): Boolean;
-var
-  I: Integer;
-  function IsAlphaNum(const C: Char): Boolean;
-  begin
-    Result := C in ['a'..'z', 'A'..'Z', '0'..'9'];
-  end;
-begin
-  Result := (Length(Method) > 0) and IsAlphaNum(Method[1]);
-
-  if (Result) then begin
-    I := 2;
-    while (I < Length(Method)) and Result do begin
-      Result := Result and (IsAlphaNum(Method[I])
-                            or (Method[I] in ['-', '.', '!', '%', '*', '_', '+', '`', '''', '~']));
-
-
-
-      Inc(I);
-    end;
-  end;
-end;
-
 function TIdSipParser.IsNumber(Number: String): Boolean;
 var
   I: Integer;
 begin
-  Result := Length(Number) > 0;
+  Result := Number <> '';
 
   if (Result) then
-    for I := 1 to Length(Number) do
+    for I := 1 to Length(Number) do begin
       Result := Result and (Number[I] in ['0'..'9']);
+
+      if not Result then Break;
+    end;
 end;
 
 function TIdSipParser.IsSipVersion(Version: String): Boolean;
@@ -1485,25 +1667,30 @@ procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: Strin
 var
   N: Integer;
 begin
-  if TIdSipHeaders.IsCallID(Header) then
-    Msg.CallID := Self.GetHeaderValue(Header)
-  else if TIdSipHeaders.IsContact(Header) then
-    Self.ParseContactHeader(Msg, Self.GetHeaderValue(Header))
-  else if TIdSipHeaders.IsContentLength(Header) then
-    Msg.ContentLength := Self.GetHeaderNumberValue(Msg, Header)
-  else if TIdSipHeaders.IsMaxForwards(Header) then begin
-    N := Self.GetHeaderNumberValue(Msg, Header);
-    if (N < 0) or (N > 255) then
-      raise Msg.MalformedException.Create(Format(MalformedToken, [Self.GetHeaderName(Header), Header]));
-    Msg.MaxForwards := N;
-  end
-//  else if TIdSipHeaders.IsTo(Header) then begin
-//    Msg.Headers.Add(ToHeaderFull).Value := Self.GetHeaderValue(Header);
-//  end
-  else if TIdSipHeaders.IsVia(Header) then
-    Self.ParseViaHeader(Msg, Self.GetHeaderValue(Header))
-  else
-    Self.AddHeader(Msg, Header);
+  try
+    if TIdSipHeaders.IsCallID(Header) then
+      Msg.CallID := Self.GetHeaderValue(Header)
+    else if TIdSipHeaders.IsContact(Header) then
+      Self.ParseContactHeader(Msg, Self.GetHeaderValue(Header))
+    else if TIdSipHeaders.IsContentLength(Header) then
+      Msg.ContentLength := Self.GetHeaderNumberValue(Msg, Header)
+    else if TIdSipHeaders.IsMaxForwards(Header) then begin
+      N := Self.GetHeaderNumberValue(Msg, Header);
+      if (N < 0) or (N > 255) then
+        raise Msg.MalformedException.Create(Format(MalformedToken, [Self.GetHeaderName(Header), Header]));
+      Msg.MaxForwards := N;
+    end
+  //  else if TIdSipHeaders.IsTo(Header) then begin
+  //    Msg.Headers.Add(ToHeaderFull).Value := Self.GetHeaderValue(Header);
+  //  end
+    else if TIdSipHeaders.IsVia(Header) then
+      Self.ParseViaHeader(Msg, Self.GetHeaderValue(Header))
+    else
+      Self.AddHeader(Msg, Header);
+  except
+    on E: EBadHeader do
+      raise Msg.MalformedException.Create(Format(MalformedToken, [E.Message, Header]));
+  end;
 end;
 
 procedure TIdSipParser.ParseHeaders(const Msg: TIdSipMessage);
@@ -1600,4 +1787,7 @@ begin
   fCurrentLine := 1;
 end;
 
+initialization
+finalization
+  GIdSipHeadersMap.Free;
 end.
