@@ -5301,7 +5301,7 @@ begin
   Check(InternalServerError.HasHeader(RetryAfterHeader),
         'No Retry-After header');
   Check(InternalServerError.FirstRetryAfter.NumericValue < 10,
-        'Bad Retry-After value (greater than 10)');
+        'Bad Retry-After value (' + IntToStr(InternalServerError.FirstRetryAfter.NumericValue) + ')');
 
   Self.SimulateAck;
 end;
