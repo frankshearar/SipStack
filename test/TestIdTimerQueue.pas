@@ -12,7 +12,7 @@ unit TestIdTimerQueue;
 interface
 
 uses
-  Classes, Dialogs, IdTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   // I wait in a separate thread for something to set Event. Then I

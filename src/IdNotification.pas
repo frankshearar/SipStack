@@ -12,7 +12,7 @@ unit IdNotification;
 interface
 
 uses
-  Classes, Dialogs, SyncObjs;
+  Classes, SyncObjs;
 
 type
   // I represent a reified method call.
