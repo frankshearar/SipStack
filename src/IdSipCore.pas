@@ -395,6 +395,7 @@ type
   private
     fCurrentRequest: TIdSipRequest;
     fIsTerminated:   Boolean;
+    NonceCount:      Cardinal;
     UA:              TIdSipUserAgentCore;
 
     procedure Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
@@ -2136,6 +2137,7 @@ begin
   Self.fCurrentRequest := TIdSipRequest.Create;
   Self.ListenerLock    := TCriticalSection.Create;
   Self.Listeners       := TList.Create;
+  Self.NonceCount      := 0;
 end;
 
 destructor TIdSipAction.Destroy;
@@ -2354,6 +2356,9 @@ end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
 begin
+  if (Self.NonceCount = 0) then
+    Inc(Self.NonceCount);
+
   Self.UA.SendRequest(Request);
 end;
 
@@ -2366,11 +2371,14 @@ end;
 
 procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
 var
+  A1:              String;
+  A2:              String;
   AuthHeader:      TIdSipAuthorizationHeader;
   ChallengeHeader: TIdSipHttpAuthHeader;
   Password:        String;
   ReAttempt:       TIdSipRequest;
 begin
+  Inc(Self.NonceCount);
   Password := Self.NotifyOfAuthenticationChallenge(Challenge);
 
   ReAttempt := Self.CreateNewAttempt(Challenge);
@@ -2386,10 +2394,24 @@ begin
       ChallengeHeader := Challenge.FirstWWWAuthenticate;
     end;
 
-    AuthHeader.Value := ChallengeHeader.FullValue;
+    AuthHeader.DigestUri := ReAttempt.RequestUri.AsString;
+    AuthHeader.Nonce     := ChallengeHeader.Nonce;
+    AuthHeader.Realm     := ChallengeHeader.Realm;
+    AuthHeader.Username  := Self.Username;
 
-    AuthHeader.Response := Self.DigestFor(ChallengeHeader.Realm,
-                                          Password);
+    if (ChallengeHeader.Qop <> '') then begin
+      // TODO: Put a real cnonce here
+      AuthHeader.CNonce := 'f00f00';
+      AuthHeader.NonceCount := Self.NonceCount;
+    end
+    else begin
+      A1 := AuthHeader.Username + ':' + AuthHeader.Realm + ':' + Password;
+      A2 := ReAttempt.Method + ':' + AuthHeader.DigestUri;
+
+      AuthHeader.Response := KD(MD5(A1),
+                                ChallengeHeader.Nonce + ':' + MD5(A2),
+                                MD5);
+    end;
 
     Self.CurrentRequest.Assign(ReAttempt);
     Self.SendRequest(ReAttempt);
@@ -3218,8 +3240,17 @@ end;
 //* TIdSipOptions Protected methods ********************************************
 
 function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
 begin
-  Result := Self.UA.CreateOptions(Challenge.ToHeader)
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.CurrentRequest.RequestUri;
+
+    Result := Self.UA.CreateOptions(TempTo);
+  finally
+    TempTo.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -3349,8 +3380,17 @@ end;
 //* TIdSipRegistration Protected methods ***************************************
 
 function TIdSipRegistration.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
 begin
-  Result := Self.UA.CreateRegister(Challenge.ToHeader);
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.CurrentRequest.RequestUri;
+
+    Result := Self.UA.CreateRegister(TempTo);
+  finally
+    TempTo.Free;
+  end;
 end;
 
 //******************************************************************************

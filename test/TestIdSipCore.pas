@@ -284,11 +284,34 @@ type
     procedure TestMethod;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestPendingTransactionCount;
-    procedure TestProxyAuthentication;
-    procedure TestProxyAuthenticationWithFailure;
     procedure TestReceive2xxSendsAck;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
+  end;
+
+  TestProxyAuthentication = class(TestTIdSipSession,
+                                  IIdSipSessionListener)
+  private
+    Password: String;
+    Session:  TIdSipOutboundSession;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
+    procedure SimulateRejectProxyUnauthorizedWithQop;
+  protected
+    function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestMultipleProxyAuthenticationAffectsNonceCount;
+    procedure TestProxyAuthentication;
+    procedure TestProxyAuthenticationWithFailure;
+    procedure TestProxyAuthenticationWithQopAuth;
   end;
 
   TestBugHunt = class(TThreadingTestCase,
@@ -437,6 +460,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+  Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
@@ -2271,8 +2295,7 @@ begin
   Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
                                            SIPProxyAuthenticationRequired);
   try
-    Challenge.AddHeader(WWWAuthenticateHeader);
-    Challenge.AddHeader(AuthenticationInfoHeader);
+    Challenge.AddHeader(ProxyAuthenticateHeader).Value := 'Digest realm="193.116.120.160",nonce="bfa807909eb7d5b960d7b23de1dc620ed82f40b5"';
     Self.Dispatcher.Transport.FireOnResponse(Challenge);
   finally
     Challenge.Free;
@@ -3336,59 +3359,6 @@ begin
               'Session should have no pending transactions');
 end;
 
-procedure TestTIdSipOutboundSession.TestProxyAuthentication;
-var
-  SequenceNo:   Cardinal;
-  ReInvite:     TIdSipRequest;
-  RequestCount: Cardinal;
-begin
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
-
-  Self.SimulateRejectProxyUnauthorized;
-  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-        'no re-issue of request');
-
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(SequenceNo + 1,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-  CheckEquals(MethodInvite,
-              ReInvite.Method,
-              'Method of new attempt');
-
-  Check(ReInvite.HasProxyAuthorization, 'No Proxy-Authorization header');
-end;
-
-procedure TestTIdSipOutboundSession.TestProxyAuthenticationWithFailure;
-var
-  SequenceNo:   Cardinal;
-  ReInvite:     TIdSipRequest;
-  RequestCount: Cardinal;
-begin
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
-
-  Self.SimulateRejectProxyUnauthorized;
-  CheckEquals(RequestCount + 1,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'no re-issue of request');
-
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(SequenceNo + 1,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-
-  Self.SimulateRejectProxyUnauthorized;
-  CheckEquals(RequestCount + 2,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'no re-issue of request');
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(SequenceNo + 2,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-end;
-
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
 var
   Ack:    TIdSipRequest;
@@ -3464,6 +3434,221 @@ begin
 
   Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
+end;
+
+//******************************************************************************
+//* TestProxyAuthentication                                                    *
+//******************************************************************************
+//* TestProxyAuthentication Public methods *************************************
+
+procedure TestProxyAuthentication.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Session := Self.Core.Call(Self.Destination, '', '');
+  Self.Session.AddSessionListener(Self);
+
+  Self.Password := 'f00L';
+end;
+
+//* TestProxyAuthentication Protected methods **********************************
+
+function TestProxyAuthentication.CreateAction: TIdSipAction;
+begin
+  Result := Self.Core.Call(Self.Destination, '', '');
+  (Result as TIdSipSession).AddSessionListener(Self);
+end;
+
+//* TestProxyAuthentication Private methods ************************************
+
+procedure TestProxyAuthentication.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                            Challenge: TIdSipResponse;
+                                                            var Password: String);
+begin
+  Password := Self.Password;
+end;
+
+procedure TestProxyAuthentication.OnEndedSession(Session: TIdSipSession;
+                                                 const Reason: String);
+begin
+end;
+
+procedure TestProxyAuthentication.OnEstablishedSession(Session: TIdSipSession);
+begin
+end;
+
+procedure TestProxyAuthentication.OnModifiedSession(Session: TIdSipSession;
+                                                    Invite: TIdSipRequest);
+begin
+end;
+
+procedure TestProxyAuthentication.SimulateRejectProxyUnauthorizedWithQop;
+var
+  Challenge: TIdSipResponse;
+  Auth:      TIdSipProxyAuthenticateHeader;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                           SIPProxyAuthenticationRequired);
+  try
+    Challenge.AddHeader(ProxyAuthenticateHeader);
+
+    Auth := Challenge.FirstProxyAuthenticate;
+    Auth.AuthorizationScheme := DigestAuthorizationScheme;
+    Auth.Nonce               := 'bfa807909eb7d5b960d7b23de1dc620ed82f40b5';
+    Auth.Qop                 := QopAuth;
+    Auth.Realm               := '193.116.120.160';
+
+    Self.Dispatcher.Transport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
+//* TestProxyAuthentication Published methods **********************************
+
+procedure TestProxyAuthentication.TestMultipleProxyAuthenticationAffectsNonceCount;
+var
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Self.SimulateRejectProxyUnauthorizedWithQop;
+
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no first re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(2,
+              ReInvite.FirstProxyAuthorization.NonceCount,
+              'NonceCount: 2 = initial request + 1 resend');
+
+  Self.SimulateRejectProxyUnauthorizedWithQop;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no second re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(3,
+              ReInvite.FirstProxyAuthorization.NonceCount,
+              'NonceCount: 3 = initial request + 2 resends');
+end;
+
+procedure TestProxyAuthentication.TestProxyAuthentication;
+var
+  A1:           String;
+  A2:           String;
+  Auth:         TIdSipProxyAuthorizationHeader;
+  SequenceNo:   Cardinal;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+  Response:     TIdSipResponse;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+  CheckEquals(MethodInvite,
+              ReInvite.Method,
+              'Method of new attempt');
+
+  Check(ReInvite.HasProxyAuthorization, 'No Proxy-Authorization header');
+
+  Auth := ReInvite.FirstProxyAuthorization;
+  Response := Self.Dispatcher.Transport.LastResponse;
+
+  CheckEquals(Response.FirstProxyAuthenticate.Nonce,
+              Auth.Nonce,
+              'Nonce');
+
+  CheckEquals(Response.FirstProxyAuthenticate.Realm,
+              Auth.Realm,
+              'Realm');
+
+  CheckEquals(ReInvite.RequestUri.AsString,
+              Auth.DigestUri,
+              'URI');
+
+  CheckEquals(ReInvite.From.Address.Username,
+              Auth.Username,
+              'Username');
+
+  A1 := Auth.Username + ':' + Auth.Realm + ':' + Self.Password;
+  A2 := ReInvite.Method + ':' + Auth.DigestUri;
+
+  CheckEquals(KD(MD5(A1),
+                 Auth.Nonce + ':' + MD5(A2),
+                 MD5),
+              ReInvite.FirstProxyAuthorization.Response,
+              'Response');
+end;
+
+procedure TestProxyAuthentication.TestProxyAuthenticationWithFailure;
+var
+  SequenceNo:   Cardinal;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized;
+  CheckEquals(RequestCount + 1,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+
+  Self.SimulateRejectProxyUnauthorized;
+  CheckEquals(RequestCount + 2,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 2,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+end;
+
+procedure TestProxyAuthentication.TestProxyAuthenticationWithQopAuth;
+var
+  A1:           String;
+  A2:           String;
+  Auth:         TIdSipProxyAuthorizationHeader;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+  Self.SimulateRejectProxyUnauthorizedWithQop;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  Auth := ReInvite.FirstProxyAuthorization;
+
+  Check(Auth.CNonce <> '',
+        'Missing CNonce (Client Nonce)');
+  Check(Auth.NonceCount > 0,
+        'Insane Nonce Count');
+
+  A1 := Auth.Username + ':' + Auth.Realm + ':' + Self.Password;
+  A2 := ReInvite.Method + ':' + Auth.DigestUri + MD5(ReInvite.Body);
+
+  CheckEquals(KD(MD5(A1),
+                 Auth.Nonce + ':'
+               + Auth.NC + ':'
+               + Auth.CNonce + ':'
+               + Auth.Qop + ':'
+               + MD5(A2),
+                 MD5),
+              ReInvite.FirstProxyAuthorization.Response,
+              'Response');
 end;
 
 //******************************************************************************
@@ -3902,6 +4087,9 @@ begin
   CheckEquals(MethodOptions,
               ReOptions.Method,
               'Method of new attempt');
+  CheckEquals(Self.Core.From.Address.Uri,
+              ReOptions.RequestUri.Uri,
+              'Re-OPTIONS Request-URI');
 
   Check(ReOptions.HasProxyAuthorization, 'No Proxy-Authorization header');
 end;
@@ -4059,17 +4247,12 @@ end;
 //*  TestTIdSipOutboundRegistration Private methods ************************************
 
 function TestTIdSipOutboundRegistration.DigestForName(const Password: String): String;
-var
-  MD5: TIdHashMessageDigest5;
 begin
-  MD5 := TIdHashMessageDigest5.Create;
-  try
-    Result := Lowercase(MD5.AsHex(MD5.HashValue(Self.Core.Username + ':'
-                                              + Self.Core.Realm + ':'
-                                              + Password)));
-  finally
-    MD5.Free;
-  end;
+  Result := KD(MD5(Self.Core.Username + ':'
+                 + Self.Core.Realm + ':'
+                 + Password),
+                   'REGISTER:' + Self.Registrar.From.Address.Uri,
+                   MD5);
 end;
 
 procedure TestTIdSipOutboundRegistration.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -4248,6 +4431,9 @@ begin
   CheckEquals(MethodRegister,
               ReReg.Method,
               'Method of new attempt');
+  CheckEquals(Self.Registrar.From.Address.Uri,
+              ReReg.RequestUri.Uri,
+              'Re-REGISTER Request-URI');
 
   Check(ReReg.HasProxyAuthorization, 'No Proxy-Authorization header');
 end;

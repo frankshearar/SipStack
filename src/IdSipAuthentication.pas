@@ -66,9 +66,38 @@ type
     property FailWith:                EAuthenticateClass read fFailWith write fFailWith;
   end;
 
+type
+  TIdHashFunction = function(const S: String): String;
+
+function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
+function MD5(const S: String): String;
+
 implementation
 
-uses Classes;
+uses
+  Classes;
+
+//*******************************************************************************
+//* Unit functions & procedures                                                 *
+//*******************************************************************************
+//* Unit Public functions & procedures ******************************************
+
+function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
+begin
+  Result := HashFunc(Trim(Secret) + ':' + Trim(Data));
+end;
+
+function MD5(const S: String): String;
+var
+  MD5: TIdHashMessageDigest5;
+begin
+  MD5 := TIdHashMessageDigest5.Create;
+  try
+    Result := Lowercase(MD5.AsHex(MD5.HashValue(S)));
+  finally
+    MD5.Free;
+  end;
+end;
 
 //*******************************************************************************
 //* TIdSipAbstractAuthenticator                                                 *
