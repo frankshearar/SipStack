@@ -19,9 +19,9 @@ type
     Request:  TIdSipRequest;
     Response: TIdSipResponse;
 
-    procedure CheckBasicMessage(const Msg: TIdSipMessage);
-    procedure CheckBasicRequest(const Msg: TIdSipMessage);
-    procedure CheckBasicResponse(const Msg: TIdSipMessage);
+    procedure CheckBasicMessage(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+    procedure CheckBasicRequest(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+    procedure CheckBasicResponse(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
     procedure CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);
   public
     procedure SetUp; override;
@@ -39,7 +39,8 @@ type
     procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestIsWord;
-    procedure TestParseAndMakeMessageEmptyString;
+    procedure TestParseAndMakeMessageEmptyStream;
+    procedure TestParseAndMakeMessageFromString;
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
@@ -372,7 +373,7 @@ begin
   Check(TIdSipParser.IsWord('-.!%*_+`''~()<>:\"/[]?{}'), '-.!%*_+`''~()<>:\"/[]?{}');
 end;
 
-procedure TestTIdSipParser.TestParseAndMakeMessageEmptyString;
+procedure TestTIdSipParser.TestParseAndMakeMessageEmptyStream;
 var
   Str: TStringStream;
 begin
@@ -388,6 +389,19 @@ begin
     end;
   finally
     Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeMessageFromString;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
+  try
+    CheckBasicRequest(R, false);
+    CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
+  finally
+    R.Free;
   end;
 end;
 
@@ -1378,7 +1392,7 @@ begin
     
     CheckEquals('INVITE',                              Request.Method,      'Method');
     CheckEquals('SIP/2.0',                             Request.SipVersion,  'SipVersion');
-    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.Request,     'Request');
+    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.RequestUri,  'RequestUri');
     CheckEquals(6,                                     Request.MaxForwards, 'MaxForwards');
     CheckEquals('0ha0isndaksdj@10.1.1.1',              Request.CallID,      'CallID');
 
@@ -1505,7 +1519,7 @@ begin
     Self.P.ParseRequest(Request);
 
     CheckEquals('sip:sip%3Auser%40example.com@company.com;other-param=summit',
-                Request.Request,
+                Request.RequestUri,
                 'Request-URI');
   finally
     Str.Free;
@@ -1528,7 +1542,7 @@ end;
 
 //* TestTIdSipParser Private methods *******************************************
 
-procedure TestTIdSipParser.CheckBasicMessage(const Msg: TIdSipMessage);
+procedure TestTIdSipParser.CheckBasicMessage(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
 begin
   CheckEquals('SIP/2.0',                              Msg.SIPVersion,                   'SipVersion');
   CheckEquals(29,                                     Msg.ContentLength,                'ContentLength');
@@ -1537,7 +1551,7 @@ begin
   CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Msg.CallID,                       'CallID');
   CheckEquals('Wintermute',                           Msg.ToHeader.DisplayName,         'ToHeader.DisplayName');
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Msg.ToHeader.Address.GetFullURI,  'ToHeader.Address.GetFullURI');
-  CheckEquals('',                                     Msg.ToHeader.ParamsAsString,      'Msg.ToHeader.ParamsAsString');
+  CheckEquals(';tag=1928301775',                      Msg.ToHeader.ParamsAsString,      'Msg.ToHeader.ParamsAsString');
   CheckEquals('Case',                                 Msg.From.DisplayName,             'From.DisplayName');
   CheckEquals('sip:case@fried.neurons.org',           Msg.From.Address.GetFullURI,      'From.Address.GetFullURI');
   CheckEquals(';tag=1928301774',                      Msg.From.ParamsAsString,          'Msg.From.ParamsAsString');
@@ -1556,34 +1570,45 @@ begin
   CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 
-  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',  Msg.Headers['to'].AsString,           'To');
-  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774', Msg.Headers['from'].AsString,         'From');
-  CheckEquals('CSeq: 314159 INVITE',                                    Msg.Headers['cseq'].AsString,         'CSeq');
-  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',          Msg.Headers['contact'].AsString,      'Contact');
-  CheckEquals('Content-Type: text/plain',                               Msg.Headers['content-type'].AsString, 'Content-Type');
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
+              Msg.Headers[ToHeaderFull].AsString,
+              'To');
+  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
+              Msg.Headers[FromHeaderFull].AsString,
+              'From');
+  CheckEquals('CSeq: 314159 INVITE',
+              Msg.Headers[CSeqHeader].AsString,
+              'CSeq');
+  CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
+              Msg.Headers[ContactHeaderFull].AsString,
+              'Contact');
+  CheckEquals('Content-Type: text/plain',
+              Msg.Headers[ContentTypeHeaderFull].AsString,
+              'Content-Type');
   CheckEquals(9, Msg.Headers.Count, 'Header count');
 
-  CheckEquals('', Msg.Body, 'message-body');
+  if CheckBody then
+    CheckEquals('', Msg.Body, 'message-body');
 end;
 
-procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage);
+procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
 begin
   CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
 
-  CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,  'Method');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).Request, 'Request');
+  CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,     'Method');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).RequestUri, 'Request-URI');
 
-  Self.CheckBasicMessage(Msg);
+  Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
-procedure TestTIdSipParser.CheckBasicResponse(const Msg: TIdSipMessage);
+procedure TestTIdSipParser.CheckBasicResponse(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
 begin
   CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
 
   CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
   CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
 
-  Self.CheckBasicMessage(Msg);
+  Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
 procedure TestTIdSipParser.CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);

@@ -147,7 +147,7 @@ begin
     Request := AMessage as TIdSipRequest;
 
     CheckEquals('INVITE',                               Request.Method,        'Method');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.Request,       'Request');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.RequestUri,    'RequestUri');
     CheckEquals('SIP/2.0',                              Request.SIPVersion,    'SipVersion');
     CheckEquals(29,                                     Request.ContentLength, 'ContentLength');
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,        'CallID');

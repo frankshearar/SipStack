@@ -35,6 +35,7 @@ type
     procedure OnTransportResponse(Sender: TObject; const R: TIdSipResponse);
     procedure DeliverToTransaction(const Request: TIdSipRequest); overload;
     procedure DeliverToTransaction(const Response: TIdSipResponse); overload;
+    function  FindTransaction(const Msg: TIdSipMessage): TIdSipTransaction;
   public
     constructor Create;
     destructor Destroy; override;
@@ -298,10 +299,17 @@ end;
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Request: TIdSipRequest);
 begin
+  Self.FindTransaction(Request).HandleMessage(Request);
 end;
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Response: TIdSipResponse);
 begin
+  Self.FindTransaction(Response).HandleMessage(Response);
+end;
+
+function TIdSipTransactionDispatcher.FindTransaction(const Msg: TIdSipMessage): TIdSipTransaction;
+begin
+  Result := nil;
 end;
 
 //******************************************************************************
@@ -568,7 +576,7 @@ var
   Routes: TIdSipHeadersFilter;
 begin
   Req.Method          := MethodAck;
-  Req.Request         := Self.InitialRequest.Request;
+  Req.RequestUri      := Self.InitialRequest.RequestUri;
   Req.SIPVersion      := Self.InitialRequest.SIPVersion;
   Req.CallID          := Self.InitialRequest.CallID;
   Req.From            := Self.InitialRequest.From;

@@ -12,6 +12,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestEmptyUri;
     procedure TestFakeSchemeUri;
     procedure TestFtpUri;
     procedure TestIPv4;
@@ -57,6 +58,18 @@ begin
 end;
 
 //* TestTIdURI Published methods ***********************************************
+
+procedure TestTIdURI.TestEmptyUri;
+var
+  URI: TIdURI;
+begin
+  URI := TIdURI.Create('');
+  try
+    CheckEquals('', URI.GetFullURI, 'Empty string');
+  finally
+    URI.Free;
+  end;
+end;
 
 procedure TestTIdURI.TestFakeSchemeUri;
 var

@@ -3,7 +3,7 @@ unit TestIdSipTransport;
 interface
 
 uses
-  IdSipTransport, TestFramework;
+  IdSipMessage, IdSipTransport, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TestTIdSipTransport = class(TTestCase)
@@ -15,6 +15,24 @@ type
     procedure TearDown; override;
 
     procedure TestWillUseReliableTransport; virtual;
+  end;
+
+  TestTIdSipTcpTransport = class(TThreadingTestCase)
+  private
+    ReceivedMessage: Boolean;
+    Request:         TIdSipRequest;
+    Response:        TIdSipResponse;
+    Transport:       TIdSipTcpTransport;
+
+    procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
+    procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCanReceiveRequest;
+    procedure TestCanReceiveResponse;
+    procedure TestSendRequest;
   end;
 
   TestTIdSipMockTransport = class(TestTIdSipTransport)
@@ -30,12 +48,13 @@ type
 implementation
 
 uses
-  IdSipMessage, IdSipParser;
+  IdSipParser, IdTcpClient, TestMessages;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
   Result.AddTest(TestTIdSipTransport.Suite);
+  Result.AddTest(TestTIdSipTcpTransport.Suite);
   Result.AddTest(TestTIdSipMockTransport.Suite);
 end;
 
@@ -90,6 +109,152 @@ end;
 function TestTIdSipTransport.TransportType: TIdSipTransportClass;
 begin
   Result := nil;
+end;
+
+//******************************************************************************
+//* TestTIdSipTcpTransport                                                     *
+//******************************************************************************
+//* TestTIdSipTcpTransport Public methods **************************************
+
+procedure TestTIdSipTcpTransport.SetUp;
+var
+  P: TIdSipParser;
+begin
+  inherited SetUp;
+
+  Self.ReceivedMessage := false;
+  Self.Transport       := TIdSipTcpTransport.Create;
+
+  P := TIdSipParser.Create;
+  try
+    Self.Request  := P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
+    Self.Response := P.ParseAndMakeMessage(BasicResponse) as TIdSipResponse;
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpTransport.TearDown;
+begin
+  Self.Response.Free;
+  Self.Request.Free;
+  Self.Transport.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTcpTransport Private methods *************************************
+
+procedure TestTIdSipTcpTransport.CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
+begin
+  try
+    Self.ReceivedMessage := true;
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpTransport.CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
+begin
+  try
+    Self.ReceivedMessage := true;
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+
+//* TestTIdSipTcpTransport Published methods ***********************************
+
+procedure TestTIdSipTcpTransport.TestCanReceiveRequest;
+var
+  Client: TIdTcpClient;
+begin
+  Self.ExceptionMessage := 'Response not received - event didn''t fire';
+  Self.Transport.OnRequest := Self.CheckCanReceiveRequest;
+  Self.Transport.Start;
+  try
+    Client := TIdTcpClient.Create(nil);
+    try
+      Client.Host := '127.0.0.1';
+      Client.Port := IdPORT_SIP;
+      Client.Connect(1000);
+      Client.Write(BasicRequest);
+    finally
+      Client.Free;
+    end;
+
+    if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+    Check(Self.ReceivedMessage, 'Request not received');
+  finally
+    Self.Transport.Stop;
+  end;
+end;
+
+procedure TestTIdSipTcpTransport.TestCanReceiveResponse;
+var
+  Client: TIdTcpClient;
+begin
+  Self.ExceptionMessage := 'Response not received - event didn''t fire';
+  Self.Transport.OnResponse := Self.CheckCanReceiveResponse;
+  Self.Transport.Start;
+  try
+    Client := TIdTcpClient.Create(nil);
+    try
+      Client.Host := '127.0.0.1';
+      Client.Port := IdPORT_SIP;
+      Client.Connect(1000);
+      Client.Write(BasicResponse);
+    finally
+      Client.Free;
+    end;
+
+    if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+    Check(Self.ReceivedMessage, 'Response not received');
+  finally
+    Self.Transport.Stop;
+  end;
+end;
+
+procedure TestTIdSipTcpTransport.TestSendRequest;
+var
+  T: TIdSipTcpTransport;
+begin
+  Self.ExceptionMessage := 'Response not received - event didn''t fire';
+  Self.Transport.OnRequest := Self.CheckCanReceiveRequest;
+
+  Self.Transport.Start;
+  try
+    T := TIdSipTcpTransport.Create(IdPORT_SIP + 10000);
+    try
+      T.Start;
+      Self.Request.RequestUri := 'sip:127.0.0.1';
+      T.SendRequest(Self.Request);
+    finally
+      T.Free;
+    end;
+
+    if (wrSignaled <> Self.ThreadEvent.WaitFor(1000)) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+    Check(Self.ReceivedMessage, 'Response not received');
+  finally
+    Self.Transport.Stop;
+  end;
 end;
 
 //******************************************************************************

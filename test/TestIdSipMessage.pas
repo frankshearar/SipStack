@@ -129,6 +129,7 @@ type
     procedure TestIsEqualSameURINoParams;
     procedure TestIsEqualSameURIWithParams;
     procedure TestValueWithTag;
+    procedure TestValueResettingTag;
     procedure TestGetSetTag;
   end;
 
@@ -270,6 +271,8 @@ type
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
+    procedure TestAddHeadersFilter;
+    procedure TestAddInReverseOrder;
     procedure TestAddResultTypes;
     procedure TestAsString;
     procedure TestCanonicaliseName;
@@ -334,6 +337,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure HasSipsUri;
     procedure TestIsAck;
     procedure TestIsInvite;
     procedure TestReadBody;
@@ -351,6 +355,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestIsFinal;
+    procedure TestIsProvisional;
     procedure TestReadBody;
   end;
 
@@ -1479,6 +1484,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipFromToHeader.TestValueResettingTag;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  CheckEquals('1928301774', Self.F.Tag, '1928301774');
+
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+  CheckEquals('', Self.F.Tag, '''''');
+end;
+
 procedure TestTIdSipFromToHeader.TestGetSetTag;
 begin
   Self.F.Tag := '123';
@@ -2604,6 +2618,68 @@ begin
   end;
 end;
 
+procedure TestTIdSipHeaders.TestAddHeadersFilter;
+var
+  NewHeaders: TIdSipHeaders;
+  Filter:     TIdSipHeadersFilter;
+begin
+  NewHeaders := TIdSipHeaders.Create;
+  try
+    NewHeaders.Add(ContentLengthHeaderFull).Value := '22';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'en';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'es';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'fr';
+    NewHeaders.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+
+    Filter := TIdSipHeadersFilter.Create(NewHeaders, ContentLanguageHeader);
+    try
+      CheckEquals(0, Self.H.Count, 'Count before Add(Filter)');
+
+      Self.H.Add(Filter);
+      CheckEquals(Filter.Count, Self.H.Count, 'Count after Add(Filter)');
+
+      CheckEquals('en', Self.H.Items[0].Value, '1st header');
+      CheckEquals('es', Self.H.Items[1].Value, '2nd header');
+      CheckEquals('fr', Self.H.Items[2].Value, '3rd header');
+    finally
+      Filter.Free;
+    end;
+  finally
+    NewHeaders.Free;
+  end;
+end;
+
+procedure TestTIdSipHeaders.TestAddInReverseOrder;
+var
+  NewHeaders: TIdSipHeaders;
+  Filter:     TIdSipHeadersFilter;
+begin
+  NewHeaders := TIdSipHeaders.Create;
+  try
+    NewHeaders.Add(ContentLengthHeaderFull).Value := '22';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'en';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'es';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'fr';
+    NewHeaders.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+
+    Filter := TIdSipHeadersFilter.Create(NewHeaders, ContentLanguageHeader);
+    try
+      CheckEquals(0, Self.H.Count, 'Count before Add(Filter)');
+
+      Self.H.AddInReverseOrder(Filter);
+      CheckEquals(Filter.Count, Self.H.Count, 'Count after Add(Filter)');
+
+      CheckEquals('fr', Self.H.Items[0].Value, '1st header');
+      CheckEquals('es', Self.H.Items[1].Value, '2nd header');
+      CheckEquals('en', Self.H.Items[2].Value, '3rd header');
+    finally
+      Filter.Free;
+    end;
+  finally
+    NewHeaders.Free;
+  end;
+end;
+
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
   CheckType(TIdSipWeightedCommaSeparatedHeader, Self.H.Add(AcceptHeader),               AcceptHeader);
@@ -3229,6 +3305,7 @@ var
 begin
   Route := TIdSipRouteHeader.Create;
   try
+    Route.Value := '<sip:127.0.0.1>';
     CheckEquals(2, Self.Filter.Count, 'Count with two headers');
     Self.Filter.Add(Route);
     CheckEquals(3, Self.Filter.Count, 'Count after Add');
@@ -3265,6 +3342,7 @@ begin
   // object and frees it.
   Route := TIdSipRouteHeader.Create;
   try
+    Route.Value := '<sip:127.0.0.1>';
     CheckEquals(2, Self.Filter.Count, 'Count with two headers');
 
     Self.Filter.Add(Route);
@@ -3411,7 +3489,7 @@ begin
   try
     R.SIPVersion := 'SIP/1.5';
     R.Method := 'NewMethod';
-    R.Request := 'sip:wintermute@tessier-ashpool.co.lu';
+    R.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
     R.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     R.ContentLength := 5;
     R.Body := 'hello';
@@ -3419,7 +3497,7 @@ begin
     Self.Request.Assign(R);
     CheckEquals(R.SIPVersion, Self.Request.SipVersion, 'SIP-Version');
     CheckEquals(R.Method, Self.Request.Method, 'Method');
-    CheckEquals(R.Request, Self.Request.Request, 'Request-URI');
+    CheckEquals(R.RequestUri, Self.Request.RequestUri, 'Request-URI');
     CheckEquals(R.Headers.Count, Self.Request.Headers.Count, 'Header count');
 
     for I := 0 to R.Headers.Count - 1 do
@@ -3457,13 +3535,13 @@ var
   Hop:      TIdSipViaHeader;
 begin
   Request.Method                       := 'INVITE';
-  Request.Request                      := 'sip:wintermute@tessier-ashpool.co.lu';
+  Request.RequestUri                   := 'sip:wintermute@tessier-ashpool.co.lu';
   Request.SIPVersion                   := SIPVersion;
   Hop := Request.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
   Hop.Value                            := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Request.MaxForwards                  := 70;
 
-  Request.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Request.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
   Request.Headers.Add('From').Value         := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
   Request.CallID                            := 'a84b4c76e66710@gw1.leo-ix.org';
   Request.Headers.Add('CSeq').Value         := '314159 INVITE';
@@ -3502,6 +3580,18 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.HasSipsUri;
+begin
+  Self.Request.RequestUri := 'tel://999';
+  Check(not Self.Request.HasSipsUri, 'tel URI');
+
+  Self.Request.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
+  Check(not Self.Request.HasSipsUri, 'sip URI');
+
+  Self.Request.RequestUri := 'sips:wintermute@tessier-ashpool.co.lu';
+  Check(Self.Request.HasSipsUri, 'sips URI');
 end;
 
 procedure TestTIdSipRequest.TestIsAck;
@@ -3702,7 +3792,7 @@ begin
   Response.SIPVersion                        := SIPVersion;
   Response.Headers.Add('Via').Value          := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Response.MaxForwards                       := 70;
-  Response.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  Response.Headers.Add('To').Value           := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775';
   Response.Headers.Add('From').Value         := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
   Response.CallID                            := 'a84b4c76e66710@gw1.leo-ix.org';
   Response.Headers.Add('CSeq').Value         := '314159 INVITE';
@@ -3761,6 +3851,27 @@ begin
 
   Self.Response.StatusCode := SIPBusyEverywhere;
   Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+end;
+
+procedure TestTIdSipResponse.TestIsProvisional;
+begin
+  Self.Response.StatusCode := SIPTrying;
+  Check(Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPOK;
+  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPMultipleChoices;
+  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPBadRequest;
+  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPInternalServerError;
+  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPBusyEverywhere;
+  Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
 end;
 
 procedure TestTIdSipResponse.TestReadBody;

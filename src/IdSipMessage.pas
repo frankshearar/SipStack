@@ -322,6 +322,8 @@ type
     property HeaderClass: TIdSipHeaderClass read fHeaderClass;
   end;
 
+  TIdSipHeadersFilter = class;
+  
   TIdSipHeaders = class(TObject)
   private
     List: TObjectList;
@@ -358,6 +360,8 @@ type
     function  Add(const HeaderName: String): TIdSipHeader; overload;
     procedure Add(const Header: TIdSipHeader); overload;
     procedure Add(const Headers: TIdSipHeaders); overload;
+    procedure Add(const Headers: TIdSipHeadersFilter); overload;
+    procedure AddInReverseOrder(const Headers: TIdSipHeadersFilter);
     function  AsString: String;
     procedure Clear;
     procedure Delete(const I: Integer);
@@ -446,18 +450,19 @@ type
 
   TIdSipRequest = class(TIdSipMessage)
   private
-    fMethod:  String;
-    fRequest: String;
+    fMethod:     String;
+    fRequestUri: String;
   protected
     function FirstLine: String; override;
   public
     procedure Assign(Src: TPersistent); override;
+    function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsInvite: Boolean;
     function  MalformedException: ExceptClass; override;
 
-    property Method:  String read fMethod write fMethod;
-    property Request: String read fRequest write fRequest;
+    property Method:     String read fMethod write fMethod;
+    property RequestUri: String read fRequestUri write fRequestUri;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -472,6 +477,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  MalformedException: ExceptClass; override;
     function  IsFinal: Boolean;
+    function  IsProvisional: Boolean;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -1273,7 +1279,7 @@ procedure TIdSipDateHeader.SetAbsoluteTime(Value: String);
 begin
   Self.Time.SetFromRFC822(Value);
 
-  // this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
+  // todo: this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
   if (Self.Time.AsTDateTime = 0) then
     Self.FailParse;
 end;
@@ -1292,7 +1298,8 @@ begin
   if Result then begin
     From := Header as TIdSipFromToHeader;
 
-    Result := (Self.Address.GetFullURI = From.Address.GetFullURI)
+    Result := (Self.Name = Header.Name)
+          and (Self.Address.GetFullURI = From.Address.GetFullURI)
           and (Self.Tag = From.Tag);
   end;
 end;
@@ -2037,6 +2044,22 @@ begin
     Self.Add(Headers.Items[I]);
 end;
 
+procedure TIdSipHeaders.Add(const Headers: TIdSipHeadersFilter);
+var
+  I: Integer;
+begin
+  for I := 0 to Headers.Count - 1 do
+    Self.Add(Headers.Items[I]);
+end;
+
+procedure TIdSipHeaders.AddInReverseOrder(const Headers: TIdSipHeadersFilter);
+var
+  I: Integer;
+begin
+  for I := Headers.Count - 1 downto 0 do
+    Self.Add(Headers.Items[I]);
+end;
+
 function TIdSipHeaders.AsString: String;
 var
   I: Integer;
@@ -2482,8 +2505,16 @@ begin
 
   R := Src as TIdSipRequest;
 
-  Self.Method  := R.Method;
-  Self.Request := R.Request;
+  Self.Method     := R.Method;
+  Self.RequestUri := R.RequestUri;
+end;
+
+function TIdSipRequest.HasSipsUri: Boolean;
+var
+  S: String;
+begin
+  S := Self.RequestUri;
+  Result := Lowercase(Fetch(S, ':')) = SipsScheme;
 end;
 
 function TIdSipRequest.IsAck: Boolean;
@@ -2505,7 +2536,7 @@ end;
 
 function TIdSipRequest.FirstLine: String;
 begin
-  Result := Format(RequestLine, [Self.Method, Self.Request, Self.SIPVersion]);
+  Result := Format(RequestLine, [Self.Method, Self.RequestUri, Self.SIPVersion]);
 end;
 
 //*******************************************************************************
@@ -2533,6 +2564,11 @@ end;
 function TIdSipResponse.IsFinal: Boolean;
 begin
   Result := Self.StatusCode div 100 > 1;
+end;
+
+function TIdSipResponse.IsProvisional: Boolean;
+begin
+  Result := Self.StatusCode div 100 = 1;
 end;
 
 //* TIdSipResponse Protected methods *******************************************

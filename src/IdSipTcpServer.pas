@@ -6,8 +6,8 @@ uses
   Classes, IdSipMessage, IdSipParser, IdSipTimer, IdTCPConnection, IdTCPServer;
 
 type
-  TIdSipMethodEvent = procedure(AThread: TIdPeerThread;
-                                AMessage: TIdSipMessage) of object;
+  TIdSipTcpMessageEvent = procedure(AThread: TIdPeerThread;
+                                    AMessage: TIdSipMessage) of object;
 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
   private
@@ -22,7 +22,7 @@ type
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
-    fOnMethod:        TIdSipMethodEvent;
+    fOnMethod:        TIdSipTcpMessageEvent;
     fReadBodyTimeout: Cardinal;
 
     procedure DoOnMethod(AThread: TIdPeerThread;
@@ -38,7 +38,7 @@ type
     constructor Create(AOwner: TComponent); override;
   published
     property DefaultPort default IdPORT_SIP;
-    property OnMethod:        TIdSipMethodEvent read fOnMethod write fOnMethod;
+    property OnMethod:        TIdSipTcpMessageEvent read fOnMethod write fOnMethod;
     property ReadBodyTimeout: Cardinal          read fReadBodyTimeout write fReadBodyTimeout;
   end;
 

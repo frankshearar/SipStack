@@ -55,7 +55,8 @@ type
     function  GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
     function  GetHeaderValue(Header: String): String;
     function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
-    function  ParseAndMakeMessage: TIdSipMessage;
+    function  ParseAndMakeMessage: TIdSipMessage; overload;
+    function  ParseAndMakeMessage(const Src: String): TIdSipMessage; overload;
     procedure ParseMessage(const Msg: TIdSipMessage);
     procedure ParseRequest(const Request: TIdSipRequest);
     procedure ParseResponse(const Response: TIdSipResponse);
@@ -151,6 +152,8 @@ const
   RouteHeader                = 'Route';
   ServerHeader               = 'Server';
   SipName                    = 'SIP';
+  SipScheme                  = 'sip';
+  SipsScheme                 = 'sips';
   SubjectHeaderFull          = 'Subject';
   SubjectHeaderShort         = 's';
   SupportedHeaderFull        = 'Supported';
@@ -508,6 +511,27 @@ begin
     raise EParser.Create(EmptyInputStream);
 end;
 
+function TIdSipParser.ParseAndMakeMessage(const Src: String): TIdSipMessage;
+var
+  OriginalSrc: TStream;
+  S:           TStringStream;
+begin
+  OriginalSrc := Self.Source;
+  try
+    S := TStringStream.Create(Src);
+    try
+      Self.Source := S;
+      Result := Self.ParseAndMakeMessage;
+
+      Result.Body := S.ReadString(Result.ContentLength);
+    finally
+      S.Free;
+    end;
+  finally
+    Self.Source := OriginalSrc;
+  end;
+end;
+
 procedure TIdSipParser.ParseMessage(const Msg: TIdSipMessage);
 begin
   if (Msg is TIdSipRequest) then
@@ -672,9 +696,9 @@ begin
     if not Self.IsMethod(Request.Method) then
       raise Request.MalformedException.Create(Format(MalformedToken, ['Method', Request.Method]));
 
-    Request.Request := Tokens[1];
+    Request.RequestUri := Tokens[1];
 
-    if (Request.Request[1] = '<') and (Request.Request[Length(Request.Request)] = '>') then
+    if (Request.RequestUri[1] = '<') and (Request.RequestUri[Length(Request.RequestUri)] = '>') then
       raise Request.MalformedException.Create(RequestUriNoAngleBrackets);
 
     Request.SIPVersion := Tokens[2];

@@ -65,8 +65,8 @@ begin
   try
     Msg.Method     := MethodInvite;
     Msg.SIPVersion := SIPVersion;
-    Msg.Request    := Target.GetFullURI;
-    Msg.Headers.Add(ToHeaderFull).Value := Msg.Request;
+    Msg.RequestUri := Target.GetFullURI;
+    Msg.Headers.Add(ToHeaderFull).Value := Msg.RequestUri;
     Msg.Headers.Add(FromHeaderFull).Value := 'sip:i@dont.know';
     // how do we get what actual iface through which the packet was sent?
     Msg.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + '';
