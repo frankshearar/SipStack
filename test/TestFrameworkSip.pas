@@ -209,13 +209,17 @@ type
   TIdSipTestUserAgentListener = class(TIdInterfacedObject,
                                       IIdSipUserAgentListener)
   private
-    fInboundCall: Boolean;
+    fDroppedUnmatchedResponse: Boolean;
+    fInboundCall:              Boolean;
 
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
   public
     constructor Create;
 
-    property InboundCall: Boolean read fInboundCall write fInboundCall;
+    property DroppedUnmatchedResponse: Boolean read fDroppedUnmatchedResponse write fDroppedUnmatchedResponse;
+    property InboundCall:              Boolean read fInboundCall write fInboundCall;
   end;
 
   // constants used in tests
@@ -608,10 +612,17 @@ constructor TIdSipTestUserAgentListener.Create;
 begin
   inherited Create;
 
-  fInboundCall := false;
+  fDroppedUnmatchedResponse := false;
+  fInboundCall              := false;
 end;
 
 //* TIdSipTestUserAgentListener Private methods ********************************
+
+procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                                 Receiver: TIdSipTransport);
+begin
+  fDroppedUnmatchedResponse := true;
+end;
 
 procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipInboundSession);
 begin

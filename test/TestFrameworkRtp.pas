@@ -66,6 +66,19 @@ type
     procedure SetAllowExtension(Allow: Boolean);
   end;
 
+  TIdRTPTestRTPDataListener = class(TIdInterfacedObject,
+                                IIdRTPDataListener)
+  private
+    fNewData: Boolean;
+  public
+    constructor Create;
+
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
+
+    property NewData: Boolean read fNewData;
+  end;
+
   TIdRTPTestRTPListener = class(TIdInterfacedObject,
                                 IIdRTPListener)
   private
@@ -263,6 +276,24 @@ end;
 procedure TIdMockProfile.SetAllowExtension(Allow: Boolean);
 begin
   fAllowExtension := Allow;
+end;
+
+//******************************************************************************
+//* TIdRTPTestRTPDataListener                                                  *
+//******************************************************************************
+//* TIdRTPTestRTPDataListener Public methods ***********************************
+
+constructor TIdRTPTestRTPDataListener.Create;
+begin
+  inherited Create;
+
+  fNewData := false;
+end;
+
+procedure TIdRTPTestRTPDataListener.OnNewData(Data: TIdRTPPayload;
+                                              Binding: TIdSocketHandle);
+begin
+  fNewData := true;
 end;
 
 //******************************************************************************

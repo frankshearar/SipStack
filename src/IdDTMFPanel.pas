@@ -3,7 +3,7 @@ unit IdDTMFPanel;
 interface
 
 uses
-  Classes, ExtCtrls, IdRTP, IdRTPTimerQueue, IdSocketHandle, StdCtrls;
+  Classes, ExtCtrls, IdRTP, IdRTPTimerQueue, IdSdp, IdSocketHandle, StdCtrls;
 
 type
   TColourButton = class(TButton)
@@ -21,7 +21,7 @@ type
     Buttons:          TIdDTMFButtonArray;
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
-    fSession:         TIdRTPSession;
+    fProcessor:       TIdSDPPayloadProcessor;
     Timer:            TIdRTPTimerQueue;
 
     procedure AddRow(Buttons: array of TColourButton);
@@ -50,17 +50,18 @@ type
     procedure SendDTMFFlash(Sender: TObject);
     procedure SendDTMFHash(Sender: TObject);
     procedure SendDTMFStar(Sender: TObject);
+    procedure SetProcessor(Value: TIdSDPPayloadProcessor);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    property Session: TIdRTPSession read fSession write fSession;
+    property Processor: TIdSDPPayloadProcessor read fProcessor write SetProcessor;
   end;
 
 implementation
 
 uses
-  Graphics;
+  Graphics, SysUtils;
 
 //*****************************************************************************
 //* TIdDTMFPanel                                                              *
@@ -195,7 +196,7 @@ begin
   if Event.IsEnd then
     Button.Color := clBlack xor clWhite;
   // what do we do if the ending packet (IsEnd is true after a series of
-  // non-end) never arrives? 
+  // non-end) never arrives? Time out when? 
 end;
 
 procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;
@@ -210,13 +211,14 @@ procedure TIdDTMFPanel.SendDTMF(Event: Byte);
 var
   TE: TIdRTPTelephoneEventPayload;
 begin
-  if Assigned(Session) then begin
-    TE := Session.Profile.EncodingFor(TelephoneEventEncoding + '/8000').Clone as TIdRTPTelephoneEventPayload;
+  if Assigned(Self.Processor) then begin
+    TE := Processor.Profile.EncodingFor(TelephoneEventEncoding).Clone as TIdRTPTelephoneEventPayload;
     try
-      TE.Event    := Event;
-      TE.Duration := 100;
-      
-      Session.SendData(TE);
+      TE.Event     := Event;
+      TE.Duration  := 100;
+      TE.StartTime := Now;
+
+      Processor.SendData(TE);
     finally
       TE.Free;
     end;
@@ -306,6 +308,12 @@ end;
 procedure TIdDTMFPanel.SendDTMFStar(Sender: TObject);
 begin
   Self.SendDTMF(DTMFStar);
+end;
+
+procedure TIdDTMFPanel.SetProcessor(Value: TIdSDPPayloadProcessor);
+begin
+  Self.fProcessor := Value;
+  Self.fProcessor.AddDataListener(Self);
 end;
 
 end.

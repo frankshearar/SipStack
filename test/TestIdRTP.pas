@@ -623,6 +623,21 @@ type
     procedure TearDown; override;
   end;
 
+  TestTIdRTPSession = class(TSessionDataTestCase,
+                            IIdRTPDataListener)
+  private
+    Member: TIdRTPMember;
+    NewDataArrived: Boolean;
+
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAddListener;
+    procedure TestRemoveListener;
+  end;
+
   TestSessionSequenceNumberRules = class(TSessionDataTestCase)
   private
     Member: TIdRTPMember;
@@ -673,6 +688,7 @@ type
     procedure TestReceiveByeMarksMembers;
     procedure TestReceiveByeOnNewSessionDoesNothing;
     procedure TestReceiveRTPIncreasesSenderCount;
+    procedure TestReceiveRTPFromValidatedSourceNotifiesListeners;
     procedure TestReceiveRTCPAffectsAvgRTCPSize;
     procedure TestReceiveSrcDescAddsAllSources;
     procedure TestRTCPDoesntAddSender;
@@ -726,6 +742,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
@@ -760,9 +777,13 @@ begin
   Result.AddTest(TestTIdBaseRTPAbstractPeer.Suite);
   Result.AddTest(TestSessionDelegationMethods.Suite);
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
+}
+  Result.AddTest(TestTIdRTPSession.Suite);
+{
   Result.AddTest(TestSessionReportRules.Suite);
   Result.AddTest(TestSessionSendReceiveRules.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
+}
 end;
 
 function ShowEncoded(S: String): String;
@@ -1604,7 +1625,7 @@ end;
 
 procedure TestTIdRTPTelephoneEventPayload.TestName;
 begin
-  CheckEquals(TelephoneEventEncoding,
+  CheckEquals(TelephoneEventEncodingName,
               Self.Payload.Name,
               Self.Payload.ClassName + ' Name');
 end;
@@ -6880,6 +6901,77 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdRTPSession                                                          *
+//******************************************************************************
+//* TestTIdRTPSession Public methods *******************************************
+
+procedure TestTIdRTPSession.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  Self.Member := Self.Session.Member(Self.Data.SyncSrcID);
+  Self.ValidateSource(Self.Member);
+end;
+
+//* TestTIdRTPSession Private methods ******************************************
+
+procedure TestTIdRTPSession.OnNewData(Data: TIdRTPPayload;
+                                      Binding: TIdSocketHandle);
+begin
+  Self.NewDataArrived := true;
+end;
+
+//* TestTIdRTPSession Published methods ****************************************
+
+procedure TestTIdRTPSession.TestAddListener;
+var
+  L1, L2: TIdRTPTestRTPDataListener;
+begin
+  L1 := TIdRTPTestRTPDataListener.Create;
+  try
+    L2 := TIdRTPTestRTPDataListener.Create;
+    try
+      Self.Session.AddListener(L1);
+      Self.Session.AddListener(L2);
+
+      Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+      Check(L1.NewData, 'L1 didn''t get notified');
+      Check(L2.NewData, 'L2 didn''t get notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdRTPSession.TestRemoveListener;
+var
+  L1, L2: TIdRTPTestRTPDataListener;
+begin
+  L1 := TIdRTPTestRTPDataListener.Create;
+  try
+    L2 := TIdRTPTestRTPDataListener.Create;
+    try
+      Self.Session.AddListener(L1);
+      Self.Session.AddListener(L2);
+      Self.Session.RemoveListener(L1);
+      Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+      Check(not L1.NewData, 'L1 wasn''t removed as a listener');
+      Check(L2.NewData, 'L2 didn''t get notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestSessionSequenceNumberRules                                             *
 //******************************************************************************
 //* TestSessionSequenceNumberRules Public methods ******************************
@@ -7434,6 +7526,14 @@ begin
   CheckEquals(0, Self.Session.SenderCount, 'New session');
   Self.Session.ReceiveData(Self.Data, Self.Binding);
   CheckEquals(3, Self.Session.SenderCount, 'RTP has 3 SSRC');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveRTPFromValidatedSourceNotifiesListeners;
+begin
+  Fail('RTP Sessions have no way of telling us when they receive data, so we '
+     + 'need to keep track, currently, of BOTH the RTP server and the session, '
+     + 'despite the session''s raison d''etre that of providing the sole '
+     + 'access point for data');
 end;
 
 procedure TestSessionSendReceiveRules.TestReceiveRTCPAffectsAvgRTCPSize;

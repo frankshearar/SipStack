@@ -688,7 +688,7 @@ type
     fControlAddress:              String;
     fControlPort:                 Cardinal;
     fCycles:                      Cardinal; // The (shifted) count of sequence number wraparounds
-    fExpectedPrior:               Cardinal;
+    fExpectedPrior:               Cardinal; // The previously calculated number of expected received packets
     fHasLeftSession:              Boolean;
     fHasSyncSrcID:                Boolean;
     fHighestSeqNo:                Word;
@@ -702,11 +702,11 @@ type
     fMaxMisOrder:                 Word;
     fMinimumSequentialPackets:    Word;
     fPreviousPacketTransit:       Int64; // Transit time of previous packet in clock rate ticks
-    fProbation:                   Cardinal;
-    fReceivedPackets:             Cardinal;
-    fReceivedPrior:               Cardinal;
-    fSentControl:                 Boolean;
-    fSentData:                    Boolean;
+    fProbation:                   Cardinal; // The number of packets still to be received before this member's considered valid
+    fReceivedPackets:             Cardinal; // The number of received packets as of right now
+    fReceivedPrior:               Cardinal; // The number of received packets in the last UpdateStatistics
+    fSentControl:                 Boolean; // Have we ever sent RTCP packets?
+    fSentData:                    Boolean; // Have we ever sent RTP packets?
     fSourceAddress:               String;
     fSourcePort:                  Cardinal;
     fSyncSrcID:                   Cardinal;
@@ -3774,7 +3774,7 @@ begin
   if (Self.LastSenderReportReceiptTime = 0) then
     Result := 0
   else
-   Result := Trunc(SecondSpan(Now, Self.LastSenderReportReceiptTime)*65536);
+    Result := Trunc(SecondSpan(Now, Self.LastSenderReportReceiptTime)*65536);
 end;
 
 procedure TIdRTPMember.InitSequence(Data: TIdRTPPacket);
@@ -3911,6 +3911,8 @@ function TIdRTPMember.ExpectedPacketCount: Cardinal;
 var
   RealMax: Cardinal;
 begin
+  // How many packets do we think we should have received?
+  
   RealMax := (Self.Cycles * Self.SequenceNumberRange)
            + Self.HighestSeqNo;
 
@@ -3940,6 +3942,7 @@ function TIdRTPMember.UpdateSequenceNo(Data: TIdRTPPacket): Boolean;
 var
   Delta: Cardinal;
 begin
+  // cf RFC 3550, appendix A.1
   if (Data.SequenceNo < Self.HighestSeqNo) then
     Delta := High(Data.SequenceNo) - (Self.HighestSeqNo - Data.SequenceNo)
   else

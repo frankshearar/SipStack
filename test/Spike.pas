@@ -72,10 +72,12 @@ type
     UpperDTMFPanel: TIdDTMFPanel;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
-    procedure LogMessage(Msg: TIdSipMessage);
+    procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
                                         Response: TIdSipResponse);
     procedure OnChanged(Observed: TObject);
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
@@ -177,6 +179,7 @@ begin
   Self.Media      := TIdSdpPayloadProcessor.Create;
   Self.Media.Host := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.Media.AddDataListener(Self);
+  Self.UpperDTMFPanel.Processor := Self.Media;
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
@@ -249,7 +252,7 @@ var
 begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
-
+{
   if (GStack.LocalAddress <> LocalHostName) then begin
     Binding      := Result.Bindings.Add;
     Binding.IP   := GStack.LocalAddress;
@@ -257,6 +260,7 @@ begin
     Result.HostName := Binding.IP;
   end
   else
+}
     Result.HostName := LocalHostName;
 
   Binding      := Result.Bindings.Add;
@@ -266,12 +270,16 @@ begin
   Result.AddTransportSendingListener(Self);
 end;
 
-procedure TrnidSpike.LogMessage(Msg: TIdSipMessage);
+procedure TrnidSpike.LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
 begin
   Self.Lock.Acquire;
   try
+    if Inbound then
+      Self.Log.Lines.Add('<<<< ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now))
+    else
+      Self.Log.Lines.Add('>>>> ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
+
     Self.Log.Lines.Add(Msg.AsString);
-    Self.Log.Lines.Add('----');
   finally
     Self.Lock.Release;
   end;
@@ -287,8 +295,20 @@ begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
 end;
 
+procedure TrnidSpike.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                Receiver: TIdSipTransport);
+begin
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('Dropped unmatched response: ' + Response.Description);
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
 procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
+  Self.Media.RemoteSessionDescription := Session.PayloadProcessor.RemoteSessionDescription;
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -364,13 +384,13 @@ end;
 procedure TrnidSpike.OnReceiveRequest(Request: TIdSipRequest;
                                       Transport: TIdSipTransport);
 begin
-  Self.LogMessage(Request);
+  Self.LogMessage(Request, true);
 end;
 
 procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
                                        Transport: TIdSipTransport);
 begin
-  Self.LogMessage(Response);
+  Self.LogMessage(Response, true);
 end;
 
 procedure TrnidSpike.OnRejectedMessage(const Msg: String;
@@ -389,13 +409,13 @@ end;
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
                                    Transport: TIdSipTransport);
 begin
-  Self.LogMessage(Request);
+  Self.LogMessage(Request, false);
 end;
 
 procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
                                     Transport: TIdSipTransport);
 begin
-  Self.LogMessage(Response);
+  Self.LogMessage(Response, false);
 end;
 
 procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipRegistration;

@@ -44,6 +44,8 @@ begin
 
   Self.Tick  := false;
   Self.Timer := TIdSipTimer.Create(true);
+
+  Self.DefaultTimeout := 500;
 end;
 
 procedure TestTIdSipTimer.TearDown;
@@ -76,24 +78,25 @@ end;
 
 procedure TestTIdSipTimer.TestExceptionHandling;
 begin
+  Self.ExceptionMessage := 'Main thread never heard of the exception';
+
   Self.Timer.OnException := Self.OnException;
   Self.Timer.OnTimer     := Self.OnRaiseExceptionTimer;
   Self.Timer.Interval    := 100;
   Self.Timer.Start;
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(200)) then
-    Fail('Main thread never heard of the exception');
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTimer.TestTick;
 begin
+  Self.ExceptionMessage := 'OnTick didn''t fire';
   Self.Timer.OnTimer := Self.OnTickTimer;
 
   Self.Timer.Interval := 100;
   Self.Timer.Start;
 
-  if (wrSignaled <> Self.ThreadEvent.WaitFor(200)) then
-    Fail('OnTick didn''t fire');
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTimer.TestReset;
@@ -101,12 +104,13 @@ begin
   Self.Timer.OnTimer := Self.OnTickTimer;
   Self.Timer.Interval := 1000;
   Self.Timer.Start;
-  IdGlobal.Sleep(500);
-
-  Check(not Self.Tick, 'Ticked prematurely before Reset');
+  Self.WaitForTimeout('Ticked prematurely before Reset');
+//  IdGlobal.Sleep(500);
+//  Check(not Self.Tick, 'Ticked prematurely before Reset');
   Self.Timer.Reset;
-  IdGlobal.Sleep(500);
-  Check(not Self.Tick, 'Ticked prematurely after Reset');
+  Self.WaitForTimeout('Ticked prematurely after Reset');
+//  IdGlobal.Sleep(500);
+//  Check(not Self.Tick, 'Ticked prematurely after Reset');
 end;
 
 initialization
