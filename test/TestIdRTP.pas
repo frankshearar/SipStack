@@ -724,6 +724,49 @@ type
     procedure TestWellOrderedStream;
   end;
 
+  TRTPListenerTestCase = class(TTestCase)
+  protected
+    Binding: TIdSocketHandle;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdRTPListenerReceiveRTCPMethod = class(TRTPListenerTestCase)
+  private
+    Binding: TIdSocketHandle;
+    Method:  TIdRTPListenerReceiveRTCPMethod;
+    Packet:  TIdRTCPPacket;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdRTPListenerReceiveRTPMethod = class(TRTPListenerTestCase)
+  private
+    Binding: TIdSocketHandle;
+    Method:  TIdRTPListenerReceiveRTPMethod;
+    Packet:  TIdRTPPacket;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdRTPDataListenerNewDataMethod = class(TRTPListenerTestCase)
+  private
+   Data:   TIdRTPPayload;
+   Method: TIdRTPDataListenerNewDataMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 // Most of the values are thumb-sucked.
 // We calculate Length by hand, and RFC3550 gives us the value for packet type
 const
@@ -791,6 +834,9 @@ begin
   Result.AddTest(TestSessionReportRules.Suite);
   Result.AddTest(TestSessionSendReceiveRules.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
+  Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
+  Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
+  Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
 end;
 
 function ShowEncoded(S: String): String;
@@ -7771,6 +7817,159 @@ begin
     Self.Q.RemoveLast;
   end;
 end;
+
+//******************************************************************************
+//* TRTPListenerTestCase                                                       *
+//******************************************************************************
+//* TRTPListenerTestCase Public methods ****************************************
+
+procedure TRTPListenerTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdSocketHandle.Create(nil);
+end;
+
+procedure TRTPListenerTestCase.TearDown;
+begin
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdRTPListenerReceiveRTCPMethod                                        *
+//******************************************************************************
+//* TestTIdRTPListenerReceiveRTCPMethod Public methods *************************
+
+procedure TestTIdRTPListenerReceiveRTCPMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Packet := TIdRTCPReceiverReport.Create;
+
+  Self.Method := TIdRTPListenerReceiveRTCPMethod.Create;
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Packet  := Self.Packet;
+end;
+
+procedure TestTIdRTPListenerReceiveRTCPMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Packet.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPListenerReceiveRTCPMethod Published methods **********************
+
+procedure TestTIdRTPListenerReceiveRTCPMethod.TestRun;
+var
+  Listener: TIdRTPTestRTPListener;
+begin
+  Listener := TIdRTPTestRTPListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedRTCP,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
+    Check(Self.Method.Packet = Listener.RTCPPacketParam,
+          Self.ClassName + ': Packet param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTPListenerReceiveRTPMethod                                         *
+//******************************************************************************
+//* TestTIdRTPListenerReceiveRTPMethod Public methods **************************
+
+procedure TestTIdRTPListenerReceiveRTPMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Packet  := TIdRTPPacket.Create(nil);
+
+  Self.Method := TIdRTPListenerReceiveRTPMethod.Create;
+  Self.Method.Binding := Self.Binding;
+  Self.Method.Packet  := Self.Packet;
+end;
+
+procedure TestTIdRTPListenerReceiveRTPMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Packet.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPListenerReceiveRTPMethod Published methods ***********************
+
+procedure TestTIdRTPListenerReceiveRTPMethod.TestRun;
+var
+  Listener: TIdRTPTestRTPListener;
+begin
+  Listener := TIdRTPTestRTPListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedRTP,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
+    Check(Self.Method.Packet = Listener.RTPPacketParam,
+          Self.ClassName + ': Packet param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTPDataListenerNewDataMethod                                        *
+//******************************************************************************
+//* TestTIdRTPDataListenerNewDataMethod Public methods *************************
+
+procedure TestTIdRTPDataListenerNewDataMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdRTPRawPayload.Create('');
+  Self.Method := TIdRTPDataListenerNewDataMethod.Create;
+  Self.Method.Data := Self.Data;
+end;
+
+procedure TestTIdRTPDataListenerNewDataMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPDataListenerNewDataMethod Published methods **********************
+
+procedure TestTIdRTPDataListenerNewDataMethod.TestRun;
+var
+  Listener: TIdRTPTestRTPDataListener;
+begin
+  Listener := TIdRTPTestRTPDataListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.NewData,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Data = Listener.DataParam,
+          Self.ClassName + ': Data param');
+    Check(Self.Method.Binding = Listener.BindingParam,
+          Self.ClassName + ': Binding param');
+  finally
+    Listener.Free;
+  end;
+end;
+
 
 initialization
   RegisterTest('RTP', Suite);

@@ -77,21 +77,28 @@ type
   TIdRTPTestRTPDataListener = class(TIdInterfacedObject,
                                 IIdRTPDataListener)
   private
-    fNewData: Boolean;
+    fBindingParam: TIdSocketHandle;
+    fDataParam:    TIdRTPPayload;
+    fNewData:      Boolean;
   public
     constructor Create;
 
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
 
-    property NewData: Boolean read fNewData;
+    property BindingParam: TIdSocketHandle read fBindingParam;
+    property DataParam: TIdRTPPayload      read fDataParam;
+    property NewData:   Boolean            read fNewData;
   end;
 
   TIdRTPTestRTPListener = class(TIdInterfacedObject,
                                 IIdRTPListener)
   private
-    fReceivedRTCP: Boolean;
-    fReceivedRTP:  Boolean;
+    fBindingParam:    TIdSocketHandle;
+    fReceivedRTCP:    Boolean;
+    fReceivedRTP:     Boolean;
+    fRTCPPacketParam: TIdRTCPPacket;
+    fRTPPacketParam:  TIdRTPPacket;
   public
     constructor Create;
 
@@ -100,8 +107,11 @@ type
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdSocketHandle);
 
-    property ReceivedRTCP: Boolean read fReceivedRTCP;
-    property ReceivedRTP:  Boolean read fReceivedRTP;
+    property BindingParam:    TIdSocketHandle read fBindingParam;
+    property ReceivedRTCP:    Boolean         read fReceivedRTCP;
+    property ReceivedRTP:     Boolean         read fReceivedRTP;
+    property RTCPPacketParam: TIdRTCPPacket   read fRTCPPacketParam;
+    property RTPPacketParam:  TIdRTPPacket    read fRTPPacketParam;
   end;
 
 implementation
@@ -293,7 +303,9 @@ end;
 procedure TIdRTPTestRTPDataListener.OnNewData(Data: TIdRTPPayload;
                                               Binding: TIdSocketHandle);
 begin
-  fNewData := true;
+  Self.fBindingParam := Binding;
+  Self.fDataParam    := Data;
+  Self.fNewData      := true;
 end;
 
 //******************************************************************************
@@ -305,20 +317,24 @@ constructor TIdRTPTestRTPListener.Create;
 begin
   inherited Create;
 
-  fReceivedRTCP := false;
-  fReceivedRTP  := false;
+  Self.fReceivedRTCP := false;
+  Self.fReceivedRTP  := false;
 end;
 
 procedure TIdRTPTestRTPListener.OnRTCP(Packet: TIdRTCPPacket;
                                        Binding: TIdSocketHandle);
 begin
-  fReceivedRTCP := true;
+  Self.fBindingParam    := Binding;
+  Self.fRTCPPacketParam := Packet;
+  Self.fReceivedRTCP    := true;
 end;
 
 procedure TIdRTPTestRTPListener.OnRTP(Packet: TIdRTPPacket;
                                       Binding: TIdSocketHandle);
 begin
-  fReceivedRTP := true;
+  Self.fBindingParam   := Binding;
+  Self.fRTPPacketParam := Packet;
+  Self.fReceivedRTP    := true;
 end;
 
 end.
