@@ -1139,6 +1139,7 @@ const
   InviteTimeout                  = 'Incoming call timed out';
   LocalCancel                    = 'Local end cancelled call';
   LocalHangUp                    = 'Local end hung up';
+  ItemNotFoundIndex              = -1;
   NoSuchRegistrar                = 'No such registrar known: %s';
   OneMinute                      = 60*1000;
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
@@ -1539,7 +1540,7 @@ begin
   try
     Index := Self.IndexOfRegistrar(Registrar);
 
-    if (Index = -1) then
+    if (Index = ItemNotFoundIndex) then
       raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
 
     Result := Self.RegistrarAt(Index).CallID;
@@ -1559,7 +1560,7 @@ begin
   try
     Index := Self.IndexOfRegistrar(Registrar);
 
-    if (Index = -1) then
+    if (Index = ItemNotFoundIndex) then
       raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
 
     RegInfo := Self.RegistrarAt(Index);
@@ -1582,12 +1583,12 @@ begin
       Inc(Result);
 
   if (Result >= Self.KnownRegistrars.Count) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 function TIdSipRegistrations.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
 begin
-  Result := Self.IndexOfRegistrar(Registrar) <> -1;
+  Result := Self.IndexOfRegistrar(Registrar) <> ItemNotFoundIndex;
 end;
 
 function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
@@ -1669,7 +1670,7 @@ end;
 procedure TIdSipUserAgentCore.AddAllowedContentType(const MimeType: String);
 begin
   if (Trim(MimeType) <> '') then begin
-    if (Self.AllowedContentTypeList.IndexOf(MimeType) = -1) then
+    if (Self.AllowedContentTypeList.IndexOf(MimeType) = ItemNotFoundIndex) then
       Self.AllowedContentTypeList.Add(MimeType);
   end;
 end;
@@ -1679,7 +1680,7 @@ begin
   if (Trim(LanguageID) = '') then
     raise EIdSipBadSyntax.Create('Not a valid language identifier');
 
-  if (Self.AllowedLanguageList.IndexOf(LanguageID) = -1) then
+  if (Self.AllowedLanguageList.IndexOf(LanguageID) = ItemNotFoundIndex) then
     Self.AllowedLanguageList.Add(LanguageID);
 end;
 
@@ -1688,7 +1689,7 @@ begin
   if not TIdSipParser.IsScheme(Scheme) then
     raise EIdSipBadSyntax.Create('Not a valid scheme');
 
-  if (Self.AllowedSchemeList.IndexOf(Scheme) = -1) then
+  if (Self.AllowedSchemeList.IndexOf(Scheme) = ItemNotFoundIndex) then
     Self.AllowedSchemeList.Add(Scheme);
 end;
 
@@ -1702,7 +1703,7 @@ begin
     try
       Self.Actions.Add(Result);
     except
-      if (Self.Actions.IndexOf(Result) <> -1) then
+      if (Self.Actions.IndexOf(Result) <> ItemNotFoundIndex) then
         Self.Actions.Remove(Result)
       else
         Result.Free;
@@ -1739,7 +1740,7 @@ begin
     try
       Self.Actions.Add(Result);
     except
-      if (Self.Actions.IndexOf(Result) <> -1) then
+      if (Self.Actions.IndexOf(Result) <> ItemNotFoundIndex) then
         Self.Actions.Remove(Result)
       else
         Result.Free;
@@ -1980,13 +1981,13 @@ end;
 function TIdSipUserAgentCore.HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentLanguageHeader)
-       and (Self.AllowedLanguageList.IndexOf(Request.FirstHeader(ContentLanguageHeader).Value) = -1);
+       and (Self.AllowedLanguageList.IndexOf(Request.FirstHeader(ContentLanguageHeader).Value) = ItemNotFoundIndex);
 end;
 
 function TIdSipUserAgentCore.HasUnknownContentType(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentTypeHeaderFull)
-       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = -1);
+       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = ItemNotFoundIndex);
 end;
 
 function TIdSipUserAgentCore.InviteCount: Integer;
