@@ -362,6 +362,7 @@ procedure TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse;
 var
   Names:    TIdDomainNameRecords;
   Port:     Cardinal;
+  SentBy:   String;
   Services: TIdSrvRecords;
 begin
   // cf RFC 3262, section 6:
@@ -385,22 +386,29 @@ begin
     if Response.Path.IsEmpty then
       raise ESipLocator.Create('You cannot find locations for a response with no Via headers');
 
+
+    if Response.LastHop.HasRport then
+      Port := Response.LastHop.RPort
+    else
+      Port := Response.LastHop.Port;
+
     if Response.LastHop.HasReceived then begin
-      if Response.LastHop.HasRport then
-        Port := Response.LastHop.RPort
-      else
-        Port := Response.LastHop.Port;
+      SentBy := Response.LastHop.Received;
 
       Result.AddLocation(Response.LastHop.Transport,
-                         Response.LastHop.Received,
+                         SentBy,
                          Port);
-    end;
+    end
+    else
+      SentBy := Response.LastHop.SentBy;
 
-    if TIdIPAddressParser.IsIPv4Address(Response.LastHop.SentBy)
-    or TIdIPAddressParser.IsIPv6Reference(Response.LastHop.SentBy) then
-      Result.AddLocation(Response.LastHop.Transport,
-                         Response.LastHop.SentBy,
-                         Response.LastHop.Port)
+    if TIdIPAddressParser.IsIPv4Address(SentBy)
+    or TIdIPAddressParser.IsIPv6Reference(SentBy) then begin
+      if not Response.LastHop.HasReceived then
+        Result.AddLocation(Response.LastHop.Transport,
+                           SentBy,
+                           Port);
+    end
     else begin
       Services := TIdSrvRecords.Create;
       try
@@ -409,10 +417,10 @@ begin
           Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
 
           if Services.IsEmpty then begin
-            Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
+            Self.ResolveNameRecords(SentBy, Names);
 
             Result.AddLocationsFromNames(Response.LastHop.Transport,
-                                         Response.LastHop.Port,
+                                         Port,
                                          Names);
           end
           else

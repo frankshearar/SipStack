@@ -95,6 +95,8 @@ type
     procedure TestFindServersForNumericMaddrIPv6;
     procedure TestFindServersForNumericMaddrSips;
     procedure TestFindServersForNumericMaddrSipsIPv6;
+    procedure TestFindServersForResponseReceivedHasPrecedenceOverSentBy;
+    procedure TestFindServersForResponseRportHasPrecedenceOverPort;
     procedure TestFindServersForResponseWithMalformedResponse;
     procedure TestFindServersForResponseWithNameAndPort;
     procedure TestFindServersForResponseWithNameNoSrv;
@@ -104,7 +106,6 @@ type
     procedure TestFindServersForResponseWithReceivedParamAndRport;
     procedure TestFindServersForResponseWithReceivedParamAndNumericSentBy;
     procedure TestFindServersForResponseWithReceivedParamAndIPv6NumericSentBy;
-    procedure TestFindServersForResponseWithRport;
     procedure TestFindServersForResponseWithSrv;
     procedure TestFindServersForSrvNoNameRecords;
     procedure TestFindServersForSrvNotAvailable;
@@ -988,6 +989,59 @@ begin
   end;
 end;
 
+procedure TestTIdSipAbstractLocator.TestFindServersForResponseReceivedHasPrecedenceOverSentBy;
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Self.IP   := '127.0.0.2';
+
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1'
+                                             + ';received=' + Self.IP;
+
+    Locations := TIdSipLocations.Create;
+    try
+      Self.Loc.FindServersFor(Response, Locations);
+
+      CheckEquals(1,       Locations.Count,        'Location count');
+      CheckEquals(Self.IP, Locations[0].IPAddress, 'IPAddress');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractLocator.TestFindServersForResponseRportHasPrecedenceOverPort;
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Self.IP   := '127.0.0.2';
+  Self.Port := 8000;
+
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1:6666'
+                                             + ';received=127.0.0.2;rport=' + IntToStr(Self.Port);
+
+    Locations := TIdSipLocations.Create;
+    try
+      Self.Loc.FindServersFor(Response, Locations);
+
+      CheckEquals(1,         Locations.Count,   'Location count');
+      CheckEquals(Self.Port, Locations[0].Port, 'Port');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TestTIdSipAbstractLocator.TestFindServersForResponseWithMalformedResponse;
 var
   Locations: TIdSipLocations;
@@ -1022,7 +1076,7 @@ begin
 
   Response := TIdSipResponse.Create;
   try
-    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + Domain + ':6666';
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + Self.Domain + ':6666';
 
     Locations := TIdSipLocations.Create;
     try
@@ -1237,13 +1291,13 @@ begin
       Self.Loc.FindServersFor(Response, Locations);
 
       CheckEquals(Response.LastHop.Transport,
-                  Locations[1].Transport,
+                  Locations[0].Transport,
                   'First location transport');
-      CheckEquals(SentByIP,
-                  Locations[1].IPAddress,
+      CheckEquals(Self.IP,
+                  Locations[0].IPAddress,
                   'First location address');
       CheckEquals(Response.LastHop.Port,
-                  Locations[1].Port,
+                  Locations[0].Port,
                   'First location port');
     finally
       Locations.Free;
@@ -1269,36 +1323,6 @@ begin
       Self.Loc.FindServersFor(Response, Locations);
 
       CheckEquals(Response.LastHop.Transport,
-                  Locations[1].Transport,
-                  'First location transport');
-      CheckEquals(SentByIP,
-                  Locations[1].IPAddress,
-                  'First location address');
-      CheckEquals(Response.LastHop.Port,
-                  Locations[1].Port,
-                  'First location port');
-    finally
-      Locations.Free;
-    end;
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractLocator.TestFindServersForResponseWithRport;
-var
-  Locations: TIdSipLocations;
-  Response:  TIdSipResponse;
-begin
-  Response := TIdSipResponse.Create;
-  try
-    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP 127.0.0.1;rport=666';
-
-    Locations := TIdSipLocations.Create;
-    try
-      Self.Loc.FindServersFor(Response, Locations);
-
-      CheckEquals(Response.LastHop.Transport,
                   Locations[0].Transport,
                   'First location transport');
       CheckEquals(Self.IP,
@@ -1306,7 +1330,7 @@ begin
                   'First location address');
       CheckEquals(Response.LastHop.Port,
                   Locations[0].Port,
-                  'First location port: must ignore rport');
+                  'First location port');
     finally
       Locations.Free;
     end;
