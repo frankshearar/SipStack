@@ -1974,7 +1974,7 @@ begin
         MethodRegister + ' not recognised as an allowed method');
 
   Check(not Self.Core.IsMethodAllowed(' '),
-        ''' '' not recognised as an allowed method');
+        ''' '' recognised as an allowed method');
 end;
 
 procedure TestTIdSipUserAgentCore.TestIsSchemeAllowed;
