@@ -164,6 +164,7 @@ type
      uarUnsupportedExtension,
      uarTooManyVias,
      uarUnauthorized,
+     uarUnsupportedAccept,
      uarUnsupportedContentEncoding,
      uarUnsupportedContentLanguage,
      uarUnsupportedContentType,
@@ -358,6 +359,7 @@ type
                                      Receiver: TIdSipTransport);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
+    procedure RejectRequestUnknownAccept(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentLanguage(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentType(Request: TIdSipRequest);
@@ -384,6 +386,9 @@ type
     function  AddInboundAction(Request: TIdSipRequest;
                                Receiver: TIdSipTransport): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
+    function  ListHasUnknownValue(Request: TIdSipRequest;
+                                  ValueList: TStrings;
+                                  const HeaderName: String): Boolean;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; virtual;
@@ -414,6 +419,7 @@ type
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
+    function  HasUnknownAccept(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
@@ -2402,6 +2408,13 @@ begin
   Result := Self.AddOutboundRegistrationQuery;
 end;
 
+function TIdSipAbstractUserAgent.HasUnknownAccept(Request: TIdSipRequest): Boolean;
+begin
+  Result := Self.ListHasUnknownValue(Request,
+                                     Self.AllowedContentTypeList,
+                                     AcceptHeader);
+end;
+
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentEncodingHeaderFull);
@@ -2691,6 +2704,14 @@ begin
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 end;
 
+function TIdSipAbstractUserAgent.ListHasUnknownValue(Request: TIdSipRequest;
+                                                     ValueList: TStrings;
+                                                     const HeaderName: String): Boolean;
+begin
+  Result := Request.HasHeader(HeaderName)
+       and (ValueList.IndexOf(Request.FirstHeader(HeaderName).Value) = ItemNotFoundIndex);
+end;
+
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                                 Request: TIdSipRequest);
 begin
@@ -2702,6 +2723,8 @@ begin
       Self.ReturnResponse(Request, SIPLoopDetected);
     uarMissingContact:
       Self.RejectBadRequest(Request, MissingContactHeader);
+    uarUnsupportedAccept:
+      Self.RejectRequestUnknownAccept(Request);
     uarUnsupportedContentEncoding:
       Self.RejectRequestUnknownContentEncoding(Request);
     uarUnsupportedContentLanguage:
@@ -2753,6 +2776,8 @@ begin
     else if Request.HasHeader(RequireHeader) then
       Result := uarUnsupportedExtension
     // Content processing - 8.2.3
+    else if Self.HasUnknownAccept(Request) then
+      Result := uarUnsupportedAccept
     else if Self.HasUnknownContentEncoding(Request) then
       Result := uarUnsupportedContentEncoding
     else if Self.HasUnknownContentLanguage(Request) then
@@ -2858,6 +2883,20 @@ begin
   try
     Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
     Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
+
+    Self.Dispatcher.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnknownAccept(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPNotAcceptableClient);
+  try
+    Response.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
 
     Self.Dispatcher.SendResponse(Response);
   finally

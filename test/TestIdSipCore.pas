@@ -177,6 +177,7 @@ type
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDoNotDisturb;
+    procedure TestHasUnknownAccept;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
     procedure TestInviteExpires;
@@ -213,6 +214,7 @@ type
     procedure TestSetFromMailto;
     procedure TestSimultaneousInAndOutboundCall;
     procedure TestTerminateAllCalls;
+    procedure TestUnknownAcceptValue;
     procedure TestUnmatchedAckGetsDropped;
     procedure TestViaMatchesTransportParameter;
   end;
@@ -2318,6 +2320,23 @@ begin
               'New session created despite Do Not Disturb');
 end;
 
+procedure TestTIdSipUserAgent.TestHasUnknownAccept;
+begin
+  Self.Invite.RemoveHeader(Self.Invite.FirstHeader(AcceptHeader));
+
+  Check(not Self.Core.HasUnknownAccept(Self.Invite),
+        'Vacuously true');
+
+  Self.Invite.AddHeader(AcceptHeader).Value := SdpMimeType;
+  Check(not Self.Core.HasUnknownAccept(Self.Invite),
+        SdpMimeType + ' MUST supported');
+
+  Self.Invite.RemoveHeader(Self.Invite.FirstHeader(AcceptHeader));
+  Self.Invite.AddHeader(AcceptHeader);
+  Check(Self.Core.HasUnknownAccept(Self.Invite),
+        'Nothing else is supported');
+end;
+
 procedure TestTIdSipUserAgent.TestHasUnknownContentEncoding;
 begin
   Self.Invite.Headers.Remove(Self.Invite.FirstHeader(ContentEncodingHeaderFull));
@@ -3073,6 +3092,24 @@ begin
   CheckEquals(1,
               Self.Core.SessionCount,
               'Session count after TerminateAllCalls');
+end;
+
+procedure TestTIdSipUserAgent.TestUnknownAcceptValue;
+begin
+  Self.Invite.AddHeader(AcceptHeader).Value := 'text/unsupportedtextvalue';
+
+  Self.MarkSentResponseCount;
+  Self.ReceiveInvite;
+
+  Self.CheckResponseSent('No response sent to INVITE');
+  CheckEquals(SIPNotAcceptableClient,
+              Self.LastSentResponse.StatusCode,
+              'Inappropriate response');
+  Check(Self.LastSentResponse.HasHeader(AcceptHeader),
+        'Response missing Accept header');
+  CheckEquals(Self.Core.AllowedContentTypes,
+              Self.LastSentResponse.FirstHeader(AcceptHeader).Value,
+              'Incorrect Accept header');
 end;
 
 procedure TestTIdSipUserAgent.TestUnmatchedAckGetsDropped;
