@@ -5777,8 +5777,8 @@ constructor TIdSipRequest.Create;
 begin
   inherited Create;
 
-  fRequestUri  := TIdSipURI.Create('');
-  fRoute       := TIdSipRoutePath.Create(Self.Headers);
+  Self.fRequestUri := TIdSipURI.Create('');
+  Self.fRoute      := TIdSipRoutePath.Create(Self.Headers);
 
   Self.ContentLength := 0;
   Self.MaxForwards   := Self.DefaultMaxForwards;
