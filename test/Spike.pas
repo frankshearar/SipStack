@@ -345,8 +345,8 @@ var
   Address: String;
   SDP:     String;
 begin
-  if (Session.Invite.ContentLength > 0) then
-    Self.StartReadingData(Session.Invite.Body);
+  if (Session.InitialRequest.ContentLength > 0) then
+    Self.StartReadingData(Session.InitialRequest.Body);
 
   Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
 

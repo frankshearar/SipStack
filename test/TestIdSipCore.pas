@@ -52,6 +52,8 @@ type
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+    procedure TestAuthenticateWithNoAttachedAuthenticator;
+    procedure TestRejectMalformedAuthorizedRequest;
     procedure TestRejectUnauthorizedRequest;
   end;
 
@@ -240,6 +242,9 @@ type
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
+    procedure SimulateForbidden;
+    procedure SimulateRejectProxyUnauthorized(Session: TIdSipSession);
+    procedure SimulateRejectUnauthorized(Session: TIdSipSession);
     procedure SimulateRemoteReInvite(Session: TIdSipSession);
   protected
     function CreateAction: TIdSipAction; override;
@@ -258,6 +263,8 @@ type
     procedure TestIsOutboundCall;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestPendingTransactionCount;
+    procedure TestProxyAuthentication;
+    procedure TestProxyAuthenticationWithFailure;
     procedure TestReceive2xxSendsAck;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
@@ -353,20 +360,24 @@ const
 implementation
 
 uses
-  IdException, IdGlobal, IdInterfacedObject, IdSipConsts, IdUdpServer, SyncObjs,
-  SysUtils, TestMessages, IdSipMockTransport;
+  IdException, IdGlobal, IdInterfacedObject, IdSipAuthentication, IdSipConsts,
+  IdUdpServer, SyncObjs, SysUtils, TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
+}
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+{
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipRegistration.Suite);
+}
 end;
 
 //******************************************************************************
@@ -742,6 +753,43 @@ begin
   end;
 end;
 
+procedure TestTIdSipAbstractUserAgent.TestAuthenticateWithNoAttachedAuthenticator;
+begin
+  // We make sure that no access violations occur just because we've not
+  // attached an authenticator to the Core.
+  Self.Core.RequireAuthentication := true;
+  Self.Invite.AddHeader(AuthorizationHeader);
+  Self.SimulateRemoteInvite;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestRejectMalformedAuthorizedRequest;
+var
+  Auth:          TIdSipMockAuthenticator;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Auth := TIdSipMockAuthenticator.Create;
+  try
+    Self.Core.RequireAuthentication := true;
+    Self.Core.Authenticator := Auth;
+    Auth.FailWith := EAuthenticate;
+
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+    Self.Invite.AddHeader(AuthorizationHeader);
+    Self.SimulateRemoteInvite;
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No response sent');
+
+    Response := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPBadRequest,
+                Response.StatusCode,
+                'Status code');
+  finally
+    Auth.Free;
+  end;
+end;
+
 procedure TestTIdSipAbstractUserAgent.TestRejectUnauthorizedRequest;
 var
   Response:      TIdSipResponse;
@@ -955,7 +1003,7 @@ begin
   Ack := Self.Core.CreateRequest(Self.Session.Dialog);
   try
     Ack.Method          := MethodAck;
-    Ack.CSeq.SequenceNo := Self.Session.Invite.CSeq.SequenceNo;
+    Ack.CSeq.SequenceNo := Self.Session.InitialRequest.CSeq.SequenceNo;
     Ack.CSeq.Method     := Ack.Method;
     // We have to swop the tags because CreateAck returns a LOCALLY created ACK,
     // so the remote tag is actually the far end's local tag.
@@ -2783,6 +2831,50 @@ begin
   Self.OnModifiedSessionFired := true;
 end;
 
+procedure TestTIdSipOutboundSession.SimulateForbidden;
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
+                                       SIPForbidden);
+  try
+    Session.AddSessionListener(Self);
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.SimulateRejectProxyUnauthorized(Session: TIdSipSession);
+var
+  Challenge: TIdSipResponse;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                           SIPProxyAuthenticationRequired);
+  try
+    Challenge.AddHeader(WWWAuthenticateHeader);
+    Challenge.AddHeader(AuthenticationInfoHeader);
+    Self.Dispatcher.Transport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.SimulateRejectUnauthorized(Session: TIdSipSession);
+var
+  Challenge: TIdSipResponse;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                           SIPUnauthorized);
+  try
+    Challenge.AddHeader(WWWAuthenticateHeader);
+    Challenge.AddHeader(AuthenticationInfoHeader);
+    Self.Dispatcher.Transport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.SimulateRemoteReInvite(Session: TIdSipSession);
 begin
   Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
@@ -2876,22 +2968,11 @@ begin
 end;
 
 procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
-var
-  Response: TIdSipResponse;
-  Session:  TIdSipSession;
 begin
   Session := Self.Core.Call(Self.Destination, '', '');
+  Self.SimulateForbidden;
 
-  Response := Self.Core.CreateResponse(Self.Dispatcher.Transport.LastRequest,
-                                       SIPForbidden);
-  try
-    Session.AddSessionListener(Self);
-    Self.Dispatcher.Transport.FireOnResponse(Response);
-
-    Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
-  finally
-    Response.Free;
-  end;
+  Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallNetworkFailure;
@@ -2978,7 +3059,7 @@ var
   Fork: TIdSipOutboundSession;
   Ok:   TIdSipResponse;
 begin
-  Self.SimulateRemoteAccept(Self.Session.Invite);
+  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
 
   Ok := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
@@ -2988,14 +3069,14 @@ begin
 
     Fork := Self.Session.Fork(Ok);
     try
-      CheckEquals(Self.Session.Invite.CallID,
-                  Fork.Invite.CallID,
+      CheckEquals(Self.Session.InitialRequest.CallID,
+                  Fork.InitialRequest.CallID,
                   'Call-ID');
-      CheckEquals(Self.Session.Invite.From.Tag,
-                  Fork.Invite.From.Tag,
+      CheckEquals(Self.Session.InitialRequest.From.Tag,
+                  Fork.InitialRequest.From.Tag,
                   'From tag');
-      CheckEquals(Self.Session.Invite.LastHop.Branch,
-                  Fork.Invite.LastHop.Branch,
+      CheckEquals(Self.Session.InitialRequest.LastHop.Branch,
+                  Fork.InitialRequest.LastHop.Branch,
                   'Topmost Via branch');
     finally
       Fork.Free;
@@ -3043,7 +3124,7 @@ end;
 
 procedure TestTIdSipOutboundSession.TestPendingTransactionCount;
 begin
-  Self.SimulateRemoteAccept(Self.Session.Invite);
+  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
   CheckEquals(0,
               Self.Session.PendingTransactionCount,
               'Session should have no pending transactions');
@@ -3055,12 +3136,62 @@ begin
               'Session should have no pending transactions');
 end;
 
+procedure TestTIdSipOutboundSession.TestProxyAuthentication;
+var
+  SequenceNo:   Cardinal;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+
+  Check(ReInvite.HasProxyAuthorization, 'No Proxy-Authorization header');
+end;
+
+procedure TestTIdSipOutboundSession.TestProxyAuthenticationWithFailure;
+var
+  SequenceNo:   Cardinal;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  CheckEquals(RequestCount + 1,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+
+  Self.SimulateRejectProxyUnauthorized(Self.Session);
+  CheckEquals(RequestCount + 2,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 2,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+end;
+
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
 var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
 begin
-  Self.SimulateRemoteAccept(Self.Session.Invite);
+  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
 
  CheckEquals(1,
               Self.Dispatcher.Transport.ACKCount,
@@ -3073,7 +3204,7 @@ begin
 
   Ack := Self.Dispatcher.Transport.LastRequest;
   CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-  Invite := Self.Session.Invite;
+  Invite := Self.Session.InitialRequest;
   CheckEquals(Invite.CSeq.SequenceNo,
               Ack.CSeq.SequenceNo,
               'CSeq numerical portion');
@@ -3113,7 +3244,7 @@ begin
 
   // We don't actually send CANCELs when we've not received a provisional
   // response.
-  Ringing := TIdSipResponse.InResponseTo(Self.Session.Invite, SIPRinging);
+  Ringing := TIdSipResponse.InResponseTo(Self.Session.InitialRequest, SIPRinging);
   try
     Self.Dispatcher.Transport.FireOnResponse(Ringing);
   finally

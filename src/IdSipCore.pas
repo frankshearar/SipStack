@@ -25,7 +25,8 @@ interface
 
 uses
   Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
-  IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
+  IdSipAuthentication, IdSipMessage, IdSipTimer, IdSipTransaction,
+  IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -95,6 +96,7 @@ type
 
   TIdSipUserAgentReaction =
     (uarAccept,
+     uarBadAuthorization,
      uarBadRequest,
      uarExpireTooBrief,
      uarForbidden,
@@ -117,8 +119,10 @@ type
   TIdSipAbstractCore = class(TIdInterfacedObject,
                              IIdSipUnhandledMessageListener)
   private
+    fAuthenticator:         TIdSipAbstractAuthenticator;
     fDispatcher:            TIdSipTransactionDispatcher;
     fHostName:              String;
+    fRealm:                 String;
     fRequireAuthentication: Boolean;
     fUserAgentName:         String;
 
@@ -127,20 +131,25 @@ type
                                         Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
+    procedure RejectBadAuthorization(Request: TIdSipRequest);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
                            Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
                            Receiver: TIdSipTransport); virtual;
-    function  Authenticate(Request: TIdSipRequest): Boolean; virtual;
-    function  HasAuthentication(Request: TIdSipRequest): Boolean; virtual;
+    function  AuthenticationHeader: String; virtual;
+    function  AuthenticationHeaderValue: String; virtual;
+    function  AuthenticationStatusCode: Cardinal; virtual;
+    function  HasAuthorization(Request: TIdSipRequest): Boolean; virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); virtual;
     procedure PrepareResponse(Response: TIdSipResponse;
                               Request: TIdSipRequest);
+    procedure RejectBadRequest(Request: TIdSipRequest;
+                               const Reason: String);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); virtual;
     procedure RejectRequestUnauthorized(Request: TIdSipRequest); virtual;
@@ -156,8 +165,10 @@ type
     function NextCallID: String;
     function NextTag: String;
 
+    property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write fAuthenticator;
     property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:              String                      read fHostName write fHostName;
+    property Realm:                 String                      read fRealm write fRealm;
     property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
     property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
@@ -190,7 +201,6 @@ type
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
-    procedure RejectRequestUnauthorized(Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
@@ -288,14 +298,11 @@ type
     procedure NotifyOfChange;
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
-
     procedure OnInboundSessionExpire(Sender: TObject);
     procedure ProcessAck(Ack: TIdSipRequest);
     procedure ProcessInvite(Invite: TIdSipRequest;
                             Receiver: TIdSipTransport);
     function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
-    procedure RejectBadRequest(Request: TIdSipRequest;
-                               const Reason: String);
     procedure RejectDoNotDisturb(Request: TIdSipRequest;
                                  const Reason: String);
     procedure SendByeToAppropriateSession(Bye: TIdSipRequest);
@@ -484,7 +491,6 @@ type
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
     property Dialog:           TIdSipDialog           read fDialog;
-    property Invite:           TIdSipRequest          read GetInvite;
     property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
     property ReceivedAck:      Boolean                read fReceivedAck;
   end;
@@ -516,13 +522,17 @@ type
   private
     InCall: Boolean;
 
+    procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
+    procedure AuthorizeAgainstUser(Challenge: TIdSipResponse);
     function  CreateOutboundDialog(Response: TIdSipResponse;
                                    UsingSecureTransport: Boolean): TIdSipDialog;
     procedure Initialize;
+    procedure ReissueInviteWithAuthorization(Challenge: TIdSipResponse);
     procedure SendAck(Final: TIdSipResponse);
     procedure SendCancel;
     procedure TerminateAfterSendingCancel;
   protected
+    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): Boolean; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
@@ -591,7 +601,8 @@ type
   EIdSipBadSyntax = class(EIdException);
 
 const
-  MissingContactHeader = 'Missing Contact Header';
+  BadAuthorizationTokens = 'Bad Authorization tokens';
+  MissingContactHeader =   'Missing Contact Header';
 
 implementation
 
@@ -617,6 +628,7 @@ begin
   inherited Create;
 
   Self.HostName              := Self.DefaultHostName;
+  Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
 end;
 
@@ -651,30 +663,39 @@ procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
 begin
 end;
 
-function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): Boolean;
+function TIdSipAbstractCore.AuthenticationHeader: String;
 begin
-  // Proxies and User Agent Servers use different headers to
-  // challenge/authenticate.
-
-  Result := false;
+  Result := WWWAuthenticateHeader;
 end;
 
-function TIdSipAbstractCore.HasAuthentication(Request: TIdSipRequest): Boolean;
+function TIdSipAbstractCore.AuthenticationHeaderValue: String;
+begin
+  Result := 'realm="' + Self.Realm + '",algorith="MD5",qop="auth",nonce="f00f"';
+end;
+
+function TIdSipAbstractCore.AuthenticationStatusCode: Cardinal;
+begin
+  Result := SIPUnauthorized;
+end;
+
+function TIdSipAbstractCore.HasAuthorization(Request: TIdSipRequest): Boolean;
 begin
   // Proxies and User Agent Servers use different headers to
   // challenge/authenticate.
-  
-  Result := false;
+
+  Result := Request.HasAuthorization;
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
                                               Receiver: TIdSipTransport);
 begin
+  // By default, do nothing. We don't know yet how Proxies behave.
 end;
 
 procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
                                                Receiver: TIdSipTransport);
 begin
+  // By default, do nothing. We don't know yet how Proxies behave.
 end;
 
 procedure TIdSipAbstractCore.PrepareResponse(Response: TIdSipResponse;
@@ -687,27 +708,59 @@ begin
     Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
 end;
 
+procedure TIdSipAbstractCore.RejectBadRequest(Request: TIdSipRequest;
+                                               const Reason: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPBadRequest);
+  try
+    Response.StatusText := Reason;
+
+    Self.Dispatcher.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TIdSipAbstractCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                            Request: TIdSipRequest);
 begin
-  // Do nothing - subclasses will return the necessary response.
-  if (Reaction = uarUnauthorized) then
-    Self.RejectRequestUnauthorized(Request);
+ case Reaction of
+   uarUnauthorized:     Self.RejectRequestUnauthorized(Request);
+   uarBadAuthorization: Self.RejectBadAuthorization(Request);
+ end;
 end;
 
 procedure TIdSipAbstractCore.RejectRequestUnauthorized(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
 begin
-  // Proxies and User Agent Servers use different headers to
-  // challenge/authenticate.
+  Response := Self.CreateResponse(Request,
+                                  Self.AuthenticationStatusCode);
+  try
+    Response.AddHeader(Self.AuthenticationHeader).Value := Self.AuthenticationHeaderValue;
+
+    Self.Dispatcher.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
-  if Self.RequireAuthentication and (not Self.HasAuthentication(Request) or not Self.Authenticate(Request)) then
-    Result := uarUnauthorized
-  else
-
   Result := uarAccept;
+
+  if Self.RequireAuthentication then begin
+    try
+      if not Self.HasAuthorization(Request)
+        or (Assigned(Self.Authenticator) and Self.Authenticator.Authenticate(Request)) then
+        Result := uarUnauthorized;
+    except
+      on EAuthenticate do
+        Result := uarBadAuthorization;
+    end;
+  end;
 end;
 
 function  TIdSipAbstractCore.WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction;
@@ -744,6 +797,20 @@ begin
   // We silently discard unacceptable responses.
   if (Self.WillAcceptResponse(Response) = uarAccept) then
     Self.ActOnResponse(Response, Receiver);
+end;
+
+procedure TIdSipAbstractCore.RejectBadAuthorization(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPBadRequest);
+  try
+    Response.StatusText := BadAuthorizationTokens;
+
+    Self.Dispatcher.Send(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TIdSipAbstractCore.SetDispatcher(Value: TIdSipTransactionDispatcher);
@@ -972,20 +1039,6 @@ begin
     Response.Free;
   end;
 end;
-
-procedure TIdSipAbstractUserAgent.RejectRequestUnauthorized(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPUnauthorized);
-  try
-    Response.AddHeader(WWWAuthenticateHeader);
-
-    Self.Dispatcher.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;  
 
 function TIdSipAbstractUserAgent.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
@@ -1834,21 +1887,6 @@ begin
   Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
-procedure TIdSipUserAgentCore.RejectBadRequest(Request: TIdSipRequest;
-                                               const Reason: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPBadRequest);
-  try
-    Response.StatusText := Reason;
-
-    Self.Dispatcher.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
 procedure TIdSipUserAgentCore.RejectDoNotDisturb(Request: TIdSipRequest;
                                                  const Reason: String);
 var
@@ -2252,7 +2290,7 @@ begin
                                     Msg.From.Tag);
   try
    Result := (Self.DialogEstablished and Self.Dialog.ID.Equals(DialogID))
-          or Self.Invite.Match(Msg);
+          or Self.InitialRequest.Match(Msg);
   finally
     DialogID.Free;
   end;
@@ -2667,8 +2705,8 @@ begin
 
   Self.Initialize;
 
-  Self.Invite.Assign(Invite);
-  Self.Invite.ToHeader.Tag := '';
+  Self.InitialRequest.Assign(Invite);
+  Self.InitialRequest.ToHeader.Tag := '';
 end;
 
 procedure TIdSipOutboundSession.Call(Dest: TIdSipAddressHeader;
@@ -2707,7 +2745,7 @@ end;
 
 function TIdSipOutboundSession.Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
 begin
-  Result := TIdSipOutboundSession.Create(Self.UA, Invite);
+  Result := TIdSipOutboundSession.Create(Self.UA, Self.InitialRequest);
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;
@@ -2734,6 +2772,15 @@ begin
 end;
 
 //* TIdSipOutboundSession Protected methods ************************************
+
+function TIdSipOutboundSession.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Result := false;
+  if Response.IsAuthenticationChallenge then
+    Self.ReissueInviteWithAuthorization(Response);
+
+  Result := true;
+end;
 
 function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
@@ -2803,6 +2850,28 @@ end;
 
 //* TIdSipOutboundSession Private methods **************************************
 
+procedure TIdSipOutboundSession.AuthorizeAgainstProxy(Challenge: TIdSipResponse);
+var
+  ReInvite: TIdSipRequest;
+begin
+  ReInvite := Self.UA.CreateInvite(Challenge.ToHeader,
+                                   Self.InitialRequest.Body,
+                                   Self.InitialRequest.ContentType);
+  try
+    ReInvite.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
+    ReInvite.AddHeader(ProxyAuthorizationHeader);
+
+    Self.UA.Dispatcher.AddClientTransaction(ReInvite);
+    Self.UA.Dispatcher.SendRequest(ReInvite);
+  finally
+    ReInvite.Free;
+  end;
+end;
+
+procedure TIdSipOutboundSession.AuthorizeAgainstUser(Challenge: TIdSipResponse);
+begin
+end;
+
 function TIdSipOutboundSession.CreateOutboundDialog(Response: TIdSipResponse;
                                                     UsingSecureTransport: Boolean): TIdSipDialog;
 begin
@@ -2818,6 +2887,16 @@ end;
 procedure TIdSipOutboundSession.Initialize;
 begin
   Self.InCall := false;
+end;
+
+procedure TIdSipOutboundSession.ReissueInviteWithAuthorization(Challenge: TIdSipResponse);
+begin
+  // We received a 401 Unauthorized or 407 Proxy Authentication Required response
+  // so we need to re-issue the INVITE with the necessary authorization details.
+  case Challenge.StatusCode of
+    SIPUnauthorized:                Self.AuthorizeAgainstUser(Challenge);
+    SIPProxyAuthenticationRequired: Self.AuthorizeAgainstProxy(Challenge);
+  end;
 end;
 
 procedure TIdSipOutboundSession.SendAck(Final: TIdSipResponse);
