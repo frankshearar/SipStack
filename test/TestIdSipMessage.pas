@@ -2065,7 +2065,6 @@ begin
   Check(not Self.Response.HasWarning,
         'New response');
 
-
   Self.Response.AddHeader(WarningHeader);
   Check(Self.Response.HasWarning,
         'Lies! There is too a Warning header!');
