@@ -1015,7 +1015,6 @@ begin
     if Assigned(Tran) and not Tran.IsTerminated then begin
       Proc(Tran);
 
-      // TODO IS THIS VALID??
       if Tran.IsTerminated then
         Self.RemoveTransaction(Tran);
     end;
