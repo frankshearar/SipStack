@@ -69,6 +69,8 @@ begin
   Self.Client := TIdSipUserAgent.Create;
   Self.ClientDispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Client.Dispatcher := Self.ClientDispatcher;
+
+  Self.Dispatcher.MockLocator.AddA(Self.Invite.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TestTIdSipProxy.TearDown;

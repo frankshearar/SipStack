@@ -2072,6 +2072,8 @@ begin
   Self.Request         := TIdSipTestResources.CreateBasicRequest;
   Self.ReceivedRequest := TIdSipTestResources.CreateBasicRequest;
   Self.Response        := TIdSipTestResources.CreateBasicResponse;
+
+  Self.Dispatcher.MockLocator.AddA(Self.Response.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TestTIdSipTransaction.TearDown;
@@ -2461,7 +2463,7 @@ begin
   Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
 
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
-                                             Self.Dispatcher.Transport);
+                                               Self.Dispatcher.Transport);
 
   // RFC2543 matching depends on the last response the server sent.
   // And remember, a 200 OK in response to an INVITE will TERMINATE THE
@@ -2646,6 +2648,8 @@ begin
   Self.TransactionFailed     := false;
   Self.TransactionProceeding := false;
   Self.TransactionTerminated := false;
+
+  Self.MockDispatcher.MockLocator.AddA(Self.MockTransport.HostName, '127.0.0.1');
 
   Self.FailMsg  := '';
 end;

@@ -105,6 +105,9 @@ begin
   Self.Request.From.Address.Uri := 'sip:case@fried.neurons.org';
 
   Self.FirstContact := Self.Request.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
+
+  // No A/AAAA records mean no possible locations!
+  Self.Dispatch.MockLocator.AddA(Self.Request.LastHop.SentBy, '127.0.0.1');
 end;
 
 procedure TestTIdSipRegistrar.TearDown;
