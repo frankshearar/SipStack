@@ -7,11 +7,21 @@ uses
   TestFrameworkSip;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestDecodeQuotedStr;
+    procedure TestFirstChar;
+    procedure TestIsEqual;
+    procedure TestLastChar;
+    procedure TestShortMonthToInt;
+    procedure TestWithoutFirstAndLastChars;
+  end;
+
   TIdSipTrivialMessage = class(TIdSipMessage)
   protected
     function FirstLine: String; override;
   public
-    function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
+    function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
   end;
@@ -118,9 +128,94 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Messages)');
 
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestDecodeQuotedStr;
+var
+  Result: String;
+begin
+  Check(DecodeQuotedStr('', Result), 'Empty string result');
+  CheckEquals('', Result,            'Empty string decoded');
+
+  Check(DecodeQuotedStr('\"', Result), '\" result');
+  CheckEquals('"', Result,             '\" decoded');
+
+  Check(DecodeQuotedStr('\\', Result), '\\ result');
+  CheckEquals('\', Result,             '\\ decoded');
+
+  Check(DecodeQuotedStr('\a', Result), '\a result');
+  CheckEquals('a', Result,             '\a decoded');
+
+  Check(DecodeQuotedStr('foo', Result), 'foo result');
+  CheckEquals('foo', Result,            'foo decoded');
+
+  Check(DecodeQuotedStr('\"foo\\\"', Result), '\"foo\\\" result');
+  CheckEquals('"foo\"', Result,               '\"foo\\\" decoded');
+
+  Check(not DecodeQuotedStr('\', Result), '\ result');
+end;
+
+procedure TestFunctions.TestFirstChar;
+begin
+  CheckEquals('',  FirstChar(''),   'Empty string');
+  CheckEquals('a', FirstChar('ab'), 'ab');
+end;
+
+procedure TestFunctions.TestIsEqual;
+begin
+  Check(    IsEqual('', ''),    'Empty strings');
+  Check(not IsEqual('', 'a'),   'Empty string & ''a''');
+  Check(    IsEqual('a', 'a'),  '''a'' & ''a''');
+  Check(    IsEqual('A', 'a'),  '''A'' & ''a''');
+  Check(    IsEqual('a', 'A'),  '''a'' & ''A''');
+  Check(    IsEqual('A', 'A'),  '''A'' & ''A''');
+  Check(not IsEqual(' a', 'a'), ''' a'' & ''a''');
+end;
+
+procedure TestFunctions.TestLastChar;
+begin
+  CheckEquals('',  LastChar(''),   'Empty string');
+  CheckEquals('b', LastChar('ab'), 'ab');
+end;
+
+procedure TestFunctions.TestShortMonthToInt;
+var
+  I: Integer;
+begin
+  for I := Low(ShortMonthNames) to High(ShortMonthNames) do begin
+    CheckEquals(I,
+                ShortMonthToInt(ShortMonthNames[I]),
+                ShortMonthNames[I]);
+    CheckEquals(I,
+                ShortMonthToInt(UpperCase(ShortMonthNames[I])),
+                UpperCase(ShortMonthNames[I]));
+  end;
+
+  try
+    ShortMonthToInt('foo');
+    Fail('Failed to raise exception on ''foo''');
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestFunctions.TestWithoutFirstAndLastChars;
+begin
+  CheckEquals('',    WithoutFirstAndLastChars(''),      'Empty string');
+  CheckEquals('',    WithoutFirstAndLastChars('a'),     'a');
+  CheckEquals('',    WithoutFirstAndLastChars('ab'),    'ab');
+  CheckEquals('b',   WithoutFirstAndLastChars('abc'),   'abc');
+  CheckEquals('abc', WithoutFirstAndLastChars('"abc"'), '"abc"');
+  CheckEquals('abc', WithoutFirstAndLastChars('[abc]'), '[abc]');
 end;
 
 //******************************************************************************
@@ -128,7 +223,7 @@ end;
 //******************************************************************************
 //* TIdSipTrivialMessage Public methods ****************************************
 
-function TIdSipTrivialMessage.IsEqualTo(const Msg: TIdSipMessage): Boolean;
+function TIdSipTrivialMessage.IsEqualTo(Msg: TIdSipMessage): Boolean;
 begin
   Result := false;
 end;

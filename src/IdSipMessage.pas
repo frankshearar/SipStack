@@ -86,8 +86,8 @@ type
     fRequestUri: TIdSipURI;
 
     function  GetMaxForwards: Byte;
-    procedure SetMaxForwards(const Value: Byte);
-    procedure SetRequestUri(const Value: TIdSipURI);
+    procedure SetMaxForwards(Value: Byte);
+    procedure SetRequestUri(Value: TIdSipURI);
   protected
     function FirstLine: String; override;
   public
@@ -117,7 +117,7 @@ type
     fStatusCode: Integer;
     fStatusText: String;
 
-    procedure SetStatusCode(const Value: Integer);
+    procedure SetStatusCode(Value: Integer);
   protected
     function FirstLine: String; override;
   public
@@ -238,8 +238,11 @@ const
   UnmatchedQuotes           = 'Unmatched quotes';
 
 function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+function FirstChar(const S: String): String;
 function IsEqual(const S1, S2: String): Boolean;
+function LastChar(const S: String): String;
 function ShortMonthToInt(const Month: String): Integer;
+function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
 
@@ -289,9 +292,19 @@ begin
   end;
 end;
 
+function FirstChar(const S: String): String;
+begin
+  Result := Copy(S, 1, 1);
+end;
+
 function IsEqual(const S1, S2: String): Boolean;
 begin
   Result := Lowercase(S1) = Lowercase(S2);
+end;
+
+function LastChar(const S: String): String;
+begin
+  Result := Copy(S, Length(S), 1);
 end;
 
 function ShortMonthToInt(const Month: String): Integer;
@@ -307,6 +320,11 @@ begin
 
   if not Found then
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
+end;
+
+function WithoutFirstAndLastChars(const S: String): String;
+begin
+  Result := Copy(S, 2, Length(S) - 2);
 end;
 
 //******************************************************************************
@@ -675,12 +693,12 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
-procedure TIdSipRequest.SetMaxForwards(const Value: Byte);
+procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
 
-procedure TIdSipRequest.SetRequestUri(const Value: TIdSipURI);
+procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
 begin
   Self.fRequestUri.URI := Value.URI
 end;
@@ -763,7 +781,7 @@ end;
 
 //* TIdSipResponse Private methods **********************************************
 
-procedure TIdSipResponse.SetStatusCode(const Value: Integer);
+procedure TIdSipResponse.SetStatusCode(Value: Integer);
 begin
   Self.fStatusCode := Value;
 
