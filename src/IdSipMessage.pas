@@ -6149,7 +6149,7 @@ begin
     end;
 
     Self.CheckContentLengthContentType(Response);
-    //Self.CheckRequiredResponseHeaders(Response);
+    Self.CheckRequiredResponseHeaders(Response);
   except
     on E: EBadResponse do begin
       Response.MarkAsInvalid(E.Message);
