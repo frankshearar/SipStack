@@ -39,6 +39,7 @@ const
   DispositionIcon            = 'icon';
   DispositionRender          = 'render';
   DispositionSession         = 'session';
+  DomainParam                = 'domain';
   ErrorInfoHeader            = 'Error-Info';
   ExpiresHeader              = 'Expires';
   ExpiresParam               = 'expires';
@@ -82,6 +83,7 @@ const
   SipName                    = 'SIP';
   SipScheme                  = 'sip';
   SipsScheme                 = 'sips';
+  StaleParam                 = 'stale';
   SubjectHeaderFull          = 'Subject';
   SubjectHeaderShort         = 's';
   SupportedHeaderFull        = 'Supported';
