@@ -51,7 +51,12 @@ end;
 
 destructor TIdSipUdpServer.Destroy;
 begin
-  Self.Listeners.Free;
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Free;
+  finally
+    Self.ListenerLock.Release;
+  end;
   Self.ListenerLock.Free;
 
   inherited Destroy;
