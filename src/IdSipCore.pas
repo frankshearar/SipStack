@@ -318,8 +318,8 @@ type
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
                       Response: TIdSipResponse): TIdSipOutboundSession;
-    function  AddInboundRequest(Request: TIdSipRequest;
-                                Receiver: TIdSipTransport): TIdSipAction;
+    function  AddInboundAction(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport): TIdSipAction;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
@@ -1934,7 +1934,7 @@ begin
   Action := Self.FindAction(Request);
 
   if not Assigned(Action) then
-    Action := Self.AddInboundRequest(Request, Receiver);
+    Action := Self.AddInboundAction(Request, Receiver);
 
   if Assigned(Action) then
     Action.ReceiveRequest(Request)
@@ -2050,8 +2050,8 @@ begin
   Self.NotifyOfChange;
 end;
 
-function TIdSipUserAgentCore.AddInboundRequest(Request: TIdSipRequest;
-                                               Receiver: TIdSipTransport): TIdSipAction;
+function TIdSipUserAgentCore.AddInboundAction(Request: TIdSipRequest;
+                                              Receiver: TIdSipTransport): TIdSipAction;
 var
   Module: TIdSipMessageModule;
 begin
