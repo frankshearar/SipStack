@@ -159,6 +159,9 @@ type
     procedure UnlockTimer; override;
   end;
 
+const
+  TriggerImmediately = 0; // zero wait time: execute as soon as possible.  
+
 // Math and conversion functions
 function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
 function AddModuloWord(Addend, Augend: Word): Word;
