@@ -331,6 +331,8 @@ type
     procedure TestPendingTransactionCount;
     procedure TestReceiveBye;
     procedure TestReceiveByeWithPendingRequests;
+    procedure TestCancelAfterAccept;
+    procedure TestCancelBeforeAccept;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestReceiveReInvite;
     procedure TestRejectCallBusy;
@@ -3812,6 +3814,68 @@ begin
   finally
     ReInvite.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestCancelAfterAccept;
+var
+  CancelResponse: TIdSipResponse;
+  InviteResponse: TIdSipResponse;
+  ResponseCount:  Cardinal;
+  SessionCount:   Integer;
+begin
+  // <--- INVITE ---
+  //  --- 200 OK --->
+  // <---- ACK -----
+  // <--- CANCEL ---
+  //  --- 200 OK --->
+
+  Self.Session.AcceptCall('', '');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  SessionCount  := Self.Core.SessionCount;
+  Self.SimulateRemoteCancel;
+
+  CheckEquals(SessionCount,
+              Self.Core.SessionCount,
+              'Session terminated and the UA cleaned it up');
+  Check(not Self.Session.IsTerminated,
+        'Session terminated');
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  CancelResponse := Self.Dispatcher.Transport.LastResponse;
+  InviteResponse := Self.Dispatcher.Transport.SecondLastResponse;
+
+  CheckEquals(SIPOK,
+              CancelResponse.StatusCode,
+              'Unexpected Status-Code for CANCEL response');
+  CheckEquals(MethodCancel,
+              CancelResponse.CSeq.Method,
+              'Unexpected CSeq method for CANCEL response');
+
+  CheckEquals(SIPOK,
+              InviteResponse.StatusCode,
+              'Unexpected Status-Code for INVITE response');
+  CheckEquals(MethodInvite,
+              InviteResponse.CSeq.Method,
+              'Unexpected CSeq method for INVITE response');
+end;
+
+procedure TestTIdSipInboundSession.TestCancelBeforeAccept;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteCancel;
+
+  // The UA clears out terminated sessions as soon as it finishes handling
+  // a message, so the session should have terminated.
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session didn''t terminate');
+
+  Check(Self.OnEndedSessionFired,
+        'Session didn''t notify listeners of ended session');        
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveOutOfOrderReInvite;
