@@ -13,18 +13,20 @@ type
   TIdIPv6AddressRec = packed array[0..7] of Word;
 
   TIdIPAddressParser = class(TObject)
-    class function  ExpandIPv6Address(IPAddress: String): String;
-    class function  IncIPAddress(IPAddress: String;
+    class function  ExpandIPv6Address(const IPAddress: String): String;
+    class function  IncIPAddress(const IPAddress: String;
                                  N: Cardinal = 1): String;
-    class function  IncIPv4Address(IPAddress: String;
+    class function  IncIPv4Address(const IPAddress: String;
                                    N: Cardinal = 1): String;
     class procedure IncIPv6Address(var Address: TIdIPv6AddressRec;
                                    N: Cardinal = 1);
-    class function  IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
-    class function  IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+    class function  IPv6AddressToStr(const Address: TIdIPv6AddressRec): String;
+    class function  IsIPAddress(IpVersion: TIdIPVersion;
+                                const Token: String): Boolean;
     class function  IsIPv4Address(const Token: String): Boolean;
     class function  IsIPv6Address(const Token: String): Boolean;
-    class procedure ParseIPv6Address(IPv6Address: String; var Address: TIdIPv6AddressRec);
+    class procedure ParseIPv6Address(const IPv6Address: String;
+                                     var Address: TIdIPv6AddressRec);
   end;
 
   TIdSimpleParser = class(TObject)
@@ -37,10 +39,10 @@ type
   public
     class function  IsAlphaNumeric(const Token: String): Boolean;
     class function  IsByte(const Token: String): Boolean;
-    class function  IsDigit(const C: Char): Boolean;
+    class function  IsDigit(C: Char): Boolean;
     class function  IsFQDN(const Token: String): Boolean;
     class function  IsHexNumber(const Number: String): Boolean;
-    class function  IsLetter(const C: Char): Boolean;
+    class function  IsLetter(C: Char): Boolean;
     class function  IsNumber(const Number: String): Boolean;
     constructor Create; virtual;
 
@@ -75,7 +77,7 @@ const
   UnreservedChars = Alphabet + Digits + MarkChars;
 
 function HexDigitToInt(Digit: Char): Cardinal;
-function HexToInt(HexValue: String): Cardinal;
+function HexToInt(const HexValue: String): Cardinal;
 
 implementation
 
@@ -110,7 +112,7 @@ begin
   end;
 end;
 
-function HexToInt(HexValue: String): Cardinal;
+function HexToInt(const HexValue: String): Cardinal;
 var
   I:     Cardinal;
   Shift: Cardinal;
@@ -137,7 +139,7 @@ end;
 //******************************************************************************
 //* TIdIPAddressParser Public methods ******************************************
 
-class function TIdIPAddressParser.ExpandIPv6Address(IPAddress: String): String;
+class function TIdIPAddressParser.ExpandIPv6Address(const IPAddress: String): String;
 var
   Address: TIdIPv6AddressRec;
 begin
@@ -148,7 +150,7 @@ begin
   Result := Self.IPv6AddressToStr(Address);
 end;
 
-class function TIdIPAddressParser.IncIPAddress(IPAddress: String;
+class function TIdIPAddressParser.IncIPAddress(const IPAddress: String;
                                                N: Cardinal = 1): String;
 var
   IPv6: TIdIPv6AddressRec;
@@ -164,7 +166,7 @@ begin
     raise EConvertError.Create(Format(IPAddrError, [IPAddress]));
 end;
 
-class function TIdIPAddressParser.IncIPv4Address(IPAddress: String;
+class function TIdIPAddressParser.IncIPv4Address(const IPAddress: String;
                                                  N: Cardinal = 1): String;
 var
   B1, B2, B3, B4: Byte;
@@ -226,7 +228,7 @@ begin
     Address[7] := Carry - 1;
 end;
 
-class function TIdIPAddressParser.IPv6AddressToStr(Address: TIdIPv6AddressRec): String;
+class function TIdIPAddressParser.IPv6AddressToStr(const Address: TIdIPv6AddressRec): String;
   function StripLeadingZeroes(Digits: String): String;
   var
     I: Integer;
@@ -248,7 +250,8 @@ begin
   Result := Copy(Result, 1, Length(Result) - 1);
 end;
 
-class function TIdIPAddressParser.IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
+class function TIdIPAddressParser.IsIPAddress(IpVersion: TIdIPVersion;
+                                              const Token: String): Boolean;
 begin
   case IpVersion of
     Id_IPv4: Result := Self.IsIPV4Address(Token);
@@ -281,7 +284,8 @@ begin
   end;
 end;
 
-class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Address: TIdIPv6AddressRec);
+class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
+                                                    var Address: TIdIPv6AddressRec);
   const
     IPv6Delim    = ':';
     IPv4Delim    = '.';
@@ -435,7 +439,7 @@ begin
   end;
 end;
 
-class function TIdSimpleParser.IsDigit(const C: Char): Boolean;
+class function TIdSimpleParser.IsDigit(C: Char): Boolean;
 begin
   Result := C in Digits;
 end;
@@ -479,7 +483,7 @@ begin
     end;
 end;
 
-class function TIdSimpleParser.IsLetter(const C: Char): Boolean;
+class function TIdSimpleParser.IsLetter(C: Char): Boolean;
 begin
   Result := C in Alphabet;
 end;
