@@ -203,7 +203,7 @@ type
 implementation
 
 uses
-  Classes, IdRtpServer, IdSdp, SysUtils;
+  Classes, IdRtpServer, SysUtils;
 
 function Suite: ITestSuite;
 begin

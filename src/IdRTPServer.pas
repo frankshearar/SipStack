@@ -55,7 +55,7 @@ type
 implementation
 
 uses
-  IdSipConsts, Math;
+  Math;
 
 //******************************************************************************
 //* TIdRTPMembers                                                              *
