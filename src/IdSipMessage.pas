@@ -205,11 +205,13 @@ type
     class function IsWord(const Token: String): Boolean;
 
     function  GetHeaderName(Header: String): String;
-    function  GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
+    function  GetHeaderNumberValue(const Msg: TIdSipMessage;
+                                   const Header: String): Cardinal;
     function  GetHeaderValue(Header: String): String;
     function  ParseAndMakeMessage: TIdSipMessage; overload;
     function  ParseAndMakeMessage(const Src: String): TIdSipMessage; overload;
-    function  ParseAndMakeMessage(const Src: String; const MessageType: TIdSipMessageClass): TIdSipMessage; overload;
+    function  ParseAndMakeMessage(const Src: String;
+                                  const MessageType: TIdSipMessageClass): TIdSipMessage; overload;
     function  ParseAndMakeRequest: TIdSipRequest; overload;
     function  ParseAndMakeRequest(const Src: String): TIdSipRequest; overload;
     function  ParseAndMakeResponse: TIdSipResponse; overload;
@@ -356,6 +358,11 @@ var
   OriginalPosition: Int64;
   S:                TStringStream;
 begin
+  if not Assigned(Data) then begin
+    Result := '';
+    Exit;
+  end;
+
   OriginalPosition := Data.Position;
   Data.Seek(0, soFromBeginning);
   try
@@ -1118,7 +1125,8 @@ begin
   Result := Trim(Fetch(Header, ':'));
 end;
 
-function TIdSipParser.GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
+function TIdSipParser.GetHeaderNumberValue(const Msg: TIdSipMessage;
+                                           const Header: String): Cardinal;
 var
   Name:  String;
   Value: String;
@@ -1194,7 +1202,8 @@ begin
   end;
 end;
 
-function TIdSipParser.ParseAndMakeMessage(const Src: String; const MessageType: TIdSipMessageClass): TIdSipMessage;
+function TIdSipParser.ParseAndMakeMessage(const Src: String;
+                                          const MessageType: TIdSipMessageClass): TIdSipMessage;
 var
   OriginalSrc: TStream;
   S:           TStringStream;

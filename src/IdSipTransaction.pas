@@ -16,7 +16,6 @@ const
   SessionTimeoutMsg = 'Timed out';
 
 type
-  TIdSipFailEvent = procedure(Sender: TObject; const Reason: String) of object;
   // This covers all states - INVITE, non-INVITE, client, server.
   TIdSipTransactionState = (itsCalling, itsCompleted, itsConfirmed,
                             itsProceeding, itsTerminated, itsTrying);

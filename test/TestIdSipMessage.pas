@@ -23,7 +23,7 @@ type
   public
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
-    function  MalformedException: ExceptClass; override;
+    function  MalformedException: EBadMessageClass; override;
   end;
 
   TestTIdSipMessage = class(TTestCaseSip)
@@ -241,7 +241,7 @@ begin
   Result := false;
 end;
 
-function TIdSipTrivialMessage.MalformedException: ExceptClass;
+function TIdSipTrivialMessage.MalformedException: EBadMessageClass;
 begin
   Result := nil;
 end;

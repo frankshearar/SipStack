@@ -429,7 +429,9 @@ type
   // with a way to register with a registrar. I take care of things like
   // doing stuff with error responses, asking for authentication, etc.
   //
-  // It makes no sense to access me once my Transaction has terminated.
+  // It makes no sense to access me once my Transaction has terminated. In
+  // other words once you've received notification of my success or failure,
+  // erase your references to me.
   TIdSipRegistration = class(TIdInterfacedObject,
                              IIdSipTransactionListener)
   private
@@ -456,6 +458,7 @@ type
     procedure ReissueRequest(Registrar: TIdSipUri;
                              MinimumExpiry: Cardinal);
     procedure Send(Request: TIdSipRequest);
+    procedure Terminate;
   public
     constructor Create(UA: TIdSipUserAgentCore);
     destructor  Destroy; override;
@@ -2381,6 +2384,8 @@ begin
   finally
     Self.ListenerLock.Release;
   end;
+
+  Self.Terminate;
 end;
 
 procedure TIdSipRegistration.NotifyOfSuccess(CurrentBindings: TIdSipContacts);
@@ -2395,6 +2400,8 @@ begin
   finally
     Self.ListenerLock.Release;
   end;
+
+  Self.Terminate;
 end;
 
 procedure TIdSipRegistration.OnFail(Transaction: TIdSipTransaction;
@@ -2478,6 +2485,11 @@ begin
   Transaction := Self.UA.Dispatcher.AddClientTransaction(Request);
   Transaction.AddTransactionListener(Self);
   Transaction.SendRequest;
+end;
+
+procedure TIdSipRegistration.Terminate;
+begin
+  Self.UA.RemoveRegistration(Self);
 end;
 
 end.
