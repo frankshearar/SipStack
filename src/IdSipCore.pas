@@ -1156,7 +1156,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.AddAllowedMethod(const Method: String);
 begin
-  if not TIdSipParser.IsToken(Method) then
+  if not TIdSipParser.IsMethod(Method) then
     raise EIdSipBadSyntax.Create('Not a token');
 
   if (Self.AllowedMethodList.IndexOf(Method) = -1) then
