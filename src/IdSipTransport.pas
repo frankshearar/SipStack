@@ -751,6 +751,8 @@ begin
   try
     for I := 0 to Self.TerminatedServers.Count - 1 do
       Self.fOwner.RemoveClient(Self.TerminatedServers[I] as TIdSipUdpClient);
+
+    Self.TerminatedServers.Clear;
   finally
     Self.ListLock.Release;
   end;
