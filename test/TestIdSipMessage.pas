@@ -50,6 +50,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAccessingHeaderDoesntAddHeader;
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
@@ -491,6 +492,33 @@ begin
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
+
+procedure TestTIdSipMessage.TestAccessingHeaderDoesntAddHeader;
+begin
+  Check(not Self.Msg.HasHeader(CallIDHeaderFull),
+        'Call-ID header already present');
+  CheckEquals('',
+              Self.Msg.CallID,
+              'Call-ID value when no header present');
+  Check(not Self.Msg.HasHeader(CallIDHeaderFull),
+        'Call-ID header added');
+
+  Check(not Self.Msg.HasHeader(ContentLanguageHeader),
+        'Content-Language header already present');
+  CheckEquals('',
+              Self.Msg.ContentLanguage,
+              'Content-Language value when no header present');
+  Check(not Self.Msg.HasHeader(ContentLanguageHeader),
+        'Content-Language header added');
+
+  Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Content-Type header already present');
+  CheckEquals('',
+              Self.Msg.ContentType,
+              'Content-Type value when no header present');
+  Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Content-Type header added');
+end;
 
 procedure TestTIdSipMessage.TestAddHeader;
 var

@@ -928,6 +928,7 @@ type
                                             ClassType: TIdSipMessageClass): TIdSipMessage;
 
     function  ContentLengthEqualsBodyLength: Boolean;
+    function  FirstHeaderValue(const HeaderName: String): String;
     function  FirstMalformedHeader: TIdSipHeader;
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
@@ -6056,6 +6057,14 @@ begin
     Self.MarkAsInvalid(BadContentLength);
 end;
 
+function TIdSipMessage.FirstHeaderValue(const HeaderName: String): String;
+begin
+  if Self.HasHeader(HeaderName) then
+    Result := Self.FirstHeader(HeaderName).Value
+  else
+    Result := '';
+end;
+
 function TIdSipMessage.FirstMalformedHeader: TIdSipHeader;
 begin
   Result := nil;
@@ -6070,7 +6079,7 @@ end;
 
 function TIdSipMessage.GetCallID: String;
 begin
-  Result := Self.FirstHeader(CallIDHeaderFull).Value;
+  Result := Self.FirstHeaderValue(CallIDHeaderFull);
 end;
 
 function TIdSipMessage.GetContentDisposition: TIdSipContentDispositionHeader;
@@ -6080,17 +6089,17 @@ end;
 
 function TIdSipMessage.GetContentLanguage: String;
 begin
-  Result := Self.FirstHeader(ContentLanguageHeader).Value;
+  Result := Self.FirstHeaderValue(ContentLanguageHeader);
 end;
 
 function TIdSipMessage.GetContentLength: Integer;
 begin
-  Result := StrToInt(Self.FirstHeader(ContentLengthHeaderFull).Value);
+  Result := StrToIntDef(Self.FirstHeaderValue(ContentLengthHeaderFull), 0);
 end;
 
 function TIdSipMessage.GetContentType: String;
 begin
-  Result := Self.FirstHeader(ContentTypeHeaderFull).Value;
+  Result := Self.FirstHeaderValue(ContentTypeHeaderFull);
 end;
 
 function TIdSipMessage.GetCSeq: TIdSipCSeqHeader;
