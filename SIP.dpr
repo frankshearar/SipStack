@@ -31,6 +31,7 @@ uses
   IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
+  SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   SysUtils,
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
@@ -56,8 +57,7 @@ uses
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdSipUri in 'test\TestIdSipUri.pas',
-  SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister};
+  TestIdSipUri in 'test\TestIdSipUri.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
