@@ -10,20 +10,29 @@ The code currently implements most of SIP, RTP. The stack can make and receive
 calls from/to X-Lite, linphonec. It also connects correctly with ser, the Sip
 Express Router.
 
+The stack uses Indy 9.0.14 (but 9.0.18 should work fine). Find this
+excellent library either in your Delphi\Sources\Indy directory or at
+http://www.indyproject.org/
+
+All test code relies on the DUnit test framework. See
+http://dunit.sourceforge.net/ for details.
+
 Of the stuff not implemented, the most important missing bits include:
  * no SRV/NAPTR DNS resolution;
  * no RFC 3263 discovery mechanisms;
- * RTP loop detection
+ * S/MIME
 
 Take a look at the Spike class in tests\Spike.pas. It does a lot of stuff, but
 it should show you what you need to do to get your very own SIP stack up and
 running. I plan to simplify Spike to ease the reader into the ways of SIP.
 
-All test code relies on the DUnit test framework. See
-http://dunit.sourceforge.net/ for details.
-
 Known bugs:
- * Sometimes certain threads don't die cleanly. This makes the application 
-   quietly hang in the background when you kill the spike prototype.
+* TCP clients don't send/receive data in a separate thread. This
+  makes the main/VCL thread hang while you send messages.
+* Very occasionally the TCP transport tests fail with an access
+  violation inside TIdTCPConnection.ReadFromStack. I currently develop
+  the stack on Indy 9.0.14. I don't know if this is a bug in Indy's
+  code or if I'm doing something subtly wrong in my code.
+* TLS tests fail because of something to do with the certificates.
 
-Frank Shearar, 2004/07/22
+Frank Shearar, 2004/12/14

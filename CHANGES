@@ -1,3 +1,41 @@
+v0.3 (2004.12.14)
+
+* Transaction User objects (i.e., Actions) and Transactions no longer
+  use their own threads for timing events - they use their
+  UserAgentCore or Dispatcher to schedule events.
+* "Message Modules": If you want a Core to handle call messages
+  (INVITE, ACK, BYE, CANCEL), you just call
+  Core.AddModule(TIdSipInviteModule). If you want it to also handle
+  REGISTER messages, just call
+  Core.AddModule(TIdSipRegisterModule). OPTIONS?
+  Core.AddModule(TIdSipOptionsModule). In general, if you want a Core
+  to handle some message (say, INFO or REFER or MESSAGE or whatever),
+  subclass TIdSipMessageModule and create an Outbound and Inbound
+  Action for the Module. Use the InviteModule, RegisterModule and
+  OptionsModule classes as examples. INVITEs behave differently to
+  other messages, so the Register- and OptionsModules will likely help
+  you the most.
+* All threads now subclass TIdBaseThread, which subclasses TThread and
+  not TIdThread.
+* Dispatcher now creates transactions for CANCELs.
+* You can terminate sessions both before you receive a 200 OK and
+  after. In the former case you send a CANCEL & the latter a BYE. We
+  check that the CANCEL did actually cancel and, if not, send a
+  BYE. (This can happen when the far end accepts the call before your
+  CANCEL reaches it.)
+* Sessions can now process redirect messages and try the received
+  alternate Contacts. We could use a better algorithm here!
+* You can now modify sessions. As per RFC 3261 section 14.1, we also
+  handle "glare" situations (simultaneous re-INVITEs by two parties in
+  the session).
+* General system-wide refactorings:
+** Sessions now use InviteActions and no longer know about the details
+   of receiving/sending INVITEs.
+** Actions and Transactions no longer ask their Core/Dispatcher to
+   free them. Instead, they mark themselves as Terminated, and the
+   Core/Dispatcher removes all terminated Actions/Transactions at
+   appropriate times (like after sending/receiving messages).
+
 v0.2 (2004/09/20)
 
 * Parsing SIP messages doesn't raise exceptions. Instead, the messages
