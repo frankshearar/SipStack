@@ -31,7 +31,8 @@ type
   // request. I do this by something supplying me with a list of
   // username+realms and digests. I thus never see the unencrypted passwords.
   // I also supply a means to create the digests.
-
+  //
+  // I thus provide the server half of the authentication process.
   TIdSipUserList = class(TObject)
   private
     Coder:    TIdHashMessageDigest5;
@@ -57,7 +58,6 @@ type
     function  Usercount: Integer;
   end;
 
-  // I thus provide the server half of the authentication process.
   TIdSipAbstractAuthenticator = class(TIdSipUserList)
   private
     fRealm: String;
