@@ -1604,6 +1604,8 @@ begin
       TerminateResponse.Free;
     end;
   end;
+
+  Self.NotifyOfRequest(Cancel, T);
 end;
 
 procedure TIdSipServerInviteTransaction.ReceiveNonCancel(R: TIdSipRequest;

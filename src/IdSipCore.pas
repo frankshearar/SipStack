@@ -534,6 +534,7 @@ type
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
     procedure ProcessBye(Request: TIdSipRequest);
+    procedure ProcessCancel(Request: TIdSipRequest);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
     procedure TerminateOpenTransaction(Request: TIdSipRequest);
@@ -827,6 +828,7 @@ const
   InviteTimeout   = 'Incoming call timed out';
   LocalCancel     = 'Local end cancelled call';
   LocalHangUp     = 'Local end hung up';
+  RemoteCancel    = 'Remote end cancelled call';
   RemoteHangUp    = 'Remote end hung up';
 
 //******************************************************************************
@@ -2798,6 +2800,8 @@ begin
   if Request.IsBye then begin
     Self.ProcessBye(Request);
   end
+  else if Request.IsCancel then
+    Self.ProcessCancel(Request)
   else if Request.IsInvite then begin
     if Self.Dialog.IsOutOfOrder(Request) then begin
       Self.RejectOutOfOrderRequest(Request);
@@ -2950,6 +2954,11 @@ begin
     OK.Free;
   end;
   Self.NotifyOfEndedSession(RemoteHangUp);
+end;
+
+procedure TIdSipSession.ProcessCancel(Request: TIdSipRequest);
+begin
+  Self.NotifyOfEndedSession(RemoteCancel);
 end;
 
 procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest);

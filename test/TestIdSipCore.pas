@@ -41,6 +41,7 @@ type
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     procedure SimulateRemoteBye(LocalDialog: TIdSipDialog);
+    procedure SimulateCancel;
     procedure SimulateRemoteInvite;
 
     procedure SimulateRemoteAccept(Invite: TIdSipRequest);
@@ -111,6 +112,7 @@ type
     procedure TestAddObserver;
     procedure TestAddUserAgentListener;
     procedure TestCallUsingProxy;
+    procedure TestCancelNotifiesTU;
     procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateInvite;
@@ -790,6 +792,18 @@ begin
   end;
 end;
 
+procedure TTestCaseTU.SimulateCancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.Invite.CreateCancel;
+  try
+    Self.Dispatcher.Transport.FireOnRequest(Cancel);
+  finally
+    Cancel.Free;
+  end;
+end;
+
 procedure TTestCaseTU.SimulateRemoteInvite;
 begin
   Self.Dispatcher.Transport.FireOnRequest(Self.Invite);
@@ -1366,6 +1380,20 @@ begin
   CheckEquals(ProxyUri,
               Invite.Route.CurrentRoute.Address.Uri,
               'Route points to wrong proxy');
+end;
+
+procedure TestTIdSipUserAgentCore.TestCancelNotifiesTU;
+var
+  SessCount: Integer;
+begin
+  Self.SimulateRemoteInvite;
+  SessCount := Self.Core.SessionCount;
+  Self.SimulateCancel;
+
+  Check(Self.OnEndedSessionFired,
+        'UA not notified of remote CANCEL');
+  Check(Self.Core.SessionCount < SessCount,
+        'UA didn''t remove cancelled session');
 end;
 
 procedure TestTIdSipUserAgentCore.TestContentTypeDefault;
