@@ -2774,8 +2774,6 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.StopListening;
-var
-  I: Integer;
 begin
   Self.RTPServerLock.Acquire;
   try
