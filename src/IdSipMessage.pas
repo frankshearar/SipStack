@@ -1442,6 +1442,7 @@ const
   TransportParamSCTP         = 'sctp';
   TransportParamTCP          = 'tcp';
   TransportParamTLS          = 'tls';
+  TransportParamTLS_SCTP     = 'tls-sctp';
   TransportParamUDP          = 'udp';
   TTLParam                   = 'ttl';
   UnsupportedHeader          = 'Unsupported';
@@ -1629,11 +1630,12 @@ const
 
 // Transport types. Don't localise them.
 const
-  NullTransport = 'NULL';
-  SctpTransport = 'SCTP';
-  TcpTransport  = 'TCP';
-  TlsTransport  = 'TLS';
-  UdpTransport  = 'UDP';
+  NullTransport        = 'NULL';
+  SctpTransport        = 'SCTP';
+  TcpTransport         = 'TCP';
+  TlsOverSctpTransport = 'TLS-SCTP';
+  TlsTransport         = 'TLS';
+  UdpTransport         = 'UDP';
 
 // Grammar definitions. Don't localise them.
 const
