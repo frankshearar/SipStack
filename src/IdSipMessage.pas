@@ -1268,7 +1268,7 @@ begin
       Result := false;
 
     if (Length(Dest) >= 2) and (Dest[Length(Dest)] = '\') and (Dest[Length(Dest) - 1] <> '\') then
-      Result := Result and false;
+      Result := false;
 
     // We use "<" and not "<=" because if a \ is the last character we have
     // a malformed string. Too, this allows use to Dest[I + 1]
@@ -1276,13 +1276,12 @@ begin
     while (I < Length(Dest)) and Result do begin
       Result := Dest[I] <> '"';
       FoundSlash := Dest[I] = '\';
-      if (FoundSlash) then begin
+      if FoundSlash then begin
         Delete(Dest, I, 1);
 
         // protect '\\'
-        if (FoundSlash) then begin
+        if FoundSlash then
           Inc(I);
-        end;
       end
       else
         Inc(I);
