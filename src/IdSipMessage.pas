@@ -436,7 +436,7 @@ begin
   // It is the responsibility of the transport to ensure that
   // Content-Length is set before this method is called.
   SetLength(fBody, Self.ContentLength);
-  S.Read(fBody[1], Self.ContentLength);
+  S.Read(PChar(fBody)^, Self.ContentLength);
 end;
 
 procedure TIdSipMessage.RemoveHeader(const Header: TIdSipHeader);
