@@ -119,9 +119,9 @@ type
     function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Receiver: TIdSipTransport): Boolean; virtual;
-    procedure ReceiveResponse(Response: TIdSipResponse;
+    function  ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
-                              Receiver: TIdSipTransport); virtual;
+                              Receiver: TIdSipTransport): Boolean; virtual;
 
     property Dispatcher: TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:   String                      read fHostName write fHostName;
@@ -292,9 +292,9 @@ type
     function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Receiver: TIdSipTransport): Boolean; override;
-    procedure ReceiveResponse(Response: TIdSipResponse;
+    function  ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
-                              Receiver: TIdSipTransport); override;
+                              Receiver: TIdSipTransport): Boolean; override;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
@@ -509,10 +509,12 @@ begin
   Result := false;
 end;
 
-procedure TIdSipAbstractCore.ReceiveResponse(Response: TIdSipResponse;
-                                             Transaction: TIdSipTransaction;
-                                             Receiver: TIdSipTransport);
+function TIdSipAbstractCore.ReceiveResponse(Response: TIdSipResponse;
+                                            Transaction: TIdSipTransaction;
+                                            Receiver: TIdSipTransport): Boolean;
 begin
+  // cf RFC 3261 section 8.1.3.3
+  Result := Response.Path.Count = 1;
 end;
 
 //* TIdSipAbstractCore Private methods *****************************************
@@ -1202,12 +1204,16 @@ begin
   Result := true;
 end;
 
-procedure TIdSipUserAgentCore.ReceiveResponse(Response: TIdSipResponse;
-                                              Transaction: TIdSipTransaction;
-                                              Receiver: TIdSipTransport);
+function TIdSipUserAgentCore.ReceiveResponse(Response: TIdSipResponse;
+                                             Transaction: TIdSipTransaction;
+                                             Receiver: TIdSipTransport): Boolean;
 var
   Session: TIdSipSession;
 begin
+  Result := inherited ReceiveResponse(Response, Transaction, Receiver);
+
+  if not Result then Exit;
+  
   // User Agents drop unmatched responses on the floor.
   // Except for 2xx's on a client INVITE. And these no longer belong to
   // a transaction, since the receipt of a 200 terminates a client INVITE

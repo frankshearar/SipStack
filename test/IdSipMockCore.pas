@@ -17,9 +17,9 @@ type
     function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Transport: TIdSipTransport): Boolean; override;
-    procedure ReceiveResponse(Response: TIdSipResponse;
+    function  ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
-                              Transport: TIdSipTransport); override;
+                              Transport: TIdSipTransport): Boolean; override;
 
     procedure Reset;
 
@@ -71,11 +71,12 @@ begin
   Result := true;
 end;
 
-procedure TIdSipMockCore.ReceiveResponse(Response: TIdSipResponse;
-                                         Transaction: TIdSipTransaction;
-                                         Transport: TIdSipTransport);
+function TIdSipMockCore.ReceiveResponse(Response: TIdSipResponse;
+                                        Transaction: TIdSipTransaction;
+                                        Transport: TIdSipTransport): Boolean;
 begin
   fReceiveResponseCalled := true;
+  Result := true;
 end;
 
 procedure TIdSipMockCore.Reset;
