@@ -17,6 +17,7 @@ type
     procedure CheckTortureTest21(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest22(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest23(Sender: TObject; const Response: TIdSipResponse);
+    procedure CheckTortureTest35(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckTortureTest40(Sender: TObject; const Response: TIdSipResponse);
   public
     procedure SetUp; override;
@@ -30,6 +31,7 @@ type
     procedure TestTortureTest21;
     procedure TestTortureTest22;
     procedure TestTortureTest23;
+    procedure TestTortureTest35;
     procedure TestTortureTest40;
   end;
 
@@ -209,6 +211,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipUdpServer.CheckTortureTest35(Sender: TObject; const Response: TIdSipResponse);
+begin
+  try
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(350,                Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'Expires: 0 0l@company.com']),
+                Response.StatusText,
+                'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipUdpServer.CheckTortureTest40(Sender: TObject; const Response: TIdSipResponse);
 begin
   try
@@ -347,6 +367,13 @@ begin
   Server.OnResponse := Self.CheckTortureTest23;
 
   Self.Client.Send(TortureTest23);
+end;
+
+procedure TestTIdSipUdpServer.TestTortureTest35;
+begin
+  Server.OnResponse := Self.CheckTortureTest35;
+
+  Self.Client.Send(TortureTest35);
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest40;

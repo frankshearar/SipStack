@@ -153,16 +153,6 @@ const
                 + 'm=video 3227 RTP/AVP 31'#13#10
                 + 'a=rtpmap:31 LPC';
 
-  //   This OPTIONS request is legal despite there being no LWS between
-  //   the display name and < in the From header.
-  TortureTest27 = 'OPTIONS sip:user@company.com SIP/2.0'#13#10
-                + 'To: sip:user@company.com'#13#10
-                + 'From: "caller"<sip:caller@example.com>;tag=323'#13#10
-                + 'Max-Forwards: 70'#13#10
-                + 'Call-ID: 1234abcd@10.0.0.1'#13#10
-                + 'CSeq: 1 OPTIONS'#13#10
-                + 'Via: SIP/2.0/UDP 135.180.130.133:5060;branch=z9hG4bKkdjuw';
-
   //   This is an illegal and badly mangled message.
   //
   //   A server should respond 400 with an appropriate reason phrase if it
@@ -174,12 +164,12 @@ const
                 + 'To: sip:user@135.180.130.133'#13#10
                 + 'Call-ID: 1804928587@company.com'#13#10
                 + 'CSeq: 1 OPTIONS'#13#10
-                + 'Expires: 0 0l@company.com'#13#10
-                + 'To: sip:user@135.180.130.133'#13#10
-                + 'Call-ID: 1804928587@company.com'#13#10
-                + 'CSeq: 1 OPTIONS'#13#10
+                + 'Expires: 0 0l@company.com'#13#10               // mangled
+                + 'To: sip:user@135.180.130.133'#13#10            // 2nd To header
+                + 'Call-ID: 1804928587@company.com'#13#10         // 2nd Call-ID
+                + 'CSeq: 1 OPTIONS'#13#10                         // 2nd CSeq
                 + 'Contact: sip:host.company.com'#13#10
-                + 'Expires: 0xpires: 0sip:host.company.com'#13#10
+                + 'Expires: 0xpires: 0sip:host.company.com'#13#10 // mangled
                 + 'Expires: 0'#13#10
                 + 'Contact: sip:host.company.com';
 

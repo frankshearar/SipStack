@@ -25,6 +25,8 @@ type
                                 AMessage: TIdSipMessage);
     procedure CheckTortureTest23(AThread: TIdPeerThread;
                                 AMessage: TIdSipMessage);
+    procedure CheckTortureTest35(AThread: TIdPeerThread;
+                                AMessage: TIdSipMessage);
     procedure CheckTortureTest40(AThread: TIdPeerThread;
                                 AMessage: TIdSipMessage);
   public
@@ -39,6 +41,7 @@ type
     procedure TestTortureTest21;
     procedure TestTortureTest22;
     procedure TestTortureTest23;
+    procedure TestTortureTest35;
     procedure TestTortureTest40;
   end;
 
@@ -223,6 +226,29 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpServer.CheckTortureTest35(AThread: TIdPeerThread;
+                                                 AMessage: TIdSipMessage);
+var
+  Response: TIdSipResponse;
+begin
+  try
+    Response := AMessage as TIdSipResponse;
+
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(350,                Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
+                Response.StatusText,
+                'StatusText');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipTcpServer.CheckTortureTest40(AThread: TIdPeerThread;
                                                  AMessage: TIdSipMessage);
 var
@@ -397,6 +423,14 @@ begin
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(TortureTest23);
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest35;
+begin
+  Server.OnMethod := Self.CheckTortureTest35;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest35);
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest40;

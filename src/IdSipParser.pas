@@ -76,6 +76,16 @@ type
     property SequenceNo: Cardinal read fSequenceNo write fSequenceNo;
   end;
 
+  TIdSipNumericHeader = class(TIdSipHeader)
+  private
+    fNumericValue: Cardinal;
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    property NumericValue: Cardinal read fNumericValue write fNumericValue;
+  end;
+
   TIdSipViaHeader = class(TIdSipHeader)
   private
     fHost:       String;
@@ -244,6 +254,7 @@ type
     procedure ResetCurrentLine;
   public
     class function IsMethod(Method: String): Boolean;
+    class function IsNumber(Number: String): Boolean;
     class function IsToken(const Token: String): Boolean;
     constructor Create;
 
@@ -253,7 +264,6 @@ type
     function  GetHeaderName(Header: String): String;
     function  GetHeaderNumberValue(const Msg: TIdSipMessage; const Header: String): Cardinal;
     function  GetHeaderValue(Header: String): String;
-    function  IsNumber(Number: String): Boolean;
     function  IsSipVersion(Version: String): Boolean;
     function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
     function  ParseAndMakeMessage: TIdSipMessage;
@@ -301,6 +311,7 @@ const
   ContentTypeHeaderShort   = 'c';
   CSeqHeader               = 'CSeq';
   DefaultMaxForwards       = 70;
+  ExpiresHeader            = 'Expires';
   FromHeaderFull           = 'From';
   FromHeaderShort          = 'f';
   MaxForwardsHeader        = 'Max-Forwards';
@@ -827,6 +838,26 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipNumericHeader                                                        *
+//******************************************************************************
+//* TIdSipNumericHeader Protected methods **************************************
+
+function TIdSipNumericHeader.GetValue: String;
+begin
+  Result := IntToStr(fNumericValue);
+end;
+
+procedure TIdSipNumericHeader.SetValue(const Value: String);
+begin
+  if not TIdSipParser.IsNumber(Value) then
+    raise EBadHeader.Create(Self.Name);
+
+  fNumericValue := StrToInt(Value);
+
+  inherited SetValue(Value);
+end;
+
+//******************************************************************************
 //* TIdSipViaHeader                                                            *
 //******************************************************************************
 //* TIdSipViaHeader Public methods *********************************************
@@ -1045,6 +1076,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,  TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort, TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,         TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,      TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,     TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,    TIdSipAddressHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,       TIdSipAddressHeader));
@@ -1406,6 +1438,20 @@ begin
   Result := Self.IsToken(Method);
 end;
 
+class function TIdSipParser.IsNumber(Number: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Number <> '';
+
+  if (Result) then
+    for I := 1 to Length(Number) do begin
+      Result := Result and (Number[I] in ['0'..'9']);
+
+      if not Result then Break;
+    end;
+end;
+
 class function TIdSipParser.IsToken(const Token: String): Boolean;
 var
   I: Integer;
@@ -1491,20 +1537,6 @@ begin
     Fetch(Result, ':');
     Result := Trim(Result);
   end;
-end;
-
-function TIdSipParser.IsNumber(Number: String): Boolean;
-var
-  I: Integer;
-begin
-  Result := Number <> '';
-
-  if (Result) then
-    for I := 1 to Length(Number) do begin
-      Result := Result and (Number[I] in ['0'..'9']);
-
-      if not Result then Break;
-    end;
 end;
 
 function TIdSipParser.IsSipVersion(Version: String): Boolean;
