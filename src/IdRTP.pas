@@ -1285,6 +1285,7 @@ uses
 const
   JanOne1900           = 2;
   NTPNegativeTimeError = 'DT < 1900/01/01';
+  RTPNegativeTimeError = 'DateTimeToRTPTimestamp doesn''t support negative timestamps';
   RTPLoopDetected      = 'RTP loop detected';
 
 //******************************************************************************
@@ -1349,7 +1350,7 @@ var
   Temp: Int64;
 begin
   if (DT < 0) then
-    raise EConvertError.Create('DateTimeToRTPTimestamp doesn''t support negative timestamps');
+    raise EConvertError.Create(RTPNegativeTimeError);
 
   if (ClockRate > 0) then begin
     Temp := Round(ClockRate / OneSecond * DT);
