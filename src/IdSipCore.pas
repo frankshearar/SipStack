@@ -705,12 +705,6 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fAllowedMethodList      := TStringList.Create;
   Self.fAllowedSchemeList      := TStringList.Create;
-
-  Self.AddAllowedContentType(SdpMimeType);
-  Self.AddAllowedMethod(MethodBye);  
-  Self.AddAllowedMethod(MethodCancel);
-  Self.AddAllowedMethod(MethodInvite);
-  Self.AddAllowedScheme(SipScheme);
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
@@ -1112,7 +1106,6 @@ begin
   Self.AddAllowedMethod(MethodBye);
   Self.AddAllowedMethod(MethodCancel);
   Self.AddAllowedMethod(MethodInvite);
-
   Self.AddAllowedScheme(SipScheme);
 
   Self.From.Value    := Self.DefaultFrom;

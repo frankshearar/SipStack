@@ -1219,7 +1219,8 @@ end;
 
 function StrToTransport(const S: String): TIdSipTransportType;
 begin
-       if (Lowercase(S) = 'sctp') then Result := sttSCTP
+       if (Lowercase(S) = 'null') then Result := sttNULL
+  else if (Lowercase(S) = 'sctp') then Result := sttSCTP
   else if (Lowercase(S) = 'tcp')  then Result := sttTCP
   else if (Lowercase(S) = 'tls')  then Result := sttTLS
   else if (Lowercase(S) = 'udp')  then Result := sttUDP
@@ -1229,11 +1230,12 @@ end;
 function TransportToStr(const T: TIdSipTransportType): String;
 begin
   case T of
+    sttNULL: Result := 'NULL';
     sttSCTP: Result := 'SCTP';
     sttTCP:  Result := 'TCP';
     sttTLS:  Result := 'TLS';
     sttUDP:  Result := 'UDP';
-  else
+ else
     raise EConvertError.Create(Format(ConvertErrorMsg, ['unknown TIdSipTransportType', 'String']));
   end;
 end;

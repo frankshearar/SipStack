@@ -563,6 +563,7 @@ var
 begin
   ContentTypes := TStringList.Create;
   try
+    Self.UA.AddAllowedContentType(SdpMimeType);
     Self.UA.AddAllowedContentType(PlainTextMimeType);
 
     ContentTypes.CommaText := Self.UA.AllowedContentTypes;
@@ -637,6 +638,9 @@ var
 begin
   Methods := TStringList.Create;
   try
+    Self.UA.AddAllowedMethod(MethodBye);
+    Self.UA.AddAllowedMethod(MethodCancel);
+    Self.UA.AddAllowedMethod(MethodInvite);
     Self.UA.AddAllowedMethod(MethodOptions);
 
     Methods.CommaText := Self.UA.AllowedMethods;
@@ -666,6 +670,7 @@ var
 begin
   Methods := TStringList.Create;
   try
+    Self.UA.AddAllowedMethod(MethodInvite);
     Methods.CommaText := Self.UA.AllowedMethods;
     MethodCount := Methods.Count;
 
@@ -684,6 +689,7 @@ var
 begin
   Schemes := TStringList.Create;
   try
+    Self.UA.AddAllowedScheme(SipScheme);
     Self.UA.AddAllowedScheme(SipsScheme);
 
     Schemes.CommaText := Self.UA.AllowedSchemes;
