@@ -388,10 +388,7 @@ begin
     if Response.Path.IsEmpty then
       raise ESipLocator.Create(NoViaHeadersMeansNoLocations);
 
-    if Response.LastHop.HasRport then
-      Port := Response.LastHop.RPort
-    else
-      Port := Response.LastHop.Port;
+    Port := Response.LastHop.RoutingPort;
 
     if Response.LastHop.HasReceived then begin
       SentBy := Response.LastHop.Received;
@@ -405,6 +402,7 @@ begin
 
     if TIdIPAddressParser.IsIPv4Address(SentBy)
     or TIdIPAddressParser.IsIPv6Reference(SentBy) then begin
+      // "not Foo" because we may have already added SentBy.
       if not Response.LastHop.HasReceived then
         Result.AddLocation(Response.LastHop.Transport,
                            SentBy,
