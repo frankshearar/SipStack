@@ -135,6 +135,8 @@ type
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
     function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; overload; override;
+    function  CreateResponse(Request: TIdSipRequest;
+                             ResponseCode: Cardinal): TIdSipResponse; overload; override;
     function  HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
@@ -148,8 +150,7 @@ type
                              Receiver: TIdSipTransport); override;
     procedure RejectRequest(Request: TIdSipRequest;
                             Reason: Cardinal;
-                            Transaction: TIdSipTransaction;
-                            Receiver: TIdSipTransport);
+                            Transaction: TIdSipTransaction);
 
     property From:          TIdSipFromHeader read GetFrom write SetFrom;
     property UserAgentName: String           read fUserAgentName write fUserAgentName;
@@ -513,6 +514,42 @@ begin
   end;
 end;
 
+function TIdSipAbstractUserAgent.CreateResponse(Request: TIdSipRequest;
+                                                ResponseCode: Cardinal): TIdSipResponse;
+var
+  TimestampHeaders: TIdSipHeadersFilter;
+begin
+  Result := TIdSipResponse.Create;
+  try
+    Result.StatusCode := ResponseCode;
+
+    // cf RFC 3261 section 8.2.6.1
+    if (Result.StatusCode = SIPTrying) then begin
+      TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
+                                                     TimestampHeader);
+      try
+        Result.AddHeaders(TimestampHeaders);
+      finally
+        TimestampHeaders.Free;
+      end;
+    end;
+
+    // cf RFC 3261 section 8.2.6.2
+    Result.Path         := Request.Path;
+    Result.CallID       := Request.CallID;
+    Result.CSeq         := Request.CSeq;
+    Result.From         := Request.From;
+    Result.ToHeader     := Request.ToHeader;
+
+    if not Request.ToHeader.HasTag then
+      Result.ToHeader.Tag := Self.NextTag;
+  except
+    Result.Free;
+
+    raise;
+  end;
+end;
+
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentEncodingHeaderFull);
@@ -591,13 +628,13 @@ begin
 
   // To & Request-URI - 8.2.2.1
   if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then begin
-    Self.RejectRequest(Request, SIPUnsupportedURIScheme, Transaction, Receiver);
+    Self.RejectRequest(Request, SIPUnsupportedURIScheme, Transaction);
     Exit;
   end;
 
   // Merged requests - 8.2.2.2
   if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then begin
-    Self.RejectRequest(Request, SIPLoopDetected, Transaction, Receiver);
+    Self.RejectRequest(Request, SIPLoopDetected, Transaction);
     Exit;
   end;
 
@@ -626,8 +663,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.RejectRequest(Request: TIdSipRequest;
                                                 Reason: Cardinal;
-                                                Transaction: TIdSipTransaction;
-                                                Receiver: TIdSipTransport);
+                                                Transaction: TIdSipTransaction);
 var
   Response: TIdSipResponse;
 begin
@@ -966,59 +1002,31 @@ function TIdSipUserAgentCore.CreateResponse(Request: TIdSipRequest;
 var
   FirstRR:          TIdSipRecordRouteHeader;
   ReqRecordRoutes:  TIdSipHeadersFilter;
-  TimestampHeaders: TIdSipHeadersFilter;
 begin
-  Result := TIdSipResponse.Create;
-  try
-    Result.StatusCode := ResponseCode;
+  Result := inherited CreateResponse(Request, ResponseCode);
 
-    // cf RFC 3261 section 8.2.6.1
-    if (Result.StatusCode = SIPTrying) then begin
-      TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
-                                                     TimestampHeader);
-      try
-        Result.AddHeaders(TimestampHeaders);
-      finally
-        TimestampHeaders.Free;
-      end;
+  // cf RFC 3261 section 12.1.1
+  ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers,
+                                                RecordRouteHeader);
+  try
+    Result.AddHeaders(ReqRecordRoutes);
+
+    if (ReqRecordRoutes.Count > 0) then begin
+      FirstRR := ReqRecordRoutes.Items[0] as TIdSipRecordRouteHeader;
+      if (FirstRR.Address.IsSecure) then
+        Self.Contact.Address.Scheme := SipsScheme;
     end;
 
-    // cf RFC 3261 section 8.2.6.2
-    Result.Path         := Request.Path;
-    Result.CallID       := Request.CallID;
-    Result.CSeq         := Request.CSeq;
-    Result.From         := Request.From;
-    Result.ToHeader     := Request.ToHeader;
+    if Request.HasSipsUri then
+      Self.Contact.Address.Scheme := SipsScheme;
 
-    if not Request.ToHeader.HasTag then
-      Result.ToHeader.Tag := Self.NextTag;
-
-    // cf RFC 3261 section 12.1.1
-    ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
-    try
-      Result.AddHeaders(ReqRecordRoutes);
-
-      if (ReqRecordRoutes.Count > 0) then begin
-        FirstRR := ReqRecordRoutes.Items[0] as TIdSipRecordRouteHeader;
-        if (FirstRR.Address.IsSecure) then
-          Self.Contact.Address.Scheme := SipsScheme;
-      end;
-
-      if Request.HasSipsUri then
-        Self.Contact.Address.Scheme := SipsScheme;
-
-      Result.AddHeader(Self.Contact);
+    Result.AddHeader(Self.Contact);
 //      Result.AddHeader(Self.From);
 
-      if (Self.UserAgentName <> '') then
-        Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-    finally
-      ReqRecordRoutes.Free;
-    end;
-  except
-    Result.Free;
-
-    raise;
+    if (Self.UserAgentName <> '') then
+      Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
+  finally
+    ReqRecordRoutes.Free;
   end;
 end;
 
@@ -1329,8 +1337,7 @@ begin
   else
     Self.RejectRequest(Bye,
                        SIPCallLegOrTransactionDoesNotExist,
-                       Transaction,
-                       Receiver);
+                       Transaction);
 
 end;
 

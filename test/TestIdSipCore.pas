@@ -40,6 +40,7 @@ type
   TestTIdSipAbstractUserAgent = class(TTestCase)
   private
     Dispatch: TIdSipMockTransactionDispatcher;
+    Request:  TIdSipRequest;
     UA:       TIdSipAbstractUserAgent;
   public
     procedure SetUp; override;
@@ -53,6 +54,7 @@ type
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+    procedure TestCreateResponse;
   end;
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
@@ -100,7 +102,6 @@ type
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
-    procedure TestCreateResponse;
     procedure TestCreateResponseRecordRoute;
     procedure TestCreateResponseSipsRecordRoute;
     procedure TestCreateResponseSipsRequestUri;
@@ -365,16 +366,32 @@ begin
 end;
 
 procedure TestTIdSipAbstractUserAgent.SetUp;
+var
+  P: TIdSipParser;
 begin
   inherited SetUp;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
   Self.UA := TIdSipAbstractUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
+
+  P := TIdSipParser.Create;
+  try
+    Self.Request := P.ParseAndMakeRequest(BasicRequest);
+    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+    Self.Request.Body := '';
+    Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
+                                 + ' <' + Self.Request.ToHeader.Address.URI + '>';
+    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+    Self.Request.ContentLength := 0;
+  finally
+    P.Free;
+  end;
 end;
 
 procedure TestTIdSipAbstractUserAgent.TearDown;
 begin
+  Self.Request.Free;
   Self.UA.Free;
   Self.Dispatch.Free;
 
@@ -543,6 +560,36 @@ begin
     CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
   finally
     Schemes.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestCreateResponse;
+var
+  FromFilter: TIdSipHeadersFilter;
+  Response:   TIdSipResponse;
+begin
+  Self.Request.ToHeader.Tag := Self.UA.NextTag;
+
+  Response := Self.UA.CreateResponse(Self.Request, SIPOK);
+  try
+    FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
+    try
+      CheckEquals(1, FromFilter.Count, 'Number of From headers');
+    finally
+      FromFilter.Free;
+    end;
+
+    CheckEquals(SIPOK, Response.StatusCode,          'StatusCode mismatch');
+    Check(Response.CSeq.IsEqualTo(Self.Request.CSeq), 'Cseq header mismatch');
+    Check(Response.From.IsEqualTo(Self.Request.From), 'From header mismatch');
+    Check(Response.Path.IsEqualTo(Self.Request.Path), 'Via headers mismatch');
+
+    Check(Self.Request.ToHeader.IsEqualTo(Response.ToHeader),
+          'To header mismatch');
+
+    Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
+  finally
+    Response.Free;
   end;
 end;
 
@@ -1086,36 +1133,6 @@ begin
     end;
   finally
     Dest.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateResponse;
-var
-  FromFilter: TIdSipHeadersFilter;
-  Response:   TIdSipResponse;
-begin
-  Self.Invite.ToHeader.Tag := Self.Core.NextTag;
-
-  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
-  try
-    FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
-    try
-      CheckEquals(1, FromFilter.Count, 'Number of From headers');
-    finally
-      FromFilter.Free;
-    end;
-
-    CheckEquals(SIPOK, Response.StatusCode,          'StatusCode mismatch');
-    Check(Response.CSeq.IsEqualTo(Self.Invite.CSeq), 'Cseq header mismatch');
-    Check(Response.From.IsEqualTo(Self.Invite.From), 'From header mismatch');
-    Check(Response.Path.IsEqualTo(Self.Invite.Path), 'Via headers mismatch');
-
-    Check(Self.Invite.ToHeader.IsEqualTo(Response.ToHeader),
-          'To header mismatch');
-
-    Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
-  finally
-    Response.Free;
   end;
 end;
 
