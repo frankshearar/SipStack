@@ -1086,8 +1086,8 @@ var
   Notification: TIdSipTransactionDispatcherAuthenticationChallengeMethod;
 begin
   // We present the authentication challenge to all listeners but only accept
-  // the first listener's password. The responsibility of listener order rests
-  // firmly on your own shoulders.
+  // the first listener's authentication credentials. The responsibility of
+  // listener order rests firmly on your own shoulders.
 
   Notification := TIdSipTransactionDispatcherAuthenticationChallengeMethod.Create;
   try
