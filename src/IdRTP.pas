@@ -4944,7 +4944,7 @@ begin
   if SSRC.UpdateStatistics(RTP,
                            DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
                                                   RTP.Payload.ClockRate)) then begin
-    // Valid, in-sequence RTP can be sent up the stack
+    // We send valid, in-sequence RTP up the stack
     Self.NotifyListenersOfData(RTP.Payload, Binding);
   end;
 end;
