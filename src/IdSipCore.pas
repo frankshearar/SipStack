@@ -464,7 +464,6 @@ type
     property Action:        TIdSipAction   read fAction write fAction;
     property FirstPassword: String         read fFirstPassword write fFirstPassword;
     property Response:      TIdSipResponse read fResponse write fResponse;
-
   end;
 
   TIdSipActionClass = class of TIdSipAction;
