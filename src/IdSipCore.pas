@@ -565,6 +565,7 @@ type
                    const InitialOffer: String;
                    const MimeType: String);
     procedure Cancel;
+    function  CanForkOn(Response: TIdSipResponse): Boolean;
     function  Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
     function  IsInboundCall: Boolean; override;
     procedure Terminate; override;
@@ -1660,7 +1661,7 @@ begin
       if (Self.Sessions[I] as TIdSipSession).IsInboundCall then Inc(I)
       else begin
         Session := Self.Sessions[I] as TIdSipOutboundSession;
-        if Session.InitialRequest.Match(Response) then
+        if Session.CanForkOn(Response) then
           Root := Session
         else
           Inc(I);
@@ -2647,6 +2648,12 @@ end;
 procedure TIdSipOutboundSession.Cancel;
 begin
   (Self.InitialTran as TIdSipClientInviteTransaction).Cancel;
+end;
+
+function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
+begin
+  Result := (Self.InitialRequest.CallID = Response.CallID)
+        and (Self.InitialRequest.From.Tag = Response.From.Tag);
 end;
 
 function TIdSipOutboundSession.Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
