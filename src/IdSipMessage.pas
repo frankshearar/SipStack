@@ -45,6 +45,11 @@ type
   end;
 
   TIdSipNotifyEvent = TNotifyEvent;
+  TIdSipRequestEvent = procedure(Sender: TObject;
+                                 R: TIdSipRequest) of object;
+  TIdSipResponseEvent = procedure(Sender: TObject;
+                                  R: TIdSipResponse;
+                                  ReceivedFrom: TIdSipConnectionBindings) of object;
 
   IIdSipMessageVisitor = interface
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']

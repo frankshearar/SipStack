@@ -12,13 +12,10 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipUdpServer,
-  IdUDPClient, SysUtils, TestFrameworkEx;
+  Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdUDPClient, SysUtils,
+  TestFrameworkEx;
 
 type
-  TIdSipRequestEvent = procedure(Sender: TObject;
-                                 R: TIdSipRequest) of object;
-
   TestTIdSipUdpServer = class(TThreadingTestCase,
                               IIdSipMessageListener)
   private

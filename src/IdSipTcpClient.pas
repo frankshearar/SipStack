@@ -15,11 +15,6 @@ uses
   Classes, IdSipMessage, IdTCPClient;
 
 type
-  TIdSipTcpClient = class;
-  TIdSipResponseEvent = procedure(Sender: TObject;
-                                  R: TIdSipResponse;
-                                  ReceivedFrom: TIdSipConnectionBindings) of object;
-
   // Note that the Timeout property determines the maximum length of time to
   // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
