@@ -22,6 +22,18 @@ type
     procedure TestReset;
   end;
 
+  TestTIdSipSingleShotTimer = class(TThreadingTestCase)
+  private
+    ReturnedData: TObject;
+
+    procedure OnTimer(Sender: TObject);
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAnEvent;
+    procedure TestNoEvent;
+  end;
+
 implementation
 
 uses
@@ -31,6 +43,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTimer unit tests');
   Result.AddTest(TestTIdSipTimer.Suite);
+  Result.AddTest(TestTIdSipSingleShotTimer.Suite);
 end;
 
 //******************************************************************************
@@ -112,6 +125,57 @@ begin
 //  IdGlobal.Sleep(500);
 //  Check(not Self.Tick, 'Ticked prematurely after Reset');
 end;
+
+//******************************************************************************
+//* TestTIdSipSingleShotTimer                                                  *
+//******************************************************************************
+//* TestTIdSipSingleShotTimer Public methods ***********************************
+
+procedure TestTIdSipSingleShotTimer.SetUp;
+begin
+  inherited SetUp;
+
+  Self.DefaultTimeout := 200;
+end;
+
+//* TestTIdSipSingleShotTimer Private methods **********************************
+
+procedure TestTIdSipSingleShotTimer.OnTimer(Sender: TObject);
+begin
+  Self.ReturnedData := (Sender as TIdSipSingleShotTimer).Data;
+
+  Self.ThreadEvent.SetEvent;
+end;
+
+//* TestTIdSipSingleShotTimer Published methods ********************************
+
+procedure TestTIdSipSingleShotTimer.TestAnEvent;
+var
+  Data: TObject;
+begin
+  Self.ExceptionMessage := 'Waiting for single-shot';
+
+  Data := TObject.Create;
+  try
+    TIdSipSingleShotTimer.Create(Self.OnTimer,
+                                 Self.DefaultTimeout div 2,
+                                 Data);
+    Self.WaitForSignaled;
+
+    Check(Self.ReturnedData = Data,
+          'Timer didn''t return the data we gave it');
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TestTIdSipSingleShotTimer.TestNoEvent;
+begin
+  Self.DefaultTimeout := 200;
+  TIdSipSingleShotTimer.Create(nil, Self.DefaultTimeout div 2);
+  Self.WaitForTimeout('No event = timeout');
+end;
+
 
 initialization
   RegisterTest('SIP Timer class', Suite);

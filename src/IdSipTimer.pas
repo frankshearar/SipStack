@@ -28,6 +28,23 @@ type
     property OnTimer:  TNotifyEvent read fOnTimer write fOnTimer;
   end;
 
+  // I provide a one-shot timer. I free myself once I've executed the notify
+  // event you supply.
+  TIdSipSingleShotTimer = class(TThread)
+  private
+    Event:    TNotifyEvent;
+    fData:    TObject;
+    WaitTime: Cardinal;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(Event: TNotifyEvent;
+                       WaitTime: Cardinal;
+                       Data: TObject = nil); reintroduce;
+
+    property Data: TObject read fData;
+  end;
+
 implementation
 
 uses
@@ -77,6 +94,33 @@ begin
       Self.OnTimer(Self);
     end;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipSingleShotTimer                                                      *
+//******************************************************************************
+//* TIdSipSingleShotTimer Public methods ***************************************
+
+constructor TIdSipSingleShotTimer.Create(Event: TNotifyEvent;
+                                         WaitTime: Cardinal;
+                                         Data: TObject = nil);
+begin
+  inherited Create(false);
+  Self.FreeOnTerminate := true;
+
+  Self.Event    := Event;
+  Self.fData    := Data;
+  Self.WaitTime := WaitTime;
+end;
+
+//* TIdSipSingleShotTimer Protected methods ************************************
+
+procedure TIdSipSingleShotTimer.Execute;
+begin
+  IdGlobal.Sleep(Self.WaitTime);
+
+  if Assigned(Self.Event) then
+    Self.Event(Self);
 end;
 
 end.
