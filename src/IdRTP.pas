@@ -4979,7 +4979,8 @@ begin
 
   // We cheat a bit: If we have a member that has a known IP/port,
   // IsMember(SSRC) tells us if we know that member's SSRC.
-  if Self.IsMember(Binding.PeerIP, Binding.PeerPort) and not Self.IsMember(RTP.SyncSrcID) then begin
+  if Self.IsMember(Binding.PeerIP, Binding.PeerPort)
+    and not Self.IsMember(RTP.SyncSrcID) then begin
     SSRC := Self.Member(Binding.PeerIP, Binding.PeerPort);
     SSRC.HasSyncSrcID := true;
     SSRC.IsSender     := true;
