@@ -137,7 +137,7 @@ type
     procedure TestOnServerInviteTransactionTimerI;
     procedure TestOnServerNonInviteTransactionTimerJ;
     procedure TestLoopDetected;
-    procedure TestProxyAuthentication; //(*)
+    procedure TestProxyAuthentication;
     procedure TestProxyAuthenticationQopAuth;
     procedure TestProxyAuthenticationQopAuthInt;
     procedure TestSendAckWontCreateTransaction;
