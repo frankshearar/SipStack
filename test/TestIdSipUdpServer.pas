@@ -23,7 +23,7 @@ type
                                const Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
                                const Response: TIdSipResponse;
-                               const ReceivedOn: TIdSipIPTarget); overload;
+                               const ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure CheckRequest(Sender: TObject;
                            const Request: TIdSipRequest);
     procedure CheckTortureTest16;
@@ -36,9 +36,9 @@ type
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedOn: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedOn: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
     function  ReadResponse: String;
   public
     procedure SetUp; override;
@@ -140,7 +140,7 @@ end;
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
                                                const Response: TIdSipResponse;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
@@ -306,17 +306,17 @@ end;
 }
 
 procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedRequest) then
     Self.CheckReceivedRequest(Self, Request);
 end;
 
 procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedOn: TIdSipIPTarget);
+                                                const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedResponse) then
-    Self.CheckReceivedResponse(Self, Response, ReceivedOn);
+    Self.CheckReceivedResponse(Self, Response, ReceivedFrom);
 end;
 
 function TestTIdSipUdpServer.ReadResponse: String;

@@ -51,9 +51,9 @@ type
     procedure NotifyTransportSendingListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipIPTarget); virtual;
+                               const ReceivedFrom: TIdSipConnectionBindings); virtual;
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
     procedure SendRequest(const R: TIdSipRequest); virtual;
     procedure SendResponse(const R: TIdSipResponse); virtual;
     function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; virtual;
@@ -93,7 +93,7 @@ type
     procedure DoOnClientFinished(Sender: TObject);
     procedure DoOnTcpResponse(Sender: TObject;
                               const Response: TIdSipResponse;
-                              const ReceivedFrom: TIdSipIPTarget);
+                              const ReceivedFrom: TIdSipConnectionBindings);
     procedure RemoveClient(Client: TIdSipTcpClient);
   protected
     Transport: TIdSipTcpServer;
@@ -184,7 +184,7 @@ type
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipIPTarget); override;
+                               const ReceivedFrom: TIdSipConnectionBindings); override;
     procedure SendRequest(const R: TIdSipRequest); override;
     procedure SendResponse(const R: TIdSipResponse); override;
     procedure SetPort(const Value: Cardinal); override;
@@ -386,18 +386,18 @@ begin
 end;
 
 procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                           const ReceivedFrom: TIdSipIPTarget);
+                                           const ReceivedFrom: TIdSipConnectionBindings);
 begin
   // cf. RFC 3261 section 18.2.1
   if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
-    or (Request.LastHop.SentBy <> ReceivedFrom.IP) then
-    Request.LastHop.Received := ReceivedFrom.IP;
+    or (Request.LastHop.SentBy <> ReceivedFrom.PeerIP) then
+    Request.LastHop.Received := ReceivedFrom.PeerIP;
 
   Self.NotifyTransportListeners(Request);
 end;
 
 procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                            const ReceivedFrom: TIdSipIPTarget);
+                                            const ReceivedFrom: TIdSipConnectionBindings);
 begin
   // cf. RFC 3261 section 18.1.2
 
@@ -579,7 +579,7 @@ end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
                                              const Response: TIdSipResponse;
-                                             const ReceivedFrom: TIdSipIPTarget);
+                                             const ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.OnReceiveResponse(Response, ReceivedFrom);
 end;
@@ -824,14 +824,14 @@ begin
 end;
 
 procedure TIdSipUDPTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                              const ReceivedFrom: TIdSipIPTarget);
+                                              const ReceivedFrom: TIdSipConnectionBindings);
 begin
   // RFC 3581 section 4
   if Request.LastHop.HasRPort then begin
     if not Request.LastHop.HasReceived then
-      Request.LastHop.Received := ReceivedFrom.IP;
+      Request.LastHop.Received := ReceivedFrom.PeerIP;
 
-    Request.LastHop.RPort := ReceivedFrom.Port;
+    Request.LastHop.RPort := ReceivedFrom.PeerPort;
   end;
 
   inherited OnReceiveRequest(Request, ReceivedFrom);

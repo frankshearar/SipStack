@@ -22,18 +22,18 @@ type
 
     procedure CheckReceiveOkResponse(Sender: TObject;
                                      const Response: TIdSipResponse;
-                                     const ReceivedOn: TIdSipIPTarget);
+                                     const ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject;
                                                    const Response: TIdSipResponse;
-                                                   const ReceivedOn: TIdSipIPTarget);
+                                                   const ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
     procedure DoOnFinished(Sender: TObject);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedOn: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedOn: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
     procedure PauseAndSendOkResponse(Sender: TObject;
                                      const Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject;
@@ -117,7 +117,7 @@ end;
 
 procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject;
                                                      const Response: TIdSipResponse;
-                                                     const ReceivedOn: TIdSipIPTarget);
+                                                     const ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Self.ThreadEvent.SetEvent;
@@ -131,7 +131,7 @@ end;
 
 procedure TestTIdSipTcpClient.CheckReceiveProvisionalAndOkResponse(Sender: TObject;
                                                                    const Response: TIdSipResponse;
-                                                                   const ReceivedOn: TIdSipIPTarget);
+                                                                   const ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Inc(Self.ReceivedResponseCount);
@@ -222,7 +222,7 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -231,10 +231,10 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedOn: TIdSipIPTarget);
+                                                const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response, ReceivedOn);
+    Self.CheckingResponseEvent(Self, Response, ReceivedFrom);
 
   Self.ThreadEvent.SetEvent;
 end;

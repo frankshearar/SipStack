@@ -145,9 +145,9 @@ type
     procedure NoteSourcePort(Sender: TObject;
                              const R: TIdSipRequest);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
   protected
     function TransportType: TIdSipTransportClass; override;
   public
@@ -950,14 +950,14 @@ begin
 end;
 
 procedure TestTIdSipUDPTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                                  const ReceivedFrom: TIdSipIPTarget);
+                                                  const ReceivedFrom: TIdSipConnectionBindings);
 begin
 end;
 
 procedure TestTIdSipUDPTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                                   const ReceivedFrom: TIdSipIPTarget);
+                                                   const ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Self.RPort := ReceivedFrom.Port;
+  Self.RPort := ReceivedFrom.PeerPort;
   Self.RPortEvent.SetEvent;
 end;
 

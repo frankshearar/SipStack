@@ -6,16 +6,18 @@ uses
   Classes, IdSipMessage, IdTCPClient;
 
 type
-  TIdSipIPTarget = record
-    IP:   String;
-    Port: Integer;
+  TIdSipConnectionBindings = record
+    LocalIP:   String;
+    LocalPort: Integer;
+    PeerIP:    String;
+    PeerPort:  Integer;
   end;
 
   TIdSipTcpClient = class;
   TIdSipClientEvent = procedure(Sender: TObject) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   const R: TIdSipResponse;
-                                  const ReceivedFrom: TIdSipIPTarget) of object;
+                                  const ReceivedFrom: TIdSipConnectionBindings) of object;
 
   // Note that the Timeout property is not a global timeout - it's the maximum
   // length of time to wait for the next line of data to arrive.
@@ -27,7 +29,7 @@ type
 
     procedure DoOnFinished;
     procedure DoOnResponse(const R: TIdSipResponse;
-                           const ReceivedFrom: TIdSipIPTarget);
+                           const ReceivedFrom: TIdSipConnectionBindings);
     function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
@@ -96,7 +98,7 @@ begin
 end;
 
 procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse;
-                                       const ReceivedFrom: TIdSipIPTarget);
+                                       const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.OnResponse) then
     Self.OnResponse(Self, R, ReceivedFrom);
@@ -124,12 +126,14 @@ var
   S:            String;
   P:            TIdSipParser;
   R:            TIdSipResponse;
-  ReceivedFrom: TIdSipIPTarget;
+  ReceivedFrom: TIdSipConnectionBindings;
 begin
   Finished := false;
 
-  ReceivedFrom.IP   := Self.Socket.Binding.PeerIP;
-  ReceivedFrom.Port := Self.Socket.Binding.PeerPort;
+  ReceivedFrom.LocalIP   := Self.Socket.Binding.IP;
+  ReceivedFrom.LocalPort := Self.Socket.Binding.Port;
+  ReceivedFrom.PeerIP    := Self.Socket.Binding.PeerIP;
+  ReceivedFrom.PeerPort  := Self.Socket.Binding.PeerPort;
 
   try
     P := TIdSipParser.Create;

@@ -45,17 +45,17 @@ type
                                const Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
                                const Response: TIdSipResponse;
-                               const ReceivedOn: TIdSipIPTarget); overload;
+                               const ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure CheckInternalServerError(Sender: TObject;
                                        const Response: TIdSipResponse;
-                                       const ReceivedOn: TIdSipIPTarget);
+                                       const ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckMultipleMessages(Sender: TObject;
                                     const Request: TIdSipRequest);
     procedure CheckMethodEvent(Sender: TObject;
                                const Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                      const Response: TIdSipResponse;
-                                                     const ReceivedOn: TIdSipIPTarget);
+                                                     const ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
@@ -66,14 +66,14 @@ type
 //    procedure CheckTortureTest41;
     procedure ClientOnResponse(Sender: TObject;
                                const Response: TIdSipResponse;
-                               const ReceivedOn: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
                                                    const Response: TIdSipResponse;
-                                                   const ReceivedOn: TIdSipIPTarget);
+                                                   const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedOn: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedOn: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnServerDisconnect(AThread: TIdPeerThread);
     procedure RaiseException(Sender: TObject;
                              const Request: TIdSipRequest);
@@ -380,14 +380,14 @@ end;
 
 procedure TestTIdSipTcpServer.AcknowledgeEvent(Sender: TObject;
                                                const Response: TIdSipResponse;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpServer.CheckInternalServerError(Sender: TObject;
                                                        const Response: TIdSipResponse;
-                                                       const ReceivedOn: TIdSipIPTarget);
+                                                       const ReceivedFrom: TIdSipConnectionBindings);
 begin
   CheckEquals(SIPInternalServerError, Response.StatusCode, 'Status-Code');
 end;
@@ -446,7 +446,7 @@ end;
 
 procedure TestTIdSipTcpServer.CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                                      const Response: TIdSipResponse;
-                                                                     const ReceivedOn: TIdSipIPTarget);
+                                                                     const ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -586,7 +586,7 @@ end;
 }
 procedure TestTIdSipTcpServer.ClientOnResponse(Sender: TObject;
                                                const Response: TIdSipResponse;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -603,23 +603,23 @@ end;
 
 procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObject;
                                                              const Response: TIdSipResponse;
-                                                             const ReceivedOn: TIdSipIPTarget);
+                                                             const ReceivedFrom: TIdSipConnectionBindings);
 begin
   Fail('The connection is closed. The client should not receive a response');
 end;
 
 procedure TestTIdSipTcpServer.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedOn: TIdSipIPTarget);
+                                               const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
 end;
 
 procedure TestTIdSipTcpServer.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedOn: TIdSipIPTarget);
+                                                const ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response, ReceivedOn);
+    Self.CheckingResponseEvent(Self, Response, ReceivedFrom);
 end;
 
 procedure TestTIdSipTcpServer.OnServerDisconnect(AThread: TIdPeerThread);

@@ -13,7 +13,7 @@ type
     procedure DoOnFinished;
   protected
     procedure NotifyListeners(const Response: TIdSipResponse;
-                              const ReceivedOn: TIdSipIPTarget); overload; override;
+                              const ReceivedFrom: TIdSipConnectionBindings); overload; override;
   public
     property OnFinished: TIdSipClientEvent read fOnFinished write fOnFinished;
   end;
@@ -26,9 +26,9 @@ implementation
 //* TIdSipUdpClient Protected methods ******************************************
 
 procedure TIdSipUdpClient.NotifyListeners(const Response: TIdSipResponse;
-                                          const ReceivedOn: TIdSipIPTarget);
+                                          const ReceivedFrom: TIdSipConnectionBindings);
 begin
-  inherited NotifyListeners(Response, ReceivedOn);
+  inherited NotifyListeners(Response, ReceivedFrom);
 
   if Response.IsFinal then Self.DoOnFinished;
 end;

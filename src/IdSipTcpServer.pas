@@ -10,9 +10,9 @@ type
   IIdSipMessageListener = interface
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
     procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedOn: TIdSipIPTarget);
+                               const ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedOn: TIdSipIPTarget);
+                                const ReceivedFrom: TIdSipConnectionBindings);
   end;
 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
@@ -80,9 +80,9 @@ type
     procedure AddConnection(const Connection: TIdTCPConnection;
                             const Request: TIdSipRequest);
     procedure NotifyListeners(const Request: TIdSipRequest;
-                              const ReceivedOn: TIdSipIPTarget); overload;
+                              const ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure NotifyListeners(const Response: TIdSipResponse;
-                              const ReceivedOn: TIdSipIPTarget); overload;
+                              const ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
@@ -94,7 +94,7 @@ type
                                         Reason: String;
                                         Parser: TIdSipParser);
     procedure SendResponseTo(const Response: TIdSipResponse;
-                             Dest: TIdSipIPTarget);
+                             Dest: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
                            AMessage: TIdSipMessage);
   protected
@@ -320,7 +320,7 @@ procedure TIdSipTcpServer.SendResponse(const Response: TIdSipResponse);
 var
   Connection:  TIdTCPConnection;
   Table:       TIdSipConnectionTable;
-  Destination: TIdSipIPTarget;
+  Destination: TIdSipConnectionBindings;
 begin
   Table := Self.ConnectionMap.LockList;
   try
@@ -330,12 +330,12 @@ begin
       Connection.Write(Response.AsString)
     else begin
       if Response.LastHop.HasReceived then begin
-        Destination.IP   := Response.LastHop.Received;
-        Destination.Port := Response.LastHop.Port;
+        Destination.PeerIP   := Response.LastHop.Received;
+        Destination.PeerPort := Response.LastHop.Port;
       end
       else begin
-        Destination.IP   := Response.LastHop.SentBy;
-        Destination.Port := Response.LastHop.Port;
+        Destination.PeerIP   := Response.LastHop.SentBy;
+        Destination.PeerPort := Response.LastHop.Port;
       end;
 
       Self.SendResponseTo(Response, Destination);
@@ -363,15 +363,15 @@ end;
 
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
-  Msg:        TIdSipMessage;
-  Parser:     TIdSipParser;
-  ReceivedOn: TIdSipIPTarget;
-  S:          TStream;
+  Msg:          TIdSipMessage;
+  Parser:       TIdSipParser;
+  ReceivedFrom: TIdSipConnectionBindings;
+  S:            TStream;
 begin
   Result := true;
 
-  ReceivedOn.IP   := AThread.Connection.Socket.Binding.PeerIP;
-  ReceivedOn.Port := AThread.Connection.Socket.Binding.PeerPort;
+  ReceivedFrom.PeerIP   := AThread.Connection.Socket.Binding.PeerIP;
+  ReceivedFrom.PeerPort := AThread.Connection.Socket.Binding.PeerPort;
 
   while AThread.Connection.Connected do begin
     S := Self.ReadMessage(AThread.Connection);
@@ -389,10 +389,10 @@ begin
 
             if Msg.IsRequest then begin
               Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-              Self.NotifyListeners(Msg as TIdSipRequest, ReceivedOn);
+              Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom);
             end
             else
-              Self.NotifyListeners(Msg as TIdSipResponse, ReceivedOn);
+              Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
           finally
             Msg.Free;
           end;
@@ -435,7 +435,7 @@ begin
 end;
 
 procedure TIdSipTcpServer.NotifyListeners(const Request: TIdSipRequest;
-                                          const ReceivedOn: TIdSipIPTarget);
+                                          const ReceivedFrom: TIdSipConnectionBindings);
 var
   I: Integer;
 begin
@@ -443,14 +443,14 @@ begin
   try
     for I := 0 to Self.Listeners.Count - 1 do
       IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request,
-                                                                ReceivedOn);
+                                                                ReceivedFrom);
   finally
     Self.ListenerLock.Release;
   end;
 end;
 
 procedure TIdSipTcpServer.NotifyListeners(const Response: TIdSipResponse;
-                                          const ReceivedOn: TIdSipIPTarget);
+                                          const ReceivedFrom: TIdSipConnectionBindings);
 var
   I: Integer;
 begin
@@ -458,7 +458,7 @@ begin
   try
     for I := 0 to Self.Listeners.Count - 1 do
       IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response,
-                                                                 ReceivedOn);
+                                                                 ReceivedFrom);
   finally
     Self.ListenerLock.Release;
   end;
@@ -556,14 +556,14 @@ begin
 end;
 
 procedure TIdSipTcpServer.SendResponseTo(const Response: TIdSipResponse;
-                                               Dest: TIdSipIPTarget);
+                                               Dest: TIdSipConnectionBindings);
 var
   Client: TIdSipTcpClient;
 begin
   Client := Self.CreateClient;
   try
-    Client.Host := Dest.IP;
-    Client.Port := Dest.Port;
+    Client.Host := Dest.PeerIP;
+    Client.Port := Dest.PeerPort;
 
     Client.Connect(Self.ConnectionTimeout);
     try
