@@ -362,6 +362,7 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    procedure HangUpAllCalls;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -370,7 +371,6 @@ type
     procedure RemoveAction(Action: TIdSipAction);
     procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
-    procedure HangUpAllCalls;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  Username: String;
 
@@ -1473,6 +1473,31 @@ begin
   Result.RegisterWith(Registrar, Self.Contact);
 end;
 
+procedure TIdSipUserAgentCore.HangUpAllCalls;
+var
+  CopyOfSessions: TObjectList;
+  I:              Integer;
+begin
+  // We copy the sessions because when they terminate we lose our reference
+  // to them and we remove them from Self.Actions
+  Self.ActionLock.Acquire;
+  try
+    CopyOfSessions := TObjectList.Create(false);
+    try
+      for I := 0 to Self.Actions.Count - 1 do
+        if Self.ActionAt(I).IsSession and not Self.ActionAt(I).IsTerminated then
+          CopyOfSessions.Add(Self.ActionAt(I));
+
+      for I := 0 to CopyOfSessions.Count - 1 do
+        (CopyOfSessions[I] as TIdSipAction).Terminate;
+    finally
+      CopyOfSessions.Free;
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
 function TIdSipUserAgentCore.OptionsCount: Integer;
 var
   I: Integer;
@@ -1563,31 +1588,6 @@ begin
       if Self.ActionAt(I).IsSession
         and not Self.ActionAt(I).IsTerminated then
         Inc(Result);
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.HangUpAllCalls;
-var
-  CopyOfSessions: TObjectList;
-  I:              Integer;
-begin
-  // We copy the sessions because when they terminate we lose our reference
-  // to them and we remove them from Self.Actions
-  Self.ActionLock.Acquire;
-  try
-    CopyOfSessions := TObjectList.Create(false);
-    try
-      for I := 0 to Self.Actions.Count - 1 do
-        if Self.ActionAt(I).IsSession and not Self.ActionAt(I).IsTerminated then
-          CopyOfSessions.Add(Self.ActionAt(I));
-
-      for I := 0 to CopyOfSessions.Count - 1 do
-        (CopyOfSessions[I] as TIdSipAction).Terminate;
-    finally
-      CopyOfSessions.Free;
-    end;
   finally
     Self.ActionLock.Release;
   end;
