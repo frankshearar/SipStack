@@ -157,6 +157,8 @@ type
     function  AddServerTransaction(InitialRequest: TIdSipRequest;
                                    Receiver: TIdSipTransport): TIdSipTransaction;
     procedure ClearTransports;
+    procedure FindServersFor(Response: TIdSipResponse;
+                             Result: TIdSipLocations);
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure OnClientInviteTransactionTimerA(Event: TObject);
     procedure OnClientInviteTransactionTimerB(Event: TObject);
@@ -519,6 +521,7 @@ const
   MustGenerateNewBranch = 'You must generate a new transaction branch.';
   MustHaveAuthorization = 'You must supply an Authorization or '
                         + 'Proxy-Authorization header';
+  NoLocatorAssigned     = 'You must assign a Locator to the TransactionDispatcher';
   OnlyRemoveTranWhenTerminated
                         = 'Transactions must only be removed when they''re '
                         + 'terminated';
@@ -641,6 +644,15 @@ begin
   finally
     Self.TransportLock.Release;
   end;
+end;
+
+procedure TIdSipTransactionDispatcher.FindServersFor(Response: TIdSipResponse;
+                                                     Result: TIdSipLocations);
+begin
+  if not Assigned(Self.Locator) then
+    raise Exception.Create(NoLocatorAssigned);
+
+  Self.Locator.FindServersFor(Response, Result);
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -1552,7 +1564,7 @@ end;
 procedure TIdSipServerTransaction.TrySendResponse(R: TIdSipResponse);
 begin
   if Self.ResponseLocations.IsEmpty then
-    Self.Dispatcher.Locator.FindServersFor(R, Self.ResponseLocations);
+    Self.Dispatcher.FindServersFor(R, Self.ResponseLocations);
 
   try
     Self.Dispatcher.SendToTransport(R, Self.ResponseLocations);
