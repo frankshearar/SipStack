@@ -3787,18 +3787,30 @@ var
   S: String;
   Token: String;
 begin
+  // Warning        =  "Warning" HCOLON warning-value *(COMMA warning-value)
+  // warning-value  =  warn-code SP warn-agent SP warn-text
+  // warn-code      =  3DIGIT
+  // warn-agent     =  hostport / pseudonym
+  //                   ;  the name or pseudonym of the server adding
+  //                   ;  the Warning header, for use in debugging
+  // warn-text      =  quoted-string
+  // pseudonym      =  token
+
   S := Value;
 
+  // warning-code
   Token := Fetch(S, ' ');
   if not TIdSipParser.IsNumber(Token) or (Length(Token) <> 3) then
     Self.FailParse;
   Self.Code := StrToInt(Token);
 
+  // warn-agent
   Token := Fetch(S, ' ');
   if not TIdSipParser.IsToken(Token) then
     Self.FailParse;
   Self.Agent := Token;
 
+  // warn-text
   if not TIdSipParser.IsQuotedString(S) then
     Self.FailParse;
 

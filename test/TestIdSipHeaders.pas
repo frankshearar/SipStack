@@ -380,6 +380,7 @@ type
     procedure TestName;
     procedure TestValue; override;
     procedure TestSetValueMalformed;
+    procedure TestSetValuePortSpecified;
   end;
 
   TestTIdSipWeightedCommaSeparatedHeader = class(THeaderTestCase)
@@ -3609,6 +3610,28 @@ begin
   except
     on EBadHeader do;
   end;
+
+  try
+    Self.W.Value := '301 gw1.leo-ix.net:ababa Case is not home';
+    Fail('Failed to bail on a malquoted hostport');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipWarningHeader.TestSetValuePortSpecified;
+begin
+  Self.W.Value := '302 gw1.leo-ix.net:5060 "Case is not home"';
+
+  CheckEquals(302,
+              Self.W.Code,
+              'Code');
+  CheckEquals('gw1.leo-ix.net:5060',
+              Self.W.Agent,
+              'Agent');
+  CheckEquals('Case is not home',
+              Self.W.Text,
+              'Text');
 end;
 
 //******************************************************************************
