@@ -4092,7 +4092,7 @@ begin
   CheckType(TIdSipHeader,                       Self.H.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
   CheckType(TIdSipUriHeader,                    Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AllowHeader),                AllowHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  CheckType(TIdSipAuthenticateInfoHeader,       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
   CheckType(TIdSipAuthorizationHeader,          Self.H.Add(AuthorizationHeader),        AuthorizationHeader);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderFull),           CallIDHeaderFull);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderShort),          CallIDHeaderShort);
@@ -4119,8 +4119,8 @@ begin
   CheckType(TIdSipNumericHeader,                Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(OrganizationHeader),         OrganizationHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(PriorityHeader),             PriorityHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
+  CheckType(TIdSipProxyAuthenticateHeader,      Self.H.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
+  CheckType(TIdSipProxyAuthorizationHeader,     Self.H.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ProxyRequireHeader),         ProxyRequireHeader);
   CheckType(TIdSipRecordRouteHeader,            Self.H.Add(RecordRouteHeader),          RecordRouteHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(RequireHeader),              RequireHeader);

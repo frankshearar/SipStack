@@ -89,6 +89,8 @@ type
     procedure TestCreateCancelWithProxyRequire;
     procedure TestCreateCancelWithRequire;
     procedure TestCreateCancelWithRoute;
+    procedure TestFirstAuthorization;
+    procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
     procedure TestIsAck;
@@ -1060,7 +1062,8 @@ end;
 
 procedure TestTIdSipRequest.TestAsStringNoMaxForwardsSet;
 begin
-  Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
+  Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0,
+        'No Max-Forwards header');
 end;
 
 procedure TestTIdSipRequest.TestCopy;
@@ -1167,6 +1170,36 @@ begin
   finally
     Cancel.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestFirstAuthorization;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstAuthorization, 'Authorization not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Authorization not auto-added');
+
+  A := Self.Request.FirstHeader(AuthorizationHeader);
+  Self.Request.AddHeader(AuthorizationHeader);
+
+  Check(A = Self.Request.FirstAuthorization, 'Wrong Authorization');
+end;
+
+procedure TestTIdSipRequest.TestFirstProxyAuthorization;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstProxyAuthorization, 'Proxy-Authorization not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Authorization not auto-added');
+
+  A := Self.Request.FirstHeader(ProxyAuthorizationHeader);
+  Self.Request.AddHeader(AuthorizationHeader);
+
+  Check(A = Self.Request.FirstProxyAuthorization, 'Wrong Proxy-Authorization');
 end;
 
 procedure TestTIdSipRequest.TestFirstProxyRequire;

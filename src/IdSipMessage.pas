@@ -468,6 +468,8 @@ type
     property Stale:  Boolean read GetStale write SetStale;
   end;
 
+  TIdSipAuthenticateInfoHeader = class(TIdSipHttpAuthHeader);
+
   TIdSipProxyAuthorizationHeader = class(TIdSipAuthorizationHeader)
   protected
     function GetName: String; override;
@@ -887,6 +889,8 @@ type
     procedure Assign(Src: TPersistent); override;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
+    function  FirstAuthorization: TIdSipAuthorizationHeader;
+    function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  HasAuthorization: Boolean;
     function  HasProxyAuthorization: Boolean;
@@ -3980,6 +3984,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticateInfoHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
@@ -3999,6 +4004,8 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,            TIdSipCallIdHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,          TIdSipMaxForwardsHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MinExpiresHeader,           TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthenticateHeader,    TIdSipProxyAuthenticateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthorizationHeader,   TIdSipProxyAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
@@ -5032,6 +5039,16 @@ end;
 function TIdSipRequest.DefaultMaxForwards: Cardinal;
 begin
   Result := 70;
+end;
+
+function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;
+begin
+  Result := Self.FirstHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
+end;
+
+function TIdSipRequest.FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
+begin
+  Result := Self.FirstHeader(ProxyAuthorizationHeader) as TIdSipProxyAuthorizationHeader
 end;
 
 function TIdSipRequest.FirstProxyRequire: TIdSipCommaSeparatedHeader;
