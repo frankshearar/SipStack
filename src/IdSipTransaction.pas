@@ -1120,11 +1120,14 @@ end;
 
 procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
 begin
-  // Three reasons why a transaction would terminate: one of its timers fired,
-  // or a transport error occurred. Transport errors can only occur in
-  // Self.SendToTransport(Request|Response); timers happen in
-  // <transaction type>Transaction<timer name> methods -
-  // ClientInviteTransactionTimerA etc.; 2xx terminate client INVITE transactions.
+  // Three reasons why a transaction would terminate:
+  //   1. one of its timers fired,
+  //   2. a transport error occurred, or
+  //   3. RFC 3261 says the transaction terminates.
+  // Transport errors can only occur in Self.Send(Request|Response); timers
+  // happen in <transaction type>Transaction<timer name> methods -
+  // ClientInviteTransactionTimerA etc.; 2xx responses terminate client INVITE
+  // transactions.
 
   Assert(TerminatedTransaction.IsTerminated,
          OnlyRemoveTranWhenTerminated);
