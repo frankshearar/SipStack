@@ -104,6 +104,7 @@ type
     procedure TestCreateInviteWithBody;
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
+    procedure TestCreateReInvite;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
@@ -1098,6 +1099,20 @@ begin
                    'Call-ID SHOULD be different for new registrar');
   finally
     Reg.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateReInvite;
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := Self.Core.CreateReInvite(Self.Dlg, 'foo', 'bar');
+  try
+    CheckEquals(MethodInvite, Invite.Method, 'Method');
+    CheckEquals('foo',        Invite.Body, 'Body');
+    CheckEquals('bar',        Invite.ContentType, 'Content-Type');
+  finally
+    Invite.Free;
   end;
 end;
 
@@ -2489,6 +2504,7 @@ begin
   inherited SetUp;
 
   Self.Session := Self.Core.Call(Self.Destination, '', '');
+  Self.Session.AddSessionListener(Self);
 
   Self.OnEndedSessionFired    := false;
   Self.OnModifiedSessionFired := false;

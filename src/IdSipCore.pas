@@ -328,6 +328,9 @@ type
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
     function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+    function  CreateReInvite(Dialog: TIdSipDialog;
+                             const Body: String;
+                             const MimeType: String): TIdSipRequest;
     function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; overload; override;
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
@@ -463,6 +466,8 @@ type
     procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
+    procedure ProcessBye(Request: TIdSipRequest;
+                         Transaction: TIdSipTransaction);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest;
                                       Transaction: TIdSipTransaction);
     procedure RejectRequest(Request: TIdSipRequest;
@@ -488,13 +493,13 @@ type
     procedure Cancel;
     function  DialogEstablished: Boolean;
     function  IsInboundCall: Boolean; virtual; abstract;
-    procedure Terminate;
     procedure Modify(const Offer, ContentType: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure ResendLastResponse; virtual;
+    procedure Terminate;
 
     property Dialog:           TIdSipDialog           read fDialog;
     property Invite:           TIdSipRequest          read GetInvite;
@@ -1202,6 +1207,23 @@ begin
 
     Result.ToHeader.Value := Self.Contact.Value;
     Result.From.Value     := Self.Contact.Value;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipUserAgentCore.CreateReInvite(Dialog: TIdSipDialog;
+                                            const Body: String;
+                                            const MimeType: String): TIdSipRequest;
+begin
+  Result := Self.CreateRequest(Dialog);
+  try
+    Result.Body        := Body;
+    Result.ContentType := MimeType;
+    Result.Method      := MethodInvite;
+    Result.CSeq.Method := MethodInvite;
   except
     FreeAndNil(Result);
 
@@ -2025,17 +2047,6 @@ procedure TIdSipSession.Cancel;
 begin
 end;
 
-procedure TIdSipSession.Terminate;
-begin
-  if Self.DialogEstablished then
-    Self.SendBye
-  else 
-    Self.SendCancel;
-
-  Self.MarkAsTerminated;
-  Self.UA.RemoveSession(Self);
-end;
-
 procedure TIdSipSession.Modify(const Offer, ContentType: String);
 begin
 end;
@@ -2043,8 +2054,6 @@ end;
 procedure TIdSipSession.OnReceiveRequest(Request: TIdSipRequest;
                                          Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport);
-var
-  OK: TIdSipResponse;
 begin
   if Self.IsTerminated then begin
     Self.RejectRequest(Request, Transaction);
@@ -2052,16 +2061,7 @@ begin
   end;
 
   if Request.IsBye then begin
-    Self.MarkAsTerminated;
-    Self.Dialog.HandleMessage(Request);
-
-    OK := Self.UA.CreateResponse(Request, SIPOK);
-    try
-      Transaction.SendResponse(OK);
-    finally
-      OK.Free;
-    end;
-    Self.NotifyOfEndedSession(RemoteHangUp);
+    Self.ProcessBye(Request, Transaction);
   end
   else if Request.IsAck then begin
     Self.fReceivedAck := true;
@@ -2097,6 +2097,17 @@ procedure TIdSipSession.ResendLastResponse;
 begin
   if Assigned(Self.LastResponse) then
     Self.UA.Dispatcher.Send(Self.LastResponse);
+end;
+
+procedure TIdSipSession.Terminate;
+begin
+  if Self.DialogEstablished then
+    Self.SendBye
+  else
+    Self.SendCancel;
+
+  Self.MarkAsTerminated;
+  Self.UA.RemoveSession(Self);
 end;
 
 //* TIdSipSession Protected methods ********************************************
@@ -2231,6 +2242,23 @@ begin
   finally
     Copy.Free;
   end;
+end;
+
+procedure TIdSipSession.ProcessBye(Request: TIdSipRequest;
+                                   Transaction: TIdSipTransaction);
+var
+  OK: TIdSipResponse;
+begin
+  Self.MarkAsTerminated;
+  Self.Dialog.HandleMessage(Request);
+
+  OK := Self.UA.CreateResponse(Request, SIPOK);
+  try
+    Transaction.SendResponse(OK);
+  finally
+    OK.Free;
+  end;
+  Self.NotifyOfEndedSession(RemoteHangUp);
 end;
 
 procedure TIdSipSession.RejectOutOfOrderRequest(Request: TIdSipRequest;
