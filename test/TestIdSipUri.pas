@@ -3,7 +3,7 @@ unit TestIdSipUri;
 interface
 
 uses
-  IdSipHeaders, TestFramework;
+  IdSipMessage, TestFramework;
 
 type
   TestTIdSipUri = class(TTestCase)

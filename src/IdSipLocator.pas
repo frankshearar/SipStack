@@ -3,7 +3,7 @@ unit IdSipLocator;
 interface
 
 uses
-  IdSipHeaders;
+  IdSipMessage;
 
 type
   // I take an address-of-record SIP/SIPS URI and return a URL at which

@@ -3,7 +3,7 @@ unit TestIdSipHeaders;
 interface
 
 uses
-  IdSipHeaders, TestFramework;
+  IdSipMessage, TestFramework;
 
 type
   TestFunctions = class(TTestCase)
@@ -435,7 +435,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipMessage, SysUtils;
+  Classes, IdSipConsts, SysUtils;
 
 function Suite: ITestSuite;
 begin

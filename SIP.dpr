@@ -16,7 +16,6 @@ uses
   IdSipCore in 'src\IdSipCore.pas',
   IdSipDialog in 'src\IdSipDialog.pas',
   IdSipDialogID in 'src\IdSipDialogID.pas',
-  IdSipHeaders in 'src\IdSipHeaders.pas',
   IdSipLocator in 'src\IdSipLocator.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
