@@ -64,6 +64,7 @@ type
     Password:       String;
     ProxyChallenge: TIdSipProxyAuthenticateHeader;
     RealmInfo:      TIdRealmInfo;
+    Response:       TIdSipResponse;
 
     procedure AddOpaqueToChallenge(Challenge: TIdSipAuthenticateHeader);
     procedure AddQopToChallenge(Challenge: TIdSipAuthenticateHeader;
@@ -77,6 +78,7 @@ type
     procedure TestCreateAuthorizationHeaderType;
     procedure TestCreateProxyAuthorization;
     procedure TestMultipleAuthenticationAffectsNonceCount;
+    procedure TestAuthenticationInfoSetsNextNonce;
     procedure TestOpaque;
     procedure TestQopAuth;
     procedure TestQopAuthInt;
@@ -459,6 +461,8 @@ begin
   Self.RealmInfo.Realm     := Self.Challenge.Realm;
   Self.RealmInfo.Username  := 'wintermute';
 
+  Self.Response := TIdSipResponse.Create;
+
   Self.Body   := '';
   Self.Method := MethodInvite;
   Self.Opaque := 'decafbadcafebabe';
@@ -466,6 +470,7 @@ end;
 
 procedure TestTIdRealmInfo.TearDown;
 begin
+  Self.Response.Free;
   Self.RealmInfo.Free;
   Self.Challenge.Free;
   Self.ProxyChallenge.Free;
@@ -494,8 +499,9 @@ var
   Auth: TIdSipAuthorizationHeader;
 begin
   Self.ProxyChallenge.Algorithm := MD5Name;
+  Self.Response.AddHeader(Self.ProxyChallenge);
 
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -516,7 +522,8 @@ var
   Auth: TIdSipAuthorizationHeader;
   Qop:  TIdQopFunction;
 begin
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Self.Response.AddHeader(Self.ProxyChallenge);
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -565,7 +572,8 @@ procedure TestTIdRealmInfo.TestCreateAuthorizationHeaderType;
 var
   Auth: TIdSipAuthorizationHeader;
 begin
-  Auth := Self.RealmInfo.CreateAuthorization(Self.Challenge,
+  Self.Response.AddHeader(Self.Challenge);
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -582,7 +590,8 @@ procedure TestTIdRealmInfo.TestCreateProxyAuthorization;
 var
   Auth: TIdSipAuthorizationHeader;
 begin
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Self.Response.AddHeader(Self.ProxyChallenge);
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -601,9 +610,10 @@ var
   I:    Integer;
 begin
   Self.AddQopToChallenge(Self.ProxyChallenge, QopAuth);
+  Self.Response.AddHeader(Self.ProxyChallenge);
 
   for I := 1 to 5 do begin
-    Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+    Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                                Self.Method,
                                                Self.Body,
                                                Self.Password);
@@ -617,13 +627,50 @@ begin
   end;
 end;
 
+procedure TestTIdRealmInfo.TestAuthenticationInfoSetsNextNonce;
+const
+  NextNonce = 'f00f00';
+var
+  Auth: TIdSipAuthorizationHeader;
+begin
+  // We add qop-auth so we can inspect NonceCount.
+  Self.AddQopToChallenge(Self.Challenge,
+                         QopAuth);
+
+  Self.Response.AddHeader(AuthenticationInfoHeader);
+  Self.Response.FirstAuthenticationInfo.NextNonce := NextNonce;
+
+  Self.Response.AddHeader(Self.Challenge);
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
+                                             Self.Method,
+                                             Self.Body,
+                                             Self.Password);
+  try
+   CheckEquals(NextNonce, Self.RealmInfo.Nonce, 'NextNonce not stored');
+  finally
+    Auth.Free;
+  end;
+
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
+                                             Self.Method,
+                                             Self.Body,
+                                             Self.Password);
+  try
+   CheckEquals(NextNonce, Auth.Nonce,      'NextNonce not used in next attempt');
+   CheckEquals(1,         Auth.NonceCount, 'NonceCount not reset');
+  finally
+    Auth.Free;
+  end;
+end;
+
 procedure TestTIdRealmInfo.TestOpaque;
 var
   Auth: TIdSipAuthorizationHeader;
 begin
   Self.AddOpaqueToChallenge(Self.ProxyChallenge);
+  Self.Response.AddHeader(Self.ProxyChallenge);
 
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -642,8 +689,9 @@ var
   Qop:  TIdQopFunction;
 begin
   Self.AddQopToChallenge(Self.ProxyChallenge, QopAuth);
+  Self.Response.AddHeader(Self.ProxyChallenge);
 
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);
@@ -686,8 +734,9 @@ var
   Qop:  TIdQopFunction;
 begin
   Self.AddQopToChallenge(Self.ProxyChallenge, QopAuthInt);
+  Self.Response.AddHeader(Self.ProxyChallenge);
 
-  Auth := Self.RealmInfo.CreateAuthorization(Self.ProxyChallenge,
+  Auth := Self.RealmInfo.CreateAuthorization(Self.Response,
                                              Self.Method,
                                              Self.Body,
                                              Self.Password);

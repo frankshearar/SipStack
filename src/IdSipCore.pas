@@ -298,6 +298,8 @@ type
     Observed:   TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
+    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
+    procedure NullProc(Action: TIdSipAction);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -314,7 +316,9 @@ type
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
     procedure FindActionAndPerform(Event: TIdNotifyEventWait;
                                    Proc: TIdSipActionProc);
-    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
+    procedure FindActionAndPerformOr(Event: TIdNotifyEventWait;
+                                     FoundProc: TIdSipActionProc;
+                                     NotFoundProc: TIdSipActionProc);
     procedure FindSessionAndPerform(Event: TIdNotifyEventWait;
                                     Proc: TIdSipSessionProc);
     function  InviteCount: Integer;
@@ -1931,7 +1935,7 @@ function TIdSipActions.CountOf(const MethodName: String): Integer;
 var
   I: Integer;
 begin
-  // Return the number of ongoing actions of type MethodName.
+  // Return the number of ongoing (non-session) actions of type MethodName.
   Self.ActionLock.Acquire;
   try
     Result := 0;
@@ -1971,6 +1975,13 @@ end;
 
 procedure TIdSipActions.FindActionAndPerform(Event: TIdNotifyEventWait;
                                              Proc: TIdSipActionProc);
+begin
+  Self.FindActionAndPerformOr(Event, Proc, Self.NullProc);
+end;
+
+procedure TIdSipActions.FindActionAndPerformOr(Event: TIdNotifyEventWait;
+                                               FoundProc: TIdSipActionProc;
+                                               NotFoundProc: TIdSipActionProc);
 var
   Action:  TIdSipAction;
   Request: TIdSipRequest;
@@ -1982,36 +1993,14 @@ begin
       Action := Self.FindAction(Request);
 
       if Assigned(Action) then
-        Proc(Action);
+        FoundProc(Action)
+      else
+        NotFoundProc(Action);
     finally
       Self.ActionLock.Release;
     end;
   finally
     Request.Free;
-  end;
-end;
-
-function TIdSipActions.FindSession(Msg: TIdSipMessage): TIdSipSession;
-var
-  Action: TIdSipAction;
-  I:      Integer;
-begin
-  Result := nil;
-
-  Self.ActionLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Actions.Count) and not Assigned(Result) do begin
-      Action := Self.Actions[I] as TIdSipAction;
-      if not Action.IsTerminated
-        and Action.IsSession
-        and Msg.InSameDialogAs(Action.InitialRequest) then
-        Result := Action as TIdSipSession
-      else
-        Inc(I);
-    end;
-  finally
-    Self.ActionLock.Release;
   end;
 end;
 
@@ -2098,6 +2087,34 @@ function TIdSipActions.ActionAt(Index: Integer): TIdSipAction;
 begin
   // Precondition: you've invoked Self.ActionLock.Acquire
   Result := Self.Actions[Index] as TIdSipAction;
+end;
+
+function TIdSipActions.FindSession(Msg: TIdSipMessage): TIdSipSession;
+var
+  Action: TIdSipAction;
+  I:      Integer;
+begin
+  Result := nil;
+
+  Self.ActionLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Actions.Count) and not Assigned(Result) do begin
+      Action := Self.Actions[I] as TIdSipAction;
+      if not Action.IsTerminated
+        and Action.IsSession
+        and Msg.InSameDialogAs(Action.InitialRequest) then
+        Result := Action as TIdSipSession
+      else
+        Inc(I);
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipActions.NullProc(Action: TIdSipAction);
+begin
 end;
 
 //******************************************************************************
@@ -3678,7 +3695,7 @@ begin
       RealmInfo := Self.UA.Keyring.Find(ChallengeHeader.Realm,
                                         ReAttempt.RequestUri.AsString);
 
-      AuthHeader := RealmInfo.CreateAuthorization(ChallengeHeader,
+      AuthHeader := RealmInfo.CreateAuthorization(Challenge,
                                                   Self.Method,
                                                   Self.InitialRequest.Body,
                                                   Password);

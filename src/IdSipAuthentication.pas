@@ -87,6 +87,7 @@ type
 
     procedure CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                    Challenge: TIdSipAuthenticateHeader;
+                                   Info: TIdSipAuthenticationInfoHeader;
                                    const Method: String;
                                    const Body: String;
                                    const Password: String);
@@ -94,7 +95,7 @@ type
     procedure ResetNonceCount;
     procedure SetNonce(const Value: String);
   public
-    function CreateAuthorization(Challenge: TIdSipAuthenticateHeader;
+    function CreateAuthorization(Challenge: TIdSipResponse;
                                  const Method: String;
                                  const Body: String;
                                  const Password: String): TIdSipAuthorizationHeader;
@@ -509,20 +510,42 @@ end;
 //*******************************************************************************
 //* TIdRealmInfo Public methods *************************************************
 
-function TIdRealmInfo.CreateAuthorization(Challenge: TIdSipAuthenticateHeader;
+function TIdRealmInfo.CreateAuthorization(Challenge: TIdSipResponse;
                                           const Method: String;
                                           const Body: String;
                                           const Password: String): TIdSipAuthorizationHeader;
+var
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  InfoHeader:      TIdSipAuthenticationInfoHeader;
 begin
-  Result := Challenge.CredentialHeaderType.Create;
+  Assert(Challenge.HasWWWAuthenticate or Challenge.HasProxyAuthenticate,
+         'You can''t generate an authorized request with no authentication request');
 
-  Self.CalculateCredentials(Result, Challenge, Method, Body, Password);
+  if Challenge.HasWWWAuthenticate then
+    ChallengeHeader := Challenge.FirstWWWAuthenticate
+  else
+    ChallengeHeader := Challenge.FirstProxyAuthenticate;
+
+  Result := ChallengeHeader.CredentialHeaderType.Create;
+
+  if Challenge.HasAuthenticationInfo then
+    InfoHeader := Challenge.FirstAuthenticationInfo
+  else
+    InfoHeader := nil;
+
+  Self.CalculateCredentials(Result,
+                            ChallengeHeader,
+                            InfoHeader,
+                            Method,
+                            Body,
+                            Password);
 end;
 
 //* TIdRealmInfo Private methods ***********************************************
 
 procedure TIdRealmInfo.CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                             Challenge: TIdSipAuthenticateHeader;
+                                            Info: TIdSipAuthenticationInfoHeader;
                                             const Method: String;
                                             const Body: String;
                                             const Password: String);
@@ -536,6 +559,7 @@ begin
   Authorization.Assign(Challenge);
 
   Authorization.DigestUri := Self.DigestUri;
+  Authorization.Nonce     := Self.Nonce;
   Authorization.Username  := Self.Username;
 
   DigestMaker := RequestDigestFor(Challenge.Qop);
@@ -550,6 +574,11 @@ begin
   Authorization.Response := DigestMaker(UserData(Authorization, Password),
                                         QopData(Authorization, Method, Body),
                                         Authorization);
+
+  if Assigned(Info) then begin
+    // Possibly authenticate the server
+    Self.Nonce := Info.NextNonce;
+  end;
 end;
 
 procedure TIdRealmInfo.IncNonceCount;
