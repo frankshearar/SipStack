@@ -14,7 +14,6 @@ uses
   GuiTestRunner,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
-  BasicClient in 'src\client\BasicClient.pas' {fmBasicClient},
   IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
   IdNotification in 'src\IdNotification.pas',
