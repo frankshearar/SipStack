@@ -18,8 +18,7 @@ uses
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase,
-                                          IIdSipTransactionListener,
-                                          IIdSipUserAgentListener)
+                                          IIdSipTransactionListener)
   private
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
@@ -35,11 +34,8 @@ type
 
     function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport);
@@ -509,7 +505,6 @@ begin
   inherited SetUp;
 
   Self.Core := TIdSipMockCore.Create;
-  Self.Core.AddUserAgentListener(Self);
 
   Self.D := TIdSipTransactionDispatcher.Create;
 
@@ -580,20 +575,10 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                                     Receiver: TIdSipTransport);
-begin
-end;
-
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                                  const Reason: String);
 begin
   // Do nothing
-end;
-
-procedure TestTIdSipTransactionDispatcher.OnInboundCall(Session: TIdSipInboundSession);
-begin
-//  Session.AcceptCall('', '');
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
