@@ -257,6 +257,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAuthenticationChallengeTreatedStatelessly;
     procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
     procedure TestIsClient;
@@ -2669,6 +2670,24 @@ begin
 end;
 
 //* TestTIdSipServerInviteTransaction Published methods ************************
+
+procedure TestTIdSipServerInviteTransaction.TestAuthenticationChallengeTreatedStatelessly;
+var
+  AuthChallenge: TIdSipResponse;
+begin
+  // cf RFC 3261, section 26.3.2.4
+
+  AuthChallenge := TIdSipResponse.InResponseTo(Self.Request, SIPUnauthorized);
+  try
+    Self.ServerTran.SendResponse(AuthChallenge);
+
+    Self.MarkSentResponseCount;
+    Self.ServerTran.FireTimerG;
+    CheckNoResponseSent('Authentication response resent (Timer G fired)');
+  finally
+    AuthChallenge.Free;
+  end;
+end;
 
 procedure TestTIdSipServerInviteTransaction.TestInitialRequestSentToTU;
 var

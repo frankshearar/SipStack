@@ -1533,6 +1533,12 @@ procedure TIdSipServerInviteTransaction.FireTimerG;
 begin
   if not (Self.State = itsCompleted) then Exit;
 
+  // cf. RFC 3261, section 26.3.2.4: "UAs and proxy servers SHOULD challenge
+  // questionable requests with only a single 401 (Unauthorized) or 407 (Proxy
+  // Authentication Required), forgoing the normal response retransmission
+  // algorithm, and thus behaving statelessly towards unauthenticated requests."
+  if Self.LastResponseSent.IsAuthenticationChallenge then Exit;
+
   if (Self.State = itsCompleted)
     and not Self.Dispatcher.WillUseReliableTranport(Self.InitialRequest) then
     Self.TrySendLastResponse(Self.InitialRequest);
@@ -1621,7 +1627,11 @@ begin
   inherited ChangeToCompleted;
 
   Self.TimerGInterval := Self.Dispatcher.T1Interval;
-  Self.ScheduleTimerG;
+
+  // See the comment in FireTimerG.
+  if not Self.LastResponseSent.IsAuthenticationChallenge then
+    Self.ScheduleTimerG;
+    
   Self.ScheduleTimerH;
 end;
 
