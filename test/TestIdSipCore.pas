@@ -82,22 +82,6 @@ type
     procedure TestScheduleEvent;
   end;
 
-  TestTIdSipAbstractUserAgent = class(TestTIdSipAbstractCore)
-  published
-    procedure TestAddAllowedContentType;
-    procedure TestAddAllowedContentTypeMalformed;
-    procedure TestAddAllowedLanguage;
-    procedure TestAddAllowedLanguageLanguageAlreadyPresent;
-    procedure TestAddAllowedMethod;
-    procedure TestAddAllowedMethodMethodAlreadyPresent;
-    procedure TestAddAllowedScheme;
-    procedure TestAddAllowedSchemeSchemeAlreadyPresent;
-    procedure TestAuthenticateWithNoAttachedAuthenticator;
-    procedure TestCleanOutTerminatedActions;
-    procedure TestRejectMalformedAuthorizedRequest;
-    procedure TestRejectUnauthorizedRequest;
-  end;
-
   TestTIdSipUserAgentCore = class(TTestCaseTU,
                                   IIdObserver,
                                   IIdSipTransportSendingListener,
@@ -148,10 +132,20 @@ type
     procedure TearDown; override;
   published
     procedure TestAcksDontMakeTransactions;
+    procedure TestAddAllowedContentType;
+    procedure TestAddAllowedContentTypeMalformed;
+    procedure TestAddAllowedLanguage;
+    procedure TestAddAllowedLanguageLanguageAlreadyPresent;
+    procedure TestAddAllowedMethod;
+    procedure TestAddAllowedMethodMethodAlreadyPresent;
+    procedure TestAddAllowedScheme;
+    procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestAddObserver;
     procedure TestAddUserAgentListener;
+    procedure TestAuthenticateWithNoAttachedAuthenticator;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
+    procedure TestCleanOutTerminatedActions;
     procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateInvite;
@@ -178,6 +172,7 @@ type
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
+    procedure TestModuleForString;
     procedure TestNotificationOfNewSession;
     procedure TestNotificationOfNewSessionRobust;
     procedure TestOutboundCallAndByeToXlite;
@@ -187,7 +182,9 @@ type
     procedure TestReceiveByeWithoutTags;
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
+    procedure TestRejectMalformedAuthorizedRequest;
     procedure TestRejectNoContact;
+    procedure TestRejectUnauthorizedRequest;
     procedure TestRejectUnknownContentEncoding;
     procedure TestRejectUnknownContentLanguage;
     procedure TestRejectUnknownContentType;
@@ -382,7 +379,7 @@ type
     procedure SimulateRemoteIntervalTooBrief;
     procedure SimulateRemoteRejectProxyAuthenticationRequired;
   protected
-    function CreateAction: TIdSipAction; override;
+    function  CreateAction: TIdSipAction; override;
     procedure PerformAction(Action: TIdSipAction); override;
   public
     procedure SetUp; override;
@@ -777,8 +774,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SysUtils,
-  TestMessages, Windows;
+  IdNotification, IdSipAuthentication, IdSipConsts, IdSipMockTransport,
+  IdUdpServer, SysUtils, TestMessages, Windows;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -795,7 +792,6 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
-  Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -1236,239 +1232,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipAbstractUserAgent                                                *
-//******************************************************************************
-//* TestTIdSipAbstractUserAgent Published methods ******************************
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentType;
-var
-  ContentTypes: TStrings;
-begin
-  ContentTypes := TStringList.Create;
-  try
-    Self.Core.AddAllowedContentType(SdpMimeType);
-    Self.Core.AddAllowedContentType(PlainTextMimeType);
-
-    ContentTypes.CommaText := Self.Core.AllowedContentTypes;
-
-    CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
-
-    CheckEquals(SdpMimeType,       ContentTypes[0], SdpMimeType);
-    CheckEquals(PlainTextMimeType, ContentTypes[1], PlainTextMimeType);
-  finally
-    ContentTypes.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentTypeMalformed;
-var
-  ContentTypes: String;
-begin
-  ContentTypes := Self.Core.AllowedContentTypes;
-  Self.Core.AddAllowedContentType(' ');
-  CheckEquals(ContentTypes,
-              Self.Core.AllowedContentTypes,
-              'Malformed Content-Type was allowed');
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedLanguage;
-var
-  Languages: TStrings;
-begin
-  Languages := TStringList.Create;
-  try
-    Self.Core.AddAllowedLanguage('en');
-    Self.Core.AddAllowedLanguage('af');
-
-    Languages.CommaText := Self.Core.AllowedLanguages;
-
-    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
-
-    CheckEquals('en', Languages[0], 'en first');
-    CheckEquals('af', Languages[1], 'af second');
-  finally
-    Languages.Free;
-  end;
-
-  try
-    Self.Core.AddAllowedLanguage(' ');
-    Fail('Failed to forbid adding a malformed language ID');
-  except
-    on EIdException do;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedLanguageLanguageAlreadyPresent;
-var
-  Languages: TStrings;
-begin
-  Languages := TStringList.Create;
-  try
-    Self.Core.AddAllowedLanguage('en');
-    Self.Core.AddAllowedLanguage('en');
-
-    Languages.CommaText := Self.Core.AllowedLanguages;
-
-    CheckEquals(1, Languages.Count, 'en was re-added');
-  finally
-    Languages.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedMethod;
-var
-  Methods: TStringList;
-begin
-  Methods := TStringList.Create;
-  try
-    Methods.CommaText := Self.Core.AllowedMethods;
-    Methods.Sort;
-
-    CheckEquals(MethodAck,     Methods[0], 'ACK first');
-    CheckEquals(MethodBye,     Methods[1], 'BYE second');
-    CheckEquals(MethodCancel,  Methods[2], 'CANCEL third');
-    CheckEquals(MethodInvite,  Methods[3], 'INVITE fourth');
-    CheckEquals(MethodOptions, Methods[4], 'OPTIONS fifth');
-
-    CheckEquals(5, Methods.Count, 'Number of allowed methods');
-  finally
-    Methods.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedMethodMethodAlreadyPresent;
-var
-  Methods: TStrings;
-  MethodCount: Cardinal;
-begin
-  Methods := TStringList.Create;
-  try
-    Self.Core.AddModule(TIdSipInviteModule);
-    Methods.CommaText := Self.Core.AllowedMethods;
-    MethodCount := Methods.Count;
-
-    Self.Core.AddModule(TIdSipInviteModule);
-    Methods.CommaText := Self.Core.AllowedMethods;
-
-    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
-  finally
-    Methods.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedScheme;
-var
-  Schemes: TStrings;
-begin
-  Schemes := TStringList.Create;
-  try
-    Self.Core.AddAllowedScheme(SipScheme);
-    Self.Core.AddAllowedScheme(SipsScheme);
-
-    Schemes.CommaText := Self.Core.AllowedSchemes;
-
-    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
-
-    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
-    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
-  finally
-    Schemes.Free;
-  end;
-
-  try
-    Self.Core.AddAllowedScheme(' ');
-    Fail('Failed to forbid adding a malformed URI scheme');
-  except
-    on EIdException do;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAddAllowedSchemeSchemeAlreadyPresent;
-var
-  Schemes: TStrings;
-begin
-  Schemes := TStringList.Create;
-  try
-    Self.Core.AddAllowedScheme(SipScheme);
-
-    Schemes.CommaText := Self.Core.AllowedSchemes;
-
-    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
-  finally
-    Schemes.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestAuthenticateWithNoAttachedAuthenticator;
-begin
-  // We make sure that no access violations occur just because we've not
-  // attached an authenticator to the Core.
-  Self.Core.RequireAuthentication := true;
-  Self.Invite.AddHeader(AuthorizationHeader);
-  Self.SimulateInvite;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestCleanOutTerminatedActions;
-var
-  Session: TIdSipSession;
-begin
-  // This test doesn't really tell us much, just that CleanOutTerminatedActions
-  // doesn't blow up when Core has terminated an unterminated actions.
-
-  Session := Self.Core.Call(Self.Destination, '', '');
-  Self.SimulateOk(Self.LastSentRequest);
-  Check(Session.DialogEstablished, 'Dialog not established for session');
-  Self.SimulateBye(Session.Dialog);
-
-  Self.Core.Call(Self.Destination, '', '');
-  Self.Core.CleanOutTerminatedActions;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestRejectMalformedAuthorizedRequest;
-var
-  Auth:     TIdSipMockAuthenticator;
-  Response: TIdSipResponse;
-begin
-  Auth := TIdSipMockAuthenticator.Create;
-  try
-    Self.Core.RequireAuthentication := true;
-    Self.Core.Authenticator := Auth;
-    Auth.FailWith := EAuthenticate;
-
-    Self.MarkSentResponseCount;
-
-    Self.Invite.AddHeader(AuthorizationHeader);
-    Self.SimulateInvite;
-    CheckResponseSent('No response sent');
-
-    Response := Self.LastSentResponse;
-    CheckEquals(SIPBadRequest,
-                Response.StatusCode,
-                'Status code');
-  finally
-    Auth.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestRejectUnauthorizedRequest;
-var
-  Response: TIdSipResponse;
-begin
-  Self.Core.RequireAuthentication := true;
-
-  Self.MarkSentResponseCount;
-  Self.SimulateInvite;
-  CheckResponseSent('No response sent');
-
-  Response := Self.LastSentResponse;
-  CheckEquals(SIPUnauthorized,
-              Response.StatusCode,
-              'Status code');
-  Check(Response.HasWWWAuthenticate,
-        'No WWW-Authenticate header');
-end;
-
-//******************************************************************************
 //* TestTIdSipUserAgentCore                                                    *
 //******************************************************************************
 //* TestTIdSipUserAgentCore Public methods *************************************
@@ -1735,6 +1498,165 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestAddAllowedContentType;
+var
+  ContentTypes: TStrings;
+begin
+  ContentTypes := TStringList.Create;
+  try
+    Self.Core.AddAllowedContentType(SdpMimeType);
+    Self.Core.AddAllowedContentType(PlainTextMimeType);
+
+    ContentTypes.CommaText := Self.Core.AllowedContentTypes;
+
+    CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
+
+    CheckEquals(SdpMimeType,       ContentTypes[0], SdpMimeType);
+    CheckEquals(PlainTextMimeType, ContentTypes[1], PlainTextMimeType);
+  finally
+    ContentTypes.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedContentTypeMalformed;
+var
+  ContentTypes: String;
+begin
+  ContentTypes := Self.Core.AllowedContentTypes;
+  Self.Core.AddAllowedContentType(' ');
+  CheckEquals(ContentTypes,
+              Self.Core.AllowedContentTypes,
+              'Malformed Content-Type was allowed');
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('af');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
+
+    CheckEquals('en', Languages[0], 'en first');
+    CheckEquals('af', Languages[1], 'af second');
+  finally
+    Languages.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedLanguage(' ');
+    Fail('Failed to forbid adding a malformed language ID');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedLanguageLanguageAlreadyPresent;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('en');
+
+    Languages.CommaText := Self.Core.AllowedLanguages;
+
+    CheckEquals(1, Languages.Count, 'en was re-added');
+  finally
+    Languages.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedMethod;
+var
+  Methods: TStringList;
+begin
+  Methods := TStringList.Create;
+  try
+    Methods.CommaText := Self.Core.AllowedMethods;
+    Methods.Sort;
+
+    CheckEquals(MethodAck,     Methods[0], 'ACK first');
+    CheckEquals(MethodBye,     Methods[1], 'BYE second');
+    CheckEquals(MethodCancel,  Methods[2], 'CANCEL third');
+    CheckEquals(MethodInvite,  Methods[3], 'INVITE fourth');
+    CheckEquals(MethodOptions, Methods[4], 'OPTIONS fifth');
+
+    CheckEquals(5, Methods.Count, 'Number of allowed methods');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedMethodMethodAlreadyPresent;
+var
+  Methods: TStrings;
+  MethodCount: Cardinal;
+begin
+  Methods := TStringList.Create;
+  try
+    Self.Core.AddModule(TIdSipInviteModule);
+    Methods.CommaText := Self.Core.AllowedMethods;
+    MethodCount := Methods.Count;
+
+    Self.Core.AddModule(TIdSipInviteModule);
+    Methods.CommaText := Self.Core.AllowedMethods;
+
+    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedScheme;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipScheme);
+    Self.Core.AddAllowedScheme(SipsScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+
+    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
+
+    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
+    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
+  finally
+    Schemes.Free;
+  end;
+
+  try
+    Self.Core.AddAllowedScheme(' ');
+    Fail('Failed to forbid adding a malformed URI scheme');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedSchemeSchemeAlreadyPresent;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.Core.AddAllowedScheme(SipScheme);
+
+    Schemes.CommaText := Self.Core.AllowedSchemes;
+
+    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
+  finally
+    Schemes.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgentCore.TestAddObserver;
 var
   L1, L2: TIdObserverListener;
@@ -1780,6 +1702,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestAuthenticateWithNoAttachedAuthenticator;
+begin
+  // We make sure that no access violations occur just because we've not
+  // attached an authenticator to the Core.
+  Self.Core.RequireAuthentication := true;
+  Self.Invite.AddHeader(AuthorizationHeader);
+  Self.SimulateInvite;
+end;
+
 procedure TestTIdSipUserAgentCore.TestCallUsingProxy;
 const
   ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
@@ -1813,6 +1744,22 @@ begin
         'UA not notified of remote CANCEL');
   Check(Self.Core.SessionCount < SessCount,
         'UA didn''t remove cancelled session');
+end;
+
+procedure TestTIdSipUserAgentCore.TestCleanOutTerminatedActions;
+var
+  Session: TIdSipSession;
+begin
+  // This test doesn't really tell us much, just that CleanOutTerminatedActions
+  // doesn't blow up when Core has terminated an unterminated actions.
+
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Self.SimulateOk(Self.LastSentRequest);
+  Check(Session.DialogEstablished, 'Dialog not established for session');
+  Self.SimulateBye(Session.Dialog);
+
+  Self.Core.Call(Self.Destination, '', '');
+  Self.Core.CleanOutTerminatedActions;
 end;
 
 procedure TestTIdSipUserAgentCore.TestContentTypeDefault;
@@ -2388,6 +2335,24 @@ begin
   CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
 end;
 
+procedure TestTIdSipUserAgentCore.TestModuleForString;
+begin
+  CheckNull(Self.Core.ModuleFor(''),
+            'Empty string');
+  CheckNull(Self.Core.ModuleFor(MethodRegister),
+            MethodRegister + ' but no module added');
+
+  Self.Core.AddModule(TIdSipRegisterModule);
+  CheckNotNull(Self.Core.ModuleFor(MethodRegister),
+               MethodRegister + ' but no module added');
+  CheckEquals(TIdSipRegisterModule.ClassName,
+              Self.Core.ModuleFor(MethodRegister).ClassName,
+              MethodRegister + ' after module added: wrong type');
+  CheckNull(Self.Core.ModuleFor(Lowercase(MethodRegister)),
+            Lowercase(MethodRegister)
+          + ': RFC 3261 defines REGISTER''s method as "REGISTER"');
+end;
+
 procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;
 begin
   Self.SimulateInvite;
@@ -2602,6 +2567,32 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestRejectMalformedAuthorizedRequest;
+var
+  Auth:     TIdSipMockAuthenticator;
+  Response: TIdSipResponse;
+begin
+  Auth := TIdSipMockAuthenticator.Create;
+  try
+    Self.Core.RequireAuthentication := true;
+    Self.Core.Authenticator := Auth;
+    Auth.FailWith := EAuthenticate;
+
+    Self.MarkSentResponseCount;
+
+    Self.Invite.AddHeader(AuthorizationHeader);
+    Self.SimulateInvite;
+    CheckResponseSent('No response sent');
+
+    Response := Self.LastSentResponse;
+    CheckEquals(SIPBadRequest,
+                Response.StatusCode,
+                'Status code');
+  finally
+    Auth.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgentCore.TestRejectNoContact;
 var
   Response: TIdSipResponse;
@@ -2617,6 +2608,24 @@ begin
   Response := Self.LastSentResponse;
   CheckEquals(SIPBadRequest,        Response.StatusCode, 'Status-Code');
   CheckEquals(MissingContactHeader, Response.StatusText, 'Status-Text');
+end;
+
+procedure TestTIdSipUserAgentCore.TestRejectUnauthorizedRequest;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Core.RequireAuthentication := true;
+
+  Self.MarkSentResponseCount;
+  Self.SimulateInvite;
+  CheckResponseSent('No response sent');
+
+  Response := Self.LastSentResponse;
+  CheckEquals(SIPUnauthorized,
+              Response.StatusCode,
+              'Status code');
+  Check(Response.HasWWWAuthenticate,
+        'No WWW-Authenticate header');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRejectUnknownContentEncoding;
@@ -5401,7 +5410,6 @@ var
   Registration: TIdSipOutboundRegistration;
 begin
   Registration := Self.Core.RegisterWith(Self.Registrar.From.Address);
-
   L1 := TIdSipTestRegistrationListener.Create;
   try
     L2 := TIdSipTestRegistrationListener.Create;

@@ -15,7 +15,7 @@ uses
   IdSipCore, IdSipMessage;
 
 type
-  TIdSipProxy = class(TIdSipAbstractUserAgent)
+  TIdSipProxy = class(TIdSipUserAgentCore)
   protected
     function  AuthenticationHeader: String; override;
     function  AuthenticationStatusCode: Cardinal; override;
