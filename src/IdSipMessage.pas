@@ -1513,6 +1513,14 @@ const
   RSWarningMisc =
       'Miscellaneous warning';
 
+// Transport types
+const
+  NullTransport = 'NULL';
+  SctpTransport = 'SCTP';
+  TcpTransport  = 'TCP';
+  TlsTransport  = 'TLS';
+  UdpTransport  = 'UDP';
+
 // Grammar definitions
 const
   HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
@@ -1855,22 +1863,22 @@ end;
 
 function StrToTransport(const S: String): TIdSipTransportType;
 begin
-       if (Lowercase(S) = 'null') then Result := sttNULL
-  else if (Lowercase(S) = 'sctp') then Result := sttSCTP
-  else if (Lowercase(S) = 'tcp')  then Result := sttTCP
-  else if (Lowercase(S) = 'tls')  then Result := sttTLS
-  else if (Lowercase(S) = 'udp')  then Result := sttUDP
+       if IsEqual(S, NullTransport) then Result := sttNULL
+  else if IsEqual(S, SctpTransport) then Result := sttSCTP
+  else if IsEqual(S, TcpTransport)  then Result := sttTCP
+  else if IsEqual(S, TlsTransport)  then Result := sttTLS
+  else if IsEqual(S, UdpTransport)  then Result := sttUDP
   else raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipTransportType']));
 end;
 
 function TransportToStr(const T: TIdSipTransportType): String;
 begin
   case T of
-    sttNULL: Result := 'NULL';
-    sttSCTP: Result := 'SCTP';
-    sttTCP:  Result := 'TCP';
-    sttTLS:  Result := 'TLS';
-    sttUDP:  Result := 'UDP';
+    sttNULL: Result := NullTransport;
+    sttSCTP: Result := SctpTransport;
+    sttTCP:  Result := TcpTransport;
+    sttTLS:  Result := TlsTransport;
+    sttUDP:  Result := UdpTransport;
  else
     raise EConvertError.Create(Format(ConvertErrorMsg, ['unknown TIdSipTransportType', 'String']));
   end;
@@ -3446,6 +3454,7 @@ begin
       if (QValue <> '')
         and not TIdSipParser.IsQValue(QValue) then
         Self.FailParse(InvalidQValue);
+
       Self.AddValue(MediaRange, StrToQValueDef(QValue, High(TIdSipQValue)));
 
       if (NewParams.IndexOfName(QParam) <> -1) then
