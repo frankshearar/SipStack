@@ -122,7 +122,7 @@ begin
   if (NumBits >= 32) then
     Result := Cardinal(Random(High(Cardinal)))
   else
-    Result := Random(2 shl NumBits);
+    Result := Random(1 shl NumBits);
 end;
 
 function TIdRandomNumber.NumBitsNeeded(N: Cardinal): Cardinal;
