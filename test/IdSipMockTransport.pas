@@ -17,6 +17,13 @@ uses
 type
   TIdMessageDirection = (dirIn, dirOut);
 
+  // The IsSecure function and TransportType properties deserve some
+  // explanation. In every case except for a mock transport, the transport
+  // subclass defines whether the transport is secure: no instance of
+  // TIdUdpTransport can be secure, and no instance of TIdTlsTransport can be
+  // insecure. It's very useful, in tests, to change mock transports to simulate
+  // other transports: in some tests you want a UDP mock transport, and other
+  // times you want a TLS transport. 
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
@@ -29,15 +36,16 @@ type
     fPort:              Cardinal;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
-    fTransportType:     String;
     fWriteLog:          Boolean;
 
     procedure DispatchRequest(R: TidSipRequest);
     procedure DispatchResponse(R: TidSipResponse);
     function  FindTransport(const Host: String;
                                   Port: Cardinal): TIdSipMockTransport;
+    function  GetGlobalTransportType: String;
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
+    procedure SetTransportType(const Value: String);
     procedure SetWriteLog(const Value: Boolean);
     function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
@@ -49,6 +57,8 @@ type
     procedure SendResponse(R: TIdSipResponse); override;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
+    class function IsSecure: Boolean; override;
+
     constructor Create; override;
     destructor  Destroy; override;
 
@@ -56,7 +66,6 @@ type
     procedure FireOnResponse(R: TIdSipResponse);
     function  GetTransportType: String; override;
     function  IsReliable: Boolean; override;
-    function  IsSecure: Boolean; override;
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     procedure RaiseException(E: ExceptClass);
@@ -75,7 +84,7 @@ type
     property LastACK:           TIdSipRequest       read fLastACK;
     property SentRequestCount:  Cardinal            read fSentRequestCount;
     property SentResponseCount: Cardinal            read fSentResponseCount;
-    property TransportType:     String              read fTransportType write fTransportType;
+    property TransportType:     String              read GetGlobalTransportType write SetTransportType;
     property WriteLog:          Boolean             read fWriteLog write SetWriteLog;
   end;
 
@@ -90,11 +99,17 @@ uses
 var
   GAllTransports: TObjectList;
   GLog:           TFileStream;
+  GTransportType: String;
 
 //******************************************************************************
 //* TIdSipMockTransport                                                        *
 //******************************************************************************
 //* TIdSipMockTransport Public methods *****************************************
+
+class function TIdSipMockTransport.IsSecure: Boolean;
+begin
+  Result := Self.TransportFor(GTransportType).IsSecure;
+end;
 
 constructor TIdSipMockTransport.Create;
 begin
@@ -161,11 +176,6 @@ end;
 function TIdSipMockTransport.IsReliable: Boolean;
 begin
   Result := Self.TransportType <> UdpTransport;
-end;
-
-function TIdSipMockTransport.IsSecure: Boolean;
-begin
-  Result := Self.TransportType = TlsTransport;
 end;
 
 function TIdSipMockTransport.LastRequest: TIdSipRequest;
@@ -339,6 +349,11 @@ begin
       Inc(I);
 end;
 
+function TIdSipMockTransport.GetGlobalTransportType: String;
+begin
+  Result := GTransportType;
+end;
+
 procedure TIdSipMockTransport.Log(Msg: String;
                                   Direction: TIdMessageDirection);
 var
@@ -356,6 +371,11 @@ begin
   WriteString(GLog, Date);
   WriteString(GLog, Msg);
   WriteString(GLog, #13#10);
+end;
+
+procedure TIdSipMockTransport.SetTransportType(const Value: String);
+begin
+  GTransportType := Value;
 end;
 
 procedure TIdSipMockTransport.SetWriteLog(const Value: Boolean);

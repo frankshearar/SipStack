@@ -94,6 +94,7 @@ type
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
+    class function  IsSecure: Boolean; virtual;
     class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure RegisterTransport(const Name: String;
                                       const TransportType: TIdSipTransportClass);
@@ -109,7 +110,6 @@ type
     function  GetTransportType: String; virtual; abstract;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
-    function  IsSecure: Boolean; virtual;
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     procedure Send(Msg: TIdSipMessage);
@@ -179,9 +179,10 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); override;
     function  ServerType: TIdSipTcpServerClass; override;
   public
+    class function IsSecure: Boolean; override;
+
     function DefaultPort: Cardinal; override;
     function GetTransportType: String; override;
-    function IsSecure: Boolean; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName      read GetRootCertificate write SetRootCertificate;
@@ -323,6 +324,11 @@ var
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
+class function TIdSipTransport.IsSecure: Boolean;
+begin
+  Result := false;
+end;
+
 class function TIdSipTransport.TransportFor(const Transport: String): TIdSipTransportClass;
 var
   Index: Integer;
@@ -400,11 +406,6 @@ end;
 function TIdSipTransport.IsReliable: Boolean;
 begin
   Result := true;
-end;
-
-function TIdSipTransport.IsSecure: Boolean;
-begin
-  Result := false;
 end;
 
 procedure TIdSipTransport.RemoveTransportListener(const Listener: IIdSipTransportListener);
@@ -872,6 +873,11 @@ end;
 //******************************************************************************
 //* TIdSipTLSTransport Public methods ******************************************
 
+class function TIdSipTLSTransport.IsSecure: Boolean;
+begin
+  Result := true;
+end;
+
 function TIdSipTLSTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
@@ -880,11 +886,6 @@ end;
 function TIdSipTLSTransport.GetTransportType: String;
 begin
   Result := TlsTransport;
-end;
-
-function TIdSipTLSTransport.IsSecure: Boolean;
-begin
-  Result := true;
 end;
 
 //* TIdSipTLSTransport Protected methods ***************************************
