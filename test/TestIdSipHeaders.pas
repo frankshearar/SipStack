@@ -2959,7 +2959,7 @@ begin
   Self.R.Value := '1 (%30%31%32%33)';
   Check(not Self.R.IsMalformed,
         'Header marked as malformed (''%30%31%32%33''): ' + Self.R.ParseFailReason);
-  CheckEquals('0123',
+  CheckEquals('%30%31%32%33',
               Self.R.Comment,
               '%30%31%32%33');
 

@@ -3597,7 +3597,7 @@ begin
 
   if (Raw <> '') then begin
     if (IndyPos('(', Raw) > 0) then begin
-      Self.ParseComment(UTF8Decode(TIdSipUri.Decode(Raw)));
+      Self.ParseComment(UTF8Decode(Raw));
     end
     else begin
       // If there's anything in Raw, it must be only parameters.
