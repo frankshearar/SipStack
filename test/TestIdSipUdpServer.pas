@@ -308,7 +308,7 @@ begin
 
   Self.Client.Send(BasicRequest);
 
-  Self.WaitForTimeout('Listener wasn''t removed');
+  Self.WaitForTimeout('Listener wasn''t removed: ' + Self.ClassName);
 end;
 
 procedure TestTIdSipUdpServer.TestRequest;
