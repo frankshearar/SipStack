@@ -218,21 +218,20 @@ begin
 
   Self.Log(R.AsString, dirOut);
 
-  if R.IsAck then
-    Self.LastACK.Assign(R)
-  else
+  if R.IsAck then begin
+    Self.LastACK.Assign(R);
+    Inc(Self.fACKCount)
+  end
+  else begin
     Self.LastRequest.Assign(R);
+    Inc(Self.fSentRequestCount);
+  end;
 
   if Assigned(Self.FailWith) then
     raise EIdSipTransport.Create(Self,
                                  R,
                                  'TIdSipMockTransport.SendRequest ('
                                + Self.FailWith.ClassName + ')');
-
-  if R.IsAck then
-    Inc(Self.fACKCount)
-  else
-    Inc(Self.fSentRequestCount);
 
   Self.DispatchRequest(R);
 end;
