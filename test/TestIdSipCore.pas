@@ -3261,21 +3261,29 @@ end;
 }
 procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
 var
+  ClassName:    String;
   RequestCount: Cardinal;
   Session:      TIdSipSession;
+  SessionCount: Integer;
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
+  ClassName := Session.ClassName;
 
   Session.Modify('', '');
 
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SessionCount := Self.Core.SessionCount;
+
   Self.SimulateRemoteResponse(SIPRequestTimeout);
+
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-        'No request sent');
+        ClassName + ': No request sent');
   CheckEquals(MethodBye,
               Self.Dispatcher.Transport.LastRequest.Method,
-              'Unexpected request sent');
+              ClassName + ': Unexpected request sent');
+  Check(Self.Core.SessionCount < SessionCount,
+        ClassName + ': Session not terminated');
 end;
 
 procedure TestTIdSipSession.TestModify;
@@ -3289,10 +3297,11 @@ begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   Session.Modify('', '');
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-        'No INVITE sent');
+        Session.ClassName + ': No INVITE sent');
 
   Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
-  Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
+  Check(Self.OnModifiedSessionFired,
+        Session.ClassName + ': OnModifiedSession didn''t fire');
 end;
 
 procedure TestTIdSipSession.TestOnlyOneInboundModifyAtaTime;
