@@ -66,7 +66,6 @@ begin
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
   Application.CreateForm(TIdSpikeT140, IdSpikeT140);
-  Application.CreateForm(TIdSpikeT140, IdSpikeT140);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}
