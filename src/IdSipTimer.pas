@@ -98,14 +98,16 @@ begin
     if Self.CoarseTiming then begin
       IdGlobal.Sleep(Self.Resolution);
 
-      if (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
+      if not Self.Terminated
+        and (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
         Self.ResetTime;
         Self.OnTimer(Self);
       end;
     end
     else begin
       IdGlobal.Sleep(Self.Interval);
-      Self.OnTimer(Self);
+      if not Self.Terminated then
+        Self.OnTimer(Self);
     end;
   end;
 end;
