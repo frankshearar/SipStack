@@ -65,18 +65,19 @@ type
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private
-    CheckOnInboundCall: TIdSipSessionEvent;
-    Dlg:                TIdSipDialog;
-    ID:                 TIdSipDialogID;
-    LocalSequenceNo:    Cardinal;
-    LocalUri:           TIdSipURI;
-    OnInboundCallFired: Boolean;
-    RemoteSequenceNo:   Cardinal;
-    RemoteTarget:       TIdSipURI;
-    RemoteUri:          TIdSipURI;
-    RouteSet:           TIdSipHeaders;
-    Session:            TIdSipSession;
-    SessionEstablished: Boolean;
+    CheckOnInboundCall:  TIdSipSessionEvent;
+    Dlg:                 TIdSipDialog;
+    ID:                  TIdSipDialogID;
+    LocalSequenceNo:     Cardinal;
+    LocalUri:            TIdSipURI;
+    OnEndedSessionFired: Boolean;
+    OnInboundCallFired:  Boolean;
+    RemoteSequenceNo:    Cardinal;
+    RemoteTarget:        TIdSipURI;
+    RemoteUri:           TIdSipURI;
+    RouteSet:            TIdSipHeaders;
+    Session:             TIdSipSession;
+    SessionEstablished:  Boolean;
 
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
@@ -122,6 +123,7 @@ type
     procedure TestForkWithProvisionalResponse;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
+    procedure TestInviteExpires;
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
@@ -168,10 +170,10 @@ type
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipAction,
-                            IIdRTPDataListener,
-                            IIdSipSessionListener,
-                            IIdSipTransportSendingListener,
-                            IIdSipUserAgentListener)
+                                   IIdRTPDataListener,
+                                   IIdSipSessionListener,
+                                   IIdSipTransportSendingListener,
+                                   IIdSipUserAgentListener)
   private
     EstablishedSession:     TIdSipSession;
     MultiStreamSdp:         TIdSdpPayload;
@@ -278,9 +280,12 @@ type
 
   TestTIdSipSessionTimer = class(TTestCase)
   private
-    Session: TIdSipMockSession;
-    Timer:   TIdSipSessionTimer;
-    UA:      TIdSipUserAgentCore;
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Invite:     TIdSipRequest;
+    NullTran:   TIdSipTransaction;
+    Session:    TIdSipMockSession;
+    Timer:      TIdSipSessionTimer;
+    UA:         TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -780,8 +785,9 @@ begin
     F.Free;
   end;
 
-  Self.OnInboundCallFired := false;
-  Self.SessionEstablished := false;
+  Self.OnEndedSessionFired := false;
+  Self.OnInboundCallFired  := false;
+  Self.SessionEstablished  := false;
 end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
@@ -872,11 +878,12 @@ end;
 procedure TestTIdSipUserAgentCore.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                              Receiver: TIdSipTransport);
 begin
-end;                                                             
+end;
 
 procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession;
                                                  const Reason: String);
 begin
+  Self.OnEndedSessionFired := true;
   Self.ThreadEvent.SetEvent;
 end;
 
@@ -892,6 +899,7 @@ begin
 
   Self.OnInboundCallFired := true;
 
+  Session.AddSessionListener(Self);
   Self.Session := Session;
 end;
 
@@ -1444,6 +1452,30 @@ begin
   Self.Invite.AddHeader(ContentTypeHeaderFull);
   Check(Self.Core.HasUnknownContentType(Self.Invite),
         'Nothing else is supported');
+end;
+
+procedure TestTIdSipUserAgentCore.TestInviteExpires;
+var
+  ResponseCount: Cardinal;
+begin
+  // This test deadlocks because the session gets destroyed within the context
+  // of the ExpiryTimer, which waits for the ExpiryTimer to terminate.
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Self.Invite.FirstExpires.NumericValue := 50;
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+
+  Self.ExceptionMessage := 'Waiting for session to expire';
+  Self.WaitForSignaled;
+  Check(Self.OnEndedSessionFired, 'Session didn''t expire');
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+  CheckEquals(SIPRequestTerminated,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Unexpected response sent');
 end;
 
 procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
@@ -2216,9 +2248,10 @@ end;
 procedure TestTIdSipInboundSession.OnEndedSession(Session: TIdSipSession;
                                            const Reason: String);
 begin
-  Self.Session := Session as TIdSipInboundSession;
   Self.OnEndedSessionFired := true;
   Self.ActionFailed := true;
+
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipInboundSession.OnEstablishedSession(Session: TIdSipSession);
@@ -2842,18 +2875,18 @@ begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Session := Self.Core.Call(Self.Destination, '', '');
-  Check(not Session.DialogEstablished, 'Brand new session');
+  Check(not Session.IsEstablished, 'Brand new session');
 
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
         'The INVITE wasn''t sent');
   SentInvite := Self.Dispatcher.Transport.LastRequest;
 
   Self.SimulateRemoteTryingWithNoToTag(SentInvite);
-  Check(not Session.DialogEstablished,
+  Check(not Session.IsEstablished,
         'Dialog established after receiving a 100 Trying');
 
   Self.SimulateRemoteRinging(SentInvite);
-  Check(Session.DialogEstablished,
+  Check(Session.IsEstablished,
         'Dialog not established after receiving a 180 Ringing');
 end;
 
@@ -3017,12 +3050,12 @@ begin
   Session := Self.UA.Call(Self.Destination, '', '');
 
   Self.SimulateRemoteTrying;
-  Check(not Session.DialogEstablished,
+  Check(not Session.IsEstablished,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's don''t make dialogs');
 
   Self.SimulateRemoteRinging;
-  Check(Session.DialogEstablished,
+  Check(Session.IsEstablished,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's with To tags make dialogs');
   Check(Session.Dialog.IsEarly,
@@ -3082,9 +3115,13 @@ procedure TestTIdSipSessionTimer.SetUp;
 begin
   inherited SetUp;
 
-  Self.UA      := TIdSipUserAgentCore.Create;
-  Self.Session := TIdSipMockSession.Create(UA);
-  Self.Timer   := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
+  Self.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
+  Self.Invite        := TIdSipRequest.Create;
+  Self.NullTran      := TIdSipNullTransaction.Create(Self.Dispatcher, Self.Invite);
+  Self.UA            := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := Self.Dispatcher;
+  Self.Session       := TIdSipMockSession.Create(UA, Self.Invite, Self.NullTran, Self.Dispatcher.Transport);
+  Self.Timer         := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
 end;
 
 procedure TestTIdSipSessionTimer.TearDown;
@@ -3092,6 +3129,9 @@ begin
   Self.Timer.Free;
   Self.Session.Free;
   Self.UA.Free;
+  Self.Invite.Free;
+  Self.NullTran.Free;
+  Self.Dispatcher.Free;
 
   inherited TearDown;
 end;
