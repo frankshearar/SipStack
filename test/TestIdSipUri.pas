@@ -120,6 +120,8 @@ type
     procedure TestPortWithSipScheme;
     procedure TestPortWithSipsScheme;
     procedure TestRemoveParameter;
+    procedure TestSchemeChangeChangesPort;
+    procedure TestSchemeChangeDoesntChangeSpecifiedPort;
     procedure TestSetUriBasicUri;
     procedure TestSetUriMultipleHeaders;
     procedure TestSetUriMultipleParameters;
@@ -1334,6 +1336,42 @@ begin
   Self.Uri.RemoveParameter('transport');
   Check(not Self.Uri.HasParameter('transport'),
         'transport parameter was not removed');
+end;
+
+procedure TestTIdSipUri.TestSchemeChangeChangesPort;
+begin
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  CheckEquals(IdPORT_SIP, Self.Uri.Port, 'Sanity check on SIP scheme port');
+
+  Self.Uri.Scheme := SipsScheme;
+  CheckEquals(IdPORT_SIPS,
+              Self.Uri.Port,
+              'Changing to SIPS scheme didn''t affect port');
+  Check(not Self.Uri.PortIsSpecified,
+        'Changing the scheme doesn''t mean you''ve specified a port');
+
+  Self.Uri.Scheme := SipScheme;
+  CheckEquals(IdPORT_SIP,
+              Self.Uri.Port,
+              'Changing back to SIP scheme didn''t affect port');
+  Check(not Self.Uri.PortIsSpecified,
+        'Changing the scheme back to SIP doesn''t mean you''ve specified a port');
+end;
+
+procedure TestTIdSipUri.TestSchemeChangeDoesntChangeSpecifiedPort;
+var
+  Port: Integer;
+begin
+  Port := 8888;
+
+  Self.Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna:' + IntToStr(Port);
+
+  Self.Uri.Scheme := SipsScheme;
+  CheckEquals(Port,
+              Self.Uri.Port,
+              'Changing to SIPS scheme changed the specified port');
+  Check(Self.Uri.PortIsSpecified,
+        'You did specify the port');
 end;
 
 procedure TestTIdSipUri.TestSetUriBasicUri;

@@ -2459,6 +2459,11 @@ begin
     Self.HostAndPort.DefaultPort := IdPORT_SIPS
   else
     Self.HostAndPort.DefaultPort := IdPORT_SIP;
+
+  if not Self.HostAndPort.PortIsSpecified then begin
+    Self.HostAndPort.Port := Self.HostAndPort.DefaultPort;
+    Self.HostAndPort.PortIsSpecified := false;
+  end;
 end;
 
 //* TIdSipUri Private methods **************************************************
