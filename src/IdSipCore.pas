@@ -5749,9 +5749,6 @@ begin
   else begin
     DialogID := Self.CreateDialogIDFrom(Msg);
     try
-//      if Msg.IsRequest and (Msg as TIdSipRequest).IsBye then
-//        Writeln('BYE matching: local=' + Self.Dialog.ID.AsString + ' remote=' + DialogID.AsString);
-
       Result := Self.DialogMatches(DialogID);
     finally
       DialogID.Free;
@@ -6006,6 +6003,7 @@ begin
   finally
     OK.Free;
   end;
+
   Self.NotifyOfEndedSession(RemoteHangUp);
 end;
 
@@ -6165,6 +6163,7 @@ begin
   try
     if Assigned(Self.ModifyAttempt) and Self.ModifyAttempt.IsInbound then
       Self.ModifyAttempt.Terminate;
+      
     Self.ModifyAttempt := nil;
   finally
     Self.ModifyLock.Release;
