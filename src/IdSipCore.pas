@@ -5234,6 +5234,7 @@ end;
 
 procedure TIdSipSession.TerminateAnyPendingRequests;
 begin
+  // cf RFC 3261, section 15.1.2
   Self.ModifyLock.Acquire;
   try
     if Assigned(Self.ModifyAttempt) and Self.ModifyAttempt.IsInbound then
