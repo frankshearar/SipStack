@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipMessage,
-  IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  SysUtils, TestFrameworkEx;
+  IdSipCore, IdSipDialog, IdSipTcpClient, IdSipTcpServer, IdSipTransaction,
+  IdSipTransport, SysUtils, TestFrameworkEx;
 
 type
   TIdSipTestResources = class(TObject)
@@ -138,29 +138,35 @@ type
   TIdSipTestInviteListener = class(TIdSipTestActionListener,
                                    IIdSipInviteListener)
   private
-    fFailure:          Boolean;
-    fInviteAgentParam: TIdSipOutboundInvite;
-    fProvisional:      Boolean;
-    fReasonParam:      String;
-    fResponseParam:    TIdSipResponse;
-    fSuccess:          Boolean;
+    fDialogEstablished: Boolean;
+    fDialogParam:       TIdSipDialog;
+    fFailure:           Boolean;
+    fInviteAgentParam:  TIdSipOutboundInvite;
+    fReasonParam:       String;
+    fRedirect:          Boolean;
+    fResponseParam:     TIdSipResponse;
+    fSuccess:           Boolean;
 
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TidSipDialog);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
-    procedure OnProvisional(InviteAgent: TIdSipOutboundInvite;
-                            Response: TIdSipResponse);
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse);
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   public
     constructor Create; override;
 
-    property Failure:          Boolean              read fFailure;
-    property InviteAgentParam: TIdSipOutboundInvite read fInviteAgentParam;
-    property Provisional:      Boolean              read fProvisional;
-    property ReasonParam:      String               read fReasonParam;
-    property ResponseParam:    TIdSipResponse       read fResponseParam;
-    property Success:          Boolean              read fSuccess;
+    property DialogEstablished: Boolean              read fDialogEstablished;
+    property DialogParam:       TIdSipDialog         read fDialogParam;
+    property Failure:           Boolean              read fFailure;
+    property InviteAgentParam:  TIdSipOutboundInvite read fInviteAgentParam;
+    property ReasonParam:       String               read fReasonParam;
+    property Redirect:          Boolean              read fRedirect;
+    property ResponseParam:     TIdSipResponse       read fResponseParam;
+    property Success:           Boolean              read fSuccess;
   end;
 
   TIdSipTestOptionsListener = class(TIdSipTestActionListener,
@@ -662,35 +668,46 @@ constructor TIdSipTestInviteListener.Create;
 begin
   inherited Create;
 
-  Self.fFailure     := false;
-  Self.fProvisional := false;
-  Self.fSuccess     := false;
+  Self.fDialogEstablished := false;
+  Self.fFailure           := false;
+  Self.fSuccess           := false;
 end;
 
 //* TIdSipTestInviteListener Private methods **********************************
+
+procedure TIdSipTestInviteListener.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                                       NewDialog: TidSipDialog);
+begin
+  Self.fDialogEstablished := true;
+  Self.fInviteAgentParam  := InviteAgent;
+  Self.fDialogParam       := NewDialog;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestInviteListener.OnDialogEstablished');
+end;
 
 procedure TIdSipTestInviteListener.OnFailure(InviteAgent: TIdSipOutboundInvite;
                                              Response: TIdSipResponse;
                                              const Reason: String);
 begin
-  Self.fFailure           := true;
+  Self.fFailure          := true;
   Self.fInviteAgentParam := InviteAgent;
-  Self.fResponseParam     := Response;
-  Self.fReasonParam       := Reason;
+  Self.fResponseParam    := Response;
+  Self.fReasonParam      := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestInviteListener.OnFailure');
 end;
 
-procedure TIdSipTestInviteListener.OnProvisional(InviteAgent: TIdSipOutboundInvite;
-                                                 Response: TIdSipResponse);
+procedure TIdSipTestInviteListener.OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                                              Redirect: TIdSipResponse);
 begin
   Self.fInviteAgentParam := InviteAgent;
-  Self.fResponseParam    := Response;
-  Self.fProvisional      := true;
+  Self.fRedirect         := true;
+  Self.fResponseParam    := Redirect;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestInviteListener.OnProvisional');
+    raise Self.FailWith.Create('TIdSipTestInviteListener.OnRedirect');
 end;
 
 procedure TIdSipTestInviteListener.OnSuccess(InviteAgent: TIdSipOutboundInvite;

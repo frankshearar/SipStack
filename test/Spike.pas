@@ -136,8 +136,6 @@ type
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport);
-    procedure OnRedirect(Action: TIdSipAction;
-                         Redirect: TIdSipResponse);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -486,17 +484,6 @@ procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
                                        Receiver: TIdSipTransport);
 begin
   Self.LogMessage(Response, true);
-end;
-
-procedure TrnidSpike.OnRedirect(Action: TIdSipAction;
-                                Redirect: TIdSipResponse);
-begin
-  Self.Lock.Acquire;
-  try
-    Self.Log.Lines.Add('Redirection to: ' + Redirect.FirstContact.AsString);
-  finally
-    Self.Lock.Release;
-  end;
 end;
 
 procedure TrnidSpike.OnRejectedMessage(const Msg: String;

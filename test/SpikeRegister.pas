@@ -50,8 +50,6 @@ type
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport);
-    procedure OnRedirect(Action: TIdSipAction;
-                         Redirect: TIdSipResponse);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -183,11 +181,6 @@ procedure TrnidSpikeRegister.OnReceiveResponse(Response: TIdSipResponse;
 begin
   Self.LogMessage(Response);
 end;
-
-procedure TrnidSpikeRegister.OnRedirect(Action: TIdSipAction;
-                                        Redirect: TIdSipResponse);
-begin
-end;                                        
 
 procedure TrnidSpikeRegister.OnRejectedMessage(const Msg: String;
                                                const Reason: String);

@@ -42,10 +42,10 @@ uses
   Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
   IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
-  IdSipTransport, SyncObjs;
+  IdSipTransport, IdTimerQueue, SyncObjs;
 
 const
-  SipStackVersion = '0.3';  
+  SipStackVersion = '0.3';
 
 type
   TIdSipAction = class;
@@ -62,8 +62,6 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String);
-    procedure OnRedirect(Action: TIdSipAction;
-                         Redirect: TIdSipResponse);
   end;
 
   TIdSipOutboundInvite = class;
@@ -73,8 +71,10 @@ type
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
-    procedure OnProvisional(InviteAgent: TIdSipOutboundInvite;
-                            Response: TIdSipResponse);
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog);
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse);
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   end;
@@ -169,6 +169,7 @@ type
     fHostName:              String;
     fRealm:                 String;
     fRequireAuthentication: Boolean;
+    fTimer:                 TIdTimerQueue;
     fUserAgentName:         String;
     Observed:               TIdObservable;
     UserAgentListeners:     TIdNotificationList;
@@ -199,6 +200,8 @@ type
     procedure RejectRequestUnauthorized(Request: TIdSipRequest);
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
+
+    property Timer: TIdTimerQueue read fTimer;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -330,6 +333,7 @@ type
     fMinimumExpiryTime:   Cardinal; // in seconds
     fProxy:               TIdSipUri;
     KnownRegistrars:      TObjectList;
+    RunningTimers:        TThreadList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddInboundAction(Request: TIdSipRequest;
@@ -347,12 +351,13 @@ type
     function  GetContact: TIdSipContactHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+    procedure KillRunningTimers;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
-    procedure OnInboundSessionExpire(Sender: TObject);
+    procedure OnTimerTerminate(Timer: TObject);
     function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
     function  ResponseForInvite: Cardinal;
     procedure SetContact(Value: TIdSipContactHeader);
@@ -365,10 +370,8 @@ type
     procedure ActOnRequest(Request: TIdSipRequest;
                            Receiver: TIdSipTransport); override;
     procedure ActOnResponse(Response: TIdSipResponse;
-                           Receiver: TIdSipTransport); override;
+                            Receiver: TIdSipTransport); override;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
@@ -378,6 +381,10 @@ type
 
     procedure AddModule(ModuleType: TIdSipMessageModuleClass);
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+    function  AddOutboundInvite: TIdSipOutboundInvite;
+    procedure AddTimer(Event: TNotifyEvent;
+                       WaitTime: Cardinal;
+                       Data: TObject);
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
@@ -396,6 +403,9 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
+    function  InviteCount: Integer;
+    procedure OnInboundSessionExpire(Sender: TObject);
+    procedure OnTransactionComplete(TransactionTimer: TObject);
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -489,7 +499,6 @@ type
     procedure MarkAsTerminated; virtual;
     function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
-    procedure NotifyOfRedirect(Response: TIdSipResponse); virtual;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
@@ -514,6 +523,7 @@ type
     constructor Create(UA: TIdSipUserAgentCore); virtual;
     destructor  Destroy; override;
 
+    function  IsInvite: Boolean; virtual;
     function  IsOptions: Boolean; virtual;
     function  IsRegistration: Boolean; virtual;
     function  IsSession: Boolean; virtual;
@@ -528,27 +538,58 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
+  // I encapsulate the call flows around an outbound INVITE.
+  // I guarantee that I will notify my listeners of the OnDialogEvent before the
+  // OnSuccess event.
   TIdSipOutboundInvite = class(TIdSipAction)
   private
-    procedure NotifyOfProvisional(Response: TIdSipResponse);
+    Cancelling:                     Boolean;
+    CancelRequest:                  TIdSipRequest;
+    DialogEstablished:              Boolean;
+    ReceivedFinalResponse:          Boolean;
+    HasReceivedProvisionalResponse: Boolean;
+    SentCancel:                     Boolean;
+
+    procedure NotifyOfDialogEstablished(Response: TIdSipResponse;
+                                        UsingSecureTransport: Boolean);
+    procedure NotifyOfRedirect(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure SendCancel;
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function  ReceiveOKResponse(Response: TIdSipResponse;
+                                UsingSecureTransport: Boolean): Boolean; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; override;
+    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                         UsingSecureTransport: Boolean): Boolean; override;
+    function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; override;
+    procedure SendRequest(Request: TIdSipRequest); override;
   public
     class function Method: String; override;
 
+    constructor Create(UA: TIdSipUserAgentCore); override;
+    destructor  Destroy; override;
+
     procedure AddListener(const Listener: IIdSipInviteListener);
+    procedure Cancel;
     procedure Invite(Destination: TIdSipAddressHeader;
                      const Offer: String;
                      const MimeType: String);
+    function  IsInvite: Boolean; override;
+    procedure RedirectedInvite(Destination: TIdSipAddressHeader;
+                               OriginalInvite: TIdSipRequest);
     procedure ReInvite(Dialog: TIdSipDialog;
                        const Offer: String;
                        const MimeType: String);
     procedure RemoveListener(const Listener: IIdSipInviteListener);
+    procedure SendAck(Dialog: TIdSipDialog; FinalResponse: TIdSipResponse);
+    procedure TransactionCompleted;
+    procedure Terminate; override;
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -676,25 +717,19 @@ type
     DialogLock:           TCriticalSection;
     fDialog:              TIdSipDialog;
     fReceivedAck:         Boolean;
-    OpenTransactionLock:  TCriticalSection;
-    OpenTransactions:     TObjectList;
     UsingSecureTransport: Boolean;
 
-    procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
-    procedure TerminateOpenTransaction(Request: TIdSipRequest);
   protected
     FullyEstablished: Boolean;
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
-    procedure AddOpenTransaction(Request: TIdSipRequest);
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
-    procedure MarkAsTerminated; override;
     procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
@@ -715,7 +750,6 @@ type
     function  IsSession: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Modify(const Offer, ContentType: String);
-    function  PendingTransactionCount: Integer;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
@@ -761,45 +795,47 @@ type
   // to false to true etc etc. And the Dialog property can return completely
   // different objects, possibly landing you in hot water (a la dangling
   // pointer style) should you keep a reference to the Dialog property.
-  TIdSipOutboundSession = class(TIdSipSession)
+  TIdSipOutboundSession = class(TIdSipSession,
+                                IIdSipActionListener,
+                                IIdSipInviteListener)
   private
-    CancelRequest:                  TIdSipRequest;
-    fCancelling:                    Boolean;
-    HasReceivedProvisionalResponse: Boolean;
-    InCall:                         Boolean;
-    SentCancel:                     Boolean;
-    TargetUriSet:                   TIdSipContacts;
+    InCall:               Boolean;
+    InitialInvite:        TIdSipOutboundInvite;
+    TargetUriSet:         TIdSipContacts;
+    RedirectedInvites:    TObjectList;
+    RedirectedInviteLock: TCriticalSection;
 
-    function  CreateOutboundDialog(Response: TIdSipResponse;
-                                   UsingSecureTransport: Boolean): TIdSipDialog;
-    procedure Initialize;
-    procedure RedirectCallTo(Dest: TIdSipAddressHeader);
-    procedure SendAck(Final: TIdSipResponse);
-    procedure SendCancel;
-    procedure TerminateAfterSendingCancel;
+    procedure AddNewRedirect(OriginalInvite: TIdSipRequest;
+                             Contact: TIdSipContactHeader);
+    function  NoMoreRedirectedInvites: Boolean;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog);
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse);
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
+    function  RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
+    procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
-    function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): Boolean; override;
-    function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
-    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
     procedure SendBye; override;
   public
     constructor Create(UA: TIdSipUserAgentCore); overload; override;
-    constructor Create(UA: TIdSipUserAgentCore;
-                       Invite: TIdSipRequest); reintroduce; overload;
     destructor  Destroy; override;
 
     procedure Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String);
     procedure Cancel;
-    function  Cancelling: Boolean;
     function  CanForkOn(Response: TIdSipResponse): Boolean;
     function  IsInboundCall: Boolean; override;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure Terminate; override;
   end;
 
@@ -821,11 +857,6 @@ type
     property FirstPassword: String read fFirstPassword write fFirstPassword;
   end;
 
-  TIdSipActionRedirectMethod = class(TIdActionMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
-  end;
-
   TIdSipInviteMethod = class(TIdMethod)
   private
     fInvite:   TIdSipOutboundInvite;
@@ -833,6 +864,15 @@ type
   public
     property Invite:   TIdSipOutboundInvite read fInvite write fInvite;
     property Response: TIdSipResponse       read fResponse write fResponse;
+  end;
+
+  TIdSipInviteDialogEstablishedMethod = class(TIdSipInviteMethod)
+  private
+    fDialog: TIdSipDialog;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Dialog: TIdSipDialog read fDialog write fDialog;
   end;
 
   TIdSipInviteFailureMethod = class(TIdSipInviteMethod)
@@ -844,7 +884,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipInviteProvisionalMethod = class(TIdSipInviteMethod)
+  TIdSipInviteRedirectMethod = class(TIdSipInviteMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
@@ -967,13 +1007,16 @@ uses
   IdSdp, IdStack, SysUtils, IdUDPServer;
 
 const
-  BusyHere      = 'Incoming call rejected - busy here';
-  CallForwarded = 'Incoming call forwarded';
-  InviteTimeout = 'Incoming call timed out';
-  LocalCancel   = 'Local end cancelled call';
-  LocalHangUp   = 'Local end hung up';
-  RemoteCancel  = 'Remote end cancelled call';
-  RemoteHangUp  = 'Remote end hung up';
+  BusyHere                  = 'Incoming call rejected - busy here';
+  CallForwarded             = 'Incoming call forwarded';
+  InviteTimeout             = 'Incoming call timed out';
+  LocalCancel               = 'Local end cancelled call';
+  LocalHangUp               = 'Local end hung up';
+  RedirectWithNoContacts    = 'Call redirected to nowhere';
+  RedirectWithNoMoreTargets = 'Call redirected but no more targets';
+  RedirectWithNoSuccess     = 'Call redirected but no target answered';
+  RemoteCancel              = 'Remote end cancelled call';
+  RemoteHangUp              = 'Remote end hung up';
 
 //******************************************************************************
 //* Unit Private procedures and functions                                      *
@@ -1029,6 +1072,7 @@ constructor TIdSipAbstractCore.Create;
 begin
   inherited Create;
 
+  Self.fTimer   := TIdTimerQueue.Create(false);
   Self.Observed := TIdObservable.Create;
 
   Self.UserAgentListeners := TIdNotificationList.Create;
@@ -1043,6 +1087,7 @@ destructor TIdSipAbstractCore.Destroy;
 begin
   Self.UserAgentListeners.Free;
   Self.Observed.Free;
+  Self.fTimer.Free;
 
   inherited Destroy;
 end;
@@ -1153,7 +1198,6 @@ end;
 procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
                                                Receiver: TIdSipTransport);
 begin
-  // We silently discard unacceptable responses.
   if (Self.WillAcceptResponse(Response) = uarAccept) then
     Self.ActOnResponse(Response, Receiver);
 end;
@@ -1375,6 +1419,9 @@ begin
     Result.CSeq.SequenceNo := Self.NextInitialSequenceNo;
 
     Self.AddLocalHeaders(Result);
+
+    if Dest.Address.HasParameter(TransportParam) then
+      Result.LastHop.Transport := StrToTransport(Dest.Address.ParamValue(TransportParam));
   except
     FreeAndNil(Result);
 
@@ -1712,15 +1759,13 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
-  Self.fProxy := TIdSipUri.Create('');
-
-  Self.KnownRegistrars := TObjectList.Create(true);
-
-  Self.ActionLock := TCriticalSection.Create;
-  Self.Actions    := TObjectList.Create;
-
+  Self.ActionLock              := TCriticalSection.Create;
+  Self.Actions                 := TObjectList.Create;
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
+  Self.fProxy                  := TIdSipUri.Create('');
+  Self.KnownRegistrars         := TObjectList.Create(true);
+  Self.RunningTimers           := TThreadList.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
 
@@ -1742,6 +1787,11 @@ begin
   Self.Contact.Free;
   Self.From.Free;
 
+//  Self.KillRunningTimers;
+  Self.RunningTimers.Free;
+  Self.KnownRegistrars.Free;
+  Self.Proxy.Free;
+
   Self.ActionLock.Acquire;
   try
     Self.Actions.Free;
@@ -1749,9 +1799,6 @@ begin
     Self.ActionLock.Release;
   end;
   Self.ActionLock.Free;
-  
-  Self.KnownRegistrars.Free;
-  Self.Proxy.Free;
 
   inherited Destroy;
 end;
@@ -1791,6 +1838,20 @@ begin
   end;
 
   Self.NotifyOfChange;
+end;
+
+function TIdSipUserAgentCore.AddOutboundInvite: TIdSipOutboundInvite;
+begin
+  // Do not call this directly. Modules call this method.
+
+  Result := Self.AddOutboundAction(TIdSipOutboundInvite) as TIdSipOutboundInvite;
+end;
+
+procedure TIdSipUserAgentCore.AddTimer(Event: TNotifyEvent;
+                                       WaitTime: Cardinal;
+                                       Data: TObject);
+begin
+  Self.Timer.AddEvent(WaitTime, Event, Data);
 end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
@@ -1938,11 +1999,74 @@ begin
   Result.RegisterWith(Registrar, Self.Contact);
 end;
 
+function TIdSipUserAgentCore.InviteCount: Integer;
+var
+  I: Integer;
+begin
+  // Return the number of ongoing INVITEs
+  Self.ActionLock.Acquire;
+  try
+    Result := 0;
+
+    for I := 0 to Self.Actions.Count - 1 do
+      if Self.ActionAt(I).IsInvite
+        and not Self.ActionAt(I).IsTerminated then Inc(Result);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.OnInboundSessionExpire(Sender: TObject);
+var
+  ExpiredRequest: TIdSipRequest;
+  Session:        TIdSipAction;
+begin
+  ExpiredRequest := (Sender as TIdSipSingleShotTimer).Data as TIdSipRequest;
+  try
+    Self.ActionLock.Acquire;
+    try
+      Session := Self.FindAction(ExpiredRequest);
+
+      if Assigned(Session) then
+        (Session as TIdSipInboundSession).TimeOut;
+    finally
+      Self.ActionLock.Release;
+    end;
+  finally
+    ExpiredRequest.Free;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.OnTransactionComplete(TransactionTimer: TObject);
+var
+  Action: TIdSipOutboundInvite;
+  Invite: TIdSipRequest;
+  Timer:  TIdSipSingleShotTimer;
+begin
+  Timer := TransactionTimer as TIdSipSingleShotTimer;
+  Invite := Timer.Data as TIdSipRequest;
+  try
+    Self.ActionLock.Acquire;
+    try
+      Action := Self.FindAction(Invite) as TIdSipOutboundInvite;
+
+      if Assigned(Action) then
+        Action.TransactionCompleted;
+        
+      Self.CleanOutTerminatedActions;
+    finally
+      Self.ActionLock.Release;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 function TIdSipUserAgentCore.OptionsCount: Integer;
 var
   I: Integer;
 begin
-  // Return the number of ongoing options queries
+  // Return the number of ongoing OPTIONS queries
   Self.ActionLock.Acquire;
   try
     Result := 0;
@@ -2090,22 +2214,6 @@ begin
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 end;
 
-procedure TIdSipUserAgentCore.OnReceiveResponse(Response: TIdSipResponse;
-                                                Receiver: TIdSipTransport);
-var
-  Action:               TIdSipAction;
-  UsingSecureTransport: Boolean;
-begin
-  UsingSecureTransport := Receiver.IsSecure;
-
-  Action := Self.FindAction(Response);
-
-  if Assigned(Action) then
-    Action.ReceiveResponse(Response, UsingSecureTransport)
-  else
-    inherited OnReceiveResponse(Response, Receiver);
-end;
-
 procedure TIdSipUserAgentCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                             Request: TIdSipRequest);
 begin
@@ -2186,14 +2294,14 @@ begin
   Result := Self.AddOutboundAction(TIdSipOutboundOptions) as TIdSipOutboundOptions;
 end;
 
-function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
-begin
-  Result := Self.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
-end;
-
 function TIdSipUserAgentCore.AddOutboundRegistration: TIdSipOutboundRegistration;
 begin
   Result := Self.AddOutboundAction(TIdSipOutboundRegistration) as TIdSipOutboundRegistration;
+end;
+
+function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
+begin
+  Result := Self.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
 end;
 
 function TIdSipUserAgentCore.CallIDFor(Registrar: TIdSipUri): String;
@@ -2224,7 +2332,7 @@ begin
     I := 0;
     while (I < Self.Actions.Count) and not Assigned(Result) do begin
       Action := Self.Actions[I] as TIdSipAction;
-      if Action.Match(Msg) and not Action.IsTerminated then
+      if not Action.IsTerminated and Action.Match(Msg) then
         Result := Action
       else
         Inc(I);
@@ -2259,6 +2367,20 @@ begin
 
   if (Result >= Self.KnownRegistrars.Count) then
     Result := -1;
+end;
+
+procedure TIdSipUserAgentCore.KillRunningTimers;
+var
+  I: Integer;
+  L: TList;
+begin
+  L := Self.RunningTimers.LockList;
+  try
+    for I := 0 to L.Count - 1 do
+      TIdBaseThread(L[I]).Terminate;
+  finally
+    Self.RunningTimers.UnlockList;
+  end;
 end;
 
 function TIdSipUserAgentCore.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
@@ -2308,24 +2430,15 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.OnInboundSessionExpire(Sender: TObject);
+procedure TIdSipUserAgentCore.OnTimerTerminate(Timer: TObject);
 var
-  ExpiredRequest: TIdSipRequest;
-  Session: TIdSipAction;
+  L: TList;
 begin
-  ExpiredRequest := (Sender as TIdSipSingleShotTimer).Data as TIdSipRequest;
+  L := Self.RunningTimers.LockList;
   try
-    Self.ActionLock.Acquire;
-    try
-      Session := Self.FindAction(ExpiredRequest);
-
-      if Assigned(Session) then
-        (Session as TIdSipInboundSession).TimeOut;
-    finally
-      Self.ActionLock.Release;
-    end;
+    L.Remove(Timer);
   finally
-    ExpiredRequest.Free;
+    Self.RunningTimers.UnlockList;
   end;
 end;
 
@@ -2447,11 +2560,10 @@ begin
     Self.UserAgent.NotifyOfInboundCall(Session);
     Self.UserAgent.NotifyOfChange;
 
-    if Request.HasHeader(ExpiresHeader) then begin
-      TIdSipSingleShotTimer.Create(Self.UserAgent.OnInboundSessionExpire,
-                                   Request.FirstExpires.NumericValue,
-                                   Request.Copy);
-    end;
+    if Request.HasHeader(ExpiresHeader) then
+      Self.UserAgent.AddTimer(Self.UserAgent.OnInboundSessionExpire,
+                              Request.FirstExpires.NumericValue,
+                              Request.Copy);
     Result := Session;
   end;
 end;
@@ -2542,6 +2654,7 @@ begin
   Self.UA := UA;
 
   Self.fInitialRequest := TIdSipRequest.Create;
+  Self.fIsTerminated   := false;
   Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
 end;
@@ -2552,6 +2665,11 @@ begin
   Self.InitialRequest.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipAction.IsInvite: Boolean;
+begin
+  Result := false;
 end;
 
 function TIdSipAction.IsOptions: Boolean;
@@ -2615,13 +2733,15 @@ begin
       Succeeded := Self.ReceiveGlobalFailureResponse(Response);
   else
     // This should never happen - response status codes lie in the range
-    // 100 <= S < 700, so we just reject these obviously malformed responses
-    // by silently discarding them.
+    // 100 <= S < 700, so we handle these obviously malformed responses by
+    // treating them as failure responses.
     Succeeded := false;
   end;
 
-  if Succeeded then
-    Self.ActionSucceeded(Response)
+  if Succeeded then begin
+    if Response.IsOK then
+      Self.ActionSucceeded(Response)
+  end
   else
     Self.NotifyOfFailure(Response);
 end;
@@ -2667,21 +2787,6 @@ end;
 procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
 begin
   // By default do nothing
-end;
-
-procedure TIdSipAction.NotifyOfRedirect(Response: TIdSipResponse);
-var
-  Notification: TIdSipActionRedirectMethod;
-begin
-  Notification := TIdSipActionRedirectMethod.Create;
-  try
-    Notification.Action   := Self;
-    Notification.Response := Response;
-
-    Self.Listeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
 end;
 
 procedure TIdSipAction.ReceiveAck(Ack: TIdSipRequest);
@@ -2764,9 +2869,6 @@ function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
 begin
   Result := false;
-
-  Self.NotifyOfRedirect(Response);
-  Self.Terminate;
 end;
 
 procedure TIdSipAction.ReceiveRegister(Register: TIdSipRequest);
@@ -2909,9 +3011,38 @@ begin
   Result := MethodInvite;
 end;
 
+constructor TIdSipOutboundInvite.Create(UA: TIdSipUserAgentCore);
+begin
+  inherited Create(UA);
+
+  // We only instantiate CancelRequest when we actually send a Cancel.
+  // See SendCancel.
+  Self.Cancelling                     := false;
+  Self.HasReceivedProvisionalResponse := false;
+  Self.ReceivedFinalResponse          := false;
+  Self.SentCancel                     := false;
+end;
+
+destructor TIdSipOutboundInvite.Destroy;
+begin
+  Self.CancelRequest.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdSipOutboundInvite.AddListener(const Listener: IIdSipInviteListener);
 begin
   Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundInvite.Cancel;
+begin
+  if Self.ReceivedFinalResponse then Exit;
+
+  Self.Cancelling := true;
+
+  if Self.HasReceivedProvisionalResponse then
+    Self.SendCancel;
 end;
 
 procedure TIdSipOutboundInvite.Invite(Destination: TIdSipAddressHeader;
@@ -2927,6 +3058,23 @@ begin
   finally
     Invite.Free;
   end;
+end;
+
+function TIdSipOutboundInvite.IsInvite: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSipOutboundInvite.RedirectedInvite(Destination: TIdSipAddressHeader;
+                                                OriginalInvite: TIdSipRequest);
+begin
+  // Use this method in the context of a redirect to an INVITE.
+  // cf RFC 3261,  section 8.1.3.4
+
+  Self.InitialRequest.Assign(OriginalInvite);
+  Self.InitialRequest.LastHop.Branch := Self.UA.NextBranch;
+  Self.InitialRequest.RequestUri := Destination.Address;
+  Self.SendRequest(Self.InitialRequest);
 end;
 
 procedure TIdSipOutboundInvite.ReInvite(Dialog: TIdSipDialog;
@@ -2947,6 +3095,38 @@ end;
 procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
 begin
   Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog; FinalResponse: TIdSipResponse);
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.UA.CreateAck(Dialog);
+  try
+    Ack.Body := Self.InitialRequest.Body;
+    Ack.ContentDisposition.Value := DispositionSession;
+    Ack.ContentLength := Length(Ack.Body);
+    Ack.ContentType := Self.InitialRequest.ContentType;
+
+    if Self.InitialRequest.HasAuthorization then
+      Ack.FirstAuthorization.Value := Self.InitialRequest.FirstAuthorization.FullValue;
+    if Self.InitialRequest.HasProxyAuthorization then
+      Ack.FirstProxyAuthorization.Value := Self.InitialRequest.FirstProxyAuthorization.FullValue;
+
+    Self.SendRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.TransactionCompleted;
+begin
+  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipOutboundInvite.Terminate;
+begin
+  Self.Cancel;
 end;
 
 //* TIdSipOutboundInvite Protected methods *************************************
@@ -2987,24 +3167,125 @@ begin
     Notification.Free;
   end;
 
-  Self.Terminate;
+  Self.MarkAsTerminated;
+end;
+
+function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Self.ReceivedFinalResponse := true;
+
+  Result := inherited ReceiveFailureResponse(Response);
+end;
+
+function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Self.ReceivedFinalResponse := true;
+
+  Result := inherited ReceiveGlobalFailureResponse(Response);
+end;
+
+function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
+                                                UsingSecureTransport: Boolean): Boolean;
+begin
+  Result                     := true;
+  Self.ReceivedFinalResponse := true;
+  // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
+  // A 2xx response immediately terminates a client INVITE transaction so that
+  // the ACK can get passed up to the UA (as an unhandled request).
+
+  if Self.Cancelling and Self.CancelRequest.Match(Response) then
+    // If we receive a 200 OK for our CANCEL (which we should!) we just ignore it.
+    // Yes, we mean to do that. Yes, it complies with the RFC.
+  else if not Self.DialogEstablished then begin
+    Self.NotifyOfDialogEstablished(Response, UsingSecureTransport)
+  end
+  else
+    Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
 end;
 
 function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;
                                                          UsingSecureTransport: Boolean): Boolean;
 begin
-  Result := inherited ReceiveProvisionalResponse(Response, UsingSecureTransport);
+  Result := true;
 
-  Self.NotifyOfProvisional(Response);
+  Self.HasReceivedProvisionalResponse := true;
+
+  if not Self.DialogEstablished
+    and not Response.IsTrying
+    and Response.ToHeader.HasTag then
+      Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
+
+  if Self.Cancelling and not Self.SentCancel then
+    Self.SendCancel;
+end;
+
+function TIdSipOutboundInvite.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                         UsingSecureTransport: Boolean): Boolean;
+begin
+  Result := inherited ReceiveRedirectionResponse(Response, UsingSecureTransport);
+
+  Self.ReceivedFinalResponse := true;
+
+  Self.NotifyOfRedirect(Response);
+end;
+
+function TIdSipOutboundInvite.ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Result := inherited ReceiveServerFailureResponse(Response);
+
+  Self.ReceivedFinalResponse := true;
+end;
+
+procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
+begin
+  inherited SendRequest(Request);
+
+  // Sending the request might just terminate this action (because of, for
+  // instance, a network failure.
+  if not Self.IsTerminated then
+    Self.UA.AddTimer(Self.UA.OnTransactionComplete,
+                     64*DefaultT1,
+                     Request.Copy);
 end;
 
 //* TIdSipOutboundInvite Private methods ***************************************
 
-procedure TIdSipOutboundInvite.NotifyOfProvisional(Response: TIdSipResponse);
+procedure TIdSipOutboundInvite.NotifyOfDialogEstablished(Response: TIdSipResponse;
+                                                         UsingSecureTransport: Boolean);
 var
-  Notification: TIdSipInviteProvisionalMethod;
+  Dialog:       TIdSipDialog;
+  Notification: TIdSipInviteDialogEstablishedMethod;
 begin
-  Notification := TIdSipInviteProvisionalMethod.Create;
+  if not Self.DialogEstablished then begin
+    Self.DialogEstablished := true;
+
+    Dialog := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
+                                                Response,
+                                                UsingSecureTransport);
+    try
+      Dialog.ReceiveRequest(Self.InitialRequest);
+      Dialog.ReceiveResponse(Response);
+
+      Notification := TIdSipInviteDialogEstablishedMethod.Create;
+      try
+        Notification.Invite   := Self;
+        Notification.Dialog := Dialog;
+
+        Self.Listeners.Notify(Notification);
+      finally
+        Notification.Free;
+      end;
+    finally
+      Dialog.Free;
+    end;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.NotifyOfRedirect(Response: TIdSipResponse);
+var
+  Notification: TIdSipInviteRedirectMethod;
+begin
+  Notification := TIdSipInviteRedirectMethod.Create;
   try
     Notification.Invite   := Self;
     Notification.Response := Response;
@@ -3014,6 +3295,7 @@ begin
     Notification.Free;
   end;
 end;
+
 
 procedure TIdSipOutboundInvite.NotifyOfSuccess(Response: TIdSipResponse);
 var
@@ -3028,8 +3310,14 @@ begin
   finally
     Notification.Free;
   end;
+end;
 
-  Self.Terminate;
+procedure TIdSipOutboundInvite.SendCancel;
+begin
+  Assert(not Self.SentCancel, 'SendCancel already invoked');
+  Self.SentCancel := true;
+  Self.CancelRequest := Self.InitialRequest.CreateCancel;
+  Self.SendRequest(Self.CancelRequest);
 end;
 
 //******************************************************************************
@@ -3712,25 +4000,12 @@ begin
 
   Self.DialogLock := TCriticalSection.Create;
 
-  Self.fIsTerminated := false;
-  Self.fReceivedAck  := false;
-
-  Self.OpenTransactionLock := TCriticalSection.Create;
-  Self.OpenTransactions    := TObjectList.Create(true);
-
+  Self.fReceivedAck     := false;
   Self.FullyEstablished := false;
 end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.OpenTransactionLock.Acquire;
-  try
-    Self.OpenTransactions.Free;
-  finally
-    Self.OpenTransactionLock.Release;
-  end;
-  Self.OpenTransactionLock.Free;
-
   Self.DialogLock.Acquire;
   try
     Self.fDialog.Free;
@@ -3793,17 +4068,16 @@ begin
 end;
 
 procedure TIdSipSession.Modify(const Offer, ContentType: String);
+var
+  ReInvite: TIdSipOutboundInvite;
 begin
-end;
+{
+  if not Self.FullyEstablished then Exit;
 
-function TIdSipSession.PendingTransactionCount: Integer;
-begin
-  Self.OpenTransactionLock.Acquire;
-  try
-    Result := Self.OpenTransactions.Count;
-  finally
-    Self.OpenTransactionLock.Release;
-  end;
+  ReInvite := Self.UA.AddOutboundInvite;
+//  ReInvite.AddListener(Self);
+  ReInvite.ReInvite(Self.Dialog, Offer, ContentType);
+}
 end;
 
 procedure TIdSipSession.ReceiveRequest(Request: TIdSipRequest);
@@ -3828,20 +4102,6 @@ begin
     Self.Dialog.ReceiveResponse(Response);
 end;
 
-procedure TIdSipSession.AddOpenTransaction(Request: TIdSipRequest);
-var
-  NewRequest: TIdSipRequest;
-begin
-  Self.OpenTransactionLock.Acquire;
-  try
-    NewRequest := TIdSipRequest.Create;
-    NewRequest.Assign(Request);
-    Self.OpenTransactions.Add(NewRequest);
-  finally
-    Self.OpenTransactionLock.Release;
-  end;
-end;
-
 function TIdSipSession.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
 begin
   Result := Self.UA.CreateInvite(Challenge.ToHeader,
@@ -3857,15 +4117,6 @@ end;
 function TIdSipSession.GetInvite: TIdSipRequest;
 begin
   Result := Self.InitialRequest;
-end;
-
-procedure TIdSipSession.MarkAsTerminated;
-begin
-  inherited MarkAsTerminated;
-
-  ApplyTo(Self.OpenTransactions,
-          Self.OpenTransactionLock,
-          Self.MarkAsTerminatedProc);
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession(const Reason: String);
@@ -3932,8 +4183,7 @@ begin
 //    if Invite.Disposition.IsSession then
 //      Self.PayloadProcessor.RemoteSessionDescription := Invite.Body;
 
-    Self.AddOpenTransaction(Invite);
-    Self.NotifyOfModifiedSession(Invite);
+    raise Exception.Create('Implement in-dialog inbound INVITEs');
   end;
 end;
 
@@ -3955,11 +4205,6 @@ begin
 end;
 
 //* TIdSipSession Private methods **********************************************
-
-procedure TIdSipSession.MarkAsTerminatedProc(ObjectOrIntf: Pointer);
-begin
-  Self.TerminateOpenTransaction(TIdSipRequest(ObjectOrIntf));
-end;
 
 procedure TIdSipSession.NotifyOfModifiedSession(Invite: TIdSipRequest);
 var
@@ -4001,11 +4246,6 @@ begin
   finally
     Response.Free;
   end;
-end;
-
-procedure TIdSipSession.TerminateOpenTransaction(Request: TIdSipRequest);
-begin
-  Self.RejectRequest(Request);
 end;
 
 //******************************************************************************
@@ -4225,24 +4465,29 @@ constructor TIdSipOutboundSession.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create(UA);
 
-  Self.Initialize;
-end;
+  Self.InCall := false;
 
-constructor TIdSipOutboundSession.Create(UA: TIdSipUserAgentCore;
-                                         Invite: TIdSipRequest);
-begin
-  inherited Create(UA);
+  Self.TargetUriSet := TIdSipContacts.Create;
 
-  Self.Initialize;
+  Self.InitialInvite := Self.UA.AddOutboundInvite;
+  Self.InitialInvite.AddListener(Self);
 
-  Self.InitialRequest.Assign(Invite);
-  Self.InitialRequest.ToHeader.Tag := '';
+  // The UA manages the lifetimes of all outbound INVITEs!
+  Self.RedirectedInvites    := TObjectList.Create(false);
+  Self.RedirectedInviteLock := TCriticalSection.Create;
 end;
 
 destructor TIdSipOutboundSession.Destroy;
 begin
+  Self.RedirectedInviteLock.Acquire;
+  try
+    Self.RedirectedInvites.Free;
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
+  Self.RedirectedInviteLock.Free;
+
   Self.TargetUriSet.Free;
-  Self.CancelRequest.Free;
 
   inherited Destroy;
 end;
@@ -4250,19 +4495,11 @@ end;
 procedure TIdSipOutboundSession.Call(Dest: TIdSipAddressHeader;
                                      const InitialOffer: String;
                                      const MimeType: String);
-var
-  Invite: TIdSipRequest;
 begin
   if not Self.InCall then begin
     Self.InCall := true;
 
-    Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
-    try
-      Self.InitialRequest.Assign(Invite);
-      Self.SendRequest(Self.InitialRequest);
-    finally
-      Invite.Free;
-    end;
+    Self.InitialInvite.Invite(Dest, InitialOffer, MimeType);
   end;
 end;
 
@@ -4270,26 +4507,38 @@ procedure TIdSipOutboundSession.Cancel;
 begin
   if Self.FullyEstablished then Exit;
 
-  Self.fCancelling := true;
-
-  if Self.HasReceivedProvisionalResponse then
-    Self.SendCancel;
-end;
-
-function TIdSipOutboundSession.Cancelling: Boolean;
-begin
-  Result := Self.fCancelling;
+  Self.InitialInvite.Cancel;
 end;
 
 function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
 begin
-  Result := (Self.InitialRequest.CallID = Response.CallID)
-        and (Self.InitialRequest.From.Tag = Response.From.Tag);
+  Result := (Self.InitialInvite.InitialRequest.CallID = Response.CallID)
+        and (Self.InitialInvite.InitialRequest.From.Tag = Response.From.Tag);
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipOutboundSession.Match(Msg: TIdSipMessage): Boolean;
+var
+  DialogID: TIdSipDialogID;
+begin
+  Result := false;
+
+  DialogID := Self.CreateDialogIDFrom(Msg);
+  try
+    Self.DialogLock.Acquire;
+    try
+      if Self.FullyEstablished and Self.DialogEstablished then
+        Result := Self.Dialog.ID.Equals(DialogID)
+    finally
+      Self.DialogLock.Release;
+    end;
+  finally
+    DialogID.Free;
+  end;
 end;
 
 procedure TIdSipOutboundSession.Terminate;
@@ -4324,172 +4573,183 @@ begin
                                     Msg.ToHeader.Tag);
 end;
 
-function TIdSipOutboundSession.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
-begin
-  Result := inherited ReceiveFailureResponse(Response);
-
-  if not Result
-    and Self.Cancelling
-    and Self.InitialRequest.Match(Response) then
-    Self.TerminateAfterSendingCancel;
-end;
-
-function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
-                                                 UsingSecureTransport: Boolean): Boolean;
-begin
-  // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
-  // A 2xx response immediately terminates a client INVITE transaction so that
-  // the ACK can get passed up to the UA (as an unhandled request).
-
-  // If we receive a 200 OK for our CANCEL (which we should!) we just ignore it.
-  // Yes, we mean to do that. Yes, it complies with the RFC.
-  if Self.Cancelling and Self.CancelRequest.Match(Response) then
-  else begin
-    Self.DialogLock.Acquire;
-    try
-      if not Self.DialogEstablished then begin
-        fDialog := Self.CreateOutboundDialog(Response, UsingSecureTransport);
-        Self.NotifyOfEstablishedSession;
-      end;
-    finally
-      Self.DialogLock.Release;
-    end;
-    Self.FullyEstablished := true;
-    Self.SendAck(Response);
-  end;
-
-  Result := true;
-end;
-
-function TIdSipOutboundSession.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                          UsingSecureTransport: Boolean): Boolean;
-begin
-  Self.HasReceivedProvisionalResponse := true;
-
-  if Self.Cancelling and not Self.SentCancel then
-    Self.SendCancel;
-
-  // We should check for "and Response.ToHeader.HasTag" but that would prevent
-  // us connecting to X-Lite, the non-compliant SIP phone.
-  if not Response.IsTrying and Response.ToHeader.HasTag then begin
-    Self.DialogLock.Acquire;
-    try
-      if not Self.DialogEstablished then begin
-        fDialog := Self.CreateOutboundDialog(Response, UsingSecureTransport);
-        Self.NotifyOfEstablishedSession;
-      end;
-    finally
-      Self.DialogLock.Release;
-    end;
-  end;
-
-  Result := true;
-end;
-
-function TIdSipOutboundSession.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                          UsingSecureTransport: Boolean): Boolean;
-begin
-  Result := false;
-
-  if Response.HasHeader(ContactHeaderFull) then begin
-    Self.RedirectCallTo(Response.FirstContact);
-
-    Self.DialogLock.Acquire;
-    try
-      if Self.DialogEstablished then
-        fDialog.Free;
-    finally
-      Self.DialogLock.Release;
-    end;
-    Result := true;
-  end;
-end;
-
 procedure TIdSipOutboundSession.SendBye;
+var
+  Bye: TIdSipRequest;
 begin
-  inherited SendBye;
+  Bye := Self.UA.CreateBye(Self.Dialog);
+  try
+    // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
+    Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
+
+    // We don't listen to the new transaction because we assume the BYE
+    // succeeds immediately.
+    Self.SendRequest(Bye);
+  finally
+    Bye.Free;
+  end;
 
   Self.MarkAsTerminated;
 end;
 
 //* TIdSipOutboundSession Private methods **************************************
 
-function TIdSipOutboundSession.CreateOutboundDialog(Response: TIdSipResponse;
-                                                    UsingSecureTransport: Boolean): TIdSipDialog;
+procedure TIdSipOutboundSession.AddNewRedirect(OriginalInvite: TIdSipRequest;
+                                               Contact: TIdSipContactHeader);
+var
+  Redirect: TIdSipOutboundInvite;
 begin
-  Self.UsingSecureTransport := UsingSecureTransport;
+  // TODO: This is very dodgy - the Invite's about to fail, and, well, it's
+  // ugly to have to refer to InitialInvite. Perhaps we need a
+  // CurrentSessionDescription or something.
+  Redirect := Self.UA.AddOutboundInvite;
+  Redirect.AddListener(Self);
+  Redirect.RedirectedInvite(Contact,
+                            OriginalInvite);
+end;
 
-  Result := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
-                                              Response,
-                                              Self.UsingSecureTransport);
+function TIdSipOutboundSession.NoMoreRedirectedInvites: Boolean;
+begin
+  Self.RedirectedInviteLock.Acquire;
+  try
+    Result := Self.RedirectedInvites.Count = 0;
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
+end;
 
+procedure TIdSipOutboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                          Challenge: TIdSipResponse;
+                                                          var Password: String);
+begin
+  Password := Self.NotifyOfAuthenticationChallenge(Challenge);
+end;
+
+procedure TIdSipOutboundSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                                    NewDialog: TIdSipDialog);
+begin
+  Self.DialogLock.Acquire;
+  try
+    if not Self.DialogEstablished then
+      Self.fDialog := NewDialog.Copy;
+  finally
+    Self.DialogLock.Release;
+  end;
+end;
+
+procedure TIdSipOutboundSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
+                                          Response: TIdSipResponse;
+                                          const Reason: String);
+begin
+  if Response.IsRedirect then
+    Self.RemoveFinishedRedirectedInvite(InviteAgent)
+  else begin
+    if (InviteAgent = Self.InitialInvite) then begin
+      Self.InitialInvite := nil;
+      Self.MarkAsTerminated;
+      Self.NotifyOfEndedSession(Reason);
+    end;
+
+    Self.RemoveFinishedRedirectedInvite(InviteAgent);
+
+    if Self.NoMoreRedirectedInvites then begin
+      Self.MarkAsTerminated;
+      Self.NotifyOfEndedSession(RedirectWithNoSuccess);
+    end;
+  end
+end;
+
+procedure TIdSipOutboundSession.OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                                           Redirect: TIdSipResponse);
+var
+  NewTargetsAdded: Boolean;
+begin
+  // cf RFC 3261, section 8.1.3.4.
+
+  if not Self.FullyEstablished then begin
+    if Redirect.Contacts.IsEmpty then begin
+      Self.MarkAsTerminated;
+      Self.NotifyOfEndedSession(RedirectWithNoContacts);
+    end
+    else begin
+      // Suppose we receive a 180 and then a 302. Then we have an established
+      // dialog, which we have to tear down first, before we attempt another
+      // target.
+      Self.DialogLock.Acquire;
+      try
+        if Self.DialogEstablished then
+          fDialog.Free;
+      finally
+        Self.DialogLock.Release;
+      end;
+
+      // We receive 3xxs with Contacts. We add these to our target URI set. We
+      // send INVITEs to these URIs in some order. If we get 3xxs back from
+      // these new targets we add the new Contacts to the target set. We of
+      // course don't reattempt to INVITE a target that we've already contacted!
+      // Sooner or later we'll either exhaust all the target URIs and report a
+      // failed call, or a target will send a 2xx and fully establish a call, in
+      // which case we simply do nothing with any other (redirect or failure)
+      // responses.
+      NewTargetsAdded := false;
+      Redirect.Contacts.First;
+      while Redirect.Contacts.HasNext do begin
+        if not Self.TargetUriSet.HasContact(Redirect.Contacts.CurrentContact) then begin
+          Self.AddNewRedirect(InviteAgent.InitialRequest,
+                              Redirect.Contacts.CurrentContact);
+          NewTargetsAdded := true;
+        end;
+        Redirect.Contacts.Next;
+      end;
+
+      Self.TargetUriSet.Add(Redirect.Contacts);
+
+      if not NewTargetsAdded then begin
+        Self.MarkAsTerminated;
+        Self.NotifyOfEndedSession(RedirectWithNoMoreTargets);
+      end;
+    end;
+  end;
+
+  Self.RemoveFinishedRedirectedInvite(InviteAgent);
+end;
+
+procedure TIdSipOutboundSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                                          Response: TIdSipResponse);
+begin
+  Self.InitialRequest.Assign(InviteAgent.InitialRequest);
+  Self.DialogLock.Acquire;
+  try
+    if Self.DialogEstablished then
+      Self.Dialog.ReceiveResponse(Response);
+  finally
+    Self.DialogLock.Release;
+  end;
+  Self.FullyEstablished := true;
+
+  InviteAgent.SendAck(Self.Dialog, Response);
+
+  Self.RemoveFinishedRedirectedInvite(InviteAgent);
   Self.NotifyOfEstablishedSession;
+
+  if (InviteAgent = Self.InitialInvite) then
+    Self.InitialInvite := nil;
 end;
 
-procedure TIdSipOutboundSession.Initialize;
+function TIdSipOutboundSession.RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
 begin
-  Self.InCall                         := false;
-  Self.fCancelling                    := false;
-  Self.HasReceivedProvisionalResponse := false;
-
-  Self.TargetUriSet := TIdSipContacts.Create;
+  // Precondition: Something's acquired RedirectLock
+  Result := Self.RedirectedInvites[Index] as TIdSipOutboundInvite;
 end;
 
-procedure TIdSipOutboundSession.RedirectCallTo(Dest: TIdSipAddressHeader);
-var
-  NewInvite: TIdSipRequest;
+procedure TIdSipOutboundSession.RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
 begin
-  NewInvite := Self.UA.CreateInvite(Dest,
-                                    Self.InitialRequest.Body,
-                                    Self.InitialRequest.ContentType);
+  Self.RedirectedInviteLock.Acquire;
   try
-    NewInvite.CallID   := Self.InitialRequest.CallID;
-    NewInvite.From.Tag := Self.InitialRequest.From.Tag;
-
-    Self.InitialRequest.Assign(NewInvite);
-    
-    Self.SendRequest(NewInvite);
+    Self.RedirectedInvites.Remove(InviteAgent);
   finally
-    NewInvite.Free;
+    Self.RedirectedInviteLock.Release;
   end;
-end;
-
-procedure TIdSipOutboundSession.SendAck(Final: TIdSipResponse);
-var
-  Ack: TIdSipRequest;
-begin
-  Assert(Self.Dialog <> nil, 'Dialog not established when we send the ACK');
-
-  Ack := Self.UA.CreateAck(Self.Dialog);
-  try
-    Ack.Body := Self.InitialRequest.Body;
-    Ack.ContentDisposition.Value := DispositionSession;
-    Ack.ContentLength := Length(Ack.Body);
-    Ack.ContentType := Self.InitialRequest.ContentType;
-
-    if Self.InitialRequest.HasAuthorization then
-      Ack.FirstAuthorization.Value := Self.InitialRequest.FirstAuthorization.FullValue;
-    if Self.InitialRequest.HasProxyAuthorization then
-      Ack.FirstProxyAuthorization.Value := Self.InitialRequest.FirstProxyAuthorization.FullValue;
-
-    Self.SendRequest(Ack);
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TIdSipOutboundSession.SendCancel;
-begin
-  Assert(not Self.SentCancel, 'SendCancel already invoked');
-  Self.SentCancel := true;
-  Self.CancelRequest := Self.InitialRequest.CreateCancel;
-  Self.SendRequest(Self.CancelRequest);
-end;
-
-procedure TIdSipOutboundSession.TerminateAfterSendingCancel;
-begin
-  Self.MarkAsTerminated;
-  Self.NotifyOfEndedSession(LocalCancel);
 end;
 
 //******************************************************************************
@@ -4515,14 +4775,14 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionRedirectMethod                                                 *
+//* TIdSipInviteDialogEstablishedMethod                                        *
 //******************************************************************************
-//* TIdSipActionRedirectMethod Public methods **********************************
+//* TIdSipInviteDialogEstablishedMethod Public methods *************************
 
-procedure TIdSipActionRedirectMethod.Run(const Subject: IInterface);
+procedure TIdSipInviteDialogEstablishedMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipActionListener).OnRedirect(Self.Action,
-                                               Self.Response);
+  (Subject as IIdSipInviteListener).OnDialogEstablished(Self.Invite,
+                                                        Self.Dialog);
 end;
 
 //******************************************************************************
@@ -4538,14 +4798,14 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipInviteProvisionalMethod                                              *
+//* TIdSipInviteRedirectMethod                                                 *
 //******************************************************************************
-//* TIdSipInviteProvisionalMethod Public methods *******************************
+//* TIdSipInviteRedirectMethod Public methods **********************************
 
-procedure TIdSipInviteProvisionalMethod.Run(const Subject: IInterface);
+procedure TIdSipInviteRedirectMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipInviteListener).OnProvisional(Self.Invite,
-                                                  Self.Response);
+  (Subject as IIdSipInviteListener).OnRedirect(Self.Invite,
+                                               Self.Response);
 end;
 
 //******************************************************************************
