@@ -547,8 +547,6 @@ end;
 //* TestTIdSipTransport Public methods *****************************************
 
 procedure TestTIdSipTransport.SetUp;
-var
-  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
@@ -1272,8 +1270,6 @@ end;
 //* TestTIdSipUDPTransport Public methods **************************************
 
 procedure TestTIdSipUDPTransport.SetUp;
-var
-  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
