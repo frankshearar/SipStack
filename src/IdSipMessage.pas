@@ -838,7 +838,7 @@ type
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
     function  GetContentLanguage: String;
-    function  GetContentLength: Cardinal;
+    function  GetContentLength: Integer;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -850,7 +850,7 @@ type
     procedure SetContacts(Value: TIdSipContacts);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
     procedure SetContentLanguage(const Value: String);
-    procedure SetContentLength(Value: Cardinal);
+    procedure SetContentLength(Value: Integer);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(Value: TIdSipCSeqHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
@@ -902,7 +902,7 @@ type
     property Contacts:           TIdSipContacts                 read fContacts write SetContacts;
     property ContentDisposition: TIdSipContentDispositionHeader read GetContentDisposition write SetContentDisposition;
     property ContentLanguage:    String                         read GetContentLanguage write SetContentLanguage;
-    property ContentLength:      Cardinal                       read GetContentLength write SetContentLength;
+    property ContentLength:      Integer                        read GetContentLength write SetContentLength;
     property ContentType:        String                         read GetContentType write SetContentType;
     property CSeq:               TIdSipCSeqHeader               read GetCSeq write SetCSeq;
     property From:               TIdSipFromHeader               read GetFrom write SetFrom;
@@ -4982,9 +4982,10 @@ procedure TIdSipMessage.ReadBody(Src: TStream);
 const
   BufLen = 100;
 var
-  Buf:         array[1..BufLen] of Char;
-  BytesToRead: Integer;
-  Read:        Integer;
+  Buf:            array[1..BufLen] of Char;
+  BytesToRead:    Integer;
+  Read:           Integer;
+  RemainingBytes: Integer;
 begin
   // The transport must set Content-Length before this method gets called!
 
@@ -4997,6 +4998,12 @@ begin
 
       Self.Body := Self.Body + System.Copy(Buf, 1, Read);
     until (Read < BufLen) or (BytesToRead <= 0);
+
+    if (Read < Self.ContentLength) then begin
+      RemainingBytes := Self.ContentLength - Read;
+      Self.MarkAsInvalid(Format(UnexpectedMessageLength,
+                               [RemainingBytes, Self.ContentLength]));
+     end;
   end;
 end;
 
@@ -5039,7 +5046,7 @@ begin
   Result := Self.FirstHeader(ContentLanguageHeader).Value;
 end;
 
-function TIdSipMessage.GetContentLength: Cardinal;
+function TIdSipMessage.GetContentLength: Integer;
 begin
   Result := StrToInt(Self.FirstHeader(ContentLengthHeaderFull).Value);
 end;
@@ -5135,7 +5142,7 @@ begin
   Self.FirstHeader(ContentLanguageHeader).Value := Value;
 end;
 
-procedure TIdSipMessage.SetContentLength(Value: Cardinal);
+procedure TIdSipMessage.SetContentLength(Value: Integer);
 begin
   Self.FirstHeader(ContentLengthHeaderFull).Value := IntToStr(Value);
 end;
@@ -5246,7 +5253,7 @@ begin
       if Self.HasHeader(ProxyAuthorizationHeader) then
         Result.AddHeader(ProxyAuthorizationHeader).Value := Self.FirstHeader(ProxyAuthorizationHeader).FullValue;
     except
-      Result.Free;
+      FreeAndNil(Result);
 
       raise;
     end;
@@ -5531,7 +5538,7 @@ begin
     if Request.HasHeader(ToHeaderFull) then
       Result.ToHeader     := Request.ToHeader;
   except
-    Result.Free;
+    FreeAndNil(Result);
 
     raise;
   end;
@@ -6020,13 +6027,7 @@ begin
       Self.Source := S;
 
       Result := Self.ParseAndMakeMessage;
-      try
-        Result.Body := S.ReadString(Result.ContentLength);
-      except
-        Result.Free;
-
-        raise;
-      end;
+      Result.Body := S.ReadString(Result.ContentLength);
     finally
       S.Free;
     end;
@@ -6048,14 +6049,8 @@ begin
       Self.Source := S;
 
       Result := MessageType.Create;
-      try
-        Self.ParseMessage(Result);
-        Result.Body := S.ReadString(Result.ContentLength);
-      except
-        Result.Free;
-
-        raise;
-      end;
+      Self.ParseMessage(Result);
+      Result.Body := S.ReadString(Result.ContentLength);
     finally
       S.Free;
     end;
@@ -6067,13 +6062,7 @@ end;
 function TIdSipParser.ParseAndMakeRequest: TIdSipRequest;
 begin
   Result := TIdSipRequest.Create;
-  try
-    Self.ParseRequest(Result);
-  except
-    Result.Free;
-
-    raise;
-  end;
+  Self.ParseRequest(Result);
 end;
 
 function TIdSipParser.ParseAndMakeRequest(const Src: String): TIdSipRequest;
@@ -6084,13 +6073,7 @@ end;
 function TIdSipParser.ParseAndMakeResponse: TIdSipResponse;
 begin
   Result := TIdSipResponse.Create;
-  try
-    Self.ParseResponse(Result);
-  except
-    Result.Free;
-
-    raise;
-  end;
+  Self.ParseResponse(Result);
 end;
 
 function TIdSipParser.ParseAndMakeResponse(const Src: String): TIdSipResponse;
