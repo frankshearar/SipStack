@@ -3,7 +3,7 @@ unit TestIdRTPServer;
 interface
 
 uses
-  Classes, IdRTPServer, IdSocketHandle, IdUDPClient, TestFramework,
+  Classes, IdRTPClient, IdRTPServer, IdSocketHandle, IdUDPClient, TestFramework,
   TestFrameworkEx;
 
 type
@@ -33,9 +33,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCreate;
     procedure TestCreateFromEncoding;
-    procedure TestAsString;
+    procedure TestClone;
     procedure TestIsNull;
   end;
 
@@ -46,9 +47,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCreate;
     procedure TestCreateFromEncoding;
-    procedure TestAsString;
+    procedure TestClone;
     procedure TestIsNull;
   end;
 
@@ -63,11 +65,15 @@ type
     procedure TearDown; override;
   published
     procedure TestAddEncoding;
+    procedure TestClear;
     procedure TestCount;
+    procedure TestEncodingFor;
+    procedure TestFirstFreePayloadType;
     procedure TestHasEncoding;
     procedure TestHasPayloadType;
-    procedure TestEncodingFor;
+    procedure TestIsFull;
     procedure TestPayloadTypeFor;
+    procedure TestReservedEncodingMustntOverwriteOthers;
   end;
 
   TestTIdAudioVisualProfile = class(TTestCase)
@@ -135,8 +141,25 @@ type
     procedure TestReceivePacket;
   end;
 
+  TestT140 = class(TThreadingTestCase)
+  private
+    Client:   TIdRTPClient;
+    Msg:      String;
+    Server:   TIdRTPServer;
+    T140PT:   TIdRTPPayloadType;
+
+    procedure StoreT140Data(Sender: TObject;
+                            APacket: TIdRTPPacket;
+                            ABinding: TIdSocketHandle);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestTransmission;
+  end;
+
 const
-  DefaultTimeout = 5000; // ms
+  DefaultTimeout = 50000; // ms
 
 implementation
 
@@ -154,6 +177,7 @@ begin
   Result.AddTest(TestTIdT140Payload.Suite);
   Result.AddTest(TestTIdRTPPacket.Suite);
   Result.AddTest(TestTIdRTPServer.Suite);
+  Result.AddTest(TestT140.Suite);
 end;
 
 //******************************************************************************
@@ -337,6 +361,22 @@ end;
 
 //* TestTIdRTPEncoding Published methods ***************************************
 
+procedure TestTIdRTPEncoding.TestAsString;
+var
+  Enc: TIdRTPEncoding;
+begin
+  CheckEquals('t140/1000/1',
+              Self.Encoding.AsString,
+              'AsString with Parameters');
+
+  Enc := TIdRTPEncoding.Create('red', 8000);
+  try
+    CheckEquals('red/8000', Enc.AsString, 'AsString without Parameters');
+  finally
+    Enc.Free;
+  end;
+end;
+
 procedure TestTIdRTPEncoding.TestCreate;
 begin
   CheckEquals(1000,   Self.Encoding.ClockRate,  'ClockRate');
@@ -356,17 +396,15 @@ begin
   end;
 end;
 
-procedure TestTIdRTPEncoding.TestAsString;
+procedure TestTIdRTPEncoding.TestClone;
 var
   Enc: TIdRTPEncoding;
 begin
-  CheckEquals('t140/1000/1',
-              Self.Encoding.AsString,
-              'AsString with Parameters');
-
-  Enc := TIdRTPEncoding.Create('red', 8000);
+  Enc := Self.Encoding.Clone;
   try
-    CheckEquals('red/8000', Enc.AsString, 'AsString without Parameters');
+    CheckEquals(TIdRTPEncoding.ClassName,
+                Enc.ClassName,
+                'Incorrect type used for cloning');
   finally
     Enc.Free;
   end;
@@ -398,6 +436,11 @@ end;
 
 //* TestTIdRTPNullEncoding Published methods ***********************************
 
+procedure TestTIdRTPNullEncoding.TestAsString;
+begin
+  CheckEquals('', Self.Encoding.AsString, 'AsString for Null Encoding');
+end;
+
 procedure TestTIdRTPNullEncoding.TestCreate;
 begin
   CheckEquals(0,  Self.Encoding.ClockRate,  'ClockRate');
@@ -423,9 +466,18 @@ begin
   end;
 end;
 
-procedure TestTIdRTPNullEncoding.TestAsString;
+procedure TestTIdRTPNullEncoding.TestClone;
+var
+  Null: TIdRTPEncoding;
 begin
-  CheckEquals('', Self.Encoding.AsString, 'AsString for Null Encoding');
+  Null := Self.Encoding.Clone;
+  try
+    CheckEquals(TIdRTPNullEncoding.ClassName,
+                Null.ClassName,
+                'Incorrect type used for cloning');
+  finally
+    Null.Free;
+  end;
 end;
 
 procedure TestTIdRTPNullEncoding.TestIsNull;
@@ -479,28 +531,22 @@ begin
   CheckEquals(2, Self.Profile.Count, 'New, different, MIME type not added');
 end;
 
+procedure TestTIdRTPProfile.TestClear;
+begin
+  Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
+  Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT + 1);
+
+  Self.Profile.Clear;
+
+  CheckEquals(0, Self.Profile.Count, 'Profile wasn''t cleared');
+end;
+
 procedure TestTIdRTPProfile.TestCount;
 begin
   CheckEquals(0, Self.Profile.Count, 'Count on new profile');
 
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
   CheckEquals(1, Self.Profile.Count, 'Count after AddEncoding');
-end;
-
-procedure TestTIdRTPProfile.TestHasEncoding;
-begin
-  Check(not Self.Profile.HasEncoding(Self.T140Encoding), 'New profile');
-
-  Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
-  Check(Self.Profile.HasEncoding(Self.T140Encoding), 'After Add');
-end;
-
-procedure TestTIdRTPProfile.TestHasPayloadType;
-begin
-  Check(not Self.Profile.HasPayloadType(Self.ArbPT), 'New profile');
-
-  Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
-  Check(Self.Profile.HasPayloadType(Self.ArbPT), 'After Add');
 end;
 
 procedure TestTIdRTPProfile.TestEncodingFor;
@@ -521,11 +567,63 @@ begin
               'MIME type for ' + T140MimeType);
 end;
 
+procedure TestTIdRTPProfile.TestFirstFreePayloadType;
+begin
+  CheckEquals(0, Self.Profile.FirstFreePayloadType, 'New (empty) profile');
+
+  Self.Profile.AddEncoding(Self.T140Encoding, 1);
+  CheckEquals(0,
+              Self.Profile.FirstFreePayloadType,
+              'Empty spaces before first assigned payload type');
+
+  Self.Profile.AddEncoding(Self.InterleavedT140Encoding, 0);
+  CheckEquals(2,
+              Self.Profile.FirstFreePayloadType,
+              'First couple of payload types assigned');
+end;
+
+procedure TestTIdRTPProfile.TestHasEncoding;
+begin
+  Check(not Self.Profile.HasEncoding(Self.T140Encoding), 'New profile');
+
+  Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
+  Check(Self.Profile.HasEncoding(Self.T140Encoding), 'After Add');
+end;
+
+procedure TestTIdRTPProfile.TestHasPayloadType;
+begin
+  Check(not Self.Profile.HasPayloadType(Self.ArbPT), 'New profile');
+
+  Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
+  Check(Self.Profile.HasPayloadType(Self.ArbPT), 'After Add');
+end;
+
+procedure TestTIdRTPProfile.TestIsFull;
+var
+  I:   TIdRTPPayloadType;
+  Enc: TIdRTPEncoding;
+begin
+  Check(not Self.Profile.IsFull, 'Empty profile');
+
+  for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
+    Enc := TIdRTPEncoding.Create('foo', I);
+    try
+      Self.Profile.AddEncoding(Enc, I);
+    finally
+      Enc.Free;
+    end;
+  end;
+  Check(Self.Profile.IsFull, 'Full profile');
+end;
+
 procedure TestTIdRTPProfile.TestPayloadTypeFor;
 begin
-  CheckEquals(High(TIdRTPPayloadType),
-              Self.Profile.PayloadTypeFor(Self.T140Encoding),
-              '"Payload Type" for unknown MIME type');
+  try
+    Self.Profile.PayloadTypeFor(Self.T140Encoding);
+    Fail('"Payload Type" for unknown MIME type');
+  except
+    on ENoPayloadTypeFound do;
+  end;
 
   Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT - 1);
   Self.Profile.AddEncoding(Self.T140Encoding,            Self.ArbPT);
@@ -537,6 +635,20 @@ begin
   CheckEquals(Self.ArbPT,
               Self.Profile.PayloadTypeFor(Self.T140Encoding),
               'Payload Type for ' + T140MimeType);
+end;
+
+procedure TestTIdRTPProfile.TestReservedEncodingMustntOverwriteOthers;
+var
+  Res: TIdRTPReservedEncoding;
+begin
+  Res := TIdRTPReservedEncoding.Create('', 0);
+  try
+    Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
+    Self.Profile.AddEncoding(Res, Self.ArbPT);
+    Self.Profile.PayloadTypeFor(Self.T140Encoding);
+  finally
+    Res.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -637,10 +749,11 @@ end;
 
 procedure TestTIdAudioVisualProfile.TestReservedAndUnassignedPayloadTypes;
 begin
-  CheckRange(1,  2);
-  CheckRange(19, 24);
-  CheckRange(29, 30);
-  CheckRange(35, 95);
+  Self.CheckRange(1,  2);
+  Self.CheckRange(19, 24);
+  Self.CheckRange(27, 27);
+  Self.CheckRange(29, 30);
+  Self.CheckRange(35, 95);
 end;
 
 //******************************************************************************
@@ -1049,11 +1162,23 @@ end;
 //* TestTIdRTPServer Public methods ********************************************
 
 procedure TestTIdRTPServer.SetUp;
+var
+  NoEncoding: TIdRTPEncoding;
+  PT:         TIdRTPPayloadType;
 begin
   inherited SetUp;
 
+  PT := 96;
+
   Self.Server := TIdRTPServer.Create(nil);
   Self.Server.DefaultPort := 5004;
+
+  NoEncoding := TIdRTPEncoding.Create('No encoding', 0);
+  try
+    Self.Server.Profile.AddEncoding(NoEncoding, PT);
+  finally
+    NoEncoding.Free;
+  end;
 
   Self.Packet := TIdRTPPacket.Create(Self.Server.Profile);
   Self.Packet.Version      := 2;
@@ -1063,7 +1188,7 @@ begin
   Self.Packet.CsrcIDs[0]   := $CAFEBABE;
   Self.Packet.CsrcIDs[1]   := $DEADBEEF;
   Self.Packet.IsMarker     := true;
-  Self.Packet.PayloadType  := $0D;
+  Self.Packet.PayloadType  := PT;
   Self.Packet.SequenceNo   := $0102;
   Self.Packet.Timestamp    := $0A0B0C0D;
   Self.Packet.SyncSrcID    := $10203040;
@@ -1114,6 +1239,9 @@ procedure TestTIdRTPServer.CheckOnRTPRead(Sender: TObject;
 begin
   try
     Self.CheckHasEqualHeaders(Self.Packet, APacket);
+    CheckEquals(TIdRawPayload.ClassName,
+                APacket.Payload.ClassName,
+                'Unexpected payload');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -1166,6 +1294,102 @@ begin
         raise Self.ExceptionType.Create(Self.ExceptionMessage);
     finally
       S.Free;
+    end;
+  finally
+    Self.Server.Active := false;
+  end;
+end;
+
+//******************************************************************************
+//* TestT140                                                                   *
+//******************************************************************************
+//* TestT140 Public methods ****************************************************
+
+procedure TestT140.SetUp;
+var
+  T140Encoding: TIdRTPEncoding;
+begin
+  inherited SetUp;
+
+  Self.Msg := 'Goodbye, cruel world';
+  Self.T140PT := 96;
+
+  Self.Server := TIdRTPServer.Create(nil);
+  Self.Server.DefaultPort := 5004;
+
+  T140Encoding := TIdRTPEncoding.Create(T140EncodingName, 1000);
+  try
+    Self.Server.Profile.AddEncoding(T140Encoding, Self.T140PT);
+  finally
+    T140Encoding.Free;
+  end;
+
+  Self.Client := TIdRTPClient.Create(nil);
+  Self.Client.Host := '127.0.0.1';
+  Self.Client.Port := Self.Server.DefaultPort;
+end;
+
+procedure TestT140.TearDown;
+begin
+  Self.Client.Free;
+  Self.Server.Free;
+
+  inherited TearDown;
+end;
+
+//* TestT140 Private methods ***************************************************
+
+procedure TestT140.StoreT140Data(Sender: TObject;
+                                 APacket: TIdRTPPacket;
+                                 ABinding: TIdSocketHandle);
+begin
+  try
+    CheckEquals(TIdT140Payload.ClassName,
+                APacket.Payload.ClassName,
+                'Payload type');
+    CheckEquals(Self.Msg,
+                TIdT140Payload(APacket.Payload).Block,
+                'Payload');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+//* TestT140 Published methods *************************************************
+
+procedure TestT140.TestTransmission;
+var
+  Packet: TIdRTPPacket;
+  S:      TStringStream;
+begin
+  Self.Server.OnRTPRead := Self.StoreT140Data;
+  Self.Server.Active := true;
+  try
+    Packet := TIdRTPPacket.Create(Self.Server.Profile);
+    try
+      Packet.PayloadType := Self.T140PT;
+      Packet.CsrcCount  := 0;
+      Packet.SequenceNo := 0;
+      Packet.Timestamp  := 0;
+
+      S := TStringStream.Create(#$00#$00 + Self.Msg);
+      try
+        Packet.ReadPayload(S);
+      finally
+        S.Free;
+      end;
+
+      Client.Send(Packet);
+
+      if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+        raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    finally
+      Packet.Free;
     end;
   finally
     Self.Server.Active := false;
