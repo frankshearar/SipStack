@@ -3320,38 +3320,37 @@ begin
 
   FirstInvite := TIdSipRequest.Create;
   try
-    Session := Self.CreateAction as TIdSipSession;
-    Self.EstablishSession(Session);
-    Session.AddSessionListener(Self);
+    Session := Self.CreateAndEstablishSession;
 
     Self.SimulateRemoteReInvite(Session);
     FirstInvite.Assign(Self.InboundModify.InitialRequest);
-    Check(Self.OnModifySessionFired, 'OnModifySession didn''t fire');
+    Check(Self.OnModifySessionFired,
+          Session.ClassName + ': OnModifySession didn''t fire');
 
     ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
     Self.OnModifySessionFired := false;
     Self.SimulateRemoteReInvite(Session);
     Check(not Self.OnModifySessionFired,
-          'OnModifySession fired for a 2nd modify');
+          Session.ClassName + ': OnModifySession fired for a 2nd modify');
     Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-          'No 491 response sent');
+          Session.ClassName + ': No 491 response sent');
     CheckEquals(SIPRequestPending,
                 Self.Dispatcher.Transport.LastResponse.StatusCode,
-                'Unexpected response to 2nd INVITE');
+                Session.ClassName + ': Unexpected response to 2nd INVITE');
     Check(Self.Invite.Match(Self.Dispatcher.Transport.LastResponse),
-          'Response doesn''t match 2nd INVITE');
+          Session.ClassName + ': Response doesn''t match 2nd INVITE');
     Self.SimulateAck;
 
     ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
     Self.InboundModify.Accept('', '');
 
     Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-          'No 200 response sent');
+          Session.ClassName + ': No 200 response sent');
     CheckEquals(SIPOK,
                 Self.Dispatcher.Transport.LastResponse.StatusCode,
-                'Unexpected response to 1st INVITE');
+                Session.ClassName + ': Unexpected response to 1st INVITE');
     Check(FirstInvite.Match(Self.Dispatcher.Transport.LastResponse),
-          'Response doesn''t match 1st INVITE');
+          Session.ClassName + ': Response doesn''t match 1st INVITE');
     Self.SimulateAck;
   finally
     FirstInvite.Free;
