@@ -2353,8 +2353,7 @@ begin
   end;
 
   OutboundRequest.AddHeader(AllowHeader).Value := Self.AllowedMethods;
-  // TODO: We need to add a proper extension support thing, as well as do a
-  // proper payload processor capable of handling multiple content types
+  // TODO: We need to add a proper extension support thing
   OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
 end;
