@@ -290,7 +290,6 @@ type
     Actions:    TObjectList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
-    procedure NullActionProc(Action: TIdSipAction);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -303,10 +302,7 @@ type
     procedure CleanOutTerminatedActions;
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
     procedure FindActionAndPerform(Event: TObject;
-                                   Proc: TIdSipActionProc); overload;
-    procedure FindActionAndPerform(Event: TObject;
-                                   ProcIfFound: TIdSipActionProc;
-                                   ProcIfNotFound: TIdSipActionProc); overload;
+                                   Proc: TIdSipActionProc);
     function  FindSession(Msg: TIdSipMessage): TIdSipSession;
     procedure FindSessionAndPerform(Event: TObject;
                                     Proc: TIdSipSessionProc);
@@ -1713,8 +1709,6 @@ end;
 function TIdSipActions.AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
                                         Request: TIdSipRequest): TIdSipInboundInvite;
 begin
-  // Do not call this directly. Modules call this method.
-
   Self.ActionLock.Acquire;
   try
     Result := TIdSipInboundInvite.Create(UserAgent, Request);
@@ -1738,8 +1732,6 @@ end;
 function TIdSipActions.AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
                                          ActionType: TIdSipActionClass): TIdSipAction;
 begin
-  // Do not call this directly. Modules call this method.
-
   Self.ActionLock.Acquire;
   try
     Result := ActionType.Create(UserAgent);
@@ -1801,15 +1793,8 @@ end;
 
 procedure TIdSipActions.FindActionAndPerform(Event: TObject;
                                              Proc: TIdSipActionProc);
-begin
-  Self.FindActionAndPerform(Event, Proc, Self.NullActionProc);
-end;
-
-procedure TIdSipActions.FindActionAndPerform(Event: TObject;
-                                             ProcIfFound: TIdSipActionProc;
-                                             ProcIfNotFound: TIdSipActionProc);
 var
-  Action: TIdSipAction;
+  Action:  TIdSipAction;
   Request: TIdSipRequest;
 begin
   Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
@@ -1819,9 +1804,7 @@ begin
       Action := Self.FindAction(Request);
 
       if Assigned(Action) then
-        ProcIfFound(Action)
-      else
-        ProcIfNotFound(Action);
+        Proc(Action);
     finally
       Self.ActionLock.Release;
     end;
@@ -1860,16 +1843,21 @@ var
   Invite:  TIdSipRequest;
   Session: TIdSipSession;
 begin
-  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  Self.ActionLock.Acquire;
   try
-    Session := Self.FindSession(Invite);
+    Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+    try
+      Session := Self.FindSession(Invite);
 
-    if not Assigned(Session) then
-      Proc(Session, Invite);
+      if not Assigned(Session) then
+        Proc(Session, Invite);
 
-    Self.CleanOutTerminatedActions;
+      Self.CleanOutTerminatedActions;
+    finally
+      Invite.Free;
+    end;
   finally
-    Invite.Free;
+    Self.ActionLock.Release;
   end;
 end;
 
@@ -1962,10 +1950,6 @@ function TIdSipActions.ActionAt(Index: Integer): TIdSipAction;
 begin
   // Precondition: you've invoked Self.ActionLock.Acquire
   Result := Self.Actions[Index] as TIdSipAction;
-end;
-
-procedure TIdSipActions.NullActionProc(Action: TIdSipAction);
-begin
 end;
 
 //******************************************************************************
@@ -2806,8 +2790,9 @@ end;
 procedure TIdSipAbstractUserAgent.ResendReInvite(Session: TIdSipSession;
                                                  Invite: TIdSipRequest);
 begin
-  Session.Modify(Invite.Body,
-                 Invite.ContentType);
+  if not Session.IsTerminated then
+    Session.Modify(Invite.Body,
+                   Invite.ContentType);
 end;
 
 procedure TIdSipAbstractUserAgent.SessionProgress(Action: TIdSipAction);
@@ -5258,7 +5243,7 @@ end;
 function TIdSipInboundSession.ModifyWaitTime: Cardinal;
 begin
   // 0s <= WaitTime <= 2s, in 10ms units
-  Result := GRandomNumber.NextCardinal(20)*10;
+  Result := GRandomNumber.NextCardinal(21)*10;
 end;
 
 procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
