@@ -460,6 +460,99 @@ type
 
   TIdSipActionClass = class of TIdSipAction;
 
+  TIdSipOptions = class(TIdSipAction)
+  protected
+    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+  public
+    class function Method: String; override;
+
+    function  IsOptions: Boolean; override;
+    procedure Terminate; override;
+  end;
+
+  TIdSipInboundOptions = class(TIdSipOptions)
+  public
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Options: TIdSipRequest); reintroduce;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
+  TIdSipOutboundOptions = class(TIdSipOptions)
+  private
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
+  protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+  public
+    procedure AddListener(const Listener: IIdSipOptionsListener);
+    procedure QueryOptions(Server: TIdSipAddressHeader);
+    procedure RemoveListener(const Listener: IIdSipOptionsListener);
+  end;
+
+  TIdSipRegistration = class(TIdSipAction)
+  protected
+    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+  public
+    class function Method: String; override;
+
+    function  IsRegistration: Boolean; override;
+    procedure Terminate; override;
+  end;
+
+  TIdSipInboundRegistration = class(TIdSipRegistration)
+  private
+    function  AcceptRequest(Request: TIdSipRequest): Boolean;
+    function  BindingDB: TIdSipAbstractBindingDatabase;
+    procedure RejectExpireTooBrief(Request: TIdSipRequest);
+    procedure RejectFailedRequest(Request: TIdSipRequest);
+    procedure RejectForbidden(Request: TIdSipRequest);
+    procedure RejectNotFound(Request: TIdSipRequest);
+    procedure RejectRequest(Request: TIdSipRequest;
+                            StatusCode: Cardinal);
+  public
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Reg: TIdSipRequest); reintroduce;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
+  // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
+  // with a way to register with a registrar. I take care of things like
+  // doing stuff with error responses, asking for authentication, etc.
+  //
+  // It makes no sense to access me once my Transaction has terminated. In
+  // other words once you've received notification of my success or failure,
+  // erase your references to me.
+  TIdSipOutboundRegistration = class(TIdSipRegistration)
+  private
+    Bindings: TIdSipContacts;
+
+    function  CreateRegister(Registrar: TIdSipUri;
+                             Bindings: TIdSipContacts): TIdSipRequest;
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure ReissueRequest(Registrar: TIdSipUri;
+                             MinimumExpiry: Cardinal);
+    procedure RetryWithoutExtensions(Registrar: TIdSipUri;
+                                     Response: TIdSipResponse);
+  protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                         UsingSecureTransport: Boolean): Boolean; override;
+    procedure SendRequest(Request: TIdSipRequest); override;
+  public
+    constructor Create(UA: TIdSipUserAgentCore); override;
+    destructor  Destroy; override;
+
+    procedure AddListener(const Listener: IIdSipRegistrationListener);
+    procedure FindCurrentBindings(Registrar: TIdSipUri);
+    procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
+    procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
+    procedure RemoveListener(const Listener: IIdSipRegistrationListener);
+    procedure Unregister(Registrar: TIdSipUri);
+  end;
+
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
   // to an INVITE until it receives an ACK. Thus I provide an exponential
   // back-off timer starting with an interval of T1 milliseconds and capping
@@ -600,99 +693,6 @@ type
     function  Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
     function  IsInboundCall: Boolean; override;
     procedure Terminate; override;
-  end;
-
-  TIdSipOptions = class(TIdSipAction)
-  protected
-    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
-  public
-    class function Method: String; override;
-
-    function  IsOptions: Boolean; override;
-    procedure Terminate; override;
-  end;
-
-  TIdSipInboundOptions = class(TIdSipOptions)
-  public
-    constructor Create(UA: TIdSipUserAgentCore;
-                       Options: TIdSipRequest); reintroduce;
-
-    procedure ReceiveRequest(Request: TIdSipRequest); override;
-  end;
-
-  TIdSipOutboundOptions = class(TIdSipOptions)
-  private
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
-  protected
-    procedure ActionSucceeded(Response: TIdSipResponse); override;
-  public
-    procedure AddListener(const Listener: IIdSipOptionsListener);
-    procedure QueryOptions(Server: TIdSipAddressHeader);
-    procedure RemoveListener(const Listener: IIdSipOptionsListener);
-  end;
-
-  TIdSipRegistration = class(TIdSipAction)
-  protected
-    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
-  public
-    class function Method: String; override;
-
-    function  IsRegistration: Boolean; override;
-    procedure Terminate; override;
-  end;
-
-  TIdSipInboundRegistration = class(TIdSipRegistration)
-  private
-    function  AcceptRequest(Request: TIdSipRequest): Boolean;
-    function  BindingDB: TIdSipAbstractBindingDatabase;
-    procedure RejectExpireTooBrief(Request: TIdSipRequest);
-    procedure RejectFailedRequest(Request: TIdSipRequest);
-    procedure RejectForbidden(Request: TIdSipRequest);
-    procedure RejectNotFound(Request: TIdSipRequest);
-    procedure RejectRequest(Request: TIdSipRequest;
-                            StatusCode: Cardinal);
-  public
-    constructor Create(UA: TIdSipUserAgentCore;
-                       Reg: TIdSipRequest); reintroduce;
-
-    procedure ReceiveRequest(Request: TIdSipRequest); override;
-  end;
-
-  // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
-  // with a way to register with a registrar. I take care of things like
-  // doing stuff with error responses, asking for authentication, etc.
-  //
-  // It makes no sense to access me once my Transaction has terminated. In
-  // other words once you've received notification of my success or failure,
-  // erase your references to me.
-  TIdSipOutboundRegistration = class(TIdSipRegistration)
-  private
-    Bindings: TIdSipContacts;
-
-    function  CreateRegister(Registrar: TIdSipUri;
-                             Bindings: TIdSipContacts): TIdSipRequest;
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
-    procedure ReissueRequest(Registrar: TIdSipUri;
-                             MinimumExpiry: Cardinal);
-    procedure RetryWithoutExtensions(Registrar: TIdSipUri;
-                                     Response: TIdSipResponse);
-  protected
-    procedure ActionSucceeded(Response: TIdSipResponse); override;
-    procedure NotifyOfFailure(Response: TIdSipResponse); override;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
-    function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
-    procedure SendRequest(Request: TIdSipRequest); override;
-  public
-    constructor Create(UA: TIdSipUserAgentCore); override;
-    destructor  Destroy; override;
-
-    procedure AddListener(const Listener: IIdSipRegistrationListener);
-    procedure FindCurrentBindings(Registrar: TIdSipUri);
-    procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
-    procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
-    procedure RemoveListener(const Listener: IIdSipRegistrationListener);
-    procedure Unregister(Registrar: TIdSipUri);
   end;
 
   TIdActionMethod = class(TIdMethod)
@@ -2608,6 +2608,624 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipOptions                                                              *
+//******************************************************************************
+//* TIdSipOptions Public methods ***********************************************
+
+class function TIdSipOptions.Method: String;
+begin
+  Result := MethodOptions;
+end;
+
+function TIdSipOptions.IsOptions: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSipOptions.Terminate;
+begin
+  Self.UA.RemoveAction(Self);
+end;
+
+//* TIdSipOptions Protected methods ********************************************
+
+function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.CurrentRequest.RequestUri;
+
+    Result := Self.UA.CreateOptions(TempTo);
+  finally
+    TempTo.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipInboundOptions                                                       *
+//******************************************************************************
+//* TIdSipInboundOptions Public methods ****************************************
+
+constructor TIdSipInboundOptions.Create(UA: TIdSipUserAgentCore;
+                                        Options: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.CurrentRequest.Assign(Options);
+end;
+
+procedure TIdSipInboundOptions.ReceiveRequest(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request,
+                                     Self.UA.ResponseForInvite);
+  try
+    Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
+    Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
+    Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
+    Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
+    Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
+    Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
+
+    // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
+    Response.FirstWarning.Code  := WarningMisc;
+    Response.FirstWarning.Agent := Self.UA.HostName;
+    Response.FirstWarning.Text  := '';
+
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundOptions                                                      *
+//******************************************************************************
+//* TIdSipOutboundOptions Public methods ***************************************
+
+procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundOptions.QueryOptions(Server: TIdSipAddressHeader);
+var
+  Options: TIdSipRequest;
+begin
+  Options := Self.UA.CreateOptions(Server);
+  try
+    Self.CurrentRequest.Assign(Options);
+    Self.SendRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
+procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+//* TIdSipOutboundOptions Protected methods ************************************
+
+procedure TIdSipOutboundOptions.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+//* TIdSipOutboundOptions Private methods **************************************
+
+procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  Notification:    TIdSipOptionsSuccessMethod;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Notification := TIdSipOptionsSuccessMethod.Create;
+    try
+      Notification.Options  := Self;
+      Notification.Response := Response;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+//******************************************************************************
+//* TIdSipRegistration                                                         *
+//******************************************************************************
+//* TIdSipRegistration Public methods ******************************************
+
+class function TIdSipRegistration.Method: String;
+begin
+  Result := MethodRegister;
+end;
+
+function TIdSipRegistration.IsRegistration: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TIdSipRegistration.Terminate;
+begin
+  Self.UA.RemoveAction(Self);
+end;
+
+//* TIdSipRegistration Protected methods ***************************************
+
+function TIdSipRegistration.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+var
+  TempTo: TIdSipToHeader;
+begin
+  TempTo := TIdSipToHeader.Create;
+  try
+    TempTo.Address := Self.CurrentRequest.RequestUri;
+
+    Result := Self.UA.CreateRegister(TempTo);
+  finally
+    TempTo.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipInboundRegistration                                                  *
+//******************************************************************************
+//* TIdSipInboundRegistration Public methods ***********************************
+
+constructor TIdSipInboundRegistration.Create(UA: TIdSipUserAgentCore;
+                                             Reg: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.CurrentRequest.Assign(Reg);
+end;
+
+procedure TIdSipInboundRegistration.ReceiveRequest(Request: TIdSipRequest);
+var
+  Bindings: TIdSipContacts;
+  Date:     TIdSipDateHeader;
+  Response: TIdSipResponse;
+begin
+  if not Self.AcceptRequest(Request) then Exit;
+
+  if (Request.ContactCount = 1)
+    and Request.FirstContact.IsWildCard
+    and (Request.QuickestExpiry = 0) then begin
+
+    if not Self.BindingDB.RemoveAllBindings(Request) then
+      Self.RejectFailedRequest(Request)
+    else
+      Self.RejectRequest(Request, SIPOK);
+    Exit;
+  end;
+
+  if not Self.BindingDB.AddBindings(Request) then begin
+    Self.RejectFailedRequest(Request);
+    Exit;
+  end;
+
+  Bindings := TIdSipContacts.Create;
+  try
+    if Self.BindingDB.BindingsFor(Request,
+                                  Bindings) then begin
+      Response := Self.UA.CreateResponse(Request, SIPOK);
+      try
+        Response.AddHeaders(Bindings);
+
+        Date := TIdSipDateHeader.Create;
+        try
+          Date.Time.SetFromTDateTime(Now);
+          Response.AddHeader(Date);
+        finally
+          Date.Free;
+        end;
+
+        Self.SendResponse(Response);
+      finally
+        Response.Free;
+      end;
+    end
+    else begin
+      Self.RejectFailedRequest(Request);
+    end;
+  finally
+    Bindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+//* TIdSipInboundRegistration Private methods **********************************
+
+function TIdSipInboundRegistration.AcceptRequest(Request: TIdSipRequest): Boolean;
+begin
+  // cf RFC 3261 section 10.3
+  // Steps 1, 2 & 3 - covered by Self.UA
+  Result := true;
+
+  // Step 4
+  if not Self.BindingDB.IsAuthorized(Request.From) then begin
+    Self.RejectForbidden(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 5
+  if not Self.BindingDB.IsValid(Request) then begin
+    Self.RejectNotFound(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 6 (or part thereof)
+  if Request.HasHeader(ContactHeaderFull) then begin
+    if Request.FirstContact.IsWildCard then begin
+      if (Request.ContactCount > 1) then begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+
+      if Request.FirstContact.WillExpire
+        and (Request.FirstContact.Expires = 0) then
+          Result := true
+      else begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+    end
+    else if Request.HasExpiry and (Request.QuickestExpiry < Self.UA.MinimumExpiryTime) then begin
+      Self.RejectExpireTooBrief(Request);
+      Result := false;
+    end;
+  end;
+
+  // Steps 7 & 8 in ReceiveRequest
+end;
+
+function TIdSipInboundRegistration.BindingDB: TIdSipAbstractBindingDatabase;
+begin
+  Result := Self.UA.BindingDB;
+end;
+
+procedure TIdSipInboundRegistration.RejectExpireTooBrief(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request,
+                                     SIPIntervalTooBrief);
+  try
+    Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.UA.MinimumExpiryTime);
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipInboundRegistration.RejectFailedRequest(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPInternalServerError);
+end;
+
+procedure TIdSipInboundRegistration.RejectForbidden(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPForbidden);
+end;
+
+procedure TIdSipInboundRegistration.RejectNotFound(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPNotFound);
+end;
+
+procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
+                                                  StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request,
+                                     StatusCode);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundRegistration                                                 *
+//******************************************************************************
+//* TIdSipOutboundRegistration Public methods **********************************
+
+constructor TIdSipOutboundRegistration.Create(UA: TIdSipUserAgentCore);
+begin
+  inherited Create(UA);
+
+  Self.Bindings := TIdSipContacts.Create;
+end;
+
+destructor TIdSipOutboundRegistration.Destroy;
+begin
+  Self.Bindings.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipOutboundRegistration.AddListener(const Listener: IIdSipRegistrationListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundRegistration.FindCurrentBindings(Registrar: TIdSipUri);
+var
+  BlankBindings: TIdSipContacts;
+begin
+  BlankBindings := TIdSipContacts.Create;
+  try
+    Self.RegisterWith(Registrar, BlankBindings);
+  finally
+    BlankBindings.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.CreateRegister(Registrar, Bindings);
+  try
+    Self.Bindings.Clear;
+    Self.Bindings.Add(Bindings);
+
+    Self.SendRequest(Request);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
+var
+  Binding: TIdSipContacts;
+begin
+  Binding := TIdSipContacts.Create;
+  try
+    Binding.Add(Contact);
+
+    Self.RegisterWith(Registrar, Binding);
+  finally
+    Binding.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
+var
+  RemovalBindings: TIdSipContacts;
+  Request:         TIdSipRequest;
+begin
+  RemovalBindings := TIdSipContacts.Create;
+  try
+    Self.Bindings.Clear;
+    Self.Bindings.Add(ContactHeaderFull);
+    Self.Bindings.First;
+    Self.Bindings.CurrentContact.IsWildCard := true;
+
+    Request := Self.CreateRegister(Registrar, Bindings);
+    try
+      Request.FirstExpires.NumericValue := 0;
+
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    RemovalBindings.Free;
+  end;
+end;
+
+//* TIdSipOutboundRegistration Protected methods *******************************
+
+procedure TIdSipOutboundRegistration.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  Notification:    TIdSipRegistrationFailedMethod;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Notification := TIdSipRegistrationFailedMethod.Create;
+    try
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Reason          := Response.Description;
+      Notification.Registration    := Self;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+begin
+  Result := not inherited ReceiveFailureResponse(Response);
+  
+  if Result then begin
+    case Response.StatusCode of
+      SIPIntervalTooBrief: begin
+        Self.ReissueRequest(Self.CurrentRequest.RequestUri,
+                            Response.FirstMinExpires.NumericValue);
+        Result := true;
+      end;
+
+      SIPBadExtension: begin
+        Result := Self.CurrentRequest.HasHeader(RequireHeader);
+        if Result then
+          Self.RetryWithoutExtensions(Self.CurrentRequest.RequestUri,
+                                      Response);
+      end;
+    else
+      Result := false;
+    end;
+  end;
+end;
+
+function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
+                                                               UsingSecureTransport: Boolean): Boolean;
+begin
+  Result := false;
+
+  if Response.HasHeader(ContactHeaderFull) then begin
+    Self.UA.RegisterWith(Response.FirstContact.Address);
+
+    Result := true;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
+begin
+  Self.CurrentRequest.Assign(Request);
+
+  inherited SendRequest(Request);
+end;
+
+//* TIdSipOutboundRegistration Private methods *********************************
+
+function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
+                                                   Bindings: TIdSipContacts): TIdSipRequest;
+var
+  OldContacts: TIdSipContacts;
+  ToHeader: TIdSipToHeader;
+begin
+  ToHeader := TIdSipToHeader.Create;
+  try
+    ToHeader.Address := Registrar;
+
+    Result := Self.UA.CreateRegister(ToHeader);
+
+    // Bindings explicitly carries all Contact information. Thus we must remove
+    // any Contact information already in Result.
+    OldContacts := TIdSipContacts.Create(Result.Headers);
+    try
+      OldContacts.Clear;
+    finally
+      OldContacts.Free;
+    end;
+
+    Result.AddHeaders(Bindings);
+  finally
+    ToHeader.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  CurrentBindings: TIdSipContacts;
+  Notification:    TIdSipRegistrationSucceededMethod;
+begin
+  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  try
+    Notification := TIdSipRegistrationSucceededMethod.Create;
+    try
+      Notification.CurrentBindings := CurrentBindings;
+      Notification.Registration    := Self;
+
+      Self.Listeners.Notify(Notification);
+    finally
+      Notification.Free;
+    end;
+  finally
+    CurrentBindings.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
+                                            MinimumExpiry: Cardinal);
+var
+  Bindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  // We received a 423 Interval Too Brief from the registrar. Therefore we
+  // make a new REGISTER request with the registrar's minimum expiry.
+  Request := Self.CreateRegister(Registrar, Self.Bindings);
+  try
+    Bindings := TIdSipContacts.Create(Request.Headers);
+    try
+      Bindings.First;
+      while Bindings.HasNext do begin
+        if Bindings.CurrentContact.WillExpire then
+          Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
+                                                     MinimumExpiry);
+        Bindings.Next;
+      end;
+    finally
+      Bindings.Free;
+    end;
+
+    Request.FirstExpires.NumericValue := MinimumExpiry;
+    Self.SendRequest(Request);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
+                                                    Response: TIdSipResponse);
+var
+  Bindings: TIdSipContacts;
+  Request: TIdSipRequest;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Bindings.Add(Self.UA.Contact);
+
+    Request := Self.CreateRegister(Registrar, Bindings);
+    try
+      if not Response.HasHeader(UnsupportedHeader) then begin
+        // A 420 Bad Extension MUST have an unsupported header. In the
+        // interests of accepting liberally though, we just drop all
+        // Requires.
+        Request.RemoveAllHeadersNamed(RequireHeader);
+      end
+      else
+        Request.FirstRequire.RemoveValues(Response.FirstUnsupported);
+
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    Bindings.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TIdSipSessionTimer                                                         *
 //******************************************************************************
 //* TIdSipSessionTimer Public methods ******************************************
@@ -3382,624 +4000,6 @@ procedure TIdSipOutboundSession.TerminateAfterSendingCancel;
 begin
   Self.MarkAsTerminated;
   Self.NotifyOfEndedSession(LocalCancel);
-end;
-
-//******************************************************************************
-//* TIdSipOptions                                                              *
-//******************************************************************************
-//* TIdSipOptions Public methods ***********************************************
-
-class function TIdSipOptions.Method: String;
-begin
-  Result := MethodOptions;
-end;
-
-function TIdSipOptions.IsOptions: Boolean;
-begin
-  Result := true;
-end;
-
-procedure TIdSipOptions.Terminate;
-begin
-  Self.UA.RemoveAction(Self);
-end;
-
-//* TIdSipOptions Protected methods ********************************************
-
-function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
-var
-  TempTo: TIdSipToHeader;
-begin
-  TempTo := TIdSipToHeader.Create;
-  try
-    TempTo.Address := Self.CurrentRequest.RequestUri;
-
-    Result := Self.UA.CreateOptions(TempTo);
-  finally
-    TempTo.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TIdSipInboundOptions                                                       *
-//******************************************************************************
-//* TIdSipInboundOptions Public methods ****************************************
-
-constructor TIdSipInboundOptions.Create(UA: TIdSipUserAgentCore;
-                                        Options: TIdSipRequest);
-begin
-  inherited Create(UA);
-
-  Self.CurrentRequest.Assign(Options);
-end;
-
-procedure TIdSipInboundOptions.ReceiveRequest(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.UA.CreateResponse(Request,
-                                     Self.UA.ResponseForInvite);
-  try
-    Response.AddHeader(AcceptHeader).Value := Self.UA.AllowedContentTypes;
-    Response.AddHeader(AllowHeader).Value  := Self.UA.AllowedMethods;
-    Response.AddHeader(AcceptEncodingHeader).Value := Self.UA.AllowedEncodings;
-    Response.AddHeader(AcceptLanguageHeader).Value := Self.UA.AllowedLanguages;
-    Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
-    Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
-
-    // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
-    Response.FirstWarning.Code  := WarningMisc;
-    Response.FirstWarning.Agent := Self.UA.HostName;
-    Response.FirstWarning.Text  := '';
-
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-
-  Self.Terminate;
-end;
-
-//******************************************************************************
-//* TIdSipOutboundOptions                                                      *
-//******************************************************************************
-//* TIdSipOutboundOptions Public methods ***************************************
-
-procedure TIdSipOutboundOptions.AddListener(const Listener: IIdSipOptionsListener);
-begin
-  Self.Listeners.AddListener(Listener);
-end;
-
-procedure TIdSipOutboundOptions.QueryOptions(Server: TIdSipAddressHeader);
-var
-  Options: TIdSipRequest;
-begin
-  Options := Self.UA.CreateOptions(Server);
-  try
-    Self.CurrentRequest.Assign(Options);
-    Self.SendRequest(Options);
-  finally
-    Options.Free;
-  end;
-end;
-
-procedure TIdSipOutboundOptions.RemoveListener(const Listener: IIdSipOptionsListener);
-begin
-  Self.Listeners.RemoveListener(Listener);
-end;
-
-//* TIdSipOutboundOptions Protected methods ************************************
-
-procedure TIdSipOutboundOptions.ActionSucceeded(Response: TIdSipResponse);
-begin
-  Self.NotifyOfSuccess(Response);
-end;
-
-//* TIdSipOutboundOptions Private methods **************************************
-
-procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
-var
-  CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipOptionsSuccessMethod;
-begin
-  CurrentBindings := TIdSipContacts.Create(Response.Headers);
-  try
-    Notification := TIdSipOptionsSuccessMethod.Create;
-    try
-      Notification.Options  := Self;
-      Notification.Response := Response;
-
-      Self.Listeners.Notify(Notification);
-    finally
-      Notification.Free;
-    end;
-  finally
-    CurrentBindings.Free;
-  end;
-
-  Self.Terminate;
-end;
-
-//******************************************************************************
-//* TIdSipRegistration                                                         *
-//******************************************************************************
-//* TIdSipRegistration Public methods ******************************************
-
-class function TIdSipRegistration.Method: String;
-begin
-  Result := MethodRegister;
-end;
-
-function TIdSipRegistration.IsRegistration: Boolean;
-begin
-  Result := true;
-end;
-
-procedure TIdSipRegistration.Terminate;
-begin
-  Self.UA.RemoveAction(Self);
-end;
-
-//* TIdSipRegistration Protected methods ***************************************
-
-function TIdSipRegistration.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
-var
-  TempTo: TIdSipToHeader;
-begin
-  TempTo := TIdSipToHeader.Create;
-  try
-    TempTo.Address := Self.CurrentRequest.RequestUri;
-
-    Result := Self.UA.CreateRegister(TempTo);
-  finally
-    TempTo.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TIdSipInboundRegistration                                                  *
-//******************************************************************************
-//* TIdSipInboundRegistration Public methods ***********************************
-
-constructor TIdSipInboundRegistration.Create(UA: TIdSipUserAgentCore;
-                                             Reg: TIdSipRequest);
-begin
-  inherited Create(UA);
-
-  Self.CurrentRequest.Assign(Reg);
-end;
-
-procedure TIdSipInboundRegistration.ReceiveRequest(Request: TIdSipRequest);
-var
-  Bindings: TIdSipContacts;
-  Date:     TIdSipDateHeader;
-  Response: TIdSipResponse;
-begin
-  if not Self.AcceptRequest(Request) then Exit;
-
-  if (Request.ContactCount = 1)
-    and Request.FirstContact.IsWildCard
-    and (Request.QuickestExpiry = 0) then begin
-
-    if not Self.BindingDB.RemoveAllBindings(Request) then
-      Self.RejectFailedRequest(Request)
-    else
-      Self.RejectRequest(Request, SIPOK);
-    Exit;
-  end;
-
-  if not Self.BindingDB.AddBindings(Request) then begin
-    Self.RejectFailedRequest(Request);
-    Exit;
-  end;
-
-  Bindings := TIdSipContacts.Create;
-  try
-    if Self.BindingDB.BindingsFor(Request,
-                                  Bindings) then begin
-      Response := Self.UA.CreateResponse(Request, SIPOK);
-      try
-        Response.AddHeaders(Bindings);
-
-        Date := TIdSipDateHeader.Create;
-        try
-          Date.Time.SetFromTDateTime(Now);
-          Response.AddHeader(Date);
-        finally
-          Date.Free;
-        end;
-
-        Self.SendResponse(Response);
-      finally
-        Response.Free;
-      end;
-    end
-    else begin
-      Self.RejectFailedRequest(Request);
-    end;
-  finally
-    Bindings.Free;
-  end;
-
-  Self.Terminate;
-end;
-
-//* TIdSipInboundRegistration Private methods **********************************
-
-function TIdSipInboundRegistration.AcceptRequest(Request: TIdSipRequest): Boolean;
-begin
-  // cf RFC 3261 section 10.3
-  // Steps 1, 2 & 3 - covered by Self.UA
-  Result := true;
-
-  // Step 4
-  if not Self.BindingDB.IsAuthorized(Request.From) then begin
-    Self.RejectForbidden(Request);
-    Result := false;
-    Exit;
-  end;
-
-  // Step 5
-  if not Self.BindingDB.IsValid(Request) then begin
-    Self.RejectNotFound(Request);
-    Result := false;
-    Exit;
-  end;
-
-  // Step 6 (or part thereof)
-  if Request.HasHeader(ContactHeaderFull) then begin
-    if Request.FirstContact.IsWildCard then begin
-      if (Request.ContactCount > 1) then begin
-        Self.RejectRequest(Request, SIPBadRequest);
-        Result := false;
-        Exit;
-      end;
-
-      if Request.FirstContact.WillExpire
-        and (Request.FirstContact.Expires = 0) then
-          Result := true
-      else begin
-        Self.RejectRequest(Request, SIPBadRequest);
-        Result := false;
-        Exit;
-      end;
-    end
-    else if Request.HasExpiry and (Request.QuickestExpiry < Self.UA.MinimumExpiryTime) then begin
-      Self.RejectExpireTooBrief(Request);
-      Result := false;
-    end;
-  end;
-
-  // Steps 7 & 8 in ReceiveRequest
-end;
-
-function TIdSipInboundRegistration.BindingDB: TIdSipAbstractBindingDatabase;
-begin
-  Result := Self.UA.BindingDB;
-end;
-
-procedure TIdSipInboundRegistration.RejectExpireTooBrief(Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.UA.CreateResponse(Request,
-                                     SIPIntervalTooBrief);
-  try
-    Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.UA.MinimumExpiryTime);
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipInboundRegistration.RejectFailedRequest(Request: TIdSipRequest);
-begin
-  Self.RejectRequest(Request, SIPInternalServerError);
-end;
-
-procedure TIdSipInboundRegistration.RejectForbidden(Request: TIdSipRequest);
-begin
-  Self.RejectRequest(Request, SIPForbidden);
-end;
-
-procedure TIdSipInboundRegistration.RejectNotFound(Request: TIdSipRequest);
-begin
-  Self.RejectRequest(Request, SIPNotFound);
-end;
-
-procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
-                                                  StatusCode: Cardinal);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.UA.CreateResponse(Request,
-                                     StatusCode);
-  try
-    Self.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TIdSipOutboundRegistration                                                 *
-//******************************************************************************
-//* TIdSipOutboundRegistration Public methods **********************************
-
-constructor TIdSipOutboundRegistration.Create(UA: TIdSipUserAgentCore);
-begin
-  inherited Create(UA);
-
-  Self.Bindings := TIdSipContacts.Create;
-end;
-
-destructor TIdSipOutboundRegistration.Destroy;
-begin
-  Self.Bindings.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipOutboundRegistration.AddListener(const Listener: IIdSipRegistrationListener);
-begin
-  Self.Listeners.AddListener(Listener);
-end;
-
-procedure TIdSipOutboundRegistration.FindCurrentBindings(Registrar: TIdSipUri);
-var
-  BlankBindings: TIdSipContacts;
-begin
-  BlankBindings := TIdSipContacts.Create;
-  try
-    Self.RegisterWith(Registrar, BlankBindings);
-  finally
-    BlankBindings.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
-var
-  Request: TIdSipRequest;
-begin
-  Request := Self.CreateRegister(Registrar, Bindings);
-  try
-    Self.Bindings.Clear;
-    Self.Bindings.Add(Bindings);
-
-    Self.SendRequest(Request);
-  finally
-    Request.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
-var
-  Binding: TIdSipContacts;
-begin
-  Binding := TIdSipContacts.Create;
-  try
-    Binding.Add(Contact);
-
-    Self.RegisterWith(Registrar, Binding);
-  finally
-    Binding.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
-begin
-  Self.Listeners.RemoveListener(Listener);
-end;
-
-procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
-var
-  RemovalBindings: TIdSipContacts;
-  Request:         TIdSipRequest;
-begin
-  RemovalBindings := TIdSipContacts.Create;
-  try
-    Self.Bindings.Clear;
-    Self.Bindings.Add(ContactHeaderFull);
-    Self.Bindings.First;
-    Self.Bindings.CurrentContact.IsWildCard := true;
-
-    Request := Self.CreateRegister(Registrar, Bindings);
-    try
-      Request.FirstExpires.NumericValue := 0;
-
-      Self.SendRequest(Request);
-    finally
-      Request.Free;
-    end;
-  finally
-    RemovalBindings.Free;
-  end;
-end;
-
-//* TIdSipOutboundRegistration Protected methods *******************************
-
-procedure TIdSipOutboundRegistration.ActionSucceeded(Response: TIdSipResponse);
-begin
-  Self.NotifyOfSuccess(Response);
-end;
-
-procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
-var
-  CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationFailedMethod;
-begin
-  CurrentBindings := TIdSipContacts.Create(Response.Headers);
-  try
-    Notification := TIdSipRegistrationFailedMethod.Create;
-    try
-      Notification.CurrentBindings := CurrentBindings;
-      Notification.Reason          := Response.Description;
-      Notification.Registration    := Self;
-
-      Self.Listeners.Notify(Notification);
-    finally
-      Notification.Free;
-    end;
-  finally
-    CurrentBindings.Free;
-  end;
-
-  Self.Terminate;
-end;
-
-function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
-begin
-  Result := not inherited ReceiveFailureResponse(Response);
-  
-  if Result then begin
-    case Response.StatusCode of
-      SIPIntervalTooBrief: begin
-        Self.ReissueRequest(Self.CurrentRequest.RequestUri,
-                            Response.FirstMinExpires.NumericValue);
-        Result := true;
-      end;
-
-      SIPBadExtension: begin
-        Result := Self.CurrentRequest.HasHeader(RequireHeader);
-        if Result then
-          Self.RetryWithoutExtensions(Self.CurrentRequest.RequestUri,
-                                      Response);
-      end;
-    else
-      Result := false;
-    end;
-  end;
-end;
-
-function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                               UsingSecureTransport: Boolean): Boolean;
-begin
-  Result := false;
-
-  if Response.HasHeader(ContactHeaderFull) then begin
-    Self.UA.RegisterWith(Response.FirstContact.Address);
-
-    Result := true;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
-begin
-  Self.CurrentRequest.Assign(Request);
-
-  inherited SendRequest(Request);
-end;
-
-//* TIdSipOutboundRegistration Private methods *********************************
-
-function TIdSipOutboundRegistration.CreateRegister(Registrar: TIdSipUri;
-                                                   Bindings: TIdSipContacts): TIdSipRequest;
-var
-  OldContacts: TIdSipContacts;
-  ToHeader: TIdSipToHeader;
-begin
-  ToHeader := TIdSipToHeader.Create;
-  try
-    ToHeader.Address := Registrar;
-
-    Result := Self.UA.CreateRegister(ToHeader);
-
-    // Bindings explicitly carries all Contact information. Thus we must remove
-    // any Contact information already in Result.
-    OldContacts := TIdSipContacts.Create(Result.Headers);
-    try
-      OldContacts.Clear;
-    finally
-      OldContacts.Free;
-    end;
-
-    Result.AddHeaders(Bindings);
-  finally
-    ToHeader.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
-var
-  CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationSucceededMethod;
-begin
-  CurrentBindings := TIdSipContacts.Create(Response.Headers);
-  try
-    Notification := TIdSipRegistrationSucceededMethod.Create;
-    try
-      Notification.CurrentBindings := CurrentBindings;
-      Notification.Registration    := Self;
-
-      Self.Listeners.Notify(Notification);
-    finally
-      Notification.Free;
-    end;
-  finally
-    CurrentBindings.Free;
-  end;
-
-  Self.Terminate;
-end;
-
-procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
-                                            MinimumExpiry: Cardinal);
-var
-  Bindings: TIdSipContacts;
-  Request: TIdSipRequest;
-begin
-  // We received a 423 Interval Too Brief from the registrar. Therefore we
-  // make a new REGISTER request with the registrar's minimum expiry.
-  Request := Self.CreateRegister(Registrar, Self.Bindings);
-  try
-    Bindings := TIdSipContacts.Create(Request.Headers);
-    try
-      Bindings.First;
-      while Bindings.HasNext do begin
-        if Bindings.CurrentContact.WillExpire then
-          Bindings.CurrentContact.Expires := Max(Bindings.CurrentContact.Expires,
-                                                     MinimumExpiry);
-        Bindings.Next;
-      end;
-    finally
-      Bindings.Free;
-    end;
-
-    Request.FirstExpires.NumericValue := MinimumExpiry;
-    Self.SendRequest(Request);
-  finally
-    Request.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
-                                                    Response: TIdSipResponse);
-var
-  Bindings: TIdSipContacts;
-  Request: TIdSipRequest;
-begin
-  Bindings := TIdSipContacts.Create;
-  try
-    Bindings.Add(Self.UA.Contact);
-
-    Request := Self.CreateRegister(Registrar, Bindings);
-    try
-      if not Response.HasHeader(UnsupportedHeader) then begin
-        // A 420 Bad Extension MUST have an unsupported header. In the
-        // interests of accepting liberally though, we just drop all
-        // Requires.
-        Request.RemoveAllHeadersNamed(RequireHeader);
-      end
-      else
-        Request.FirstRequire.RemoveValues(Response.FirstUnsupported);
-
-      Self.SendRequest(Request);
-    finally
-      Request.Free;
-    end;
-  finally
-    Bindings.Free;
-  end;
 end;
 
 //******************************************************************************
