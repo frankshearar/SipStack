@@ -16,6 +16,8 @@ uses
 
 type
   TIdWait = class(TObject)
+  private
+    fData:        TObject;
     fTriggerTime: Cardinal;
   public
     function  Due: Boolean;
@@ -23,6 +25,7 @@ type
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
 
+    property Data:        TObject  read fData write fData;
     property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;
   end;
 
@@ -62,7 +65,8 @@ type
     WaitEvent: TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
-                  Event: TIdWait);
+                  Event: TIdWait;
+                  Data: TObject);
     function  EarliestEvent: TIdWait;
     function  EventAt(Index: Integer): TIdWait;
     procedure InternalRemove(Event: Pointer);
@@ -75,9 +79,11 @@ type
     destructor  Destroy; override;
 
     procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TEvent); overload;
+                       Event: TEvent;
+                       Data: TObject = nil); overload;
     procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TNotifyEvent); overload;
+                       Event: TNotifyEvent;
+                       Data: TObject = nil); overload;
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveEvent(Event: TEvent); overload;
@@ -198,25 +204,27 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TEvent);
+                                 Event: TEvent;
+                                 Data: TObject = nil);
 var
   EventWait: TIdEventWait;
 begin
   // Add will free EventWait in the event of an exception
   EventWait := TIdEventWait.Create;
   EventWait.Event := Event;
-  Self.Add(MillisecsWait, EventWait);
+  Self.Add(MillisecsWait, EventWait, Data);
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TNotifyEvent);
+                                 Event: TNotifyEvent;
+                                 Data: TObject = nil);
 var
   EventWait: TIdNotifyEventWait;
 begin
   // Add will free EventWait in the event of an exception
   EventWait := TIdNotifyEventWait.Create;
   EventWait.Event := Event;
-  Self.Add(MillisecsWait, EventWait);
+  Self.Add(MillisecsWait, EventWait, Data);
 end;
 
 function TIdTimerQueue.Before(TimeA,
@@ -259,12 +267,14 @@ end;
 //* TIdTimerQueue Private methods **********************************************
 
 procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
-                            Event: TIdWait);
+                            Event: TIdWait;
+                            Data: TObject);
 begin
   Self.Lock.Acquire;
   try
     try
       Self.EventList.Add(Event);
+      Event.Data        := Data;
       Event.TriggerTime := AddModulo(GetTickCount,
                                      MillisecsWait,
                                      High(MillisecsWait));

@@ -40,6 +40,7 @@ type
   private
     CallbackEventOne: TEvent;
     CallbackEventTwo: TEvent;
+    Data:             TObject;
     EventOne:         TEvent;
     EventTwo:         TEvent;
     Lock:             TCriticalSection;
@@ -50,6 +51,7 @@ type
     T2:               TThreadEvent;
 
     procedure CheckNotifyEvent(Sender: TObject);
+    procedure CheckNotifyEventWithData(Sender: TObject);
     procedure NotifyEventOne(Sender: TObject);
     procedure NotifyEventTwo(Sender: TObject);
     procedure OnEventOneSet(Sender: TObject);
@@ -62,6 +64,7 @@ type
   published
     procedure TestBefore;
     procedure TestNotifyEvent;
+    procedure TestNotifyEventWithData;
     procedure TestOneEvent;
     procedure TestRemoveEvent;
     procedure TestRemoveNonExistentEvent;
@@ -163,13 +166,14 @@ begin
   inherited SetUp;
 
   Self.DefaultTimeout   := 100;
-  Self.ExceptionType    := Exception;
+  Self.ExceptionType    := nil;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.Notified         := false;
   Self.OrderOfFire      := '';
 
   Self.CallbackEventOne := TSimpleEvent.Create;
   Self.CallbackEventTwo := TSimpleEvent.Create;
+  Self.Data             := TObject.Create;
   Self.EventOne         := TSimpleEvent.Create;
   Self.EventTwo         := TSimpleEvent.Create;
   Self.Lock             := TCriticalSection.Create;
@@ -204,6 +208,7 @@ begin
   Self.Lock.Free;
   Self.EventTwo.Free;
   Self.EventOne.Free;
+  Self.Data.Free;
   Self.CallbackEventTwo.Free;
   Self.CallbackEventOne.Free;
 
@@ -216,6 +221,25 @@ procedure TestTIdTimerQueue.CheckNotifyEvent(Sender: TObject);
 begin
   Self.Notified := true;
   Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdTimerQueue.CheckNotifyEventWithData(Sender: TObject);
+begin
+  try
+    CheckEquals(Sender.ClassName,
+                TIdNotifyEventWait.ClassName,
+                'Unexpected object in CheckNotifyEventWithData');
+
+    Check(Self.Data = (Sender as TIdNotifyEventWait).Data,
+          'Unexpected data object');
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+
+  Self.CheckNotifyEvent(Sender);
 end;
 
 procedure TestTIdTimerQueue.NotifyEventOne(Sender: TObject);
@@ -312,6 +336,19 @@ begin
   Self.ExceptionMessage := 'Event didn''t fire';
 
   Self.WaitForSignaled(Self.ThreadEvent);
+  Check(Self.Notified, 'TNotifyEvent didn''t fire');
+end;
+
+procedure TestTIdTimerQueue.TestNotifyEventWithData;
+begin
+  Self.Queue.AddEvent(ShortTimeout,
+                      Self.CheckNotifyEventWithData,
+                      Self.Data);
+
+  Self.WaitForSignaled(Self.ThreadEvent);
+
+  if Assigned(Self.ExceptionType) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
   Check(Self.Notified, 'TNotifyEvent didn''t fire');
 end;
 
