@@ -31,7 +31,7 @@ type
     ResponseCount: Cardinal;
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
-    function  CreateRemoteOk(Invite: TIdSipRequest): TIdSipResponse;
+    function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
     function  LastSentAck: TIdSipRequest;
     function  LastSentRequest: TIdSipRequest;
     function  LastSentResponse: TIdSipResponse;
@@ -449,14 +449,28 @@ type
     procedure TestReceiveOK;
     procedure TestReceiveUnauthorized;
     procedure TestRemoveListener;
+    procedure TestReregisterTime;
     procedure TestSequenceNumberIncrements;
     procedure TestUsername;
   end;
 
+  TExpiryProc = procedure(ExpiryTime: Cardinal) of object;
+
   TestTIdSipOutboundRegister = class(TestTIdSipOutboundRegistration)
+  private
+    procedure CheckAutoReregister(ReceiveResponse: TExpiryProc;
+                                  EventIsScheduled: Boolean;
+                                  const MsgPrefix: String);
+    procedure ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
+    procedure ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
+    procedure ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
   protected
-    function CreateAction: TIdSipAction; override;
+    function  CreateAction: TIdSipAction; override;
   published
+    procedure TestAutoReregister;
+    procedure TestAutoReregisterContactHasExpires;
+    procedure TestAutoReregisterNoExpiresValue;
+    procedure TestAutoReregisterSwitchedOff;
     procedure TestReceiveIntervalTooBriefForOneContact;
     procedure TestRegister;
   end;
@@ -991,12 +1005,12 @@ begin
   end;
 end;
 
-function TTestCaseTU.CreateRemoteOk(Invite: TIdSipRequest): TIdSipResponse;
+function TTestCaseTU.CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
 begin
   // This message appears to originate from the network. Invite originates from
   // us so presumably has no To tag. Having come from the network, the response
   // WILL have a To tag.
-  Result := Self.Core.CreateResponse(Invite, SIPOK);
+  Result := Self.Core.CreateResponse(Request, SIPOK);
   Result.ToHeader.Tag := Self.Core.NextTag;
 end;
 
@@ -5782,6 +5796,32 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundRegistration.TestReregisterTime;
+const
+  OneMinute     = 60;
+  OneHour       = 60*OneMinute;
+  OneDay        = 24*OneHour; // Seconds in a day
+  FiveMinutes   = 5*OneMinute;
+  TwentyMinutes = 20*OneMinute;
+var
+  Reg: TIdSipOutboundRegistration;
+begin
+  Reg := Self.CreateAction as TIdSipOutboundRegistration;
+
+  CheckEquals(OneDay - FiveMinutes, Reg.ReregisterTime(OneDay), 'One day');
+  CheckEquals(OneHour - FiveMinutes, Reg.ReregisterTime(OneHour), 'One hour');
+  CheckEquals(TwentyMinutes - FiveMinutes,
+              Reg.ReregisterTime(TwentyMinutes), '20 minutes');
+
+  CheckEquals(FiveMinutes - OneMinute,
+              Reg.ReregisterTime(FiveMinutes),
+              '5 minutes');
+
+  CheckEquals(22, Reg.ReregisterTime(30), '30 seconds');
+  CheckEquals(1,  Reg.ReregisterTime(1), '1 second');
+  CheckEquals(1,  Reg.ReregisterTime(0), 'Zero');
+end;
+
 procedure TestTIdSipOutboundRegistration.TestSequenceNumberIncrements;
 var
   SeqNo: Cardinal;
@@ -5828,7 +5868,125 @@ begin
   Result.Send;
 end;
 
+//* TestTIdSipOutboundRegister Private methods *********************************
+
+procedure TestTIdSipOutboundRegister.CheckAutoReregister(ReceiveResponse: TExpiryProc;
+                                                         EventIsScheduled: Boolean;
+                                                         const MsgPrefix: String);
+const
+  ExpiryTime = 42;
+var
+  DebugTimer:    TIdDebugTimerQueue;
+  Event:         TNotifyEvent;
+  EventCount:    Integer;
+  LatestEvent:   TIdWait;
+begin
+  Event := Self.Core.OnReregister;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.Core.Timer := DebugTimer;
+
+    Self.CreateAction;
+
+    EventCount := DebugTimer.EventCount;
+    ReceiveResponse(ExpiryTime);
+
+    DebugTimer.LockTimer;
+    try
+      if EventIsScheduled then begin
+        Check(EventCount < DebugTimer.EventCount,
+              MsgPrefix + ': No timer added');
+
+        LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+        Check(LatestEvent.MatchEvent(@Event),
+              MsgPrefix + ': Wrong notify event');
+        Check(LatestEvent.DebugWaitTime > 0,
+              MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
+      end
+      else
+        CheckEquals(EventCount,
+                    DebugTimer.EventCount,
+                    MsgPrefix + ': Timer erroneously added');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.Core.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegister.ReceiveOkWithContactExpiresOf(ExpiryTime: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Self.LastSentRequest);
+  try
+    Response.Contacts := Self.LastSentRequest.Contacts;
+    Response.FirstContact.Expires := ExpiryTime;
+
+    Response.AddHeader(ContactHeaderFull).Value := Response.FirstContact.AsAddressOfRecord
+                                                 + '1;expires=' + IntToStr(ExpiryTime + 1);
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegister.ReceiveOkWithExpiresOf(ExpiryTime: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateRemoteOk(Self.LastSentRequest);
+  try
+    Response.Contacts := Self.LastSentRequest.Contacts;
+    Response.FirstExpires.NumericValue := ExpiryTime;
+
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundRegister.ReceiveOkWithNoExpires(ExpiryTime: Cardinal);
+begin
+  Self.ReceiveOk(Self.LastSentRequest);
+end;
+
 //* TestTIdSipOutboundRegister Published methods *******************************
+
+procedure TestTIdSipOutboundRegister.TestAutoReregister;
+begin
+  Self.Core.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
+                           true,
+                           'Expires header');
+end;
+
+procedure TestTIdSipOutboundRegister.TestAutoReregisterContactHasExpires;
+begin
+  Self.Core.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithContactExpiresOf,
+                           true,
+                           'Contact expires param');
+end;
+
+procedure TestTIdSipOutboundRegister.TestAutoReregisterNoExpiresValue;
+begin
+  Self.Core.AutoReRegister := true;
+  Self.CheckAutoReregister(Self.ReceiveOkWithNoExpires,
+                           false,
+                           'No Expires header or expires param');
+end;
+
+procedure TestTIdSipOutboundRegister.TestAutoReregisterSwitchedOff;
+begin
+  Self.Core.AutoReRegister := false;
+  Self.CheckAutoReregister(Self.ReceiveOkWithExpiresOf,
+                           false,
+                           'Expires header; Autoreregister = false');
+end;
 
 procedure TestTIdSipOutboundRegister.TestReceiveIntervalTooBriefForOneContact;
 const
