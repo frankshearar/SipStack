@@ -415,6 +415,7 @@ type
     procedure TestName;
     procedure TestReceived;
     procedure TestRemoveBranch;
+    procedure TestSrvQuery;
     procedure TestTTL;
     procedure TestValue; override;
     procedure TestValueTorture;
@@ -3786,7 +3787,27 @@ begin
               Self.V.FullValue,
               'AsString after RemoveBranch');
   Check(not Self.V.HasBranch,
-        'HasBranch claims there''s still a branch');            
+        'HasBranch claims there''s still a branch');
+end;
+
+procedure TestTIdSipViaHeader.TestSrvQuery;
+const
+  Domain = 'gw1.leo-ix.net';
+begin
+  Self.V.Value := 'SIP/2.0/TLS ' + Domain;
+  CheckEquals('_sips._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+
+  Self.V.Transport := TcpTransport;
+  CheckEquals('_sip._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+
+  Self.V.Transport := UdpTransport;
+  CheckEquals('_sip._udp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+
+  Self.V.Transport := SctpTransport;
+  CheckEquals('_sip._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+
+  Self.V.Transport := TlsOverSctpTransport;
+  CheckEquals('_sips._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 end;
 
 procedure TestTIdSipViaHeader.TestTTL;

@@ -724,6 +724,8 @@ type
                                         const Transport: String): Boolean;
     function  IsRFC3261Branch: Boolean;
     procedure RemoveBranch;
+    function  SrvQuery: String;
+    function  UsesSecureTransport: Boolean;
 
     property Branch:     String              read GetBranch write SetBranch;
     property SentBy:     String              read GetSentBy write SetSentBy;
@@ -1711,7 +1713,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSipDialog, IdUnicode;
+  IdGlobal, IdSipDialog, IdSipLocator, IdUnicode;
 
 const
   OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
@@ -4661,6 +4663,31 @@ begin
   // good, healthy RFC 3261 Via headers into twisted, perverted RFC 2543 Via
   // headers.
   Self.RemoveParameter(BranchParam);
+end;
+
+function TIdSipViaHeader.SrvQuery: String;
+begin
+  // Return the query name to use in an SRV (RFC 2782) lookup, as part of the
+  // SIP server location algorithms of RFC 3263.
+
+  Result := '_';
+
+  if Self.UsesSecureTransport then
+    Result := Result + SrvSipsService
+  else
+    Result := Result + SrvSipService;
+
+  if (Self.Transport = TlsTransport) then
+    Result := Result + '._tcp.' + Self.SentBy
+  else if (Self.Transport = TlsOverSctpTransport) then
+    Result := Result + '._sctp.' + Self.SentBy
+  else
+    Result := Result + '._' + Lowercase(Self.Transport) + '.' + Self.SentBy;
+end;
+
+function TIdSipViaHeader.UsesSecureTransport: Boolean;
+begin
+  Result := (Self.Transport = TlsTransport) or (Self.Transport = TlsOverSctpTransport);
 end;
 
 //* TIdSipViaHeader Protected methods ******************************************

@@ -590,7 +590,13 @@ begin
         else
           Self.ResolveSRV(Naptr[0].Value, Srv);
 
-        Result.AddLocationsFromSRVs(SRV);
+        if Srv.IsEmpty then begin
+          Self.ResolveNameRecords(AddressOfRecord.Host, ARecords);
+
+          Result.AddLocationsFromNames(Transport, AddressOfRecord.Port, ARecords);
+        end
+        else
+          Result.AddLocationsFromSRVs(Srv);
       finally
         ARecords.Free;
       end;
@@ -616,8 +622,9 @@ end;
 
 function TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse): TIdSipLocations;
 var
-  Names: TIdDomainNameRecords;
-  Port:  Cardinal;
+  Names:    TIdDomainNameRecords;
+  Port:     Cardinal;
+  Services: TIdSrvRecords;
 begin
   // cf RFC 3262, section 6:
   // Sending (unicast) responses:
@@ -650,15 +657,26 @@ begin
                        Response.LastHop.SentBy,
                        Response.LastHop.Port)
   else begin
-    Names := TIdDomainNameRecords.Create;
+    Services := TIdSrvRecords.Create;
     try
-      Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
+      Names := TIdDomainNameRecords.Create;
+      try
+        Self.ResolveSRV(Response.LastHop.SrvQuery, Services);
 
-      Result.AddLocationsFromNames(Response.LastHop.Transport,
-                                   Response.LastHop.Port,
-                                   Names);
+        if Services.IsEmpty then begin
+          Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
+
+          Result.AddLocationsFromNames(Response.LastHop.Transport,
+                                       Response.LastHop.Port,
+                                       Names);
+        end
+        else
+          Result.AddLocationsFromSRVs(Services);
+      finally
+        Names.Free;
+      end;
     finally
-      Names.Free;
+      Services.Free;
     end;
   end;
 end;

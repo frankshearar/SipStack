@@ -4341,14 +4341,17 @@ procedure TestLocation.TestAllLocationsFail;
 var
   Locations: TIdSipLocations;
 begin
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           SctpTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
+  // SRV records point to Self.Destination.Address.Host;
+  // Self.Destination.Address.Host resolves to two A records.
+
+  Self.Locator.AddSRV(Self.Destination.Address.Host,
+                      SrvTcpPrefix,
+                      0,
+                      0,
+                      IdPORT_SIP,
+                      Self.Destination.Address.Host);
+  Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.1');
+  Self.Locator.AddAAAA(Self.Destination.Address.Host, '::1');
 
   Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
   Self.MarkSentRequestCount;
@@ -4370,8 +4373,10 @@ end;
 
 procedure TestLocation.TestLooseRoutingProxy;
 const
-  ProxyTransport = SctpTransport;
-  ProxyUri       = 'sip:127.0.0.1;lr';
+  ProxyAAAARecord = '::1';
+  ProxyHost       = 'gw1.leo-ix.net';
+  ProxyTransport  = SctpTransport;
+  ProxyUri        = 'sip:' + ProxyHost + ';lr';
 var
   RequestUriTransport: String;
 begin
@@ -4380,14 +4385,13 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy  := true;
 
-  Self.Locator.AddLocation(ProxyUri,
-                           ProxyTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
+  Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, IdPORT_SIP, ProxyHost);
+  Self.Locator.AddAAAA(ProxyHost, ProxyAAAARecord);
+
+  Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix, 0, 0,
+                      IdPORT_SIP, Self.Destination.Address.Host);
+
+  Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
 
   Self.MarkSentRequestCount;
   Self.CreateAction;
@@ -4400,8 +4404,7 @@ end;
 
 procedure TestLocation.TestStrictRoutingProxy;
 const
-  ProxyTransport = SctpTransport;
-  ProxyUri       = 'sip:127.0.0.1';
+  ProxyUri = 'sip:127.0.0.1;transport=' + TransportParamSCTP;
 var
   RequestUriTransport: String;
 begin
@@ -4410,14 +4413,7 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy  := true;
 
-  Self.Locator.AddLocation(ProxyUri,
-                           ProxyTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
+  Self.Destination.Address.Transport := TransportParamTCP;
 
   Self.MarkSentRequestCount;
   Self.CreateAction;
@@ -4434,14 +4430,9 @@ const
 var
   Action: TIdSipAction;  
 begin
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           CorrectTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
+  Self.Locator.AddSRV(Self.Destination.Address.Host, SrvSctpPrefix, 0, 0, IdPORT_SIP, 'localhost');
+  Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix,  1, 0, IdPORT_SIP, 'localhost');
+  Self.Locator.AddA('localhost', '127.0.0.1');
 
   Self.MarkSentRequestCount;
   Action := Self.CreateAction;
