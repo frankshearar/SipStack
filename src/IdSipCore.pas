@@ -3355,6 +3355,7 @@ begin
     Response.AddHeader(SupportedHeaderFull).Value := Self.UA.AllowedExtensions;
     Response.AddHeader(ContactHeaderFull).Assign(Self.UA.Contact);
 
+    // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
     Response.FirstWarning.Code  := WarningMisc;
     Response.FirstWarning.Agent := Self.UA.HostName;
     Response.FirstWarning.Text  := '';
