@@ -5817,9 +5817,9 @@ begin
               Reg.ReregisterTime(FiveMinutes),
               '5 minutes');
 
-  CheckEquals(22, Reg.ReregisterTime(30), '30 seconds');
-  CheckEquals(1,  Reg.ReregisterTime(1), '1 second');
-  CheckEquals(1,  Reg.ReregisterTime(0), 'Zero');
+  CheckEquals(4*30 div 5, Reg.ReregisterTime(30), '30 seconds');
+  CheckEquals(1,          Reg.ReregisterTime(1), '1 second');
+  CheckEquals(1,          Reg.ReregisterTime(0), 'Zero');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestSequenceNumberIncrements;
