@@ -321,6 +321,12 @@ begin
   CheckEquals(AOR,
               Self.Uri.CanonicaliseAsAddressOfRecord,
               'URI with header');
+
+  AOR := 'sip:<wintermute>@tessier-ashpool.co.luna';
+  Self.Uri.Uri := 'sip:%3c%77intermute%3e@tessier-ashpool.co.luna';
+  CheckEquals(AOR,
+              Self.Uri.CanonicaliseAsAddressOfRecord,
+              'URI with escaped characters in user name');
 end;
 
 procedure TestTIdSipUri.TestCanonicaliseAsAddressOfRecordSips;
