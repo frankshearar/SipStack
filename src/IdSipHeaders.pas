@@ -464,30 +464,66 @@ type
     property HeaderClass: TIdSipHeaderClass read fHeaderClass;
   end;
 
-  TIdSipHeadersFilter = class;
-
+  // I am a set of headers. I may or may not be ordered. That depends on what
+  // sort've headers I contain. You may iterate over me using my External
+  // Iterator methods.
   TIdSipHeaderList = class(TObject)
   protected
     function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
   public
-    function Count: Integer; virtual; abstract;
-    function IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+    procedure Clear; virtual; abstract;
+    function  Count: Integer; virtual; abstract;
+    function CurrentHeader: TIdSipHeader; virtual; abstract;
+    procedure First; virtual; abstract;
+    function  HasNext: Boolean; virtual; abstract;
+    function  IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+    function  IsEmpty: Boolean;
+    procedure Next; virtual; abstract;
+    procedure Remove(Header: TIdSipHeader); virtual; abstract;
 
     property Items[const I: Integer]: TIdSipHeader read GetItems;
   end;
 
+  // I am a filter over an underlying set of headers. If you iterate over me
+  // you will only find HeaderName headers. You can still add arbitrary
+  // headers to me (i.e., to the set of headers I filter).
+  TIdSipHeadersFilter = class(TIdSipHeaderList)
+  private
+    CurrentIndex: Integer;
+    fHeaderName:  String;
+    Headers:      TIdSipHeaders;
+
+  protected
+    function GetItems(const Index: Integer): TIdSipHeader; override;
+  public
+    constructor Create(const Headers: TIdSipHeaders; const HeaderName: String);
+
+    procedure Add(Header: TIdSipHeader); overload;
+    procedure Add(Headers: TIdSipHeaderList); overload;
+    procedure Clear; override;
+    function  Count: Integer; override;
+    function  CurrentHeader: TIdSipHeader; override;
+    procedure First; override;
+    function  HasNext: Boolean; override;
+    procedure Next; override;
+    procedure Remove(Header: TIdSipHeader); override;
+    procedure RemoveAll;
+
+    property HeaderName:                  String       read fHeaderName;
+    property Items[const Index: Integer]: TIdSipHeader read GetItems;
+  end;
+
   TIdSipHeaders = class(TIdSipHeaderList)
   private
-    List: TObjectList;
+    CurrentIndex: Integer;
+    List:         TObjectList;
 
     class function HeaderTypes: TObjectList;
     class function IsHeader(const Header, ExpectedHeaderName: String): Boolean;
 
     function  ConstructHeader(HeaderName: String): TIdSipHeader;
     function  GetHeaders(const Name: String): TIdSipHeader;
-    function  GetValues(const Name: String): String;
     function  IndexOf(const HeaderName: String): Integer;
-    procedure SetValues(const Header, Value: String);
   protected
     function GetItems(const I: Integer): TIdSipHeader; override;
   public
@@ -515,37 +551,19 @@ type
     procedure Add(const Headers: TIdSipHeaderList); overload;
     procedure AddInReverseOrder(const Headers: TIdSipHeadersFilter);
     function  AsString: String;
-    procedure Clear;
+    procedure Clear; override;
+    function  CurrentHeader: TIdSipHeader; override;
     procedure Delete(const I: Integer);
     function  Count: Integer; override;
+    procedure First; override;
     function  HasHeader(const HeaderName: String): Boolean;
-    function  IsEmpty: Boolean;
-    procedure Remove(const Header: TIdSipHeader);
+    function  HasNext: Boolean; override;
+    procedure Next; override;
+    procedure Remove(Header: TIdSipHeader); override;
     procedure RemoveAll(const HeaderName: String);
 
-    property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
-    property  Values[const Header: String]: String       read GetValues write SetValues;
-  end;
-
-  TIdSipHeadersFilter = class(TIdSipHeaderList)
-  private
-    fHeaderName: String;
-    Headers:     TIdSipHeaders;
-  protected
-    function GetItems(const Index: Integer): TIdSipHeader; override;
-  public
-    constructor Create(const Headers: TIdSipHeaders; const HeaderName: String);
-
-    procedure Add(Header: TIdSipHeader); overload;
-    procedure Add(Headers: TIdSipHeaderList); overload;
-    procedure Clear;
-    function  Count: Integer; override;
-    function  IsEmpty: Boolean;
-    procedure Remove(Header: TIdSipHeader);
-    procedure RemoveAll;
-
-    property HeaderName:                  String       read fHeaderName;
-    property Items[const Index: Integer]: TIdSipHeader read GetItems;
+    // This returns the FIRST MATCHing header
+    property Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
@@ -2681,6 +2699,102 @@ begin
   end;
 end;
 
+function TIdSipHeaderList.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
+//******************************************************************************
+//* TIdSipHeadersFilter                                                        *
+//******************************************************************************
+//* TIdSipHeadersFilter Public methods *****************************************
+
+constructor TIdSipHeadersFilter.Create(const Headers: TIdSipHeaders; const HeaderName: String);
+begin
+  Self.fHeaderName := HeaderName;
+  Self.Headers     := Headers;
+end;
+
+procedure TIdSipHeadersFilter.Add(Header: TIdSipHeader);
+begin
+  Self.Headers.Add(Header);
+end;
+
+procedure TIdSipHeadersFilter.Add(Headers: TIdSipHeaderList);
+begin
+  Self.Headers.Add(Headers);
+end;
+
+procedure TIdSipHeadersFilter.Clear;
+begin
+  Self.Headers.RemoveAll(Self.HeaderName);
+end;
+
+function TIdSipHeadersFilter.Count: Integer;
+var
+  I: Integer;
+begin
+  Result := 0;
+  for I := 0 to Self.Headers.Count - 1 do
+    if (Self.Headers.Items[I].Name = Self.HeaderName) then
+      Inc(Result);
+end;
+
+function TIdSipHeadersFilter.CurrentHeader: TIdSipHeader;
+begin
+  if Self.IsEmpty or (Self.CurrentIndex >= Self.Count) then
+    Result := nil
+  else
+    Result := Self.GetItems(Self.CurrentIndex);
+end;
+
+procedure TIdSipHeadersFilter.First;
+begin
+  Self.CurrentIndex := 0;
+end;
+
+function TIdSipHeadersFilter.HasNext: Boolean;
+begin
+  Result := Self.CurrentIndex < Self.Count;
+end;
+
+procedure TIdSipHeadersFilter.Next;
+begin
+  Inc(Self.CurrentIndex);
+end;
+
+procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);
+begin
+  Self.Headers.Remove(Header);
+end;
+
+procedure TIdSipHeadersFilter.RemoveAll;
+begin
+  Self.Headers.RemoveAll(Self.HeaderName);
+end;
+
+//* TIdSipHeadersFilter Protected methods **************************************
+
+function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
+var
+  I:         Integer;
+  ItemCount: Integer;
+begin
+  Result    := nil;
+  I         := 0;
+  ItemCount := -1;
+
+  while (I < Self.Headers.Count) and not Assigned(Result) do begin
+    if (Self.Headers.Items[I].Name = Self.HeaderName) then
+      Inc(ItemCount);
+
+    if (ItemCount = Index) then
+      Result := Self.Headers.Items[I];
+
+    Inc(I);
+  end;
+end;
+
 //******************************************************************************
 //* TIdSipHeaders                                                              *
 //******************************************************************************
@@ -2852,7 +2966,7 @@ begin
     Self.List.Add(Result);
     Result.Name := HeaderName;
   except
-    Result.Free;
+    FreeAndNil(Result);
 
     raise;
   end;
@@ -2862,10 +2976,10 @@ procedure TIdSipHeaders.Add(const Header: TIdSipHeader);
 var
   H: TIdSipHeader;
 begin
-  H := Self.ConstructHeader(Header.Name);
-  H.Assign(Header);
-
-  Self.List.Add(H);
+  H := Self.Add(Header.Name);
+  
+  if Assigned(H) then
+    H.Assign(Header);
 end;
 
 procedure TIdSipHeaders.Add(const Headers: TIdSipHeaderList);
@@ -2898,6 +3012,14 @@ begin
   Self.List.Clear;
 end;
 
+function TIdSipHeaders.CurrentHeader: TIdSipHeader;
+begin
+  if Self.IsEmpty or (Self.CurrentIndex >= Self.Count) then
+    Result := nil
+  else
+    Result := Self.List[Self.CurrentIndex] as TIdSipHeader;
+end;
+
 procedure TIdSipHeaders.Delete(const I: Integer);
 begin
   Self.List.Delete(I);
@@ -2908,17 +3030,27 @@ begin
   Result := Self.List.Count;
 end;
 
+procedure TIdSipHeaders.First;
+begin
+  Self.CurrentIndex := 0;
+end;
+
 function TIdSipHeaders.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.IndexOf(HeaderName) <> -1;
 end;
 
-function TIdSipHeaders.IsEmpty: Boolean;
+function TIdSipHeaders.HasNext: Boolean;
 begin
-  Result := Self.Count = 0;
+  Result := Self.CurrentIndex < Self.Count;
 end;
 
-procedure TIdSipHeaders.Remove(const Header: TIdSipHeader);
+procedure TIdSipHeaders.Next;
+begin
+  Inc(Self.CurrentIndex);
+end;
+
+procedure TIdSipHeaders.Remove(Header: TIdSipHeader);
 begin
   Self.List.Remove(Header);
 end;
@@ -3030,20 +3162,6 @@ begin
     Result := Self.List[I] as TIdSipHeader;
 end;
 
-function TIdSipHeaders.GetValues(const Name: String): String;
-var
-  I: Integer;
-begin
-  I := Self.IndexOf(Name);
-
-  if (I = -1) then begin
-//    Result := Self.Add(Name).Value;
-    Result := ''
-  end
-  else
-    Result := (Self.List[I] as TIdSipHeader).Value;
-end;
-
 function TIdSipHeaders.IndexOf(const HeaderName: String): Integer;
 var
   Found: Boolean;
@@ -3060,91 +3178,6 @@ begin
     Result := -1;
 end;
 
-procedure TIdSipHeaders.SetValues(const Header, Value: String);
-var
-  I: Integer;
-begin
-  I := Self.IndexOf(Header);
-
-  if (I = -1) then
-    Self.Add(Header).Value := Value
-  else
-    (Self.List[I] as TIdSipHeader).Value := Value;
-end;
-
-//******************************************************************************
-//* TIdSipHeadersFilter                                                        *
-//******************************************************************************
-//* TIdSipHeadersFilter Public methods *****************************************
-
-constructor TIdSipHeadersFilter.Create(const Headers: TIdSipHeaders; const HeaderName: String);
-begin
-  Self.fHeaderName := HeaderName;
-  Self.Headers     := Headers;
-end;
-
-procedure TIdSipHeadersFilter.Add(Header: TIdSipHeader);
-begin
-  Self.Headers.Add(Header);
-end;
-
-procedure TIdSipHeadersFilter.Add(Headers: TIdSipHeaderList);
-begin
-  Self.Headers.Add(Headers);
-end;
-
-procedure TIdSipHeadersFilter.Clear;
-begin
-  Self.Headers.RemoveAll(Self.HeaderName);
-end;
-
-function TIdSipHeadersFilter.Count: Integer;
-var
-  I: Integer;
-begin
-  Result := 0;
-  for I := 0 to Self.Headers.Count - 1 do
-    if (Self.Headers.Items[I].Name = Self.HeaderName) then
-      Inc(Result);
-end;
-
-function TIdSipHeadersFilter.IsEmpty: Boolean;
-begin
-  Result := Self.Count = 0;
-end;
-
-procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);
-begin
-  Self.Headers.Remove(Header);
-end;
-
-procedure TIdSipHeadersFilter.RemoveAll;
-begin
-  Self.Headers.RemoveAll(Self.HeaderName);
-end;
-
-//* TIdSipHeadersFilter Protected methods **************************************
-
-function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
-var
-  I:         Integer;
-  ItemCount: Integer;
-begin
-  Result    := nil;
-  I         := 0;
-  ItemCount := -1;
-
-  while (I < Self.Headers.Count) and not Assigned(Result) do begin
-    if (Self.Headers.Items[I].Name = Self.HeaderName) then
-      Inc(ItemCount);
-
-    if (ItemCount = Index) then
-      Result := Self.Headers.Items[I];
-
-    Inc(I);
-  end;
-end;
-
 //******************************************************************************
 //* TIdSipViaPath                                                              *
 //******************************************************************************
@@ -3156,20 +3189,9 @@ begin
 end;
 
 function TIdSipViaPath.LastHop: TIdSipViaHeader;
-var
-  I: Integer;
 begin
-  Result := nil;
-  I := 0;
-
-  while (I < Self.Headers.Count) and not Assigned(Result) do
-    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
-      Result := Self.Headers.Items[I] as TIdSipViaHeader
-    else
-      Inc(I);
-
-//  if not Assigned(Result) then
-//    Result := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Self.First;
+  Result := Self.CurrentHeader as TIdSipViaHeader;
 end;
 
 function TIdSipViaPath.Length: Integer;

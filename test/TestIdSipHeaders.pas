@@ -306,6 +306,7 @@ type
     procedure TestCanonicaliseName;
     procedure TestClear;
     procedure TestDelete;
+    procedure TestFirst;
     procedure TestHasHeader;
     procedure TestHeaders;
     procedure TestItems;
@@ -323,10 +324,10 @@ type
     procedure TestIsTo;
     procedure TestIsVia;
     procedure TestIsWarning;
+    procedure TestIteratorVisitsAllHeaders;
     procedure TestRemove;
     procedure TestRemoveAll;
     procedure TestSetMaxForwards;
-    procedure TestValues;
   end;
 
   TestTIdSipHeadersFilter = class(TTestCase)
@@ -339,10 +340,12 @@ type
   published
     procedure TestAdd;
     procedure TestCount;
+    procedure TestFirst;
     procedure TestIsEmpty;
     procedure TestIsEqualToFilter;
     procedure TestIsEqualToHeaders;
     procedure TestItems;
+    procedure TestIteratorVisitsAllHeaders;
     procedure TestRemove;
     procedure TestRemoveAll;
   end;
@@ -2847,8 +2850,9 @@ begin
     Self.H.Add(NewHeader);
     CheckEquals(1, Self.H.Count, 'Count after Add(Header)');
 
+    Self.H.First;
     CheckEquals(NewHeader.AsString,
-                Self.H.Items[0].AsString,
+                Self.H.CurrentHeader.AsString,
                 'Data not copied');
   finally
     NewHeader.Free;
@@ -2861,7 +2865,10 @@ begin
   Self.H.Add('NewHeader').Value := 'FooBar';
   CheckEquals(1, Self.H.Count, 'Count after Add(HeaderName)');
 
-  CheckEquals('NewHeader: FooBar', Self.H.Items[0].AsString, 'AsString');
+  Self.H.First;
+  CheckEquals('NewHeader: FooBar',
+              Self.H.CurrentHeader.AsString,
+              'AsString');
 end;
 
 procedure TestTIdSipHeaders.TestAddHeaders;
@@ -2878,9 +2885,7 @@ begin
     Self.H.Add(NewHeaders);
     CheckEquals(NewHeaders.Count, Self.H.Count, 'Count after Add(Headers)');
 
-    CheckEquals('en', Self.H.Items[0].Value, '1st header');
-    CheckEquals('es', Self.H.Items[1].Value, '2nd header');
-    CheckEquals('fr', Self.H.Items[2].Value, '3rd header');
+    Check(Self.H.IsEqualTo(NewHeaders), 'Headers weren''t properly added');
   finally
     NewHeaders.Free;
   end;
@@ -2890,6 +2895,7 @@ procedure TestTIdSipHeaders.TestAddHeadersFilter;
 var
   NewHeaders: TIdSipHeaders;
   Filter:     TIdSipHeadersFilter;
+  Expected:   TIdSipHeaders;
 begin
   NewHeaders := TIdSipHeaders.Create;
   try
@@ -2906,9 +2912,16 @@ begin
       Self.H.Add(Filter);
       CheckEquals(Filter.Count, Self.H.Count, 'Count after Add(Filter)');
 
-      CheckEquals('en', Self.H.Items[0].Value, '1st header');
-      CheckEquals('es', Self.H.Items[1].Value, '2nd header');
-      CheckEquals('fr', Self.H.Items[2].Value, '3rd header');
+      Expected := TIdSipHeaders.Create;
+      try
+        Expected.Add(ContentLanguageHeader).Value := 'en';
+        Expected.Add(ContentLanguageHeader).Value := 'es';
+        Expected.Add(ContentLanguageHeader).Value := 'fr';
+
+        Check(Self.H.IsEqualTo(Expected), 'Filter doesn''t filter properly');
+      finally
+        Expected.Free;
+      end;
     finally
       Filter.Free;
     end;
@@ -3030,7 +3043,7 @@ end;
 
 procedure TestTIdSipHeaders.TestCanonicaliseName;
 begin
-  CheckEquals('', TIdSipHeaders.CanonicaliseName(''), '''''');
+  CheckEquals('', TIdSipHeaders.CanonicaliseName(''), 'Empty string');
   CheckEquals('New-Header', TIdSipHeaders.CanonicaliseName('New-Header'), 'New-Header');
   CheckEquals('new-header', TIdSipHeaders.CanonicaliseName('new-header'), 'new-header');
 
@@ -3278,6 +3291,20 @@ begin
   CheckEquals(0, Self.H.Count, 'Count after 4th Delete');
 end;
 
+procedure TestTIdSipHeaders.TestFirst;
+begin
+  Self.H.First;
+  CheckNull(Self.H.CurrentHeader, 'First element of an empty collection');
+
+  Self.H.Add('foo');
+  Self.H.First;
+  CheckNotNull(Self.H.CurrentHeader,
+               'First element of a non-empty collection');
+  CheckEquals('foo',
+              Self.H.CurrentHeader.Name,
+              'Name of first element');
+end;
+
 procedure TestTIdSipHeaders.TestHasHeader;
 begin
   Check(not Self.H.HasHeader(''), '''''');
@@ -3494,6 +3521,25 @@ begin
   Check(    TIdSipHeaders.IsWarning(WarningHeader), 'WarningHeader constant');
 end;
 
+procedure TestTIdSipHeaders.TestIteratorVisitsAllHeaders;
+var
+  X, Y, Z: TIdSipHeader;
+begin
+  X := Self.H.Add('X-X-X');
+  Y := Self.H.Add('X-X-Y');
+  Z := Self.H.Add('X-X-Z');
+
+  Self.H.First;
+  while Self.H.HasNext do begin
+    Self.H.CurrentHeader.Params['foo'] := 'bar';
+    Self.H.Next;
+  end;
+
+  CheckEquals('bar', X.Params['foo'], 'X wasn''t visited by iterator');
+  CheckEquals('bar', Y.Params['foo'], 'Y wasn''t visited by iterator');
+  CheckEquals('bar', Z.Params['foo'], 'Z wasn''t visited by iterator');
+end;
+
 procedure TestTIdSipHeaders.TestRemove;
 var
   X, Y, Z: TIdSipHeader;
@@ -3531,25 +3577,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipHeaders.TestValues;
-begin
-  CheckEquals(0, Self.H.Count, 'Header count of newly created headers');
-  CheckEquals('',
-              Self.H.Values[CallIdHeaderFull],
-              'Newly created header');
-  CheckEquals(0, Self.H.Count, 'Requesting a value doesn''t create a new header');
-
-  Self.H.Values[CallIdHeaderFull] := 'b';
-  CheckEquals('b',
-              Self.H.Values[CallIdHeaderFull],
-              'Header value not set');
-
-  Self.H.Values[ContentTypeHeaderFull] := 'Content-Type';
-  CheckEquals('Content-Type',
-              Self.H.Values[ContentTypeHeaderFull],
-              'New header value not set');
-end;
-
 //******************************************************************************
 //* TestTIdSipHeadersFilter                                                    *
 //******************************************************************************
@@ -3561,15 +3588,8 @@ begin
 
   Self.Headers := TIdSipHeaders.Create;
 
-  // Based on TestIdSipParser's BasicRequest
   Self.Headers.Add(MaxForwardsHeader).Value       := '70';
-  Self.Headers.Add(ViaHeaderFull).Value           := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
-  Self.Headers.Add(FromHeaderFull).Value          := 'Case <sip:case@fried.neurons.org>;1928301774';
-  Self.Headers.Add(CallIDHeaderFull).Value        := 'a84b4c76e66710@gw1.leo-ix.org';
-  Self.Headers.Add(CSeqHeader).Value              := '314159 INVITE';
-  Self.Headers.Add(ContactHeaderFull).Value       := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Headers.Add(ContentTypeHeaderFull).Value   := 'text/plain';
   Self.Headers.Add(ContentLengthHeaderFull).Value := '29';
   Self.Headers.Add(RouteHeader).Value             := 'localhost <sip:127.0.0.1>';
 
@@ -3611,6 +3631,20 @@ begin
   Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
   Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
   CheckEquals(4, Self.Filter.Count, 'Count with newly added headers');
+end;
+
+procedure TestTIdSipHeadersFilter.TestFirst;
+begin
+  Self.Headers.Clear;
+  Self.Headers.First;
+  CheckNull(Self.Filter.CurrentHeader,
+            'First element of an empty collection');
+
+  Self.Headers.Add(Self.Filter.HeaderName);
+  Self.Headers.First;
+  Self.Filter.First;
+  Check(Self.Headers.CurrentHeader = Self.Filter.CurrentHeader,
+  'First element of a non-empty collection');
 end;
 
 procedure TestTIdSipHeadersFilter.TestIsEmpty;
@@ -3696,12 +3730,37 @@ begin
   CheckEquals('<sip:127.0.0.3>',  Self.Filter.Items[3].Value, '4h Route');
 end;
 
+procedure TestTIdSipHeadersFilter.TestIteratorVisitsAllHeaders;
+var
+  Expected: TIdSipHeaders;
+begin
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+
+  Self.Filter.First;
+  while Self.Filter.HasNext do begin
+    Self.Filter.CurrentHeader.Params['foo'] := 'bar';
+    Self.Filter.Next;
+  end;
+
+  Expected := TIdSipHeaders.Create;
+  try
+    Expected.Add(MaxForwardsHeader).Value := '70';
+    Expected.Add(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>;foo=bar';
+    Expected.Add(ContentLengthHeaderFull).Value := '29';
+    Expected.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>;foo=bar';
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.2>;foo=bar';
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.3>;foo=bar';
+    Check(Expected.IsEqualTo(Self.Headers), 'Not all (Route) headers visited');
+  finally
+    Expected.Free;
+  end;
+end;
+
 procedure TestTIdSipHeadersFilter.TestRemove;
 var
   Route: TIdSipRouteHeader;
 begin
-  // MemProof thinks this is a memory leak. It's not. Self.Headers owns the
-  // object and frees it.
   Route := TIdSipRouteHeader.Create;
   try
     Route.Value := '<sip:127.0.0.1>';
@@ -3710,7 +3769,7 @@ begin
     Self.Filter.Add(Route);
     CheckEquals(3, Self.Filter.Count, 'Count after Add');
 
-    Self.Filter.Remove(Self.Filter.Items[2]);
+    Self.Filter.Remove(Self.Headers[Self.Filter.HeaderName]);
     CheckEquals(2, Self.Filter.Count, 'Count after Remove');
 
     Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
