@@ -3,7 +3,7 @@ unit TestIdNotification;
 interface
 
 uses
-  IdInterfacedObject, IdNotification, TestFramework;
+  IdInterfacedObject, IdNotification, SysUtils, TestFramework;
 
 type
   IIdFoo = interface
@@ -14,11 +14,11 @@ type
   TIdFoo = class(TIdInterfacedObject,
                  IIdFoo)
   private
-    fBarCalled: Boolean;
-
-    procedure Bar;
+    fBarCalled:   Boolean;
   public
     constructor Create;
+
+    procedure Bar; virtual;
 
     property BarCalled: Boolean read fBarCalled;
   end;
@@ -26,6 +26,24 @@ type
   TIdCallBar = class(TIdMethod)
   public
     procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdRaiseException = class(TIdFoo)
+  private
+    fExceptClass: ExceptClass;
+  public
+    procedure Bar; override;
+
+    property ExceptClass: ExceptClass read fExceptClass write fExceptClass;
+  end;
+
+  TIdSelfRemover = class(TIdFoo)
+  private
+    fObserved: TIdNotificationList;
+  public
+    procedure Bar; override;
+
+    property Observed: TIdNotificationList read fObserved write fObserved;
   end;
 
   TestTIdNotificationList = class(TTestCase)
@@ -37,12 +55,15 @@ type
   published
     procedure TestAddRemoveCount;
     procedure TestNotify;
+    procedure TestListenerRaisesException;
+    procedure TestListSwallowsExpectedExceptions;
+    procedure TestSelfRemovingListener;
   end;
 
 implementation
 
 uses
-  SysUtils;
+  Dialogs;
 
 function Suite: ITestSuite;
 begin
@@ -77,6 +98,30 @@ end;
 procedure TIdCallBar.Run(const Subject: IInterface);
 begin
   (Subject as IIdFoo).Bar;
+end;
+
+//******************************************************************************
+//* TIdRaiseException                                                          *
+//******************************************************************************
+//* TIdRaiseException Public methods *******************************************
+
+procedure TIdRaiseException.Bar;
+begin
+  inherited Bar;
+
+  raise Self.ExceptClass.Create(Self.ClassName + '.BlowUp');
+end;
+
+//******************************************************************************
+//* TIdSelfRemover                                                             *
+//******************************************************************************
+//* TIdSelfRemover Public methods **********************************************
+
+procedure TIdSelfRemover.Bar;
+begin
+  inherited Bar;
+
+  Self.Observed.RemoveListener(Self);
 end;
 
 //******************************************************************************
@@ -152,6 +197,82 @@ begin
     end;
   finally
     F1.Free;
+  end;
+end;
+
+procedure TestTIdNotificationList.TestListenerRaisesException;
+var
+  Failure:       TIdRaiseException;
+  FailureMethod: TIdCallBar;
+begin
+  FailureMethod := TIdCallBar.Create;
+  try
+    Failure := TIdRaiseException.Create;
+    try
+      Failure.ExceptClass := EConvertError;
+
+      Self.List.AddListener(Failure);
+
+      try
+        Self.List.Notify(FailureMethod);
+        Fail('No exception raised');
+      except
+        on EConvertError do;
+      end;
+    finally
+      Failure.Free;
+    end;
+  finally
+    FailureMethod.Free;
+  end;
+end;
+
+procedure TestTIdNotificationList.TestListSwallowsExpectedExceptions;
+var
+  Failure:       TIdRaiseException;
+  FailureMethod: TIdCallBar;
+begin
+  FailureMethod := TIdCallBar.Create;
+  try
+    Failure := TIdRaiseException.Create;
+    try
+      Failure.ExceptClass := EConvertError;
+      Self.List.AddExpectedException(Failure.ExceptClass);
+
+      Self.List.AddListener(Failure);
+
+      Self.List.Notify(FailureMethod);
+    finally
+      Failure.Free;
+    end;
+  finally
+    FailureMethod.Free;
+  end;
+end;
+
+procedure TestTIdNotificationList.TestSelfRemovingListener;
+var
+  Count:   Integer;
+  Remover: TIdSelfRemover;
+  Method:  TIdCallBar;
+begin
+  Method := TIdCallBar.Create;
+  try
+    Remover := TIdSelfRemover.Create;
+    try
+      Remover.Observed := Self.List;
+      Self.List.AddListener(Remover);
+
+      Count := Self.List.Count;
+      Self.List.Notify(Method);
+      Check(Remover.BarCalled, 'Listener not notified');
+
+      Check(Self.List.Count < Count, 'Listener didn''t remove itself');
+    finally
+      Remover.Free;
+    end;
+  finally
+    Method.Free;
   end;
 end;
 

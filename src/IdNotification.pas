@@ -12,7 +12,7 @@ unit IdNotification;
 interface
 
 uses
-  Classes, SyncObjs;
+  Classes, Dialogs, SyncObjs;
 
 type
   // I represent a reified method call.
@@ -29,21 +29,28 @@ type
   // TIdMethod.
   TIdNotificationList = class(TObject)
   private
-    List: TList;
-    Lock: TCriticalSection;
+    ExpectedExceptions:     TList;
+    ExpectedExceptionsLock: TCriticalSection;
+    List:                   TList;
+    Lock:                   TCriticalSection;
 
     procedure CopyList(Copy: TList);
+    function  Expects(ExceptionType: TClass): Boolean;
   public
     constructor Create;
     destructor  Destroy; override;
 
-    procedure AddListener(L: IInterface);
+    procedure AddExpectedException(ExceptionType: TClass);
+    procedure AddListener(const L: IInterface);
     function  Count: Integer;
     procedure Notify(Method: TIdMethod);
-    procedure RemoveListener(L: IInterface);
+    procedure RemoveListener(const L: IInterface);
   end;
 
 implementation
+
+uses
+  SysUtils;
 
 //******************************************************************************
 //* TIdMethod                                                                  *
@@ -64,8 +71,10 @@ constructor TIdNotificationList.Create;
 begin
   inherited Create;
 
-  Self.List := TList.Create;
-  Self.Lock := TCriticalSection.Create;
+  Self.ExpectedExceptions     := TList.Create;
+  Self.ExpectedExceptionsLock := TCriticalSection.Create;
+  Self.List                   := TList.Create;
+  Self.Lock                   := TCriticalSection.Create;
 end;
 
 destructor TIdNotificationList.Destroy;
@@ -78,10 +87,28 @@ begin
   end;
   Self.Lock.Free;
 
+  Self.ExpectedExceptionsLock.Acquire;
+  try
+    Self.ExpectedExceptions.Free;
+  finally
+    Self.ExpectedExceptionsLock.Release;
+  end;
+  Self.ExpectedExceptionsLock.Free;
+
   inherited Destroy;
 end;
 
-procedure TIdNotificationList.AddListener(L: IInterface);
+procedure TIdNotificationList.AddExpectedException(ExceptionType: TClass);
+begin
+  Self.ExpectedExceptionsLock.Acquire;
+  try
+    Self.ExpectedExceptions.Add(Pointer(ExceptionType));
+  finally
+    Self.ExpectedExceptionsLock.Release;
+  end;
+end;
+
+procedure TIdNotificationList.AddListener(const L: IInterface);
 begin
   Self.Lock.Acquire;
   try
@@ -108,24 +135,21 @@ var
 begin
   Copy := TList.Create;
   try
-    Self.Lock.Acquire;
-    try
-      Self.CopyList(Copy);
-    finally
-      Self.Lock.Release;
-    end;
+    Self.CopyList(Copy);
 
     for I := 0 to Copy.Count - 1 do
       try
         Method.Run(IInterface(Copy[I]));
       except
+        on E: Exception do
+          if not Self.Expects(E.ClassType) then raise;
       end;
   finally
     Copy.Free;
   end;
 end;
 
-procedure TIdNotificationList.RemoveListener(L: IInterface);
+procedure TIdNotificationList.RemoveListener(const L: IInterface);
 begin
   Self.Lock.Acquire;
   try
@@ -148,6 +172,24 @@ begin
       Copy.Add(Self.List[I]);
   finally
     Self.Lock.Release;
+  end;
+end;
+
+function TIdNotificationList.Expects(ExceptionType: TClass): Boolean;
+var
+  I: Integer;
+begin
+  Result := false;
+
+  Self.ExpectedExceptionsLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.ExpectedExceptions.Count) and not Result do begin
+      Result := TClass(Self.ExpectedExceptions[I]) = ExceptionType;
+      Inc(I);
+    end;
+  finally
+    Self.ExpectedExceptionsLock.Release;
   end;
 end;
 
