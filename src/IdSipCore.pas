@@ -285,12 +285,12 @@ type
     procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(Invite: TIdSipRequest);
     procedure NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
-    procedure OnFail(const Transaction: TIdSipTransaction;
+    procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transaction: TIdSipTransaction;
-                                const Receiver: TIdSipTransport);
-    procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport);
+    procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest;
                                       Transaction: TIdSipTransaction);
     procedure RejectRequest(Request: TIdSipRequest;
@@ -322,9 +322,9 @@ type
     function  DialogEstablished: Boolean;
     procedure Terminate;
     procedure Modify;
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction;
-                               const Receiver: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transaction: TIdSipTransaction;
+                               Receiver: TIdSipTransport);
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure ResendLastResponse; virtual;
 
@@ -1483,9 +1483,9 @@ procedure TIdSipSession.Modify;
 begin
 end;
 
-procedure TIdSipSession.OnReceiveRequest(const Request: TIdSipRequest;
-                                         const Transaction: TIdSipTransaction;
-                                         const Receiver: TIdSipTransport);
+procedure TIdSipSession.OnReceiveRequest(Request: TIdSipRequest;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport);
 var
   OK: TIdSipResponse;
 begin
@@ -1772,16 +1772,16 @@ begin
   IIdSipSessionListener(ObjectOrIntf).OnModifiedSession(Self, Invite);
 end;
 
-procedure TIdSipSession.OnFail(const Transaction: TIdSipTransaction;
+procedure TIdSipSession.OnFail(Transaction: TIdSipTransaction;
                                const Reason: String);
 begin
   if (Transaction = Self.InitialTran) then
     Self.MarkAsTerminated;
 end;
 
-procedure TIdSipSession.OnReceiveResponse(const Response: TIdSipResponse;
-                                          const Transaction: TIdSipTransaction;
-                                          const Receiver: TIdSipTransport);
+procedure TIdSipSession.OnReceiveResponse(Response: TIdSipResponse;
+                                          Transaction: TIdSipTransaction;
+                                          Receiver: TIdSipTransport);
 begin
   // We should check for "and Response.ToHeader.HasTag" but that would prevent
   // us connecting to X-Lite, the non-compliant SIP phone.
@@ -1805,7 +1805,7 @@ begin
   end;
 end;
 
-procedure TIdSipSession.OnTerminated(const Transaction: TIdSipTransaction);
+procedure TIdSipSession.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Self.RemoveTransaction(Transaction);
 

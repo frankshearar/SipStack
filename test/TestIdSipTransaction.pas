@@ -29,18 +29,18 @@ type
     function  CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
     procedure OnEndedSession(Session: TIdSipSession);
     procedure OnEstablishedSession(Session: TIdSipSession);
-    procedure OnFail(const Transaction: TIdSipTransaction;
+    procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewSession(Session: TIdSipSession);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transaction: TIdSipTransaction;
-                                const Transport: TIdSipTransport);
-    procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transaction: TIdSipTransaction;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Transport: TIdSipTransport);
+    procedure OnTerminated(Transaction: TIdSipTransaction);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -116,15 +116,15 @@ type
 
     procedure Completed(Sender: TObject;
                         const R: TIdSipResponse);
-    procedure OnFail(const Transaction: TIdSipTransaction;
+    procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transaction: TIdSipTransaction;
-                                const Transport: TIdSipTransport);
-    procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transaction: TIdSipTransaction;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Transport: TIdSipTransport);
+    procedure OnTerminated(Transaction: TIdSipTransaction);
     procedure Proceeding(Sender: TObject; const R: TIdSipResponse);
     procedure TransactionFail(Sender: TObject; const Reason: String);
     procedure Terminated(Sender: TIdSipTransaction);
@@ -468,7 +468,7 @@ procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(Session: TIdSipSe
 begin
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnFail(const Transaction: TIdSipTransaction;
+procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                                  const Reason: String);
 begin
 end;
@@ -483,21 +483,21 @@ begin
   Self.Session := Session;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
-                                                           const Transaction: TIdSipTransaction;
-                                                           const Transport: TIdSipTransport);
+procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
+                                                           Transaction: TIdSipTransaction;
+                                                           Transport: TIdSipTransport);
 begin
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(const Response: TIdSipResponse;
-                                                            const Transaction: TIdSipTransaction;
-                                                            const Transport: TIdSipTransport);
+procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
+                                                            Transaction: TIdSipTransaction;
+                                                            Transport: TIdSipTransport);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnReceiveResponseFired := true;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnTerminated(const Transaction: TIdSipTransaction);
+procedure TestTIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnTerminatedFired := true;
@@ -1300,30 +1300,30 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TTestTransaction.OnFail(const Transaction: TIdSipTransaction;
+procedure TTestTransaction.OnFail(Transaction: TIdSipTransaction;
                                   const Reason: String);
 begin
   Self.FailMsg           := Reason;
   Self.TransactionFailed := true;
 end;
 
-procedure TTestTransaction.OnReceiveRequest(const Request: TIdSipRequest;
-                                            const Transaction: TIdSipTransaction;
-                                            const Transport: TIdSipTransport);
+procedure TTestTransaction.OnReceiveRequest(Request: TIdSipRequest;
+                                            Transaction: TIdSipTransaction;
+                                            Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckReceiveRequest) then
     Self.CheckReceiveRequest(Self, Request);
 end;
 
-procedure TTestTransaction.OnReceiveResponse(const Response: TIdSipResponse;
-                                             const Transaction: TIdSipTransaction;
-                                             const Transport: TIdSipTransport);
+procedure TTestTransaction.OnReceiveResponse(Response: TIdSipResponse;
+                                             Transaction: TIdSipTransaction;
+                                             Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckReceiveResponse) then
     Self.CheckReceiveResponse(Self, Response);
 end;
 
-procedure TTestTransaction.OnTerminated(const Transaction: TIdSipTransaction);
+procedure TTestTransaction.OnTerminated(Transaction: TIdSipTransaction);
 begin
   if Assigned(Self.CheckTerminated) then
     Self.CheckTerminated(Transaction);

@@ -30,15 +30,15 @@ type
   // up your reference you will have a dangling pointer.
   IIdSipTransactionListener = interface
     ['{77B97FA0-7073-40BC-B3F0-7E53ED02213F}']
-    procedure OnFail(const Transaction: TIdSipTransaction;
+    procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction;
-                               const Receiver: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transaction: TIdSipTransaction;
-                                const Receiver: TIdSipTransport);
-    procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transaction: TIdSipTransaction;
+                               Receiver: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport);
+    procedure OnTerminated(Transaction: TIdSipTransaction);
   end;
 
   IIdSipUnhandledMessageListener = interface
@@ -89,15 +89,15 @@ type
                                                  Receiver: TIdSipTransport);
 
     // IIdSipTransactionListener
-    procedure OnFail(const Transaction: TIdSipTransaction;
+    procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transaction: TIdSipTransaction;
-                               const Receiver: TIdSipTransport); overload;
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transaction: TIdSipTransaction;
-                                const Receiver: TIdSipTransport); overload;
-    procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transaction: TIdSipTransaction;
+                               Receiver: TIdSipTransport); overload;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport); overload;
+    procedure OnTerminated(Transaction: TIdSipTransaction);
 
     // IIdSipTransportListener
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -676,24 +676,24 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.OnFail(const Transaction: TIdSipTransaction;
+procedure TIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                              const Reason: String);
 begin
 end;
 
-procedure TIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
-                                                       const Transaction: TIdSipTransaction;
-                                                       const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
+                                                       Transaction: TIdSipTransaction;
+                                                       Receiver: TIdSipTransport);
 begin
 end;
 
-procedure TIdSipTransactionDispatcher.OnReceiveResponse(const Response: TIdSipResponse;
-                                                        const Transaction: TIdSipTransaction;
-                                                        const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
+                                                        Transaction: TIdSipTransaction;
+                                                        Receiver: TIdSipTransport);
 begin
 end;
 
-procedure TIdSipTransactionDispatcher.OnTerminated(const Transaction: TIdSipTransaction);
+procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
 begin
 end;
 
