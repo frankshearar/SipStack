@@ -2016,7 +2016,7 @@ begin
   Result := (Token <> '') and (Token[1] = '[');
 end;
 
-//* TIdSipHostAndPort Private methods TIdSipHostAndPort
+//* TIdSipHostAndPort Private methods TIdSipHostAndPort ************************
 
 function TIdSipHostAndPort.GetValue: String;
 begin
