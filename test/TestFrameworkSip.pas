@@ -25,6 +25,7 @@ type
     class function CreateBasicResponse: TIdSipResponse;
     class function CreateLocalLoopRequest: TIdSipRequest;
     class function CreateLocalLoopResponse: TIdSipResponse;
+    class function BasicSDP(const Host: String): String;
   end;
 
   TTestCaseSip = class(TThreadingTestCase)
@@ -522,6 +523,16 @@ begin
   finally
     Request.Free;
   end;
+end;
+
+class function TIdSipTestResources.BasicSDP(const Host: String): String;
+begin
+  Result := 'v=0'#13#10
+          + 'o=sc 1106835019 1106835019 IN IP4 ' + Host + #13#10
+          + 's=Dummy on hold SDP'#13#10
+          + 'c=IN IP4 0.0.0.0'#13#10
+          + 'm=audio 65534 RTP/AVP 0'#13#10
+          + 'a=rtpmap:0 PCMU/8000'#13#10;
 end;
 
 //* TIdSipTestResources Private methods ****************************************
