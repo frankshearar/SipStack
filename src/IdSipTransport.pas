@@ -42,10 +42,6 @@ type
     TransportSendingListenerLock: TCriticalSection;
     TransportSendingListeners:    TList;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedOn: TIdSipIPTarget);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedOn: TIdSipIPTarget);
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
     function  GetBindings: TIdSocketHandles; virtual; abstract;
@@ -54,6 +50,10 @@ type
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
     procedure NotifyTransportSendingListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportSendingListeners(const Response: TIdSipResponse); overload;
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedFrom: TIdSipIPTarget); virtual;
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedFrom: TIdSipIPTarget);
     procedure SendRequest(const R: TIdSipRequest); virtual;
     procedure SendResponse(const R: TIdSipResponse); virtual;
     function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; virtual;
@@ -78,10 +78,10 @@ type
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
 
-    property Bindings:   TIdSocketHandles    read GetBindings;
-    property HostName:   String              read fHostName write fHostName;
-    property Port:       Cardinal            read GetPort write SetPort;
-    property Timeout:    Cardinal            read fTimeout write fTimeout;
+    property Bindings: TIdSocketHandles read GetBindings;
+    property HostName: String           read fHostName write fHostName;
+    property Port:     Cardinal         read GetPort write SetPort;
+    property Timeout:  Cardinal         read fTimeout write fTimeout;
   end;
 
   TIdSipTCPTransport = class(TIdSipTransport)
@@ -93,7 +93,7 @@ type
     procedure DoOnClientFinished(Sender: TObject);
     procedure DoOnTcpResponse(Sender: TObject;
                               const Response: TIdSipResponse;
-                              const ReceivedOn: TIdSipIPTarget);
+                              const ReceivedFrom: TIdSipIPTarget);
     procedure RemoveClient(Client: TIdSipTcpClient);
   protected
     Transport: TIdSipTcpServer;
@@ -147,6 +147,7 @@ type
   end;
 
   TIdSipUDPTransport = class;
+
   TIdServerCleanupThread = class(TIdThread)
   private
     fOwner:            TIdSipUDPTransport;
@@ -182,6 +183,8 @@ type
   protected
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedFrom: TIdSipIPTarget); override;
     procedure SendRequest(const R: TIdSipRequest); override;
     procedure SendResponse(const R: TIdSipResponse); override;
     procedure SetPort(const Value: Cardinal); override;
@@ -382,6 +385,27 @@ begin
   end;
 end;
 
+procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
+                                           const ReceivedFrom: TIdSipIPTarget);
+begin
+  // cf. RFC 3261 section 18.2.1
+  if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
+    or (Request.LastHop.SentBy <> ReceivedFrom.IP) then
+    Request.LastHop.Received := ReceivedFrom.IP;
+
+  Self.NotifyTransportListeners(Request);
+end;
+
+procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
+                                            const ReceivedFrom: TIdSipIPTarget);
+begin
+  // cf. RFC 3261 section 18.1.2
+
+  if Self.SentByIsRecognised(Response.LastHop) then begin
+    Self.NotifyTransportListeners(Response);
+  end;
+end;
+
 procedure TIdSipTransport.SendRequest(const R: TIdSipRequest);
 begin
   Self.RewriteOwnVia(R);
@@ -413,31 +437,10 @@ end;
 
 //* TIdSipTransport Private methods ********************************************
 
-procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                           const ReceivedOn: TIdSipIPTarget);
-begin
-  // cf. RFC 3261 section 18.2.1
-  if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
-    or (Request.LastHop.SentBy <> ReceivedOn.IP) then
-    Request.LastHop.Received := ReceivedOn.IP;
-
-  Self.NotifyTransportListeners(Request);
-end;
-
-procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                            const ReceivedOn: TIdSipIPTarget);
-begin
-  // cf. RFC 3261 section 18.1.2
-
-  if Self.SentByIsRecognised(Response.LastHop) then begin
-    Self.NotifyTransportListeners(Response);
-  end;
-end;
-
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
 begin
   Msg.LastHop.Transport := Self.GetTransportType;
-  Msg.LastHop.SentBy    := Self.HostName;
+  Msg.LastHop.SentBy := Self.HostName;
 end;
 
 //******************************************************************************
@@ -576,9 +579,9 @@ end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
                                              const Response: TIdSipResponse;
-                                             const ReceivedOn: TIdSipIPTarget);
+                                             const ReceivedFrom: TIdSipIPTarget);
 begin
-  Self.OnReceiveResponse(Response, ReceivedOn);
+  Self.OnReceiveResponse(Response, ReceivedFrom);
 end;
 
 procedure TIdSipTCPTransport.RemoveClient(Client: TIdSipTcpClient);
@@ -820,44 +823,26 @@ begin
   Result := Self.Transport.DefaultPort;
 end;
 
+procedure TIdSipUDPTransport.OnReceiveRequest(const Request: TIdSipRequest;
+                                              const ReceivedFrom: TIdSipIPTarget);
+begin
+  // RFC 3581 section 4
+  if Request.LastHop.HasRPort then begin
+    if not Request.LastHop.HasReceived then
+      Request.LastHop.Received := ReceivedFrom.IP;
+
+    Request.LastHop.RPort := ReceivedFrom.Port;
+  end;
+
+  inherited OnReceiveRequest(Request, ReceivedFrom);
+end;
+
 procedure TIdSipUDPTransport.SendRequest(const R: TIdSipRequest);
 var
-{
-  Client:   TIdUdpClient;
-  P:        TIdSipParser;
-  Reply:    String;
-  Response: TIdSipResponse;
-}
   Client: TIdSipUdpServer;
 begin
   inherited SendRequest(R);
-{
-  Client := TIdUdpClient.Create(nil);
-  try
-    Client.Host := R.RequestUri.Host;
-    Client.Port := R.RequestUri.Port;
-    Client.Send(R.AsString);
 
-    P := TIdSipParser.Create;
-    try
-      Reply := Client.ReceiveString(Self.Timeout);
-      while (Reply <> '') do begin
-        Response := P.ParseAndMakeResponse(Reply);
-        try
-          Self.NotifyTransportListeners(Response);
-        finally
-          Response.Free;
-        end;
-
-        Reply := Client.ReceiveString(Self.Timeout);
-      end;
-    finally
-      P.Free;
-    end;
-  finally
-    Client.Free;
-  end;
-}
   if not R.RequiresResponse then
     Self.SendResponseNotExpectingResponses(R)
   else begin
@@ -883,7 +868,14 @@ begin
   try
     if R.LastHop.HasReceived then begin
       Client.Host := R.LastHop.Received;
-      Client.Port := R.LastHop.Port;
+
+      // cf RFC 3581 section 4.
+      // TODO: this isn't quite right. We have to send the response
+      // from the ip/port that the request was received on.
+      if R.LastHop.HasRport then
+        Client.Port := R.LastHop.RPort
+      else
+        Client.Port := R.LastHop.Port;
     end
     else begin
       Client.Host := R.LastHop.SentBy;

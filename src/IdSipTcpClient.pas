@@ -13,11 +13,9 @@ type
 
   TIdSipTcpClient = class;
   TIdSipClientEvent = procedure(Sender: TObject) of object;
-  TIdSipRequestEvent = procedure(Sender: TObject;
-                                 const R: TIdSipRequest) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   const R: TIdSipResponse;
-                                  const ReceivedOn: TIdSipIPTarget) of object;
+                                  const ReceivedFrom: TIdSipIPTarget) of object;
 
   // Note that the Timeout property is not a global timeout - it's the maximum
   // length of time to wait for the next line of data to arrive.
@@ -29,7 +27,7 @@ type
 
     procedure DoOnFinished;
     procedure DoOnResponse(const R: TIdSipResponse;
-                           const ReceivedOn: TIdSipIPTarget);
+                           const ReceivedFrom: TIdSipIPTarget);
     function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
@@ -98,10 +96,10 @@ begin
 end;
 
 procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse;
-                                       const ReceivedOn: TIdSipIPTarget);
+                                       const ReceivedFrom: TIdSipIPTarget);
 begin
   if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, R, ReceivedOn);
+    Self.OnResponse(Self, R, ReceivedFrom);
 end;
 
 function TIdSipTcpClient.ReadResponse(var TimedOut: Boolean): String;
@@ -122,16 +120,16 @@ end;
 
 procedure TIdSipTcpClient.ReadResponses;
 var
-  Finished:   Boolean;
-  S:          String;
-  P:          TIdSipParser;
-  R:          TIdSipResponse;
-  ReceivedOn: TIdSipIPTarget;
+  Finished:     Boolean;
+  S:            String;
+  P:            TIdSipParser;
+  R:            TIdSipResponse;
+  ReceivedFrom: TIdSipIPTarget;
 begin
   Finished := false;
 
-  ReceivedOn.IP   := Self.Socket.Binding.PeerIP;
-  ReceivedOn.Port := Self.Socket.Binding.PeerPort;
+  ReceivedFrom.IP   := Self.Socket.Binding.PeerIP;
+  ReceivedFrom.Port := Self.Socket.Binding.PeerPort;
 
   try
     P := TIdSipParser.Create;
@@ -143,7 +141,7 @@ begin
           R := P.ParseAndMakeResponse(S);
           try
             R.Body := Self.ReadString(R.ContentLength);
-            Self.DoOnResponse(R, ReceivedOn);
+            Self.DoOnResponse(R, ReceivedFrom);
 
             Finished := R.IsFinal;
           finally

@@ -4,6 +4,7 @@ uses
   Forms,
   GuiTestRunner,
   TextTestRunner,
+  audioclasses in 'src\audioclasses.pas',
   IdRTP in 'src\IdRTP.pas',
   IdRTPClient in 'src\IdRTPClient.pas',
   IdRTPPCM in 'src\IdRTPPCM.pas',

@@ -6,6 +6,9 @@ uses
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, TestFrameworkEx;
 
 type
+  TIdSipRequestEvent = procedure(Sender: TObject;
+                                 const R: TIdSipRequest) of object;
+
   TestTIdSipTcpClient = class(TThreadingTestCase, IIdSipMessageListener)
   private
     CheckingRequestEvent:  TIdSipRequestEvent;
@@ -31,9 +34,12 @@ type
                                const ReceivedOn: TIdSipIPTarget);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const ReceivedOn: TIdSipIPTarget);
-    procedure PauseAndSendOkResponse(Sender: TObject; const Request: TIdSipRequest);
-    procedure SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
-    procedure SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
+    procedure PauseAndSendOkResponse(Sender: TObject;
+                                     const Request: TIdSipRequest);
+    procedure SendOkResponse(Sender: TObject;
+                             const Request: TIdSipRequest);
+    procedure SendProvisionalAndOkResponse(Sender: TObject;
+                                           const Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -233,40 +239,42 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject; const Request: TIdSipRequest);
-var
-  Threads: TList;
+procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject;
+                                                     const Request: TIdSipRequest);
 begin
   Sleep(200);
+  Self.SendOkResponse(Sender, Request);
+end;
+
+procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject;
+                                             const Request: TIdSipRequest);
+var
+  S:       String;
+  Threads: TList;
+begin
+  S := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
   Threads := Self.Server.Threads.LockList;
   try
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
   finally
     Self.Server.Threads.UnlockList;
   end;
 end;
 
-procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject;
+                                                           const Request: TIdSipRequest);
 var
+  OK:      String;
   Threads: TList;
+  Trying:  String;
 begin
+  Trying := StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []);
+  OK     := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
   Threads := Self.Server.Threads.LockList;
   try
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
-  finally
-    Self.Server.Threads.UnlockList;
-  end;
-end;
-
-procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
-var
-  Threads: TList;
-begin
-  Threads := Self.Server.Threads.LockList;
-  try
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []));
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Trying);
     Sleep(500);
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []));
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(OK);
   finally
     Self.Server.Threads.UnlockList;
   end;

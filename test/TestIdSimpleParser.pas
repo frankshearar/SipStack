@@ -109,11 +109,12 @@ end;
 
 procedure TestTIdSimpleParser.TestIsFQDN;
 begin
-  Check(not TIdSimpleParser.IsFQDN(''),        '''''');
-  Check(not TIdSimpleParser.IsFQDN('a.b.c-'),  'No trailing hyphens');
-  Check(not TIdSimpleParser.IsFQDN('a.-b.c'),  'No leading hyphens');
-  Check(not TIdSimpleParser.IsFQDN('a.1b.c'),  'No leading digits');
-  Check(not TIdSimpleParser.IsFQDN('a..1b.c'), 'Empty label');
+  Check(not TIdSimpleParser.IsFQDN(''),          '''''');
+  Check(not TIdSimpleParser.IsFQDN('127.0.0.1'), 'No leading digits');
+  Check(not TIdSimpleParser.IsFQDN('a.b.c-'),    'No trailing hyphens');
+  Check(not TIdSimpleParser.IsFQDN('a.-b.c'),    'No leading hyphens');
+  Check(not TIdSimpleParser.IsFQDN('a.1b.c'),    'No leading digits');
+  Check(not TIdSimpleParser.IsFQDN('a..1b.c'),   'Empty label');
   Check(not TIdSimpleParser.IsFQDN('a.b.abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz'),
         'Length(<label>) >= 64');
 

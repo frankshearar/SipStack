@@ -142,7 +142,7 @@ type
    *    don't make any attempt to store the raw header - we parse it, and when
    *    we write out the headers we write them in the simplest possible way. As
    *    a result we CANNOT duplicate the exact form of the original message, even
-   *    though the new message will have identical, semantically speaking.
+   *    though the new message will be identical, semantically speaking.
    *  * We do (because we have to) keep the order of headers. Any newly created
    *    headers are simply appended.
    *  * Any and all parsing errors are raised as exceptions that descend from
@@ -1152,9 +1152,15 @@ begin
 end;
 
 procedure TIdSipParser.CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
+var
+  Request: TIdSipRequest;
 begin
   Self.CheckRequiredResponseHeaders(Msg);
 
+  Request := Msg as TIdSipRequest;
+  if not Request.HasHeader(MaxForwardsHeader) then
+    Request.MaxForwards := Request.DefaultMaxForwards;
+    
 //  if not Msg.HasHeader(MaxForwardsHeader) then
 //    raise Msg.MalformedException.Create(MissingMaxForwards);
 end;

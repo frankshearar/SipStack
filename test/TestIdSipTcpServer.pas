@@ -36,18 +36,21 @@ type
     procedure TestRemoveOnNonEmptyList;
   end;
 
+  TIdSipRequestEvent = procedure(Sender: TObject;
+                                 const R: TIdSipRequest) of object;
+
   TestTIdSipTcpServer = class(TThreadingTestCase, IIdSipMessageListener)
   private
     procedure AcknowledgeEvent(Sender: TObject;
-                                 const Request: TIdSipRequest); overload;
+                               const Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
-                                 const Response: TIdSipResponse;
-                                 const ReceivedOn: TIdSipIPTarget); overload;
+                               const Response: TIdSipResponse;
+                               const ReceivedOn: TIdSipIPTarget); overload;
     procedure CheckInternalServerError(Sender: TObject;
-                                 const Response: TIdSipResponse;
-                                 const ReceivedOn: TIdSipIPTarget);
+                                       const Response: TIdSipResponse;
+                                       const ReceivedOn: TIdSipIPTarget);
     procedure CheckMultipleMessages(Sender: TObject;
-                              const Request: TIdSipRequest);
+                                    const Request: TIdSipRequest);
     procedure CheckMethodEvent(Sender: TObject;
                                const Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
@@ -72,9 +75,11 @@ type
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const ReceivedOn: TIdSipIPTarget);
     procedure OnServerDisconnect(AThread: TIdPeerThread);
-    procedure RaiseException(Sender: TObject; const Request: TIdSipRequest);
+    procedure RaiseException(Sender: TObject;
+                             const Request: TIdSipRequest);
     function  ReadResponse: String;
-    procedure Send200OK(Sender: TObject; const Request: TIdSipRequest);
+    procedure Send200OK(Sender: TObject;
+                        const Request: TIdSipRequest);
   protected
     CheckingRequestEvent:   TIdSipRequestEvent;
     CheckingResponseEvent:  TIdSipResponseEvent;
@@ -381,14 +386,14 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckInternalServerError(Sender: TObject;
-                                                 const Response: TIdSipResponse;
-                                                 const ReceivedOn: TIdSipIPTarget);
+                                                       const Response: TIdSipResponse;
+                                                       const ReceivedOn: TIdSipIPTarget);
 begin
   CheckEquals(SIPInternalServerError, Response.StatusCode, 'Status-Code');
 end;
 
 procedure TestTIdSipTcpServer.CheckMultipleMessages(Sender: TObject;
-                                              const Request: TIdSipRequest);
+                                                    const Request: TIdSipRequest);
 begin
   try
     Inc(Self.MethodCallCount);
@@ -622,7 +627,8 @@ begin
   Self.ConnectionDropped := true;
 end;
 
-procedure TestTIdSipTcpServer.RaiseException(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipTcpServer.RaiseException(Sender: TObject;
+                                             const Request: TIdSipRequest);
 begin
   raise Exception.Create('RaiseException');
 end;
@@ -640,7 +646,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.Send200OK(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipTcpServer.Send200OK(Sender: TObject;
+                                        const Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin

@@ -120,7 +120,7 @@ type
     procedure TestSetContactWildCard;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
-    procedure TestTerminateAllSessions;
+    procedure TestHangUpAllCalls;
   end;
 
   TestTIdSipSession = class(TTestCaseTU,
@@ -1667,7 +1667,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestTerminateAllSessions;
+procedure TestTIdSipUserAgentCore.TestHangUpAllCalls;
 var
   FirstSession:  TIdSipSession;
   SecondSession: TIdSipSession;
@@ -1686,10 +1686,10 @@ begin
   CheckEquals(2,
               Self.Core.SessionCount,
               'Session count');
-  Self.Core.TerminateAllSessions;
+  Self.Core.HangUpAllCalls;
   CheckEquals(0,
               Self.Core.SessionCount,
-              'Session count after TerminateAllSessions');
+              'Session count after HangUpAllCalls');
 end;
 
 //******************************************************************************

@@ -239,6 +239,7 @@ type
     procedure TestBranch;
     procedure TestHasBranch;
     procedure TestHasReceived;
+    procedure TestHasRport;
     procedure TestIsRFC3261Branch;
     procedure TestIsEqualTo;
     procedure TestMaddr;
@@ -2195,6 +2196,14 @@ begin
 
   Self.V.Received := '127.0.0.1';
   Check(Self.V.HasReceived, 'Received should have been set');
+end;
+
+procedure TestTIdSipViaHeader.TestHasRport;
+begin
+  Check(not Self.V.HasRport, 'No rport should be assigned on creation');
+
+  Self.V.Rport := 1024;
+  Check(Self.V.HasRport, 'Rport should have been set');
 end;
 
 procedure TestTIdSipViaHeader.TestIsRFC3261Branch;

@@ -3914,7 +3914,7 @@ procedure TestTIdSdpPayloadProcessor.TestMultipleMediaDescriptions;
 var
   Server: TIdUDPServer;
 begin
-  Self.Proc.Process('v=0'#13#10
+  Self.Proc.StartListening('v=0'#13#10
                   + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
                   + 's=-'#13#10
                   + 'c=IN IP4 127.0.0.1'#13#10
@@ -3951,7 +3951,7 @@ procedure TestTIdSdpPayloadProcessor.TestSingleMediaDescription;
 var
   Server: TIdUDPServer;
 begin
-  Self.Proc.Process('v=0'#13#10
+  Self.Proc.StartListening('v=0'#13#10
                   + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
                   + 's=-'#13#10
                   + 'c=IN IP4 127.0.0.1'#13#10
@@ -3979,7 +3979,7 @@ var
   I:       Integer;
   Server:  TIdUDPServer;
 begin
-  Self.Proc.Process('v=0'#13#10
+  Self.Proc.StartListening('v=0'#13#10
                   + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
                   + 's=-'#13#10
                   + 'c=IN IP4 127.0.0.1'#13#10

@@ -435,9 +435,9 @@ type
     function  DefaultHost: String;
     function  DefaultUsername: String;
     function  MediaType: String;
-    procedure Process(const RemoteSessionDescription: String);
     function  LocalSessionDescription: String;
     procedure RemoveDataListener(const Listener: IIdSipDataListener);
+    procedure StartListening(const RemoteSessionDescription: String);
     procedure StopListening;
 
     property BasePort: Integer       read fBasePort write fBasePort;
@@ -2368,27 +2368,6 @@ begin
   Result := SdpMimeType;
 end;
 
-procedure TIdSdpPayloadProcessor.Process(const RemoteSessionDescription: String);
-var
-  S:   TStringStream;
-  SDP: TIdSdpPayload;
-begin
-  Self.StopListening;
-  
-  S := TStringStream.Create(RemoteSessionDescription);
-  try
-    SDP := TIdSdpPayload.CreateFrom(S);
-    try
-      SDP.InitializeProfile(Self.Profile);
-      Self.SetUpMediaStreams(SDP);
-    finally
-      SDP.Free;
-    end;
-  finally
-    S.Free;
-  end;
-end;
-
 function TIdSdpPayloadProcessor.LocalSessionDescription: String;
 var
   I: Integer;
@@ -2422,6 +2401,27 @@ begin
     Self.DataListeners.Remove(Pointer(Listener));
   finally
     Self.DataListenerLock.Release;
+  end;
+end;
+
+procedure TIdSdpPayloadProcessor.StartListening(const RemoteSessionDescription: String);
+var
+  S:   TStringStream;
+  SDP: TIdSdpPayload;
+begin
+  Self.StopListening;
+
+  S := TStringStream.Create(RemoteSessionDescription);
+  try
+    SDP := TIdSdpPayload.CreateFrom(S);
+    try
+      SDP.InitializeProfile(Self.Profile);
+      Self.SetUpMediaStreams(SDP);
+    finally
+      SDP.Free;
+    end;
+  finally
+    S.Free;
   end;
 end;
 

@@ -384,10 +384,12 @@ type
     function  GetBranch: String;
     function  GetMaddr: String;
     function  GetReceived: String;
+    function  GetRport: Cardinal;
     function  GetTTL: Byte;
     procedure SetBranch(const Value: String);
     procedure SetMaddr(const Value: String);
     procedure SetReceived(const Value: String);
+    procedure SetRport(const Value: Cardinal);
     procedure SetTTL(const Value: Byte);
   protected
     function  GetName: String; override;
@@ -398,6 +400,7 @@ type
     function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
     function  HasBranch: Boolean;
     function  HasReceived: Boolean;
+    function  HasRport: Boolean;
     function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
     function  IsRFC3261Branch: Boolean;
 
@@ -406,6 +409,7 @@ type
     property Maddr:      String              read GetMaddr write SetMaddr;
     property Port:       Cardinal            read fPort write fPort;
     property Received:   String              read GetReceived write SetReceived;
+    property Rport:      Cardinal            read GetRport write SetRport;
     property SipVersion: String              read fSipVersion write fSipVersion;
     property Transport:  TIdSipTransportType read fTransport write fTransport;
     property TTL:        Byte                read GetTTL write SetTTL;
@@ -2205,6 +2209,11 @@ begin
   Result := Self.Received <> '';
 end;
 
+function TIdSipViaHeader.HasRport: Boolean;
+begin
+  Result := Self.HasParam(RPortParam);
+end;
+
 function TIdSipViaHeader.IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
 begin
   Result := ((T = sttTLS) and (Port = IdPORT_SIPS))
@@ -2304,34 +2313,42 @@ end;
 
 function TIdSipViaHeader.GetBranch: String;
 begin
-  if (Self.Parameters.IndexOfName(BranchParam) = -1) then
-    Result := ''
+  if Self.HasParam(BranchParam) then
+    Result := Self.Params[BranchParam]
   else
-    Result := Self.Params[BranchParam];
+    Result := '';
 end;
 
 function TIdSipViaHeader.GetMaddr: String;
 begin
-  if (Self.Parameters.IndexOfName(MaddrParam) = -1) then
-    Result := ''
+  if Self.HasParam(MaddrParam) then
+    Result := Self.Params[MaddrParam]
   else
-    Result := Self.Params[MaddrParam];
+    Result := '';
 end;
 
 function TIdSipViaHeader.GetReceived: String;
 begin
-  if (Self.Parameters.IndexOfName(ReceivedParam) = -1) then
-    Result := ''
+  if Self.HasParam(ReceivedParam) then
+    Result := Self.Params[ReceivedParam]
   else
-    Result := Self.Params[ReceivedParam];
+    Result := '';
+end;
+
+function TIdSipViaHeader.GetRport: Cardinal;
+begin
+  if Self.HasParam(RportParam) then
+    Result := StrToIntDef(Self.Params[RPortParam], 0)
+  else
+    Result := 0;
 end;
 
 function TIdSipViaHeader.GetTTL: Byte;
 begin
-  if (Self.Parameters.IndexOfName(TTLParam) = -1) then
-    Result := 0
+  if Self.HasParam(TTLParam) then
+    Result := StrToInt(Self.Params[TTLParam])
   else
-    Result := StrToInt(Self.Params[TTLParam]);
+    Result := 0;
 end;
 
 procedure TIdSipViaHeader.SetBranch(const Value: String);
@@ -2353,6 +2370,11 @@ begin
   Self.Params[ReceivedParam] := Value;
 
   Self.AssertReceivedWellFormed;
+end;
+
+procedure TIdSipViaHeader.SetRport(const Value: Cardinal);
+begin
+  Self.Params[RportParam] := IntToStr(Value);
 end;
 
 procedure TIdSipViaHeader.SetTTL(const Value: Byte);

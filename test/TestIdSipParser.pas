@@ -1037,15 +1037,10 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingMaxForwards,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Self.Request);
+    CheckEquals(Self.Request.DefaultMaxForwards,
+                Self.Request.MaxForwards,
+                'Max-Forwards wasn''t set to the default value');
   finally
     Str.Free;
   end;

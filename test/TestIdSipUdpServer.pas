@@ -7,6 +7,9 @@ uses
   IdUDPClient, SysUtils, TestFrameworkEx;
 
 type
+  TIdSipRequestEvent = procedure(Sender: TObject;
+                                 const R: TIdSipRequest) of object;
+
   TestTIdSipUdpServer = class(TThreadingTestCase,
                               IIdSipMessageListener)
   private

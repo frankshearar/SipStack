@@ -25,28 +25,22 @@ type
     Bye: TButton;
     Label3: TLabel;
     UDPDataCount: TLabel;
-    ExtraLog: TMemo;
-    Splitter1: TSplitter;
     procedure UiTimerTimer(Sender: TObject);
     procedure InviteClick(Sender: TObject);
     procedure ByeClick(Sender: TObject);
   private
     AudioPlayer:  TAudioData;
-    AudioStream:  TStream;
     DataStore:    TStream;
     Dispatch:     TIdSipTransactionDispatcher;
     Lock:         TCriticalSection;
     Media:        TIdSdpPayloadProcessor;
     RTPByteCount: Integer;
-    TransportTCP: TIdSipTransport;
-    TransportTLS: TIdSipTransport;
     TransportUDP: TIdSipTransport;
     UA:           TIdSipUserAgentCore;
     UDPByteCount: Integer;
 
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnChanged(const Observed: TObject);
-    procedure OnData(Origin: TAudioData; BlockCounter: Cardinal);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
@@ -54,6 +48,7 @@ type
     procedure OnNewData(const Data: TStream);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
@@ -62,10 +57,16 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
+    procedure StartPlayback;
+    procedure StartReadingData(const SDP: String);
+    procedure StopReadingData;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
   end;
+
+const
+  AudioFile = 'dump.wav';
 
 var
   rnidSpike: TrnidSpike;
@@ -91,35 +92,16 @@ var
 begin
   inherited Create(AOwner);
 
-  Self.AudioStream := TMemoryStream.Create;
-  Self.AudioPlayer := TAudioData.Create;
-  Self.AudioPlayer.AutoFreeSource := false;
-  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
-  Self.AudioPlayer.Assign(Self.AudioStream);
-  Self.AudioPlayer.OnData := Self.OnData;
-  Self.AudioPlayer.Play(AnyAudioDevice);
-
-  Self.RTPByteCount := 0;
-  Self.DataStore := TFileStream.Create('..\etc\dump.wav', fmCreate or fmShareDenyWrite);
-  Self.Lock      := TCriticalSection.Create;
+  Self.Lock := TCriticalSection.Create;
 
   Self.TransportUDP := TIdSipUdpTransport.Create(IdPORT_SIP);
   Binding := Self.TransportUDP.Bindings.Add;
   Binding.IP := GStack.LocalAddress;
   Binding.Port := IdPORT_SIP;
   Self.TransportUDP.HostName := Binding.IP;
-
-  Self.TransportTCP := TIdSipTcpTransport.Create(IdPORT_SIP);
-  Binding := Self.TransportTCP.Bindings.Add;
-  Binding.IP := Self.TransportUDP.HostName;
+  Binding := Self.TransportUDP.Bindings.Add;
+  Binding.IP := '127.0.0.1';
   Binding.Port := IdPORT_SIP;
-  Self.TransportTCP.HostName := Self.TransportUDP.HostName;
-
-  Self.TransportTLS := TIdSipTLSTransport.Create(IdPORT_SIPS);
-  Binding := Self.TransportTLS.Bindings.Add;
-  Binding.IP := Self.TransportUDP.HostName;
-  Binding.Port := IdPORT_SIPS;
-  Self.TransportTLS.HostName := Self.TransportUDP.HostName;
 
   Self.Media := TIdSdpPayloadProcessor.Create;
   Self.Media.Host := Self.TransportUDP.HostName;
@@ -127,14 +109,8 @@ begin
 
   Self.TransportUDP.AddTransportListener(Self);
   Self.TransportUDP.AddTransportSendingListener(Self);
-  Self.TransportTCP.AddTransportListener(Self);
-  Self.TransportTCP.AddTransportSendingListener(Self);
-  Self.TransportTLS.AddTransportListener(Self);
-  Self.TransportTLS.AddTransportSendingListener(Self);
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.TransportUDP);
-  Self.Dispatch.AddTransport(Self.TransportTCP);
-  Self.Dispatch.AddTransport(Self.TransportTLS);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
@@ -161,8 +137,6 @@ begin
 
   try
     Self.TransportUDP.Start;
-    Self.TransportTCP.Start;
-    Self.TransportTLS.Start;
   except
     on EIdCouldNotBindSocket do
       ShowMessage('Something''s hogged the SIP port (5060) - '
@@ -178,15 +152,10 @@ begin
   Self.Dispatch.Free;
   Self.Media.Free;
   Self.TransportUDP.Free;
-  Self.TransportTLS.Free;
-  Self.TransportTCP.Free;
 
   Self.Lock.Free;
   Self.DataStore.Free;
-
-  Self.AudioPlayer.Stop;
   Self.AudioPlayer.Free;
-  Self.AudioStream.Free;
 
   inherited Destroy;
 end;
@@ -204,18 +173,13 @@ begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
 end;
 
-procedure TrnidSpike.OnData(Origin: TAudioData; BlockCounter: Cardinal);
-begin
-  Self.ExtraLog.Lines.Add('OnData, BlockCounter=' + IntToStr(BlockCounter));
-end;
-
 procedure TrnidSpike.OnEstablishedSession(const Session: TIdSipSession);
 begin
 end;
 
 procedure TrnidSpike.OnEndedSession(const Session: TIdSipSession);
 begin
-  Self.Media.StopListening;
+  Self.StopReadingData;
 end;
 
 procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
@@ -229,8 +193,10 @@ begin
   try
     Inc(Self.RTPByteCount, Data.Size);
 
-    Self.AudioStream.CopyFrom(Data, 0);
-    Self.DataStore.CopyFrom(Data, 0);
+    if Assigned(Self.DataStore) then begin
+      Self.DataStore.Seek(0, soFromEnd);
+      Self.DataStore.CopyFrom(Data, 0);
+    end;
   finally
     Self.Lock.Release;
   end;
@@ -249,9 +215,17 @@ end;
 procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
 begin
   if (Session.Invite.ContentLength > 0) then
-    Self.Media.Process(Session.Invite.Body);
+    Self.StartReadingData(Session.Invite.Body);
 
+  Session.AddSessionListener(Self);
   Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
+end;
+
+procedure TrnidSpike.OnPlaybackStopped(Origin: TAudioData);
+begin
+  Self.AudioPlayer.Stop;
+  FreeAndNil(Self.AudioPlayer);
+  Self.Invite.Enabled := true;
 end;
 
 procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;
@@ -276,6 +250,40 @@ procedure TrnidSpike.OnSendResponse(const Response: TIdSipResponse;
                                     const Transport: TIdSipTransport);
 begin
   Self.LogMessage(Response);
+end;
+
+procedure TrnidSpike.StartPlayback;
+begin
+  Self.AudioPlayer := TAudioData.Create;
+  Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
+  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
+  Self.AudioPlayer.LoadFromFile(AudioFile);
+  Self.AudioPlayer.Play(AnyAudioDevice);
+end;
+
+procedure TrnidSpike.StartReadingData(const SDP: String);
+begin
+  if FileExists(AudioFile) then
+    DeleteFile(AudioFile);
+    FileClose(FileCreate(AudioFile));
+
+  if not Assigned(Self.DataStore) then
+    Self.DataStore := TFileStream.Create(AudioFile, fmOpenWrite);
+
+  Self.Invite.Enabled := false;
+  Self.RTPByteCount   := 0;
+  Self.UDPByteCount   := 0;
+
+  Self.Media.StartListening(SDP);
+end;
+
+procedure TrnidSpike.StopReadingData;
+begin
+  Self.Media.StopListening;
+
+  FreeAndNil(Self.DataStore);
+  Sleep(500);
+  Self.StartPlayback;
 end;
 
 //* TrnidSpike Published methods ***********************************************
@@ -310,11 +318,11 @@ begin
          + 't=0 0'#13#10
          + 'm=audio 8000 RTP/AVP 0'#13#10;
 
-    Self.Media.Process(SDP);
+    Self.StartReadingData(SDP);
 
     Self.UA.Call(Target,
                  SDP,
-                 SdpMimeType);
+                 SdpMimeType).AddSessionListener(Self);
   finally
     Target.Free;
   end;
@@ -322,8 +330,8 @@ end;
 
 procedure TrnidSpike.ByeClick(Sender: TObject);
 begin
-  Self.UA.TerminateAllSessions;
-  Self.Media.StopListening;
+  Self.UA.HangUpAllCalls;
+  Self.StopReadingData;
 end;
 
 end.

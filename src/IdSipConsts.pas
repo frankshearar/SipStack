@@ -65,6 +65,7 @@ const
   RequireHeader              = 'Require';
   RetryAfterHeader           = 'Retry-After';
   RouteHeader                = 'Route';
+  RportParam                 = 'rport';
   ServerHeader               = 'Server';
   SipName                    = 'SIP';
   SipScheme                  = 'sip';

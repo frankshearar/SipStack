@@ -203,7 +203,7 @@ type
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure RemoveSession(const Session: TIdSipSession);
     function  SessionCount: Integer;
-    procedure TerminateAllSessions;
+    procedure HangUpAllCalls;
     function  Username: String;
 
     property Contact:       TIdSipContactHeader read GetContact write SetContact;
@@ -881,7 +881,7 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.TerminateAllSessions;
+procedure TIdSipUserAgentCore.HangUpAllCalls;
 var
   CopyOfSessions: TObjectList;
   I:              Integer;

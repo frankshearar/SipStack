@@ -1,6 +1,6 @@
 object rnidSpike: TrnidSpike
-  Left = 192
-  Top = 103
+  Left = 181
+  Top = 197
   Width = 700
   Height = 480
   Caption = 'rnidSpike'
@@ -13,18 +13,10 @@ object rnidSpike: TrnidSpike
   OldCreateOrder = False
   PixelsPerInch = 96
   TextHeight = 13
-  object Splitter1: TSplitter
-    Left = 502
-    Top = 35
-    Width = 5
-    Height = 418
-    Cursor = crHSplit
-    Align = alRight
-  end
   object Log: TMemo
     Left = 0
     Top = 35
-    Width = 502
+    Width = 692
     Height = 418
     Align = alClient
     ScrollBars = ssVertical
@@ -39,42 +31,42 @@ object rnidSpike: TrnidSpike
     BevelOuter = bvNone
     TabOrder = 1
     object Label1: TLabel
-      Left = 280
+      Left = 448
       Top = 4
       Width = 71
       Height = 13
       Caption = 'Session Count:'
     end
     object SessionCounter: TLabel
-      Left = 354
+      Left = 522
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
     object Label2: TLabel
-      Left = 381
+      Left = 549
       Top = 4
       Width = 50
       Height = 13
       Caption = 'RTP bytes'
     end
     object RTPDataCount: TLabel
-      Left = 441
+      Left = 604
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
     object Label3: TLabel
-      Left = 379
+      Left = 547
       Top = 18
       Width = 51
       Height = 13
       Caption = 'UDP bytes'
     end
     object UDPDataCount: TLabel
-      Left = 441
+      Left = 604
       Top = 18
       Width = 6
       Height = 13
@@ -83,10 +75,10 @@ object rnidSpike: TrnidSpike
     object TargetUri: TEdit
       Left = 76
       Top = 1
-      Width = 121
+      Width = 290
       Height = 21
       TabOrder = 0
-      Text = 'sip:franks@ltfasil;transport=udp'
+      Text = 'sip:computername;transport=udp'
     end
     object Invite: TButton
       Left = 0
@@ -98,7 +90,7 @@ object rnidSpike: TrnidSpike
       OnClick = InviteClick
     end
     object Bye: TButton
-      Left = 200
+      Left = 368
       Top = 0
       Width = 75
       Height = 25
@@ -107,18 +99,10 @@ object rnidSpike: TrnidSpike
       OnClick = ByeClick
     end
   end
-  object ExtraLog: TMemo
-    Left = 507
-    Top = 35
-    Width = 185
-    Height = 418
-    Align = alRight
-    TabOrder = 2
-  end
   object UiTimer: TTimer
     Interval = 100
     OnTimer = UiTimerTimer
-    Left = 216
-    Top = 8
+    Left = 8
+    Top = 40
   end
 end
