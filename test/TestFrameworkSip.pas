@@ -66,11 +66,11 @@ type
   public
     constructor Create;
 
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
-    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
+    procedure OnNewSession(Session: TIdSipSession);
 
     property EndedSession:       Boolean read fEndedSession;
     property EstablishedSession: Boolean read fEstablishedSession;
@@ -78,7 +78,8 @@ type
     property NewSession:         Boolean read fNewSession;
   end;
 
-  TIdSipTestTransactionListener = class(TIdInterfacedObject, IIdSipTransactionListener)
+  TIdSipTestTransactionListener = class(TIdInterfacedObject,
+                                        IIdSipTransactionListener)
   private
     fFailReason:       String;
     fReceivedRequest:  Boolean;
@@ -262,23 +263,23 @@ begin
   Self.fNewSession         := false;
 end;
 
-procedure TIdSipTestSessionListener.OnEndedSession(const Session: TIdSipSession);
+procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession);
 begin
   Self.fEndedSession := true;
 end;
 
-procedure TIdSipTestSessionListener.OnEstablishedSession(const Session: TIdSipSession);
+procedure TIdSipTestSessionListener.OnEstablishedSession(Session: TIdSipSession);
 begin
   Self.fEstablishedSession := true;
 end;
 
-procedure TIdSipTestSessionListener.OnModifiedSession(const Session: TIdSipSession;
-                                                      const Invite: TIdSipRequest);
+procedure TIdSipTestSessionListener.OnModifiedSession(Session: TIdSipSession;
+                                                      Invite: TIdSipRequest);
 begin
   Self.fModifiedSession := true;
 end;
 
-procedure TIdSipTestSessionListener.OnNewSession(const Session: TIdSipSession);
+procedure TIdSipTestSessionListener.OnNewSession(Session: TIdSipSession);
 begin
   Self.fNewSession := true;
 end;

@@ -53,14 +53,15 @@ type
     RemoteUri:                 TIdSipURI;
     RouteSet:                  TIdSipHeaders;
 
-    procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
-    procedure OnNewSession(const Session: TIdSipSession);
-    procedure SimulateRemoteAck(const Response: TIdSipResponse);
-    procedure SimulateRemoteBye(const Dialog: TIdSipDialog);
+    procedure CheckCreateRequest(Dest: TIdSipToHeader;
+                                 Request: TIdSipRequest);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
+    procedure OnNewSession(Session: TIdSipSession);
+    procedure SimulateRemoteAck(Response: TIdSipResponse);
+    procedure SimulateRemoteBye(Dialog: TIdSipDialog);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -141,23 +142,23 @@ type
     SimpleSdp:              TIdSdpPayload;
 
     procedure CheckServerActiveOn(Port: Cardinal);
-    function  CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
+    function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
-    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnNewSession(Session: TIdSipSession);
     procedure OnSendRequest(const Request: TIdSipRequest;
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
-    procedure SimulateRemoteAccept(const Invite: TIdSipRequest);
-    procedure SimulateRemoteRinging(const Invite: TIdSipRequest);
-    procedure SimulateRemoteTryingWithNoToTag(const Invite: TIdSipRequest);
+    procedure SimulateRemoteAccept(Invite: TIdSipRequest);
+    procedure SimulateRemoteRinging(Invite: TIdSipRequest);
+    procedure SimulateRemoteTryingWithNoToTag(Invite: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -424,7 +425,8 @@ end;
 
 //* TestTIdSipUserAgentCore Private methods ************************************
 
-procedure TestTIdSipUserAgentCore.CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
+procedure TestTIdSipUserAgentCore.CheckCreateRequest(Dest: TIdSipToHeader;
+                                                     Request: TIdSipRequest);
 var
   Contact: TIdSipContactHeader;
 begin
@@ -463,22 +465,22 @@ begin
         'TCP should be the default transport');
 end;
 
-procedure TestTIdSipUserAgentCore.OnEndedSession(const Session: TIdSipSession);
+procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession);
 begin
   Self.OnEndedSessionFired := true;
 end;
 
-procedure TestTIdSipUserAgentCore.OnEstablishedSession(const Session: TIdSipSession);
+procedure TestTIdSipUserAgentCore.OnEstablishedSession(Session: TIdSipSession);
 begin
   Self.OnEstablishedSessionFired := true;
 end;
 
-procedure TestTIdSipUserAgentCore.OnModifiedSession(const Session: TIdSipSession;
-                                                    const Invite: TIdSipRequest);
+procedure TestTIdSipUserAgentCore.OnModifiedSession(Session: TIdSipSession;
+                                                    Invite: TIdSipRequest);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnNewSession(const Session: TIdSipSession);
+procedure TestTIdSipUserAgentCore.OnNewSession(Session: TIdSipSession);
 begin
   if Assigned(Self.CheckOnNewSession) then
     Self.CheckOnNewSession(Session);
@@ -488,7 +490,7 @@ begin
   Self.Session := Session;
 end;
 
-procedure TestTIdSipUserAgentCore.SimulateRemoteAck(const Response: TIdSipResponse);
+procedure TestTIdSipUserAgentCore.SimulateRemoteAck(Response: TIdSipResponse);
 var
   Ack:  TIdSipRequest;
   Temp: String;
@@ -514,7 +516,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.SimulateRemoteBye(const Dialog: TIdSipDialog);
+procedure TestTIdSipUserAgentCore.SimulateRemoteBye(Dialog: TIdSipDialog);
 var
   Bye: TIdSipRequest;
 begin
@@ -1869,7 +1871,7 @@ begin
   end;
 end;
 
-function TestTIdSipSession.CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
+function TestTIdSipSession.CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := Self.Core.CreateRequest(LocalDialog);
   try
@@ -1949,18 +1951,18 @@ begin
   Connection.Address     := '127.0.0.1';
 end;
 
-procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
+procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession);
 begin
   Self.Session := Session;
   Self.OnEndedSessionFired := true;
 end;
 
-procedure TestTIdSipSession.OnEstablishedSession(const Session: TIdSipSession);
+procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession);
 begin
 end;
 
-procedure TestTIdSipSession.OnModifiedSession(const Session: TIdSipSession;
-                                              const Invite: TIdSipRequest);
+procedure TestTIdSipSession.OnModifiedSession(Session: TIdSipSession;
+                                              Invite: TIdSipRequest);
 begin
   Self.OnModifiedSessionFired := true;
 end;
@@ -1972,7 +1974,7 @@ begin
 end;
 
 
-procedure TestTIdSipSession.OnNewSession(const Session: TIdSipSession);
+procedure TestTIdSipSession.OnNewSession(Session: TIdSipSession);
 begin
   Self.Session := Session;
   Self.Session.AddSessionListener(Self);
@@ -1990,7 +1992,7 @@ begin
     Self.SentRequestTerminated := true;
 end;
 
-procedure TestTIdSipSession.SimulateRemoteAccept(const Invite: TIdSipRequest);
+procedure TestTIdSipSession.SimulateRemoteAccept(Invite: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
@@ -2006,7 +2008,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipSession.SimulateRemoteRinging(const Invite: TIdSipRequest);
+procedure TestTIdSipSession.SimulateRemoteRinging(Invite: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
@@ -2018,7 +2020,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipSession.SimulateRemoteTryingWithNoToTag(const Invite: TIdSipRequest);
+procedure TestTIdSipSession.SimulateRemoteTryingWithNoToTag(Invite: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
