@@ -1551,20 +1551,20 @@ var
   Copy: TList;
   I: Integer;
 begin
-  Lock.Acquire;
+  Copy := TList.Create;
   try
-    Copy := TList.Create;
+    Lock.Acquire;
     try
       for I := 0 to List.Count - 1 do
         Copy.Add(List[I]);
-
-      for I := 0 to Copy.Count - 1 do
-        Proc(Copy[I]);
     finally
-      Copy.Free;
+      Lock.Release;
     end;
+
+    for I := 0 to Copy.Count - 1 do
+      Proc(Copy[I]);
   finally
-    Lock.Release;
+    Copy.Free;
   end;
 end;
 
