@@ -3016,8 +3016,7 @@ begin
       A1 := 'completely wrong';
 
     if (ChallengeHeader.Qop <> '') then begin
-      // TODO: Put a real cnonce here
-      AuthHeader.CNonce := 'f00f00';
+      AuthHeader.CNonce     := GRandomNumber.NextHexString;
       AuthHeader.NonceCount := Self.NonceCount;
 
       A2 := ReAttempt.Method + ':'
