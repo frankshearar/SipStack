@@ -203,7 +203,8 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@' + (Self.Transports[0] as TIdSipTransport).HostName;
+    From.Value := 'sip:franks@' + (Self.Transports[0] as TIdSipTransport).HostName
+                + ':' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
     Self.UA.From := From;
   finally
     From.Free;
@@ -218,6 +219,12 @@ begin
                 + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port) + ') - '
                 + 'kill it and restart this');
   end;
+
+  Self.UA.From.Address.Username    := 'rnid01';
+  Self.UA.Contact.Address.Username := 'rnid01';
+  Self.UA.HostName := GStack.LocalAddress;
+//  Self.UA.HasProxy := true;
+//  Self.UA.Proxy.Uri := 'sip:193.116.120.160';
 end;
 
 destructor TrnidSpike.Destroy;
@@ -308,6 +315,7 @@ procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
                                                Response: TIdSipResponse;
                                                var Password: String);
 begin
+  Password := 'rnid01';
 end;
 
 procedure TrnidSpike.OnChanged(Observed: TObject);
@@ -528,7 +536,7 @@ begin
 
   Target := TIdSipToHeader.Create;
   try
-    Target.Value := Self.TargetUri.Text;
+    Target.Address.Uri := Self.TargetUri.Text;
 
     Self.StartReadingData(Self.LocalSDP(Address));
 
@@ -561,8 +569,8 @@ begin
 end;
 
 procedure TrnidSpike.TextTimerTimer(Sender: TObject);
-var
-  Text: TIdRTPT140Payload;
+//var
+//  Text: TIdRTPT140Payload;
 begin
 {
   Self.TextLock.Acquire;
@@ -595,13 +603,18 @@ end;
 
 procedure TrnidSpike.BasePortChange(Sender: TObject);
 var
-  I, J: Integer;
+  I, J:    Integer;
+  NewPort: Integer;
 begin
   Self.StopTransports;
 
+  NewPort := StrToInt(BasePort.Text);
+
   for I := 0 to Self.Transports.Count - 1 do
     for J := 0 to (Self.Transports[I] as TIdSipTransport).Bindings.Count - 1 do
-      (Self.Transports[I] as TIdSipTransport).Bindings[J].Port := StrToInt(BasePort.Text);
+      (Self.Transports[I] as TIdSipTransport).Bindings[J].Port := NewPort;
+
+  Self.UA.From.Address.Port := NewPort;
 
   Self.StartTransports;
 end;
@@ -612,7 +625,7 @@ var
 begin
   Registrar := TIdSipUri.Create(Self.RegistrarUri.Text);
   try
-    Self.UA.RegisterWith(Registrar);
+    Self.UA.RegisterWith(Registrar).AddListener(Self);
   finally
     Registrar.Free;
   end;
