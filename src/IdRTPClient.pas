@@ -23,6 +23,7 @@ type
     function  DefaultMaximumPayloadSize: Cardinal; virtual;
     procedure Send(Data: String; PayloadType: TIdRTPPayloadType); overload;
     procedure Send(Data: TStream; PayloadType: TIdRTPPayloadType); overload;
+    procedure Send(Packet: TIdRTPPayload); overload;
 
     property MaximumPayloadSize: Cardinal      read fMaximumPayloadSize write fMaximumPayloadSize;
     property Profile:            TIdRTPProfile read GetProfile write fProfile;
@@ -114,6 +115,10 @@ begin
       Packet.Free;
     end;
   until (BytesRead < BufLen);
+end;
+
+procedure TIdRTPClient.Send(Packet: TIdRTPPayload);
+begin
 end;
 
 //* TIdRTPClient Private methods ***********************************************

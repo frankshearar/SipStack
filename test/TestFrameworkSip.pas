@@ -19,7 +19,8 @@ type
   public
     constructor Create;
 
-    procedure OnNewData(const Data: TStream);
+    procedure OnNewData(const Data: TStream;
+                        const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
 
     property NewData: Boolean read fNewData;
@@ -188,7 +189,8 @@ begin
   Self.fNewData := false;
 end;
 
-procedure TIdSipTestDataListener.OnNewData(const Data: TStream);
+procedure TIdSipTestDataListener.OnNewData(const Data: TStream;
+                                           const Format: TIdRTPEncoding);
 begin
   Self.fNewData := true;
 end;

@@ -3,7 +3,7 @@ unit TestIdSipCore;
 interface
 
 uses
-  Classes, IdRTPClient, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
+  Classes, IdRTP, IdRTPClient, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockCore,
   IdSipMockTransactionDispatcher, IdSipTransaction, IdSipTransport,
   TestFramework, TestFrameworkSip;
@@ -148,7 +148,8 @@ type
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
-    procedure OnNewData(const Data: TStream);
+    procedure OnNewData(const Data: TStream;
+                        const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnSendRequest(const Request: TIdSipRequest;
@@ -208,14 +209,14 @@ const
 implementation
 
 uses
-  IdException, IdGlobal, IdRTP, IdSipConsts, IdSocketHandle,
+  IdException, IdGlobal, IdSipConsts, IdSocketHandle,
   IdUdpServer, SyncObjs, SysUtils, TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-//  Result.AddTest(TestTIdSipAbstractCore.Suite);
-//  Result.AddTest(TestTIdSipUserAgentCore.Suite);
+  Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipSession.Suite);
 end;
 
@@ -1940,7 +1941,8 @@ begin
   Self.OnModifiedSessionFired := true;
 end;
 
-procedure TestTIdSipSession.OnNewData(const Data: TStream);
+procedure TestTIdSipSession.OnNewData(const Data: TStream;
+                                      const Format: TIdRTPEncoding);
 begin
   Self.ThreadEvent.SetEvent;
 end;

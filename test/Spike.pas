@@ -3,7 +3,7 @@ unit Spike;
 interface
 
 uses
-  audioclasses, Classes, Controls, ExtCtrls, Forms, IdSdp, IdSipCore,
+  audioclasses, Classes, Controls, ExtCtrls, Forms, IdRTP, IdSdp, IdSipCore,
   IdSipMessage, IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs;
 
 type
@@ -25,9 +25,46 @@ type
     Bye: TButton;
     Label3: TLabel;
     UDPDataCount: TLabel;
-    procedure UiTimerTimer(Sender: TObject);
-    procedure InviteClick(Sender: TObject);
+    Splitter1: TSplitter;
+    Panel2: TPanel;
+    Button0: TButton;
+    Button9: TButton;
+    Button8: TButton;
+    Button7: TButton;
+    Button6: TButton;
+    Button5: TButton;
+    Button4: TButton;
+    Button3: TButton;
+    Button2: TButton;
+    Button1: TButton;
+    ButtonStar: TButton;
+    ButtonHash: TButton;
+    ButtonA: TButton;
+    ButtonB: TButton;
+    ButtonC: TButton;
+    ButtonD: TButton;
+    ButtonFlash: TButton;
+    procedure Button0Click(Sender: TObject);
+    procedure Button1Click(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+    procedure Button3Click(Sender: TObject);
+    procedure Button4Click(Sender: TObject);
+    procedure Button5Click(Sender: TObject);
+    procedure Button6Click(Sender: TObject);
+    procedure Button7Click(Sender: TObject);
+    procedure Button8Click(Sender: TObject);
+    procedure Button9Click(Sender: TObject);
+    procedure ButtonStarClick(Sender: TObject);
+    procedure ButtonHashClick(Sender: TObject);
+    procedure ButtonAClick(Sender: TObject);
+    procedure ButtonBClick(Sender: TObject);
+    procedure ButtonCClick(Sender: TObject);
+    procedure ButtonDClick(Sender: TObject);
+    procedure ButtonFlashClick(Sender: TObject);
     procedure ByeClick(Sender: TObject);
+    procedure FormKeyPress(Sender: TObject; var Key: Char);
+    procedure InviteClick(Sender: TObject);
+    procedure UiTimerTimer(Sender: TObject);
   private
     AudioPlayer:  TAudioData;
     DataStore:    TStream;
@@ -40,13 +77,15 @@ type
     UA:           TIdSipUserAgentCore;
     UDPByteCount: Integer;
 
+    procedure Flash(const Btn: TButton);
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnChanged(const Observed: TObject);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
-    procedure OnNewData(const Data: TStream);
+    procedure OnNewData(const Data: TStream;
+                        const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnPlaybackStopped(Origin: TAudioData);
@@ -58,6 +97,9 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
+    procedure ProcessPCMMu(const Data: TStream);
+    procedure ProcessTelephoneEvent(const Data: TStream);
+    procedure SendDTMF(const Event: Byte);
     procedure StartReadingData(const SDP: String);
     procedure StopReadingData;
   public
@@ -76,8 +118,8 @@ implementation
 {$R *.dfm}
 
 uses
-  Dialogs, IdGlobal, IdSipConsts, IdSipHeaders, IdSocketHandle, IdStack,
-  SysUtils;
+  Dialogs, Graphics, IdGlobal, IdSipConsts, IdSipHeaders, IdSocketHandle,
+  IdStack, SysUtils;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -178,6 +220,13 @@ end;
 
 //* TrnidSpike Private methods *************************************************
 
+procedure TrnidSpike.Flash(const Btn: TButton);
+begin
+  Btn.Font.Color := clGreen;
+  Sleep(100);
+  Btn.Font.Color := clBlack;
+end;
+
 procedure TrnidSpike.LogMessage(const Msg: TIdSipMessage);
 begin
   Self.Log.Lines.Add(Msg.AsString);
@@ -203,23 +252,14 @@ procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
 begin
 end;
 
-procedure TrnidSpike.OnNewData(const Data: TStream);
+procedure TrnidSpike.OnNewData(const Data: TStream;
+                               const Format: TIdRTPEncoding);
 begin
-  Self.Lock.Acquire;
-  try
-    Inc(Self.RTPByteCount, Data.Size);
-
-    Self.AudioPlayer.Lock;
-    try
-      if Assigned(Self.DataStore) then begin
-        Self.DataStore.Seek(0, soFromEnd);
-        Self.DataStore.CopyFrom(Data, 0);
-      end;
-    finally
-      Self.AudioPlayer.UnLock;                        
-    end;
-  finally
-    Self.Lock.Release;
+  if (Format.Name = PCMMuLawEncoding) then begin
+    Self.ProcessPCMMu(Data);
+  end
+  else if (Format.Name = TelephoneEventEncoding) then begin
+    Self.ProcessTelephoneEvent(Data);
   end;
 end;
 
@@ -271,6 +311,61 @@ begin
   Self.LogMessage(Response);
 end;
 
+procedure TrnidSpike.ProcessPCMMu(const Data: TStream);
+begin
+  Self.Lock.Acquire;
+  try
+    Inc(Self.RTPByteCount, Data.Size);
+
+    Self.AudioPlayer.Lock;
+    try
+      if Assigned(Self.DataStore) then begin
+        Self.DataStore.Seek(0, soFromEnd);
+        Self.DataStore.CopyFrom(Data, 0);
+      end;
+    finally
+      Self.AudioPlayer.UnLock;
+    end;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+procedure TrnidSpike.ProcessTelephoneEvent(const Data: TStream);
+var
+  Tone: Byte;
+begin
+  Self.Lock.Acquire;
+  try
+    Data.Read(Tone, SizeOf(Byte));
+    case Tone of
+      DTMF0:     Self.Flash(Button0);
+      DTMF1:     Self.Flash(Button1);
+      DTMF2:     Self.Flash(Button2);
+      DTMF3:     Self.Flash(Button3);
+      DTMF4:     Self.Flash(Button4);
+      DTMF5:     Self.Flash(Button5);
+      DTMF6:     Self.Flash(Button6);
+      DTMF7:     Self.Flash(Button7);
+      DTMF8:     Self.Flash(Button8);
+      DTMF9:     Self.Flash(Button9);
+      DTMFStar:  Self.Flash(ButtonStar);
+      DTMFHash:  Self.Flash(ButtonHash);
+      DTMFA:     Self.Flash(ButtonA);
+      DTMFB:     Self.Flash(ButtonB);
+      DTMFC:     Self.Flash(ButtonC);
+      DTMFD:     Self.Flash(ButtonD);
+      DTMFFlash: Self.Flash(ButtonFlash);
+    end;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+procedure TrnidSpike.SendDTMF(const Event: Byte);
+begin
+end;
+
 procedure TrnidSpike.StartReadingData(const SDP: String);
 begin
   Self.Invite.Enabled := false;
@@ -288,15 +383,95 @@ end;
 
 //* TrnidSpike Published methods ***********************************************
 
-procedure TrnidSpike.UiTimerTimer(Sender: TObject);
+procedure TrnidSpike.Button0Click(Sender: TObject);
 begin
-  Self.Lock.Acquire;
-  try
-    RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
-    UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
-  finally
-    Self.Lock.Release;
-  end;
+  Self.SendDTMF(DTMF0);
+end;
+
+procedure TrnidSpike.Button1Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF1);
+end;
+
+procedure TrnidSpike.Button2Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF2);
+end;
+
+procedure TrnidSpike.Button3Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF3);
+end;
+
+procedure TrnidSpike.Button4Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF4);
+end;
+
+procedure TrnidSpike.Button5Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF5);
+end;
+
+procedure TrnidSpike.Button6Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF6);
+end;
+
+procedure TrnidSpike.Button7Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF7);
+end;
+
+procedure TrnidSpike.Button8Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF8);
+end;
+
+procedure TrnidSpike.Button9Click(Sender: TObject);
+begin
+  Self.SendDTMF(DTMF9);
+end;
+
+procedure TrnidSpike.ButtonAClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFA);
+end;
+
+procedure TrnidSpike.ButtonBClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFB);
+end;
+
+procedure TrnidSpike.ButtonCClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFC);
+end;
+
+procedure TrnidSpike.ButtonDClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFD);
+end;
+
+procedure TrnidSpike.ButtonStarClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFStar);
+end;
+
+procedure TrnidSpike.ButtonHashClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFHash);
+end;
+
+procedure TrnidSpike.ButtonFlashClick(Sender: TObject);
+begin
+  Self.SendDTMF(DTMFFlash);
+end;
+
+procedure TrnidSpike.ByeClick(Sender: TObject);
+begin
+  Self.UA.HangUpAllCalls;
+  Self.StopReadingData;
 end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
@@ -328,10 +503,20 @@ begin
   end;
 end;
 
-procedure TrnidSpike.ByeClick(Sender: TObject);
+procedure TrnidSpike.FormKeyPress(Sender: TObject; var Key: Char);
 begin
-  Self.UA.HangUpAllCalls;
-  Self.StopReadingData;
+  //
+end;
+
+procedure TrnidSpike.UiTimerTimer(Sender: TObject);
+begin
+  Self.Lock.Acquire;
+  try
+    RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
+    UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 end.

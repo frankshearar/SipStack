@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdRTP,
-  IdRTPServer, IdSimpleParser, IdSocketHandle, IdUDPServer, IdURI, SyncObjs;
+  IdRTPServer, IdSimpleParser, IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -296,7 +296,7 @@ type
     fPhoneNumber:       String;
     fSessionName:       String;
     fTimes:             TIdSdpTimes;
-    fURI:               TIdURI;
+    fURI:               String;
     fVersion:           Cardinal;
 
     function  GetAttributes: TIdSdpAttributes;
@@ -307,7 +307,6 @@ type
     function  GetMediaDescriptions: TIdSdpMediaDescriptions;
     function  GetOrigin: TIdSdpOrigin;
     function  GetTimes: TIdSdpTimes;
-    function  GetURI: TIdURI;
     procedure PrintEmailAddressField(Dest: TStream);
     procedure PrintInfo(Dest: TStream);
     procedure PrintPhoneNumber(Dest: TStream);
@@ -339,7 +338,7 @@ type
     property PhoneNumber:       String                  read fPhoneNumber write fPhoneNumber;
     property SessionName:       String                  read fSessionName write fSessionName;
     property Times:             TIdSdpTimes             read GetTimes;
-    property URI:               TIdURI                  read GetURI;
+    property URI:               String                  read fUri write fUri;
     property Version:           Cardinal                read fVersion write fVersion;
   end;
 
@@ -394,7 +393,8 @@ type
   // streams.
   IIdSipDataListener = interface
     ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
-    procedure OnNewData(const Data: TStream);
+    procedure OnNewData(const Data: TStream;
+                        const Format: TIdRTPEncoding);
     procedure OnNewUdpData(const Data: TStream);
   end;
 
@@ -407,13 +407,14 @@ type
     fUsername:        String;
     fProfile:         TIdRTPProfile;
     RTPClients:       TObjectList;
-    RTPLock:          TCriticalSection;
+    RTPServerLock:    TCriticalSection;
     RTPServers:       TObjectList;
     RTCPServers:      TObjectList;
 
     procedure ActivateServerOnFreePort(const Server: TIdRTPServer);
     procedure AddRTCPServer(const RTP: TIdRTPServer);
-    procedure NotifyOfNewData(Data: TStream);
+    procedure NotifyOfNewRTPData(Data: TStream;
+                                 const Format: TIdRTPEncoding);
     procedure NotifyOfNewUdpData(Data: TStream);
     procedure OnReceiveRTP(Sender: TObject;
                            APacket: TIdRTPPacket;
@@ -1251,7 +1252,6 @@ begin
   fMediaDescriptions.Free;
   fOrigin.Free;
   fTimes.Free;
-  fURI.Free;
 
   inherited Destroy;
 end;
@@ -1420,14 +1420,6 @@ begin
   Result := fTimes;
 end;
 
-function TIdSdpPayload.GetURI: TIdURI;
-begin
-  if not Assigned(fURI) then
-    fURI := TIdURI.Create('');
-
-  Result := fURI;
-end;
-
 procedure TIdSdpPayload.PrintEmailAddressField(Dest: TStream);
 var
   S: String;
@@ -1477,8 +1469,8 @@ var
   S: String;
 begin
   // TODO: I hate stinking TIdURI
-  if (Self.URI.Protocol <> '') then begin
-    S := #13#10'u=' + Self.URI.GetFullURI;
+  if (Self.URI <> '') then begin
+    S := #13#10'u=' + Self.URI;
 
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2285,7 +2277,7 @@ begin
 //  if not Self.IsUri(Value) then
 //    raise EParser.Create(Format(MalformedToken, [RSSDPUriName, Name + '=' + Value]));
 
-  Payload.URI.URI := Value;
+  Payload.URI := Value;
   Self.LastSessionHeader := RSSDPUriName;
 end;
 
@@ -2329,7 +2321,7 @@ begin
   Self.RTCPServers := TObjectList.Create(true);
   Self.RTPClients  := TObjectList.Create(true);
   Self.RTPServers  := TObjectList.Create(true);
-  Self.RTPLock     := TCriticalSection.Create;
+  Self.RTPServerLock     := TCriticalSection.Create;
 
   Self.fProfile := TIdAudioVisualProfile.Create;
 end;
@@ -2338,7 +2330,7 @@ destructor TIdSdpPayloadProcessor.Destroy;
 begin
   Self.Profile.Free;
 
-  Self.RTPLock.Free;
+  Self.RTPServerLock.Free;
   Self.RTPServers.Free;
   Self.RTPClients.Free;
   Self.RTCPServers.Free;
@@ -2388,7 +2380,7 @@ begin
           + 's=-'#13#10
           + 'c=IN IP4 ' + Self.Host + #13#10;
 
-  Self.RTPLock.Acquire;
+  Self.RTPServerLock.Acquire;
   try
     for I := 0 to Self.RTPServers.Count - 1 do begin
       Result := Result + 'm=audio ';
@@ -2401,7 +2393,7 @@ begin
       Result := Result + ' ' + Self.Profile.TransportDesc + ' 0'#13#10;
     end;
   finally
-    Self.RTPLock.Release;
+    Self.RTPServerLock.Release;
   end;
 end;
 
@@ -2440,14 +2432,14 @@ procedure TIdSdpPayloadProcessor.StopListening;
 var
   I: Integer;
 begin
-  Self.RTPLock.Acquire;
+  Self.RTPServerLock.Acquire;
   try
     for I := 0 to Self.RTPServers.Count - 1 do begin
       Self.ServerAt(I).Active := false;
       Self.RTCPAt(I).Active   := false;
     end;
   finally
-    Self.RTPLock.Release;
+    Self.RTPServerLock.Release;
   end;
 end;
 
@@ -2460,6 +2452,7 @@ var
   NextPort: Integer;
 begin
   NextPort := Self.DefaultBasePort;
+  
   Server.Bindings.Clear;
   Binding := Server.Bindings.Add;
 
@@ -2501,14 +2494,15 @@ begin
   end;
 end;
 
-procedure TIdSdpPayloadProcessor.NotifyOfNewData(Data: TStream);
+procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TStream;
+                                                    const Format: TIdRTPEncoding);
 var
   I: Integer;
 begin
   Self.DataListenerLock.Acquire;
   try
     for I := 0 to Self.DataListeners.Count - 1 do
-      IIdSipDataListener(Self.DataListeners[I]).OnNewData(Data);
+      IIdSipDataListener(Self.DataListeners[I]).OnNewData(Data, Format);
   finally
     Self.DataListenerLock.Release;
   end;
@@ -2528,23 +2522,24 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.OnReceiveRTP(Sender: TObject;
-                                                 APacket: TIdRTPPacket;
-                                                 ABinding: TIdSocketHandle);
+                                              APacket: TIdRTPPacket;
+                                              ABinding: TIdSocketHandle);
 var
   Data: TMemoryStream;
 begin
   Data := TMemoryStream.Create;
   try
     APacket.Payload.PrintOn(Data);
-    Self.NotifyOfNewData(Data);
+    Self.NotifyOfNewRTPData(Data,
+                            Self.Profile.EncodingFor(APacket.PayloadType));
   finally
     Data.Free;
   end;
 end;
 
 procedure TIdSdpPayloadProcessor.OnReceiveUDP(Sender: TObject;
-                                                 AData: TStream;
-                                                 ABinding: TIdSocketHandle);
+                                              AData: TStream;
+                                              ABinding: TIdSocketHandle);
 begin
   Self.NotifyOfNewUdpData(AData);
 end;
@@ -2574,7 +2569,7 @@ var
   NewClient: TIdRTPClient;
   NewServer: TIdRTPServer;
 begin
-  Self.RTPLock.Acquire;
+  Self.RTPServerLock.Acquire;
   try
     NewClient := TIdRTPClient.Create(nil);
     try
@@ -2588,8 +2583,8 @@ begin
         Self.RTPServers.Add(NewServer);
 
         NewServer.Profile.Assign(Self.Profile);
-        NewServer.OnRTPRead := Self.OnReceiveRTP;
-        NewServer.OnUDPRead := Self.OnReceiveUDP;
+        NewServer.OnRTPRead  := Self.OnReceiveRTP;
+        NewServer.OnUDPRead  := Self.OnReceiveUDP;
 
         Self.ActivateServerOnFreePort(NewServer);
         Self.AddRTCPServer(NewServer);
@@ -2604,7 +2599,7 @@ begin
       raise;
     end;
   finally
-    Self.RTPLock.Release;
+    Self.RTPServerLock.Release;
   end;
 end;
 

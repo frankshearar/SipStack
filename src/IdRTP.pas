@@ -7,10 +7,10 @@ uses
 
 type
   TIdCardinalArray        = array of Cardinal;
-  TIdDTMFTone             = 0..16;
   TIdTelephoneEventVolume = 0..63;
   TIdNTPTimestamp         = Cardinal;
   TIdRTCPSourceCount      = 0..31;
+  TIdRTCPSubType          = 0..31;
   TIdRTPCsrcCount         = 0..15;
   TIdRTPPayloadType       = 0..127;
   TIdRTPSequenceNo        = Word;
@@ -230,11 +230,34 @@ type
     property Data[Index: Word]:   Cardinal read GetData write SetData;
   end;
 
+  TIdRTPBasePacket = class(TObject)
+  private
+    fSyncSrcID: Cardinal;
+    fVersion:   TIdRTPVersion;
+  protected
+    function  GetSyncSrcID: Cardinal; virtual;
+    procedure SetSyncSrcID(const Value: Cardinal); virtual;
+  public
+    class function IsRTCPPayloadType(const PayloadType: Byte): Boolean;
+    class function CreateFrom(Src: TStream;
+                              const Profile: TIdRTPProfile): TIdRTPBasePacket;
+
+    constructor Create;
+
+    function IsRTCP: Boolean; virtual; abstract;
+    function IsRTP: Boolean; virtual; abstract;
+    procedure ReadFrom(Src: TStream); virtual; abstract;
+    procedure PrintOn(Dest: TStream); virtual; abstract;
+
+    property SyncSrcID: Cardinal      read GetSyncSrcID write SetSyncSrcID;
+    property Version:   TIdRTPVersion read fVersion write fVersion;
+  end;
+
   // I am a packet of the Real-time Transport Protocol.
   //
   // I currently do not support the Header Extension as defined in RFC 3550,
   // section 5.3.1, nor do I have timestamp (either RTP or NTP) information.
-  TIdRTPPacket = class(TObject)
+  TIdRTPPacket = class(TIdRTPBasePacket)
   private
     fCsrcCount:       TIdRTPCsrcCount;
     fCsrcIDs:         TIdCardinalArray;
@@ -245,9 +268,7 @@ type
     fPayload:         TIdRTPPayload;
     fPayloadType:     TIdRTPPayloadType;
     fSequenceNo:      TIdRTPSequenceNo;
-    fSyncSrcID:       Cardinal;
     fTimestamp:       TIdNTPTimestamp;
-    fVersion:         TIdRTPVersion;
     Profile:          TIdRTPProfile;
 
     procedure CreatePayload(const Encoding: TIdRTPEncoding);
@@ -260,8 +281,10 @@ type
     destructor  Destroy; override;
 
     function  DefaultVersion: TIdRTPVersion;
-    procedure ReadFrom(Src: TStream);
-    procedure PrintOn(Dest: TStream);
+    function  IsRTCP: Boolean; override;
+    function  IsRTP: Boolean; override;
+    procedure ReadFrom(Src: TStream); override;
+    procedure PrintOn(Dest: TStream); override;
     procedure ReadPayload(Src: TStream); overload;
     procedure ReadPayload(Src: String); overload;
 
@@ -274,20 +297,31 @@ type
     property Payload:                         TIdRTPPayload         read fPayload;
     property PayloadType:                     TIdRTPPayloadType     read fPayloadType write fPayloadType;
     property SequenceNo:                      TIdRTPSequenceNo      read fSequenceNo write fSequenceNo;
-    property SyncSrcID:                       Cardinal              read fSyncSrcID write fSyncSrcID;
     property Timestamp:                       TIdNTPTimestamp       read fTimestamp write fTimestamp;
-    property Version:                         TIdRTPVersion         read fVersion write fVersion;
   end;
+
+  TIdRTCPPacket = class;
+  TIdRTCPPacketClass = class of TIdRTCPPacket;
 
   // I am a packet in the Real-time Transport Control Protocol, as defined in
   // RFC 3550 section 6.
-  TIdRTCPPacket = class(TObject)
+  TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
     function GetPacketType: Cardinal; virtual; abstract;
   public
-    procedure PrintOn(Dest: TStream); virtual; abstract;
-    procedure ReadFrom(Src: TStream); virtual; abstract;
+    class function RTCPType(const PacketType: Byte): TIdRTCPPacketClass;
+
+    constructor Create; virtual;
+
+    function IsRTCP: Boolean; override;
+    function IsRTP: Boolean; override;
+
+    property PacketType: Cardinal read GetPacketType;
   end;
+
+  TIdRTCPSenderReportPacket = class(TIdRTCPPacket);
+  TIdRTCPReceiverReportPacket = class(TIdRTCPPacket);
+  TIdRTCPSourceDescriptionPacket = class(TIdRTCPPacket);
 
   TIdRTCPByePacket = class(TIdRTCPPacket)
   private
@@ -296,27 +330,55 @@ type
     fLength:       Word;
     fReason:       String;
     fReasonLength: Word;
-    fVersion:      TIdRTPVersion;
 
     function  GetSourceCount: TIdRTCPSourceCount;
     function  GetSource(Index: TIdRTCPSourceCount): Cardinal;
-    procedure SetSourceCount(const Value: TIdRTCPSourceCount);
+    procedure SetReason(const Value: String);
     procedure SetSource(Index: TIdRTCPSourceCount;
                         const Value: Cardinal);
+    procedure SetSourceCount(const Value: TIdRTCPSourceCount);
   protected
-    function GetPacketType: Cardinal; override;
+    function  GetPacketType: Cardinal; override;
+    function  GetSyncSrcID: Cardinal; override;
+    procedure SetSyncSrcID(const Value: Cardinal); override;
   public
+    constructor Create; override;
+
     procedure PrintOn(Dest: TStream); override;
     procedure ReadFrom(Src: TStream); override;
 
     property HasPadding:                         Boolean            read fHasPadding write fHasPadding;
     property Length:                             Word               read fLength write fLength;
-    property PacketType:                         Cardinal           read GetPacketType;
-    property Reason:                             String             read fReason write fReason;
+    property Reason:                             String             read fReason write SetReason;
     property ReasonLength:                       Word               read fReasonLength write fReasonLength;
     property SourceCount:                        TIdRTCPSourceCount read GetSourceCount write SetSourceCount;
     property Sources[Index: TIdRTCPSourceCount]: Cardinal           read GetSource write SetSource;
-    property Version:                            TIdRTPVersion      read fVersion write fVersion;
+  end;
+
+  TIdRTCPApplicationDefinedPacket = class(TIdRTCPPacket)
+  private
+    fData:       String;
+    fHasPadding: Boolean;
+    fLength:     Word;
+    fName:       String;
+    fSubType:    TIdRTCPSubType;
+
+    procedure ResetLength;
+    procedure SetData(const Value: String);
+    procedure SetName(const Value: String);
+  protected
+    function GetPacketType: Cardinal; override;
+  public
+    constructor Create; override;
+
+    procedure PrintOn(Dest: TStream); override;
+    procedure ReadFrom(Src: TStream); override;
+
+    property Data:       String         read fData write SetData;
+    property HasPadding: Boolean        read fHasPadding write fHasPadding;
+    property Length:     Word           read fLength write fLength;
+    property Name:       String         read fName write SetName;
+    property SubType:    TIdRTCPSubType read fSubType write fSubType;
   end;
 
   ENoPayloadTypeFound = class(Exception);
@@ -336,6 +398,7 @@ procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 procedure WriteWord(Dest: TStream; Value: Word);
 
 const
+  RFC3550Version = 2;
   AudioVisualProfile = 'RTP/AVP'; // defined in RFC 3551
 
   CelBEncoding                = 'CelB';
@@ -527,11 +590,11 @@ begin
   ClockRate  := StrToInt(Fetch(Value, '/'));
   Parameters := Value;
 
-  if (Name = T140Encoding) then
+  if (Lowercase(Name) = Lowercase(T140Encoding)) then
     Result := TIdRTPT140Encoding.Create(Name,
                                         ClockRate,
                                         Parameters)
-  else if (Name = TelephoneEventEncoding) then
+  else if (Lowercase(Name) = Lowercase(TelephoneEventEncoding)) then
     Result := TIdRTPTelephoneEventEncoding.Create(Name,
                                                   ClockRate,
                                                   Parameters)
@@ -1112,6 +1175,53 @@ begin
   System.SetLength(fData, Value);
 end;
 
+
+//******************************************************************************
+//* TIdRTPBasePacket                                                           *
+//******************************************************************************
+//* TIdRTPBasePacket Public methods ********************************************
+
+class function TIdRTPBasePacket.IsRTCPPayloadType(const PayloadType: Byte): Boolean;
+begin
+  Result := (PayloadType >= RTCPSenderReport)
+        and (PayloadType <= RTCPApplicationDefined);
+end;
+
+class function TIdRTPBasePacket.CreateFrom(Src: TStream;
+                                           const Profile: TIdRTPProfile): TIdRTPBasePacket;
+var
+  FirstWord: Word;
+  PacketType: Byte;
+begin
+  FirstWord := ReadWord(Src);
+  Src.Seek(0, soFromBeginning);
+
+  PacketType := FirstWord and $00FF;
+
+  if Self.IsRTCPPayloadType(PacketType) then begin
+    Result := TIdRTCPPacket.RTCPType(PacketType).Create;
+  end
+  else
+    Result := TIdRTPPacket.Create(Profile);
+end;
+
+constructor TIdRTPBasePacket.Create;
+begin
+  Self.Version := RFC3550Version;
+end;
+
+//* TIdRTPBasePacket Protected methods *****************************************
+
+function TIdRTPBasePacket.GetSyncSrcID: Cardinal;
+begin
+  Result := fSyncSrcID;
+end;
+
+procedure TIdRTPBasePacket.SetSyncSrcID(const Value: Cardinal);
+begin
+  fSyncSrcID := Value;
+end;
+
 //******************************************************************************
 //* TIdRTPPacket                                                               *
 //******************************************************************************
@@ -1141,6 +1251,16 @@ end;
 function TIdRTPPacket.DefaultVersion: TIdRTPVersion;
 begin
   Result := 2;
+end;
+
+function TIdRTPPacket.IsRTCP: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdRTPPacket.IsRTP: Boolean;
+begin
+  Result := true;
 end;
 
 procedure TIdRTPPacket.ReadFrom(Src: TStream);
@@ -1245,12 +1365,73 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRTCPPacket                                                              *
+//******************************************************************************
+//* TIdRTCPPacket Public methods ***********************************************
+
+class function TIdRTCPPacket.RTCPType(const PacketType: Byte): TIdRTCPPacketClass;
+begin
+  case PacketType of
+    RTCPSenderReport:       Result := TIdRTCPSenderReportPacket;
+    RTCPReceiverReport:     Result := TIdRTCPReceiverReportPacket;
+    RTCPSourceDescription:  Result := TIdRTCPSourceDescriptionPacket;
+    RTCPGoodbye:            Result := TIdRTCPByePacket;
+    RTCPApplicationDefined: Result := TIdRTCPApplicationDefinedPacket;
+  else
+    Result := nil;
+  end;
+end;
+
+constructor TIdRTCPPacket.Create;
+begin
+  inherited Create;
+end;
+
+function TIdRTCPPacket.IsRTCP: Boolean;
+begin
+  Result := true;
+end;
+
+function TIdRTCPPacket.IsRTP: Boolean;
+begin
+  Result := false;
+end;
+
+//******************************************************************************
 //* TIdRTCPByePacket                                                           *
 //******************************************************************************
 //* TIdRTCPByePacket Public methods ********************************************
 
-procedure TIdRTCPByePacket.PrintOn(Dest: TStream);
+constructor TIdRTCPByePacket.Create;
 begin
+  inherited Create;
+
+  Self.SourceCount := 1;
+end;
+
+procedure TIdRTCPByePacket.PrintOn(Dest: TStream);
+var
+  B: Byte;
+  I: Integer;
+begin
+  B := Self.Version shl 6;
+
+  if Self.HasPadding then
+    B := B or $40;
+  Dest.Write(B, 1);
+
+  B := Self.GetPacketType;
+  Dest.Write(B, 1);
+
+  WriteWord(Dest, Self.Length);
+
+  for I := 0 to Self.SourceCount - 1 do
+    WriteCardinal(Dest, Self.Sources[I]);
+
+  if (Self.ReasonLength > 0) then begin
+    WriteWord(Dest, Self.ReasonLength);
+    Dest.Write(Self.Reason[1], System.Length(Self.Reason));
+  end;
 end;
 
 procedure TIdRTCPByePacket.ReadFrom(Src: TStream);
@@ -1284,6 +1465,16 @@ begin
   Result := RTCPGoodbye;
 end;
 
+function TIdRTCPByePacket.GetSyncSrcID: Cardinal;
+begin
+  Result := Self.Sources[0];
+end;
+
+procedure TIdRTCPByePacket.SetSyncSrcID(const Value: Cardinal);
+begin
+  Self.Sources[0] := Value;
+end;
+
 //* TIdRTCPByePacket Private methods *******************************************
 
 function TIdRTCPByePacket.GetSourceCount: TIdRTCPSourceCount;
@@ -1296,15 +1487,123 @@ begin
   Result := fSources[Index];
 end;
 
-procedure TIdRTCPByePacket.SetSourceCount(const Value: TIdRTCPSourceCount);
+procedure TIdRTCPByePacket.SetReason(const Value: String);
 begin
-  SetLength(fSources, Value);
+  fReason := Value;
+  Self.ReasonLength := System.Length(Value);
 end;
 
 procedure TIdRTCPByePacket.SetSource(Index: TIdRTCPSourceCount;
                                      const Value: Cardinal);
 begin
+  Self.SourceCount := Max(Self.SourceCount, Index + 1);
   fSources[Index] := Value;
+end;
+
+procedure TIdRTCPByePacket.SetSourceCount(const Value: TIdRTCPSourceCount);
+begin
+  SetLength(fSources, Value);
+end;
+
+//******************************************************************************
+//* TIdRTCPApplicationDefinedPacket                                            *
+//******************************************************************************
+//* TIdRTCPApplicationDefinedPacket Public methods *****************************
+
+constructor TIdRTCPApplicationDefinedPacket.Create;
+begin
+  inherited Create;
+
+  Self.Name := #0#0#0#0;
+  Self.Length := 12;
+end;
+
+procedure TIdRTCPApplicationDefinedPacket.PrintOn(Dest: TStream);
+var
+  B: Byte;
+begin
+  B := Self.Version shl 6;
+
+  if Self.HasPadding then
+    B := B or $40;
+  Dest.Write(B, 1);
+
+  B := Self.GetPacketType;
+  Dest.Write(B, 1);
+
+  WriteWord(Dest, Self.Length);
+
+  WriteCardinal(Dest, Self.SyncSrcID);
+
+  Dest.Write(Self.Name[1], SizeOf(Self.Name));
+
+  if (Self.Data <> '') then
+    Dest.Write(Self.Data[1], SizeOf(Self.Data));
+end;
+
+procedure TIdRTCPApplicationDefinedPacket.ReadFrom(Src: TStream);
+const
+  // The size of the set headers of an Application-Defined RTCP packet -
+  // cf. RFC 3550, section 6.7
+  DataOffset = 12;
+var
+  B:    Byte;
+  Name: array[0..3] of Char;
+begin
+  Src.Read(B, 1);
+  Self.Version    := B and $C0 shr 6;
+  Self.HasPadding := (B and $20) <> 0;
+
+  Src.Read(B, 1);
+  Assert(RTCPApplicationDefined = B, 'TIdRTCPApplicationDefinedPacket packet type');
+
+  Self.Length := ReadWord(Src);
+  Self.SyncSrcID := ReadCardinal(Src);
+
+  Src.Read(Name, System.Length(Name));
+  Self.Name := Name;
+
+  Self.Data := ReadString(Src, Self.Length - DataOffset);
+end;
+
+//* TIdRTCPApplicationDefinedPacket Protected methods **************************
+
+function TIdRTCPApplicationDefinedPacket.GetPacketType: Cardinal;
+begin
+  Result := RTCPApplicationDefined;
+end;
+
+//* TIdRTCPApplicationDefinedPacket Private methods ****************************
+
+procedure TIdRTCPApplicationDefinedPacket.ResetLength;
+begin
+  Self.Length := 12 + System.Length(Self.Data);
+end;
+
+procedure TIdRTCPApplicationDefinedPacket.SetData(const Value: String);
+var
+  Len: Integer;
+begin
+  fData := Value;
+
+  Len := System.Length(fData);
+
+  if (Len mod 4 <> 0) then
+    while System.Length(fData) < 4*((Len div 4) + 1) do
+      fData := fData + #0;
+end;
+
+procedure TIdRTCPApplicationDefinedPacket.SetName(const Value: String);
+begin
+  if (System.Length(Value) > 4) then
+    fName := Copy(Value, 1, 4)
+  else if (System.Length(Value) < 4) then begin
+    fName := Value;
+    while (System.Length(fName) < 4) do
+      fName := fName + #0;
+  end
+  else
+    fName := Value;
 end;
 
 initialization

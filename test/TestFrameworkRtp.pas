@@ -29,7 +29,7 @@ begin
   CheckEquals(Expected.PayloadType,        Received.PayloadType,          'PayloadType');
   CheckEquals(Expected.SequenceNo,         Received.SequenceNo,           'SequenceNo');
   CheckEquals(Integer(Expected.Timestamp), Integer(Received.Timestamp),   'Timestamp');
-  CheckEquals(Expected.SyncSrcID,          Received.SyncSrcID,            'SSRC ID');
+  CheckEquals(Integer(Expected.SyncSrcID), Integer(Received.SyncSrcID),   'SSRC ID');
 
   for I := 0 to Expected.CsrcCount - 1 do
     CheckEquals(Integer(Expected.CsrcIDs[I]),

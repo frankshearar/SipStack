@@ -385,7 +385,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
-  {
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -402,11 +401,8 @@ begin
   Result.AddTest(TestTIdSdpRepeats.Suite);
   Result.AddTest(TestTIdSdpTimes.Suite);
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
-  }
   Result.AddTest(TestTIdSdpParser.Suite);
-  {
   Result.AddTest(TestTIdSdpPayload.Suite);
-  }
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
@@ -761,7 +757,7 @@ end;
 
 procedure TestTIdSdpRTPMapAttribute.TestSetValue;
 begin
-  Self.A.Value := '98 t140/1000';
+  Self.A.Value := '98 T140/1000';
 
   CheckEquals(TIdRTPT140Encoding.ClassName,
               Self.A.Encoding.ClassName,
@@ -3435,7 +3431,7 @@ begin
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
-    CheckEquals('http://127.0.0.1/', Self.Payload.URI.GetFullURI, 'URI');
+    CheckEquals('http://127.0.0.1/', Self.Payload.URI, 'URI');
   finally
     S.Free;
   end;
@@ -3873,7 +3869,7 @@ begin
   S := TStringStream.Create('');
   try
     Self.SetToMinimumPayload(Self.Payload);
-    Self.Payload.URI.URI := 'mailto:nyarlathotep@crawling.chaos.net';
+    Self.Payload.URI := 'mailto:nyarlathotep@crawling.chaos.net';
 
     Self.Payload.PrintOn(S);
 
