@@ -57,6 +57,8 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
   end;
 
   TIdSipOutboundOptions = class;
@@ -693,17 +695,27 @@ type
     procedure Unregister(Registrar: TIdSipUri);
   end;
 
-  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdMethod)
+  TIdActionMethod = class(TIdMethod)
   private
     fAction:        TIdSipAction;
-    fFirstPassword: String;
     fResponse:      TIdSipResponse;
+  public
+    property Action:   TIdSipAction   read fAction write fAction;
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdActionMethod)
+  private
+    fFirstPassword: String;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Action:        TIdSipAction   read fAction write fAction;
-    property FirstPassword: String         read fFirstPassword write fFirstPassword;
-    property Response:      TIdSipResponse read fResponse write fResponse;
+    property FirstPassword: String read fFirstPassword write fFirstPassword;
+  end;
+
+  TIdSipActionRedirectMethod = class(TIdActionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
   end;
 
   TIdSipOptionsMethod = class(TIdMethod)
@@ -711,7 +723,6 @@ type
     fOptions:  TIdSipOutboundOptions;
     fResponse: TIdSipResponse;
   public
-
     property Options:  TIdSipOutboundOptions read fOptions write fOptions;
     property Response: TIdSipResponse        read fResponse write fResponse;
   end;
@@ -4011,6 +4022,17 @@ begin
     Listener.OnAuthenticationChallenge(Self.Action,
                                        Self.Response,
                                        DiscardedPassword)
+end;
+
+//******************************************************************************
+//* TIdSipActionRedirectMethod                                                 *
+//******************************************************************************
+//* TIdSipActionRedirectMethod Public methods **********************************
+
+procedure TIdSipActionRedirectMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipActionListener).OnRedirect(Self.Action,
+                                               Self.Response);
 end;
 
 //******************************************************************************

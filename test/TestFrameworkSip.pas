@@ -50,6 +50,7 @@ type
                                IIdSipActionListener)
   private
     fAuthenticationChallenge: Boolean;
+    fRedirect:                Boolean;
     fPassword:                String;
   public
     constructor Create; override;
@@ -57,8 +58,11 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
                                         var Password: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
 
     property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
+    property Redirect:                Boolean read fRedirect;
     property Password:                String  read fPassword write fPassword;
   end;
 
@@ -183,12 +187,15 @@ type
     fEstablishedSession:      Boolean;
     fModifiedSession:         Boolean;
     fNewSession:              Boolean;
+    fRedirect:                Boolean;
   public
     constructor Create; override;
 
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
                                         var Password: String);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -201,6 +208,7 @@ type
     property EstablishedSession:      Boolean read fEstablishedSession;
     property ModifiedSession:         Boolean read fModifiedSession;
     property NewSession:              Boolean read fNewSession;
+    property Redirect:                Boolean read fRedirect;
   end;
 
   TIdSipTestTransactionListener = class(TIdSipMockListener,
@@ -470,6 +478,7 @@ begin
   inherited Create;
 
   Self.fAuthenticationChallenge := false;
+  Self.fRedirect                := false;
   Self.Password                 := '';
 end;
 
@@ -482,6 +491,15 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
+end;
+
+procedure TIdSipTestActionListener.OnRedirect(Action: TIdSipAction;
+                                              Redirect: TIdSipResponse);
+begin
+  Self.fRedirect := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
 end;
 
 //******************************************************************************
@@ -689,6 +707,7 @@ begin
   Self.fEstablishedSession      := false;
   Self.fModifiedSession         := false;
   Self.fNewSession              := false;
+  Self.fRedirect                := false;
 end;
 
 procedure TIdSipTestSessionListener.OnAuthenticationChallenge(Action: TIdSipAction;
@@ -699,6 +718,15 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnAuthenticationChallenge');
+end;
+
+procedure TIdSipTestSessionListener.OnRedirect(Action: TIdSipAction;
+                                               Redirect: TIdSipResponse);
+begin
+  Self.fRedirect := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestSessionListener.OnRedirect');
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;

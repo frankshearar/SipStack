@@ -103,6 +103,8 @@ type
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
     procedure SimulateRemoteAck(Response: TIdSipResponse);
     procedure SimulateRemoteBye(Dialog: TIdSipDialog);
   public
@@ -178,6 +180,8 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String); virtual;
+    procedure OnRedirect(Action: TIdSipAction;
+                         Redirect: TIdSipResponse);
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteMovedPermanently(const SipUrl: String);
@@ -307,6 +311,7 @@ type
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
+    procedure SimulateRemoteDecline;
   protected
     function CreateAction: TIdSipAction; override;
   public
@@ -319,6 +324,7 @@ type
     procedure TestAddSessionListener;
     procedure TestCancelNotifiesSession;
     procedure TestForwardCall;
+    procedure TestGlobalFailureEndsSession;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
@@ -328,6 +334,7 @@ type
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestReceiveReInvite;
+    procedure TestRedirectionEndsSession;
     procedure TestRejectCallBusy;
     procedure TestRing;
     procedure TestRemoveSessionListener;
@@ -1254,6 +1261,11 @@ end;
 
 procedure TestTIdSipUserAgentCore.OnModifiedSession(Session: TIdSipSession;
                                                     Invite: TIdSipRequest);
+begin
+end;
+
+procedure TestTIdSipUserAgentCore.OnRedirect(Action: TIdSipAction;
+                                             Redirect: TIdSipResponse);
 begin
 end;
 
@@ -2525,6 +2537,11 @@ begin
   Self.Challenged := true;
 end;
 
+procedure TestTIdSipAction.OnRedirect(Action: TIdSipAction;
+                                      Redirect: TIdSipResponse);
+begin
+end;
+
 procedure TestTIdSipAction.SimulateRejectProxyUnauthorized;
 var
   Challenge: TIdSipResponse;
@@ -3600,6 +3617,18 @@ begin
     Self.SentRequestTerminated := true;
 end;
 
+procedure TestTIdSipInboundSession.SimulateRemoteDecline;
+var
+  Decline: TIdSipResponse;
+begin
+  Decline := TIdSipResponse.InResponseTo(Self.Invite, SIPDecline);
+  try
+    Self.Dispatcher.Transport.FireOnResponse(Decline);
+  finally
+    Decline.Free;
+  end;
+end;
+
 //* TestTIdSipInboundSession Published methods ****************************************
 
 procedure TestTIdSipInboundSession.Test2xxRetransmission;
@@ -3730,7 +3759,23 @@ begin
 
     Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
   finally
+    Dest.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestGlobalFailureEndsSession;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteDecline;
+
+  Check(Self.OnEndedSessionFired,
+        'No notification of ended session');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not torn down because of a global failure');
 end;
 
 procedure TestTIdSipInboundSession.TestIsInboundCall;
@@ -3845,6 +3890,21 @@ begin
   finally
     ReInvite.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestRedirectionEndsSession;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteMovedPermanently('sip:foo');
+
+  Check(Self.OnEndedSessionFired,
+        'No notification of ended session');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not torn down because of redirection');
 end;
 
 procedure TestTIdSipInboundSession.TestRejectCallBusy;
