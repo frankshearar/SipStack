@@ -61,6 +61,7 @@ type
     procedure TestSetPath;
     procedure TestSetSipVersion;
     procedure TestSetTo;
+    procedure TestWillEstablishDialog;
   end;
 
   TestTIdSipRequest = class(TTestCaseSip)
@@ -144,7 +145,6 @@ type
     procedure TestIsProvisional;
     procedure TestIsRequest;
     procedure TestIsTrying;
-    procedure TestWillEstablishDialog;
   end;
 
 implementation
@@ -781,6 +781,33 @@ begin
   end;
 end;
 
+procedure TestTIdSipMessage.TestWillEstablishDialog;
+var
+  I, J:    Integer;
+  Request: TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Response := TIdSipResponse.Create;
+    try
+      for I := Low(AllMethods) to High(AllMethods) do
+        for J := Low(AllResponses) to High(AllResponses) do begin
+          Request.Method := AllMethods[I];
+          Response.StatusCode := AllResponses[J];
+
+          Check((Request.IsInvite and Response.IsOK)
+              = TIdSipMessage.WillEstablishDialog(Request, Response),
+                AllMethods[I] + ' + ' + Response.StatusText);
+        end;
+    finally
+      Response.Free;
+    end;
+  finally
+    Request.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipRequest                                                          *
 //******************************************************************************
@@ -817,6 +844,9 @@ procedure TestTIdSipRequest.TestAckFor;
 var
   Ack: TIdSipRequest;
 begin
+  Self.Request.Method      := MethodInvite;
+  Self.Response.StatusCode := SIPOK;
+  
   Ack := Self.Request.AckFor(Self.Response);
   try
     Check(Ack.IsAck, 'Method');
@@ -848,6 +878,9 @@ procedure TestTIdSipRequest.TestAckForWithRoute;
 var
   Ack: TIdSipRequest;
 begin
+  Self.Request.Method      := MethodInvite;
+  Self.Response.StatusCode := SIPOK;
+
   Self.Request.AddHeader(RouteHeader).Value := '<sip:gw1.tessier-ashpool.co.luna;lr>';
   Self.Request.AddHeader(RouteHeader).Value := '<sip:gw2.tessier-ashpool.co.luna>';
 
@@ -2019,27 +2052,6 @@ begin
 
   Self.Response.StatusCode := SIPTrying;
   Check(Self.Response.IsTrying, Self.Response.StatusText);
-end;
-
-procedure TestTIdSipResponse.TestWillEstablishDialog;
-var
-  I, J:    Integer;
-  Request: TIdSipRequest;
-begin
-  Request := TIdSipRequest.Create;
-  try
-    for I := Low(AllMethods) to High(AllMethods) do
-      for J := Low(AllResponses) to High(AllResponses) do begin
-        Request.Method := AllMethods[I];
-        Self.Response.StatusCode := AllResponses[J];
-
-        Check((Request.IsInvite and Self.Response.IsOK)
-            = Self.Response.WillEstablishDialog(Request),
-              AllMethods[I] + ' + ' + Self.Response.StatusText);
-      end;
-  finally
-    Request.Free;
-  end;
 end;
 
 initialization

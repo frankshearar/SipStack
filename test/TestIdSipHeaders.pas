@@ -414,6 +414,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddRoute;
     procedure TestCreateOnEmptySet;
     procedure TestCurrentRoute;
     procedure TestGetAllButFirst;
@@ -463,6 +464,7 @@ begin
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipContacts.Suite);
+  Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
 end;
 
@@ -4292,6 +4294,28 @@ end;
 
 //* TestTIdSipRoutePath Published methods *****************************************
 
+procedure TestTIdSipRoutePath.TestAddRoute;
+const
+  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+var
+  NewRoute: TIdSipUri;
+begin
+  Check(Self.Routes.IsEmpty,
+        'Precondition: Self.Routes must be empty');
+
+  NewRoute := TIdSipUri.Create(ProxyUri);
+  try
+    Self.Routes.AddRoute(NewRoute);
+    Self.Routes.First;
+    Check(Self.Routes.HasNext, 'Route not added');
+    CheckEquals(NewRoute.Uri,
+                Self.Routes.CurrentRoute.Address.Uri,
+                'Wrong URI added');
+  finally
+    NewRoute.Free;
+  end;
+end;
+
 procedure TestTIdSipRoutePath.TestCreateOnEmptySet;
 var
   Rts:       TIdSipRoutePath;
@@ -4303,6 +4327,7 @@ begin
 
     NewHeader := TIdSipRouteHeader.Create;
     try
+      NewHeader.Value := '<sip:proxy.tessier-ashpool.co.luna>';
       Rts.Add(NewHeader);
       CheckEquals(1, Rts.Count, 'Added a new Route');
     finally
@@ -4311,6 +4336,7 @@ begin
 
     NewHeader := TIdSipCallIdHeader.Create;
     try
+      NewHeader.Value := 'foo@bar';
       Rts.Add(NewHeader);
       CheckEquals(1, Rts.Count, 'Added a non-Route');
     finally

@@ -214,7 +214,7 @@ begin
   Self.StopEvent := TSimpleEvent.Create;
 
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
-//  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
+  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
   Self.Media      := TIdSdpPayloadProcessor.Create;

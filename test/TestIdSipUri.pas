@@ -15,6 +15,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsRouteHeader;
     procedure TestAsStringFancyParameters;
     procedure TestAsStringHeadersWithNoParameters;
     procedure TestAsStringHeadersWithParameters;
@@ -140,6 +141,21 @@ begin
 end;
 
 //* TestTIdSipUri Published methods ********************************************
+
+procedure TestTIdSipUri.TestAsRouteHeader;
+var
+  Route: TIdSipRouteHeader;
+begin
+  Self.Uri.Uri := 'sip:proxy.tessier-ashpool.co.luna';
+  Route := Self.Uri.AsRouteHeader;
+  try
+    CheckEquals(Self.Uri.Uri,
+                Route.Address.Uri,
+                'URI of route');
+  finally
+    Route.Free;
+  end;
+end;
 
 procedure TestTIdSipUri.TestAsStringFancyParameters;
 begin

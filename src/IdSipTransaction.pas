@@ -1806,35 +1806,8 @@ begin
 end;
 
 function TIdSipClientInviteTransaction.CreateACK(R: TIdSipResponse): TIdSipRequest;
-var
-  Routes: TIdSipHeadersFilter;
 begin
-  Result := TIdSipRequest.Create;
-  try
-    Result.Method          := MethodAck;
-    Result.RequestUri      := Self.InitialRequest.RequestUri;
-    Result.SIPVersion      := Self.InitialRequest.SIPVersion;
-    Result.CallID          := Self.InitialRequest.CallID;
-    Result.From            := Self.InitialRequest.From;
-    Result.MaxForwards     := Result.DefaultMaxForwards;
-    Result.ToHeader        := R.ToHeader;
-    Result.Path.Add(Self.InitialRequest.LastHop);
-    Result.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo;
-    Result.CSeq.Method     := MethodAck;
-    Result.ContentLength   := 0;
-    Result.Body            := '';
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Result.AddHeaders(Routes);
-    finally
-      Routes.Free;
-    end;
-  except
-    Result.Free;
-
-    raise;
-  end;
+  Result := Self.InitialRequest.AckFor(R);
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;

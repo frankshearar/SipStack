@@ -229,8 +229,8 @@ type
   // a particular registrar.
   TIdSipRegistrationInfo = class(TObject)
   private
-    fCallID: String;
-    fRegistrar: TIdSipUri;
+    fCallID:     String;
+    fRegistrar:  TIdSipUri;
     fSequenceNo: Cardinal;
   public
     constructor Create;
@@ -251,6 +251,8 @@ type
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
     fContact:                 TIdSipContactHeader;
+    fHasProxy:                Boolean;
+    fProxy:                   TIdSipUri;
     KnownRegistrars:          TObjectList;
     ObserverLock:             TCriticalSection;
     Observers:                TList;
@@ -296,6 +298,7 @@ type
                                           Receiver: TIdSipTransport);
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure SetContact(Value: TIdSipContactHeader);
+    procedure SetProxy(Value: TIdSipUri);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
                            Transaction: TIdSipTransaction;
@@ -337,7 +340,9 @@ type
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
     function  Username: String;
 
-    property Contact: TIdSipContactHeader read GetContact write SetContact;
+    property Contact:  TIdSipContactHeader read GetContact write SetContact;
+    property HasProxy: Boolean             read fHasProxy write fHasProxy;
+    property Proxy:    TIdSipUri           read fProxy write SetProxy;
   end;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -458,8 +463,7 @@ type
     procedure RejectRequest(Request: TIdSipRequest;
                             Transaction: TIdSipTransaction);
     procedure RemoveTransaction(Transaction: TIdSipTransaction);
-    procedure SendAck(Final: TIdSipResponse;
-                      Transaction: TIdSipTransaction);
+    procedure SendAck(Final: TIdSipResponse);
     procedure SendBye;
     procedure SendCancel;
     procedure TerminateOpenTransaction(Transaction: TIdSipTransaction);
@@ -1063,6 +1067,9 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
+  Self.fProxy   := TIdSipUri.Create('');
+  Self.HasProxy := false;
+  
   Self.KnownRegistrars := TObjectList.Create(true);
 
   Self.ObserverLock             := TCriticalSection.Create;
@@ -1098,7 +1105,7 @@ begin
   Self.Contact.Free;
   Self.From.Free;
   Self.UserAgentListeners.Free;
-  Self.UserAgentListenerLock.Free;  
+  Self.UserAgentListenerLock.Free;
   Self.Sessions.Free;
   Self.SessionLock.Free;
   Self.Registrations.Free;
@@ -1108,6 +1115,7 @@ begin
   Self.Observers.Free;
   Self.ObserverLock.Free;
   Self.KnownRegistrars.Free;
+  Self.Proxy.Free;
 
   inherited Destroy;
 end;
@@ -1206,6 +1214,9 @@ begin
   Result := inherited CreateRequest(Dest);
 
   Result.AddHeader(Self.Contact);
+
+  if Self.HasProxy then
+    Result.Route.AddRoute(Self.Proxy);
 
   if Dest.HasSipsUri then
     Result.FirstContact.Address.Scheme := SipsScheme;
@@ -1686,9 +1697,15 @@ end;
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
 begin
   Assert(not Value.IsWildCard,
-         'A wildcard Contact header may not be used here');
+         'You may not use a wildcard Contact header for a User Agent''s '
+       + 'Contact');
 
   Self.Contact.Assign(Value);
+end;
+
+procedure TIdSipUserAgentCore.SetProxy(Value: TIdSipUri);
+begin
+  Self.Proxy.Uri := Value.Uri;
 end;
 
 //******************************************************************************
@@ -2093,13 +2110,17 @@ function TIdSipSession.ReceiveOKResponse(Response: TIdSipResponse;
                                          Transaction: TIdSipTransaction;
                                          Receiver: TIdSipTransport): Boolean;
 begin
+  // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
+  // A 2xx response immediately terminates a client INVITE transaction so that
+  // the ACK can get passed up to the UA (as an unhandled request).
+
   if not Self.DialogEstablished then begin
     fDialog := Self.CreateOutboundDialog(Response, Transaction, Receiver);
     Self.NotifyOfEstablishedSession;
   end;
 
   if Response.IsOK then
-    Self.SendAck(Response, Transaction);
+    Self.SendAck(Response);
   Result := true;
 end;
 
@@ -2312,12 +2333,11 @@ begin
   end;
 end;
 
-procedure TIdSipSession.SendAck(Final: TIdSipResponse;
-                                Transaction: TIdSipTransaction);
+procedure TIdSipSession.SendAck(Final: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Transaction.InitialRequest.AckFor(Final);
+  Ack := Self.CurrentRequest.AckFor(Final);
   try
     Self.UA.Dispatcher.Send(Ack);
   finally

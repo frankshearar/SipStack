@@ -196,7 +196,7 @@ end;
 function TIdSipDialog.CreateRequest: TIdSipRequest;
 var
   FirstRoute: TIdSipRouteHeader;
-  Routes:     TIdSipHeaderList;
+  Routes:     TIdSipRoutePath;
 begin
   Result := TIdSipRequest.Create;
 
@@ -209,20 +209,17 @@ begin
 
   Result.CSeq.SequenceNo := Self.NextLocalSequenceNo;
 
-  if (Self.RouteSet.IsEmpty) then begin
+  if Self.RouteSet.IsEmpty then begin
     Result.RequestUri := Self.RemoteTarget;
   end
   else begin
     Self.RouteSet.First;
-    FirstRoute := Self.RouteSet.CurrentHeader as TIdSipRouteHeader;
+    FirstRoute := Self.RouteSet.CurrentRoute;
 
     if FirstRoute.IsLooseRoutable then begin
       Result.RequestUri := Self.RemoteTarget;
 
-      while Self.RouteSet.HasNext do begin
-        Result.AddHeader(RouteHeader).Assign(Self.RouteSet.CurrentHeader);
-        Self.RouteSet.Next;
-      end;
+      Result.Route := Self.RouteSet;
     end
     else begin
       Result.RequestUri := FirstRoute.Address;
@@ -234,16 +231,11 @@ begin
       // Request-URI, remember?
       Routes := Self.RouteSet.GetAllButFirst;
       try
-        Routes.First;
-        while Routes.HasNext do begin
-          Result.AddHeader(RouteHeader).Assign(Routes.CurrentHeader);
-          Routes.Next;
-        end;
+        Result.Route := Routes;
+        Result.Route.AddRoute(Self.RemoteURI);
       finally
         Routes.Free;
       end;
-
-      (Result.AddHeader(RouteHeader) as TIdSipRouteHeader).Address := Self.RemoteURI;
     end;
   end;
 end;
@@ -354,6 +346,8 @@ begin
 
   fRouteSet := TIdSipRoutePath.Create;
 
+  // We normalise the RouteSet to contain only Routes. This just makes our
+  // lives a bit simpler.
   RouteSet.First;
   while RouteSet.HasNext do begin
     Self.RouteSet.Add(RouteHeader).Assign(RouteSet.CurrentHeader);

@@ -37,6 +37,8 @@ type
     property Scheme: String read fScheme write fScheme;
   end;
 
+  TIdSipRouteHeader = class;
+
   TIdSipUri = class(TIdUri)
   private
     fHeaders:         TIdSipHeaders;
@@ -95,6 +97,7 @@ type
 
     procedure AddParameter(const Name: String;
                            const Value: String = '');
+    function  AsRouteHeader: TIdSipRouteHeader;
     function  AsString: String; override;
     function  CanonicaliseAsAddressOfRecord: String;
     procedure ClearHeaders;
@@ -641,8 +644,9 @@ type
     constructor Create; overload;
     destructor  Destroy; override;
 
-    function CurrentRoute: TIdSipRouteHeader;
-    function GetAllButFirst: TIdSipRoutePath;
+    procedure AddRoute(RouteUri: TIdSipUri);
+    function  CurrentRoute: TIdSipRouteHeader;
+    function  GetAllButFirst: TIdSipRoutePath;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
@@ -687,6 +691,9 @@ type
   protected
     function FirstLine: String; virtual; abstract;
   public
+    class function WillEstablishDialog(Request: TIdSipRequest;
+                                       Response: TIdSipResponse): Boolean; overload;
+
     constructor Create; virtual;
     destructor  Destroy; override;
 
@@ -789,8 +796,6 @@ type
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal;
                                 Contact: TIdSipContactHeader): TIdSipResponse; overload;
-    class function WillEstablishDialog(Request: TIdSipRequest;
-                                       Response: TIdSipResponse): Boolean; overload;
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
@@ -1356,6 +1361,12 @@ procedure TIdSipUri.AddParameter(const Name: String;
                                  const Value: String = '');
 begin
   Self.Parameters.Add(Name + '=' + Self.Decode(Value));
+end;
+
+function TIdSipUri.AsRouteHeader: TIdSipRouteHeader;
+begin
+  Result := TIdSipRouteHeader.Create;
+  Result.Address := Self;
 end;
 
 function TIdSipUri.AsString: String;
@@ -3932,6 +3943,18 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipRoutePath.AddRoute(RouteUri: TIdSipUri);
+var
+  NewRoute: TIdSipRouteHeader;
+begin
+  NewRoute := RouteUri.AsRouteHeader;
+  try
+    Self.Add(NewRoute);
+  finally
+    NewRoute.Free;
+  end;
+end;
+
 function TIdSipRoutePath.CurrentRoute: TIdSipRouteHeader;
 begin
   Result := Self.CurrentHeader as TIdSipRouteHeader;
@@ -3987,6 +4010,12 @@ end;
 //* TIdSipMessage                                                              *
 //******************************************************************************
 //* TIdSipMessage Public methods ***********************************************
+
+class function TIdSipMessage.WillEstablishDialog(Request: TIdSipRequest;
+                                                 Response: TIdSipResponse): Boolean;
+begin
+  Result := Request.IsInvite and Response.IsOK;
+end;
 
 constructor TIdSipMessage.Create;
 begin
@@ -4339,19 +4368,44 @@ begin
 end;
 
 function TIdSipRequest.AckFor(Response: TIdSipResponse): TIdSipRequest;
+var
+  Routes: TIdSipRoutePath;
 begin
   Result := TIdSipRequest.Create;
   try
-    Result.RequestUri := Self.RequestUri;
-    Result.CallID   := Response.CallID;
-    Result.CSeq     := Response.CSeq;
-    Result.From     := Self.From;
-    Result.Method   := MethodAck;
-    Result.ToHeader := Response.ToHeader;
+    if Response.WillEstablishDialog(Self) then begin
+      Result.RequestUri := Self.RequestUri;
+      Result.CallID   := Response.CallID;
+      Result.CSeq     := Response.CSeq;
+      Result.From     := Self.From;
+      Result.Method   := MethodAck;
+      Result.ToHeader := Response.ToHeader;
 
-    Result.CSeq.Method := Result.Method;
-    Result.AddHeader(Response.LastHop);
-    Result.AddHeaders(Self.Route);
+      Result.CSeq.Method := Result.Method;
+      Result.AddHeader(Response.LastHop);
+      Result.AddHeaders(Self.Route);
+    end
+    else begin
+      Result.Method          := MethodAck;
+      Result.RequestUri      := Self.RequestUri;
+      Result.SIPVersion      := Self.SIPVersion;
+      Result.CallID          := Self.CallID;
+      Result.From            := Self.From;
+      Result.MaxForwards     := Result.DefaultMaxForwards;
+      Result.ToHeader        := Response.ToHeader;
+      Result.Path.Add(Self.LastHop);
+      Result.CSeq.SequenceNo := Self.CSeq.SequenceNo;
+      Result.CSeq.Method     := MethodAck;
+      Result.ContentLength   := 0;
+      Result.Body            := '';
+
+      Routes := TIdSipRoutePath.Create(Response.Headers);
+      try
+        Result.AddHeaders(Routes);
+      finally
+        Routes.Free;
+      end;
+    end;
   except
     Result.Free;
 
@@ -4635,12 +4689,6 @@ begin
       ReqRecordRoutes.Free;
     end;
   end;
-end;
-
-class function TIdSipResponse.WillEstablishDialog(Request: TIdSipRequest;
-                                                  Response: TIdSipResponse): Boolean;
-begin
-  Result := Request.IsInvite and Response.IsOK;
 end;
 
 procedure TIdSipResponse.Accept(Visitor: IIdSipMessageVisitor);

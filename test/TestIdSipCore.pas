@@ -57,6 +57,7 @@ type
   end;
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
+                                  IIdSipObserver,
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private
@@ -74,6 +75,7 @@ type
 
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
+    procedure OnChanged(Observed: TObject);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -88,6 +90,7 @@ type
   published
     procedure TestAddObserver;
     procedure TestAddUserAgentListener;
+    procedure TestCallUsingProxy;
     procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateInvite;
@@ -149,7 +152,7 @@ type
     procedure TestReceiveFailureNotification;
     procedure TestReceiveMovedPermanently;
 {
-    procedure TestReceiveResponseBadExtension;
+    procedure TestReceiveResponseBadExtension; // Currently our stack can't sent Requires; ergo we can't test in the usual fashion
     procedure TestReceiveResponseBadExtensionWithoutRequires;
 }
   end;
@@ -726,9 +729,15 @@ begin
         'TCP should be the default transport');
 end;
 
+procedure TestTIdSipUserAgentCore.OnChanged(Observed: TObject);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
 procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession;
                                                  const Reason: String);
 begin
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUserAgentCore.OnEstablishedSession(Session: TIdSipSession);
@@ -837,6 +846,27 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCallUsingProxy;
+const
+  ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
+var
+  Invite: TIdSipRequest;
+begin
+  Self.Core.Proxy.Uri := ProxyUri;
+  Self.Core.HasProxy := true;
+
+  Self.Core.Call(Self.Destination, '', '');
+
+  Invite := Self.Dispatcher.Transport.LastRequest;
+  Check(Invite.HasHeader(RouteHeader),
+        'No Route header added');
+
+  Invite.Route.First;
+  CheckEquals(ProxyUri,
+              Invite.Route.CurrentRoute.Address.Uri,
+              'Route points to wrong proxy');
 end;
 
 procedure TestTIdSipUserAgentCore.TestContentTypeDefault;
@@ -1151,7 +1181,13 @@ begin
               'Number of sessions after two INVITEs');
 
   SessionTwo.AcceptCall('', '');
+
+  SessionTwo.AddSessionListener(Self);
+  Self.ThreadEvent.ResetEvent;
+  Self.ExceptionMessage := 'SessionTwo wasn''t terminated';
   Self.SimulateRemoteBye(SessionTwo.Dialog);
+  Self.WaitForSignaled;
+
   Check(not SessionOne.IsTerminated, 'SessionOne was terminated');
   Check(    SessionTwo.IsTerminated, 'SessionTwo wasn''t terminated');
 end;
