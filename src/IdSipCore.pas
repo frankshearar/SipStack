@@ -4045,6 +4045,13 @@ end;
 procedure TIdSipOutboundInvite.ActionSucceeded(Response: TIdSipResponse);
 begin
   Self.NotifyOfSuccess(Response);
+
+  // We only call SendAck here because we need to give the listeners (especially
+  // the Session that created this Invite) time to process the message. The
+  // Session especially needs to have its Dialog receive the response to set up
+  // the Dialog, otherwise the ACK will not be well formed.
+  if Response.IsOK then
+    Self.SendAck(Self.Dialog, Response);
 end;
 
 procedure TIdSipOutboundInvite.NotifyOfFailure(Response: TIdSipResponse);
@@ -4094,13 +4101,12 @@ begin
   else if not Self.DialogEstablished then begin
     Self.NotifyOfDialogEstablished(Response, UsingSecureTransport)
   end
-  else
+  else begin
     Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
+  end;
 
   Assert(Assigned(Self.Dialog),
          'Nothing set this Invite''s Dialog property');
-         
-  Self.SendAck(Self.Dialog, Response);
 end;
 
 function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;

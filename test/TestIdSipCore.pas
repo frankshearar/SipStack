@@ -6389,6 +6389,9 @@ begin
 
     Ack := Self.Dispatcher.Transport.LastACK;
 
+    CheckEquals(Self.Session.Dialog.RemoteTarget,
+                Ack.RequestUri,
+                'Request-URI');
     CheckEquals(Invite.CSeq.SequenceNo,
                 Ack.CSeq.SequenceNo,
                 'CSeq sequence number');
