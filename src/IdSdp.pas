@@ -475,6 +475,7 @@ type
     fUsername:                 String;
     fProfile:                  TIdRTPProfile;
     fRemoteSessionDescription: String;
+    fTransportType:            TIdIPVersion;
     RTPClients:                TObjectList;
     RTPClientLock:             TCriticalSection;
     RTPServerLock:             TCriticalSection;
@@ -514,6 +515,7 @@ type
 
     property BasePort:                 Integer       read fBasePort write fBasePort;
     property Host:                     String        read fHost write fHost;
+    property TransportType:            TIdIPVersion  read fTransportType write fTransportType;
     property Profile:                  TIdRTPProfile read fProfile;
     property RemoteSessionDescription: String        read fRemoteSessionDescription write SetRemoteSessionDescription;
     property Username:                 String        read fUsername write fUsername;
@@ -837,7 +839,7 @@ begin
 
   Val(PayloadType, N, E);
   if (E <> 0) then
-    raise EParser.Create(Format(MalformedToken, [Value]));
+    raise EParserError.Create(Format(MalformedToken, [Value]));
   Self.PayloadType := N;
 
   Self.SetEncoding(TIdRTPPayload.CreatePayload(EncodingDesc));
@@ -1877,7 +1879,7 @@ begin
       Result := Result and (Lowercase(Copy(Address, 1, 2)) = 'ff');
     end;
   else
-    raise EParser.Create('Unknown TIdIPVersion in IsMulticastAddress');
+    raise EParserError.Create('Unknown TIdIPVersion in IsMulticastAddress');
   end;
 end;
 
@@ -1992,7 +1994,7 @@ begin
   if (Payload.Connections.Count = 0)
      and not ((Payload.MediaDescriptionCount > 0)
               and Payload.AllDescriptionsHaveConnections) then
-    raise EParser.Create(MissingConnection);
+    raise EParserError.Create(MissingConnection);
 end;
 
 //* TIdSdpParser Private methods ***********************************************
@@ -2020,7 +2022,7 @@ begin
   end;
 
   if (IndyPos(LastHeader, HeaderOrder) > IndyPos(CurrentHeader, HeaderOrder)) then
-    raise EParser.Create(Format(BadHeaderOrder, [CurrentHeader, LastHeader]));
+    raise EParserError.Create(Format(BadHeaderOrder, [CurrentHeader, LastHeader]));
 end;
 
 function TIdSdpParser.GetAndCheckInfo: String;
@@ -2031,10 +2033,10 @@ begin
   Self.ParseHeader(Name, Value);
 
   if (Name <> RSSDPInformationName) then
-    raise EParser.Create(BadHeaderOrder);
+    raise EParserError.Create(BadHeaderOrder);
 
   if not Self.IsText(Value) then
-    raise EParser.Create(Format(MalformedToken,
+    raise EParserError.Create(Format(MalformedToken,
                                 [RSSDPInformationName, Name + '=' + Value]));
   Result := Value;
 
@@ -2058,11 +2060,11 @@ begin
   Att := TIdSdpAttribute.CreateAttribute(Value);
   try
     if not Self.IsAlphaNumeric(Att.Name) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPAttributeName, Name + '=' + OriginalValue]));
 
     if (Att.Value <> '') and not Self.IsByteString(Att.Value) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPAttributeName, Name + '=' + OriginalValue]));
 
     Attributes.Add(Att);
@@ -2091,7 +2093,7 @@ begin
     Token := Fetch(Value, ':');
 
     if not Self.IsBandwidthType(Token) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPBandwidthName, Name + '=' + OriginalValue]));
 
     BW.BandwidthType := StrToBandwidthType(Token);
@@ -2101,7 +2103,7 @@ begin
     // bandwidth. Bastards.
     Token := Fetch(Value, ' ');
     if not Self.IsNumber(Token) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPBandwidthName, Name + '=' + OriginalValue]));
     BW.Bandwidth := StrToInt(Token);
 
@@ -2138,12 +2140,12 @@ begin
 
   NetType := Fetch(Value, ' ');
   if not Self.IsNetType(NetType) then
-    raise EParser.Create(Format(MalformedToken,
+    raise EParserError.Create(Format(MalformedToken,
                                 [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
   AddrType := Fetch(Value, ' ');
   if not Self.IsAddressType(AddrType) then
-    raise EParser.Create(Format(MalformedToken,
+    raise EParserError.Create(Format(MalformedToken,
                                 [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
   Multicast := IndyPos('/', Value) > 0;
@@ -2152,12 +2154,12 @@ begin
     Addr := Fetch(Value, '/');
     if not Self.IsMulticastAddress(StrToAddressType(AddrType), Addr)
       and not Self.IsFQDN(Addr) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
     TTL := Fetch(Value, '/');
     if not Self.IsByte(TTL) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPConnectionName, Name + '=' + OriginalValue]));
 
     NumAddrs := Value;
@@ -2169,7 +2171,7 @@ begin
 
     if not TIdIPAddressParser.IsIPAddress(StrToAddressType(AddrType), Value)
       and not Self.IsFQDN(Value) then
-      raise EParser.Create(Format(MalformedToken,
+      raise EParserError.Create(Format(MalformedToken,
                                   [RSSDPConnectionName, Name + '=' + OriginalValue]));
   end;
 
@@ -2200,7 +2202,7 @@ begin
   Self.ParseHeader(Name, Value);
 
 //  if not Self.IsEmailAddress(Value) then
-//    raise EParser.Create(Format(MalformedToken, [RSSDPEmailName, Name + '=' + Value]));
+//    raise EParserError.Create(Format(MalformedToken, [RSSDPEmailName, Name + '=' + Value]));
 
   Payload.EmailAddress.Text := Value;
   Self.LastSessionHeader := RSSDPEmailName;
@@ -2215,17 +2217,17 @@ begin
   Name  := Fetch(Value, '=');
 
   if (Name = '') then
-    raise EParser.Create(Format(MalformedToken, ['Header', Line]));
+    raise EParserError.Create(Format(MalformedToken, ['Header', Line]));
 
   if (Value = '') then
-    raise EParser.Create(Format(MalformedToken, [Name, Line]));
+    raise EParserError.Create(Format(MalformedToken, [Name, Line]));
 
   // Technically speaking we should throw out the header, but we don't because
   // we can't answer the question "Can an Origin header have an empty string
   // as the username?" 'o= 467752 467752 IN IP4 192.168.1.41' might be legal -
   // the BNF says nothing on this.
 //  if (Name <> Trim(Name)) or (Value <> Trim(Value)) then
-//    raise EParser.Create(Format(MalformedToken, [Trim(Name), Line]));
+//    raise EParserError.Create(Format(MalformedToken, [Trim(Name), Line]));
 end;
 
 procedure TIdSdpParser.ParseInfo(MediaDescription: TIdSdpMediaDescription);
@@ -2257,19 +2259,19 @@ begin
   end;
 
   if not Self.IsKeyType(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]));
 
   Key.KeyType := StrToKeyType(Token);
 
   if (Key.KeyType = ktPrompt) then begin
     if (Value <> '') then
-      raise EParser.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]))
+      raise EParserError.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]))
   end
   else begin
     if Self.IsKeyData(Value) then
       Key.Value := Value
     else
-      raise EParser.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]));
+      raise EParserError.Create(Format(MalformedToken, [RSSDPKeyName, Name + '=' + OriginalValue]));
   end;
 
   if Self.ParsingSessionHeaders then
@@ -2295,7 +2297,7 @@ begin
   try
     Token := Fetch(Value, ' ');
     if not Self.IsMediaType(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+      raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                    Name + '=' + OriginalValue]));
     NewMediaDesc.MediaType := StrToMediaType(Token);
 
@@ -2306,31 +2308,31 @@ begin
     end;
 
     if not Self.IsPort(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+      raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                    Name + '=' + OriginalValue]));
       NewMediaDesc.Port := StrToInt(Token);
 
     if (Count <> '') and not Self.IsNumber(Count) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+      raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                    Name + '=' + OriginalValue]));
     NewMediaDesc.PortCount := StrToIntDef(Count, 1);
 
     Token := Fetch(Value, ' ');
     if not Self.IsTransport(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+      raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                    Name + '=' + OriginalValue]));
     NewMediaDesc.Transport := Token;
 
     while (Value <> '') do begin
       Token := Fetch(Value, ' ');
       if not Self.IsAlphaNumeric(Token) then
-        raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+        raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                      Name + '=' + OriginalValue]));
       NewMediaDesc.AddFormat(Token);
     end;
 
     if (NewMediaDesc.FormatCount = 0) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+      raise EParserError.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
                                                    Name + '=' + OriginalValue]));
 
     Self.ParseMediaOptionalHeaders(NewMediaDesc);
@@ -2362,7 +2364,7 @@ begin
       RSSDPKeyName:         Self.ParseKey(MediaDescription.Key);
       RSSDPAttributeName:   Self.ParseAttribute(MediaDescription.Attributes);
     else
-      raise EParser.Create(Format(UnknownOptionalHeader, [NextHeader]));
+      raise EParserError.Create(Format(UnknownOptionalHeader, [NextHeader]));
     end;
 
     NextHeader := Self.PeekLine;
@@ -2380,7 +2382,7 @@ begin
   OriginalValue := Value;
 
   if (Name <> RSSDPOriginName) then
-    raise EParser.Create(MissingOrigin);
+    raise EParserError.Create(MissingOrigin);
 
   Payload.Origin.Username := Fetch(Value, ' ');
 
@@ -2390,32 +2392,32 @@ begin
   // *(safe). We don't know, ergo 'o= 467752 467752 IN IP4 192.168.1.41' might
   // be legal (meaning username = '').
 //  if (Payload.Origin.Username = '') then
-//    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+//    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
 
   Token := Fetch(Value, ' ');
   if not Self.IsNumber(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
   Payload.Origin.SessionID := Token;
 
   Token := Fetch(Value, ' ');
   if not Self.IsNumber(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
   Payload.Origin.SessionVersion := Token;
 
   Token := Fetch(Value, ' ');
   if not Self.IsNetType(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
   Payload.Origin.NetType := Token;
 
   Token := Fetch(Value, ' ');
   if not Self.IsAddressType(Token) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
 
   Payload.Origin.AddressType := StrToAddressType(Token);
 
   Payload.Origin.Address := Value;
   if (Payload.Origin.Address = '') then
-    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPOriginName, Name + '=' + OriginalValue]));
 
   Self.LastSessionHeader := RSSDPOriginName;
 end;
@@ -2428,10 +2430,10 @@ begin
   Self.ParseHeader(Name, Value);
 
   if not Self.IsPhoneNumber(Value) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPPhoneName, Name + '=' + Value]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPPhoneName, Name + '=' + Value]));
 
   if (Payload.PhoneNumber <> '') then
-    raise EParser.Create(Format(TooManyHeaders, [RSSDPPhoneName]));
+    raise EParserError.Create(Format(TooManyHeaders, [RSSDPPhoneName]));
 
   Payload.PhoneNumber := Value;
   Self.LastSessionHeader := RSSDPPhoneName;
@@ -2449,7 +2451,7 @@ begin
   OriginalValue := Value;
 
   if (Name <> RSSDPRepeatName) then
-    raise EParser.Create(BadHeaderOrder);
+    raise EParserError.Create(BadHeaderOrder);
 
   Rpt := TIdSdpRepeat.Create;
   try
@@ -2459,7 +2461,7 @@ begin
       Token := Fetch(Value, ' ');
 
       if not Self.IsTime(Token) then
-        raise EParser.Create(Format(MalformedToken, [RSSDPRepeatName, Name + '=' + OriginalValue]));
+        raise EParserError.Create(Format(MalformedToken, [RSSDPRepeatName, Name + '=' + OriginalValue]));
     end;
 
     Time.Repeats.Add(Rpt);
@@ -2503,7 +2505,7 @@ begin
       RSSDPTimeName:        Self.ParseTime(Payload);
       RSSDPUriName:         Self.ParseUri(Payload);
     else
-      raise EParser.Create(Format(UnknownOptionalHeader, [NextHeader]));
+      raise EParserError.Create(Format(UnknownOptionalHeader, [NextHeader]));
     end;
 
     NextHeader := Self.PeekLine;
@@ -2517,10 +2519,10 @@ begin
   Self.ParseHeader(Name, Value);
 
   if (Name <> RSSDPSessionName) then
-    raise EParser.Create(MissingSessionName);
+    raise EParserError.Create(MissingSessionName);
 
   if not Self.IsText(Value) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPSessionName, Name + '=' + Value]));
+    raise EParserError.Create(Format(MalformedToken, [RSSDPSessionName, Name + '=' + Value]));
 
   Payload.SessionName := Value;
   Self.LastSessionHeader := RSSDPSessionName;
@@ -2541,12 +2543,12 @@ begin
   try
     Token := Fetch(Value, ' ');
     if not Self.IsNumber(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPTimeName, Name + '=' + OriginalValue]));
+      raise EParserError.Create(Format(MalformedToken, [RSSDPTimeName, Name + '=' + OriginalValue]));
     Time.StartTime := StrToInt64(Token);
 
     Token := Fetch(Value, ' ');
     if not Self.IsNumber(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPTimeName, Name + '=' + OriginalValue]));
+      raise EParserError.Create(Format(MalformedToken, [RSSDPTimeName, Name + '=' + OriginalValue]));
     Time.EndTime := StrToInt64(Token);
 
     while not Self.Eof and (Copy(Self.PeekLine, 1, 1) = RSSDPZoneAdjustmentName) do
@@ -2585,7 +2587,7 @@ begin
       Token := Fetch(Value, ' ');
 
 //      if not Self.IsZoneAdjustment(Token) then
-//        raise EParser.Create(Format(MalformedToken, [RSSDPRepeatName, Name + '=' + OriginalValue]));
+//        raise EParserError.Create(Format(MalformedToken, [RSSDPRepeatName, Name + '=' + OriginalValue]));
     end;
 
     Time.ZoneAdjustments.Add(Zone);
@@ -2605,7 +2607,7 @@ begin
   Self.ParseHeader(Name, Value);
 
 //  if not Self.IsUri(Value) then
-//    raise EParser.Create(Format(MalformedToken, [RSSDPUriName, Name + '=' + Value]));
+//    raise EParserError.Create(Format(MalformedToken, [RSSDPUriName, Name + '=' + Value]));
 
   Payload.URI := Value;
   Self.LastSessionHeader := RSSDPUriName;
@@ -2619,17 +2621,18 @@ var
   Value: String;
 begin
   if Self.Eof then
-    raise EParser.Create(EmptyInputStream);
+    raise EParserError.Create(EmptyInputStream);
 
   Self.ParseHeader(Name, Value);
 
   if (Name <> RSSDPVersionName) then
-    raise EParser.Create(MissingVersion);
+    raise EParserError.Create(MissingVersion);
 
   Val(Value, N, E);
 
   if (E <> 0) then
-    raise EParser.Create(Format(MalformedToken, [RSSDPVersionName, Name + '=' + Value]));
+    raise EParserError.Create(Format(MalformedToken,
+                                     [RSSDPVersionName, Name + '=' + Value]));
 
   Payload.Version := N;
   Self.LastSessionHeader := RSSDPVersionName;
@@ -2703,7 +2706,8 @@ begin
   Self.Filters       := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
 
-  Self.fProfile     := TIdAudioVisualProfile.Create;
+  Self.fProfile      := TIdAudioVisualProfile.Create;
+  Self.TransportType := Id_IPv4;
 end;
 
 destructor TIdSdpPayloadProcessor.Destroy;
@@ -2747,11 +2751,17 @@ begin
 end;
 
 function TIdSdpPayloadProcessor.LocalSessionDescription: String;
+const
+  OLine = 'o=%s %u %u IN %s %s'#13#10;
 var
   I: Integer;
 begin
   Result := 'v=0'#13#10
-          + 'o=' + Self.Username + ' ' + IntToStr(DateTimeToNtpSeconds(Now)) + ' ' + IntToStr(DateTimeToNtpSeconds(Now)) + ' IN IP4 ' + Self.Host + #13#10
+          + Format(OLine, [Self.Username,
+                           DateTimeToNtpSeconds(Now),
+                           DateTimeToNtpSeconds(Now),
+                           AddressTypeToStr(Self.TransportType),
+                           Self.Host])
           + 's=-'#13#10
           + 'c=IN IP4 ' + Self.Host + #13#10;
 
@@ -2819,6 +2829,7 @@ begin
     try
       Description := TIdSdpPayload.CreateFrom(S);
       try
+        Self.TransportType := Description.Origin.AddressType;
         Description.InitializeProfile(Self.Profile);
         Self.SetUpMediaStreams(Description);
       finally

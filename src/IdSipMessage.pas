@@ -145,6 +145,8 @@ type
     property StatusText: String  read fStatusText write fStatusText;
   end;
 
+  TIdSipParserError = procedure(const RawMessage, Reason: String) of object;
+
   {*
    * Some implementation principles we follow:
    *  * The original headers may be folded, may contain all manner of guff. We
@@ -165,12 +167,15 @@ type
    *}
   TIdSipParser = class(TIdSimpleParser, IIdSipMessageVisitor)
   private
+    fOnParserError: TIdSipParserError;
+
     procedure AddHeader(Msg: TIdSipMessage; Header: String);
     procedure CheckContentLengthContentType(Msg: TIdSipMessage);
     procedure CheckCSeqMethod(Request: TIdSipRequest);
     procedure CheckRequiredRequestHeaders(Msg: TIdSipMessage);
     procedure CheckRequiredResponseHeaders(Msg: TIdSipMessage);
     function  CreateResponseOrRequest(const Token: String): TIdSipMessage;
+    procedure DoOnParseError(const Reason: String);
     procedure FailParse(Msg: TIdSipMessage;
                         const Reason: String);
     procedure InitializeMessage(Msg: TIdSipMessage);
@@ -212,11 +217,13 @@ type
 
     procedure VisitRequest(Request: TIdSipRequest);
     procedure VisitResponse(Response: TIdSipResponse);
+
+    property OnParserError: TIdSipParserError read fOnParserError write fOnParserError;
   end;
 
-  EBadHeader = class(EParser);
-  EBadRequest = class(EParser);
-  EBadResponse = class(EParser);
+  EBadHeader = class(EParserError);
+  EBadRequest = class(EParserError);
+  EBadResponse = class(EParserError);
 
 const
   LegalTokenChars = Alphabet + Digits
@@ -1125,7 +1132,7 @@ begin
     end;
   end
   else
-    raise EParser.Create(EmptyInputStream);
+    raise EParserError.Create(EmptyInputStream);
 end;
 
 function TIdSipParser.ParseAndMakeMessage(const Src: String): TIdSipMessage;
@@ -1219,7 +1226,14 @@ end;
 
 procedure TIdSipParser.ParseMessage(const Msg: TIdSipMessage);
 begin
-  Msg.Accept(Self);
+  try
+    Msg.Accept(Self);
+  except
+    on E: EParserError do begin
+      Self.DoOnParseError(E.Message);
+      raise;
+    end;
+  end;
 end;
 
 procedure TIdSipParser.ParseRequest(const Request: TIdSipRequest);
@@ -1325,6 +1339,22 @@ begin
     Result := TIdSipResponse.Create
   else
     Result := TIdSipRequest.Create;
+end;
+
+procedure TIdSipParser.DoOnParseError(const Reason: String);
+var
+  S: TStringStream;
+begin
+  Self.Source.Seek(0, soFromBeginning);
+  S := TStringStream.Create('');
+  try
+    S.CopyFrom(Self.Source, 0);
+
+    if Assigned(Self.OnParserError) then
+      Self.OnParserError(S.DataString, Reason);
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TIdSipParser.FailParse(Msg: TIdSipMessage; const Reason: String);

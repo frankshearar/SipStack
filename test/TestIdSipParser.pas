@@ -15,13 +15,16 @@ type
 
   TestTIdSipParser = class(TTestCase)
   private
-    P:        TIdSipParser;
-    Request:  TIdSipRequest;
-    Response: TIdSipResponse;
+    P:          TIdSipParser;
+    ParseError: String;
+    RawMessage: String;
+    Request:    TIdSipRequest;
+    Response:   TIdSipResponse;
 
     procedure CheckBasicMessage(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
     procedure CheckBasicRequest(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
     procedure CheckBasicResponse(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+    procedure CheckParserError(const RawMessage, Reason: String);
     procedure CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);
   public
     procedure SetUp; override;
@@ -41,6 +44,7 @@ type
     procedure TestIsToken;
     procedure TestIsTransport;
     procedure TestIsWord;
+    procedure TestOnParseError;
     procedure TestParseAndMakeMessageEmptyStream;
     procedure TestParseAndMakeMessageFromString;
     procedure TestParseAndMakeMessageMalformedRequest;
@@ -430,6 +434,44 @@ begin
         '-.!%*_+`''~()<>:\"/[]?{}');
 end;
 
+procedure TestTIdSipParser.TestOnParseError;
+const
+  MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
+                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                   + 'Max-Forwards:     70'#13#10
+                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                   + 'CSeq:    1 INVITE'#13#10
+                   + #13#10;
+var
+  ExpectedReason: String;
+  Str:            TStringStream;
+begin
+  ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
+
+  Str := TStringStream.Create(MalformedMessage);
+  try
+    Self.P.OnParserError := Self.CheckParserError;
+    Self.P.Source := Str;
+
+    try
+      Self.P.ParseAndMakeMessage.Free;
+    except
+      on E: EParserError do
+        CheckEquals(ExpectedReason, E.Message, 'Unexpected exception');
+    end;
+    CheckEquals(ExpectedReason,
+                Self.ParseError,
+                'Unexpected parse error reason');
+    CheckEquals(Copy(MalformedMessage, 1, 255),
+                Copy(Self.RawMessage, 1, 255),
+                'Unexpected raw message');
+  finally
+    Str.Free;
+  end;
+end;
+
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyStream;
 var
   Str: TStringStream;
@@ -441,7 +483,7 @@ begin
     try
       Self.P.ParseAndMakeMessage.Free;
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(EmptyInputStream, E.Message, 'Unexpected exception');
     end;
   finally
@@ -1228,7 +1270,7 @@ begin
       Self.P.ParseRequest(Request);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingContentType,
                     E.Message,
                     'Unexpected exception');
@@ -1799,6 +1841,12 @@ begin
   CheckEquals(8,           Msg.HeaderCount,                'Header count');
 
   Self.CheckBasicMessage(Msg, CheckBody);
+end;
+
+procedure TestTIdSipParser.CheckParserError(const RawMessage, Reason: String);
+begin
+  Self.RawMessage := RawMessage;
+  Self.ParseError := Reason;
 end;
 
 procedure TestTIdSipParser.CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);

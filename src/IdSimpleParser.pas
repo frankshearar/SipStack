@@ -58,8 +58,6 @@ type
     property  Source: TStream read fSource write fSource;
   end;
 
-  EParser = class(Exception);
-
 const
   BadSyntax        = 'Bad syntax';
   DamagedLineEnd   = 'Damaged line end at line %d, expected %s but was %s';
@@ -257,7 +255,7 @@ begin
     Id_IPv4: Result := Self.IsIPV4Address(Token);
     Id_IPv6: Result := Self.IsIPv6Address(Token);
   else
-    raise EParser.Create('Unknown TIdIPVersion in IsIPAddress');
+    raise EParserError.Create('Unknown TIdIPVersion in IsIPAddress');
   end;
 end;
 

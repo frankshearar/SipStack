@@ -2566,7 +2566,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPConnectionName, 'c=' + Value]),
                     E.Message,
                     'Unexpected exception');
@@ -2589,7 +2589,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPOriginName, 'o=' + OriginValue]),
                     E.Message,
                     'Unexpected exception');
@@ -2611,7 +2611,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPPhoneName, 'p=' + Value]),
                     E.Message,
                     'Unexpected exception');
@@ -2640,7 +2640,7 @@ begin
     Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPMediaDescriptionName, 'm=' + Value]),
                     E.Message,
                     'Unexpected exception');
@@ -2664,7 +2664,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [Name, Name + '=' + Value]),
                     E.Message,
                     'Unexpected exception');
@@ -2688,7 +2688,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPRepeatName, 'r=' + RepeatValue]),
                     E.Message,
                     'Unexpected exception');
@@ -3000,7 +3000,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out on a malformed bandwidth');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPBandwidthName, 'b=:']),
                     E.Message,
                     'Unexpected exception');
@@ -3281,7 +3281,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with empty input stream');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(EmptyInputStream, E.Message, 'Unexpected exception');
     end;
   finally
@@ -3302,7 +3302,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(UnknownOptionalHeader, ['=Missing name']),
                     E.Message,
                     'Unexpected exception');
@@ -3325,7 +3325,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, ['b', 'b=']),
                     E.Message,
                     'Unexpected exception');
@@ -3351,7 +3351,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out: vosui');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(BadHeaderOrder, [RSSDPInformationName, RSSDPUriName]),
                     E.Message,
                     'Unexpected exception');
@@ -3371,7 +3371,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out: vosbcb');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(BadHeaderOrder, [RSSDPConnectionName, RSSDPBandwidthName]),
                     E.Message,
                     'Unexpected exception');
@@ -3413,7 +3413,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out on malformed information-field');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPInformationName, 'i=haha'#0'haha']),
                     E.Message,
                     'Unexpected exception');
@@ -3954,7 +3954,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with missing origin-field');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingOrigin, E.Message, 'Unexpected exception');
     end;
   finally
@@ -3976,7 +3976,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with missing session-name-field');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingSessionName, E.Message, 'Unexpected exception');
     end;
   finally
@@ -3996,7 +3996,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingConnection,
                     E.Message,
                     'Unexpected exception');
@@ -4018,7 +4018,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with missing proto-version');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingVersion, E.Message, 'Unexpected exception');
     end;
   finally
@@ -4105,7 +4105,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with multiple Phone headers');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(TooManyHeaders, [RSSDPPhoneName]),
                     E.Message,
                     'Unexpected exception');
@@ -4153,7 +4153,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPPhoneName, 'p=+99 666 0942-3'#0]),
                     E.Message,
                     'Unexpected exception');
@@ -4223,7 +4223,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out on Session with #0');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPSessionName, 's='#0]),
                     E.Message,
                     'Unexpected exception');
@@ -4250,7 +4250,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(MissingConnection,
                     E.Message,
                     'Unexpected exception');
@@ -4392,7 +4392,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(UnknownOptionalHeader, ['z=1 -2 3 4']),
                     E.Message,
                     'Unexpected exception');
@@ -4491,7 +4491,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out malformed version');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(MalformedToken, [RSSDPVersionName, 'v=a']),
                     E.Message,
                     'Unexpected exception');
@@ -4514,7 +4514,7 @@ begin
       Self.P.Parse(Self.Payload);
       Fail('Failed to bail out with a duplicate version header');
     except
-      on E: EParser do
+      on E: EParserError do
         CheckEquals(Format(UnknownOptionalHeader, ['v=1']),
                     E.Message,
                     'Unexpected exception');
