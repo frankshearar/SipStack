@@ -290,6 +290,21 @@ type
     procedure TestName; override;
   end;
 
+  TestTIdSipAuthenticationInfoHeader = class(THeaderTestCase)
+  private
+    A: TIdSipAuthenticationInfoHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestCNonce;
+    procedure TestName;
+    procedure TestNextNonce;
+    procedure TestResponseDigest;
+    procedure TestValue; override;
+  end;
+
   TestTIdSipProxyAuthorizationHeader = class(TestTIdSipAuthorizationHeader)
   private
     P: TIdSipProxyAuthorizationHeader;
@@ -622,6 +637,7 @@ begin
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipProxyAuthenticateHeader.Suite);
+  Result.AddTest(TestTIdSipAuthenticationInfoHeader.Suite);
   Result.AddTest(TestTIdSipProxyAuthorizationHeader.Suite);
   Result.AddTest(TestTIdSipRetryAfterHeader.Suite);
   Result.AddTest(TestTIdSipRouteHeader.Suite);
@@ -2818,6 +2834,117 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipAuthenticationInfoHeader                                         *
+//******************************************************************************
+//* TestTIdSipAuthenticationInfoHeader Public methods **************************
+
+procedure TestTIdSipAuthenticationInfoHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.A := Self.Header as TIdSipAuthenticationInfoHeader;
+end;
+
+//* TestTIdSipAuthenticationInfoHeader Protected methods ***********************
+
+function TestTIdSipAuthenticationInfoHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipAuthenticationInfoHeader;
+end;
+
+//* TestTIdSipAuthenticationInfoHeader Published methods ***********************
+
+procedure TestTIdSipAuthenticationInfoHeader.TestCNonce;
+var
+  Value: String;
+begin
+  Value := 'f00f00';
+  Self.A.CNonce := Value;
+  CheckEquals(Value,
+              Self.A.CNonce,
+              Self.ClassName + ' CNonce');
+
+  Value := 'f00df00d';
+  Self.A.CNonce := Value;
+  CheckEquals(Value,
+              Self.A.CNonce,
+              Self.ClassName + ' CNonce');
+end;
+
+procedure TestTIdSipAuthenticationInfoHeader.TestName;
+begin
+  Self.A.Name := AuthenticationInfoHeader;
+
+  CheckEquals(AuthenticationInfoHeader,
+              Self.A.Name,
+              'Name after set');
+end;
+
+procedure TestTIdSipAuthenticationInfoHeader.TestNextNonce;
+var
+  Value: String;
+begin
+  Value := 'f00f00';
+  Self.A.NextNonce := Value;
+  CheckEquals(Value,
+              Self.A.NextNonce,
+              Self.ClassName + ' NextNonce');
+
+  Value := 'f00df00d';
+  Self.A.NextNonce := Value;
+  CheckEquals(Value,
+              Self.A.NextNonce,
+              Self.ClassName + ' NextNonce');
+end;
+
+procedure TestTIdSipAuthenticationInfoHeader.TestResponseDigest;
+var
+  Value: String;
+begin
+  Value := 'f00f00';
+  Self.A.ResponseDigest := Value;
+  CheckEquals(Value,
+              Self.A.ResponseDigest,
+              Self.ClassName + ' ResponseDigest');
+
+  Value := 'f00df00d';
+  Self.A.ResponseDigest := Value;
+  CheckEquals(Value,
+              Self.A.ResponseDigest,
+              Self.ClassName + ' ResponseDigest');
+end;
+
+procedure TestTIdSipAuthenticationInfoHeader.TestValue;
+const
+  CNonce         = 'deadbeef';
+  NextNonce      = 'f00f00';
+  NonceCount     = '0000000d';
+  Qop            = QopAuthInt;
+  ResponseDigest = 'decafbad';
+begin
+  Self.A.Value := NextNonceParam + '=' + NextNonce + ','
+                + QopParam + '=' + Qop + ','
+                + ResponseDigestParam + '=' + ResponseDigest + ','
+                + CNonceParam + '=' + CNonce + ','
+                + NonceCountParam + '=' + NonceCount;
+  CheckEquals(NextNonce,
+              Self.A.NextNonce,
+              'NextNonce');
+  CheckEquals(Qop,
+              Self.A.Qop,
+              'Qop');
+  CheckEquals(ResponseDigest,
+              Self.A.ResponseDigest,
+              'ResponseDigest');
+  CheckEquals(CNonce,
+              Self.A.CNonce,
+              'CNonce');
+  CheckEquals(NonceCount,
+              Self.A.NC,
+              'NonceCount');
+end;
+
+//******************************************************************************
 //* TestTIdSipProxyAuthorizationHeader                                         *
 //******************************************************************************
 //* TestTIdSipProxyAuthorizationHeader Public methods **************************
@@ -2843,6 +2970,12 @@ begin
   CheckEquals(ProxyAuthorizationHeader,
               Self.P.Name,
               'Name');
+
+  Self.P.Name := 'foo';
+
+  CheckEquals(ProxyAuthorizationHeader,
+              Self.P.Name,
+              'Name after set');
 end;
 
 //******************************************************************************
@@ -4472,7 +4605,7 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
   CheckType(TIdSipUriHeader,                    Self.Headers.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(AllowHeader),                AllowHeader);
-  CheckType(TIdSipAuthenticateInfoHeader,       Self.Headers.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  CheckType(TIdSipAuthenticationInfoHeader,     Self.Headers.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
   CheckType(TIdSipAuthorizationHeader,          Self.Headers.Add(AuthorizationHeader),        AuthorizationHeader);
   CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderFull),           CallIDHeaderFull);
   CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderShort),          CallIDHeaderShort);

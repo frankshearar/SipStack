@@ -526,7 +526,21 @@ type
     function CredentialHeaderType: TIdSipAuthorizationHeaderClass; override;
   end;
 
-  TIdSipAuthenticationInfoHeader = class(TIdSipHttpAuthHeader);
+  TIdSipAuthenticationInfoHeader = class(TIdSipAuthorizationHeader)
+  private
+    function  GetNextNonce: String;
+    function  GetResponseDigest: String;
+    procedure SetNextNonce(const Value: String);
+    procedure SetResponseDigest(const Value: String);
+  protected
+    procedure CheckDigestResponses(Responses: TStrings); override;
+    function  GetName: String; override;
+    function  KnownResponse(const Name: String): Boolean; override;
+    procedure Parse(const Value: String); override;
+  public
+    property NextNonce:      String read GetNextNonce write SetNextNonce;
+    property ResponseDigest: String read GetResponseDigest write SetResponseDigest;
+  end;
 
   TIdSipProxyAuthorizationHeader = class(TIdSipAuthorizationHeader)
   protected
@@ -1273,6 +1287,7 @@ const
   MethodRegister             = 'REGISTER';
   MIMEVersionHeader          = 'MIME-Version';
   MinExpiresHeader           = 'Min-Expires';
+  NextNonceParam             = 'nextnonce';
   NonceCountParam            = 'nc';
   NonceParam                 = 'nonce';
   OpaqueParam                = 'opaque';
@@ -1290,6 +1305,7 @@ const
   RecordRouteHeader          = 'Record-Route';
   ReplyToHeader              = 'Reply-To';
   RequireHeader              = 'Require';
+  ResponseDigestParam        = 'rspauth';
   RetryAfterHeader           = 'Retry-After';
   RouteHeader                = 'Route';
   RportParam                 = 'rport';
@@ -3858,6 +3874,60 @@ end;
 function TIdSipProxyAuthenticateHeader.GetName: String;
 begin
   Result := ProxyAuthenticateHeader;
+end;
+
+//******************************************************************************
+//* TIdSipAuthenticationInfoHeader                                             *
+//******************************************************************************
+//* TIdSipAuthenticationInfoHeader Protected methods ***************************
+
+procedure TIdSipAuthenticationInfoHeader.CheckDigestResponses(Responses: TStrings);
+begin
+  if (Self.ResponseDigest <> '')
+    and not TIdSimpleParser.IsHexNumber(Self.ResponseDigest) then
+    Self.FailParse(InvalidDigestResponse);
+end;
+
+function TIdSipAuthenticationInfoHeader.GetName: String;
+begin
+  Result := AuthenticationInfoHeader;
+end;
+
+function TIdSipAuthenticationInfoHeader.KnownResponse(const Name: String): Boolean;
+begin
+  Result := (Name = NextNonceParam)
+         or (Name = CNonceParam)
+         or (Name = NonceCountParam)
+         or (Name = QopParam)
+         or (Name = ResponseDigestParam);
+end;
+
+procedure TIdSipAuthenticationInfoHeader.Parse(const Value: String);
+begin
+  Self.ParseDigestResponses(Value);
+  Self.CheckDigestResponses(Self.DigestResponses);
+end;
+
+//* TIdSipAuthenticationInfoHeader Private methods *****************************
+
+function TIdSipAuthenticationInfoHeader.GetNextNonce: String;
+begin
+  Result := Self.DigestResponseValue(NextNonceParam);
+end;
+
+function TIdSipAuthenticationInfoHeader.GetResponseDigest: String;
+begin
+  Result := Self.DigestResponseValue(ResponseDigestParam);
+end;
+
+procedure TIdSipAuthenticationInfoHeader.SetNextNonce(const Value: String);
+begin
+  Self.DigestResponses.Values[NextNonceParam] := Value;
+end;
+
+procedure TIdSipAuthenticationInfoHeader.SetResponseDigest(const Value: String);
+begin
+  Self.DigestResponses.Values[ResponseDigestParam] := Value;
 end;
 
 //******************************************************************************
