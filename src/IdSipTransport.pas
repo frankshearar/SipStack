@@ -55,6 +55,8 @@ type
 
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
+    procedure ChangeBinding(const Address: String; Port: Cardinal); virtual; abstract;
+    function  GetAddress: String; virtual; abstract;
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual; abstract;
     procedure NotifyTransportListeners(Request: TIdSipRequest); overload;
@@ -76,7 +78,10 @@ type
     procedure SendRequest(R: TIdSipRequest); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
-    procedure SetPort(Value: Cardinal); virtual; abstract;
+    procedure SetAddress(const Value: String); virtual;
+    procedure SetPort(Value: Cardinal); virtual;
+
+    property Bindings: TIdSocketHandles read GetBindings;
   public
     class function TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
 
@@ -99,7 +104,7 @@ type
     procedure VisitRequest(Request: TIdSipRequest);
     procedure VisitResponse(Response: TIdSipResponse);
 
-    property Bindings: TIdSocketHandles read GetBindings;
+    property Address:  String           read GetAddress write SetAddress;
     property HostName: String           read fHostName write fHostName;
     property Port:     Cardinal         read GetPort write SetPort;
     property Timeout:  Cardinal         read fTimeout write fTimeout;
@@ -120,6 +125,8 @@ type
   protected
     Transport: TIdSipTcpServer;
 
+    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
+    function  GetAddress: String; override;
     function  CreateClient: TIdSipTcpClient; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     function  GetBindings: TIdSocketHandles; override;
@@ -173,6 +180,8 @@ type
     Transport: TIdSipUdpServer;
 
   protected
+    procedure ChangeBinding(const Address: String; Port: Cardinal); override;
+    function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -292,7 +301,7 @@ const
 implementation
 
 uses
-  IdSipConsts;
+  IdSipConsts, IdTCPServer;
 
 //******************************************************************************
 //* TIdSipTransport                                                            *
@@ -572,6 +581,16 @@ begin
   end;
 end;
 
+procedure TIdSipTransport.SetAddress(const Value: String);
+begin
+  Self.ChangeBinding(Value, Self.Port);
+end;
+
+procedure TIdSipTransport.SetPort(Value: Cardinal);
+begin
+  Self.ChangeBinding(Self.Address, Value);
+end;
+
 //* TIdSipTransport Private methods ********************************************
 
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
@@ -629,6 +648,23 @@ begin
 end;
 
 //* TIdSipTCPTransport Protected methods ***************************************
+
+procedure TIdSipTCPTransport.ChangeBinding(const Address: String; Port: Cardinal);
+var
+  Binding: TIdSocketHandle;
+begin
+  Self.Stop;
+  Self.Transport.Bindings.Clear;
+
+  Binding := Self.Bindings.Add;
+  Binding.IP   := Address;
+  Binding.Port := Port;
+end;
+
+function TIdSipTCPTransport.GetAddress: String;
+begin
+  Result := Self.Transport.Bindings[0].IP;
+end;
 
 function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
@@ -880,6 +916,23 @@ begin
 end;
 
 //* TIdSipUDPTransport Protected methods ***************************************
+
+procedure TIdSipUDPTransport.ChangeBinding(const Address: String; Port: Cardinal);
+var
+  Binding: TIdSocketHandle;
+begin
+  Self.Stop;
+  Self.Transport.Bindings.Clear;
+
+  Binding := Self.Bindings.Add;
+  Binding.IP   := Address;
+  Binding.Port := Port;
+end;
+
+function TIdSipUDPTransport.GetAddress: String;
+begin
+  Result := Self.Bindings[0].IP;
+end;
 
 function TIdSipUDPTransport.GetBindings: TIdSocketHandles;
 begin

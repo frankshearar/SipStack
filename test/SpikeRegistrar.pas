@@ -85,18 +85,11 @@ begin
   Self.DB := TIdSipMockBindingDatabase.Create;
 
   Self.Transport := TIdSipUDPTransport.Create(StrToInt(Self.Port.Text));
-  if (GStack.LocalAddress <> LocalHostName) then begin
-    Binding                 := Self.Transport.Bindings.Add;
-    Binding.IP              := GStack.LocalAddress;
-    Binding.Port            := StrToInt(Self.Port.Text);
-    Self.Transport.HostName := Binding.IP;
-  end
+  if (GStack.LocalAddress <> LocalHostName) then
+    Self.Transport.HostName := GStack.LocalAddress
   else
     Self.Transport.HostName := LocalHostName;
-
-  Binding      := Self.Transport.Bindings.Add;
-  Binding.IP   := LocalHostName;
-  Binding.Port := StrToInt(Self.Port.Text);
+  Self.Transport.Address := Self.Transport.HostName;
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
 
@@ -113,7 +106,7 @@ begin
   try
     Contact.Value := 'sip:franks@'
                    + Self.Transport.HostName + ':'
-                   + IntToStr(Self.Transport.Bindings[0].Port);
+                   + IntToStr(Self.Transport.Port);
     Self.UA.Contact := Contact;
   finally
     Contact.Free;

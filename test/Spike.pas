@@ -226,12 +226,12 @@ begin
   Self.UA.AddAllowedMethod(MethodRegister);
 
   try
-    BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
+    BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Port);
     Self.StartTransports;
   except
     on EIdCouldNotBindSocket do
       ShowMessage('Something''s hogged the SIP port '
-                + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port) + ') - '
+                + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Port) + ') - '
                 + 'kill it and restart this');
   end;
   Self.UA.Contact.Value := Self.ContactUri.Text;
@@ -288,19 +288,13 @@ begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
   Result.HostName := Self.HostName.Text;
+  Result.Port     := RunningPort;
 
-  if (GStack.LocalAddress <> LocalHostName) then begin
-    Binding      := Result.Bindings.Add;
-    Binding.IP   := GStack.LocalAddress;
-    Binding.Port := RunningPort;
-//    Result.HostName := Binding.IP;
-  end;
-//  else
-//   Result.HostName := LocalHostName;
+  if (GStack.LocalAddress <> LocalHostName) then
+    Result.Address := GStack.LocalAddress
+  else
+   Result.Address := LocalHostName;
 
-  Binding      := Result.Bindings.Add;
-  Binding.IP   := LocalHostName;
-  Binding.Port := RunningPort;
   Result.AddTransportListener(Self);
   Result.AddTransportSendingListener(Self);
 end;
@@ -658,7 +652,7 @@ end;
 
 procedure TrnidSpike.BasePortChange(Sender: TObject);
 var
-  I, J:    Integer;
+  I:       Integer;
   NewPort: Integer;
 begin
   Self.StopTransports;
@@ -666,8 +660,7 @@ begin
   NewPort := StrToInt(BasePort.Text);
 
   for I := 0 to Self.Transports.Count - 1 do
-    for J := 0 to (Self.Transports[I] as TIdSipTransport).Bindings.Count - 1 do
-      (Self.Transports[I] as TIdSipTransport).Bindings[J].Port := NewPort;
+    (Self.Transports[I] as TIdSipTransport).Port := NewPort;
 
   Self.UA.Contact.Address.Port := NewPort;
   Self.UA.From.Address.Port    := NewPort;

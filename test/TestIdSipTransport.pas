@@ -17,7 +17,7 @@ uses
   TestFrameworkEx;
 
 type
-  TIdSipTransportSubclass = class(TIdSipTcpTransport)
+  TIdSipTransportSubclass = class(TIdSipTcpTransport)   
   public
     procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
@@ -543,28 +543,24 @@ begin
 
   Self.HighPortTransport := Self.TransportType.Create(Self.DefaultPort + 10000);
   Self.HighPortTransport.AddTransportListener(Self);
-  Self.HighPortTransport.Timeout := 500;
+  Self.HighPortTransport.Timeout  := 500;
   Self.HighPortTransport.HostName := IndyGetHostName;
-  Self.HighPortTransport.Bindings.Clear;
-  Binding := Self.HighPortTransport.Bindings.Add;
-  Binding.IP := GStack.LocalAddress;
-  Binding.Port := Self.DefaultPort + 10000;
+  Self.HighPortTransport.Address  := GStack.LocalAddress;
+  Self.HighPortTransport.Port     := Self.DefaultPort + 10000;
   Self.HighPortTransport.Start;
 
   Self.LowPortTransport := Self.TransportType.Create(Self.DefaultPort);
   Self.LowPortTransport.AddTransportListener(Self);
-  Self.LowPortTransport.Timeout := 500;
+  Self.LowPortTransport.Timeout  := 500;
   Self.LowPortTransport.HostName := 'localhost';
-  Self.LowPortTransport.Bindings.Clear;
-  Binding := Self.LowPortTransport.Bindings.Add;
-  Binding.IP := '127.0.0.1';
-  Binding.Port := Self.DefaultPort;
+  Self.LowPortTransport.Address  := '127.0.0.1';
+  Self.LowPortTransport.Port     := Self.DefaultPort;
   Self.LowPortTransport.Start;
 
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
-  Self.Request.LastHop.SentBy     := Self.LowPortTransport.Bindings[0].IP;
+  Self.Request.LastHop.SentBy     := Self.LowPortTransport.Address;
   Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
-  Self.Request.RequestUri.Port := Self.HighPortTransport.Bindings[0].Port;
+  Self.Request.RequestUri.Port := Self.HighPortTransport.Port;
 
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
@@ -676,7 +672,7 @@ procedure TestTIdSipTransport.CheckSendRequestFromNonStandardPort(Sender: TObjec
 begin
   try
     CheckEquals(Request.LastHop.Port,
-                Self.HighPortTransport.Bindings[0].Port,
+                Self.HighPortTransport.Port,
                 Self.HighPortTransport.ClassName
               + ': Port number on top via');
 
@@ -713,7 +709,7 @@ procedure TestTIdSipTransport.CheckSendResponseFromNonStandardPort(Sender: TObje
                                                                    R: TIdSipResponse);
 begin
   try
-    CheckEquals(Self.LowPortTransport.Bindings[0].Port,
+    CheckEquals(Self.LowPortTransport.Port,
                 R.LastHop.Port,
                 Self.HighPortTransport.ClassName
               + ': Port number on top via');
@@ -870,7 +866,7 @@ begin
   // the message to the right SIP server. No, you'd never do this
   // in production, because it's wilfully wrong.
   Self.Response.LastHop.SentBy := 'unknown.host';
-  Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+  Self.Response.LastHop.Received := Self.LowPortTransport.Address;
   Self.LowPortTransport.Send(Self.Response);
 
   Self.WaitForSignaled;
@@ -945,7 +941,7 @@ procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
 begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
   // This is a bit of a hack. We want to make sure the sent-by's an IP.
-  Self.HighPortTransport.HostName := Self.HighPortTransport.Bindings[0].IP;
+  Self.HighPortTransport.HostName := Self.HighPortTransport.Address;
   Self.HighPortTransport.Send(Self.Request);
 
   Self.WaitForSignaled;
@@ -966,7 +962,7 @@ end;
 procedure TestTIdSipTransport.TestSendRequestFromNonStandardPort;
 begin
   Self.Request.RequestUri.Host := Self.LowPortTransport.HostName;
-  Self.Request.RequestUri.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.Request.RequestUri.Port := Self.LowPortTransport.Port;
   Self.CheckingRequestEvent := Self.CheckSendRequestFromNonStandardPort;
   Self.HighPortTransport.Send(Self.Request);
 
@@ -995,7 +991,7 @@ end;
 
 procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;
 begin
-  Self.Response.LastHop.Port := Self.LowPortTransport.Bindings[0].Port;
+  Self.Response.LastHop.Port := Self.LowPortTransport.Port;
   Self.CheckingResponseEvent := Self.CheckSendResponseFromNonStandardPort;
   Self.HighPortTransport.Send(Self.Response);
 
@@ -1015,11 +1011,7 @@ begin
       try
         Self.LowPortTransport.AddTransportListener(LowPortListener);
         try
-          Check(Self.LowPortTransport.Bindings.Count > 0,
-                Self.HighPortTransport.ClassName
-              + ': Sanity check on LowPortTransport''s bindings');
-
-          Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+          Self.Response.LastHop.Received := Self.LowPortTransport.Address;
           Self.HighPortTransport.Send(Self.Response);
 
           // It's not perfect, but anyway. We need to wait long enough for
@@ -1067,8 +1059,8 @@ var
 begin
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortTransport.Address;
+    Client.Port := Self.HighPortTransport.Port;
     Client.Connect(DefaultTimeout);
     try
       Client.Write(Msg);
@@ -1139,8 +1131,8 @@ begin
   // TODO: This won't work! You need to set up the certs & such!
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortTransport.Address;
+    Client.Port := Self.HighPortTransport.Port;
     Client.Connect(DefaultTimeout);
     try
       Client.Write(Msg);
@@ -1213,9 +1205,8 @@ begin
   Self.MaddrTransport := Self.TransportType.Create(IdPORT_SIP);
   Self.MaddrTransport.AddTransportListener(Self);
   Self.MaddrTransport.HostName := 'localhost';
-  Binding := Self.MaddrTransport.Bindings.Add;
-  Binding.IP := '127.0.0.2';
-  Binding.Port := IdPORT_SIP;
+  Self.MaddrTransport.Address  := '127.0.0.2';
+  Self.MaddrTransport.Port     := IdPORT_SIP;
 
   Self.RPortEvent := TSimpleEvent.Create;
 end;
@@ -1236,8 +1227,8 @@ var
 begin
   Client := TIdUdpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortTransport.Address;
+    Client.Port := Self.HighPortTransport.Port;
 
     Client.Send(Msg);
   finally
@@ -1347,8 +1338,8 @@ begin
 
   Client := TIdUdpClient.Create(nil);
   try
-    Client.Host := Self.HighPortTransport.Bindings[0].IP;
-    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Host := Self.HighPortTransport.Address;
+    Client.Port := Self.HighPortTransport.Port;
 
     Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
               + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
@@ -1407,8 +1398,8 @@ begin
   Self.CheckingResponseEvent := Self.CheckMaddrUser;
   Self.MaddrTransport.Start;
   try
-    Self.Response.LastHop.Maddr  := Self.MaddrTransport.Bindings[0].IP;
-    Self.Response.LastHop.SentBy := Self.MaddrTransport.Bindings[0].IP;
+    Self.Response.LastHop.Maddr  := Self.MaddrTransport.Address;
+    Self.Response.LastHop.SentBy := Self.MaddrTransport.Address;
 
     Self.LowPortTransport.Send(Self.Response);
 
@@ -1440,11 +1431,11 @@ begin
     Server.DefaultPort := 5000; // some arbitrary value
     Server.Active      := true;
 
-    Self.Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
+    Self.Response.LastHop.Received := Self.HighPortTransport.Address;
     Self.Response.LastHop.Rport    := Server.DefaultPort;
 
-    Server.Send(Self.HighPortTransport.Bindings[0].IP,
-                Self.HighPortTransport.Bindings[0].Port,
+    Server.Send(Self.HighPortTransport.Address,
+                Self.HighPortTransport.Port,
                 Self.Request.AsString);
 
     Self.WaitForSignaled(Self.RPortEvent);
@@ -1481,7 +1472,7 @@ begin
   try
     try
       Binding := Server.Bindings.Add;
-      Binding.IP   := Self.LowPortTransport.Bindings[0].IP;
+      Binding.IP   := Self.LowPortTransport.Address;
       Binding.Port := Self.RPort;
 
       Server.Active := true;
