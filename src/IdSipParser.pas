@@ -13,31 +13,41 @@ type
 
   TIdSipHeader = class(TPersistent)
   private
+    fName:   String;
     fParams: TStrings;
+    fValue: String;
 
     function  GetParam(const Name: String): String;
     procedure SetParam(const Name, Value: String);
     procedure SetParameters(const Value: TStrings);
-
+  protected
+    function  GetValue: String; virtual;
+    procedure SetValue(const Value: String); virtual;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure Assign(Src: TPersistent); override;
+    function  ParamsAsString: String;
 
-    property Parameters: TStrings read fParams write SetParameters;
+    property Name:                       String read fName write fName;
+    property Value:                      String read GetValue write SetValue;
+    property Parameters:                 TStrings read fParams write SetParameters;
     property Params[const Name: String]: String read GetParam write SetParam;
   end;
 
-  // Via header
   TIdSipViaHeader = class(TIdSipHeader)
   private
     fHost:       String;
     fSipVersion: String;
     fPort:       Cardinal;
     fTransport:  TIdSipTransportType;
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
   public
-    procedure Assign(Src: TPersistent); override;
+    function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
+    function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
     function  IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
 
     property Host:       String              read fHost write fHost;
@@ -123,7 +133,6 @@ type
     procedure IncCurrentLine;
     procedure InitialiseMessage(Msg: TIdSipMessage);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
-    procedure ParseHeaderParams(const Header: TIdSipHeader; const Params: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
     procedure ParseRequestLine(const Request: TIdSipRequest);
     procedure ParseStatusLine(const Response: TIdSipResponse);
@@ -356,9 +365,52 @@ var
 begin
   if Src is TIdSipHeader then begin
     H := Src as TIdSipHeader;
+    Self.Name       := H.Name;
     Self.Parameters := H.Parameters;
+    Self.Value      := H.Value;
   end
   else inherited Assign(Src);
+end;
+
+function TIdSipHeader.ParamsAsString: String;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Parameters.Count - 1 do
+    Result := ';' + Self.Parameters[I];
+end;
+
+//* TIdSipHeader Protected methods *********************************************
+
+function TIdSipHeader.GetValue: String;
+begin
+  Result := fValue;
+end;
+
+procedure TIdSipHeader.SetValue(const Value: String);
+var
+  ParamName:  String;
+  ParamValue: String;
+  S:          String;
+begin
+  fValue := Value;
+
+  S := Value;
+  Fetch(S, ';');
+  if (Pos(';', S) = 0) then begin
+    ParamValue := S;
+    ParamName := Fetch(ParamValue, '=');
+
+    Self.Params[ParamName] := ParamValue;
+  end
+  else begin
+    while (S <> '') do begin
+      ParamValue := Fetch(S, ';');
+      ParamName  := Fetch(ParamValue, '=');
+
+      Self.Params[ParamName] := ParamValue;
+    end;
+  end;
 end;
 
 //* TIdSipHeader Private methods ***********************************************
@@ -383,20 +435,18 @@ end;
 //******************************************************************************
 //* TIdSipViaHeader Public methods *********************************************
 
-procedure TIdSipViaHeader.Assign(Src: TPersistent);
-var
-  V: TIdSipViaHeader;
+function TIdSipViaHeader.DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
 begin
-  inherited Assign(Src);
+  if (T = sttTLS) then
+    Result := IdPort_SIP_TLS
+  else
+    Result := IdPORT_SIP;
+end;
 
-  if (Src is TIdSipViaHeader) then begin
-    V := Src as TIdSipViaHeader;
-
-    Self.Host       := V.Host;
-    Self.Port       := V.Port;
-    Self.SipVersion := V.SipVersion;
-    Self.Transport  := V.Transport;
-  end;
+function TIdSipViaHeader.IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
+begin
+  Result := ((T = sttTLS) and (Port = IdPORT_SIP_TLS))
+         or (Port = IdPORT_SIP);
 end;
 
 function TIdSipViaHeader.IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
@@ -405,6 +455,42 @@ begin
         and (Self.Port = Hop.Port)
         and (Self.SipVersion = Hop.SipVersion)
         and (Self.Transport = Hop.Transport);
+end;
+
+//* TIdSipViaHeader Private methods ********************************************
+
+function TIdSipViaHeader.GetValue: String;
+begin
+  Result := Self.SipVersion + '/' + TransportToStr(Self.Transport)
+          + ' ' + Self.Host;
+
+  if not Self.IsDefaultPortForTransport(Self.Port, Self.Transport) then
+    Result := Result + ':' + IntToStr(Self.Port);
+
+  Result := Result + Self.ParamsAsString;
+end;
+
+procedure TIdSipViaHeader.SetValue(const Value: String);
+var
+  Token: String;
+  S:     String;
+begin
+  inherited SetValue(Value);
+
+  S := Value;
+
+  Token := Trim(Fetch(S, '/')) + '/';
+  Token := Token + Trim(Fetch(S, '/'));
+  Self.SipVersion := Token;
+
+  Token := Trim(Fetch(S, ' '));
+  Self.Transport := StrToTransport(Token);
+  Token := Trim(Fetch(S, ';'));
+  Self.Host := Fetch(Token, ':');
+  if (Token = '') then 
+    Self.Port := Self.DefaultPortForTransport(Self.Transport)
+  else
+    Self.Port := StrToInt(Token);
 end;
 
 //******************************************************************************
@@ -878,29 +964,14 @@ end;
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
 var
   NewHop: TIdSipViaHeader;
-  Token:  String;
   S:      String;
 begin
   if Self.IsVia(Header) then begin
     NewHop := TIdSipViaHeader.Create;
     try
       S := Header;
-      Fetch(S, ':'); // eat the header name
-      Token := Trim(Fetch(S, '/')) + '/';
-      Token := Token + Trim(Fetch(S, '/'));
-      NewHop.SipVersion := Token;
-
-      Token := Trim(Fetch(S, ' '));
-      NewHop.Transport := StrToTransport(Token);
-      Token := Trim(Fetch(S, ';'));
-      NewHop.Host := Fetch(Token, ':');
-      if (Token = '') then
-        NewHop.Port := IdPORT_SIP
-      else
-        NewHop.Port := StrToInt(Token);
-
-      // parse the parameters. Dump the rest of the header up to the first ;
-      Self.ParseHeaderParams(NewHop, S);
+      NewHop.Name := Trim(Fetch(S, ':'));
+      NewHop.Value := Trim(S);
     except
       NewHop.Free;
       NewHop := nil;
@@ -911,28 +982,6 @@ begin
   end
   else
     Self.AddHeader(Msg, Header);
-end;
-
-procedure TIdSipParser.ParseHeaderParams(const Header: TIdSipHeader; const Params: String);
-var
-  Name, Value: String;
-  S:           String;
-begin
-  S := Params;
-  if (Pos(';', S) = 0) then begin
-    Value := S;
-    Name := Fetch(Value, '=');
-
-    Header.Params[Name] := Value;
-  end
-  else begin
-    while (S <> '') do begin
-      Value := Fetch(S, ';');
-      Name := Fetch(Value, '=');
-
-      Header.Params[Name] := Value;
-    end;
-  end;
 end;
 
 procedure TIdSipParser.ParseHeaders(const Msg: TIdSipMessage);
@@ -1024,55 +1073,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -14,11 +14,12 @@ type
     procedure TestTransportToStr;
   end;
 
+  TestTIdSipHeader = class(TTestCase)
+  published
+    procedure TestParamsAsString;
+  end;
+
   TestTIdSipViaHeader = class(TTestCase)
-  private
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestIsEqualTo;
   end;
@@ -176,20 +177,30 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipHeader                                                           *
+//******************************************************************************
+//* TestTIdSipHeader Published methods *****************************************
+
+procedure TestTIdSipHeader.TestParamsAsString;
+var
+  H: TIdSipHeader;
+begin
+  H := TIdSipHeader.Create;
+  try
+    H.Params['branch'] := 'z9hG4bK776asdhds';
+    H.Params['ttl']    := '5';
+
+    CheckEquals(';branch=z9hG4bK776asdhds;ttl=5',
+                H.ParamsAsString,
+                'ParamsAsString');
+  finally
+    H.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipViaHeader                                                        *
 //******************************************************************************
-//* TestTIdSipViaHeader Public methods *****************************************
-
-procedure TestTIdSipViaHeader.SetUp;
-begin
-  inherited SetUp;
-end;
-
-procedure TestTIdSipViaHeader.TearDown;
-begin
-  inherited TearDown;
-end;
-
 //* TestTIdSipViaHeader Published methods **************************************
 
 procedure TestTIdSipViaHeader.TestIsEqualTo;
@@ -274,6 +285,7 @@ begin
 
   Hop := TIdSipViaHeader.Create;
   try
+    Hop.Name       := 'Via';
     Hop.Host       := '127.0.0.1';
     Hop.Port       := 5060;
     Hop.SipVersion := 'SIP/2.0';
@@ -948,14 +960,14 @@ var
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org:5061;branch=z9hG4bK776asdhds'#13#10
                             + 'Max-Forwards: 70'#13#10
                             + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
                             + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                             + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
                             + 'CSeq: 314159 INVITE'#13#10
                             + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'Via: SIP/3.0/TLS gw5.cust1.leo_ix.org:5061;branch=z9hG4bK776aheh'#13#10
+                            + 'Via: SIP/3.0/TLS gw5.cust1.leo_ix.org;branch=z9hG4bK776aheh'#13#10
                             + 'Content-Length: 4'#13#10
                             + #13#10
                             + 'I am a message. Hear me roar!');
@@ -965,17 +977,25 @@ begin
 
     CheckEquals(2,                       Request.Path.Length,                   'Path.Length');
     Check      (Request.Path.FirstHop <> Request.Path.LastHop,                  'Sanity check on Path');
+    CheckEquals('Via',                   Request.Path.LastHop.Name,             'LastHop.Name');
     CheckEquals('SIP/2.0',               Request.Path.LastHop.SipVersion,       'LastHop.SipVersion');
     Check      (sttTCP =                 Request.Path.LastHop.Transport,        'LastHop.Transport');
     CheckEquals('gw1.leo_ix.org',        Request.Path.LastHop.Host,             'LastHop.Host');
-    CheckEquals(IdPORT_SIP,              Request.Path.LastHop.Port,             'LastHop.Port');
+    CheckEquals(5061,                    Request.Path.LastHop.Port,             'LastHop.Port');
     CheckEquals('z9hG4bK776asdhds',      Request.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
+    CheckEquals('SIP/2.0/TCP gw1.leo_ix.org:5061;branch=z9hG4bK776asdhds',
+                Request.Path.LastHop.Value,
+                'LastHop.Value');
 
+    CheckEquals('Via',                   Request.Path.FirstHop.Name,             'FirstHop.Name');
     CheckEquals('SIP/3.0',               Request.Path.FirstHop.SipVersion,       'FirstHop.SipVersion');
     Check      (sttTLS =                 Request.Path.FirstHop.Transport,        'FirstHop.Transport');
     CheckEquals('gw5.cust1.leo_ix.org',  Request.Path.FirstHop.Host,             'FirstHop.Host');
     CheckEquals(IdPORT_SIP_TLS,          Request.Path.FirstHop.Port,             'FirstHop.Port');
     CheckEquals('z9hG4bK776aheh',        Request.Path.FirstHop.Params['branch'], 'FirstHop.Params[''branch'']');
+    CheckEquals('SIP/3.0/TLS gw5.cust1.leo_ix.org;branch=z9hG4bK776aheh',
+                Request.Path.FirstHop.Value,
+                'FirstHop.Value');
   finally
     Str.Free;
   end;
