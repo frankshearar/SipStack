@@ -151,8 +151,6 @@ type
     procedure TestSendResponse;
     procedure TestSendMessageButNoAppropriateTransport;
     procedure TestSendMessageWithAppropriateTransport;
-    procedure TestSendVeryBigMessageWithTcpFailure;
-    procedure TestSendVeryBigRequest;
     procedure TestServerInviteTransactionGetsAck;
     procedure TestTransactionsCleanedUp;
     procedure TestWillUseReliableTransport;
@@ -1768,50 +1766,6 @@ begin
         'No response sent down UDP');
   CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
               'TCP response was sent');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendVeryBigMessageWithTcpFailure;
-var
-  TcpResponseCount: Cardinal;
-  UdpResponseCount: Cardinal;
-begin
-  Self.MockTransport.TransportType := TcpTransport;
-  Self.MockTransport.FailWith      := EIdConnectTimeout;
-
-  TcpResponseCount := Self.MockTcpTransport.SentResponseCount;
-  UdpResponseCount := Self.MockUdpTransport.SentResponseCount;
-
-  while (Length(Self.Response200.AsString) < MaximumUDPMessageSize) do
-    Self.Response200.AddHeader(SubjectHeaderFull).Value := 'In R''lyeh dead Cthulhu lies dreaming';
-
-  Self.Response200.LastHop.Transport := Self.MockUdpTransport.TransportType;
-  Self.D.SendToTransport(Self.Response200);
-
-  Check(UdpResponseCount < Self.MockUdpTransport.SentResponseCount,
-        'No response sent down UDP');
-  CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
-              'TCP response was sent');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendVeryBigRequest;
-var
-  TcpRequestCount: Cardinal;
-  UdpRequestCount: Cardinal;
-begin
-  TcpRequestCount := Self.MockTcpTransport.SentRequestCount;
-  UdpRequestCount := Self.MockUdpTransport.SentRequestCount;
-
-  Self.TranRequest.LastHop.Transport := UdpTransport;
-  while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
-    Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
-                                                         + 'and with strange aeons even death may die.';
-
-  Self.D.SendToTransport(Self.TranRequest);
-
-  CheckEquals(UdpRequestCount, Self.MockUdpTransport.SentRequestCount,
-              'UDP response was sent');
-  Check(TcpRequestCount < Self.MockTcpTransport.SentRequestCount,
-        'No response sent down TCP');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestServerInviteTransactionGetsAck;

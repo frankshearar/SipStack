@@ -489,8 +489,7 @@ const
   DefaultT4    = 5000;  // milliseconds
 
 const
-  MaximumUDPMessageSize = 1300;
-  SessionTimeoutMsg     = 'Timed out';
+  SessionTimeoutMsg = 'Timed out';
 
 implementation
 
@@ -739,30 +738,14 @@ end;
 
 procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage);
 var
-  MsgLen:       Cardinal;
-  RewrittenVia: Boolean;
+  T: TIdSipTransport;
 begin
-  // Don't call this method. Transactions use this method to send messages to
-  // the Transport layer.
+  T := Self.FindAppropriateTransport(Msg);
 
-  MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
-              and (Msg.LastHop.Transport = UdpTransport);
-
-  if RewrittenVia then
-    Msg.LastHop.Transport := TcpTransport;
-
-  try
-    Self.FindAppropriateTransport(Msg).Send(Msg);
-  except
-    on EIdSipTransport do begin
-      Msg.LastHop.Transport := UdpTransport;
-
-      // If this too raises an EIdSipTransport exception, the transaction will
-      // receive the exception and handle it accordingly.
-      Self.FindAppropriateTransport(Msg).Send(Msg);
-    end;
-  end;
+  if Assigned(T) then
+    T.Send(Msg)
+  else
+    raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
 
 procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest);
@@ -896,6 +879,7 @@ end;
 procedure TIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                              const Reason: String);
 begin
+  // Do nothing?
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
@@ -1463,42 +1447,26 @@ begin
 end;
 
 procedure TIdSipTransaction.TrySendRequest(R: TIdSipRequest);
-var
-  CopyOfRequest: TIdSipRequest;
 begin
-  CopyOfRequest := TIdSipRequest.Create;
   try
-    CopyOfRequest.Assign(R);
-    try
-      Self.Dispatcher.SendToTransport(CopyOfRequest);
-    except
-      on E: EIdSipTransport do
-        Self.DoOnTransportError(E.Transport,
-                                E.SipMessage as TIdSipRequest,
-                                E.Message);
-    end;
-  finally
-    CopyOfRequest.Free;
+    Self.Dispatcher.SendToTransport(R);
+  except
+    on E: EIdSipTransport do
+      Self.DoOnTransportError(E.Transport,
+                              E.SipMessage as TIdSipRequest,
+                              E.Message);
   end;
 end;
 
 procedure TIdSipTransaction.TrySendResponse(R: TIdSipResponse);
-var
-  CopyOfResponse: TIdSipResponse;
 begin
-  CopyOfResponse := TIdSipResponse.Create;
   try
-    CopyOfResponse.Assign(R);
-    try
-      Self.Dispatcher.SendToTransport(CopyOfResponse);
-    except
-      on E: EIdSipTransport do
-        Self.DoOnTransportError(E.Transport,
-                                E.SipMessage as TIdSipResponse,
-                                E.Message);
-    end;
-  finally
-    CopyOfResponse.Free;
+    Self.Dispatcher.SendToTransport(R);
+  except
+    on E: EIdSipTransport do
+      Self.DoOnTransportError(E.Transport,
+                              E.SipMessage as TIdSipResponse,
+                              E.Message);
   end;
 end;
 
