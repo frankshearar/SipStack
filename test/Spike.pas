@@ -114,8 +114,8 @@ type
                                         var Username: String;
                                         var Password: String);
     procedure OnChanged(Observed: TObject);
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                        Receiver: TIdSipTransport);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
@@ -346,16 +346,21 @@ begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgent).SessionCount);
 end;
 
-procedure TrnidSpike.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                Receiver: TIdSipTransport);
+procedure TrnidSpike.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                               Receiver: TIdSipTransport);
+const
+  LogLine = 'Dropped unmatched message: %s';
 begin
   Self.Lock.Acquire;
   try
-    Self.Log.Lines.Add('Dropped unmatched response: ' + Response.Description);
+    if Message.IsRequest then
+      Self.Log.Lines.Add(Format(LogLine, [(Message as TIdSipRequest).Method]))
+    else
+      Self.Log.Lines.Add(Format(LogLine, [(Message as TIdSipResponse).Description]));
   finally
     Self.Lock.Release;
   end;
-  Self.LogMessage(Response, true);
+  Self.LogMessage(Message, true);
 end;
 
 procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
@@ -591,8 +596,8 @@ begin
 
     Self.ResetCounters;
 
-//    Self.AudioPlayer.Play(AnyAudioDevice);
-//    Self.PayloadProcessor.StartListening(SDP);
+    Self.AudioPlayer.Play(AnyAudioDevice);
+    Self.PayloadProcessor.StartListening(SDP);
 
     if Self.MasqAsNat.Checked then
       SDP := StringReplace(SDP, OurHostName, Self.HostName.Text, [rfReplaceAll, rfIgnoreCase]);
@@ -783,7 +788,7 @@ begin
 
     Self.ResetCounters;
 
-//    Self.AudioPlayer.Play(AnyAudioDevice);
+    Self.AudioPlayer.Play(AnyAudioDevice);
 
     // Offer contains a description of what data we expect to receive. Sometimes
     // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
