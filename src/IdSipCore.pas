@@ -1944,12 +1944,10 @@ begin
   // Except for 2xx's on a client INVITE. And these no longer belong to
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately.
-  if Response.IsOK then begin
-    Action := Self.FindAction(Response);
+  Action := Self.FindAction(Response);
 
-    if Assigned(Action) then
-      Action.ReceiveResponse(Response, Receiver.IsSecure);
-  end
+  if Assigned(Action) then
+    Action.ReceiveResponse(Response, Receiver.IsSecure)
   else
     Self.NotifyOfDroppedResponse(Response, Receiver);
 end;
