@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, IdRTP, IdRTPClient, IdRTPServer, IdSocketHandle, IdThread, SyncObjs,
-  TestFrameworkSip;
+  TestFrameworkRtp;
 
 type
   TestTIdRTPClient = class(TTestRTP)
