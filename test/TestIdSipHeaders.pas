@@ -117,6 +117,7 @@ type
     procedure TestValueWithExpires;
     procedure TestValueWithQ;
     procedure TestValueWithStar;
+    procedure TestWillExpire;
   end;
 
   TestTIdSipContentDispositionHeader = class(THeaderTestCase)
@@ -376,6 +377,28 @@ type
     procedure TestRemoveAll;
   end;
 
+  TestTIdSipExpiresHeaders = class(TTestCase)
+  private
+    Headers:        TIdSipHeaders;
+    ExpiresHeaders: TIdSipExpiresHeaders;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCurrentExpires;
+  end;
+
+  TestTIdSipContacts = class(TTestCase)
+  private
+    Headers:  TIdSipHeaders;
+    Contacts: TIdSipContacts;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCurrentContact;
+  end;
+
   TestTIdSipViaPath = class(TTestCase)
   private
     Headers: TIdSipHeaders;
@@ -419,6 +442,7 @@ begin
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
+  Result.AddTest(TestTIdSipContacts.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
 end;
 
@@ -1495,6 +1519,17 @@ begin
   Self.C.Value := '*;q=0.1';
   Check(Self.C.IsWildCard, 'IsWildCard');
   CheckEquals(100, Self.C.Q, 'QValue');
+end;
+
+procedure TestTIdSipContactHeader.TestWillExpire;
+begin
+  Check(not Self.C.WillExpire, 'No expire param');
+  Self.C.Expires := 2;
+  Check(Self.C.WillExpire, 'Expire param set via property');
+
+  Self.C.Params[ExpiresParam] := '';
+  Self.C.Params[ExpiresParam] := '2';
+  Check(Self.C.WillExpire, 'Expire param set directly');
 end;
 
 //******************************************************************************
@@ -3996,6 +4031,100 @@ procedure TestTIdSipHeadersFilter.TestRemoveAll;
 begin
   Self.Filter.RemoveAll;
   CheckEquals(0, Self.Filter.Count, 'Route headers not removed');
+end;
+
+//******************************************************************************
+//* TestTIdSipExpiresHeaders                                                   *
+//******************************************************************************
+//* TestTIdSipExpiresHeaders Public methods ************************************
+
+procedure TestTIdSipExpiresHeaders.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers        := TIdSipHeaders.Create;
+  Self.ExpiresHeaders := TIdSipExpiresHeaders.Create(Self.Headers);
+end;
+
+procedure TestTIdSipExpiresHeaders.TearDown;
+begin
+  Self.ExpiresHeaders.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipExpiresHeaders Published methods *********************************
+
+procedure TestTIdSipExpiresHeaders.TestCurrentExpires;
+begin
+  CheckEquals(0,
+              Self.ExpiresHeaders.CurrentExpires,
+              'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  CheckEquals(0,
+              Self.ExpiresHeaders.CurrentExpires,
+              'No ExpiresHeaders');
+
+  Self.Headers.Add(ExpiresHeader).Value := '99';
+  Self.ExpiresHeaders.First;
+  CheckEquals(99,
+              Self.ExpiresHeaders.CurrentExpires,
+              'First Expires');
+
+  Self.Headers.Add(ExpiresHeader).Value := '22';
+  Self.ExpiresHeaders.First;
+  Self.ExpiresHeaders.Next;
+  CheckEquals(22,
+              Self.ExpiresHeaders.CurrentExpires,
+              'First Expires');
+end;
+
+//******************************************************************************
+//* TestTIdSipContacts                                                         *
+//******************************************************************************
+//* TestTIdSipContacts Public methods ******************************************
+
+procedure TestTIdSipContacts.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers  := TIdSipHeaders.Create;
+  Self.Contacts := TIdSipContacts.Create(Self.Headers);
+end;
+
+procedure TestTIdSipContacts.TearDown;
+begin
+  Self.Contacts.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipContacts Published methods ***************************************
+
+procedure TestTIdSipContacts.TestCurrentContact;
+var
+  NewContact: TIdSipHeader;
+begin
+  Check(nil = Self.Contacts.CurrentContact,
+        'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  Check(nil = Self.Contacts.CurrentContact,
+        'No Contacts');
+
+  NewContact := Self.Headers.Add(ContactHeaderFull);
+  Self.Contacts.First;
+  Check(NewContact = Self.Contacts.CurrentContact,
+        'First Contact');
+
+  NewContact := Self.Headers.Add(ContactHeaderFull);
+  Self.Contacts.First;
+  Self.Contacts.Next;
+  Check(NewContact = Self.Contacts.CurrentContact,
+        'Second Contact');
 end;
 
 //******************************************************************************

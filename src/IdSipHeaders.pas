@@ -262,6 +262,8 @@ type
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
   public
+    function WillExpire: Boolean;
+
     property Expires:    Cardinal     read GetExpires write SetExpires;
     property IsWildCard: Boolean      read fIsWildCard write fIsWildCard;
     property Q:          TIdSipQValue read GetQ write SetQ;
@@ -474,9 +476,9 @@ type
     property HeaderClass: TIdSipHeaderClass read fHeaderClass;
   end;
 
-  // I am a set of headers. I may or may not be ordered. That depends on what
-  // sort've headers I contain. You may iterate over me using my External
-  // Iterator methods.
+  // I represent a set of headers. I may or may not be ordered. That depends
+  // on what sort've headers I contain. You may iterate over me using my
+  // External Iterator methods.
   TIdSipHeaderList = class(TObject)
   protected
     function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
@@ -575,6 +577,20 @@ type
 
     // This returns the FIRST MATCHING header
     property Headers[const Name: String]: TIdSipHeader read GetHeaders; default;
+  end;
+
+  TIdSipContacts = class(TIdSipHeadersFilter)
+  public
+    constructor Create(const Headers: TIdSipHeaders);
+
+    function CurrentContact: TIdSipContactHeader;
+  end;
+
+  TIdSipExpiresHeaders = class(TIdSipHeadersFilter)
+  public
+    constructor Create(const Headers: TIdSipHeaders);
+
+    function CurrentExpires: Cardinal;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
@@ -1975,6 +1991,13 @@ end;
 //******************************************************************************
 //* TIdSipContactHeader                                                        *
 //******************************************************************************
+//* TIdSipContactHeader Public methods *****************************************
+
+function TIdSipContactHeader.WillExpire: Boolean;
+begin
+  Result := Self.HasParam(ExpiresParam);
+end;
+
 //* TIdSipContactHeader Protected methods **************************************
 
 function TIdSipContactHeader.GetName: String;
@@ -3317,6 +3340,37 @@ begin
 
   if not Assigned(Result) then
     Result := Self.Add(Name);
+end;
+
+//******************************************************************************
+//* TIdSipContacts                                                             *
+//******************************************************************************
+//* TIdSipContacts Public methods **********************************************
+
+constructor TIdSipContacts.Create(const Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, ContactHeaderFull);
+end;
+
+function TIdSipContacts.CurrentContact: TIdSipContactHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipContactHeader;
+end;
+
+
+//******************************************************************************
+//* TIdSipExpiresHeaders
+//******************************************************************************
+//* TIdSipExpiresHeaders Public methods ****************************************
+
+constructor TIdSipExpiresHeaders.Create(const Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, ExpiresHeader);
+end;
+
+function TIdSipExpiresHeaders.CurrentExpires: Cardinal;
+begin
+  Result := (Self.CurrentHeader as TIdSipNumericHeader).NumericValue;
 end;
 
 //******************************************************************************
