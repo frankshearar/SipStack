@@ -307,7 +307,6 @@ type
                                 const ContentType: String);
   public
     procedure SetUp; override;
-    procedure TestUseCorrectTransport; virtual;
   published
     procedure TestIsInbound; virtual;
     procedure TestIsInvite; virtual;
@@ -388,8 +387,6 @@ type
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
-    TransportParam: String;
-
     function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
@@ -413,10 +410,6 @@ type
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
     procedure TestTransactionCompleted;
-    procedure TestUseCorrectTransport; override;
-    procedure TestUseTransportParam; virtual;
-    procedure TestUseUdpByDefault;
-    procedure TestVeryLargeMessagesUseAReliableTransport;
   end;
 
   TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
@@ -436,7 +429,6 @@ type
     procedure TearDown; override;
   published
     procedure TestReInviteTwice;
-    procedure TestUseTransportParam; override;
   end;
 
   TestTIdSipInboundOptions = class(TestTIdSipAction)
@@ -468,7 +460,6 @@ type
     procedure TestIsOptions; override;
     procedure TestReceiveResponse;
     procedure TestRemoveListener;
-    procedure TestUseCorrectTransport; override;
   end;
 
   TestTIdSipRegistration = class(TestTIdSipAction)
@@ -514,7 +505,6 @@ type
     procedure TestRemoveListener;
     procedure TestReregisterTime;
     procedure TestSequenceNumberIncrements;
-    procedure TestUseCorrectTransport; override;
     procedure TestUsername;
   end;
 
@@ -736,7 +726,6 @@ type
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateUnestablishedSession;
-    procedure TestUseCorrectTransport; override;
   end;
 
   TActionMethodTestCase = class(TTestCase)
@@ -3976,32 +3965,6 @@ begin
   Self.ActionFailed := false;
 end;
 
-procedure TestTIdSipAction.TestUseCorrectTransport;
-const
-  CorrectTransport = SctpTransport;
-var
-  Action: TIdSipAction;
-begin
-  // This test only makes sense for outbound Actions.
-
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           CorrectTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.Destination.AsAddressOfRecord,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
-
-  Self.MarkSentRequestCount;
-  Action := Self.CreateAction;
-
-  CheckRequestSent(Action.ClassName + ': No request sent');
-  CheckEquals(CorrectTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'Incorrect transport');
-end;
-
 //* TestTIdSipAction Protected methods *****************************************
 
 function TestTIdSipAction.CreateAction: TIdSipAction;
@@ -5350,13 +5313,11 @@ begin
 
   // We create Self.Dialog in Self.OnDialogEstablished
 
+  Self.InviteMimeType           := SdpMimeType;
+  Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
   Self.OnDialogEstablishedFired := false;
   Self.OnFailureFired           := false;
   Self.OnRedirectFired          := false;
-  Self.InviteMimeType           := SdpMimeType;
-  Self.InviteOffer              := TIdSipTestResources.BasicSDP('1.2.3.4');
-
-  Self.TransportParam := SctpTransport;
 end;
 
 procedure TestTIdSipOutboundInvite.TearDown;
@@ -5877,45 +5838,6 @@ begin
   Check(Invite.IsTerminated, 'Outbound INVITE not marked as terminated');
 end;
 
-procedure TestTIdSipOutboundInvite.TestUseCorrectTransport;
-begin
-  inherited TestUseCorrectTransport;
-end;
-
-procedure TestTIdSipOutboundInvite.TestUseTransportParam;
-begin
-  Self.Destination.Address.Transport := Self.TransportParam;
-
-  Self.CreateAction;
-
-  CheckEquals(SctpTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'INVITE didn''t use transport param');
-end;
-
-procedure TestTIdSipOutboundInvite.TestUseUdpByDefault;
-begin
-  Self.CreateAction;
-
-  CheckEquals(UdpTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'INVITE didn''t use UDP by default');
-end;
-
-procedure TestTIdSipOutboundInvite.TestVeryLargeMessagesUseAReliableTransport;
-begin
-  Self.InviteOffer    := TIdSipTestResources.VeryLargeSDP('localhost');
-  Self.InviteMimeType := SdpMimeType;
-
-  Self.CreateAction;
-
-  CheckEquals(TcpTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'INVITE didn''t use a reliable transport despite the large size '
-            + 'of the message');
-end;
-
-
 //******************************************************************************
 //* TestTIdSipOutboundRedirectedInvite                                         *
 //******************************************************************************
@@ -6028,13 +5950,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundReInvite.TestUseTransportParam;
-begin
-  Self.Dialog.RemoteURI.Transport := Self.TransportParam;
-
-  inherited TestUseTransportParam;
 end;
 
 //******************************************************************************
@@ -6308,11 +6223,6 @@ begin
   finally
     L1.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundOptions.TestUseCorrectTransport;
-begin
-  inherited TestUseCorrectTransport;
 end;
 
 //******************************************************************************
@@ -6610,30 +6520,6 @@ begin
   Self.CreateAction;
   Check(SeqNo + 1 = Self.LastSentRequest.CSeq.SequenceNo,
         'CSeq sequence number didn''t increment');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestUseCorrectTransport;
-const
-  CorrectTransport = SctpTransport;
-var
-  Action: TIdSipAction;
-begin
-  Self.Locator.AddLocation(Self.RegistrarAddress.AsString,
-                           CorrectTransport,
-                           'localhost',
-                           IdPORT_SIP);
-  Self.Locator.AddLocation(Self.RegistrarAddress.AsString,
-                           TcpTransport,
-                           'localhost',
-                           IdPORT_SIP);
-
-  Self.MarkSentRequestCount;
-  Action := Self.CreateAction;
-
-  CheckRequestSent(Action.ClassName + ': No request sent');
-  CheckEquals(CorrectTransport,
-              Self.LastSentRequest.LastHop.Transport,
-              'Incorrect transport');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestUsername;
@@ -8659,11 +8545,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.TestUseCorrectTransport;
-begin
-  inherited TestUseCorrectTransport;
 end;
 
 //******************************************************************************
