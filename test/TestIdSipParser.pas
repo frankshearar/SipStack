@@ -90,6 +90,7 @@ type
     procedure TestParseResponseEmptyString;
     procedure TestParseResponseFoldedHeader;
     procedure TestParseResponseInvalidStatusCode;
+    procedure TestParseResponseMalformedHeader;
 {    procedure TestParseResponseMissingCallID;
     procedure TestParseResponseMissingCSeq;
     procedure TestParseResponseMissingFrom;
@@ -1271,6 +1272,51 @@ begin
 
     Check(Self.Response.HasInvalidSyntax,
           'Failed to reject a non-numeric Status-Code');
+    CheckEquals(Format(InvalidStatusCode, ['Aheh']),
+                Self.Response.ParseFailReason,
+                'Unexpected parse fail reason');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseResponseMalformedHeader;
+const
+  // Note the malformed Expires header
+  MalformedMessage = 'SIP/2.0 200 OK'#13#10
+                   + 'Expires: a'#13#10
+                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
+                   + 'Max-Forwards:     70'#13#10
+                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
+                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
+                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
+                   + 'CSeq:    1 INVITE'#13#10
+                   + #13#10;
+var
+  ExpectedReason: String;
+  Str:            TStringStream;
+begin
+  ExpectedReason := Format(MalformedToken, [ExpiresHeader, 'a']);
+
+  Str := TStringStream.Create(MalformedMessage);
+  try
+    Self.P.OnParserError := Self.CheckParserError;
+    Self.P.Source := Str;
+    Self.P.ParseResponse(Self.Response);
+
+    Check(Self.Response.HasInvalidSyntax,
+          'Response not marked as invalid');
+
+    CheckEquals(ExpectedReason,
+                Self.Response.ParseFailReason,
+                'Unexpected parse fail reason');
+
+    CheckEquals(ExpectedReason,
+                Self.ParseError,
+                'Unexpected parse error reason');
+    CheckEquals(Copy(MalformedMessage, 1, 255),
+                Copy(Self.RawMessage, 1, 255),
+                'Unexpected raw message');
   finally
     Str.Free;
   end;

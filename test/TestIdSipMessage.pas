@@ -368,10 +368,10 @@ end;
 procedure TestTIdSipMessage.AddRequiredHeaders(Msg: TIdSipMessage);
 begin
   Msg.AddHeader(CallIDHeaderFull).Value := 'foo';
-  Msg.AddHeader(CSeqHeader).Value := '1 foo';
-  Msg.AddHeader(FromHeaderFull).Value := 'foo';
-  Msg.AddHeader(ToHeaderFull).Value := 'foo';
-  Msg.AddHeader(ViaHeaderFull).Value := 'SIP/2.0 UDP foo';
+  Msg.AddHeader(CSeqHeader).Value       := '1 foo';
+  Msg.AddHeader(FromHeaderFull).Value   := 'foo';
+  Msg.AddHeader(ToHeaderFull).Value     := 'foo';
+  Msg.AddHeader(ViaHeaderFull).Value    := 'SIP/2.0 UDP foo';
 end;
 
 //* TestTIdSipMessage Published methods ****************************************

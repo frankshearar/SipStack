@@ -2218,7 +2218,7 @@ end;
 
 procedure TIdSipHeader.FailParse(const Reason: String);
 begin
-  Self.MarkAsInvalid(Reason);
+//  Self.MarkAsInvalid(Reason);
   raise EBadHeader.Create(Self.Name);
 end;
 
@@ -2235,6 +2235,7 @@ end;
 procedure TIdSipHeader.MarkAsInvalid(const Reason: String);
 begin
   Self.fHasInvalidSyntax := true;
+  Self.fParseFailReason  := Reason;
 end;
 
 procedure TIdSipHeader.Parse(const Value: String);
@@ -3415,16 +3416,7 @@ begin
   if not TIdSipParser.IsNumber(Value) then
     Self.FailParse(InvalidNumber)
   else begin
-    try
-      fNumericValue := StrToInt(Value);
-    except
-      on EConvertError do
-        Self.FailParse(InvalidNumber);
-      on ERangeError do
-        Self.FailParse(InvalidNumber);
-      else
-        raise;
-    end;
+    fNumericValue := StrToInt(Value);
 
     inherited Parse(Value);
   end;
@@ -6132,7 +6124,7 @@ begin
   except
     on E: EBadResponse do begin
       Response.MarkAsInvalid(E.Message);
-//      Self.DoOnParserError(E.Message);
+      Self.DoOnParseError(E.Message);
     end;
   end;
 end;
@@ -6151,6 +6143,7 @@ end;
 
 procedure TIdSipParser.AddHeader(Msg: TIdSipMessage; Header: String);
 var
+  H:    TIdSipHeader;
   Name: String;
   S:    String;
 begin
@@ -6158,7 +6151,11 @@ begin
   Name := Trim(Fetch(S, ':'));
   Name := TIdSipHeaders.CanonicaliseName(Name);
 
-  Msg.AddHeader(Name).Value := Trim(S);
+  H := Msg.AddHeader(Name);
+  H.Value := Trim(S);
+
+  if H.HasInvalidSyntax then
+    Self.DoOnParseError(Msg.ParseFailReason);
 end;
 
 procedure TIdSipParser.CheckContentLengthContentType(Msg: TIdSipMessage);
