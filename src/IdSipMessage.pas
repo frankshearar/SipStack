@@ -164,7 +164,7 @@ type
     procedure CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
     procedure CheckRequiredResponseHeaders(const Msg: TIdSipMessage);
     function  CreateResponseOrRequest(const Token: String): TIdSipMessage;
-    procedure InitialiseMessage(Msg: TIdSipMessage);
+    procedure InitializeMessage(Msg: TIdSipMessage);
     procedure ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
@@ -432,10 +432,9 @@ procedure TIdSipMessage.ReadBody(const S: TStream);
 const
   BufLen = 100;
 var
-  Buf:         PChar;
+  Buf:         array[1..BufLen] of Char;
   BytesToRead: Integer;
   Read:        Integer;
-  StrBuf:      String;
 begin
   // It is the responsibility of the transport to ensure that
   // Content-Length is set before this method is called!
@@ -443,19 +442,12 @@ begin
   if (Self.ContentLength > 0) then begin
     BytesToRead := Self.ContentLength;
 
-    Buf := AllocMem(BufLen);
-    try
-      repeat
-        Read := S.Read(Buf^, Min(BufLen, BytesToRead));
-        Dec(BytesToRead, Read);
+    repeat
+      Read := S.Read(Buf, Min(BufLen, BytesToRead));
+      Dec(BytesToRead, Read);
 
-        StrBuf := Buf;
-        SetLength(StrBuf, Read);
-        Self.Body := Self.Body + StrBuf;
-      until (Read < BufLen) or (BytesToRead <= 0);
-    finally
-      FreeMem(Buf);
-    end;
+      Self.Body := Self.Body + Copy(Buf, 1, Read);
+    until (Read < BufLen) or (BytesToRead <= 0);
   end;
 end;
 
@@ -1091,7 +1083,7 @@ end;
 
 procedure TIdSipParser.ParseRequest(const Request: TIdSipRequest);
 begin
-  Self.InitialiseMessage(Request);
+  Self.InitializeMessage(Request);
 
   if not Self.Eof then begin
     Self.ResetCurrentLine;
@@ -1106,7 +1098,7 @@ end;
 
 procedure TIdSipParser.ParseResponse(const Response: TIdSipResponse);
 begin
-  Self.InitialiseMessage(Response);
+  Self.InitializeMessage(Response);
 
   if not Self.Eof then begin
     Self.ResetCurrentLine;
@@ -1188,7 +1180,7 @@ begin
     Result := TIdSipRequest.Create;
 end;
 
-procedure TIdSipParser.InitialiseMessage(Msg: TIdSipMessage);
+procedure TIdSipParser.InitializeMessage(Msg: TIdSipMessage);
 begin
   Msg.ClearHeaders;
   Msg.SipVersion := '';

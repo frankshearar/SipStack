@@ -3,7 +3,8 @@ unit TestIdRTPClient;
 interface
 
 uses
-  Classes, IdRTPClient, IdRTPServer, IdSocketHandle, TestFrameworkSip;
+  Classes, IdRTP, IdRTPClient, IdRTPServer, IdSocketHandle, IdThread, SyncObjs,
+  TestFrameworkSip;
 
 type
   TestTIdRTPClient = class(TTestRTP)
@@ -43,12 +44,11 @@ type
 
 const
   DefaultTimeout = 5000; // ms
-  TargetFile     = '..\etc\arb';
 
 implementation
 
 uses
-  IdStack, SyncObjs, SysUtils, TestFramework;
+  IdStack, SysUtils, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -57,9 +57,9 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPClient                                                           *
+//* TIdTestClientThread                                                        *
 //******************************************************************************
-//* TestTIdRTPClient Public methods ********************************************
+//* TIdTestClientThread Public methods *****************************************
 
 procedure TestTIdRTPClient.SetUp;
 var
@@ -100,6 +100,9 @@ begin
   Self.Client.Port        := Self.Server.DefaultPort;
 
   Self.Server.Active := true;
+
+  Self.ReceiveBuffer.Seek(0, soFromBeginning);
+  Self.SendBuffer.Seek(0, soFromBeginning);
 end;
 
 procedure TestTIdRTPClient.TearDown;
@@ -122,39 +125,30 @@ const
   BufLen = 255;
 var
   BytesRead:      Cardinal;
-  ExpectedBuffer: PChar;
-  ReceivedBuffer: PChar;
+  ExpectedBuffer: array[1..BufLen] of Char;
+  ReceivedBuffer: array[1..BufLen] of Char;
   TotalBytesRead: Cardinal;
 begin
   CheckEquals(Expected.Size, Received.Size, 'Stream size mismatch');
 
   TotalBytesRead := 0;
-  ExpectedBuffer := AllocMem(BufLen);
-  try
-    ReceivedBuffer := AllocMem(BufLen);
-    try
-      Expected.Seek(0, soFromBeginning);
-      Received.Seek(0, soFromBeginning);
-      repeat
-        BytesRead := Expected.Read(ExpectedBuffer^, BufLen);
-        Inc(TotalBytesRead, BytesRead);
 
-        CheckEquals(BytesRead,
-                    Received.Read(ReceivedBuffer^, BufLen),
-                    'Stream size mismatch after ' + IntToStr(TotalBytesRead)
-                  + ' bytes read');
+  Expected.Seek(0, soFromBeginning);
+  Received.Seek(0, soFromBeginning);
+  repeat
+    BytesRead := Expected.Read(ExpectedBuffer, BufLen);
+    Inc(TotalBytesRead, BytesRead);
 
-        CheckEquals(String(ExpectedBuffer),
-                    String(ReceivedBuffer),
-                    'Differing contents after ' + IntToStr(TotalBytesRead)
-                  + ' bytes read');
-      until (BytesRead < BufLen);
-    finally
-      FreeMem(ReceivedBuffer);
-    end;
-  finally
-    FreeMem(ExpectedBuffer);
-  end;
+    CheckEquals(BytesRead,
+                Received.Read(ReceivedBuffer, BufLen),
+                'Stream size mismatch after ' + IntToStr(TotalBytesRead)
+              + ' bytes read');
+
+    CheckEquals(System.Copy(ExpectedBuffer, 1, BytesRead),
+                System.Copy(ReceivedBuffer, 1, BytesRead),
+                'Differing contents after ' + IntToStr(TotalBytesRead)
+              + ' bytes read');
+  until (BytesRead < BufLen);
 end;
 
 procedure TestTIdRTPClient.CheckSmallString(Sender: TObject;

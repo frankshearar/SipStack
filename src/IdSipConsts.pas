@@ -201,17 +201,9 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
-// MIME types etc
+  // MIME types etc
 const
-  InterleavedT140ClockRate    = 8000;
-  RedundancyEncodingParameter = 'red';
-  T140ClockRate               = 1000;
-  T140EncodingName            = 't140';
-
-  InterleavedT140MimeType = 'audio/t140';
-  RedundantT140MimeType   = 'text/RED';
-  SdpMimeType             = 'application/sdp';
-  T140MimeType            = 'text/t140';
+  SdpMimeType = 'application/sdp';
 
 implementation
 

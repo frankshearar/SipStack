@@ -3,7 +3,7 @@ unit IdRTPClient;
 interface
 
 uses
-  Classes, IdUDPClient, IdRTPServer;
+  Classes, IdUDPClient, IdRTP;
 
 type
   TIdRTPClient = class(TIdUDPClient)
@@ -62,19 +62,31 @@ end;
 
 procedure TIdRTPClient.Send(Data: String; PayloadType: TIdRTPPayloadType);
 var
-  Buffer: String;
-  Packet: TIdRTPPacket;
   S:      TStringStream;
-  Size:   Cardinal;
 begin
-  Size := Self.MaximumPayloadSize;
+  S := TStringStream.Create(Data);
+  try
+    Self.Send(S, PayloadType);
+  finally
+    S.Free;
+  end;
+end;
 
-  while (Data <> '') do begin
-    Buffer := Copy(Data, 1, Size);
-    Delete(Data, 1, Size);
-
+procedure TIdRTPClient.Send(Data: TStream; PayloadType: TIdRTPPayloadType);
+const
+  BufLen = 1000;
+var
+  Buf:       array[1..BufLen] of Char;
+  BytesRead: Cardinal;
+  Packet:    TIdRTPPacket;
+  S:         TStringStream;
+begin
+  FillChar(Buf, Length(Buf), 0);
+  repeat
     Packet := TIdRTPPacket.Create(Self.Profile);
     try
+      BytesRead := Data.Read(Buf, BufLen);
+
       if Self.FirstPacketSent then begin
         Self.SequenceNo  := Packet.SequenceNo;
         Packet.Timestamp := $DEADBEEF;
@@ -86,7 +98,7 @@ begin
 
       Packet.PayloadType := PayloadType;
 
-      Packet.ReadPayload(Buffer);
+      Packet.ReadPayload(Copy(Buf, 1, BytesRead));
 
       S := TStringStream.Create('');
       try
@@ -97,23 +109,11 @@ begin
       finally
         S.Free;
       end;
+
     finally
       Packet.Free;
     end;
-  end;
-end;
-
-procedure TIdRTPClient.Send(Data: TStream; PayloadType: TIdRTPPayloadType);
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create('');
-  try
-    S.CopyFrom(Data, 0);
-    Self.Send(S.DataString, PayloadType);
-  finally
-    S.Free;
-  end;
+  until (BytesRead < BufLen);
 end;
 
 //* TIdRTPClient Private methods ***********************************************

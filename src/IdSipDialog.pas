@@ -7,7 +7,7 @@ uses
 
 type
   TIdSipDialog = class;
-  TIdSipDialogState = (sdsNotInitialised, sdsEarly, sdsConfirmed);
+  TIdSipDialogState = (sdsNotInitialized, sdsEarly, sdsConfirmed);
   TIdSipDialogEvent = procedure(Sender: TIdSipDialog) of object;
 
   // cf RFC 3261, section 12.1

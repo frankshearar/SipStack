@@ -3,7 +3,7 @@ unit TestFrameworkSip;
 interface
 
 uses
-  IdURI, IdSipInterfacedObject, IdRTPServer, IdSipMessage, IdSipCore,
+  IdURI, IdSipInterfacedObject, IdRTP, IdSipMessage, IdSipCore,
   IdSipTransaction, IdSipTransport, TestFrameworkEx;
 
 type

@@ -10,52 +10,69 @@ type
   TIdNtpTimestamp     = Int64;
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR);
   TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
-  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl);
+  // Technically, Text doesn't exist. However, it will once
+  // draft-ietf-sip-callee-caps is accepted as an RFC.
+  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl, mtText);
 
-  TIdSdpAttribute = class(TObject)
+  TIdPrintable = class(TObject)
+    procedure PrintOn(Dest: TStream); virtual; abstract;
+  end;
+
+  TIdSdpAttribute = class(TIdPrintable)
   private
     fName:  String;
     fValue: String;
   public
+    function  Clone: TIdSdpAttribute;
+    procedure PrintOn(Dest: TStream); override;
+
     property Name:  String read fName write fName;
     property Value: String read fValue write fValue;
   end;
 
-  TIdSdpBandwidth = class(TObject)
+  TIdSdpBandwidth = class(TIdPrintable)
   private
     fBandwidth:     Cardinal;
     fBandwidthType: TIdSdpBandwidthType;
   public
+    procedure PrintOn(Dest: TStream); override;
+
     property Bandwidth:     Cardinal            read fBandwidth write fBandwidth;
     property BandwidthType: TIdSdpBandwidthType read fBandwidthType write fBandwidthType;
   end;
 
-  TIdSdpConnection = class(TObject)
+  TIdSdpConnection = class(TIdPrintable)
   private
-    fAddress:     String;
-    fAddressType: TIdIPVersion;
-    fNetType:     String;
-    fTTL:         Byte;
+    fAddress:           String;
+    fAddressType:       TIdIPVersion;
+    fNetType:           String;
+    fNumberOfAddresses: Cardinal;
+    fTTL:               Byte;
   public
-    property AddressType: TIdIPVersion read fAddressType write fAddressType;
-    property Address:     String       read fAddress write fAddress;
-    property NetType:     String       read fNetType write fNetType;
-    property TTL:         Byte         read fTTL write fTTL;
+    procedure PrintOn(Dest: TStream); override;
+
+    property AddressType:       TIdIPVersion read fAddressType write fAddressType;
+    property Address:           String       read fAddress write fAddress;
+    property NetType:           String       read fNetType write fNetType;
+    property NumberOfAddresses: Cardinal     read fNumberOfAddresses write fNumberOfAddresses;
+    property TTL:               Byte         read fTTL write fTTL;
   end;
 
-  TIdSdpKey = class(TObject)
+  TIdSdpKey = class(TIdPrintable)
   private
     fKeyType: TIdSdpKeyType;
     fValue:   String;
   public
+    procedure PrintOn(Dest: TStream); override;
+
     property KeyType: TIdSdpKeyType read fKeyType write fKeyType;
     property Value:   String        read fValue write fValue;
   end;
 
   TIdSdpAttributes = class;
   TIdSdpBandwidths = class;
-  
-  TIdSdpMediaDescription = class(TObject)
+
+  TIdSdpMediaDescription = class(TIdPrintable)
   private
     fAttributes: TIdSdpAttributes;
     fBandwidths: TIdSdpBandwidths;
@@ -68,18 +85,22 @@ type
     fPortCount:  Cardinal;
     fTransport:  String;
 
-    function GetAttributes: TIdSdpAttributes;
-    function GetBandwidths: TIdSdpBandwidths;
-    function GetConnection: TIdSdpConnection;
-    function GetFormats(Index: Integer): String;
-    function GetKey: TIdSdpKey;
+    function  GetAttributes: TIdSdpAttributes;
+    function  GetBandwidths: TIdSdpBandwidths;
+    function  GetConnection: TIdSdpConnection;
+    function  GetFormats(Index: Integer): String;
+    function  GetKey: TIdSdpKey;
+    procedure PrintInfoField(Dest: TStream);
+    procedure PrintMediaField(Dest: TStream);
   public
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     procedure AddFormat(const Fmt: String);
     function  FormatCount: Integer;
     procedure ClearFormats;
     function  HasConnection: Boolean;
+    function  HasKey: Boolean;
+    procedure PrintOn(Dest: TStream); override;
 
     property Attributes:              TIdSdpAttributes read GetAttributes;
     property Bandwidths:              TIdSdpBandwidths read GetBandwidths;
@@ -93,7 +114,7 @@ type
     property Transport:               String           read fTransport write fTransport;
   end;
 
-  TIdSdpOrigin = class(TObject)
+  TIdSdpOrigin = class(TIdPrintable)
   private
     fAddress:        String;
     fAddressType:    TIdIPVersion;
@@ -102,6 +123,8 @@ type
     fSessionVersion: String;
     fUsername:       String;
   public
+    procedure PrintOn(Dest: TStream); override;
+
     property Address:        String       read fAddress write fAddress;
     property AddressType:    TIdIPVersion read fAddressType write fAddressType;
     property NetType:        String       read fNetType write fNetType;
@@ -110,24 +133,28 @@ type
     property Username:       String       read fUsername write fUsername;
   end;
 
-  TIdSdpRepeat = class(TObject)
+  TIdSdpRepeat = class(TIdPrintable)
   private
     fValue: String;
   public
+    procedure PrintOn(Dest: TStream); override;
+
     property Value: String read fValue write fValue;
   end;
 
-  TIdSdpZoneAdjustment = class(TObject)
+  TIdSdpZoneAdjustment = class(TIdPrintable)
   private
     fValue: String;
   public
+    procedure PrintOn(Dest: TStream); override;
+
     property Value: String read fValue write fValue;
   end;
 
   TIdSdpRepeats = class;
   TIdSdpZoneAdjustments = class;
   
-  TIdSdpTime = class(TObject)
+  TIdSdpTime = class(TIdPrintable)
   private
     fEndTime:         TIdNtpTimestamp;
     fStartTime:       TIdNtpTimestamp;
@@ -139,13 +166,15 @@ type
   public
     destructor Destroy; override;
 
+    procedure PrintOn(Dest: TStream); override;
+
     property EndTime:         TIdNtpTimestamp       read fEndTime write fEndTime;
     property Repeats:         TIdSdpRepeats         read GetRepeats;
     property StartTime:       TIdNtpTimestamp       read fStartTime write fStartTime;
     property ZoneAdjustments: TIdSdpZoneAdjustments read GetZoneAdjustments;
   end;
 
-  TIdSdpList = class(TObject)
+  TIdSdpList = class(TIdPrintable)
   protected
     List: TObjectList;
   public
@@ -155,6 +184,7 @@ type
     procedure Clear;
     function  Count: Integer;
     function  Contains(const O: TObject): Boolean;
+    procedure PrintOn(Dest: TStream); override;
   end;
 
   TIdSdpAttributes = class(TIdSdpList)
@@ -228,21 +258,29 @@ type
     fURI:               TIdURI;
     fVersion:           Cardinal;
 
-    function GetAttributes: TIdSdpAttributes;
-    function GetBandwidths: TIdSdpBandwidths;
-    function GetConnection: TIdSdpConnection;
-    function GetEmailAddress: TIdEmailAddressItem;
-    function GetKey: TIdSdpKey;
-    function GetMediaDescriptions: TIdSdpMediaDescriptions;
-    function GetOrigin: TIdSdpOrigin;
-    function GetTimes: TIdSdpTimes;
-    function GetURI: TIdURI;
+    function  GetAttributes: TIdSdpAttributes;
+    function  GetBandwidths: TIdSdpBandwidths;
+    function  GetConnection: TIdSdpConnection;
+    function  GetEmailAddress: TIdEmailAddressItem;
+    function  GetKey: TIdSdpKey;
+    function  GetMediaDescriptions: TIdSdpMediaDescriptions;
+    function  GetOrigin: TIdSdpOrigin;
+    function  GetTimes: TIdSdpTimes;
+    function  GetURI: TIdURI;
+    procedure PrintEmailAddressField(Dest: TStream);
+    procedure PrintInfo(Dest: TStream);
+    procedure PrintPhoneNumber(Dest: TStream);
+    procedure PrintSessionNameField(Dest: TStream);
+    procedure PrintUriField(Dest: TStream);
+    procedure PrintVersionField(Dest: TStream);
   public
     destructor Destroy; override;
 
     function  AllDescriptionsHaveConnections: Boolean;
-    procedure PrintOn(Dest: TStream);
+    procedure GetRtpMapAttributes(Atts: TIdSdpAttributes);
     function  HasConnection: Boolean;
+    function  HasKey: Boolean;
+    procedure PrintOn(Dest: TStream);
 
     property Attributes:        TIdSdpAttributes        read GetAttributes;
     property Bandwidths:        TIdSdpBandwidths        read GetBandwidths;
@@ -323,11 +361,12 @@ const
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
   IllegalByteStringChars = [#0, #10, #13];
+
+  AudioVisualProfile = 'RTP/AVP'; // defined in RFC 3551
   SessionHeaderOrder = 'vosiuepcbtka';
-  //                            ** * <-- * indicates that this header can occur multiple times
   MediaHeaderOrder   = 'micbka';
-  //                      ** * <-- * indicates that this header can occur multiple times
-  TimeTypes = ['d', 'h', 'm', 's'];
+  RTPMapAttribute    = 'rtpmap';
+  TimeTypes          = ['d', 'h', 'm', 's'];
 
 // for IdAssignedNumbers
 const
@@ -376,6 +415,7 @@ const
   RSSDPMediaTypeApplication  = 'application';
   RSSDPMediaTypeData         = 'data';
   RSSDPMediaTypeControl      = 'control';
+  RSSDPMediaTypeText         = 'text';
 
 function AddressTypeToStr(const Version: TIdIPVersion): String;
 function BandwidthTypeToStr(const BwType: TIdSdpBandwidthType): String;
@@ -401,7 +441,10 @@ begin
     Id_IPv4: Result := Id_SDP_IP4;
     Id_IPv6: Result := Id_SDP_IP6;
   else
-    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdIPVersion', Ord(Version), 'String']));
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdIPVersion',
+                                       Ord(Version),
+                                       'String']));
   end;
 end;
 
@@ -413,7 +456,10 @@ begin
     btRS:                  Result := Id_SDP_RS;
     btRR:                  Result := Id_SDP_RR;
   else
-    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdSdpBandwidthType', Ord(BwType), 'String']));
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdSdpBandwidthType',
+                                       Ord(BwType),
+                                       'String']));
   end;
 end;
 
@@ -425,7 +471,10 @@ begin
     ktURI:    Result := Id_SDP_URI;
     ktPrompt: Result := Id_SDP_Prompt;
   else
-    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdSdpKeyType', Ord(KeyType), 'String']));
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdSdpKeyType',
+                                       Ord(KeyType),
+                                       'String']));
   end;
 end;
 
@@ -437,8 +486,12 @@ begin
     mtApplication: Result := RSSDPMediaTypeApplication;
     mtData:        Result := RSSDPMediaTypeData;
     mtControl:     Result := RSSDPMediaTypeControl;
+    mtText:        Result := RSSDPMediaTypeText;
   else
-    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdSdpMediaType', Ord(MediaType), 'String']));
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg,
+                                      ['TIdSdpMediaType',
+                                       Ord(MediaType),
+                                       'String']));
   end;
 end;
 
@@ -447,7 +500,8 @@ begin
        if (S = Id_SDP_IP4) then Result := Id_IPv4
   else if (S = Id_SDP_IP6) then Result := Id_IPv6
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdIPVersion']));
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdIPVersion']));
 end;
 
 function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
@@ -457,7 +511,8 @@ begin
   else if (S = Id_SDP_RS)                  then Result := btRS
   else if (S = Id_SDP_RR)                  then Result := btRR
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdSdpBandwidthType']));
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpBandwidthType']));
 end;
 
 function StrToKeyType(const S: String): TIdSDPKeyType;
@@ -467,7 +522,8 @@ begin
   else if (S = Id_SDP_URI)    then Result := ktURI
   else if (S = Id_SDP_Prompt) then Result := ktPrompt
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdSdpKeyType']));
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpKeyType']));
 end;
 
 function StrToMediaType(const S: String): TIdSDPMediaType;
@@ -477,8 +533,96 @@ begin
   else if (S = RSSDPMediaTypeApplication) then Result := mtApplication
   else if (S = RSSDPMediaTypeData)        then Result := mtData
   else if (S = RSSDPMediaTypeControl)     then Result := mtControl
+  else if (S = RSSDPMediaTypeText)        then Result := mtText
   else
-    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdSdpMediaType']));
+    raise EConvertError.Create(Format(ConvertStrErrorMsg,
+                                      [S, 'TIdSdpMediaType']));
+end;
+
+//******************************************************************************
+//* TIdSdpAttribute                                                            *
+//******************************************************************************
+//* TIdSdpAttribute Public methods *********************************************
+
+function TIdSdpAttribute.Clone: TIdSdpAttribute;
+begin
+  Result := TIdSdpAttribute.Create;
+  try
+    Result.Name  := Self.Name;
+    Result.Value := Self.Value;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+procedure TIdSdpAttribute.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10'a=' + Self.Name;
+
+  if (Self.Value <> '') then
+    S := S + ':' + Self.Value;
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpBandwidth                                                            *
+//******************************************************************************
+//* TIdSdpBandwidth Public methods *********************************************
+
+procedure TIdSdpBandwidth.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10'b=' + BandwidthTypeToStr(Self.BandwidthType) + ':'
+                  + IntToStr(Self.Bandwidth);
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpConnection                                                           *
+//******************************************************************************
+//* TIdSdpConnection Public methods ********************************************
+
+procedure TIdSdpConnection.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := S + #13#10'c=' + Self.NetType + ' '
+         + AddressTypeToStr(Self.AddressType)
+         + ' ' + Self.Address;
+
+  if (Self.TTL > 0) then begin
+    S := S + '/' + IntToStr(Self.TTL);
+
+    if (Self.NumberOfAddresses > 0) then begin
+      S := S + '/' + IntToStr(Self.NumberOfAddresses);
+    end;
+  end;
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpKey                                                                  *
+//******************************************************************************
+//* TIdSdpKey Public methods ***************************************************
+
+procedure TIdSdpKey.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10'k=' + KeyTypeToStr(Self.KeyType);
+
+  if (Self.KeyType <> ktPrompt) then
+    S := S + ':' + Self.Value;
+
+  Dest.Write(PChar(S)^, Length(S));
 end;
 
 //******************************************************************************
@@ -520,6 +664,27 @@ begin
   Result := Assigned(fConnection);
 end;
 
+function TIdSdpMediaDescription.HasKey: Boolean;
+begin
+  Result := Assigned(fKey);
+end;
+
+procedure TIdSdpMediaDescription.PrintOn(Dest: TStream);
+begin
+  Self.PrintMediaField(Dest);
+  Self.PrintInfoField(Dest);
+
+  if Self.HasConnection then
+    Self.Connection.PrintOn(Dest);
+
+  Self.Bandwidths.PrintOn(Dest);
+
+  if Self.HasKey then
+    Self.Key.PrintOn(Dest);
+
+  Self.Attributes.PrintOn(Dest);
+end;
+
 //* TIdSdpMediaDescription Private methods *************************************
 
 function TIdSdpMediaDescription.GetAttributes: TIdSdpAttributes;
@@ -559,6 +724,86 @@ begin
   Result := fKey;
 end;
 
+procedure TIdSdpMediaDescription.PrintInfoField(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.Info <> '') then begin
+    S := #13#10'i=' + Self.Info;
+
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpMediaDescription.PrintMediaField(Dest: TStream);
+var
+  I: Integer;
+  S: String;
+begin
+  S := #13#10
+     + 'm=' + MediaTypeToStr(Self.MediaType) + ' '
+     + IntToStr(Self.Port);
+
+  if (Self.PortCount > 0) then
+    S := S + '/' + IntToStr(PortCount);
+
+  S := S + ' ' + Self.Transport;
+
+  for I := 0 to Self.FormatCount - 1 do
+    S := S + ' ' + Self.Formats[I];
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpOrigin                                                               *
+//******************************************************************************
+//* TIdSdpOrigin Public methods ************************************************
+
+procedure TIdSdpOrigin.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10
+     + 'o=' + Self.Username + ' '
+     + Self.SessionID + ' '
+     + Self.SessionVersion + ' '
+     + Self.NetType + ' '
+     + AddressTypeToStr(Self.AddressType) + ' '
+     + Self.Address;
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpRepeat                                                               *
+//******************************************************************************
+//* TIdSdpRepeat Public methods ************************************************
+
+procedure TIdSdpRepeat.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10
+     + 'r=' + Self.Value;
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
+
+//******************************************************************************
+//* TIdSdpZoneAdjustment                                                       *
+//******************************************************************************
+//* TIdSdpZoneAdjustment Public methods ****************************************
+
+procedure TIdSdpZoneAdjustment.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10
+     + 'z=' + Self.Value;
+
+  Dest.Write(PChar(S)^, Length(S));
+end;
 
 //******************************************************************************
 //* TIdSdpTime                                                                 *
@@ -571,6 +816,17 @@ begin
   fZoneAdjustments.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSdpTime.PrintOn(Dest: TStream);
+var
+  S: String;
+begin
+  S := #13#10't=' + IntToStr(Self.StartTime) + ' ' + IntToStr(Self.EndTime);
+  Dest.Write(PChar(S)^, Length(S));
+
+  Self.Repeats.PrintOn(Dest);
+  Self.ZoneAdjustments.PrintOn(Dest); 
 end;
 
 //* TIdSdpTime Private methods *************************************************
@@ -623,6 +879,14 @@ end;
 function TIdSdpList.Contains(const O: TObject): Boolean;
 begin
   Result := Self.List.IndexOf(O) <> -1;
+end;
+
+procedure TIdSdpList.PrintOn(Dest: TStream);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.Count - 1 do
+    (Self.List[I] as TIdPrintable).PrintOn(Dest);
 end;
 
 //******************************************************************************
@@ -763,13 +1027,52 @@ begin
   Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
 end;
 
-procedure TIdSdpPayload.PrintOn(Dest: TStream);
+procedure TIdSdpPayload.GetRtpMapAttributes(Atts: TIdSdpAttributes);
+var
+  I: Integer;
+  J: Integer;
 begin
+  for I := 0 to Self.Attributes.Count - 1 do
+    if (Self.Attributes[I].Name = RTPMapAttribute) then
+      Atts.Add(Self.Attributes[I].Clone);
+
+  for I := 0 to Self.MediaDescriptions.Count - 1 do
+    for J := 0 to Self.MediaDescriptions[I].Attributes.Count - 1 do
+      if (Self.MediaDescriptions[I].Attributes[J].Name = RTPMapAttribute) then
+        Atts.Add(Self.MediaDescriptions[I].Attributes[J].Clone);
 end;
 
 function TIdSdpPayload.HasConnection: Boolean;
 begin
   Result := Assigned(fConnection);
+end;
+
+function TIdSdpPayload.HasKey: Boolean;
+begin
+  Result := Assigned(fKey);
+end;
+
+procedure TIdSdpPayload.PrintOn(Dest: TStream);
+begin
+  Self.PrintVersionField(Dest);
+  Self.Origin.PrintOn(Dest);
+  Self.PrintSessionNameField(Dest);
+  Self.PrintInfo(Dest);
+  Self.PrintUriField(Dest);
+  Self.PrintEmailAddressField(Dest);
+  Self.PrintPhoneNumber(Dest);
+
+  if Self.HasConnection then
+    Self.Connection.PrintOn(Dest);
+
+  Self.Bandwidths.PrintOn(Dest);
+  Self.Times.PrintOn(Dest);
+
+  if Self.HasKey then
+    Self.Key.PrintOn(Dest);
+
+  Self.Attributes.PrintOn(Dest);
+  Self.MediaDescriptions.PrintOn(Dest);
 end;
 
 //* TIdSdpPayload Private methods **********************************************
@@ -844,6 +1147,70 @@ begin
     fURI := TIdURI.Create('');
 
   Result := fURI;
+end;
+
+procedure TIdSdpPayload.PrintEmailAddressField(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.EmailAddress.Address <> '') then begin
+    S := #13#10'e=' + Self.EmailAddress.Address;
+    
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpPayload.PrintInfo(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.Info <> '') then begin
+    S := #13#10'i=' + Self.Info;
+
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpPayload.PrintPhoneNumber(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.PhoneNumber <> '') then begin
+    S := #13#10'p=' + Self.PhoneNumber;
+    
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpPayload.PrintSessionNameField(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.SessionName <> '') then begin
+    S := #13#10's=' + Self.SessionName;
+
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpPayload.PrintUriField(Dest: TStream);
+var
+  S: String;
+begin
+  if (Self.URI.GetFullURI <> '') then begin
+    S := #13#10'u=' + Self.URI.GetFullURI;
+
+    Dest.Write(PChar(S)^, Length(S));
+  end;
+end;
+
+procedure TIdSdpPayload.PrintVersionField(Dest: TStream);
+var
+  S: String;
+begin
+  S := 'v=' + IntToStr(Self.Version);
+
+  Dest.Write(PChar(S)^, Length(S));
 end;
 
 //******************************************************************************
@@ -1202,9 +1569,16 @@ begin
       raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
     Connection.Address := Token;
 
-    if not Self.IsByte(Value) then
+    Token := Fetch(Value, '/');
+    if not Self.IsByte(Token) then
       raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
-    Connection.TTL     := StrToInt(Value);
+    Connection.TTL := StrToInt(Token);
+
+    if (Value <> '') then begin
+      if not Self.IsByte(Value) then
+        raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+      Connection.NumberOfAddresses := StrToInt(Value);
+    end;
   end
   else begin
     // unicast
@@ -1318,7 +1692,8 @@ begin
   try
     Token := Fetch(Value, ' ');
     if not Self.IsMediaType(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
+      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                   OriginalValue]));
     NewMediaDesc.MediaType := StrToMediaType(Token);
 
     Token := Fetch(Value, ' ');
@@ -1328,29 +1703,32 @@ begin
     end;
 
     if not Self.IsPort(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
+      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                   OriginalValue]));
     NewMediaDesc.Port := StrToInt(Token);
 
     if (Count <> '') and not Self.IsNumber(Count) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
+      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                   OriginalValue]));
     NewMediaDesc.PortCount := StrToIntDef(Count, 0);
 
     Token := Fetch(Value, ' ');
     if not Self.IsTransport(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
+      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                   OriginalValue]));
     NewMediaDesc.Transport := Token;
 
     while (Value <> '') do begin
       Token := Fetch(Value, ' ');
       if not Self.IsAlphaNumeric(Token) then
-        raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
+        raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                     OriginalValue]));
       NewMediaDesc.AddFormat(Token);
     end;
 
     if (NewMediaDesc.FormatCount = 0) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName, OriginalValue]));
-
-    Self.ParseInfo(NewMediaDesc);
+      raise EParser.Create(Format(MalformedToken, [RSSDPMediaDescriptionName,
+                                                   OriginalValue]));
 
     Self.ParseMediaOptionalHeaders(NewMediaDesc);
 
@@ -1371,12 +1749,15 @@ var
   NextHeader: String;
 begin
   NextHeader := Self.PeekLine;
-  while not Self.Eof and (NextHeader <> '') and (NextHeader[1] <> RSSDPMediaDescriptionName) do begin
+  while not Self.Eof
+        and (NextHeader <> '')
+        and (NextHeader[1] <> RSSDPMediaDescriptionName) do begin
     case NextHeader[1] of
-      RSSDPConnectionName: Self.ParseConnection(MediaDescription.Connection);
-      RSSDPBandwidthName:  Self.ParseBandwidth(MediaDescription.Bandwidths);
-      RSSDPKeyName:        Self.ParseKey(MediaDescription.Key);
-      RSSDPAttributeName:  Self.ParseAttribute(MediaDescription.Attributes);
+      RSSDPInformationName: Self.ParseInfo(MediaDescription);
+      RSSDPConnectionName:  Self.ParseConnection(MediaDescription.Connection);
+      RSSDPBandwidthName:   Self.ParseBandwidth(MediaDescription.Bandwidths);
+      RSSDPKeyName:         Self.ParseKey(MediaDescription.Key);
+      RSSDPAttributeName:   Self.ParseAttribute(MediaDescription.Attributes);
     else
       raise EParser.Create(Format(UnknownOptionalHeader, [NextHeader]));
     end;
