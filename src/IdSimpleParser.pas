@@ -34,6 +34,7 @@ type
                                 const Token: String): Boolean;
     class function  IsIPv4Address(const Token: String): Boolean;
     class function  IsIPv6Address(const Token: String): Boolean;
+    class function  IsIPv6Reference(const Token: String): Boolean;
     class procedure ParseIPv6Address(const IPv6Address: String;
                                      var Address: TIdIPv6AddressRec);
   end;
@@ -89,6 +90,7 @@ const
 function EncodeNonLineUnprintableChars(S: String): String;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
+function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
 
@@ -159,6 +161,11 @@ begin
     on EConvertError do
       raise EConvertError.Create(Format(HexToIntError, [HexValue]));
   end;
+end;
+
+function WithoutFirstAndLastChars(const S: String): String;
+begin
+  Result := Copy(S, 2, Length(S) - 2);
 end;
 
 //******************************************************************************
@@ -309,6 +316,14 @@ begin
   except
     Result := false;
   end;
+end;
+
+class function TIdIPAddressParser.IsIPv6Reference(const Token: String): Boolean;
+begin
+  Result := (Token <> '') and (Token[1] = '[') and (Token[Length(Token)] = ']');
+
+  Result := Result
+        and Self.IsIPv6Address(WithoutFirstAndLastChars(Token));
 end;
 
 class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;

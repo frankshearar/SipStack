@@ -20,6 +20,7 @@ type
     procedure TestEncodeNonLineUnprintableChars;
     procedure TestHexDigitToInt;
     procedure TestHexToInt;
+    procedure TestWithoutFirstAndLastChars;
   end;
 
   TestTIdIPAddressParser = class(TTestCase)
@@ -36,6 +37,7 @@ type
     procedure TestIPv6AddressToStr;
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
+    procedure TestIsIpv6Reference;
     procedure TestParseIpv6Address;
   end;
 
@@ -176,6 +178,14 @@ begin
   except
     on EConvertError do;
   end;
+end;
+
+procedure TestFunctions.TestWithoutFirstAndLastChars;
+begin
+  CheckEquals('bc', WithoutFirstAndLastChars('abcd'), 'abcd');
+  CheckEquals('',   WithoutFirstAndLastChars('ab'), 'ab');
+  CheckEquals('',   WithoutFirstAndLastChars('a'), 'a');
+  CheckEquals('',   WithoutFirstAndLastChars(''), '''''');
 end;
 
 //******************************************************************************
@@ -346,6 +356,14 @@ begin
   Check(    TIdIPAddressParser.IsIPv6Address('::13.1.68.3'),              '::13.1.68.3');
   Check(    TIdIPAddressParser.IsIPv6Address('::FFFF:129.144.52.38'),     '::FFFF:129.144.52.38');
   Check(    TIdIPAddressParser.IsIPv6Address('1::1:129.144.52.38'),       '1::1:129.144.52.38');
+end;
+
+procedure TestTIdIPAddressParser.TestIsIpv6Reference;
+begin
+  Check(not TIdIPAddressParser.IsIPv6Reference(''),                           '''''');
+  Check(not TIdIPAddressParser.IsIPv6Reference('x'),                          'x');
+  Check(    TIdIPAddressParser.IsIPv6Reference('[::]'),                       '[::]');
+  Check(    TIdIPAddressParser.IsIPv6Reference('[1::1:129.144.52.38]'),       '[1::1:129.144.52.38]');
 end;
 
 procedure TestTIdIPAddressParser.TestParseIpv6Address;
