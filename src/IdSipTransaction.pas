@@ -1998,17 +1998,17 @@ begin
   FirstResponse := Self.State <> itsCompleted;
 
   // It's unfortunate that we can't simply call inherited.
-  // However, TrySendACK must be called before NotifyOfResponse,
+  // However, TrySendACK must be called before NotifyOfResponse, (todo: why?)
   // and we have to set Self.State to itsCompleted before
   // TrySendACK because a transport failure changes Self.State
   // to itsTerminated.
 
   Self.SetState(itsCompleted);
 
+  Self.TrySendACK(R);
+
   if FirstResponse then
     Self.NotifyOfResponse(R, T);
-
-  Self.TrySendACK(R);
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
