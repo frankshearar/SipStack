@@ -74,8 +74,10 @@ type
     procedure TearDown; override;
   published
     procedure TestDefaultPortFor;
+    procedure TestInsecureTransports;
     procedure TestIsSecure;
     procedure TestRegisterTransport;
+    procedure TestSecureTransports;
     procedure TestTransportFor;
     procedure TestUriSchemeFor;
   end;
@@ -626,6 +628,48 @@ begin
                 'unknown transport');
 end;
 
+procedure TestTransportRegistry.TestInsecureTransports;
+var
+  Transports: TStrings;
+begin
+  Transports := TStringList.Create;
+  try
+    TIdSipTransportRegistry.InsecureTransports(Transports);
+
+    CheckEquals(1, Transports.Count, 'Count');
+    CheckEquals(UdpTransport, Transports[0], 'First transport');
+
+    TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
+    Transports.Clear;
+
+    TIdSipTransportRegistry.InsecureTransports(Transports);
+
+    CheckEquals(2,
+                Transports.Count,
+                'Count after new register');
+    CheckEquals(UdpTransport,
+                Transports[0],
+                'First transport after new register');
+    CheckEquals(TcpTransport,
+                Transports[1],
+                'Second transport after new register');
+
+    TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+    Transports.Clear;
+
+    TIdSipTransportRegistry.InsecureTransports(Transports);
+
+    CheckEquals(1,
+                Transports.Count,
+                'Count after unregister');
+    CheckEquals(UdpTransport,
+                Transports[0],
+                'First transport after unregister');
+  finally
+    Transports.Free;
+  end;
+end;
+
 procedure TestTransportRegistry.TestIsSecure;
 begin
   Check(TIdSipUDPTransport.IsSecure
@@ -662,6 +706,48 @@ begin
     Fail('Didn''t unregister transport ' + Foo);
   except
     on EUnknownTransport do;
+  end;
+end;
+
+procedure TestTransportRegistry.TestSecureTransports;
+var
+  Transports: TStrings;
+begin
+  Transports := TStringList.Create;
+  try
+    TIdSipTransportRegistry.SecureTransports(Transports);
+
+    CheckEquals(1,            Transports.Count, 'Count');
+    CheckEquals(TlsTransport, Transports[0],    'First transport');
+
+    TIdSipTransportRegistry.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+    Transports.Clear;
+
+    TIdSipTransportRegistry.SecureTransports(Transports);
+
+    CheckEquals(2,
+                Transports.Count,
+                'Count after new register');
+    CheckEquals(TlsTransport,
+                Transports[0],
+                'First transport after new register');
+    CheckEquals(TlsOverSctpTransport,
+                Transports[1],
+                'Second transport after new register');
+
+    TIdSipTransportRegistry.UnregisterTransport(TlsOverSctpTransport);
+    Transports.Clear;
+
+    TIdSipTransportRegistry.SecureTransports(Transports);
+
+    CheckEquals(1,
+                Transports.Count,
+                'Count after unregister');
+    CheckEquals(TlsTransport,
+                Transports[0],
+                'First transport after unregister');
+  finally
+    Transports.Free;
   end;
 end;
 

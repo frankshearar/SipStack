@@ -123,6 +123,8 @@ type
     property UseRport: Boolean  read fUseRport write fUseRport;
   end;
 
+  // I supply methods for objects to find out what transports the stack knows
+  // about, and information about those transports.
   TIdSipTransportRegistry = class(TObject)
   private
     class function TransportAt(Index: Integer): TIdSipTransportClass;
