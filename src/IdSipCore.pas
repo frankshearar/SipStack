@@ -2673,6 +2673,8 @@ begin
   end;
 
   // Action generates the response - 8.2.6
+
+  Self.Actions.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipAbstractUserAgent.ActOnResponse(Response: TIdSipResponse;
@@ -5542,6 +5544,8 @@ procedure TIdSipSession.ReceiveBye(Bye: TIdSipRequest);
 var
   OK: TIdSipResponse;
 begin
+  inherited ReceiveBye(Bye);
+
   Self.TerminateAnyPendingRequests;
 
   Self.MarkAsTerminated;

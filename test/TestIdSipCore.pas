@@ -209,6 +209,7 @@ type
     procedure TestOutboundInviteSessionProgressResends;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
+    procedure TestReceiveByeDestroysTerminatedSession;
     procedure TestReceiveByeWithoutTags;
     procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
@@ -2845,6 +2846,28 @@ begin
   CheckNotEquals(SIPCallLegOrTransactionDoesNotExist,
                  Response.StatusCode,
                  'UA tells us no matching dialog was found');
+end;
+
+procedure TestTIdSipUserAgent.TestReceiveByeDestroysTerminatedSession;
+var
+  O: TIdObserverListener;
+begin
+  O := TIdObserverListener.Create;
+  try
+    Self.ReceiveInvite;
+    Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+    Self.Session.AcceptCall('', '');
+
+    Self.Core.AddObserver(O);
+
+    Self.ReceiveBye(Self.Session.Dialog);
+
+    CheckEquals(0, Self.Core.SessionCount, 'Number of sessions after BYE');
+    Check(O.Changed, 'Observer not notified after session ended');
+  finally
+    Self.Core.RemoveObserver(O);
+    O.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestReceiveByeWithoutTags;
