@@ -107,6 +107,7 @@ type
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
     procedure TestCanReceiveUnsolicitedResponse;
+    procedure TestIsNull; virtual;
     procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDiscardMalformedMessage; virtual; abstract;
@@ -191,6 +192,13 @@ type
     procedure TestIsSecure;
   end;
 }
+
+  TestTIdSipNullTransport = class(TestTIdSipTransport)
+  protected
+    function  TransportType: TIdSipTransportClass; override;
+  published
+    procedure TestIsNull; override;
+  end;
 
 implementation
 
@@ -676,6 +684,13 @@ begin
 
   Check(Self.ReceivedResponse,
         Self.HighPortTransport.ClassName + ': Response not received');
+end;
+
+procedure TestTIdSipTransport.TestIsNull;
+begin
+  Check(not Self.HighPortTransport.IsNull,
+        'non-null transport (' + Self.HighPortTransport.ClassName
+      + ') marked as null');
 end;
 
 procedure TestTIdSipTransport.TestTransportFor;
@@ -1255,6 +1270,25 @@ begin
   Check(not Self.Transport.IsSecure, 'SCTP transport marked as secure');
 end;
 }
+
+//******************************************************************************
+//* TestTIdSipNullTransport                                                    *
+//******************************************************************************
+//* TestTIdSipNullTransport Protected methods **********************************
+
+function TestTIdSipNullTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipNullTransport;
+end;
+
+//* TestTIdSipNullTransport Published methods **********************************
+
+procedure TestTIdSipNullTransport.TestIsNull;
+begin
+  Check(Self.HighPortTransport.IsNull, 'Null transport marked as non-null');
+end;
+
+
 initialization
   RegisterTest('IdSipTransport', Suite);
 end.

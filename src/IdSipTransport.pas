@@ -72,6 +72,7 @@ type
     procedure SetPort(Value: Cardinal); virtual; abstract;
   public
     class function TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
+
     constructor Create(Port: Cardinal); virtual;
     destructor  Destroy; override;
 
@@ -80,6 +81,7 @@ type
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTimeout: Cardinal; virtual;
     function  GetTransportType: TIdSipTransportType; virtual; abstract;
+    function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsSecure: Boolean; virtual;
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
@@ -192,7 +194,22 @@ type
     property SipMessage: TIdSipMessage   read fSipMessage;
     property Transport:  TIdSipTransport read fTransport;
   end;
-  
+
+  TIdSipNullTransport = class(TIdSipTransport)
+  private
+    FakeBindings: TIdSocketHandles;
+  protected
+    function  GetBindings: TIdSocketHandles; override;
+    function  GetPort: Cardinal; override;
+    procedure SetPort(Value: Cardinal); override;
+  public
+    constructor Create(Port: Cardinal); override;
+    destructor  Destroy; override;
+
+    function GetTransportType: TIdSipTransportType; override;
+    function IsNull: Boolean; override;
+  end;
+
   EUnknownTransport = class(EIdException);
 
 const
@@ -215,6 +232,7 @@ begin
     sttTCP:  Result := TIdSipTCPTransport;
     sttTLS:  Result := TIdSipTLSTransport;
     sttUDP:  Result := TIdSipUDPTransport;
+    sttNULL: Result := TIdSipNullTransport;
   else
     raise EUnknownTransport.Create('TIdSipTransport.TransportFor');
   end;
@@ -272,6 +290,11 @@ end;
 function TIdSipTransport.DefaultTimeout: Cardinal;
 begin
   Result := 5000;
+end;
+
+function TIdSipTransport.IsNull: Boolean;
+begin
+  Result := false;
 end;
 
 function TIdSipTransport.IsReliable: Boolean;
@@ -858,6 +881,51 @@ begin
 
   for I := 0 to Self.Bindings.Count - 1 do
     Self.Bindings[I].Port := Value;
+end;
+
+//******************************************************************************
+//* TIdSipNullTransport                                                        *
+//******************************************************************************
+//* TIdSipNullTransport Public methods *****************************************
+
+constructor TIdSipNullTransport.Create(Port: Cardinal);
+begin
+  inherited Create(Port);
+
+  Self.FakeBindings := TIdSocketHandles.Create(nil);
+end;
+
+destructor TIdSipNullTransport.Destroy;
+begin
+  Self.FakeBindings.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipNullTransport.GetTransportType: TIdSipTransportType;
+begin
+  Result := sttNULL;
+end;
+
+function TIdSipNullTransport.IsNull: Boolean;
+begin
+  Result := true;
+end;
+
+//* TIdSipNullTransport Protected methods **************************************
+
+function TIdSipNullTransport.GetBindings: TIdSocketHandles;
+begin
+  Result := Self.FakeBindings;
+end;
+
+function TIdSipNullTransport.GetPort: Cardinal;
+begin
+  Result := 0;
+end;
+
+procedure TIdSipNullTransport.SetPort(Value: Cardinal);
+begin
 end;
 
 //******************************************************************************

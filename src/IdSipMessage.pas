@@ -8,7 +8,7 @@ uses
 
 type
   TIdSipQValue = 0..1000;
-  TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP);
+  TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP, sttNULL);
 
   TIdSipChars = set of Char;
 
