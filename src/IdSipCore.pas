@@ -809,6 +809,8 @@ type
   // and not.
   // I guarantee that I will notify my listeners of the OnDialogEvent before the
   // OnSuccess event.
+  // I consider a successful action (in other words I call OnSuccess on my
+  // listeners) when I receive a 2xx response.
   TIdSipOutboundInvite = class(TIdSipInvite)
   private
     Cancelling:                     Boolean;
@@ -889,8 +891,8 @@ type
 
     procedure Send; override;
 
-    property Contact:    TIdSipAddressHeader read fContact write SetContact;
-    property OriginalInvite: TIdSipRequest   read fOriginalInvite write SetOriginalInvite;
+    property Contact:        TIdSipAddressHeader read fContact write SetContact;
+    property OriginalInvite: TIdSipRequest       read fOriginalInvite write SetOriginalInvite;
   end;
 
   TIdSipOutboundReInvite = class(TIdSipOutboundInvite)
