@@ -1063,11 +1063,11 @@ type
 
   {*
    * Some implementation principles we follow:
-   *  * The original headers may be folded, may contain all manner of guff. We
-   *    don't make any attempt to store the raw header - we unfold it (storing
-   *    that unparsed), we parse it, and when we write out the headers we write
-   *    them in the simplest possible way. As a result we CANNOT duplicate the
-   *    exact form of the original message, even though the new message remains
+   *  * The original headers may arrived folded, may contain all manner of guff.
+   *    We make no attempt to store the raw header - we unfold it (storing that
+   *    unparsed), we parse it, and when we write out the headers we write them
+   *    in the simplest possible way. As a result we CANNOT duplicate the exact
+   *    form of the original message, even though the new message remains
    *    identical, semantically speaking.
    *  * We do (because we have to) keep the order of headers. We simple append
    *    any newly created headers.
