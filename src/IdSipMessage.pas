@@ -112,7 +112,12 @@ type
   // I represent URIs defined in RFC 3261, namely SIP and SIPS URIs. The sole
   // difference between SIP and SIPS URIs, at least as far as their structure is
   // concerned, is that SIP URIs use the 'sip' scheme and SIPS URIs the 'sips'
-  // schemes. 
+  // schemes.
+  //
+  // Note that Transport (and DefaultTransport) returns a transport PARAMETER,
+  // not a transport IDENTIFIER. For TCP, for example, the PARAMETER is "tcp"
+  // but the identifier is "TCP". For the definitive translation of parameter to
+  // identifier, see ParamToTransport.
   TIdSipUri = class(TIdUri)
   private
     fHeaders:   TIdSipHeaders;
