@@ -141,6 +141,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAddMultipleAttributes;
     procedure TestAddUsingString;
     procedure TestClear;
     procedure TestContains;
@@ -180,6 +181,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAddConnection;
     procedure TestAddMultipleConnections;
     procedure TestClear;
     procedure TestContains;
@@ -338,6 +340,7 @@ type
     procedure TestParseKeyUnknownKeyType;
     procedure TestParseLinphoneSessionDescription;
     procedure TestParseMediaDescription;
+    procedure TestParseMediaDescriptionWithSessionAttributes;
     procedure TestParseMediaDescriptionWithSessionConnections;
     procedure TestParseMediaDescriptionMalformedFormatList;
     procedure TestParseMediaDescriptionMalformedPort;
@@ -421,12 +424,20 @@ type
     procedure TestSendPacket;
   end;
 
-  TestTIdSdpPayloadProcessor = class(TTestCase)
+  TestTIdSdpPayloadProcessor = class(TThreadingTestCase,
+                                     IIdRTPListener)
   private
     Proc: TIdSdpPayloadProcessor;
 
+    procedure ActivateServerOn(Server: TIdRTPServer;
+                               const IP: String;
+                               Port: Cardinal);
     procedure CheckServerActiveOn(Port: Cardinal);
     procedure CheckServerNotActiveOn(Port: Cardinal);
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -436,6 +447,7 @@ type
     procedure TestMultipleMediaDescriptions;
     procedure TestSessionCount;
     procedure TestSingleMediaDescription;
+    procedure TestSingleMediaDescriptionRemoteDescription;
     procedure TestStopListening;
   end;
 
@@ -451,11 +463,12 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdUDPServer, SysUtils;
+  IdSimpleParser, IdStack, IdUDPServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -476,6 +489,7 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdFilteredRTPPeer.Suite);
+}
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
@@ -1379,6 +1393,34 @@ begin
   CheckEquals(2, Self.A.Count, 'Count after 2nd Add()');
 end;
 
+procedure TestTIdSdpAttributes.TestAddMultipleAttributes;
+var
+  Atts: TIdSdpAttributes;
+  I:    Integer;
+begin
+  Atts := TIdSdpAttributes.Create;
+  try
+    Atts.Add(TIdSdpAttribute.Create);
+    Atts.Add(TIdSdpAttribute.Create);
+    Atts.Add(TIdSdpAttribute.Create);
+
+    for I := 0 to Atts.Count - 1 do
+      Atts[I].Name := IntToStr(I);
+
+    Self.A.Add(Atts);
+    CheckEquals(Atts.Count,
+                Self.A.Count,
+                'Not all connections added');
+
+    for I := 0 to Self.A.Count - 1 do
+      CheckEquals(IntToStr(I),
+                  Self.A[I].Name,
+                  'Name of attribute ' + IntToStr(I));
+  finally
+    Atts.Free;
+  end;
+end;
+
 procedure TestTIdSdpAttributes.TestAddUsingString;
 begin
   Self.A.Add('foo:bar');
@@ -1590,6 +1632,17 @@ begin
   CheckEquals(1, Self.C.Count, 'Count after Add()');
   Self.C.Add(TIdSdpConnection.Create);
   CheckEquals(2, Self.C.Count, 'Count after 2nd Add()');
+end;
+
+procedure TestTIdSdpConnections.TestAddConnection;
+begin
+  Self.C.AddConnection('IP', Id_IPv6, '2002:5156:4019:2::1', 69);
+  CheckEquals(1, Self.C.Count, 'Count after AddConnection()');
+
+  CheckEquals('IP',                  Self.C[0].NetType,     'NetType');
+  Check(      Id_IPv6 =              Self.C[0].AddressType, 'AddressType');
+  CheckEquals('2002:5156:4019:2::1', Self.C[0].Address,     'Address');
+  CheckEquals(69,                    Self.C[0].TTL,         'TTL');
 end;
 
 procedure TestTIdSdpConnections.TestAddMultipleConnections;
@@ -3456,7 +3509,9 @@ begin
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
-    CheckEquals(1, Self.Payload.MediaDescriptionCount, 'MediaDescriptionCount');
+    CheckEquals(1,
+                Self.Payload.MediaDescriptionCount,
+                'MediaDescriptionCount');
 
     Check(mtData = Self.Payload.MediaDescriptionAt(0).MediaType,
           'MediaDescriptionAt(0).MediaType');
@@ -3485,20 +3540,41 @@ begin
   end;
 end;
 
+procedure TestTIdSdpParser.TestParseMediaDescriptionWithSessionAttributes;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'c=IN IP4 127.0.0.1'#13#10
+                          + 'a=recvonly'#13#10
+                          + 'a=tool:RNID SDP'#13#10
+                          + 'm=data 6666 RTP/AVP 1'#13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    CheckEquals(Self.Payload.AttributeCount,
+                Self.Payload.MediaDescriptionAt(0).AttributeCount,
+                'Media description attribute count');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpParser.TestParseMediaDescriptionWithSessionConnections;
 var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayload + #13#10
                           + 'c=IN IP4 127.0.0.1'#13#10
-                          + 'm=data 6666 RTP/AVP 1'#13#10
-                          + 'i=Information');
+                          + 'm=data 6666 RTP/AVP 1'#13#10);
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
 
-    CheckEquals(2,
+    CheckEquals(Self.Payload.ConnectionCount,
                 Self.Payload.MediaDescriptionAt(0).Connections.Count,
                 'Media description connection count');
   finally
@@ -4586,6 +4662,20 @@ end;
 
 //* TestTIdSdpPayloadProcessor Private methods *********************************
 
+procedure TestTIdSdpPayloadProcessor.ActivateServerOn(Server: TIdRTPServer;
+                                                      const IP: String;
+                                                      Port: Cardinal);
+var
+  Binding: TIdSocketHandle;
+begin
+  Binding := Server.Bindings.Add;
+  Binding.IP := IP;
+  Binding.Port := Port;
+  Server.Profile := Self.Proc.Profile;
+  Server.AddListener(Self);
+  Server.Active := true;
+end;
+
 procedure TestTIdSdpPayloadProcessor.CheckServerActiveOn(Port: Cardinal);
 var
   Server: TIdUDPServer;
@@ -4624,6 +4714,17 @@ begin
   finally
     Server.Free;
   end;
+end;
+
+procedure TestTIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
+                                            Binding: TIdSocketHandle);
+begin
+end;
+
+procedure TestTIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
+                                           Binding: TIdSocketHandle);
+begin
+  Self.ThreadEvent.SetEvent;
 end;
 
 //* TestTIdSdpPayloadProcessor Published methods *******************************
@@ -4757,6 +4858,46 @@ begin
                 'Media description port');
   finally
     Description.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayloadProcessor.TestSingleMediaDescriptionRemoteDescription;
+var
+  RemoteServer: TIdRTPServer;
+  T140Payload:  TIdRTPT140Payload;
+begin
+  Self.Proc.Profile.AddEncoding(T140Encoding,
+                                T140ClockRate,
+                                '',
+                                96);
+
+  RemoteServer := TIdRTPServer.Create(nil);
+  try
+    Assert(Assigned(GStack) and (GStack.LocalAddress <> '127.0.0.1'),
+           'This test cannot work on a machine with only one network interface. '
+         + 'Please make sure it''s got a NIC and that NIC has an IP');
+
+    Self.ActivateServerOn(RemoteServer,
+                          GStack.LocalAddress,
+                          8000);
+
+    Self.Proc.RemoteSessionDescription := 'v=0'#13#10
+                                        + 'o=wintermute 1 1 IN IP4 ' + GStack.LocalAddress + #13#10
+                                        + 's=-'#13#10
+                                        + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+                                        + 'm=text 8000 RTP/AVP 96'#13#10
+                                        + 'a=rtpmap:96 t140/1000'#13#10;
+
+    T140Payload := Self.Proc.Profile.EncodingFor(96).Clone as TIdRTPT140Payload;
+    try
+      T140Payload.StartTime := Now;
+      Self.Proc.SendData(T140Payload);
+      Self.WaitForSignaled;
+    finally
+      T140Payload.Free;
+    end;
+  finally
+    RemoteServer.Free;
   end;
 end;
 

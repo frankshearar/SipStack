@@ -233,6 +233,7 @@ type
     function GetItems(Index: Integer): TIdSdpAttribute;
   public
     procedure Add(Att: TIdSdpAttribute); overload;
+    procedure Add(A: TIdSdpAttributes); overload;
     procedure Add(const NameAndValue: String); overload;
 
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
@@ -262,6 +263,10 @@ type
   public
     procedure Add(C: TIdSdpConnection); overload;
     procedure Add(C: TIdSdpConnections); overload;
+    procedure AddConnection(NetType: String;
+                            AddrType: TIdIPVersion;
+                            Addr: String;
+                            TTL: Byte);
 
     property Items[Index: Integer]: TIdSdpConnection read GetItems; default;
   end;
@@ -477,6 +482,8 @@ type
 
     procedure ActivateServerOnNextFreePort(Server: TIdRTPServer;
                                            StartFrom: Cardinal);
+    function  AddPeer(MediaDesc: TIdSdpMediaDescription;
+                      List: TObjectList): TIdRTPServer;
     function  DefaultBasePort: Integer;
     function  DefaultHost: String;
     function  DefaultUsername: String;
@@ -500,6 +507,7 @@ type
     function  LocalSessionDescription: String;
     function  MediaType: String;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
+    procedure SendData(Payload: TIdRTPPayload);
     function  SessionCount: Integer;
     procedure StartListening(const LocalSessionDescription: String);
     procedure StopListening;
@@ -1220,6 +1228,28 @@ begin
   Self.List.Add(Att);
 end;
 
+procedure TIdSdpAttributes.Add(A: TIdSdpAttributes);
+var
+  I:       Integer;
+  NewAtt: TIdSdpAttribute;
+begin
+  for I := 0 to A.Count - 1 do begin
+    NewAtt := TIdSdpAttribute.Create;
+    try
+      Self.Add(NewAtt);
+      NewAtt.Name  := A[I].Name;
+      NewAtt.Value := A[I].Value;
+    except
+      if Self.Contains(NewAtt) then
+        Self.Remove(NewAtt)
+      else
+        FreeAndNil(NewAtt);
+        
+      raise;
+    end;
+  end;
+end;
+
 procedure TIdSdpAttributes.Add(const NameAndValue: String);
 begin
   Self.Add(TIdSdpAttribute.CreateAttribute(NameAndValue));
@@ -1284,17 +1314,45 @@ begin
   for I := 0 to C.Count - 1 do begin
     NewConn := TIdSdpConnection.Create;
     try
-      Self.Add(NewConn);
       NewConn.AddressType       := C[I].AddressType;
       NewConn.Address           := C[I].Address;
       NewConn.NetType           := C[I].NetType;
       NewConn.NumberOfAddresses := C[I].NumberOfAddresses;
       NewConn.TTL               := C[I].TTL;
+
+      Self.Add(NewConn);      
     except
-      Self.Remove(NewConn);
-      FreeAndNil(NewConn);
+      if Self.Contains(NewConn) then
+        Self.Remove(NewConn)
+      else
+        FreeAndNil(NewConn);
       raise;
     end;
+  end;
+end;
+
+procedure TIdSdpConnections.AddConnection(NetType: String;
+                                          AddrType: TIdIPVersion;
+                                          Addr: String;
+                                          TTL: Byte);
+var
+  NewConnection: TIdSdpConnection;
+begin
+  NewConnection := TIdSdpConnection.Create;
+  try
+    NewConnection.NetType     := NetType;
+    NewConnection.AddressType := AddrType;
+
+    NewConnection.Address := Addr;
+    NewConnection.TTL := TTL;
+    Self.Add(NewConnection);
+  except
+    if Self.Contains(NewConnection) then
+      Self.Remove(NewConnection)
+    else
+      FreeAndNil(NewConnection);
+
+    raise;
   end;
 end;
 
@@ -1457,6 +1515,7 @@ end;
 procedure TIdSdpPayload.AddMediaDescription(NewDesc: TIdSdpMediaDescription);
 begin
   Self.MediaDescriptions.Add(NewDesc);
+  NewDesc.Attributes.Add(Self.Attributes);
   NewDesc.Connections.Add(Self.Connections);
 end;
 
@@ -2061,28 +2120,6 @@ begin
 end;
 
 procedure TIdSdpParser.ParseConnection(Connections: TIdSdpConnections);
-  procedure AddConnection(Connections: TIdSdpConnections;
-                          NetType: String;
-                          AddrType: TIdIPVersion;
-                          Addr: String;
-                          TTL: Byte);
-  var
-    NewConnection: TIdSdpConnection;
-  begin
-    NewConnection := TIdSdpConnection.Create;
-    try
-      NewConnection.NetType     := NetType;
-      NewConnection.AddressType := AddrType;
-
-      NewConnection.Address := Addr;
-      NewConnection.TTL := TTL;
-      Connections.Add(NewConnection);
-    except
-      Connections.Remove(NewConnection);
-      FreeAndNil(NewConnection);
-      raise;
-    end;
-  end;
 var
   Addr:          String;
   AddrType:      String;
@@ -2138,18 +2175,16 @@ begin
 
   if (NumAddrs <> '') then begin
     for I := 0 to StrToInt(NumAddrs) - 1 do
-      AddConnection(Connections,
-                    NetType,
-                    StrToAddressType(AddrType),
-                    TIdIPAddressParser.IncIPAddress(Addr, I),
-                    StrToInt(TTL))
+      Connections.AddConnection(NetType,
+                                StrToAddressType(AddrType),
+                                TIdIPAddressParser.IncIPAddress(Addr, I),
+                                StrToInt(TTL))
   end
   else
-    AddConnection(Connections,
-                  NetType,
-                  StrToAddressType(AddrType),
-                  Addr,
-                  StrToInt(TTL));
+    Connections.AddConnection(NetType,
+                              StrToAddressType(AddrType),
+                              Addr,
+                              StrToInt(TTL));
 
   if Self.ParsingSessionHeaders then
     Self.LastSessionHeader := RSSDPConnectionName
@@ -2752,6 +2787,16 @@ begin
   end;
 end;
 
+procedure TIdSdpPayloadProcessor.SendData(Payload: TIdRTPPayload);
+begin
+  Self.RTPClientLock.Acquire;
+  try
+    (Self.RTPClients[0] as TIdRTPServer).Session.SendData(Payload);
+  finally
+    Self.RTPClientLock.Release;
+  end;
+end;
+
 function TIdSdpPayloadProcessor.SessionCount: Integer;
 begin
   Self.RTPServerLock.Acquire;
@@ -2830,6 +2875,39 @@ begin
   end;
 end;
 
+function TIdSdpPayloadProcessor.AddPeer(MediaDesc: TIdSdpMediaDescription;
+                                         List: TObjectList): TIdRTPServer;
+var
+  I:    Cardinal;
+begin
+  // Precondition: If necessary, a critical section has already protected
+  // List.
+
+  Result := TIdRTPServer.Create(nil);
+  try
+    List.Add(Result);
+    Result.Profile := Self.Profile;
+
+    Self.ActivateServerOnNextFreePort(Result,
+                                      MediaDesc.Port);
+
+    // Result.Bindings.Count - 2 >= 0 since
+    // ActivateServerOnNextFreePort adds 2 bindings.
+    for I := 2 to MediaDesc.PortCount do
+      Self.ActivateServerOnNextFreePort(Result,
+                                        Result.Bindings[Result.Bindings.Count - 2].Port);
+
+    Result.DefaultPort := Result.Bindings[0].Port;
+  except
+    if (List.IndexOf(Result) <> -1) then
+      List.Remove(Result)
+    else
+      FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSdpPayloadProcessor.DefaultBasePort: Integer;
 begin
   Result := 8000;
@@ -2882,10 +2960,32 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.SetRemoteSessionDescription(const Value: String);
+var
+  I:          Integer;
+  NewClient:  TIdRTPServer;
+  RemoteDesc: TIdSdpPayload;
+  S:          TStringStream;
 begin
   Self.RTPClientLock.Acquire;
   try
     Self.fRemoteSessionDescription := Value;
+
+    S := TStringStream.Create(Self.RemoteSessionDescription);
+    try
+      RemoteDesc := TIdSdpPayload.CreateFrom(S);
+      try
+        for I := 0 to RemoteDesc.MediaDescriptionCount - 1 do begin
+          NewClient := Self.AddPeer(RemoteDesc.MediaDescriptionAt(I),
+                                    Self.RTPClients);
+          NewClient.Session.AddReceiver(RemoteDesc.MediaDescriptionAt(I).Connections[0].Address,
+                                        RemoteDesc.MediaDescriptionAt(I).Port);
+        end;
+      finally
+        RemoteDesc.Free;
+      end;
+    finally
+      S.Free;
+    end;
   finally
     Self.RTPClientLock.Release;
   end;
@@ -2901,9 +3001,7 @@ end;
 
 procedure TIdSdpPayloadProcessor.SetUpSingleStream(MediaDesc: TIdSdpMediaDescription);
 var
-  I:         Cardinal;
-  NewServer: TIdRTPServer;
-  NewPeer:   TIdFilteredRTPPeer;
+  NewPeer: TIdFilteredRTPPeer;
 begin
   // Realise that the MediaDesc contains a Port value. We TRY to allocate that
   // port, but if that port's already bound we just bind to the lowest free
@@ -2911,37 +3009,17 @@ begin
 
   Self.RTPServerLock.Acquire;
   try
-    NewServer := TIdRTPServer.Create(nil);
+    NewPeer := TIdFilteredRTPPeer.Create(Self.AddPeer(MediaDesc,
+                                                      Self.RTPServers),
+                                         nil,
+                                         nil);
     try
-      NewServer.Profile := Self.Profile;
-      Self.RTPServers.Add(NewServer);
-      NewPeer := TIdFilteredRTPPeer.Create(NewServer, nil, nil);
-      try
-        NewPeer.AddListener(Self);
-
-        Self.ActivateServerOnNextFreePort(NewServer,
-                                          MediaDesc.Port);
-
-        // NewServer.Bindings.Count - 2 >= 0 since
-        // ActivateServerOnNextFreePort adds 2 bindings.
-        for I := 2 to MediaDesc.PortCount do
-          Self.ActivateServerOnNextFreePort(NewServer,
-                                            NewServer.Bindings[NewServer.Bindings.Count - 2].Port);
-
-        NewServer.DefaultPort := NewServer.Bindings[0].Port;
-      except
+      NewPeer.AddListener(Self);
+    except
       if (Self.Filters.IndexOf(NewPeer) <> -1) then
         Self.Filters.Remove(NewPeer)
       else
         FreeAndNil(NewPeer);
-
-      raise;
-      end;
-    except
-      if (Self.RTPServers.IndexOf(NewServer) <> -1) then
-        Self.RTPServers.Remove(NewServer)
-      else
-        FreeAndNil(NewServer);
 
       raise;
     end;
