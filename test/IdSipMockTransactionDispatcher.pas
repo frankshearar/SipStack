@@ -46,8 +46,8 @@ uses
 
 const
   NoDestinationsForResponse = 'Couldn''t send the response because there are '
-                            + 'no destinations: check your A/AAAA/etc setup in '
-                            + 'your mock locator';
+                            + 'no destinations for ''%s'': check your A/AAAA/etc '
+                            + 'setup in your mock locator';
 
 //******************************************************************************
 //* TIdSipMockTransactionDispatcher                                            *
@@ -121,7 +121,7 @@ procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipRespon
                                                           Dests: TIdSipLocations);
 begin
   if Dests.IsEmpty then
-    raise Exception.Create(NoDestinationsForResponse);
+    raise Exception.Create(Format(NoDestinationsForResponse, [Response.LastHop.SentBy]));
 
   Self.Transport.Send(Response, Dests[0]);
 end;
