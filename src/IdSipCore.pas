@@ -25,8 +25,8 @@ interface
 
 uses
   Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
-  IdSipAuthentication, IdSipMessage, IdSipTimer, IdSipTransaction,
-  IdSipTransport, SyncObjs;
+  IdSipAuthentication, IdSipMessage, IdSipRegistration, IdSipTimer,
+  IdSipTransaction, IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -238,6 +238,7 @@ type
     function  IsSchemeAllowed(const Scheme: String): Boolean;
     function  NextBranch: String;
     function  NextInitialSequenceNo: Cardinal;
+    procedure RemoveAllowedMethod(const Method: String);
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
 
@@ -260,6 +261,7 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
+  TIdSipInboundRegistration = class;
   TIdSipOutboundSession = class;
 
   // I (usually) represent a human being in the SIP network. I:
@@ -271,10 +273,12 @@ type
   private
     ActionLock:               TCriticalSection;
     Actions:                  TObjectList;
+    fBindingDB:               TIdSipAbstractBindingDatabase;
     fContact:                 TIdSipContactHeader;
     fDoNotDisturb:            Boolean;
     fDoNotDisturbMessage:     String;
     fHasProxy:                Boolean;
+    fMinimumExpiryTime:       Cardinal; // in seconds
     fProxy:                   TIdSipUri;
     KnownRegistrars:          TObjectList;
     ObserverLock:             TCriticalSection;
@@ -287,6 +291,7 @@ type
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
                       Response: TIdSipResponse): TIdSipOutboundSession;
+    function  AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
     function  AddInboundSession(Invite: TIdSipRequest;
                                 UsingSecureTransport: Boolean): TIdSipInboundSession;
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
@@ -300,6 +305,7 @@ type
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
     function  ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
     function  GetContact: TIdSipContactHeader;
+    function  GetDefaultRegistrationExpiryTime: Cardinal;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
@@ -308,14 +314,11 @@ type
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
     procedure OnInboundSessionExpire(Sender: TObject);
-    procedure ProcessAck(Ack: TIdSipRequest);
-    procedure ProcessInvite(Invite: TIdSipRequest;
-                            UsingSecureTransport: Boolean);
     function  RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
     procedure RejectDoNotDisturb(Request: TIdSipRequest;
                                  const Reason: String);
-    procedure SendByeToAppropriateSession(Bye: TIdSipRequest);
     procedure SetContact(Value: TIdSipContactHeader);
+    procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
                              const Offer: String;
@@ -364,11 +367,14 @@ type
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  Username: String;
 
-    property Contact:             TIdSipContactHeader read GetContact write SetContact;
-    property DoNotDisturb:        Boolean             read fDoNotDisturb write fDoNotDisturb;
-    property DoNotDisturbMessage: String              read fDoNotDisturbMessage write fDoNotDisturbMessage;
-    property HasProxy:            Boolean             read fHasProxy write fHasProxy;
-    property Proxy:               TIdSipUri           read fProxy write SetProxy;
+    property BindingDB:                     TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
+    property Contact:                       TIdSipContactHeader           read GetContact write SetContact;
+    property DoNotDisturb:                  Boolean                       read fDoNotDisturb write fDoNotDisturb;
+    property DoNotDisturbMessage:           String                        read fDoNotDisturbMessage write fDoNotDisturbMessage;
+    property HasProxy:                      Boolean                       read fHasProxy write fHasProxy;
+    property Proxy:                         TIdSipUri                     read fProxy write SetProxy;
+    property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
+    property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
   TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
@@ -414,6 +420,8 @@ type
                                          UsingSecureTransport: Boolean): Boolean; virtual;
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; virtual;
   public
+    class function Method: String; virtual; abstract;
+
     constructor Create(UA: TIdSipUserAgentCore); virtual;
     destructor  Destroy; override;
 
@@ -431,18 +439,6 @@ type
   end;
 
   TIdSipActionClass = class of TIdSipAction;
-
-  // When a User Agent cannot match a message against an Action, it uses me to
-  // react appropriately. Thus, I drop unmatched responses, I drop unmatched
-  // ACKs, I create new inbound Sessions on unmatched INVITEs, etc.
-
-  // I am also an experiment, above all.
-  TIdSipNullAction = class(TIdSipAction)
-  protected
-    function ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
-    function ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                        UsingSecureTransport: Boolean): Boolean; override;
-  end;
 
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
   // to an INVITE until it receives an ACK. Thus I provide an exponential
@@ -506,6 +502,8 @@ type
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure SendBye; virtual;
   public
+    class function Method: String; override;
+
     constructor Create(UA: TIdSipUserAgentCore); override;
     destructor  Destroy; override;
 
@@ -582,6 +580,31 @@ type
     procedure Terminate; override;
   end;
 
+  TIdSipRegistration = class(TIdSipAction)
+  public
+    class function Method: String; override;
+
+    function IsRegistration: Boolean; override;
+  end;
+
+  TIdSipInboundRegistration = class(TIdSipRegistration)
+  private
+    function  AcceptRequest(Request: TIdSipRequest): Boolean;
+    function  BindingDB: TIdSipAbstractBindingDatabase;
+    procedure RejectExpireTooBrief(Request: TIdSipRequest);
+    procedure RejectFailedRequest(Request: TIdSipRequest);
+    procedure RejectForbidden(Request: TIdSipRequest);
+    procedure RejectNotFound(Request: TIdSipRequest);
+    procedure RejectRequest(Request: TIdSipRequest;
+                            StatusCode: Cardinal);
+    procedure RejectUnauthorized(Request: TIdSipRequest);
+  public
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Reg: TIdSipRequest); reintroduce;
+
+    procedure ReceiveRequest(Request: TIdSipRequest); override;
+  end;
+
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
   // with a way to register with a registrar. I take care of things like
   // doing stuff with error responses, asking for authentication, etc.
@@ -589,7 +612,7 @@ type
   // It makes no sense to access me once my Transaction has terminated. In
   // other words once you've received notification of my success or failure,
   // erase your references to me.
-  TIdSipOutboundRegistration = class(TIdSipAction)
+  TIdSipOutboundRegistration = class(TIdSipRegistration)
   private
     Bindings: TIdSipContacts;
 
@@ -613,7 +636,6 @@ type
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
     procedure FindCurrentBindings(Registrar: TIdSipUri);
-    function  IsRegistration: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
@@ -1001,6 +1023,16 @@ begin
   Result := GRandomNumber.NextCardinal($7FFFFFFF);
 end;
 
+procedure TIdSipAbstractUserAgent.RemoveAllowedMethod(const Method: String);
+var
+  Index: Integer;
+begin
+  Index := Self.AllowedMethodList.IndexOf(Method);
+
+  if (Index <> -1) then
+    Self.AllowedMethodList.Delete(Index);
+end;
+
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
                                                  Reason: Cardinal);
 var
@@ -1235,7 +1267,6 @@ begin
 
   Self.AddAllowedContentType(SdpMimeType);
   Self.AddAllowedMethod(MethodBye);
-  Self.AddAllowedMethod(MethodCancel);
   Self.AddAllowedMethod(MethodInvite);
   Self.AddAllowedScheme(SipScheme);
 
@@ -1505,16 +1536,30 @@ end;
 
 procedure TIdSipUserAgentCore.ActOnRequest(Request: TIdSipRequest;
                                            Receiver: TIdSipTransport);
+var
+  Action: TIdSipAction;
 begin
   inherited ActOnRequest(Request, Receiver);
 
   // Processing the request - 8.2.5
-  if Request.IsInvite then
-    Self.ProcessInvite(Request, Receiver.IsSecure)
-  else if Request.IsAck then
-    Self.ProcessAck(Request)
-  else if Request.IsBye then
-    Self.SendByeToAppropriateSession(Request);
+  Action := Self.FindAction(Request);
+
+  if Assigned(Action) then
+    Action.ReceiveRequest(Request)
+  else begin
+    if Request.IsBye then
+      Self.ReturnResponse(Request,
+                          SIPCallLegOrTransactionDoesNotExist)
+    else if Request.IsInvite then begin
+      if Self.DoNotDisturb then
+        Self.RejectDoNotDisturb(Request,
+                                Self.DoNotDisturbMessage)
+      else
+        Self.AddInboundSession(Request, Receiver.IsSecure)
+    end
+    else if Request.IsRegister then
+      Self.AddInboundRegistration(Request).ReceiveRequest(Request);
+  end;
 
   // TIdSipSession generates the response - 8.2.6
 end;
@@ -1628,7 +1673,23 @@ begin
   end;
 
   Self.NotifyOfChange;
-end;                  
+end;
+
+function TIdSipUserAgentCore.AddInboundRegistration(Reg: TIdSipRequest): TIdSipInboundRegistration;
+begin
+  Result := TIdSipInboundRegistration.Create(Self, Reg);
+  try
+    Self.ActionLock.Acquire;
+    try
+      Self.Actions.Add(Result);
+    finally
+      Self.ActionLock.Release;
+    end;
+
+  except
+    FreeAndNil(Result);
+  end;
+end;
 
 function TIdSipUserAgentCore.AddInboundSession(Invite: TIdSipRequest;
                                                UsingSecureTransport: Boolean): TIdSipInboundSession;
@@ -1792,6 +1853,11 @@ begin
   Result := fContact;
 end;
 
+function TIdSipUserAgentCore.GetDefaultRegistrationExpiryTime: Cardinal;
+begin
+  Result := Self.BindingDB.DefaultExpiryTime;
+end;
+
 function TIdSipUserAgentCore.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
 begin
   // Precondition: something's acquired the RegistrationLock
@@ -1881,41 +1947,6 @@ begin
   (Sender as TIdSipSingleShotTimer).Data.Free;
 end;
 
-procedure TIdSipUserAgentCore.ProcessAck(Ack: TIdSipRequest);
-var
-  Session: TIdSipAction;
-begin
-  Session := Self.FindAction(Ack);
-
-  // If Session = nil then we didn't match the ACK against any session, and so
-  // we just drop it on the floor. There's no point in replying.
-  if Assigned(Session) then
-    Session.ReceiveRequest(Ack);
-end;
-
-procedure TIdSipUserAgentCore.ProcessInvite(Invite: TIdSipRequest;
-                                            UsingSecureTransport: Boolean);
-var
-  Session: TIdSipAction;
-begin
-  Assert(Invite.IsInvite,
-         'ProcessInvite accepts only INVITE messages, '
-       + 'not ' + Invite.Method + ' messages');
-
-  if Self.DoNotDisturb then begin
-    Self.RejectDoNotDisturb(Invite,
-                            Self.DoNotDisturbMessage);
-    Exit;
-  end;
-
-  Session := Self.FindAction(Invite);
-
-  if Assigned(Session) then
-    Session.ReceiveRequest(Invite)
-  else
-    Self.AddInboundSession(Invite, UsingSecureTransport);
-end;
-
 function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
 begin
   Result := Self.KnownRegistrars[Index] as TIdSipOutboundRegistrationInfo;
@@ -1936,19 +1967,6 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.SendByeToAppropriateSession(Bye: TIdSipRequest);
-var
-  Session: TIdSipAction;
-begin
-  Session := Self.FindAction(Bye);
-
-  if Assigned(Session) then
-    Session.ReceiveRequest(Bye)
-  else
-    Self.ReturnResponse(Bye,
-                        SIPCallLegOrTransactionDoesNotExist);
-end;
-
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
 begin
   Assert(not Value.IsWildCard,
@@ -1956,6 +1974,11 @@ begin
        + 'Contact');
 
   Self.Contact.Assign(Value);
+end;
+
+procedure TIdSipUserAgentCore.SetDefaultRegistrationExpiryTime(Value: Cardinal);
+begin
+  Self.BindingDB.DefaultExpiryTime := Value;
 end;
 
 procedure TIdSipUserAgentCore.SetProxy(Value: TIdSipUri);
@@ -2283,23 +2306,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipNullAction
-//******************************************************************************
-//* TIdSipNullAction Public methods ********************************************
-//* TIdSipNullAction Protected methods *****************************************
-
-function TIdSipNullAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
-begin
-  Result := false;
-end;
-
-function TIdSipNullAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                     UsingSecureTransport: Boolean): Boolean;
-begin
-  Result := true;
-end;
-
-//******************************************************************************
 //* TIdSipSessionTimer                                                         *
 //******************************************************************************
 //* TIdSipSessionTimer Public methods ******************************************
@@ -2374,6 +2380,11 @@ end;
 //* TIdSipSession                                                              *
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
+
+class function TIdSipSession.Method: String;
+begin
+  Result := MethodInvite;
+end;
 
 constructor TIdSipSession.Create(UA: TIdSipUserAgentCore);
 begin
@@ -3049,6 +3060,198 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRegistration                                                         *
+//******************************************************************************
+//* TIdSipRegistration Public methods ******************************************
+
+class function TIdSipRegistration.Method: String;
+begin
+  Result := MethodRegister;
+end;
+
+function TIdSipRegistration.IsRegistration: Boolean;
+begin
+  Result := true;
+end;
+
+//******************************************************************************
+//* TIdSipInboundRegistration                                                  *
+//******************************************************************************
+//* TIdSipInboundRegistration Public methods ***********************************
+
+constructor TIdSipInboundRegistration.Create(UA: TIdSipUserAgentCore;
+                                             Reg: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.CurrentRequest.Assign(Reg);
+end;
+
+procedure TIdSipInboundRegistration.ReceiveRequest(Request: TIdSipRequest);
+var
+  Bindings: TIdSipContacts;
+  Date:     TIdSipDateHeader;
+  Response: TIdSipResponse;
+begin
+  if not Self.AcceptRequest(Request) then Exit;
+
+  if (Request.ContactCount = 1)
+    and Request.FirstContact.IsWildCard
+    and (Request.QuickestExpiry = 0) then begin
+
+    if not Self.BindingDB.RemoveAllBindings(Request) then
+      Self.RejectFailedRequest(Request)
+    else
+      Self.RejectRequest(Request, SIPOK);
+    Exit;
+  end;
+
+  if not Self.BindingDB.AddBindings(Request) then begin
+    Self.RejectFailedRequest(Request);
+    Exit;
+  end;
+
+  Bindings := TIdSipContacts.Create;
+  try
+    if Self.BindingDB.BindingsFor(Request,
+                                  Bindings) then begin
+      Response := Self.UA.CreateResponse(Request, SIPOK);
+      try
+        Response.AddHeaders(Bindings);
+
+        Date := TIdSipDateHeader.Create;
+        try
+          Date.Time.SetFromTDateTime(Now);
+          Response.AddHeader(Date);
+        finally
+          Date.Free;
+        end;
+
+        Self.UA.SendResponse(Response);
+      finally
+        Response.Free;
+      end;
+    end
+    else begin
+      Self.RejectFailedRequest(Request);
+    end;
+  finally
+    Bindings.Free;
+  end;
+
+  Self.UA.RemoveAction(Self);
+end;
+
+//* TIdSipInboundRegistration Private methods **********************************
+
+function TIdSipInboundRegistration.AcceptRequest(Request: TIdSipRequest): Boolean;
+begin
+  // cf RFC 3261 section 10.3
+  // Steps 1, 2 & 3 - covered by Self.UA
+  Result := true;
+
+  // Step 4
+  if not Self.BindingDB.IsAuthorized(Request.From) then begin
+    Self.RejectForbidden(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 5
+  if not Self.BindingDB.IsValid(Request) then begin
+    Self.RejectNotFound(Request);
+    Result := false;
+    Exit;
+  end;
+
+  // Step 6 (or part thereof)
+  if Request.HasHeader(ContactHeaderFull) then begin
+    if Request.FirstContact.IsWildCard then begin
+      if (Request.ContactCount > 1) then begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+
+      if Request.FirstContact.WillExpire
+        and (Request.FirstContact.Expires = 0) then
+          Result := true
+      else begin
+        Self.RejectRequest(Request, SIPBadRequest);
+        Result := false;
+        Exit;
+      end;
+    end
+    else if Request.HasExpiry and (Request.QuickestExpiry < Self.UA.MinimumExpiryTime) then begin
+      Self.RejectExpireTooBrief(Request);
+      Result := false;
+    end;
+  end;
+
+  // Steps 7 & 8 in ReceiveRequest
+end;
+
+function TIdSipInboundRegistration.BindingDB: TIdSipAbstractBindingDatabase;
+begin
+  Result := Self.UA.BindingDB;
+end;
+
+procedure TIdSipInboundRegistration.RejectExpireTooBrief(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request, SIPIntervalTooBrief);
+  try
+    Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.UA.MinimumExpiryTime);
+    Self.UA.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipInboundRegistration.RejectFailedRequest(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPInternalServerError);
+end;
+
+procedure TIdSipInboundRegistration.RejectForbidden(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPForbidden);
+end;
+
+procedure TIdSipInboundRegistration.RejectNotFound(Request: TIdSipRequest);
+begin
+  Self.RejectRequest(Request, SIPNotFound);
+end;
+
+procedure TIdSipInboundRegistration.RejectRequest(Request: TIdSipRequest;
+                                                  StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request, StatusCode);
+  try
+    Self.UA.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipInboundRegistration.RejectUnauthorized(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Request, SIPInternalServerError);
+  try
+    Response.StatusText := 'TIdSipRegistrar.RejectUnauthorized not yet implemented';
+    Self.UA.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+  raise Exception.Create('TIdSipRegistrar.RejectUnauthorized not yet implemented');
+end;
+
+//******************************************************************************
 //* TIdSipOutboundRegistration                                                 *
 //******************************************************************************
 //* TIdSipOutboundRegistration Public methods **********************************
@@ -3087,11 +3290,6 @@ begin
   finally
     BlankBindings.Free;
   end;
-end;
-
-function TIdSipOutboundRegistration.IsRegistration: Boolean;
-begin
-  Result := true;
 end;
 
 function TIdSipOutboundRegistration.Match(Msg: TIdSipMessage): Boolean;
@@ -3357,5 +3555,6 @@ begin
 
   Self.UA.SendRequest(Request);
 end;
+
 
 end.

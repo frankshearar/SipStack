@@ -23,7 +23,7 @@ uses
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',
   IdSipMockTransport in 'test\IdSipMockTransport.pas',
   IdSipProxy in 'src\IdSipProxy.pas',
-  IdSipRegistrar in 'src\IdSipRegistrar.pas',
+  IdSipRegistration in 'src\IdSipRegistration.pas',
   IdSipTcpClient in 'src\IdSipTcpClient.pas',
   IdSipTcpServer in 'src\IdSipTcpServer.pas',
   IdSipTimer in 'src\IdSipTimer.pas',

@@ -5,7 +5,7 @@ interface
 uses
   Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
-  IdSipRegistrar, IdSipTransaction, IdSipTransport, IdSocketHandle,
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSocketHandle,
   TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -221,6 +221,7 @@ type
     procedure TestForwardCall;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
+    procedure TestMethod;
     procedure TestReceiveBye;
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
@@ -270,6 +271,7 @@ type
     procedure TestFork;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
+    procedure TestMethod;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestPendingTransactionCount;
     procedure TestProxyAuthentication;
@@ -329,7 +331,7 @@ type
     Contacts:    TIdSipContacts;
     MinExpires:  Cardinal;
     Reg:         TIdSipOutboundRegistration;
-    Registrar:   TIdSipRegistrar;
+    Registrar:   TIdSipUserAgentCore;
     Request:     TIdSipRequest;
     Succeeded:   Boolean;
 
@@ -354,6 +356,7 @@ type
   published
     procedure TestAddListener;
     procedure TestCheckFirstListenerSetsPassword;
+    procedure TestMethod;
     procedure TestRegister;
     procedure TestFindCurrentBindings;
     procedure TestReceiveFail;
@@ -672,7 +675,7 @@ end;
 
 procedure TestTIdSipAbstractUserAgent.TestAddAllowedMethod;
 var
-  Methods: TStrings;
+  Methods: TStringList;
 begin
   Methods := TStringList.Create;
   try
@@ -682,6 +685,7 @@ begin
     Self.Core.AddAllowedMethod(MethodOptions);
 
     Methods.CommaText := Self.Core.AllowedMethods;
+    Methods.Sort;
 
     CheckEquals(4, Methods.Count, 'Number of allowed methods');
 
@@ -2610,6 +2614,13 @@ begin
         'Inbound session; IsOutboundCall');
 end;
 
+procedure TestTIdSipInboundSession.TestMethod;
+begin
+  CheckEquals(MethodInvite,
+              TIdSipInboundSession.Method,
+              'Inbound session; Method');
+end;
+
 procedure TestTIdSipInboundSession.TestReceiveBye;
 begin
   Self.Session.AcceptCall('', '');
@@ -3093,6 +3104,13 @@ begin
         'Outbound session; IsOutboundCall');
 end;
 
+procedure TestTIdSipOutboundSession.TestMethod;
+begin
+  CheckEquals(MethodInvite,
+              TIdSipOutboundSession.Method,
+              'Outbound session; Method');
+end;
+
 procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
 var
   RequestCount: Cardinal;
@@ -3514,8 +3532,11 @@ const
 begin
   inherited SetUp;
 
-  Self.Registrar := TIdSipRegistrar.Create;
+  Self.Registrar := TIdSipUserAgentCore.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Registrar.RemoveAllowedMethod(MethodInvite);
+  Self.Registrar.RemoveAllowedMethod(MethodBye);
+  Self.Registrar.AddAllowedMethod(MethodRegister);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
@@ -3706,6 +3727,13 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundRegistration.TestMethod;
+begin
+  CheckEquals(MethodRegister,
+              TIdSipOutboundRegistration.Method,
+              'Outbound registration; Method');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestRegister;

@@ -3,8 +3,8 @@ unit TestIdSipRegistrar;
 interface
 
 uses
-  Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipMockTransactionDispatcher,
-  IdSipRegistrar, TestFramework;
+  Classes, Contnrs, IdSipConsts, IdSipCore, IdSipMessage,
+  IdSipMockTransactionDispatcher, IdSipRegistration, TestFramework;
 
 type
   TIdSipMockBindingDatabase = class;
@@ -19,7 +19,7 @@ type
     Dispatch:     TIdSipMockTransactionDispatcher;
     ExpireAll:    String;
     FirstContact: TIdSipContactHeader;
-    Registrar:    TIdSipRegistrar;
+    Registrar:    TIdSipUserAgentCore;
     Request:      TIdSipRequest;
 
     procedure CheckResponse(Received: TIdSipContacts;
@@ -38,6 +38,7 @@ type
     procedure TestFailedBindingsFor;
     procedure TestFailedRemoveAll;
     procedure TestInvalidAddressOfRecord;
+    procedure TestMethod;
     procedure TestOKResponseContainsAllBindings;
     procedure TestReceiveInvite;
     procedure TestReceiveRegister;
@@ -173,10 +174,13 @@ begin
 //  Self.DB.DefaultExpiryTime := 0;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
-  Self.Registrar := TIdSipRegistrar.Create;
+  Self.Registrar := TIdSipUserAgentCore.Create;
   Self.Registrar.BindingDB := Self.DB;
   Self.Registrar.Dispatcher := Self.Dispatch;
   Self.Registrar.MinimumExpiryTime := 3600;
+  Self.Registrar.AddAllowedMethod(MethodRegister);
+  Self.Registrar.RemoveAllowedMethod(MethodInvite);
+  Self.Registrar.RemoveAllowedMethod(MethodBye);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
@@ -392,6 +396,13 @@ begin
                            'Invalid address-of-record');
 end;
 
+procedure TestTIdSipRegistrar.TestMethod;
+begin
+  CheckEquals(MethodRegister,
+              TIdSipInboundRegistration.Method,
+              'Inbound registration; Method');
+end;
+
 procedure TestTIdSipRegistrar.TestOKResponseContainsAllBindings;
 var
   Bindings: TIdSipContacts;
@@ -423,7 +434,10 @@ begin
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveRegister;
+var
+  RegistrationCount: Cardinal;
 begin
+  RegistrationCount := Self.Registrar.RegistrationCount;
   Self.SimulateRemoteRequest;
   CheckEquals(1,
               Self.Dispatch.Transport.SentResponseCount,
@@ -431,6 +445,9 @@ begin
   CheckNotEquals(SIPMethodNotAllowed,
                  Self.Dispatch.Transport.LastResponse.StatusCode,
                 'Registrars MUST accept REGISTER');
+  CheckEquals(RegistrationCount,
+              Self.Registrar.RegistrationCount,
+              'InboundRegistration object not freed');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveExpireTooShort;
