@@ -3038,29 +3038,28 @@ end;
 
 procedure TestTIdSipUserAgent.TestTerminateAllCalls;
 var
-  FirstSession:  TIdSipInboundSession;
-  SecondSession: TIdSipInboundSession;
+  InboundSession: TIdSipInboundSession;
 begin
   Self.SimulateInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, first INVITE');
-  FirstSession := Self.Session;
-  FirstSession.AcceptCall('', '');
-  Self.Session := nil;
+  InboundSession := Self.Session;
+  InboundSession.AcceptCall('', '');
 
-  Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
-  Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
-  Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
-
-  Self.SimulateInvite;
-  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, second INVITE');
-  SecondSession := Self.Session;
-  SecondSession.AcceptCall('', '');
+  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.SimulateTrying(Self.LastSentRequest);
 
   CheckEquals(2,
               Self.Core.SessionCount,
               'Session count');
   Self.Core.TerminateAllCalls;
-  CheckEquals(0,
+
+  // This looks completely wrong, I know. However, we've sent a CANCEL to
+  // terminate the not-yet-accepted INVITE we sent out with Call(). That
+  // session won't end until we receive a 487 Request Terminated for that INVITE
+  // or we receive a 200 OK (in which case we send a BYE and immediately tear
+  // down the session), or we time out (because the remote end was an RFC 2543
+  // UAS). cf RFC 3261 section 9.1
+  CheckEquals(1,
               Self.Core.SessionCount,
               'Session count after TerminateAllCalls');
 end;

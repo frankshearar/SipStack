@@ -311,7 +311,7 @@ type
     function  OptionsCount: Integer;
     function  RegistrationCount: Integer;
     function  SessionCount: Integer;
-    procedure TerminateAllSessions;
+    procedure TerminateAllActions;
   end;
 
   TIdSipInboundOptions = class;
@@ -585,9 +585,14 @@ type
   // REGISTERs and the like - where we care what the remote end answers.
   // With CANCELs and BYEs, for instance, we don't care how the remote end
   // answers.
+  //
+  // Owned actions are actions that other actions control. For example, Sessions
+  // are Actions. Sessions use Invites (among other things), and Sessions
+  // control those Invites. Thus, the Invites are Owned.
   TIdSipAction = class(TIdInterfacedObject)
   private
     fInitialRequest: TIdSipRequest;
+    fIsOwned:        Boolean;
     fIsTerminated:   Boolean;
     NonceCount:      Cardinal;
     SentRequest:     Boolean;
@@ -648,6 +653,7 @@ type
     procedure Terminate; virtual;
 
     property InitialRequest: TIdSipRequest read fInitialRequest;
+    property IsOwned:        Boolean       read fIsOwned;
     property IsTerminated:   Boolean       read fIsTerminated;
     property Username:       String        read GetUsername write SetUsername;
   end;
@@ -657,6 +663,8 @@ type
     function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
   public
     class function Method: String; override;
+
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
 
     function IsInbound: Boolean; virtual;
     function IsInvite: Boolean; override;
@@ -2037,14 +2045,15 @@ begin
   end;
 end;
 
-procedure TIdSipActions.TerminateAllSessions;
+procedure TIdSipActions.TerminateAllActions;
 var
   I: Integer;
 begin
   Self.ActionLock.Acquire;
   try
     for I := 0 to Self.Actions.Count - 1 do
-      if not Self.ActionAt(I).IsTerminated then
+      if not Self.ActionAt(I).IsOwned
+        and not Self.ActionAt(I).IsTerminated then
         Self.ActionAt(I).Terminate;
   finally
     Self.ActionLock.Release;
@@ -2557,7 +2566,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.TerminateAllCalls;
 begin
-  Self.Actions.TerminateAllSessions;
+  Self.Actions.TerminateAllActions;
 end;
 
 function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
@@ -3276,6 +3285,7 @@ begin
   Self.UA := UA;
 
   Self.fInitialRequest := TIdSipRequest.Create;
+  Self.fIsOwned        := false;
   Self.fIsTerminated   := false;
   Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
@@ -3658,6 +3668,14 @@ end;
 class function TIdSipInvite.Method: String;
 begin
   Result := MethodInvite;
+end;
+
+constructor TIdSipInvite.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  // Invites are always owned by a Session
+  Self.fIsOwned := true;
 end;
 
 function TIdSipInvite.IsInbound: Boolean;
