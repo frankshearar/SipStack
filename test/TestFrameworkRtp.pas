@@ -24,8 +24,7 @@ type
   TIdMockRTPPeer = class(TIdInterfacedObject,
                          IIdAbstractRTPPeer)
   private
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    Listeners:    TIdNotificationList;
     fLastRTP:     TIdRTPPacket;
     fProfile:     TIdRTPProfile;
     fRTCPCount:   Cardinal;
@@ -140,8 +139,7 @@ constructor TIdMockRTPPeer.Create;
 begin
   inherited Create;
 
-  Self.ListenerLock := TCriticalSection.Create;
-  Self.Listeners    := TList.Create;
+  Self.Listeners := TIdNotificationList.Create;
 
   Self.fRTCPCount := 0;
   Self.RTCPBuffer := TObjectList.Create(true);
@@ -152,57 +150,50 @@ begin
   Self.RTCPBuffer.Free;
   Self.LastRTP.Free;
   Self.Listeners.Free;
-  Self.ListenerLock.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdMockRTPPeer.AddListener(const Listener: IIdRTPListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdMockRTPPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                                Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdRTPListener(Self.Listeners[I]).OnRTCP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdMockRTPPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                               Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTPMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdRTPListenerReceiveRTPMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdRTPListener(Self.Listeners[I]).OnRTP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdMockRTPPeer.RemoveListener(const Listener: IIdRTPListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 procedure TIdMockRTPPeer.SendPacket(const Host: String;

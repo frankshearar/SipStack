@@ -562,8 +562,7 @@ type
                                  IIdRTPListener,
                                  IIdRTPDataListener)
   private
-    DataListenerLock:          TCriticalSection;
-    DataListeners:             TList;
+    DataListeners:             TIdNotificationList;
     fBasePort:                 Integer;
     fHost:                     String;
     fUsername:                 String;
@@ -572,8 +571,7 @@ type
     fTransportType:            TIdIPVersion;
     RTPClients:                TObjectList;
     RTPClientLock:             TCriticalSection;
-    RTPListenerLock:           TCriticalSection;
-    RTPListeners:              TList;
+    RTPListeners:              TIdNotificationList;
     RTPServerLock:             TCriticalSection;
     RTPServers:                TObjectList;
 
@@ -3367,14 +3365,12 @@ begin
   Self.Host     := Self.DefaultHost;
   Self.Username := Self.DefaultUsername;
 
-  Self.DataListeners := TList.Create;
-  Self.DataListenerLock := TCriticalSection.Create;
+  Self.DataListeners := TIdNotificationList.Create;
 
   Self.RTPClients    := TObjectList.Create(true);
   Self.RTPClientLock := TCriticalSection.Create;
 
-  Self.RTPListeners := TList.Create;
-  Self.RTPListenerLock := TCriticalSection.Create;
+  Self.RTPListeners := TIdNotificationList.Create;
 
   Self.RTPServers    := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
@@ -3390,39 +3386,24 @@ begin
   Self.RTPServers.Free;
   Self.RTPServerLock.Free;
 
-  Self.DataListeners := TList.Create;
-  Self.DataListenerLock := TCriticalSection.Create;
-
   Self.RTPListeners.Free;
-  Self.RTPListenerLock.Free;
 
   Self.RTPClients.Free;
   Self.RTPClientLock.Free;
 
   Self.DataListeners.Free;
-  Self.DataListenerLock.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSdpPayloadProcessor.AddDataListener(const Listener: IIdRTPDataListener);
 begin
-  Self.DataListenerLock.Acquire;
-  try
-    Self.DataListeners.Add(Pointer(Listener));
-  finally
-    Self.DataListenerLock.Release;
-  end;
+  Self.DataListeners.AddListener(Listener);
 end;
 
 procedure TIdSdpPayloadProcessor.AddRTPListener(const Listener: IIdRTPListener);
 begin
-  Self.RTPListenerLock.Acquire;
-  try
-    Self.RTPListeners.Add(Pointer(Listener));
-  finally
-    Self.RTPListenerLock.Release;
-  end;
+  Self.RTPListeners.AddListener(Listener);
 end;
 
 function TIdSdpPayloadProcessor.IsListening: Boolean;
@@ -3477,22 +3458,12 @@ end;
 
 procedure TIdSdpPayloadProcessor.RemoveDataListener(const Listener: IIdRTPDataListener);
 begin
-  Self.DataListenerLock.Acquire;
-  try
-    Self.DataListeners.Remove(Pointer(Listener));
-  finally
-    Self.DataListenerLock.Release;
-  end;
+  Self.DataListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSdpPayloadProcessor.RemoveRTPListener(const Listener: IIdRTPListener);
 begin
-  Self.RTPListenerLock.Acquire;
-  try
-    Self.RTPListeners.Remove(Pointer(Listener));
-  finally
-    Self.RTPListenerLock.Release;
-  end;
+  Self.RTPListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSdpPayloadProcessor.SendData(Payload: TIdRTPPayload);
@@ -3636,42 +3607,48 @@ end;
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TIdRTPPayload;
                                                     Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPDataListenerNewDataMethod;
 begin
-  Self.DataListenerLock.Acquire;
+  Notification := TIdRTPDataListenerNewDataMethod.Create;
   try
-    for I := 0 to Self.DataListeners.Count - 1 do
-      IIdRTPDataListener(Self.DataListeners[I]).OnNewData(Data, Binding);
+    Notification.Binding := Binding;
+    Notification.Data    := Data;
+
+    Self.DataListeners.Notify(Notification);
   finally
-    Self.DataListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTCP(Packet: TIdRTCPPacket;
                                                           Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
-  Self.RTPListenerLock.Acquire;
+  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
   try
-    for I := 0 to Self.RTPListeners.Count - 1 do
-      IIdRTPListener(Self.RTPListeners[I]).OnRTCP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.RTPListeners.Notify(Notification);
   finally
-    Self.RTPListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTP(Packet: TIdRTPPacket;
                                                          Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTPMethod;
 begin
-  Self.RTPListenerLock.Acquire;
+  Notification := TIdRTPListenerReceiveRTPMethod.Create;
   try
-    for I := 0 to Self.RTPListeners.Count - 1 do
-      IIdRTPListener(Self.RTPListeners[I]).OnRTP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.RTPListeners.Notify(Notification);
   finally
-    Self.RTPListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
