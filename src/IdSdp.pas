@@ -452,6 +452,9 @@ type
                               Address: String;
                               Port: Cardinal);
     procedure AddRTCPServer(RTP: TIdRTPServer);
+    function  DefaultBasePort: Integer;
+    function  DefaultHost: String;
+    function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TStream;
                                  Port: Cardinal;
                                  Format: TIdRTPEncoding);
@@ -474,9 +477,6 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdSipDataListener);
-    function  DefaultBasePort: Integer;
-    function  DefaultHost: String;
-    function  DefaultUsername: String;
     function  MediaType: String;
     function  LocalSessionDescription: String;
     procedure RemoveDataListener(const Listener: IIdSipDataListener);
@@ -2563,7 +2563,10 @@ end;
 
 constructor TIdSdpPayloadProcessor.Create;
 begin
+  inherited Create;
+
   Self.BasePort := Self.DefaultBasePort;
+  Self.Host     := Self.DefaultHost;
   Self.Username := Self.DefaultUsername;
 
   Self.DataListeners := TList.Create;
@@ -2598,21 +2601,6 @@ begin
   finally
     Self.DataListenerLock.Release;
   end;
-end;
-
-function TIdSdpPayloadProcessor.DefaultBasePort: Integer;
-begin
-  Result := 8000;
-end;
-
-function TIdSdpPayloadProcessor.DefaultHost: String;
-begin
-  Result := 'localhost';
-end;
-
-function TIdSdpPayloadProcessor.DefaultUsername: String;
-begin
-  Result := 'unknown';
 end;
 
 function TIdSdpPayloadProcessor.MediaType: String;
@@ -2755,6 +2743,21 @@ end;
 procedure TIdSdpPayloadProcessor.AddRTCPServer(RTP: TIdRTPServer);
 begin
   Self.RTCPServers.Add(RTP);
+end;
+
+function TIdSdpPayloadProcessor.DefaultBasePort: Integer;
+begin
+  Result := 8000;
+end;
+
+function TIdSdpPayloadProcessor.DefaultHost: String;
+begin
+  Result := 'localhost';
+end;
+
+function TIdSdpPayloadProcessor.DefaultUsername: String;
+begin
+  Result := 'unknown';
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TStream;

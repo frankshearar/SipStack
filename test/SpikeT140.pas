@@ -12,31 +12,35 @@ type
     Splitter1: TSplitter;
     Received: TMemo;
     Panel1: TPanel;
-    Send: TButton;
+    Join: TButton;
     Label1: TLabel;
     ByteCount: TLabel;
-    SendFile: TEdit;
-    Save: TButton;
+    RemoteHostAndPort: TEdit;
     Label2: TLabel;
     PacketCount: TLabel;
-    procedure SendClick(Sender: TObject);
-    procedure SaveClick(Sender: TObject);
+    Timer1: TTimer;
+    Leave: TButton;
+    procedure JoinClick(Sender: TObject);
+    procedure LeaveClick(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+    procedure SentKeyPress(Sender: TObject; var Key: Char);
   private
-    Client:        TIdUDPClient;
+    ByteCounter:   Cardinal;
+//    Client:        TIdRTPServer;
     Lock:          TCriticalSection;
     PacketCounter: Cardinal;
-    RecvText:      String;
-    Server:        TIdUDPServer;
+    SendBuffer:    String;
+    Server:        TIdRTPServer;
     T140:          TIdRTPEncoding;
+    T140PT:        TIdRTPPayloadType;
 
     procedure CountUDP(Sender: TObject;
                        Data: TStream;
                        Binding: TIdSocketHandle);
-//    procedure ReadRTP(Sender: TObject;
-//                      APacket: TIdRTPPacket;
-//                      ABinding: TIdSocketHandle);
+    procedure ReadRTP(Sender: TObject;
+                      APacket: TIdRTPPacket;
+                      ABinding: TIdSocketHandle);
     procedure Reset;
-    procedure SendData(Data: TStream);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -61,32 +65,33 @@ constructor TIdSpikeT140.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.T140 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate);
-
-  Self.Server := TIdUDPServer.Create(nil);
-  Self.Server.DefaultPort   := 5004;
-//  Self.Server.OnRTPRead     := Self.ReadRTP;
+  Self.Server := TIdRTPServer.Create(nil);
+  Self.Server.OnRTPRead     := Self.ReadRTP;
   Self.Server.OnUDPRead     := Self.CountUDP;
-  Self.Server.ThreadedEvent := true;
+  Self.Server.DefaultPort   := 8002;
   Self.Server.Active        := true;
 
-//  Self.Server.Profile.AddEncoding(Self.T140Encoding,
-//                                  Self.Server.Profile.FirstFreePayloadType);
+//  Self.Client := TIdRTPServer.Create(nil);
+//  Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
+//  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
+//  Self.Client.Active      := true;
 
-  Self.Client := TIdUDPClient.Create(nil);
-  Self.Client.Host := IndyGetHostName;
-  Self.Client.Port := Server.DefaultPort;
-  Self.Client.ReceiveTimeout := 100;
+  Self.T140   := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
+  Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
+//  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
 
   Self.Lock := TCriticalSection.Create;
+  Self.SendBuffer := '';
 end;
 
 destructor TIdSpikeT140.Destroy;
 begin
   Self.Lock.Free;
 
+//  Self.Client.Active := false;
   Self.Server.Active := false;
-  Self.Client.Free;
+//  Self.Client.Free;
   Self.Server.Free;
   Self.T140.Free;
 
@@ -101,99 +106,92 @@ procedure TIdSpikeT140.CountUDP(Sender: TObject;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create('');
+  Self.Lock.Acquire;
   try
-    S.CopyFrom(Data, 0);
-    Self.RecvText := Self.RecvText + S.DataString;
-  finally
-    S.Free;
-  end;
+   S := TStringStream.Create('');
+   try
+     S.CopyFrom(Data, 0);
+     Inc(Self.ByteCounter, S.Size);
+   finally
+     S.Free;
+   end;
 
-//  Self.Lock.Acquire;
-//  try
     Inc(Self.PacketCounter);
     Self.PacketCount.Caption := IntToStr(Self.PacketCounter);
 
-    Self.ByteCount.Caption := IntToStr(Length(Self.RecvText));
-//  finally
-//    Self.Lock.Release;
-//  end;
+    Self.ByteCount.Caption := IntToStr(Self.ByteCounter);
+  finally
+    Self.Lock.Release;
+  end;
 end;
-{
+
 procedure TIdSpikeT140.ReadRTP(Sender: TObject;
                                APacket: TIdRTPPacket;
                                ABinding: TIdSocketHandle);
 begin
   Self.Lock.Acquire;
   try
-    Self.RecvText := Self.RecvText + TIdRawPayload(APacket.Payload).Data;
+    if (APacket.Payload.Encoding.Name = T140Encoding) then
+      Received.Text := Received.Text + (APacket.Payload as TIdT140Payload).Block;
   finally
     Self.Lock.Release;
   end;
 end;
-}
+
 procedure TIdSpikeT140.Reset;
 begin
   Self.Lock.Acquire;
   try
     Self.ByteCount.Caption   := '0';
+    Self.ByteCounter         := 0;
     Self.PacketCount.Caption := '0';
-    Self.RecvText            := '';
     Self.Received.Text       := '';
     Self.PacketCounter       := 0;
+    Self.SendBuffer          := '';
   finally
     Self.Lock.Release;
   end;
 end;
 
-procedure TIdSpikeT140.SendData(Data: TStream);
-const
-  BufLen = 100;
-var
-  S:         TStringStream;
-  BytesRead: Cardinal;
-  BytesLeft: Cardinal;
-begin
-  S := TStringStream.Create('');
-  try
-    BytesLeft := Data.Size;
-    repeat
-      S.Seek(0, soFromBeginning);
-      BytesRead := S.CopyFrom(Data, Min(BufLen, BytesLeft));
-      Dec(BytesLeft, BytesRead);
-      Self.Client.Send(S.DataString);
-      IdGlobal.Sleep(100);
-    until (BytesRead < BufLen);
-  finally
-    S.Free;
-  end;
-end;
-
 //* TIdSpikeT140 Published methods *********************************************
 
-procedure TIdSpikeT140.SendClick(Sender: TObject);
-var
-  FS: TFileStream;
+procedure TIdSpikeT140.JoinClick(Sender: TObject);
 begin
   Self.Reset;
-  FS := TFileStream.Create(Self.SendFile.Text, fmOpenRead or fmShareDenyWrite);
-  try
-    Self.SendData(FS);
-  finally
-    FS.Free;
+//  Self.Client.JoinSession(IndyGetHostName, Self.Server.DefaultPort);
+  Self.Server.JoinSession(IndyGetHostName, Self.Server.DefaultPort);
+end;
+
+procedure TIdSpikeT140.LeaveClick(Sender: TObject);
+begin
+//  Self.Client.Session.LeaveSession('Bye!');
+  Self.Server.Session.LeaveSession('Bye!');
+end;
+
+procedure TIdSpikeT140.Timer1Timer(Sender: TObject);
+var
+  Payload: TIdT140Payload;
+  Host:    String;
+  Port:    String;
+begin
+  if (Self.SendBuffer <> '') then begin
+    Port := Self.RemoteHostAndPort.Text;
+    Host := Fetch(Port, ':');
+
+    Payload := TIdT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT));
+    try
+      Payload.Block := Self.SendBuffer;
+      Self.Server.Session.SendDataTo(Payload, Host, StrToInt(Port));
+      Self.SendBuffer := '';
+    finally
+      Payload.Free;
+    end;
   end;
 end;
 
-procedure TIdSpikeT140.SaveClick(Sender: TObject);
-var
-  FS: TFileStream;
+procedure TIdSpikeT140.SentKeyPress(Sender: TObject; var Key: Char);
 begin
-  FS := TFileStream.Create('..\etc\saved.wav', fmCreate or fmShareDenyWrite);
-  try
-    FS.Write(PChar(Self.RecvText)^, Length(Self.RecvText));
-  finally
-    FS.Free;
-  end;
+  Self.SendBuffer := Self.SendBuffer + Key;
 end;
 
 end.

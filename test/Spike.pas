@@ -67,6 +67,7 @@ type
     procedure UiTimerTimer(Sender: TObject);
   private
     AudioPlayer:  TAudioData;
+    CounterLock:  TCriticalSection;
     DataStore:    TStream;
     Dispatch:     TIdSipTransactionDispatcher;
     Lock:         TCriticalSection;
@@ -145,7 +146,8 @@ begin
   Self.AudioPlayer.Assign(Self.DataStore);
   Self.AudioPlayer.Play(AnyAudioDevice);
 
-  Self.Lock := TCriticalSection.Create;
+  Self.Lock        := TCriticalSection.Create;
+  Self.CounterLock := TCriticalSection.Create;
 
   Self.TransportUDP := TIdSipUdpTransport.Create(IdPORT_SIP);
   Binding := Self.TransportUDP.Bindings.Add;
@@ -206,6 +208,7 @@ begin
   Self.Media.Free;
   Self.TransportUDP.Free;
 
+  Self.CounterLock.Free;
   Self.Lock.Free;
 
   // If no data at all has arrived we stall here.
@@ -262,16 +265,18 @@ begin
   end
   else if (Format.Name = TelephoneEventEncoding) then begin
     Self.ProcessTelephoneEvent(Data);
-  end;
+  end
+  else
+    Log.Lines.Add(Format.Name + ' received');
 end;
 
 procedure TrnidSpike.OnNewUdpData(const Data: TStream);
 begin
-  Self.Lock.Acquire;
+  Self.CounterLock.Acquire;
   try
     Inc(Self.UDPByteCount, Data.Size);
   finally
-    Self.Lock.Release;
+    Self.CounterLock.Release;
   end;
 end;
 
@@ -371,12 +376,14 @@ var
 begin
   S := TMemoryStream.Create;
   try
-    TE := TIdTelephoneEventPayload.Create(nil);
+
+    TE := Self.Media.Profile.EncodingFor(TelephoneEventEncoding + '/8000').CreatePayload as TIdTelephoneEventPayload;
     try
       TE.Event := Event;
       TE.Duration := 100;
       TE.PrintOn(S);
-      Self.Media.ServerFor(Self.Media.BasePort).Session.SendData(TE);
+      // TODO: How do we figure out the real port?
+      Self.Media.ServerFor(8000).Session.SendData(TE);
     finally
       TE.Free;
     end;

@@ -28,6 +28,7 @@ object IdSpikeT140: TIdSpikeT140
     Height = 89
     Align = alTop
     TabOrder = 0
+    OnKeyPress = SentKeyPress
   end
   object Received: TMemo
     Left = 0
@@ -46,58 +47,64 @@ object IdSpikeT140: TIdSpikeT140
     BevelOuter = bvNone
     TabOrder = 2
     object Label1: TLabel
-      Left = 304
+      Left = 424
       Top = 4
       Width = 54
       Height = 13
       Caption = 'Byte count:'
     end
     object ByteCount: TLabel
-      Left = 360
+      Left = 480
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
     object Label2: TLabel
-      Left = 408
+      Left = 528
       Top = 4
       Width = 68
       Height = 13
       Caption = 'Packet Count:'
     end
     object PacketCount: TLabel
-      Left = 478
+      Left = 598
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
-    object Send: TButton
+    object Join: TButton
       Left = 0
       Top = 0
       Width = 75
       Height = 25
-      Caption = 'Send'
+      Caption = 'Join'
       TabOrder = 0
-      OnClick = SendClick
+      OnClick = JoinClick
     end
-    object SendFile: TEdit
+    object RemoteHostAndPort: TEdit
       Left = 76
       Top = 2
       Width = 121
       Height = 21
       TabOrder = 1
-      Text = '..\etc\bigburp.wav'
+      Text = '127.0.0.1:8000'
     end
-    object Save: TButton
-      Left = 199
+    object Leave: TButton
+      Left = 336
       Top = 0
       Width = 75
       Height = 25
-      Caption = 'Save'
+      Caption = 'Leave'
       TabOrder = 2
-      OnClick = SaveClick
+      OnClick = LeaveClick
     end
+  end
+  object Timer1: TTimer
+    Interval = 300
+    OnTimer = Timer1Timer
+    Left = 528
+    Top = 16
   end
 end

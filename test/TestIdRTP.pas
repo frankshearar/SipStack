@@ -3,7 +3,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdRTP, TestFramework, TestFrameworkRtp;
+  IdGlobal, IdRTP, IdSocketHandle, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
@@ -15,6 +15,7 @@ type
     procedure TestDateTimeToNTPTimestampExceptionalCases;
     procedure TestDateTimeToNTPTimestampFractionalValues;
     procedure TestDateTimeToNTPTimestampIntegralValues;
+    procedure TestDateTimeToRTPTimestamp;
     procedure TestEncodeAsStringCardinal;
     procedure TestEncodeAsStringWord;
     procedure TestHtoNL;
@@ -31,7 +32,9 @@ type
     procedure TestReadTimestamp;
     procedure TestReadString;
     procedure TestReadWord;
+    procedure TestTwosComplement;
     procedure TestWriteCardinal;
+    procedure TestWriteString;
     procedure TestWriteTimestamp;
     procedure TestWriteWord;
   end;
@@ -91,28 +94,46 @@ type
     procedure TestIsNull;
   end;
 
-  TestTIdT140Payload = class(TTestCase)
-  private
+  TPayloadTestCase = class(TTestCase)
+  protected
     Encoding: TIdRTPEncoding;
-    Packet:   TIdT140Payload;
+    Payload:  TIdRTPPayload;
+
+    function EncodingType: TIdRTPEncodingClass; virtual; abstract;
+    function PayloadType: TIdRTPPayloadClass; virtual; abstract;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsNull; virtual;
+  end;
+
+  TestTIdT140Payload = class(TPayloadTestCase)
+  private
+    Packet: TIdT140Payload;
+  protected
+    function EncodingType: TIdRTPEncodingClass; override;
+    function PayloadType: TIdRTPPayloadClass; override;
+  public
+    procedure SetUp; override;
+  published
     procedure TestLength;
+    procedure TestName;
     procedure TestPrintOn;
     procedure TestReadFrom;
   end;
 
-  TestTIdTelephoneEventPayload = class(TTestCase)
+  TestTIdTelephoneEventPayload = class(TPayloadTestCase)
   private
-    Encoding:        TIdRTPEncoding;
     Packet:          TIdTelephoneEventPayload;
     SampleDurations: array[0..5] of Word;
+  protected
+    function EncodingType: TIdRTPEncodingClass; override;
+    function PayloadType: TIdRTPPayloadClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
+    procedure TestName;
     procedure TestNumberOfSamples;
     procedure TestPrintOnDuration;
     procedure TestPrintOnEvent;
@@ -140,13 +161,19 @@ type
     procedure TestAssign;
     procedure TestClear;
     procedure TestCount;
+    procedure TestCreatePacketRTCP;
+    procedure TestCreatePacketRTP;
     procedure TestEncodingFor;
+    procedure TestEncodingForName;
     procedure TestFirstFreePayloadType;
     procedure TestHasEncoding;
     procedure TestHasPayloadType;
     procedure TestIsFull;
+    procedure TestIsRTCPPayloadType;
     procedure TestPayloadTypeFor;
     procedure TestReservedEncodingMustntOverwriteOthers;
+    procedure TestStreamContainsEncoding;
+    procedure TestStreamContainsPayloadType;
   end;
 
   TestTIdAudioVisualProfile = class(TTestCase)
@@ -182,10 +209,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  published
-    procedure TestIsRTCPPayloadType;
-    procedure TestCreatePacketRTCP;
-    procedure TestCreatePacketRTP;
   end;
 
   TestTIdRTCPReportBlock = class(TTestCase)
@@ -208,6 +231,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestClone;
+    procedure TestCollidesWith;
+    procedure TestGetAllSrcIDsNoCsrcs;
+    procedure TestGetAllSrcIDsWithCsrcs;
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestIsValidBogusVersion;
@@ -217,6 +244,7 @@ type
     procedure TestIsValidSenderOrReceiverReport;
     procedure TestIsValidUnknownPayloadType;
     procedure TestPrintOn;
+    procedure TestPrintOnHasExtension;
     procedure TestReadFromContributingSourceIdentifiers;
     procedure TestReadFromCsrcCount;
     procedure TestReadFromHasExtension;
@@ -229,8 +257,10 @@ type
     procedure TestReadFromVersion;
     procedure TestReadFromWithPadding;
     procedure TestReadFromPrintOnInverse;
+    procedure TestReadPayloadPayload;
+    procedure TestReadPayloadStream;
+    procedure TestReadPayloadString;
     procedure TestRealLength;
-    procedure TestT140Payload;
   end;
 
   TestTIdRTCPPacket = class(TTestCase)
@@ -352,9 +382,11 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestClone;
     procedure TestIsBye; virtual;
     procedure TestIsReceiverReport; virtual;
     procedure TestIsSenderReport; virtual;
+    procedure TestIsSourceDescription; virtual;
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestPacketType;
@@ -436,6 +468,7 @@ type
   published
     procedure TestAddChunkAndChunkCount;
     procedure TestGetAllSrcIDs;
+    procedure TestIsSourceDescription; override;
     procedure TestPrintOn;
     procedure TestPrintOnLength;
     procedure TestReadFromWithSingleCname;
@@ -451,11 +484,13 @@ type
   published
     procedure TestGetAllSrcIDs;
     procedure TestIsBye; override;
+    procedure TestPrepareForTransmission;
     procedure TestPrintOnLength;
     procedure TestPrintOnMultipleSources;
     procedure TestPrintOnReason;
     procedure TestPrintOnSyncSrcId;
     procedure TestReadFrom;
+    procedure TestReadFromLongReason;
     procedure TestReadFromReason;
     procedure TestReadFromReasonLength;
     procedure TestReadFromSourceCount;
@@ -493,6 +528,7 @@ type
     procedure TestAdd;
     procedure TestFirstPacket;
     procedure TestHasBye;
+    procedure TestHasSourceDescription;
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestIsValidFirstPacketAnAppDef;
@@ -503,6 +539,161 @@ type
     procedure TestPrintOn;
     procedure TestReadFrom;
     procedure TestReadFromEmptyStream;
+  end;
+
+  TestTIdRTPMember = class(TTestCase)
+  private
+    Data:     TIdRTPPacket;
+    Member:   TIdRTPMember;
+    Notified: Boolean;
+    Profile:  TIdRTPProfile;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestDelaySinceLastSenderReport;
+    procedure TestInitSequence;
+    procedure TestLastSenderReport;
+    procedure TestPacketLossCount;
+    procedure TestPacketLossFraction;
+    procedure TestUpdateJitter;
+  end;
+
+  TestTIdRTPMemberTable = class(TTestCase)
+  private
+    Members: TIdRTPMemberTable;
+    SSRC:    Cardinal;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndFind;
+    procedure TestContains;
+    procedure TestRemove;
+    procedure TestRemoveAll;
+    procedure TestReceiverCount;
+    procedure TestRemoveTimedOutMembers;
+    procedure TestRemoveTimedOutSenders;
+    procedure TestSenderCount;
+  end;
+
+  TestTIdRTPSenders = class(TTestCase)
+  private
+    Members: TIdRTPMemberTable;
+    Senders: TIdRTPSenderTable;
+    SSRC:    Cardinal;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndFind;
+    procedure TestAddSetsIsSender;
+    procedure TestContains;
+    procedure TestMemberAt;
+    procedure TestMemberAtAnotherTest;
+    procedure TestRemove;
+    procedure TestRemoveAll;
+  end;
+
+  TRTPSessionTestCase = class(TTestCase)
+  protected
+    Agent:   TIdMockRTPPeer;
+    Session: TIdRTPSession;
+    Profile: TIdRTPProfile;
+    T140PT:  Cardinal;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestSessionDelegationMethods = class(TRTPSessionTestCase)
+  private
+    SSRC: Cardinal;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAcceptableSSRC;
+    procedure TestAddMember;
+    procedure TestAddSender;
+    procedure TestAddSenderAddsMember;
+    procedure TestCantRemoveSelfFromSession;
+    procedure TestIsSenderSelf;
+    procedure TestIsMember;
+    procedure TestIsSender;
+    procedure TestPrepareRTP;
+    procedure TestPrepareSR;
+    procedure TestRemoveMember;
+    procedure TestRemoveSender;
+  end;
+
+  TSessionDataTestCase = class(TRTPSessionTestCase)
+  protected
+    Binding: TIdSocketHandle;
+    Data:    TIdRTPPacket;
+
+    procedure ValidateSource(Member: TIdRTPMember);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestSessionSequenceNumberRules = class(TSessionDataTestCase)
+  private
+    Member: TIdRTPMember;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestFirstDataSetsProbation;
+    procedure TestDuplicateRTPPacketDoesNothing;
+    procedure TestLargeJumpInSequenceNoIgnored;
+    procedure TestMemberSequenceInitialized;
+    procedure TestMisOrderedPacketIgnored;
+    procedure TestStaleSequenceNoAccepted;
+    procedure TestSequentialPacketsDecrementProbationCounter;
+    procedure TestSequentialPacketsIncrementReceivedCounter;
+  end;
+
+  TestSessionReportRules = class(TSessionDataTestCase)
+  private
+    function AddNewSender: TIdRTPMember;
+  published
+    // still got to do a test for LARGE numbers of members - packet size > MTU (1500?)
+    procedure TestReportDetailsProperData;
+    procedure TestReportDetailsUnvalidatedSource;
+    procedure TestReportWith0Senders;
+    procedure TestReportWith2Senders;
+    procedure TestReportWith31Senders;
+    procedure TestReportWith32Senders;
+    procedure TestSentOctetCount;
+    procedure TestSentPacketCount;
+    procedure TestSSRCChangeResetsSentOctetCount;
+    procedure TestSSRCChangeResetsSentPacketCount;
+  end;
+
+  TestSessionSendReceiveRules = class(TRTPSessionTestCase)
+  private
+    Binding: TIdSocketHandle;
+    Bye:     TIdRTCPBye;
+    Data:    TIdRTPPacket;
+    SR:      TIdRTCPSenderReport;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+//    procedure TestCollisionTriggersBye;
+    procedure TestInitialState;
+    procedure TestInitialDeterministicSendInterval;
+    procedure TestReceiveRTPAddsMembers;
+    procedure TestReceiveByeMarksMembers;
+    procedure TestReceiveByeOnNewSessionDoesNothing;
+    procedure TestReceiveRTPIncreasesSenderCount;
+    procedure TestReceiveRTCPAffectsAvgRTCPSize;
+    procedure TestReceiveSrcDescAddsAllSources;
+    procedure TestRTCPDoesntAddSender;
+    procedure TestDeterministicSendInterval10MembersAndNotSender;
+    procedure TestDeterministicSendInterval10MembersAndSender;
+    procedure TestDeterministicSendIntervalMinimumInterval;
+    procedure TestDeterministicSendIntervalWithZeroBandwidth;
   end;
 
   TestTIdRTPPacketBuffer = class(TTestCase)
@@ -518,30 +709,6 @@ type
     procedure TestBadlyOrderedStream;
     procedure TestOutOfOrderPacket;
     procedure TestWellOrderedStream;
-  end;
-
-  TIdMockEncoding = class(TIdRTPEncoding)
-  public
-    function PayloadType: TIdRTPPayloadClass; override;
-  end;
-
-  TIdMockPayload = class(TIdRTPPayload)
-  private
-    fHasKnownLength: Boolean;
-    fLength:         Cardinal;
-  public
-    function  HasKnownLength: Boolean; override;
-    function  Length: Cardinal; override;
-    procedure SetHasKnownLength(const Yes: Boolean);
-    procedure SetLength(const Length: Cardinal);
-  end;
-
-  TIdMockProfile = class(TIdAudioVisualProfile)
-  private
-    fAllowExtension: Boolean;
-  public
-    function  AllowsHeaderExtensions: Boolean; override;
-    procedure SetAllowExtension(const Allow: Boolean);
   end;
 
 // Most of the values are thumb-sucked.
@@ -603,6 +770,13 @@ begin
   Result.AddTest(TestTIdRTCPBye.Suite);
   Result.AddTest(TestTIdRTCPApplicationDefined.Suite);
   Result.AddTest(TestTIdCompoundRTCPPacket.Suite);
+  Result.AddTest(TestTIdRTPMember.Suite);
+  Result.AddTest(TestTIdRTPMemberTable.Suite);
+  Result.AddTest(TestTIdRTPSenders.Suite);
+  Result.AddTest(TestSessionDelegationMethods.Suite);
+  Result.AddTest(TestSessionSequenceNumberRules.Suite);
+  Result.AddTest(TestSessionReportRules.Suite);
+  Result.AddTest(TestSessionSendReceiveRules.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
 end;
 
@@ -655,7 +829,7 @@ procedure TestFunctions.TestDateTimeToNTPFractionsOfASecond;
 var
   JanOne1900: TDateTime;
 begin
-  JanOne1900    := 2;
+  JanOne1900 := 2;
   CheckEquals(0,
               DateTimeToNTPFractionsOfASecond(JanOne1900),
               '1900/01/01 00:00:00');
@@ -775,6 +949,33 @@ begin
   CheckEquals(IntToHex(ExpectedTime, 8),
               IntToHex(ReceivedTime, 8),
               '2002/04/12 14:59:59.999, IntegerPart');
+end;
+
+procedure TestFunctions.TestDateTimeToRTPTimestamp;
+begin
+  CheckEquals(0,
+              DateTimeToRTPTimestamp(0, 0),
+              'Zero clock rate');
+
+  try
+    DateTimeToRTPTimestamp(-1, 0);
+    Fail('Negative timestamp not rejected');
+  except
+    on EConvertError do;
+  end;
+
+  CheckEquals(0,
+              DateTimeToRTPTimestamp(0, 100),
+              'Time 0, Clock rate 100');
+  CheckEquals(100,
+              DateTimeToRTPTimestamp(OneSecond, 100),
+              'Time 1s, Clock rate 100');
+  CheckEquals(22000,
+              DateTimeToRTPTimestamp(OneSecond, 22000),
+              'Time 1s, Clock rate 22000');
+  CheckEquals(2200000,
+              DateTimeToRTPTimestamp(100*OneSecond, 22000),
+              'Time 100s, Clock rate 22000');
 end;
 
 procedure TestFunctions.TestEncodeAsStringCardinal;
@@ -1060,6 +1261,19 @@ begin
   end;
 end;
 
+procedure TestFunctions.TestTwosComplement;
+begin
+  CheckEquals(IntToHex(0, 16),
+              IntToHex(TwosComplement(0), 16),
+              '0');
+  CheckEquals(IntToHex(Low(Int64) + 1, 16),
+              IntToHex(TwosComplement(High(Int64)), 16),
+              'High(Int64)');
+  CheckEquals(IntToHex($fffffffffffffffb, 16),
+              IntToHex(TwosComplement(5), 16),
+              '5');
+end;
+
 procedure TestFunctions.TestWriteCardinal;
 var
   S: TStringStream;
@@ -1073,6 +1287,30 @@ begin
                 'Cardinal incorrectly written - check byte order');
   finally
     S.Free;
+  end;
+end;
+
+procedure TestFunctions.TestWriteString;
+const
+  TestStrings: array[1..4] of String = ('',
+                                        'Cthulhu',
+                                        #0'Azathoth'#0,
+                                        #$be#$ef#$ca'ke');
+var
+  I: Integer;
+  S: TStringStream;
+begin
+  for I := Low(TestStrings) to High(TestStrings) do begin
+    S := TStringStream.Create('');
+    try
+      WriteString(S, TestStrings[I]);
+
+      CheckEquals(TestStrings[I],
+                  S.DataString,
+                  'String incorrectly written');
+    finally
+      S.Free;
+    end;
   end;
 end;
 
@@ -1428,6 +1666,34 @@ begin
 end;
 
 //******************************************************************************
+//* TPayloadTestCase                                                           *
+//******************************************************************************
+//* TPayloadTestCase Public methods ********************************************
+
+procedure TPayloadTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Encoding := Self.EncodingType.Create;
+  Self.Payload := Self.PayloadType.Create(Self.Encoding);
+end;
+
+procedure TPayloadTestCase.TearDown;
+begin
+  Self.Payload.Free;
+  Self.Encoding.Free;
+
+  inherited TearDown;
+end;
+
+//* TPayloadTestCase Published methods *****************************************
+
+procedure TPayloadTestCase.TestIsNull;
+begin
+  Check(not Self.Payload.IsNull, Self.Payload.ClassName + 'IsNull');
+end;
+
+//******************************************************************************
 //* TestTIdT140Payload                                                         *
 //******************************************************************************
 //* TestTIdT140Payload Public methods ******************************************
@@ -1436,16 +1702,19 @@ procedure TestTIdT140Payload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Encoding := TIdT140Encoding.Create;
-  Self.Packet   := TIdT140Payload.Create(Self.Encoding);
+  Self.Packet := Self.Payload as TIdT140Payload;
 end;
 
-procedure TestTIdT140Payload.TearDown;
-begin
-  Self.Packet.Free;
-  Self.Encoding.Free;
+//* TestTIdT140Payload Protected methods ***************************************
 
-  inherited TearDown;
+function TestTIdT140Payload.EncodingType: TIdRTPEncodingClass;
+begin
+  Result := TIdT140Encoding;
+end;
+
+function TestTIdT140Payload.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdT140Payload;
 end;
 
 //* TestTIdT140Payload Published methods ***************************************
@@ -1460,6 +1729,13 @@ begin
   S := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
   Self.Packet.Block := S;
   CheckEquals(Length(S), Self.Packet.Length, 'Length');
+end;
+
+procedure TestTIdT140Payload.TestName;
+begin
+  CheckEquals(T140Encoding,
+              Self.Payload.Name,
+              Self.Payload.ClassName + ' Name');
 end;
 
 procedure TestTIdT140Payload.TestPrintOn;
@@ -1509,8 +1785,7 @@ procedure TestTIdTelephoneEventPayload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Encoding := TIdTelephoneEventEncoding.Create;
-  Self.Packet := TIdTelephoneEventPayload.Create(Self.Encoding);
+  Self.Packet := Self.Payload as TIdTelephoneEventPayload;
 
   SampleDurations[0] := $f00d;
   SampleDurations[1] := $beef;
@@ -1520,15 +1795,26 @@ begin
   SampleDurations[5] := $fbad;
 end;
 
-procedure TestTIdTelephoneEventPayload.TearDown;
-begin
-  Self.Packet.Free;
-  Self.Encoding.Free;
+//* TestTIdTelephoneEventPayload Protected methods *****************************
 
-  inherited TearDown;
+function TestTIdTelephoneEventPayload.EncodingType: TIdRTPEncodingClass;
+begin
+  Result := TIdTelephoneEventEncoding;
+end;
+
+function TestTIdTelephoneEventPayload.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdTelephoneEventPayload;
 end;
 
 //* TestTIdTelephoneEventPayload Published methods *****************************
+
+procedure TestTIdTelephoneEventPayload.TestName;
+begin
+  CheckEquals(TelephoneEventEncoding,
+              Self.Payload.Name,
+              Self.Payload.ClassName + ' Name');
+end;
 
 procedure TestTIdTelephoneEventPayload.TestNumberOfSamples;
 var
@@ -1866,6 +2152,42 @@ begin
   CheckEquals(1, Self.Profile.Count, 'Count after AddEncoding');
 end;
 
+procedure TestTIdRTPProfile.TestCreatePacketRTCP;
+var
+  Data: TStringStream;
+  Pkt:  TIdRTPBasePacket;
+begin
+  Data := TStringStream.Create(#$00 + Chr(RTCPGoodbye));
+  try
+    Pkt := Self.Profile.CreatePacket(Data);
+    try
+      Check(Pkt.IsRTCP, 'RTCP packet not created');
+    finally
+      Pkt.Free;
+    end;
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TestTIdRTPProfile.TestCreatePacketRTP;
+var
+  Data: TStringStream;
+  Pkt:  TIdRTPBasePacket;
+begin
+  Data := TStringStream.Create(#$00#$00);
+  try
+    Pkt := Self.Profile.CreatePacket(Data);
+    try
+      Check(Pkt.IsRTP, 'RTP packet not created');
+    finally
+      Pkt.Free;
+    end;
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TestTIdRTPProfile.TestEncodingFor;
 begin
   CheckEquals('',
@@ -1881,6 +2203,22 @@ begin
 
   CheckEquals(Self.T140Encoding.AsString,
               Self.Profile.EncodingFor(Self.ArbPT).AsString,
+              'MIME type for ' + T140MimeType);
+end;
+
+procedure TestTIdRTPProfile.TestEncodingForName;
+begin
+  Check(Self.Profile.EncodingFor(Self.InterleavedT140Encoding.AsString).IsNull,
+        'Non-null encoding returned for non-existent encoding');
+
+  Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT - 1);
+  Self.Profile.AddEncoding(Self.T140Encoding,            Self.ArbPT);
+
+  CheckEquals(Self.InterleavedT140Encoding.AsString,
+              Self.Profile.EncodingFor(Self.InterleavedT140Encoding.AsString).AsString,
+              'MIME type for ' + InterleavedT140MimeType);
+  CheckEquals(Self.T140Encoding.AsString,
+              Self.Profile.EncodingFor(Self.T140Encoding.AsString).AsString,
               'MIME type for ' + T140MimeType);
 end;
 
@@ -1933,6 +2271,30 @@ begin
   Check(Self.Profile.IsFull, 'Full profile');
 end;
 
+procedure TestTIdRTPProfile.TestIsRTCPPayloadType;
+var
+  PT: Byte;
+begin
+  for PT := Low(Byte) to RTCPSenderReport - 1 do
+    Check(not Self.Profile.IsRTCPPayloadType(PT),
+          'Unknown RTCP payload type: ' + IntToStr(PT));
+
+  Check(Self.Profile.IsRTCPPayloadType(RTCPSenderReport),
+        'RTCPSenderReport');
+  Check(Self.Profile.IsRTCPPayloadType(RTCPReceiverReport),
+        'RTCPReceiverReport');
+  Check(Self.Profile.IsRTCPPayloadType(RTCPSourceDescription),
+        'RTCPSourceDescription');
+  Check(Self.Profile.IsRTCPPayloadType(RTCPGoodbye),
+        'RTCPGoodbye');
+  Check(Self.Profile.IsRTCPPayloadType(RTCPApplicationDefined),
+        'RTCPApplicationDefined');
+
+  for PT := RTCPApplicationDefined + 1 to High(Byte) - 1 do
+    Check(not Self.Profile.IsRTCPPayloadType(PT),
+          'Unknown RTCP payload type: ' + IntToStr(PT));
+end;
+
 procedure TestTIdRTPProfile.TestPayloadTypeFor;
 begin
   try
@@ -1965,6 +2327,39 @@ begin
     Self.Profile.PayloadTypeFor(Self.T140Encoding);
   finally
     Res.Free;
+  end;
+end;
+
+procedure TestTIdRTPProfile.TestStreamContainsEncoding;
+var
+  PT: TIdRTPPayloadType;
+  S:  TStringStream;
+begin
+  for PT := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
+    S := TStringStream.Create(#$00 + Chr(PT));
+    try
+      Check(Self.Profile.EncodingFor(PT) = Self.Profile.StreamContainsEncoding(S),
+            'Wrong encoding, PT = ' + IntToStr(PT));
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+procedure TestTIdRTPProfile.TestStreamContainsPayloadType;
+var
+  PT: TIdRTPPayloadType;
+  S:  TStringStream;
+begin
+  for PT := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
+    S := TStringStream.Create(#$00 + Chr(PT));
+    try
+    CheckEquals(PT,
+                Self.Profile.StreamContainsPayloadType(S),
+                'Wrong payload type');
+    finally
+      S.Free;
+    end;
   end;
 end;
 
@@ -2229,68 +2624,6 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdRTPBasePacket Published methods *************************************
-
-procedure TestTIdRTPBasePacket.TestIsRTCPPayloadType;
-var
-  PT: Byte;
-begin
-  for PT := Low(Byte) to RTCPSenderReport - 1 do
-    Check(not TIdRTPBasePacket.IsRTCPPayloadType(PT),
-          'Unknown RTCP payload type: ' + IntToStr(PT));
-
-  Check(TIdRTPBasePacket.IsRTCPPayloadType(RTCPSenderReport),
-        'RTCPSenderReport');
-  Check(TIdRTPBasePacket.IsRTCPPayloadType(RTCPReceiverReport),
-        'RTCPReceiverReport');
-  Check(TIdRTPBasePacket.IsRTCPPayloadType(RTCPSourceDescription),
-        'RTCPSourceDescription');
-  Check(TIdRTPBasePacket.IsRTCPPayloadType(RTCPGoodbye),
-        'RTCPGoodbye');
-  Check(TIdRTPBasePacket.IsRTCPPayloadType(RTCPApplicationDefined),
-        'RTCPApplicationDefined');
-
-  for PT := RTCPApplicationDefined + 1 to High(Byte) - 1 do
-    Check(not TIdRTPBasePacket.IsRTCPPayloadType(PT),
-          'Unknown RTCP payload type: ' + IntToStr(PT));
-end;
-
-procedure TestTIdRTPBasePacket.TestCreatePacketRTCP;
-var
-  Data: TStringStream;
-  Pkt:  TIdRTPBasePacket;
-begin
-  Data := TStringStream.Create(#$00 + Chr(RTCPGoodbye));
-  try
-    Pkt := TIdRTPBasePacket.CreateFrom(Data, Self.Profile);
-    try
-      Check(Pkt.IsRTCP, 'RTCP packet not created');
-    finally
-      Pkt.Free;
-    end;
-  finally
-    Data.Free;
-  end;
-end;
-
-procedure TestTIdRTPBasePacket.TestCreatePacketRTP;
-var
-  Data: TStringStream;
-  Pkt:  TIdRTPBasePacket;
-begin
-  Data := TStringStream.Create(#$00#$00);
-  try
-    Pkt := TIdRTPBasePacket.CreateFrom(Data, Self.Profile);
-    try
-      Check(Pkt.IsRTP, 'RTP packet not created');
-    finally
-      Pkt.Free;
-    end;
-  finally
-    Data.Free;
-  end;
-end;
-
 //******************************************************************************
 //* TestTIdRTCPReportBlock                                                     *
 //******************************************************************************
@@ -2416,6 +2749,104 @@ begin
 end;
 
 //* TestTIdRTPPacket Published methods *****************************************
+
+procedure TestTIdRTPPacket.TestClone;
+var
+  Clone:    TIdRTPBasePacket;
+  Expected: TStringStream;
+  Received: TStringStream;
+begin
+  Self.Packet.HasExtension    := true;
+  Self.Packet.IsMarker        := true;
+  Self.Packet.PayloadType     := Self.AVP.FirstFreePayloadType;
+  Self.Packet.SequenceNo      := $dead;
+  Self.Packet.SyncSrcID       := $decafbad;
+  Self.Packet.Timestamp       := $f00df00d;
+  Self.Packet.HeaderExtension.Length              := 1;
+  Self.Packet.HeaderExtension.ProfileDefinedValue := $cafe;
+  Self.Packet.HeaderExtension.Data[0]             := $fe;
+
+  Expected := TStringStream.Create('');
+  try
+    Received := TStringStream.Create('');
+    try
+      Self.Packet.PrintOn(Expected);
+
+      Clone := Self.Packet.Clone;
+      try
+        Clone.PrintOn(Received);
+
+        CheckEquals(Expected.DataString,
+                    Received.DataString,
+                    'Clone');
+      finally
+        Clone.Free;
+      end;
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestCollidesWith;
+var
+  SSRC: Cardinal;
+begin
+  SSRC := $cafebeef;
+  Self.Packet.SyncSrcID := $decafbad;
+  Check(not Self.Packet.CollidesWith(SSRC), 'SSRCs different');
+
+  Self.Packet.CsrcCount := Self.Packet.CsrcCount + 1;
+  Self.Packet.CsrcIDs[Self.Packet.CsrcCount - 1] := SSRC;
+  Check(Self.Packet.CollidesWith(SSRC), 'Session''s SSRC in CSRCs');
+
+  Self.Packet.CsrcCount := Self.Packet.CsrcCount - 1;
+  Check(Self.Packet.CollidesWith(Self.Packet.SyncSrcID), 'SSRCs identical');
+end;
+
+procedure TestTIdRTPPacket.TestGetAllSrcIDsNoCsrcs;
+var
+  IDs: TCardinalDynArray;
+begin
+  IDs := Self.Packet.GetAllSrcIDs;
+  CheckEquals(1, Length(IDs), 'Number of identifiers');
+  CheckEquals(IntToHex(Self.Packet.SyncSrcID, 8),
+              IntToHex(IDs[0], 8),
+              'ID');
+end;
+
+procedure TestTIdRTPPacket.TestGetAllSrcIDsWithCsrcs;
+var
+  IDs: TCardinalDynArray;
+  SSRC1: Cardinal;
+  SSRC2: Cardinal;
+  SSRC3: Cardinal;
+begin
+  SSRC1 := $deafbead;
+  SSRC2 := $decafbad;
+  SSRC3 := $deadbea7;
+
+  Self.Packet.CsrcCount := 3;
+  Self.Packet.CsrcIDs[0] := SSRC1;
+  Self.Packet.CsrcIDs[1] := SSRC2;
+  Self.Packet.CsrcIDs[2] := SSRC3;
+
+  IDs := Self.Packet.GetAllSrcIDs;
+  CheckEquals(Self.Packet.CsrcCount + 1,
+              Length(IDs),
+              'Number of identifiers');
+  CheckEquals(IntToHex(SSRC1, 8),
+              IntToHex(IDs[1], 8),
+              'CSRC 1');
+  CheckEquals(IntToHex(SSRC2, 8),
+              IntToHex(IDs[2], 8),
+              'CSRC 2');
+  CheckEquals(IntToHex(SSRC3, 8),
+              IntToHex(IDs[3], 8),
+              'CSRC 3');
+end;
 
 procedure TestTIdRTPPacket.TestIsRTCP;
 begin
@@ -2578,6 +3009,49 @@ begin
     finally
       Srv.Free;
     end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestPrintOnHasExtension;
+var
+  S: TStringStream;
+begin
+  Self.Packet.HasExtension := true;
+  Self.Packet.HeaderExtension.ProfileDefinedValue := $dead;
+  Self.Packet.HeaderExtension.Length              := 4;
+  Self.Packet.HeaderExtension.Data[0]             := $deadbeef;
+  Self.Packet.HeaderExtension.Data[1]             := $f00dcafe;
+  Self.Packet.HeaderExtension.Data[2]             := $beeff00d;
+  Self.Packet.HeaderExtension.Data[3]             := $cafebabe;
+
+  S := TStringStream.Create('');
+  try
+    Self.Packet.PrintOn(S);
+    Check(Length(S.DataString) > 31, 'Too little output');
+    Check((Ord(S.DataString[1]) and $10) > 0, 'Header eXtension bit not set');
+
+    CheckEquals($de, Ord(S.DataString[13]), 'ProfileDefinedValue MSB');
+    CheckEquals($ad, Ord(S.DataString[14]), 'ProfileDefinedValue LSB');
+    CheckEquals(0,   Ord(S.DataString[15]), 'Length MSB');
+    CheckEquals(4,   Ord(S.DataString[16]), 'Length LSB');
+    CheckEquals($de, Ord(S.DataString[17]), 'Data[0] MSB');
+    CheckEquals($ad, Ord(S.DataString[18]), 'Data[0] MSB - 1');
+    CheckEquals($be, Ord(S.DataString[19]), 'Data[0] LSB + 1');
+    CheckEquals($ef, Ord(S.DataString[20]), 'Data[0] LSB');
+    CheckEquals($f0, Ord(S.DataString[21]), 'Data[1] MSB');
+    CheckEquals($0d, Ord(S.DataString[22]), 'Data[1] MSB - 1');
+    CheckEquals($ca, Ord(S.DataString[23]), 'Data[1] LSB + 1');
+    CheckEquals($fe, Ord(S.DataString[24]), 'Data[1] LSB');
+    CheckEquals($be, Ord(S.DataString[25]), 'Data[2] MSB');
+    CheckEquals($ef, Ord(S.DataString[26]), 'Data[2] MSB - 1');
+    CheckEquals($f0, Ord(S.DataString[27]), 'Data[2] LSB + 1');
+    CheckEquals($0d, Ord(S.DataString[28]), 'Data[2] LSB');
+    CheckEquals($ca, Ord(S.DataString[29]), 'Data[3] MSB');
+    CheckEquals($fe, Ord(S.DataString[30]), 'Data[3] MSB - 1');
+    CheckEquals($ba, Ord(S.DataString[31]), 'Data[3] LSB + 1');
+    CheckEquals($be, Ord(S.DataString[32]), 'Data[3] LSB');
   finally
     S.Free;
   end;
@@ -2777,7 +3251,9 @@ begin
       P := TIdRTPPacket.Create(Self.AVP);
       try
         P.ReadFrom(S);
-        CheckEquals(I, P.PayloadType, 'PayloadType ' + IntToStr(I));
+        CheckEquals(I and $7F,
+                    P.PayloadType,
+                    'PayloadType ' + IntToStr(I));
       finally
         P.Free;
       end;
@@ -2950,22 +3426,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPPacket.TestRealLength;
-begin
-  CheckEquals(12, Self.Packet.RealLength, 'Minimum RealLength');
-
-  Self.Packet.CsrcCount := 4;
-  CheckEquals(12 + 4*4,
-              Self.Packet.RealLength, 'RealLength with 4 CSRCs');
-
-  Self.Packet.CsrcCount              := 0;
-  Self.Packet.HasExtension           := true;
-  Self.Packet.HeaderExtension.Length := 4;
-  CheckEquals(12 + 4*4 + 4,
-              Self.Packet.RealLength, 'RealLength with a header extension');
-end;
-
-procedure TestTIdRTPPacket.TestT140Payload;
+procedure TestTIdRTPPacket.TestReadPayloadStream;
 var
   Data:     String;
   Expected: TIdT140Payload;
@@ -2982,7 +3443,7 @@ begin
       S.Seek(0, soFromBeginning);
 
       Self.Packet.PayloadType := Self.T140PT;
-      Self.Packet.ReadPayload(S);
+      Self.Packet.ReadPayload(S, Self.AVP);
 
       CheckEquals(Expected.ClassName,
                   Self.Packet.Payload.ClassName,
@@ -2996,6 +3457,77 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdRTPPacket.TestReadPayloadPayload;
+var
+  Data:     String;
+  Expected: TIdT140Payload;
+begin
+  Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  try
+    Expected.Block := Data;
+
+    Self.Packet.ReadPayload(Expected);
+
+    CheckEquals(Expected.ClassName,
+                Self.Packet.Payload.ClassName,
+                'Payload type');
+    CheckEquals(Expected.Block,
+                (Self.Packet.Payload as TIdT140Payload).Block,
+                'Payload data');
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestReadPayloadString;
+var
+  Data:     String;
+  Expected: TIdT140Payload;
+  S:        TStringStream;
+begin
+  Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  try
+    Expected.Block := Data;
+
+    S := TStringStream.Create('');
+    try
+      Expected.PrintOn(S);
+      S.Seek(0, soFromBeginning);
+
+      Self.Packet.PayloadType := Self.T140PT;
+      Self.Packet.ReadPayload(S.DataString, Self.AVP);
+
+      CheckEquals(Expected.ClassName,
+                  Self.Packet.Payload.ClassName,
+                  'Payload type');
+      CheckEquals(Expected.Block,
+                  (Self.Packet.Payload as TIdT140Payload).Block,
+                  'Payload data');
+    finally
+      S.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
+procedure TestTIdRTPPacket.TestRealLength;
+begin
+  CheckEquals(12, Self.Packet.RealLength, 'Minimum RealLength');
+
+  Self.Packet.CsrcCount := 4;
+  CheckEquals(12 + 4*4,
+              Self.Packet.RealLength, 'RealLength with 4 CSRCs');
+
+  Self.Packet.CsrcCount              := 0;
+  Self.Packet.HasExtension           := true;
+  Self.Packet.HeaderExtension.Length := 4;
+  CheckEquals(12 + 4*4 + 4,
+              Self.Packet.RealLength, 'RealLength with a header extension');
 end;
 
 //******************************************************************************
@@ -3712,6 +4244,36 @@ end;
 
 //* TRTCPPacketTestCase Published methods **************************************
 
+procedure TRTCPPacketTestCase.TestClone;
+var
+  Clone:    TIdRTPBasePacket;
+  Expected: TStringStream;
+  Received: TStringStream;
+begin
+  Expected := TStringStream.Create('');
+  try
+    Received := TStringStream.Create('');
+    try
+      Self.Packet.PrintOn(Expected);
+
+      Clone := Self.Packet.Clone;
+      try
+        Clone.PrintOn(Received);
+
+        CheckEquals(Expected.DataString,
+                    Received.DataString,
+                    Self.Packet.ClassName + ' Clone');
+      finally
+        Clone.Free;
+      end;
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
+
 procedure TRTCPPacketTestCase.TestIsBye;
 begin
   Check(not Self.Packet.IsBye,
@@ -3728,6 +4290,12 @@ procedure TRTCPPacketTestCase.TestIsSenderReport;
 begin
   Check(not Self.Packet.IsSenderReport,
         Self.Packet.ClassName  + ' marked as being a sender report');
+end;
+
+procedure TRTCPPacketTestCase.TestIsSourceDescription;
+begin
+  Check(not Self.Packet.IsSourceDescription,
+        Self.Packet.ClassName  + ' marked as being a source description');
 end;
 
 procedure TRTCPPacketTestCase.TestIsRTCP;
@@ -3756,7 +4324,7 @@ begin
     Self.Packet.PrintOn(S);
     Check(S.DataString <> '', 'Too little input');
     CheckEquals(RFC3550Version shl 6,
-                Ord(S.DataString[1]),
+                Ord(S.DataString[1]) and $c0,
                 'Has no padding');
   finally
     S.Free;
@@ -3769,7 +4337,7 @@ begin
     Self.Packet.PrintOn(S);
     Check(S.DataString <> '', 'Too little input');
     CheckEquals((RFC3550Version shl 6) or $20,
-                Ord(S.DataString[1]),
+                Ord(S.DataString[1]) and $e0,
                 'Has padding');
   finally
     S.Free;
@@ -3825,7 +4393,7 @@ begin
     Self.Packet.PrintOn(S);
     Check(S.DataString <> '', 'Too little input');
     CheckEquals(RFC3550Version shl 6,
-                Ord(S.DataString[1]),
+                Ord(S.DataString[1]) and $c0,
                 'Version');
   finally
     S.Free;
@@ -4727,6 +5295,12 @@ begin
   end;
 end;
 
+procedure TestTIdRTCPSourceDescription.TestIsSourceDescription;
+begin
+  Check(Self.Packet.IsSourceDescription,
+        Self.Packet.ClassName  + ' not marked as being a source description');
+end;
+
 procedure TestTIdRTCPSourceDescription.TestPrintOn;
 var
   Chunk: TIdRTCPSrcDescChunk;
@@ -4870,6 +5444,35 @@ begin
         Self.Packet.ClassName  + ' not marked as being a bye');
 end;
 
+procedure TestTIdRTCPBye.TestPrepareForTransmission;
+var
+  MockAgent: TIdAbstractRTPPeer;
+  Profile:   TIdRTPProfile;
+  Session:   TIdRTPSession;
+begin
+  MockAgent := TIdMockRTPPeer.Create(nil);
+  try
+    Profile := TIdAudioVisualProfile.Create;
+    try
+      Session := TIdRTPSession.Create(MockAgent, Profile);
+      try
+        Self.Bye.PrepareForTransmission(Session);
+        Check(Self.Bye.SourceCount > 0,
+              'BYE must have source counts');
+        CheckEquals(IntToHex(Session.SyncSrcID, 8),
+                    IntToHex(Self.Bye.Sources[0], 8),
+                    'We''re not BYEing ourselves');
+      finally
+        Session.Free;
+      end;
+    finally
+      Profile.Free;
+    end;
+  finally
+    MockAgent.Free;
+  end;
+end;
+
 procedure TestTIdRTCPBye.TestPrintOnLength;
 var
   S: TStringStream;
@@ -4898,6 +5501,10 @@ begin
     Self.Bye.PrintOn(S);
 
     Check(Length(S.DataString) > 11, 'Too little output');
+    CheckEquals(2,
+                Ord(S.DataString[1]) and $1f,
+                'Source count');
+
     CheckEquals($de, Ord(S.DataString[5]), '0: MSB');
     CheckEquals($ca, Ord(S.DataString[6]), '0: MSB - 1');
     CheckEquals($fb, Ord(S.DataString[7]), '0: LSB + 1');
@@ -4921,15 +5528,12 @@ begin
     Self.Bye.Reason := 'No reason';
     Self.Bye.PrintOn(S);
 
-    Check(Length(S.DataString) > (7 + SizeOf(Word) + Length(Self.Bye.Reason)),
+    Check(Length(S.DataString) > (7 + SizeOf(Byte) + Length(Self.Bye.Reason)),
           'Too little output');
 
-    CheckEquals(Self.Bye.ReasonLength shr 8,
+    CheckEquals(Self.Bye.ReasonLength,
                 Ord(S.DataString[9]),
-                'Reason length MSB');
-    CheckEquals(Self.Bye.ReasonLength and $FF,
-                Ord(S.DataString[10]),
-                'Reason length LSB');
+                'Reason length');
     CheckEquals(Self.Bye.Reason,
                 Copy(S.DataString,
                      Length(S.DataString) - Length(Self.Bye.Reason) + 1,
@@ -4960,6 +5564,22 @@ begin
 end;
 
 procedure TestTIdRTCPBye.TestReadFrom;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$80 + Chr(RTCPGoodbye) + #$00#$00
+                          + #$00#$00#$00#$00
+                          + #$00#$00#$00#$00);
+  try
+    Self.Bye.ReadFrom(S);
+
+    CheckEquals(2, Self.Bye.Version, 'Version');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPBye.TestReadFromLongReason;
 var
   S: TStringStream;
 begin
@@ -5105,7 +5725,7 @@ begin
 
   Self.Bye.SourceCount := 1;
   Self.Bye.Reason := '12345';
-  CheckEquals(4 + 4 + (2 + 5),
+  CheckEquals(4 + 4 + (Sizeof(Byte) + Length(Self.Bye.Reason)),
               Self.Bye.RealLength,
               'RealLength with reason');
 end;
@@ -5380,7 +6000,16 @@ begin
   Self.Packet.AddSenderReport;
   Check(not Self.Packet.HasBye, 'One SR');
   Self.Packet.AddBye;
-  Check(Self.Packet.HasBye, 'One SR, one BYE');  
+  Check(Self.Packet.HasBye, 'One SR, one BYE');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestHasSourceDescription;
+begin
+  Check(not Self.Packet.HasSourceDescription, 'Empty packet');
+  Self.Packet.AddSenderReport;
+  Check(not Self.Packet.HasSourceDescription, 'One SR');
+  Self.Packet.AddSourceDescription;
+  Check(Self.Packet.HasSourceDescription, 'One SR, one SDES');
 end;
 
 procedure TestTIdCompoundRTCPPacket.TestIsRTCP;
@@ -5523,6 +6152,1395 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdRTPMember                                                           *
+//******************************************************************************
+//* TestTIdRTPMember Public methods ********************************************
+
+procedure TestTIdRTPMember.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Member := TIdRTPMember.Create;;
+  Self.Member.SyncSrcID := $decafbad;
+  Self.Notified := false;
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+  Self.Data    := TIdRTPPacket.Create(Self.Profile);
+
+  Self.Data.SyncSrcID  := Self.Member.SyncSrcID;
+  Self.Data.SequenceNo := $f00d;
+end;
+
+procedure TestTIdRTPMember.TearDown;
+begin
+  Self.Data.Free;
+  Self.Profile.Free;
+  Self.Member.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPMember Published methods *****************************************
+
+procedure TestTIdRTPMember.TestDelaySinceLastSenderReport;
+var
+  DLSR: Cardinal;
+begin
+  CheckEquals(0,
+              Self.Member.DelaySinceLastSenderReport,
+              'New source');
+
+  // Don't place too much faith in the following tests.
+  // DelaySinceLastSenderReport uses Now(), so we can't be too sure of the
+  // _exact_ delay. Too, doubles lack precision, so there might be roundoff
+  // errors. They shouldn't be more than a handful of units out though.
+  Self.Member.LastSenderReportReceiptTime := Now - OneSecond;
+  DLSR := Self.Member.DelaySinceLastSenderReport;
+  CheckEquals(65536, DLSR, 'Delay of one second');
+
+  Self.Member.LastSenderReportReceiptTime := Now - 100*OneSecond;
+  DLSR := Self.Member.DelaySinceLastSenderReport;
+  CheckEquals(6553600, DLSR, 'Delay of 100 seconds');
+end;
+
+procedure TestTIdRTPMember.TestInitSequence;
+begin
+  Self.Member.InitSequence(Self.Data);
+
+  CheckEquals(IntToHex(Self.Data.SequenceNo, 8),
+              IntToHex(Self.Member.BaseSeqNo, 8),
+              'Base sequence no');
+  CheckEquals(IntToHex(Self.Data.SequenceNo, 8),
+              IntToHex(Self.Member.HighestSeqNo, 8),
+              'Max sequence no');
+  CheckEquals(IntToHex(Self.Member.SequenceNumberRange + 1, 8),
+              IntToHex(Self.Member.BadSeqNo, 8),
+              'Bad sequence no');
+  CheckEquals(0,
+              Self.Member.Cycles,
+              'Cycles');
+  CheckEquals(0,
+              Self.Member.ExpectedPrior,
+              'Expected Prior');
+  CheckEquals(0,
+              Self.Member.ReceivedPrior,
+              'Received Prior');
+end;
+
+procedure TestTIdRTPMember.TestLastSenderReport;
+var
+  DT:  TDateTime;
+  NTP: TIdNTPTimestamp;
+begin
+  Self.Member.LastSenderReportReceiptTime := 0;
+  CheckEquals(0,
+              Self.Member.LastSenderReport,
+              'Time = 0');
+
+  DT := Now;
+  NTP := DateTimeToNTPTimestamp(DT);
+  Self.Member.LastSenderReportReceiptTime := DT;
+  CheckEquals(IntToHex((NTP.IntegerPart and $0000ffff) shl 16, 8),
+              IntToHex(Self.Member.LastSenderReport and $ffff0000, 8),
+              'High 16 bits');
+  CheckEquals(IntToHex((NTP.FractionalPart and $ffff0000) shr 16, 8),
+              IntToHex(Self.Member.LastSenderReport and $0000ffff, 8),
+              'Low 16 bits');
+end;
+
+procedure TestTIdRTPMember.TestPacketLossCount;
+begin
+  Self.Member.BaseSeqNo       := 0;
+  Self.Member.HighestSeqNo    := 0;
+  Self.Member.Cycles          := 0;
+  Self.Member.ReceivedPackets := 0;
+
+  // This may seem odd, but consider that BaseSeqNo et al can't even be set
+  // without receiving a packet. PacketLossCount returns 1 on a new member
+  // because we've "lost" the initial packet that starts the source off in
+  // the first place.
+  CheckEquals(1, Self.Member.PacketLossCount, '0 packets; no cycle');
+
+  Self.Member.HighestSeqNo := 10;
+  CheckEquals(Self.Member.HighestSeqNo + 1,
+              Self.Member.PacketLossCount,
+              '10 packets; no cycle');
+
+  Self.Member.Cycles := 1;
+  CheckEquals(Self.Member.SequenceNumberRange + Self.Member.HighestSeqNo + 1,
+              Self.Member.PacketLossCount,
+              '10 packets; one cycle');
+
+  Self.Member.ReceivedPackets := 888;
+  CheckEquals(Self.Member.SequenceNumberRange + Self.Member.HighestSeqNo + 1
+            - Self.Member.ReceivedPackets,
+              Self.Member.PacketLossCount,
+              '10 packets; one cycle; 888 packets received');
+
+  Self.Member.Cycles          := 128; // $800000
+  Self.Member.HighestSeqNo    := 0;
+  Self.Member.ReceivedPackets := 0;
+  CheckEquals($7fffff,
+              Self.Member.PacketLossCount,
+              'Packet loss wasn''t capped on the positive side');
+
+  Self.Member.Cycles := 0;
+  Self.Member.ReceivedPackets := $ffffff;
+  CheckEquals($800000,
+              Self.Member.PacketLossCount,
+              'Packet loss wasn''t capped on the negative side');
+
+  Self.Member.HighestSeqNo    := $ff;
+  Self.Member.ReceivedPackets := $ffff;
+  CheckEquals($00feff,
+              Self.Member.PacketLossCount,
+              'Negative packet loss');
+end;
+
+procedure TestTIdRTPMember.TestPacketLossFraction;
+begin
+  Self.Member.BaseSeqNo       := 0;
+  Self.Member.HighestSeqNo    := 19;
+  Self.Member.ReceivedPackets := 10;
+  CheckEquals($80, Self.Member.PacketLossFraction, '1/2');
+
+  Self.Member.HighestSeqNo := 20;
+  CheckEquals($86, Self.Member.PacketLossFraction, '11/21');
+end;
+
+procedure TestTIdRTPMember.TestUpdateJitter;
+  function CurrentTime(Timestamp, Transit: Cardinal): Cardinal;
+  begin
+    Result := Timestamp + Transit;
+  end;
+var
+  Transit: Cardinal;
+begin
+  CheckEquals(0,
+              Self.Member.Jitter,
+              'Initial jitter');
+  CheckEquals(0,
+              Self.Member.PreviousPacketTransit,
+              'Initial PreviousPacketTransit');
+
+  Self.Data.Timestamp := $beefcace;
+  Transit             := 100;
+  Self.Member.UpdateStatistics(Self.Data, CurrentTime(Self.Data.Timestamp, Transit));
+  CheckEquals(100,
+              Self.Member.Jitter,
+              'First packet');
+  CheckEquals(100,
+              Self.Member.PreviousPacketTransit,
+              'First packet; PreviousPacketTransit');
+
+  Self.Data.Timestamp := $cafebabe;
+  Transit             := 80;
+  Self.Member.UpdateStatistics(Self.Data, CurrentTime(Self.Data.Timestamp, Transit));
+  CheckEquals(114,
+              Self.Member.Jitter,
+              'Second packet');
+  CheckEquals(80,
+              Self.Member.PreviousPacketTransit,
+              'Second packet; PreviousPacketTransit');
+
+  Self.Data.Timestamp := $deadbeef;
+  Transit             := 110;
+  Self.Member.UpdateStatistics(Self.Data, CurrentTime(Self.Data.Timestamp, Transit));
+  CheckEquals(137,
+              Self.Member.Jitter,
+              'Third packet');
+  CheckEquals(110,
+              Self.Member.PreviousPacketTransit,
+              'Third packet; PreviousPacketTransit');
+end;
+
+//******************************************************************************
+//* TestTIdRTPMemberTable                                                      *
+//******************************************************************************
+//* TestTIdRTPMemberTable Public methods ***************************************
+
+procedure TestTIdRTPMemberTable.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Members := TIdRTPMemberTable.Create;
+  Self.SSRC    := $decafbad;
+end;
+
+procedure TestTIdRTPMemberTable.TearDown;
+begin
+  Self.Members.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPMemberTable Published methods ************************************
+
+procedure TestTIdRTPMemberTable.TestAddAndFind;
+var
+  Member: TIdRTPMember;
+begin
+  CheckEquals(0, Self.Members.Count, 'Empty table');
+
+  Member := Self.Members.Add(Self.SSRC);
+  CheckEquals(1, Self.Members.Count, 'SSRC not added');
+  Check(not Member.IsSender, 'New member marked as a sender');
+
+  Self.Members.Add(Self.SSRC);
+  CheckEquals(1, Self.Members.Count, 'SSRC re-added');
+
+  Check(Self.Members.Find(Self.SSRC) = Self.Members.Add(Self.SSRC),
+        'Different entry returned for same SSRC');
+end;
+
+procedure TestTIdRTPMemberTable.TestContains;
+begin
+  Check(not Self.Members.Contains(Self.SSRC), 'Empty table');
+  Self.Members.Add(Self.SSRC);
+  Check(Self.Members.Contains(Self.SSRC), 'SSRC not added?');
+end;
+
+procedure TestTIdRTPMemberTable.TestRemove;
+begin
+  Self.Members.Add(Self.SSRC);
+  Check(Self.Members.Contains(Self.SSRC), 'SSRC not added');
+  Self.Members.Remove(Self.SSRC);
+  Check(not Self.Members.Contains(Self.SSRC), 'SSRC not removed');
+end;
+
+procedure TestTIdRTPMemberTable.TestRemoveAll;
+begin
+  Self.Members.Add(Self.SSRC);
+  Self.Members.Add($deadbeef);
+  Self.Members.RemoveAll;
+  CheckEquals(0, Self.Members.Count, 'RemoveAll didn''t');
+end;
+
+procedure TestTIdRTPMemberTable.TestReceiverCount;
+var
+  NewSSRC: Cardinal;
+begin
+  NewSSRC := $deadbeef;
+  CheckEquals(0, Self.Members.ReceiverCount, 'Empty list');
+
+  Self.Members.Add(Self.SSRC);
+  CheckEquals(1, Self.Members.ReceiverCount, 'One member');
+
+  Self.Members.Add(NewSSRC);
+  CheckEquals(2, Self.Members.ReceiverCount, 'Two members');
+
+  Self.Members.Find(NewSSRC).IsSender := true;
+  CheckEquals(1, Self.Members.ReceiverCount, 'Two members; one a sender');
+
+  Self.Members.Find(Self.SSRC).IsSender := true;
+  CheckEquals(0, Self.Members.ReceiverCount, 'Two members; both senders');
+end;
+
+procedure TestTIdRTPMemberTable.TestRemoveTimedOutMembers;
+var
+  FirstSSRC:   Cardinal;
+  SecondSSRC:  Cardinal;
+  SessionSSRC: Cardinal;
+  Timestamp:   TDateTime;
+begin
+  Timestamp   := Now;
+  SessionSSRC := $deadbeef;
+  FirstSSRC   := 1;
+  SecondSSRC  := 2;
+
+  Self.Members.Add(SessionSSRC).LastRTCPReceiptTime := Timestamp - 1;
+  Self.Members.Add(FirstSSRC).LastRTCPReceiptTime   := Timestamp - 1;
+  Self.Members.Add(SecondSSRC).LastRTCPReceiptTime  := Timestamp;
+  Self.Members.RemoveTimedOutMembersExceptFor(Timestamp, SessionSSRC);
+  CheckEquals(2,
+              Self.Members.Count,
+              'Timed-out member not removed');
+
+  CheckEquals(SecondSSRC,
+              Self.Members.MemberAt(1).SyncSrcID,
+              'Protected member removed');
+end;
+
+procedure TestTIdRTPMemberTable.TestRemoveTimedOutSenders;
+var
+  FirstSSRC:  Cardinal;
+  SecondSSRC: Cardinal;
+  Timestamp:  TDateTime;
+begin
+  FirstSSRC  := 1;
+  SecondSSRC := 2;
+  Timestamp  := Now;
+
+  Self.Members.AddSender(FirstSSRC).LastRTCPReceiptTime  := Timestamp - 1;
+  Self.Members.AddSender(SecondSSRC).LastRTCPReceiptTime := Timestamp;
+  Self.Members.RemoveTimedOutSenders(Timestamp);
+  CheckEquals(1,
+              Self.Members.SenderCount,
+              'Timed-out sender not removed');
+
+  CheckEquals(SecondSSRC,
+              Self.Members.MemberAt(0).SyncSrcID,
+              'Wrong member removed');
+end;
+
+procedure TestTIdRTPMemberTable.TestSenderCount;
+var
+  NewSSRC: Cardinal;
+begin
+  NewSSRC := $deadbeef;
+  CheckEquals(0, Self.Members.SenderCount, 'Empty list');
+
+  Self.Members.Add(Self.SSRC);
+  CheckEquals(0, Self.Members.SenderCount, 'One member');
+
+  Self.Members.Add(NewSSRC);
+  CheckEquals(0, Self.Members.SenderCount, 'Two members');
+
+  Self.Members.Find(NewSSRC).IsSender := true;
+  CheckEquals(1, Self.Members.SenderCount, 'Two members; one a sender');
+
+  Self.Members.Find(Self.SSRC).IsSender := true;
+  CheckEquals(2, Self.Members.SenderCount, 'Two members; both senders');
+end;
+
+//******************************************************************************
+//* TestTIdRTPSenders                                                          *
+//******************************************************************************
+//* TestTIdRTPSenders Public methods *******************************************
+
+procedure TestTIdRTPSenders.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Members := TIdRTPMemberTable.Create;
+  Self.Senders := TIdRTPSenderTable.Create(Self.Members);
+  Self.SSRC    := $decafbad;
+end;
+
+procedure TestTIdRTPSenders.TearDown;
+begin
+  Self.Senders.Free;
+  Self.Members.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTPSenders Published methods ****************************************
+
+procedure TestTIdRTPSenders.TestAddAndFind;
+var
+  Member: TIdRTPMember;
+begin
+  CheckEquals(0, Self.Senders.Count, 'Empty table');
+
+  Member := Self.Senders.Add(SSRC);
+  CheckEquals(1, Self.Senders.Count, 'SSRC not added');
+  Check(Member.IsSender, 'New member not marked as a sender');
+
+  Self.Senders.Add(SSRC);
+  CheckEquals(1, Self.Senders.Count, 'SSRC re-added');
+
+  Check(Self.Senders.Find(SSRC) = Self.Senders.Add(SSRC),
+        'Different entry returned for same SSRC');
+  Check(Self.Senders.Find(SSRC) = Self.Members.Find(SSRC),
+        'Senders table doesn''t simply reference Members table');
+end;
+
+procedure TestTIdRTPSenders.TestAddSetsIsSender;
+var
+  Member: TIdRTPMember;
+begin
+  Member := Self.Members.Add(SSRC);
+  Self.Senders.Add(Self.SSRC);
+  CheckEquals(1, Self.Senders.Count, 'SSRC added to senders');
+  CheckEquals(1, Self.Members.Count, 'SSRC re-added to underlying table');
+  Check(Member.IsSender, 'Member not set as IsSender');
+end;
+
+procedure TestTIdRTPSenders.TestContains;
+var
+  NonSenderSSRC: Cardinal;
+begin
+  NonSenderSSRC := $cafebabe;
+  Self.Members.Add(NonSenderSSRC);
+
+  Check(not Self.Senders.Contains(Self.SSRC), 'Empty table');
+  Self.Senders.Add(Self.SSRC);
+  Check(Self.Senders.Contains(Self.SSRC), 'SSRC not added?');
+
+  Check(not Self.Senders.Contains(NonSenderSSRC), 'Table contains a non-sender');
+end;
+
+procedure TestTIdRTPSenders.TestMemberAt;
+var
+  NewSSRC: Cardinal;
+begin
+  NewSSRC := $deadbeef;
+  Self.Senders.Add(Self.SSRC);
+  Self.Senders.Add(NewSSRC);
+
+  Check(Self.Senders.Count > 1, 'Both members weren''t added');
+  CheckEquals(IntToHex(Self.SSRC, 8),
+              IntToHex(Self.Senders.MemberAt(0).SyncSrcID, 8),
+              'Index 0');
+  CheckEquals(IntToHex(NewSSRC, 8),
+              IntToHex(Self.Senders.MemberAt(1).SyncSrcID, 8),
+              'Index 1');
+end;
+
+procedure TestTIdRTPSenders.TestMemberAtAnotherTest;
+var
+  NewSSRC: Cardinal;
+begin
+  NewSSRC := $deadbeef;
+  Self.Members.Add(Self.SSRC);
+  Self.Senders.Add(NewSSRC);
+
+  CheckEquals(1, Self.Senders.Count, 'Non-sender was added');
+  CheckEquals(IntToHex(NewSSRC, 8),
+              IntToHex(Self.Senders.MemberAt(0).SyncSrcID, 8),
+              'Index 0');
+end;
+
+procedure TestTIdRTPSenders.TestRemove;
+var
+  NewSSRC: Cardinal;
+begin
+  NewSSRC := $deadbeef;
+  Self.Senders.Add(Self.SSRC);
+  Self.Senders.Add(NewSSRC);
+
+  Self.Senders.Remove(Self.SSRC);
+
+  CheckEquals(1, Self.Senders.Count, 'Sender not removed');
+  Check(Self.Senders.Contains(NewSSRC), 'Wrong sender removed');
+end;
+
+procedure TestTIdRTPSenders.TestRemoveAll;
+begin
+  Self.Senders.Add(Self.SSRC);
+  Self.Members.Add($cafebabe);
+  Self.Senders.Add($deadbeef);
+  Self.Senders.RemoveAll;
+  CheckEquals(0, Self.Senders.Count, 'RemoveAll didn''t');
+  CheckEquals(1,
+              Self.Members.Count,
+              'Non-senders removed from underlying table');
+end;
+
+//******************************************************************************
+//* TRTPSessionTestCase                                                        *
+//******************************************************************************
+//* TRTPSessionTestCase Public methods *****************************************
+
+procedure TRTPSessionTestCase.SetUp;
+var
+  T140: TIdT140Encoding;
+begin
+  inherited SetUp;
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+
+  Self.Agent   := TIdMockRTPPeer.Create(nil);
+  Self.Agent.Profile := Self.Profile;
+
+  Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
+
+  Self.T140PT := Self.Profile.FirstFreePayloadType;
+  T140 := TIdT140Encoding.Create;
+  try
+    Self.Profile.AddEncoding(T140, Self.T140PT);
+  finally
+    T140.Free;
+  end;
+end;
+
+procedure TRTPSessionTestCase.TearDown;
+begin
+  Self.Session.Free;
+  Self.Agent.Free;
+  Self.Profile.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestSessionDelegationMethods                                               *
+//******************************************************************************
+//* TestSessionDelegationMethods Public methods ********************************
+
+procedure TestSessionDelegationMethods.SetUp;
+begin
+  inherited SetUp;
+
+  Self.SSRC := $decafbad;
+end;
+
+//* TestSessionDelegationMethods Published methods *****************************
+
+procedure TestSessionDelegationMethods.TestAcceptableSSRC;
+begin
+  Check(not Self.Session.AcceptableSSRC(0), '0');
+  Check(Self.Session.AcceptableSSRC(1), '1');
+
+  Self.Session.AddMember(1);
+  Check(not Self.Session.AcceptableSSRC(1), '1 in the Session');
+  Check(Self.Session.AcceptableSSRC(2), '2');
+end;
+
+procedure TestSessionDelegationMethods.TestAddMember;
+var
+  OriginalCount: Cardinal;
+begin
+  OriginalCount := Self.Session.MemberCount;
+  CheckEquals(1, OriginalCount, 'Empty table, except for self');
+
+  Self.Session.AddMember(Self.SSRC);
+  CheckEquals(OriginalCount + 1,
+              Self.Session.MemberCount,
+              'SSRC not added');
+
+  Self.Session.AddMember(Self.SSRC);
+  CheckEquals(OriginalCount + 1,
+              Self.Session.MemberCount,
+              'SSRC re-added');
+
+  Check(Self.Session.Member(Self.SSRC) = Self.Session.AddMember(Self.SSRC),
+        'Different entry returned for same SSRC');
+end;
+
+procedure TestSessionDelegationMethods.TestAddSender;
+begin
+  CheckEquals(0, Self.Session.SenderCount, 'Empty table');
+  Self.Session.AddSender(Self.SSRC);
+  CheckEquals(1, Self.Session.SenderCount, 'SSRC not added');
+  Self.Session.AddSender(Self.SSRC);
+  CheckEquals(1, Self.Session.SenderCount, 'SSRC re-added');
+  Check(Self.Session.Sender(Self.SSRC) = Self.Session.AddSender(Self.SSRC),
+        'Different entry returned for same SSRC');
+end;
+
+procedure TestSessionDelegationMethods.TestAddSenderAddsMember;
+var
+  OriginalMemberCount: Cardinal;
+begin
+  OriginalMemberCount := Self.Session.MemberCount;
+
+  CheckNotEquals(IntToHex(Self.Session.SyncSrcID, 8),
+                 IntToHex(Self.SSRC, 8),
+                 'Sanity check');
+
+  Self.Session.AddSender(Self.SSRC);
+  CheckEquals(1,
+              Self.Session.SenderCount,
+              'SSRC not added to Senders');
+  CheckEquals(OriginalMemberCount + 1,
+              Self.Session.MemberCount,
+              'SSRC not added to Members');
+end;
+
+procedure TestSessionDelegationMethods.TestCantRemoveSelfFromSession;
+begin
+  CheckEquals(1, Self.Session.MemberCount, 'Initially only self in session');
+  Self.Session.RemoveMember(Self.Session.SyncSrcID);
+  CheckEquals(1, Self.Session.MemberCount, 'Self was removed from session');
+end;
+
+procedure TestSessionDelegationMethods.TestIsSenderSelf;
+begin
+  Check(not Self.Session.IsSender, 'New session');
+  Self.Session.SendData(TIdNullPayload.NullPayload);
+  Check(Self.Session.IsSender, 'Sent data');
+end;
+
+procedure TestSessionDelegationMethods.TestIsMember;
+begin
+  Check(not Self.Session.IsMember(Self.SSRC), 'Empty table');
+  Self.Session.AddMember(Self.SSRC);
+  Check(Self.Session.IsMember(Self.SSRC), 'SSRC not added?');
+end;
+
+procedure TestSessionDelegationMethods.TestIsSender;
+begin
+  Check(not Self.Session.IsSender(Self.SSRC), 'Empty table');
+  Self.Session.AddSender(Self.SSRC);
+  Check(Self.Session.IsSender(Self.SSRC), 'SSRC not added?');
+end;
+
+procedure TestSessionDelegationMethods.TestPrepareRTP;
+var
+  Data:           TIdRawPayload;
+  Encoding:       TIdRTPEncoding;
+  StartTimestamp: Cardinal;
+begin
+  Encoding := TIdRTPEncoding.Create('foo', 8000);
+  try
+    Self.Profile.AddEncoding(Encoding, Self.Profile.FirstFreePayloadType);
+
+    Data := TIdRawPayload.Create(Encoding);
+    try
+      Data.StartTime := Now + 5*OneSecond;
+      Self.Session.SendData(Data);
+
+      // Note that the session determines the initial sequence number and
+      // timestamp by selecting random numbers. We can't really check for
+      // that sort've thing. The tests below should fail with a probability
+      // ~2^-32, if my maths is correct. In other words, while it's perfectly
+      // legal to have a zero initial sequence number and/or timestamp, it's
+      // not very likely. We mainly want to ensure that the session sets the
+      // timestamp and sequence number.
+      CheckNotEquals(IntToHex(0,
+                              Sizeof(Self.Agent.LastRTP.Timestamp)),
+                     IntToHex(Self.Agent.LastRTP.Timestamp,
+                              Sizeof(Self.Agent.LastRTP.Timestamp)),
+                     'Timestamp');
+      CheckNotEquals(IntToHex(0,
+                              Sizeof(Self.Agent.LastRTP.SequenceNo)),
+                     IntToHex(Self.Agent.LastRTP.SequenceNo,
+                              Sizeof(Self.Agent.LastRTP.SequenceNo)),
+                     'SequenceNo');
+
+      StartTimestamp := Self.Agent.LastRTP.Timestamp;
+      Data.StartTime := Data.StartTime + OneSecond;
+      Self.Session.SendData(Data);
+
+      CheckEquals(Encoding.ClockRate,
+                  GetTickDiff(StartTimestamp, Self.Agent.LastRTP.Timestamp),
+                  'Timestamp increment');
+    finally
+      Data.Free;
+    end;
+  finally
+    Encoding.Free;
+  end;
+end;
+
+procedure TestSessionDelegationMethods.TestPrepareSR;
+var
+  Difference: Int64;
+  Now:        TIdNTPTimestamp;
+  SR:         TIdRTCPSenderReport;
+begin
+  SR := TIdRTCPSenderReport.Create;
+  try
+    Now := NowAsNTP;
+    SR.PrepareForTransmission(Self.Session);
+
+    CheckEquals(IntToHex(Now.IntegerPart, 8),
+                IntToHex(SR.NTPTimestamp.IntegerPart, 8),
+                'Integer part of timestamp');
+
+    // Because of timing, we can't really check equality between
+    // Now.FractionalPart and SR.NTPTimestamp.FractionalPart. We
+    // thus check for proximity.
+    Difference := Abs(Int64(Now.FractionalPart) - SR.NTPTimestamp.FractionalPart);
+    Check(Difference < DateTimeToNTPFractionsOfASecond(EncodeTime(0, 0, 0, 100)),
+          'Timestamps differ by more than 100ms');
+  finally
+    SR.Free;
+  end;
+end;
+
+procedure TestSessionDelegationMethods.TestRemoveMember;
+begin
+  Self.Session.AddMember(Self.SSRC);
+  Check(Self.Session.IsMember(Self.SSRC), 'SSRC not added');
+  Self.Session.RemoveMember(Self.SSRC);
+  Check(not Self.Session.IsMember(Self.SSRC), 'SSRC not removed');
+end;
+
+procedure TestSessionDelegationMethods.TestRemoveSender;
+begin
+  Self.Session.AddSender(Self.SSRC);
+  Check(Self.Session.IsSender(Self.SSRC), 'SSRC not added');
+  Self.Session.RemoveSender(Self.SSRC);
+  Check(not Self.Session.IsSender(Self.SSRC), 'SSRC not removed');
+end;
+
+//******************************************************************************
+//* TSessionDataTestCase                                                       *
+//******************************************************************************
+//* TSessionDataTestCase Public methods ****************************************
+
+procedure TSessionDataTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdSocketHandle.Create(nil);
+  Self.Binding.IP   := '1.2.3.4';
+  Self.Binding.Port := 4321;
+
+  Self.Data := TIdRTPPacket.Create(Self.Profile);
+  Self.Data.SequenceNo := $f00d;
+  Self.Data.SyncSrcID  := $decafbad;
+end;
+
+procedure TSessionDataTestCase.TearDown;
+begin
+  Self.Data.Free;
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TSessionDataTestCase Protected methods *************************************
+
+procedure TSessionDataTestCase.ValidateSource(Member: TIdRTPMember);
+var
+  I: Cardinal;
+begin
+  for I := 1 to Member.MinimumSequentialPackets - 1 do begin
+    Self.Data.SequenceNo := Self.Data.SequenceNo + 1;
+    Self.Session.ReceiveData(Self.Data, Self.Binding);
+  end;
+end;
+
+//******************************************************************************
+//* TestSessionSequenceNumberRules                                             *
+//******************************************************************************
+//* TestSessionSequenceNumberRules Public methods ******************************
+
+procedure TestSessionSequenceNumberRules.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  Self.Member := Self.Session.Member(Self.Data.SyncSrcID);
+end;
+
+//* TestSessionSequenceNumberRules Published methods ***************************
+
+procedure TestSessionSequenceNumberRules.TestFirstDataSetsProbation;
+begin
+  CheckEquals(Self.Member.MinimumSequentialPackets - 1,
+              Self.Member.Probation,
+              'Probation counter not decremented');
+  CheckEquals(0,
+              Self.Member.ReceivedPackets,
+              'Member should still be under probation');
+end;
+
+procedure TestSessionSequenceNumberRules.TestDuplicateRTPPacketDoesNothing;
+begin
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(Self.Member.MinimumSequentialPackets - 1,
+              Self.Member.Probation,
+              'Received identical packet (i.e., not sequential), but '
+            + 'probation counter decremented');
+end;
+
+procedure TestSessionSequenceNumberRules.TestLargeJumpInSequenceNoIgnored;
+var
+  PacketCount: Cardinal;
+begin
+  Self.ValidateSource(Self.Member);
+  PacketCount := Self.Member.ReceivedPackets;
+
+  Self.Data.SequenceNo := AddModuloWord(Self.Data.SequenceNo,
+                                        Self.Member.MaxDropout);
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  CheckEquals(PacketCount,
+              Self.Member.ReceivedPackets,
+              'Mis-ordered sequence number not ignored');
+end;
+
+procedure TestSessionSequenceNumberRules.TestMemberSequenceInitialized;
+begin
+  Self.Data.SequenceNo := Self.Data.SequenceNo + 1;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  CheckEquals(Self.Data.SequenceNo,
+              Self.Member.BaseSeqNo,
+              'BaseSeqNo');
+  CheckEquals(Self.Member.SequenceNumberRange + 1,
+              Self.Member.BadSeqNo,
+              'BadSeqNo');
+  CheckEquals(Self.Data.SequenceNo,
+              Self.Member.HighestSeqNo,
+              'HighestSeqNo');
+  CheckEquals(0,
+              Self.Member.Cycles,
+              'Cycles');
+  CheckEquals(1,
+              Self.Member.ReceivedPrior,
+              'ReceivedPrior');
+  CheckEquals(1,
+              Self.Member.ExpectedPrior,
+              'ExpectedPrior');
+end;
+
+procedure TestSessionSequenceNumberRules.TestMisOrderedPacketIgnored;
+var
+  PacketCount: Cardinal;
+begin
+  Self.ValidateSource(Self.Member);
+  PacketCount := Self.Member.ReceivedPackets;
+
+  Self.Data.SequenceNo := Self.Data.SequenceNo - Self.Member.MaxMisOrder;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  CheckEquals(PacketCount,
+              Self.Member.ReceivedPackets,
+              'Mis-ordered sequence number not ignored');
+end;
+
+procedure TestSessionSequenceNumberRules.TestStaleSequenceNoAccepted;
+var
+  PacketCount: Cardinal;
+begin
+  Self.ValidateSource(Self.Member);
+  PacketCount := Self.Member.ReceivedPackets;
+
+  Self.Data.SequenceNo := Self.Data.SequenceNo - Self.Member.MaxMisOrder + 2;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  CheckEquals(PacketCount + 1,
+              Self.Member.ReceivedPackets,
+              'Mis-ordered sequence number not ignored');
+end;
+
+procedure TestSessionSequenceNumberRules.TestSequentialPacketsDecrementProbationCounter;
+begin
+  Self.Data.SequenceNo := Self.Data.SequenceNo + 1;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(Self.Member.MinimumSequentialPackets - 2,
+              Self.Member.Probation,
+              'Received identical packet (i.e., not sequential), but '
+            + 'probation counter decremented');
+end;
+
+procedure TestSessionSequenceNumberRules.TestSequentialPacketsIncrementReceivedCounter;
+begin
+  Self.ValidateSource(Self.Member);
+  CheckEquals(0,
+              Self.Member.Probation,
+              'Probation period should have ended');
+  CheckEquals(1,
+              Self.Member.ReceivedPackets,
+              'Received counter');
+
+  Self.Data.SequenceNo := Self.Data.SequenceNo + 1;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(2,
+              Self.Member.ReceivedPackets,
+              'Received counter increment');
+end;
+
+//******************************************************************************
+//* TestSessionReportRules                                                     *
+//******************************************************************************
+//* TestSessionReportRules Private methods *************************************
+
+function TestSessionReportRules.AddNewSender: TIdRTPMember;
+begin
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  Result := Self.Session.Member(Self.Data.SyncSrcID);
+  Self.ValidateSource(Result);
+end;
+
+//* TestSessionReportRules Published methods ***********************************
+
+procedure TestSessionReportRules.TestReportDetailsProperData;
+var
+  Member: TIdRTPMember;
+  Pkt:    TIdCompoundRTCPPacket;
+  RR:     TIdRTCPReceiverReport;
+begin
+  Member := Self.AddNewSender;
+
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // An RR and the obligatory SDES
+    CheckEquals(2, Pkt.PacketCount, 'Packet count');
+    CheckEquals(RTCPReceiverReport,
+                Pkt.PacketAt(0).PacketType,
+                '1st packet');
+    CheckEquals(RTCPSourceDescription,
+                Pkt.PacketAt(1).PacketType,
+                '2nd packet');
+
+    CheckEquals(1,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks');
+    RR := Pkt.PacketAt(0) as TIdRTCPReceiverReport;
+
+    CheckEquals(IntToHex(Member.SyncSrcID, 8),
+                IntToHex(RR.Reports[0].SyncSrcID, 8),
+                'Report SSRC');
+
+    CheckEquals(Member.HighestSeqNo,
+                RR.Reports[0].HighestSeqNo,
+                'Highest sequence no');
+    CheckEquals(Member.Jitter,
+                RR.Reports[0].InterArrivalJitter,
+                'Interarrival jitter');
+
+    CheckEquals(Member.PacketLossCount,
+                RR.Reports[0].CumulativeLoss,
+                'Cumulative loss');
+    CheckEquals(0, RR.Reports[0].DelaySinceLastSR, 'Delay since last SR');
+    CheckEquals(Member.PacketLossFraction,
+                RR.Reports[0].FractionLost,
+                'Fraction lost');
+    CheckEquals(0, RR.Reports[0].LastSenderReport, 'Last SR');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestReportDetailsUnvalidatedSource;
+var
+  Pkt: TIdCompoundRTCPPacket;
+  RR:  TIdRTCPReceiverReport;
+begin
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // An RR and the obligatory SDES
+    CheckEquals(2, Pkt.PacketCount, 'Packet count');
+    CheckEquals(RTCPReceiverReport,
+                Pkt.PacketAt(0).PacketType,
+                '1st packet');
+    CheckEquals(RTCPSourceDescription,
+                Pkt.PacketAt(1).PacketType,
+                '2nd packet');
+
+    CheckEquals(1,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks');
+    RR := Pkt.PacketAt(0) as TIdRTCPReceiverReport;
+
+    CheckEquals(IntToHex(Self.Data.SyncSrcID, 8),
+                IntToHex(RR.Reports[0].SyncSrcID, 8),
+                'Report SSRC');
+
+    // We don't check some of the RTCP statistics because it makes no
+    // sense if we haven't validated the source.
+    // CumulativeLoss in particular depends on a base sequence number,
+    // which we only store upon source validation.
+    CheckEquals(0, RR.Reports[0].DelaySinceLastSR, 'Delay since last SR');
+    CheckEquals(0, RR.Reports[0].FractionLost,     'Fraction lost');
+    CheckEquals(Self.Data.SequenceNo,
+                RR.Reports[0].HighestSeqNo,
+                'Highest sequence no of UNVALIDATED sender');
+    CheckEquals(0, RR.Reports[0].InterArrivalJitter, 'Interarrival jitter');
+    CheckEquals(0, RR.Reports[0].LastSenderReport,   'Last SR');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestReportWith0Senders;
+var
+  Pkt: TIdCompoundRTCPPacket;
+begin
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // An RR and the obligatory SDES
+    CheckEquals(2, Pkt.PacketCount, 'Packet count');
+    CheckEquals(RTCPReceiverReport,
+                Pkt.PacketAt(0).PacketType,
+                '1st packet');
+    CheckEquals(RTCPSourceDescription,
+                Pkt.PacketAt(1).PacketType,
+                '2nd packet');
+
+    CheckEquals(0,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestReportWith2Senders;
+var
+  Pkt: TIdCompoundRTCPPacket;
+begin
+  Self.Session.AddSender(Self.Session.NewSSRC);
+
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // An RR and the obligatory SDES
+    CheckEquals(2, Pkt.PacketCount, 'Packet count');
+    CheckEquals(RTCPReceiverReport,
+                Pkt.PacketAt(0).PacketType,
+                '1st packet');
+    CheckEquals(RTCPSourceDescription,
+                Pkt.PacketAt(1).PacketType,
+                '2nd packet');
+
+    CheckEquals(1,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestReportWith31Senders;
+var
+  I:   Integer;
+  Pkt: TIdCompoundRTCPPacket;
+begin
+  for I := 1 to 31 do
+    Self.Session.AddSender(Self.Session.NewSSRC);
+
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // One (full) RR and the obligatory SDES
+    CheckEquals(2, Pkt.PacketCount, 'Packet count');
+    CheckEquals(TIdRTCPReceiverReport.ClassName,
+                Pkt.PacketAt(0).ClassName,
+                '1st packet');
+    CheckEquals(TIdRTCPSourceDescription.ClassName,
+                Pkt.PacketAt(1).ClassName,
+                '2nd packet');
+
+    CheckEquals(31,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks, 1st RR');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestReportWith32Senders;
+var
+  I:   Integer;
+  Pkt: TIdCompoundRTCPPacket;
+begin
+  for I := 1 to 32 do
+    Self.Session.AddSender(Self.Session.NewSSRC);
+
+  Pkt := Self.Session.CreateNextReport;
+  try
+    // Two RRs and the obligatory SDES
+    CheckEquals(3, Pkt.PacketCount, 'Packet count');
+    CheckEquals(TIdRTCPReceiverReport.ClassName,
+                Pkt.PacketAt(0).ClassName,
+                '1st packet');
+    CheckEquals(TIdRTCPReceiverReport.ClassName,
+                Pkt.PacketAt(1).ClassName,
+                '2nd packet');
+    CheckEquals(TIdRTCPSourceDescription.ClassName,
+                Pkt.PacketAt(2).ClassName,
+                '3rd packet');
+
+    CheckEquals(31,
+                (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks, 1st RR');
+    CheckEquals(1,
+                (Pkt.PacketAt(1) as TIdRTCPReceiverReport).ReceptionReportCount,
+                'Wrong number of report blocks, 2nd RR');
+  finally
+    Pkt.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestSentOctetCount;
+var
+  DataLen: Cardinal;
+  Payload: TIdT140Payload;
+begin
+  CheckEquals(0,
+              Self.Session.SentOctetCount,
+              'Initially we have sent no data');
+
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  try
+    Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+    DataLen := Payload.Length;
+
+    Self.Session.SendData(Payload);
+    CheckEquals(DataLen,
+                Self.Session.SentOctetCount,
+                'SentOctetCount not updated');
+
+    Self.Session.SendData(Payload);
+    CheckEquals(2*DataLen,
+                Self.Session.SentOctetCount,
+                'SentOctetCount not updated; 2nd packet');
+  finally
+    Payload.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestSentPacketCount;
+var
+  I:       Integer;
+  Payload: TIdT140Payload;
+begin
+  CheckEquals(0,
+              Self.Session.SentPacketCount,
+              'Initially we have sent no data');
+
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  try
+    for I := 1 to 5 do begin
+      Self.Session.SendData(Payload);
+      CheckEquals(I,
+                  Self.Session.SentPacketCount,
+                  'SentPacketCount not updated, I=' + IntToStr(I));
+    end;
+  finally
+    Payload.Free;
+  end;
+end;
+
+procedure TestSessionReportRules.TestSSRCChangeResetsSentOctetCount;
+var
+  Payload: TIdT140Payload;
+begin
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  try
+    Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+    Self.Session.SendData(Payload);
+  finally
+    Payload.Free;
+  end;
+
+  Self.Session.Initialize;
+  CheckEquals(0,
+              Self.Session.SentOctetCount,
+              'Changed SSRC');
+end;
+
+procedure TestSessionReportRules.TestSSRCChangeResetsSentPacketCount;
+var
+  Payload: TIdT140Payload;
+begin
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  try
+    Self.Session.SendData(Payload);
+  finally
+    Payload.Free;
+  end;
+
+  Self.Session.Initialize;
+  CheckEquals(0,
+              Self.Session.SentPacketCount,
+              'Changed SSRC');
+end;
+
+//******************************************************************************
+//* TestSessionSendReceiveRules                                                *
+//******************************************************************************
+//* TestSessionSendReceiveRules Public methods *********************************
+
+procedure TestSessionSendReceiveRules.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Binding := TIdSocketHandle.Create(nil);
+  Self.Binding.IP   := '1.2.3.4';
+  Self.Binding.Port := 4321;
+
+  Self.Data := TIdRTPPacket.Create(Self.Profile);
+  Self.Data.SyncSrcID  := $decafbad;
+  Self.Data.CsrcCount  := 2;
+  Self.Data.CsrcIDs[0] := $deadbeef;
+  Self.Data.CsrcIDs[1] := $cafef00d;
+
+  Self.Bye := TIdRTCPBye.Create;
+  Self.Bye.SyncSrcID := $deadbeef;
+
+  Self.SR := TIdRTCPSenderReport.Create;
+  Self.SR.SyncSrcID := Self.Data.SyncSrcID;
+  Self.SR.ReceptionReportCount := Self.Data.CsrcCount;
+  Self.SR.Reports[0].SyncSrcID := Self.Data.CsrcIDs[0];
+  Self.SR.Reports[1].SyncSrcID := Self.Data.CsrcIDs[1];
+end;
+
+procedure TestSessionSendReceiveRules.TearDown;
+begin
+  Self.SR.Free;
+  Self.Bye.Free;
+  Self.Data.Free;
+
+  Self.Binding.Free;
+
+  inherited TearDown;
+end;
+
+//* TestSessionSendReceiveRules Published methods ******************************
+{
+procedure TestSessionSendReceiveRules.TestCollisionTriggersBye;
+begin
+  // We need at least one other person in the session
+//  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  Self.Data.CsrcCount  := 1;
+  Self.Data.CsrcIDs[0] := Self.Session.SyncSrcID;
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+
+  Check(Self.Agent.RTCPCount > 1,
+        'No control stuff sent');
+  Check(Self.Agent.SecondLastRTCP.IsBye,
+        'No BYE sent');
+  Check(Self.Agent.LastRTCP.IsReceiverReport,
+        'No RR sent (which tells the members of our new SSRC)');
+end;
+}
+procedure TestSessionSendReceiveRules.TestInitialState;
+begin
+  CheckEquals(1, Self.Session.MemberCount, 'New initialised, session');
+
+  CheckEquals(0, Self.Session.SenderCount,         'Senders');
+  CheckEquals(1, Self.Session.PreviousMemberCount, 'PreviousMemberCount');
+  CheckEquals(20, Self.Session.AvgRTCPSize,        'AvgRTCPSize'); // a small SDES
+  Check(not Self.Session.IsSender,                 'IsSender');
+  Check(Self.Session.NoControlSent,                'NoControlSent');
+end;
+
+procedure TestSessionSendReceiveRules.TestInitialDeterministicSendInterval;
+begin
+  Self.Session.MaxRTCPBandwidth := 100; // bytes per second
+  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
+              OneMillisecond,
+              'Initial send interval should be half the minimum');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveRTPAddsMembers;
+var
+  I: Integer;
+begin
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(4,
+              Self.Session.MemberCount,
+              'Session member count SSRC + 2 CSRCSs + self');
+
+  Check(Self.Session.IsMember(Self.Data.SyncSrcID), 'Data.SyncSrcID');
+
+  for I := 0 to Self.Data.CsrcCount - 1 do
+    Check(Self.Session.IsMember(Self.Data.CsrcIDs[I]),
+          'Data.CsrcIDs[' + IntToStr(I) + ']');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveByeMarksMembers;
+begin
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  Self.Session.ReceiveControl(Self.Bye, Self.Binding);
+
+  Check(not Self.Session.IsMember(Self.Bye.SyncSrcID),
+        'BYE didn''t remove member as leaving');
+  Check(Self.Session.IsMember(Self.Data.SyncSrcID),
+        'Wrong member removed');
+
+  Check(not Self.Session.IsSender(Self.Bye.SyncSrcID),
+        'BYE didn''t remove member (from senders)');
+  Check(Self.Session.IsSender(Self.Data.SyncSrcID),
+        'Wrong sender removed');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveByeOnNewSessionDoesNothing;
+begin
+  Self.Session.ReceiveControl(Self.Bye, Self.Binding);
+  // sole member = Self.Session itself
+  CheckEquals(1, Self.Session.MemberCount, 'Bye added members');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveRTPIncreasesSenderCount;
+begin
+  CheckEquals(0, Self.Session.SenderCount, 'New session');
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(3, Self.Session.SenderCount, 'RTP has 3 SSRC');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveRTCPAffectsAvgRTCPSize;
+var
+  InitialAvgSize: Cardinal;
+begin
+  InitialAvgSize := Self.Session.AvgRTCPSize;
+
+  Self.Session.ReceiveControl(Self.SR, Self.Binding);
+
+  CheckEquals(Self.SR.RealLength div 16 + (15 * InitialAvgSize) div 16,
+              Self.Session.AvgRTCPSize,
+              'Avg RTCP size not correctly adjusted');
+end;
+
+procedure TestSessionSendReceiveRules.TestReceiveSrcDescAddsAllSources;
+var
+  I: Integer;
+begin
+  Self.Session.ReceiveControl(Self.SR, Self.Binding);
+  CheckEquals(Length(Self.SR.GetAllSrcIDs) + 1,
+              Self.Session.MemberCount,
+              IntToStr(Length(Self.SR.GetAllSrcIDs)) + ' sources + self');
+
+  for I := 0 to Self.SR.ReceptionReportCount - 1 do
+    Check(Self.Session.IsMember(Self.SR.Reports[I].SyncSrcID),
+          'SR.Reports[' + IntToStr(I) + '].SyncSrcID');
+end;
+
+procedure TestSessionSendReceiveRules.TestRTCPDoesntAddSender;
+begin
+  Self.Session.ReceiveControl(Self.SR, Self.Binding);
+  CheckEquals(0, Self.Session.SenderCount, 'Sender added');
+end;
+
+procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndNotSender;
+var
+  I: Integer;
+begin
+  // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
+
+  Self.Session.MaxRTCPBandwidth := 100; // bytes per second
+  for I := 1 to 9 do
+    Self.Session.AddMember(I);
+
+  CheckEquals(2666*OneMillisecond,
+              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
+              OneMillisecond,
+              '10 members, session''s not a sender');
+end;
+
+procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndSender;
+begin
+  // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
+
+  // Senders get much less bandwidth - 2666/0.75*0.25 = 2666/3 ~= 888ms;
+  // 888 < minimum RTCP interval
+  Self.Session.MaxRTCPBandwidth := 100; // bytes per second
+  Self.Session.SendData(TIdNullPayload.NullPayload);
+  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
+              OneMillisecond,
+              '10 members, session''s a sender');
+end;
+
+procedure TestSessionSendReceiveRules.TestDeterministicSendIntervalMinimumInterval;
+var
+  I: Integer;
+begin
+  // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
+
+  Self.Session.MaxRTCPBandwidth := 100; // bytes per second
+  for I := 1 to 4 do
+    Self.Session.AddMember(I);
+
+  // Calculated interval is 1333ms, and 1333ms < minimum RTCP interval
+  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
+              OneMillisecond,
+              '5 members, session''s not a sender');
+end;
+
+procedure TestSessionSendReceiveRules.TestDeterministicSendIntervalWithZeroBandwidth;
+begin
+  CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
+              Self.Session.DeterministicSendInterval(Self.Session.IsSender),
+              OneMillisecond,
+              'Zero bandwidth');
+end;
+
+//******************************************************************************
 //* TestTIdRTPPacketBuffer                                                     *
 //******************************************************************************
 //* TestTIdRTPPacketBuffer Public methods **************************************
@@ -5598,56 +7616,6 @@ begin
     CheckEquals(I, Self.Q.Last.Timestamp, 'Last #' + IntToStr(I));
     Self.Q.RemoveLast;
   end;
-end;
-
-//******************************************************************************
-//* TIdMockEncoding                                                            *
-//******************************************************************************
-//* TIdMockEncoding Public methods *********************************************
-
-function TIdMockEncoding.PayloadType: TIdRTPPayloadClass;
-begin
-  Result := TIdMockPayload;
-end;
-
-//******************************************************************************
-//* TIdMockPayload                                                             *
-//******************************************************************************
-//* TIdMockPayload Public methods **********************************************
-
-function TIdMockPayload.HasKnownLength: Boolean;
-begin
-  Result := fHasKnownLength;
-end;
-
-function TIdMockPayload.Length: Cardinal;
-begin
-  Result := fLength;
-end;
-
-procedure TIdMockPayload.SetHasKnownLength(const Yes: Boolean);
-begin
-  fHasKnownLength := Yes;
-end;
-
-procedure TIdMockPayload.SetLength(const Length: Cardinal);
-begin
-  fLength := Length;
-end;
-
-//******************************************************************************
-//* TIdMockProfile                                                             *
-//******************************************************************************
-//* TIdMockProfile Public methods **********************************************
-
-function TIdMockProfile.AllowsHeaderExtensions: Boolean;
-begin
-  Result := fAllowExtension;
-end;
-
-procedure TIdMockProfile.SetAllowExtension(const Allow: Boolean);
-begin
-  fAllowExtension := Allow;
 end;
 
 initialization

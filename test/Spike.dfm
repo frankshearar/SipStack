@@ -122,7 +122,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '1'
-      TabOrder = 9
+      TabOrder = 0
       OnClick = Button1Click
     end
     object Button2: TButton
@@ -131,7 +131,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '2'
-      TabOrder = 8
+      TabOrder = 1
       OnClick = Button2Click
     end
     object Button3: TButton
@@ -140,7 +140,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '3'
-      TabOrder = 7
+      TabOrder = 2
       OnClick = Button3Click
     end
     object ButtonA: TButton
@@ -149,7 +149,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = 'A'
-      TabOrder = 12
+      TabOrder = 10
       OnClick = ButtonAClick
     end
     object Button4: TButton
@@ -158,7 +158,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '4'
-      TabOrder = 6
+      TabOrder = 3
       OnClick = Button4Click
     end
     object Button5: TButton
@@ -167,7 +167,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '5'
-      TabOrder = 5
+      TabOrder = 4
       OnClick = Button5Click
     end
     object Button6: TButton
@@ -176,7 +176,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '6'
-      TabOrder = 4
+      TabOrder = 5
       OnClick = Button6Click
     end
     object ButtonB: TButton
@@ -185,7 +185,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = 'B'
-      TabOrder = 13
+      TabOrder = 11
       OnClick = ButtonBClick
     end
     object Button7: TButton
@@ -194,7 +194,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '7'
-      TabOrder = 3
+      TabOrder = 6
       OnClick = Button7Click
     end
     object Button8: TButton
@@ -203,7 +203,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '8'
-      TabOrder = 2
+      TabOrder = 7
       OnClick = Button8Click
     end
     object Button9: TButton
@@ -212,7 +212,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '9'
-      TabOrder = 1
+      TabOrder = 8
       OnClick = Button9Click
     end
     object ButtonC: TButton
@@ -221,7 +221,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = 'C'
-      TabOrder = 14
+      TabOrder = 12
       OnClick = ButtonCClick
     end
     object ButtonStar: TButton
@@ -230,7 +230,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '*'
-      TabOrder = 10
+      TabOrder = 14
       OnClick = ButtonStarClick
     end
     object Button0: TButton
@@ -239,7 +239,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '0'
-      TabOrder = 0
+      TabOrder = 9
       OnClick = Button0Click
     end
     object ButtonHash: TButton
@@ -248,7 +248,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = '#'
-      TabOrder = 11
+      TabOrder = 15
       OnClick = ButtonHashClick
     end
     object ButtonD: TButton
@@ -257,7 +257,7 @@ object rnidSpike: TrnidSpike
       Width = 25
       Height = 25
       Caption = 'D'
-      TabOrder = 15
+      TabOrder = 13
       OnClick = ButtonDClick
     end
     object ButtonFlash: TButton
