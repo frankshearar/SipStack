@@ -3252,7 +3252,8 @@ var
 begin
   Notification := TIdSipUserAgentInboundCallMethod.Create;
   try
-    Notification.Session := Session;
+    Notification.Session   := Session;
+    Notification.UserAgent := Self;
 
     Self.UserAgentListeners.Notify(Notification);
   finally
@@ -3267,8 +3268,9 @@ var
 begin
   Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
   try
-    Notification.Receiver := Receiver;
-    Notification.Message  := Message;
+    Notification.Message   := Message;
+    Notification.Receiver  := Receiver;
+    Notification.UserAgent := Self;
 
     Self.UserAgentListeners.Notify(Notification);
   finally

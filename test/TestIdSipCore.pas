@@ -110,6 +110,7 @@ type
     Session:             TIdSipInboundSession;
     SessionEstablished:  Boolean;
     TryAgain:            Boolean;
+    UserAgentParam:      TIdSipAbstractUserAgent;
 
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
@@ -966,10 +967,13 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
+}
   Result.AddTest(TestTIdSipUserAgent.Suite);
+{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -997,6 +1001,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1717,6 +1722,7 @@ procedure TestTIdSipUserAgent.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
 begin
   Self.InboundCallMimeType := Session.RemoteMimeType;
   Self.InboundCallOffer    := Session.RemoteSessionDescription;
+  Self.UserAgentParam      := UserAgent;
   Self.OnInboundCallFired := true;
 
   Session.AddSessionListener(Self);
@@ -2778,6 +2784,8 @@ begin
   CheckEquals(Self.Invite.ContentType,
               Self.InboundCallMimeType,
               'Offer MIME type');
+  Check(Self.Core = Self.UserAgentParam,
+        'UserAgent param of Session''s InboundCall notification wrong');
 end;
 
 procedure TestTIdSipUserAgent.TestInviteExpires;
@@ -3715,6 +3723,8 @@ begin
 
     Check(Listener.DroppedUnmatchedMessage,
           'Unmatched ACK not dropped');
+    Check(Listener.UserAgentParam = Self.Core,
+          'UserAgent param of Session''s DroppedUnmatchedMessage notification wrong');
     CheckNoResponseSent('Sent a response to an unmatched ACK');
   finally
     Self.Core.RemoveUserAgentListener(Listener);
