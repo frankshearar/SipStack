@@ -33,7 +33,7 @@ type
     Dispatcher: TIdSipTransactionDispatcher;
     Lock:       TCriticalSection;
     Transport:  TIdSipTransport;
-    UA:         TIdSipUserAgentCore;
+    UA:         TIdSipRegistrar;
 
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnChanged(Observed: TObject);
@@ -95,7 +95,7 @@ begin
 
   Self.Dispatcher := TIdSipTransactionDispatcher.Create;
   Self.Dispatcher.AddTransport(Self.Transport);
-  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA := TIdSipRegistrar.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
   Self.UA.AddModule(TIdSipRegisterModule);
   Self.UA.BindingDB := Self.DB;

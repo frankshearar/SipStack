@@ -35,7 +35,7 @@ type
     Dispatcher: TIdSipTransactionDispatcher;
     Lock:       TCriticalSection;
     Transport:  TIdSipTransport;
-    UA:         TIdSipUserAgentCore;
+    UA:         TIdSipUserAgent;
 
     procedure LogMessage(Msg: TIdSipMessage);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
@@ -105,7 +105,7 @@ begin
 
   Self.Dispatcher := TIdSipTransactionDispatcher.Create;
   Self.Dispatcher.AddTransport(Self.Transport);
-  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
   Self.UA.HostName := 'wsfrank';
   Self.UA.UserAgentName := 'Frank''s Registration Spike';

@@ -96,7 +96,7 @@ type
     SendBuffer:     String;
     StopEvent:      TEvent;
     Transports:     TObjectList;
-    UA:             TIdSipUserAgentCore;
+    UA:             TIdSipUserAgent;
     UDPByteCount:   Integer;
 
     fPayloadProcessor:    TIdSDPMultimediaSession;
@@ -219,7 +219,7 @@ begin
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
-  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
@@ -339,7 +339,7 @@ end;
 
 procedure TrnidSpike.OnChanged(Observed: TObject);
 begin
-  Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
+  Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgent).SessionCount);
 end;
 
 procedure TrnidSpike.OnDroppedUnmatchedResponse(Response: TIdSipResponse;

@@ -23,7 +23,7 @@ type
     procedure RemoveBody(Msg: TIdSipMessage);
   protected
     AckCount:      Cardinal;
-    Core:          TIdSipUserAgentCore;
+    Core:          TIdSipUserAgent;
     Destination:   TIdSipToHeader;
     Dispatcher:    TIdSipMockTransactionDispatcher;
     Invite:        TIdSipRequest;
@@ -95,11 +95,11 @@ type
     procedure TestNextSequenceNoFor;
   end;
 
-  TestTIdSipUserAgentCore = class(TTestCaseTU,
-                                  IIdObserver,
-                                  IIdSipTransportSendingListener,
-                                  IIdSipSessionListener,
-                                  IIdSipUserAgentListener)
+  TestTIdSipUserAgent = class(TTestCaseTU,
+                              IIdObserver,
+                              IIdSipTransportSendingListener,
+                              IIdSipSessionListener,
+                              IIdSipUserAgentListener)
   private
     Dlg:                 TIdSipDialog;
     ID:                  TIdSipDialogID;
@@ -158,7 +158,6 @@ type
     procedure TestAuthenticateWithNoAttachedAuthenticator;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
-    procedure TestCleanOutTerminatedActions;
     procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateInvite;
@@ -379,7 +378,7 @@ type
     Contacts:    TIdSipContacts;
     MinExpires:  Cardinal;
     Reg:         TIdSipOutboundRegistration;
-    Registrar:   TIdSipUserAgentCore;
+    Registrar:   TIdSipAbstractUserAgent;
     Request:     TIdSipRequest;
     Succeeded:   Boolean;
 
@@ -596,7 +595,7 @@ type
   TActionMethodTestCase = class(TTestCase)
   private
     Response: TIdSipResponse;
-    UA:       TIdSipUserAgentCore;
+    UA:       TIdSipUserAgent;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -806,7 +805,7 @@ begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
-  Result.AddTest(TestTIdSipUserAgentCore.Suite);
+  Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
@@ -868,7 +867,7 @@ begin
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Dispatcher.Transport.TransportType := sttTCP;
 
-  Self.Core := TIdSipUserAgentCore.Create;
+  Self.Core := TIdSipUserAgent.Create;
   Self.Core.Dispatcher := Self.Dispatcher;
 
   Self.Core.Contact.Value := 'sip:wintermute@localhost';
@@ -1320,11 +1319,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUserAgentCore                                                    *
+//* TestTIdSipUserAgent                                                        *
 //******************************************************************************
-//* TestTIdSipUserAgentCore Public methods *************************************
+//* TestTIdSipUserAgent Public methods *****************************************
 
-procedure TestTIdSipUserAgentCore.SetUp;
+procedure TestTIdSipUserAgent.SetUp;
 var
   C:        TIdSipContactHeader;
   F:        TIdSipFromHeader;
@@ -1396,7 +1395,7 @@ begin
   Self.SessionEstablished  := false;
 end;
 
-procedure TestTIdSipUserAgentCore.TearDown;
+procedure TestTIdSipUserAgent.TearDown;
 begin
   Self.SendEvent.Free;
   Self.Dlg.Free;
@@ -1410,9 +1409,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUserAgentCore Private methods ************************************
+//* TestTIdSipUserAgent Private methods ****************************************
 
-procedure TestTIdSipUserAgentCore.CheckCommaSeparatedHeaders(const ExpectedValues: String;
+procedure TestTIdSipUserAgent.CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                                              Header: TIdSipHeader;
                                                              const Msg: String);
 var
@@ -1438,7 +1437,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.CheckCreateRequest(Dest: TIdSipToHeader;
+procedure TestTIdSipUserAgent.CheckCreateRequest(Dest: TIdSipToHeader;
                                                      Request: TIdSipRequest);
 var
   Contact: TIdSipContactHeader;
@@ -1478,36 +1477,36 @@ begin
         'TCP should be the default transport');
 end;
 
-procedure TestTIdSipUserAgentCore.OnAuthenticationChallenge(Action: TIdSipAction;
+procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
                                                             Challenge: TIdSipResponse;
                                                             var Username: String;
                                                             var Password: String);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnChanged(Observed: TObject);
+procedure TestTIdSipUserAgent.OnChanged(Observed: TObject);
 begin
   Self.OnChangedEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgentCore.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+procedure TestTIdSipUserAgent.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                              Receiver: TIdSipTransport);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnEndedSession(Session: TIdSipSession;
+procedure TestTIdSipUserAgent.OnEndedSession(Session: TIdSipSession;
                                                  const Reason: String);
 begin
   Self.OnEndedSessionFired := true;
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgentCore.OnEstablishedSession(Session: TIdSipSession);
+procedure TestTIdSipUserAgent.OnEstablishedSession(Session: TIdSipSession);
 begin
   Self.SessionEstablished := true;
 end;
 
-procedure TestTIdSipUserAgentCore.OnInboundCall(Session: TIdSipInboundSession);
+procedure TestTIdSipUserAgent.OnInboundCall(Session: TIdSipInboundSession);
 begin
   Self.OnInboundCallFired := true;
 
@@ -1516,28 +1515,28 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgentCore.OnModifiedSession(Session: TIdSipSession;
+procedure TestTIdSipUserAgent.OnModifiedSession(Session: TIdSipSession;
                                                     Answer: TIdSipResponse);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnModifySession(Modify: TIdSipInboundInvite);
+procedure TestTIdSipUserAgent.OnModifySession(Modify: TIdSipInboundInvite);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnSendRequest(Request: TIdSipRequest;
+procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
                                                 Sender: TIdSipTransport);
 begin
 end;
 
-procedure TestTIdSipUserAgentCore.OnSendResponse(Response: TIdSipResponse;
+procedure TestTIdSipUserAgent.OnSendResponse(Response: TIdSipResponse;
                                                  Sender: TIdSipTransport);
 begin
   if (Response.StatusCode = SIPSessionProgress) then
     Self.SendEvent.SetEvent;
 end;
 
-procedure TestTIdSipUserAgentCore.SimulateBye(Dialog: TIdSipDialog);
+procedure TestTIdSipUserAgent.SimulateBye(Dialog: TIdSipDialog);
 var
   Bye: TIdSipRequest;
 begin
@@ -1549,9 +1548,9 @@ begin
   end;
 end;
 
-//* TestTIdSipUserAgentCore Published methods **********************************
+//* TestTIdSipUserAgent Published methods **************************************
 
-procedure TestTIdSipUserAgentCore.TestAcksDontMakeTransactions;
+procedure TestTIdSipUserAgent.TestAcksDontMakeTransactions;
 var
   Ack:       TIdSipRequest;
   RemoteDlg: TIdSipDialog;
@@ -1586,7 +1585,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedContentType;
+procedure TestTIdSipUserAgent.TestAddAllowedContentType;
 var
   ContentTypes: TStrings;
 begin
@@ -1606,7 +1605,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedContentTypeMalformed;
+procedure TestTIdSipUserAgent.TestAddAllowedContentTypeMalformed;
 var
   ContentTypes: String;
 begin
@@ -1617,7 +1616,7 @@ begin
               'Malformed Content-Type was allowed');
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
+procedure TestTIdSipUserAgent.TestAddAllowedLanguage;
 var
   Languages: TStrings;
 begin
@@ -1644,7 +1643,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedLanguageLanguageAlreadyPresent;
+procedure TestTIdSipUserAgent.TestAddAllowedLanguageLanguageAlreadyPresent;
 var
   Languages: TStrings;
 begin
@@ -1661,7 +1660,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedMethod;
+procedure TestTIdSipUserAgent.TestAddAllowedMethod;
 var
   Methods: TStringList;
 begin
@@ -1682,7 +1681,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedMethodMethodAlreadyPresent;
+procedure TestTIdSipUserAgent.TestAddAllowedMethodMethodAlreadyPresent;
 var
   Methods: TStrings;
   MethodCount: Cardinal;
@@ -1702,7 +1701,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedScheme;
+procedure TestTIdSipUserAgent.TestAddAllowedScheme;
 var
   Schemes: TStrings;
 begin
@@ -1729,7 +1728,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddAllowedSchemeSchemeAlreadyPresent;
+procedure TestTIdSipUserAgent.TestAddAllowedSchemeSchemeAlreadyPresent;
 var
   Schemes: TStrings;
 begin
@@ -1745,7 +1744,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddObserver;
+procedure TestTIdSipUserAgent.TestAddObserver;
 var
   L1, L2: TIdObserverListener;
 begin
@@ -1767,7 +1766,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAddUserAgentListener;
+procedure TestTIdSipUserAgent.TestAddUserAgentListener;
 var
   L1, L2: TIdSipTestUserAgentListener;
 begin
@@ -1790,7 +1789,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestAuthenticateWithNoAttachedAuthenticator;
+procedure TestTIdSipUserAgent.TestAuthenticateWithNoAttachedAuthenticator;
 begin
   // We make sure that no access violations occur just because we've not
   // attached an authenticator to the Core.
@@ -1799,7 +1798,7 @@ begin
   Self.SimulateInvite;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCallUsingProxy;
+procedure TestTIdSipUserAgent.TestCallUsingProxy;
 const
   ProxyUri = 'sip:proxy.tessier-ashpool.co.luna';
 var
@@ -1820,7 +1819,7 @@ begin
               'Route points to wrong proxy');
 end;
 
-procedure TestTIdSipUserAgentCore.TestCancelNotifiesTU;
+procedure TestTIdSipUserAgent.TestCancelNotifiesTU;
 var
   SessCount: Integer;
 begin
@@ -1834,30 +1833,14 @@ begin
         'UA didn''t remove cancelled session');
 end;
 
-procedure TestTIdSipUserAgentCore.TestCleanOutTerminatedActions;
-var
-  Session: TIdSipSession;
-begin
-  // This test doesn't really tell us much, just that CleanOutTerminatedActions
-  // doesn't blow up when Core has terminated an unterminated actions.
-
-  Session := Self.Core.Call(Self.Destination, '', '');
-  Self.SimulateOk(Self.LastSentRequest);
-  Check(Session.DialogEstablished, 'Dialog not established for session');
-  Self.SimulateBye(Session.Dialog);
-
-  Self.Core.Call(Self.Destination, '', '');
-  Self.Core.CleanOutTerminatedActions;
-end;
-
-procedure TestTIdSipUserAgentCore.TestContentTypeDefault;
+procedure TestTIdSipUserAgent.TestContentTypeDefault;
 begin
   CheckEquals(SdpMimeType,
               Self.Core.AllowedContentTypes,
               'AllowedContentTypes');
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateBye;
+procedure TestTIdSipUserAgent.TestCreateBye;
 var
   Bye: TIdSipRequest;
 begin
@@ -1872,7 +1855,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateInvite;
+procedure TestTIdSipUserAgent.TestCreateInvite;
 var
   Dest:    TIdSipToHeader;
   Request: TIdSipRequest;
@@ -1910,7 +1893,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateInviteInsideDialog;
+procedure TestTIdSipUserAgent.TestCreateInviteInsideDialog;
 var
   Invite: TIdSipRequest;
 begin
@@ -1941,7 +1924,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateInviteWithBody;
+procedure TestTIdSipUserAgent.TestCreateInviteWithBody;
 var
   Invite: TIdSipRequest;
   Body:   String;
@@ -1963,7 +1946,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateOptions;
+procedure TestTIdSipUserAgent.TestCreateOptions;
 var
   Options: TIdSipRequest;
 begin
@@ -1980,7 +1963,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRegister;
+procedure TestTIdSipUserAgent.TestCreateRegister;
 var
   Register: TIdSipRequest;
 begin
@@ -2005,7 +1988,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRegisterReusesCallIDForSameRegistrar;
+procedure TestTIdSipUserAgent.TestCreateRegisterReusesCallIDForSameRegistrar;
 var
   FirstCallID:  String;
   Reg:          TIdSipRequest;
@@ -2040,7 +2023,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateReInvite;
+procedure TestTIdSipUserAgent.TestCreateReInvite;
 var
   Invite: TIdSipRequest;
 begin
@@ -2054,7 +2037,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRequest;
+procedure TestTIdSipUserAgent.TestCreateRequest;
 var
   Request: TIdSipRequest;
   Dest:    TIdSipToHeader;
@@ -2073,7 +2056,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRequestSipsRequestUri;
+procedure TestTIdSipUserAgent.TestCreateRequestSipsRequestUri;
 var
   Contact: TIdSipContactHeader;
   Request: TIdSipRequest;
@@ -2096,7 +2079,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRequestUserAgent;
+procedure TestTIdSipUserAgent.TestCreateRequestUserAgent;
 var
   Request: TIdSipRequest;
   Dest:    TIdSipToHeader;
@@ -2119,7 +2102,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateRequestWithTransport;
+procedure TestTIdSipUserAgent.TestCreateRequestWithTransport;
 var
   Request: TIdSipRequest;
   Dest:    TIdSipToHeader;
@@ -2158,7 +2141,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateResponseToTagMissing;
+procedure TestTIdSipUserAgent.TestCreateResponseToTagMissing;
 var
   Response: TIdSipResponse;
 begin
@@ -2178,7 +2161,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateResponseUserAgent;
+procedure TestTIdSipUserAgent.TestCreateResponseUserAgent;
 var
   Response: TIdSipResponse;
 begin
@@ -2195,7 +2178,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateResponseUserAgentBlank;
+procedure TestTIdSipUserAgent.TestCreateResponseUserAgentBlank;
 var
   Response: TIdSipResponse;
 begin
@@ -2211,7 +2194,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestDialogLocalSequenceNoMonotonicallyIncreases;
+procedure TestTIdSipUserAgent.TestDialogLocalSequenceNoMonotonicallyIncreases;
 var
   BaseSeqNo: Cardinal;
   R:         TIdSipRequest;
@@ -2233,7 +2216,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestDispatchToCorrectSession;
+procedure TestTIdSipUserAgent.TestDispatchToCorrectSession;
 var
   SessionOne: TIdSipInboundSession;
   SessionTwo: TIdSipInboundSession;
@@ -2272,7 +2255,7 @@ begin
               'Number of sessions after one BYE');
 end;
 
-procedure TestTIdSipUserAgentCore.TestDoNotDisturb;
+procedure TestTIdSipUserAgent.TestDoNotDisturb;
 var
   SessionCount: Cardinal;
 begin
@@ -2294,7 +2277,7 @@ begin
               'New session created despite Do Not Disturb');
 end;
 
-procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
+procedure TestTIdSipUserAgent.TestHasUnknownContentEncoding;
 begin
   Self.Invite.Headers.Remove(Self.Invite.FirstHeader(ContentEncodingHeaderFull));
 
@@ -2306,7 +2289,7 @@ begin
         'No encodings are supported');
 end;
 
-procedure TestTIdSipUserAgentCore.TestHasUnknownContentType;
+procedure TestTIdSipUserAgent.TestHasUnknownContentType;
 begin
   Self.Invite.RemoveHeader(Self.Invite.FirstHeader(ContentTypeHeaderFull));
 
@@ -2323,7 +2306,7 @@ begin
         'Nothing else is supported');
 end;
 
-procedure TestTIdSipUserAgentCore.TestInviteExpires;
+procedure TestTIdSipUserAgent.TestInviteExpires;
 var
   Event: TIdNotifyEventWait;
 begin
@@ -2357,7 +2340,7 @@ begin
   CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
-procedure TestTIdSipUserAgentCore.TestInviteRaceCondition;
+procedure TestTIdSipUserAgent.TestInviteRaceCondition;
 begin
   CheckEquals(0,
               Self.Core.InviteCount,
@@ -2377,7 +2360,7 @@ begin
               'INVITE resend made a new INVITE action');
 end;
 
-procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
+procedure TestTIdSipUserAgent.TestIsMethodAllowed;
 begin
   Check(not Self.Core.IsMethodAllowed(MethodRegister),
         MethodRegister + ' not allowed');
@@ -2390,7 +2373,7 @@ begin
         ''' '' recognised as an allowed method');
 end;
 
-procedure TestTIdSipUserAgentCore.TestIsSchemeAllowed;
+procedure TestTIdSipUserAgent.TestIsSchemeAllowed;
 begin
   Check(not Self.Core.IsMethodAllowed(SipScheme),
         SipScheme + ' not allowed');
@@ -2403,7 +2386,7 @@ begin
         ''' '' not recognised as an allowed scheme');
 end;
 
-procedure TestTIdSipUserAgentCore.TestLoopDetection;
+procedure TestTIdSipUserAgent.TestLoopDetection;
 var
   Response: TIdSipResponse;
 begin
@@ -2423,7 +2406,7 @@ begin
   CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
 end;
 
-procedure TestTIdSipUserAgentCore.TestModuleForString;
+procedure TestTIdSipUserAgent.TestModuleForString;
 begin
   CheckNull(Self.Core.ModuleFor(''),
             'Empty string');
@@ -2441,14 +2424,14 @@ begin
           + ': RFC 3261 defines REGISTER''s method as "REGISTER"');
 end;
 
-procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;
+procedure TestTIdSipUserAgent.TestNotificationOfNewSession;
 begin
   Self.SimulateInvite;
 
   Check(Self.OnInboundCallFired, 'UI not notified of new session');
 end;
 
-procedure TestTIdSipUserAgentCore.TestNotificationOfNewSessionRobust;
+procedure TestTIdSipUserAgent.TestNotificationOfNewSessionRobust;
 var
   L1, L2: TIdSipTestUserAgentListener;
 begin
@@ -2472,7 +2455,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestOutboundCallAndByeToXlite;
+procedure TestTIdSipUserAgent.TestOutboundCallAndByeToXlite;
 var
   Session: TIdSipSession;
 begin
@@ -2505,7 +2488,7 @@ begin
         'Must send a BYE to terminate an established session');
 end;
 
-procedure TestTIdSipUserAgentCore.TestOutboundInviteSessionProgressResends;
+procedure TestTIdSipUserAgent.TestOutboundInviteSessionProgressResends;
 var
   DebugTimer: TIdDebugTimerQueue;
 begin
@@ -2532,7 +2515,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestReceiveByeForUnmatchedDialog;
+procedure TestTIdSipUserAgent.TestReceiveByeForUnmatchedDialog;
 var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
@@ -2558,7 +2541,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestReceiveByeForDialog;
+procedure TestTIdSipUserAgent.TestReceiveByeForDialog;
 var
   Response: TIdSipResponse;
 begin
@@ -2579,7 +2562,7 @@ begin
                  'UA tells us no matching dialog was found');
 end;
 
-procedure TestTIdSipUserAgentCore.TestReceiveByeWithoutTags;
+procedure TestTIdSipUserAgent.TestReceiveByeWithoutTags;
 var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
@@ -2606,7 +2589,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestReceiveOptions;
+procedure TestTIdSipUserAgent.TestReceiveOptions;
 var
   Options:  TIdSipRequest;
   Response: TIdSipResponse;
@@ -2636,7 +2619,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestReceiveResponseWithMultipleVias;
+procedure TestTIdSipUserAgent.TestReceiveResponseWithMultipleVias;
 var
   Response: TIdSipResponse;
 begin
@@ -2655,7 +2638,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectMalformedAuthorizedRequest;
+procedure TestTIdSipUserAgent.TestRejectMalformedAuthorizedRequest;
 var
   Auth:     TIdSipMockAuthenticator;
   Response: TIdSipResponse;
@@ -2681,7 +2664,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectNoContact;
+procedure TestTIdSipUserAgent.TestRejectNoContact;
 var
   Response: TIdSipResponse;
 begin
@@ -2698,7 +2681,7 @@ begin
   CheckEquals(MissingContactHeader, Response.StatusText, 'Status-Text');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnauthorizedRequest;
+procedure TestTIdSipUserAgent.TestRejectUnauthorizedRequest;
 var
   Response: TIdSipResponse;
 begin
@@ -2716,7 +2699,7 @@ begin
         'No WWW-Authenticate header');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownContentEncoding;
+procedure TestTIdSipUserAgent.TestRejectUnknownContentEncoding;
 var
   Response: TIdSipResponse;
 begin
@@ -2738,7 +2721,7 @@ begin
               'Accept value');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownContentLanguage;
+procedure TestTIdSipUserAgent.TestRejectUnknownContentLanguage;
 var
   Response: TIdSipResponse;
 begin
@@ -2760,7 +2743,7 @@ begin
               'Accept-Language value');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownContentType;
+procedure TestTIdSipUserAgent.TestRejectUnknownContentType;
 var
   Response: TIdSipResponse;
 begin
@@ -2780,7 +2763,7 @@ begin
               'Accept value');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownExtension;
+procedure TestTIdSipUserAgent.TestRejectUnknownExtension;
 var
   Response: TIdSipResponse;
 begin
@@ -2800,7 +2783,7 @@ begin
               'Unexpected Unsupported header value');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnknownScheme;
+procedure TestTIdSipUserAgent.TestRejectUnknownScheme;
 var
   Response: TIdSipResponse;
 begin
@@ -2815,7 +2798,7 @@ begin
   CheckEquals(SIPUnsupportedURIScheme, Response.StatusCode, 'Status-Code');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnsupportedMethod;
+procedure TestTIdSipUserAgent.TestRejectUnsupportedMethod;
 var
   Response: TIdSipResponse;
 begin
@@ -2837,7 +2820,7 @@ begin
                              'Allow header');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRejectUnsupportedSipVersion;
+procedure TestTIdSipUserAgent.TestRejectUnsupportedSipVersion;
 var
   Response: TIdSipResponse;
 begin
@@ -2856,7 +2839,7 @@ begin
               'Status-Code');
 end;
 
-procedure TestTIdSipUserAgentCore.TestRemoveObserver;
+procedure TestTIdSipUserAgent.TestRemoveObserver;
 var
   L1, L2: TIdObserverListener;
 begin
@@ -2880,7 +2863,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestRemoveUserAgentListener;
+procedure TestTIdSipUserAgent.TestRemoveUserAgentListener;
 var
   L1, L2: TIdSipTestUserAgentListener;
 begin
@@ -2904,7 +2887,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSetContact;
+procedure TestTIdSipUserAgent.TestSetContact;
 var
   C: TIdSipContactHeader;
 begin
@@ -2920,7 +2903,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSetContactMailTo;
+procedure TestTIdSipUserAgent.TestSetContactMailTo;
 var
   C: TIdSipContactHeader;
 begin
@@ -2938,7 +2921,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSetContactWildCard;
+procedure TestTIdSipUserAgent.TestSetContactWildCard;
 var
   C: TIdSipContactHeader;
 begin
@@ -2958,7 +2941,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSetFrom;
+procedure TestTIdSipUserAgent.TestSetFrom;
 var
   F: TIdSipFromHeader;
 begin
@@ -2974,7 +2957,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSetFromMailTo;
+procedure TestTIdSipUserAgent.TestSetFromMailTo;
 var
   F: TIdSipFromHeader;
 begin
@@ -2992,7 +2975,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestSimultaneousInAndOutboundCall;
+procedure TestTIdSipUserAgent.TestSimultaneousInAndOutboundCall;
 begin
   Self.Core.Call(Self.Destination, '', '');
   Self.SimulateTrying(Self.LastSentRequest);
@@ -3005,7 +2988,7 @@ begin
   CheckEquals(2, Self.Core.SessionCount, 'Session count');
 end;
 
-procedure TestTIdSipUserAgentCore.TestTerminateAllCalls;
+procedure TestTIdSipUserAgent.TestTerminateAllCalls;
 var
   FirstSession:  TIdSipInboundSession;
   SecondSession: TIdSipInboundSession;
@@ -3034,7 +3017,7 @@ begin
               'Session count after TerminateAllCalls');
 end;
 
-procedure TestTIdSipUserAgentCore.TestViaMatchesTransportParameter;
+procedure TestTIdSipUserAgent.TestViaMatchesTransportParameter;
 var
   Trans: TIdSipTransportType;
 begin
@@ -5170,7 +5153,7 @@ const
 begin
   inherited SetUp;
 
-  Self.Registrar := TIdSipUserAgentCore.Create;
+  Self.Registrar := TIdSipAbstractUserAgent.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.RemoveModule(TIdSipInviteModule);
   Self.Registrar.AddModule(TIdSipRegisterModule);
@@ -6981,7 +6964,7 @@ procedure TActionMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
   Self.Response := TIdSipResponse.Create;

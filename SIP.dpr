@@ -57,7 +57,7 @@ uses
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
-  TestMessages in 'test\TestMessages.pas',
+  TestMessages in 'test\TestMessages.pas'{,
   TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
   TestIdRandom in 'test\TestIdRandom.pas',
@@ -80,19 +80,19 @@ uses
   TestIdSipRegistration in 'test\TestIdSipRegistration.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
-  TestIdSipTimer in 'test\TestIdSipTimer.pas',
-  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
+  TestIdSipTimer in 'test\TestIdSipTimer.pas'},
+  TestIdSipTransaction in 'test\TestIdSipTransaction.pas'{,
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
   TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
-  TestIdUnicode in 'test\TestIdUnicode.pas';
+  TestIdUnicode in 'test\TestIdUnicode.pas'};
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
 //{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

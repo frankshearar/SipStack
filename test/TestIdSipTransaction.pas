@@ -528,9 +528,9 @@ end;
 
 function TestTIdSipTransactionDispatcher.CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
 var
-  UA: TIdSipUserAgentCore;
+  UA: TIdSipUserAgent;
 begin
-  UA := TIdSipUserAgentCore.Create;
+  UA := TIdSipUserAgent.Create;
   try
     Result := UA.CreateResponse(Request, SIPMultipleChoices);
   finally

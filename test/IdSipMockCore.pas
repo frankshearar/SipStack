@@ -43,7 +43,7 @@ type
     fIsInboundCall:  Boolean;
     fResponseResent: Boolean;
   public
-    constructor Create(UA: TIdSipUserAgentCore;
+    constructor Create(UA: TIdSipAbstractUserAgent;
                        Invite: TIdSipRequest;
                        UsingSecureTransport: Boolean); override;
 
@@ -62,9 +62,9 @@ implementation
 
 function TIdSipMockCore.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
 var
-  UA: TIdSipUserAgentCore;
+  UA: TIdSipAbstractUserAgent;
 begin
-  UA := TIdSipUserAgentCore.Create;
+  UA := TIdSipAbstractUserAgent.Create;
   try
     Result := UA.CreateRequest(Dest);
   finally
@@ -118,7 +118,7 @@ end;
 //******************************************************************************
 //* TIdSipMockSession Public methods *******************************************
 
-constructor TIdSipMockSession.Create(UA: TIdSipUserAgentCore;
+constructor TIdSipMockSession.Create(UA: TIdSipAbstractUserAgent;
                                      Invite: TIdSipRequest;
                                      UsingSecureTransport: Boolean);
 begin

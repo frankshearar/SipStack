@@ -18,7 +18,7 @@ uses
 type
   TestTIdSipProxy = class(TTestCase)
   private
-    Client:           TIdSipUserAgentCore;
+    Client:           TIdSipUserAgent;
     ClientDispatcher: TIdSipMockTransactionDispatcher;
     Dispatcher:       TIdSipMockTransactionDispatcher;
     Invite:           TIdSipRequest;
@@ -66,7 +66,7 @@ begin
   Self.Proxy.Dispatcher := Self.Dispatcher;
   Self.Dispatcher.AddUnhandledMessageListener(Self.Proxy);
 
-  Self.Client := TIdSipUserAgentCore.Create;
+  Self.Client := TIdSipUserAgent.Create;
   Self.ClientDispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.Client.Dispatcher := Self.ClientDispatcher;
 end;

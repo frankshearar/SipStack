@@ -26,7 +26,7 @@ type
     Dispatch:     TIdSipMockTransactionDispatcher;
     ExpireAll:    String;
     FirstContact: TIdSipContactHeader;
-    Registrar:    TIdSipUserAgentCore;
+    Registrar:    TIdSipRegistrar;
     Request:      TIdSipRequest;
 
     procedure CheckResponse(Received: TIdSipContacts;
@@ -88,12 +88,10 @@ begin
 //  Self.DB.DefaultExpiryTime := 0;
 
   Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
-  Self.Registrar := TIdSipUserAgentCore.Create;
+  Self.Registrar := TIdSipRegistrar.Create;
   Self.Registrar.BindingDB := Self.DB;
   Self.Registrar.Dispatcher := Self.Dispatch;
   Self.Registrar.MinimumExpiryTime := 3600;
-  Self.Registrar.AddModule(TIdSipRegisterModule);
-  Self.Registrar.RemoveModule(TIdSipInviteModule);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;
