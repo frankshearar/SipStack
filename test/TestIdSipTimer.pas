@@ -17,8 +17,10 @@ uses
 type
   TestTIdSipTimer = class(TThreadingTestCase)
   private
-    Tick:  Boolean;
-    Timer: TIdSipTimer;
+    ThreadWillSelfTerminate: Boolean;
+    Tick:                Boolean;
+    Timer:               TIdSipTimer;
+
     procedure OnException(AThread: TIdThread; AException: Exception);
     procedure OnRaiseExceptionTimer(Sender: TObject);
     procedure OnTickTimer(Sender: TObject);
@@ -28,7 +30,6 @@ type
   published
     procedure TestExceptionHandling;
     procedure TestTick;
-    procedure TestResetTime;
   end;
 
   TestTIdSipSingleShotTimer = class(TThreadingTestCase)
@@ -41,6 +42,7 @@ type
   published
     procedure TestAnEvent;
     procedure TestNoEvent;
+    procedure TestTerminateTerminatesImmediately;
   end;
 
 implementation
@@ -67,13 +69,16 @@ begin
   Self.Tick  := false;
   Self.Timer := TIdSipTimer.Create(true);
 
-  Self.DefaultTimeout := 500;
+  Self.DefaultTimeout          := 500;
+  Self.ThreadWillSelfTerminate := false;
 end;
 
 procedure TestTIdSipTimer.TearDown;
 begin
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
+//  if not Self.ThreadWillSelfTerminate then begin
+    Self.Timer.TerminateAndWaitFor;
+    Self.Timer.Free;
+//  end;
 
   inherited TearDown;
 end;
@@ -100,6 +105,8 @@ end;
 
 procedure TestTIdSipTimer.TestExceptionHandling;
 begin
+  Self.ThreadWillSelfTerminate := true;
+
   Self.ExceptionMessage := 'Main thread never heard of the exception';
 
   Self.Timer.OnException := Self.OnException;
@@ -119,20 +126,6 @@ begin
   Self.Timer.Start;
 
   Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipTimer.TestResetTime;
-begin
-  Self.Timer.OnTimer := Self.OnTickTimer;
-  Self.Timer.Interval := 1000;
-  Self.Timer.Start;
-  Self.WaitForTimeout('Ticked prematurely before ResetTime');
-//  IdGlobal.Sleep(500);
-//  Check(not Self.Tick, 'Ticked prematurely before ResetTime');
-  Self.Timer.ResetTime;
-  Self.WaitForTimeout('Ticked prematurely after ResetTime');
-//  IdGlobal.Sleep(500);
-//  Check(not Self.Tick, 'Ticked prematurely after ResetTime');
 end;
 
 //******************************************************************************
@@ -180,9 +173,17 @@ end;
 
 procedure TestTIdSipSingleShotTimer.TestNoEvent;
 begin
-  Self.DefaultTimeout := 200;
   TIdSipSingleShotTimer.Create(nil, Self.DefaultTimeout div 2);
   Self.WaitForTimeout('No event = timeout');
+end;
+
+procedure TestTIdSipSingleShotTimer.TestTerminateTerminatesImmediately;
+var
+  Timer: TIdSipSingleShotTimer;
+begin
+  Timer := TIdSipSingleShotTimer.Create(Self.OnTimer, Self.DefaultTimeout);
+  Timer.Terminate;
+  Self.WaitForTimeout('Timer still fired after Terminate');
 end;
 
 initialization

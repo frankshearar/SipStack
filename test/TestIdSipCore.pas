@@ -14,7 +14,7 @@ interface
 uses
   Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSocketHandle,
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdSocketHandle, SyncObjs,
   TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -78,6 +78,7 @@ type
     ID:                  TIdSipDialogID;
     LocalSequenceNo:     Cardinal;
     LocalUri:            TIdSipURI;
+    OnChangedEvent:      TEvent;
     OnEndedSessionFired: Boolean;
     OnInboundCallFired:  Boolean;
     RemoteSequenceNo:    Cardinal;
@@ -571,7 +572,7 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SyncObjs,
+  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, 
   SysUtils, TestIdObservable, TestMessages;
 
 type
@@ -1116,6 +1117,8 @@ var
 begin
   inherited SetUp;
 
+  Self.OnChangedEvent := TSimpleEvent.Create;
+
   Self.Core.AddUserAgentListener(Self);
 
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
@@ -1181,6 +1184,7 @@ begin
   Self.RemoteTarget.Free;
   Self.LocalUri.Free;
   Self.ID.Free;
+  Self.OnChangedEvent.Free;
 
   inherited TearDown;
 end;
@@ -1261,7 +1265,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.OnChanged(Observed: TObject);
 begin
-  Self.ThreadEvent.SetEvent;
+  Self.OnChangedEvent.SetEvent;
 end;
 
 procedure TestTIdSipUserAgentCore.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
@@ -1944,13 +1948,13 @@ procedure TestTIdSipUserAgentCore.TestInviteExpires;
 var
   ResponseCount: Cardinal;
 begin
-  // This test deadlocks because the session gets destroyed within the context
-  // of the ExpiryTimer, which waits for the ExpiryTimer to terminate.
+  Self.Core.AddObserver(Self);
 
   ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
 
   Self.Invite.FirstExpires.NumericValue := 50;
   Self.SimulateRemoteInvite;
+
   Self.ExceptionMessage := 'Waiting for OnInboundCall to fire';
   Self.WaitForSignaled;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
@@ -1964,6 +1968,11 @@ begin
   CheckEquals(SIPRequestTerminated,
               Self.Dispatcher.Transport.LastResponse.StatusCode,
               'Unexpected response sent');
+
+  Self.WaitForSignaled(Self.OnChangedEvent,
+                       'Waiting for OnChanged, signalling when the whole '
+                     + 'shebang''s finished');
+  CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
 procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
@@ -2641,7 +2650,6 @@ begin
   Check(not Action.IsSession,
         Action.ClassName + ' marked as a Session');
 end;
-
 {
 procedure TestTIdSipAction.TestReceiveResponseBadExtension;
 var
