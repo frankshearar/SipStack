@@ -26,7 +26,6 @@ type
     fLastACK:           TIdSipRequest;
     fLastRequest:       TIdSipRequest;
     fResponses:         TIdSipResponseList;
-    fLocalEchoMessages: Boolean;
     fPort:              Cardinal;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
@@ -66,7 +65,6 @@ type
     property FailWith:          ExceptClass         read fFailWith write fFailWith;
     property LastACK:           TIdSipRequest       read fLastACK;
     property LastRequest:       TIdSipRequest       read fLastRequest;
-    property LocalEchoMessages: Boolean             read fLocalEchoMessages write fLocalEchoMessages;
     property SentRequestCount:  Cardinal            read fSentRequestCount;
     property SentResponseCount: Cardinal            read fSentResponseCount;
     property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
@@ -98,8 +96,6 @@ begin
   Self.fLastACK     := TIdSipRequest.Create;
   Self.fLastRequest := TIdSipRequest.Create;
   Self.fResponses   := TIdSipResponseList.Create;
-
-  Self.LocalEchoMessages := false;
 end;
 
 destructor TIdSipMockTransport.Destroy;
@@ -227,9 +223,6 @@ begin
     Inc(Self.fACKCount)
   else
     Inc(Self.fSentRequestCount);
-
-  if Self.LocalEchoMessages then
-    Self.NotifyTransportListeners(R);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
@@ -244,9 +237,6 @@ begin
                                + Self.FailWith.ClassName + ')');
 
   Inc(Self.fSentResponseCount);
-
-  if Self.LocalEchoMessages then
-    Self.NotifyTransportListeners(R);
 
   // We call inherited at the end because we want to update our state first,
   // so listeners get a true idea of, for instance, SentResponseCount.

@@ -57,7 +57,6 @@ begin
   inherited SetUp;
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatcher.Transport.LocalEchoMessages := false;
   Self.Dispatcher.Transport.TransportType := sttTCP;
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;

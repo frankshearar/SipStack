@@ -257,9 +257,14 @@ type
 
   TestTIdSipNullTransport = class(TestTIdSipTransport)
   protected
-    function  TransportType: TIdSipTransportClass; override;
+    function TransportType: TIdSipTransportClass; override;
   published
     procedure TestIsNull; override;
+  end;
+
+  TestTIdSipMockTransport = class(TestTIdSipTransport)
+  protected
+    function TransportType: TIdSipTransportClass; override;
   end;
 
   TTransportMethodTestCase = class(TTestCase)
@@ -338,8 +343,12 @@ type
 implementation
 
 uses
-  IdException, IdGlobal, IdSipConsts, IdSipUdpServer, IdSSLOpenSSL, IdStack,
-  IdTcpClient, IdUdpClient, IdUDPServer, TestMessages, TestFrameworkSip;
+  IdException, IdGlobal, IdSipConsts, IdSipMockTransport, IdSipUdpServer,
+  IdSSLOpenSSL, IdStack, IdTcpClient, IdUdpClient, IdUDPServer, TestMessages,
+  TestFrameworkSip;
+
+var
+  ServerThatInstantiatesGStack: TIdTcpServer;
 
 function Suite: ITestSuite;
 begin
@@ -349,6 +358,8 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
+//  Result.AddTest(TestTIdSipNullTransport.Suite);
+//  Result.AddTest(TestTIdSipMockTransport.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveResponseMethod.Suite);
@@ -580,6 +591,10 @@ end;
 procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
+
+  if not Assigned(GStack) then
+    raise Exception.Create('GStack isn''t instantiated - you need something '
+                         + 'that opens a socket');
 
   Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
@@ -902,6 +917,8 @@ end;
 
 function TestTIdSipTransport.TransportType: TIdSipTransportClass;
 begin
+  raise Exception.Create('TestTIdSipTransport.TransportType: override for '
+                       + Self.ClassName + '!');
   Result := nil;
 end;
 
@@ -1836,6 +1853,16 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipMockTransport                                                    *
+//******************************************************************************
+//* TestTIdSipMockTransport Protected methods **********************************
+
+function TestTIdSipMockTransport.TransportType: TIdSipTransportClass;
+begin
+  Result := TIdSipMockTransport;
+end;
+
+//******************************************************************************
 //* TTransportMethodTestCase                                                   *
 //******************************************************************************
 //* TTransportMethodTestCase Public methods ************************************
@@ -2119,5 +2146,8 @@ begin
 end;
 
 initialization
+  ServerThatInstantiatesGStack := TIdTCPServer.Create(nil);
   RegisterTest('IdSipTransport', Suite);
+finalization
+  ServerThatInstantiatesGStack.Free;
 end.
