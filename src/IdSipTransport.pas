@@ -642,7 +642,6 @@ end;
 
 procedure TIdSipTransport.SendResponse(R: TIdSipResponse);
 begin
-//  Self.RewriteOwnVia(R);
   Self.NotifyTransportSendingListeners(R);
 end;
 
