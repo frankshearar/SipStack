@@ -82,6 +82,7 @@ type
     procedure TestIsEqualToResponse;
     procedure TestIsEqualToTrivial;
     procedure TestIsInvite;
+    procedure TestIsRegister;
     procedure TestIsRequest;
     procedure TestMatchInviteClient;
     procedure TestMatchInviteClientAckWithInvite;
@@ -945,6 +946,30 @@ begin
 
   Self.Request.Method := 'XXX';
   Check(not Self.Request.IsInvite, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsRegister;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsRegister, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsRegister, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsRegister, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsRegister, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsRegister, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(Self.Request.IsRegister, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsRegister, 'XXX');
 end;
 
 procedure TestTIdSipRequest.TestIsRequest;

@@ -102,6 +102,7 @@ type
     function  IsCancel: Boolean;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
+    function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
@@ -614,6 +615,11 @@ end;
 function TIdSipRequest.IsInvite: Boolean;
 begin
   Result := Self.Method = MethodInvite;
+end;
+
+function TIdSipRequest.IsRegister: Boolean;
+begin
+  Result := Self.Method = MethodRegister;
 end;
 
 function TIdSipRequest.IsRequest: Boolean;
