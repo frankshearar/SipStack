@@ -14,8 +14,8 @@ interface
 uses
   Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, SyncObjs, TestFramework,
-  TestFrameworkEx, TestFrameworkSip;
+  IdSipRegistration, IdSipTransaction, IdSipTransport, IdTimerQueue, SyncObjs,
+  TestFramework, TestFrameworkEx, TestFrameworkSip;
 
 type
   TTestCaseTU = class(TTestCaseSip)
@@ -77,6 +77,7 @@ type
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
                                   IIdObserver,
+                                  IIdSipTransportSendingListener,
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private
@@ -91,6 +92,7 @@ type
     RemoteTarget:        TIdSipURI;
     RemoteUri:           TIdSipURI;
     RouteSet:            TIdSipHeaders;
+    SendEvent:           TEvent;
     Session:             TIdSipInboundSession;
     SessionEstablished:  Boolean;
 
@@ -111,6 +113,10 @@ type
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport);
     procedure SimulateRemoteBye(Dialog: TIdSipDialog);
   public
     procedure SetUp; override;
@@ -148,6 +154,7 @@ type
     procedure TestLoopDetection;
     procedure TestNotificationOfNewSession;
     procedure TestNotificationOfNewSessionRobust;
+    procedure TestOutboundInviteSessionProgressResends;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
@@ -222,6 +229,7 @@ type
     procedure TestRejectCallBusy;
     procedure TestResendOk;
     procedure TestRing;
+    procedure TestSendSessionProgress;
     procedure TestTerminateAfterAccept;
     procedure TestTerminateBeforeAccept;
     procedure TestTimeOut;
@@ -658,8 +666,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdTimerQueue,
-  IdUdpServer, SysUtils, TestIdObservable, TestMessages, Windows;
+  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SysUtils,
+  TestIdObservable, TestMessages, Windows;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -1262,6 +1270,8 @@ var
 begin
   inherited SetUp;
 
+  Self.Dispatcher.Transport.AddTransportSendingListener(Self);
+
   Self.OnChangedEvent := TSimpleEvent.Create;
 
   Self.Core.AddUserAgentListener(Self);
@@ -1316,6 +1326,8 @@ begin
     F.Free;
   end;
 
+  Self.SendEvent := TSimpleEvent.Create;
+
   Self.OnEndedSessionFired := false;
   Self.OnInboundCallFired  := false;
   Self.SessionEstablished  := false;
@@ -1323,6 +1335,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
 begin
+  Self.SendEvent.Free;
   Self.Dlg.Free;
   Self.RouteSet.Free;
   Self.RemoteUri.Free;
@@ -1442,6 +1455,18 @@ end;
 procedure TestTIdSipUserAgentCore.OnModifiedSession(Session: TIdSipSession;
                                                     Invite: TIdSipRequest);
 begin
+end;
+
+procedure TestTIdSipUserAgentCore.OnSendRequest(Request: TIdSipRequest;
+                                                Sender: TIdSipTransport);
+begin
+end;
+
+procedure TestTIdSipUserAgentCore.OnSendResponse(Response: TIdSipResponse;
+                                                 Sender: TIdSipTransport);
+begin
+  if (Response.StatusCode = SIPSessionProgress) then
+    Self.SendEvent.SetEvent;
 end;
 
 procedure TestTIdSipUserAgentCore.SimulateRemoteBye(Dialog: TIdSipDialog);
@@ -2148,6 +2173,33 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestOutboundInviteSessionProgressResends;
+var
+  DebugTimer: TIdDebugTimerQueue;
+begin
+  DebugTimer := TIdDebugTimerQueue.Create(false);
+  try
+    Self.Core.Timer := DebugTimer;
+
+    // Receive an INVITE. Ring. Wait.
+    Self.Core.ProgressResendInterval := 50;
+
+    Self.SimulateRemoteInvite;
+    Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+
+    // Wait here. For what? How do we avoid waiting for an entire minute?
+    Self.WaitForSignaled(Self.SendEvent);
+
+    Check(Self.Dispatcher.Transport.SentResponseCount > 0,
+          'No response sent');
+    CheckEquals(SIPSessionProgress,
+                Self.Dispatcher.Transport.LastResponse.StatusCode,
+                'Wrong response');
+  finally
+    DebugTimer.Terminate;
   end;
 end;
 
@@ -3222,6 +3274,18 @@ begin
   Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPRinging,
               Response.StatusCode,
+              'Unexpected Status-Code');
+end;
+
+procedure TestTIdSipInboundInvite.TestSendSessionProgress;
+begin
+  Self.InviteAction.SendSessionProgress;
+
+  Check(Self.Dispatcher.Transport.SentResponseCount > 0,
+        'No session progress response sent');
+
+  CheckEquals(SIPSessionProgress,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
               'Unexpected Status-Code');
 end;
 

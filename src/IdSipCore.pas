@@ -330,16 +330,18 @@ type
   // * clean up established Sessions
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
-    ActionLock:           TCriticalSection;
-    Actions:              TObjectList;
-    fBindingDB:           TIdSipAbstractBindingDatabase;
-    fContact:             TIdSipContactHeader;
-    fDoNotDisturb:        Boolean;
-    fDoNotDisturbMessage: String;
-    fHasProxy:            Boolean;
-    fMinimumExpiryTime:   Cardinal; // in seconds
-    fProxy:               TIdSipUri;
-    KnownRegistrars:      TObjectList;
+    ActionLock:              TCriticalSection;
+    Actions:                 TObjectList;
+    fBindingDB:              TIdSipAbstractBindingDatabase;
+    fContact:                TIdSipContactHeader;
+    fDoNotDisturb:           Boolean;
+    fDoNotDisturbMessage:    String;
+    fHasProxy:               Boolean;
+    fInitialResendInterval:  Cardinal; // in milliseconds
+    fMinimumExpiryTime:      Cardinal; // in seconds
+    fProgressResendInterval: Cardinal; // in milliseconds
+    fProxy:                  TIdSipUri;
+    KnownRegistrars:         TObjectList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddInboundAction(Request: TIdSipRequest;
@@ -408,6 +410,7 @@ type
     function  InviteCount: Integer;
     procedure OnInboundSessionExpire(Event: TObject);
     procedure OnResendOk(Event: TObject);
+    procedure OnSessionProgress(Event: TObject);
     procedure OnTransactionComplete(Event: TObject);
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
@@ -420,12 +423,15 @@ type
 
     property BindingDB:                     TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property Contact:                       TIdSipContactHeader           read GetContact write SetContact;
+    property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
     property DoNotDisturb:                  Boolean                       read fDoNotDisturb write fDoNotDisturb;
     property DoNotDisturbMessage:           String                        read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property HasProxy:                      Boolean                       read fHasProxy write fHasProxy;
     property Proxy:                         TIdSipUri                     read fProxy write SetProxy;
-    property DefaultRegistrationExpiryTime: Cardinal                      read GetDefaultRegistrationExpiryTime write SetDefaultRegistrationExpiryTime;
     property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
+
+    property InitialResendInterval:  Cardinal read fInitialResendInterval write fInitialResendInterval;
+    property ProgressResendInterval: Cardinal read fProgressResendInterval write fProgressResendInterval;
   end;
 
   TIdSipMessageModule = class(TObject)
@@ -559,16 +565,19 @@ type
   // ResendInterval provide the numbers, my UA provides the timer.
   TIdSipInboundInvite = class(TIdSipInvite)
   private
-    fInitialResendInterval: Cardinal;
-    LastResponse:           TIdSipResponse;
-    MaxResendInterval:      Cardinal;
-    ReceivedAck:            Boolean;
-    ResendInterval:         Cardinal;
-    SentFinalResponse:      Boolean;
+    fMaxResendInterval: Cardinal; // in milliseconds
+    LastResponse:       TIdSipResponse;
+    ReceivedAck:        Boolean;
+    ResendInterval:     Cardinal;
+    SentFinalResponse:  Boolean;
 
+    function  GetInitialResendInterval: Cardinal;
+    function  GetProgressResendInterval: Cardinal;
     procedure NotifyOfFailure; reintroduce; overload;
     procedure SendCancelResponse(Cancel: TIdSipRequest);
     procedure SendSimpleResponse(StatusCode: Cardinal);
+    procedure SetInitialResendInterval(const Value: Cardinal);
+    procedure SetProgressResendInterval(const Value: Cardinal);
   protected
     procedure ReceiveAck(Ack: TIdSipRequest); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
@@ -588,10 +597,13 @@ type
     procedure RemoveListener(const Listener: IIdSipInboundInviteListener);
     procedure ResendOk;
     procedure Ring;
+    procedure SendSessionProgress;
     procedure Terminate; override;
     procedure TimeOut;
 
-    property InitialResendInterval: Cardinal read fInitialResendInterval write fInitialResendInterval;
+    property InitialResendInterval:  Cardinal read GetInitialResendInterval write SetInitialResendInterval;
+    property MaxResendInterval:      Cardinal read fMaxResendInterval write fMaxResendInterval;
+    property ProgressResendInterval: Cardinal read GetProgressResendInterval write SetProgressResendInterval;
   end;
 
   // I encapsulate the call flows around an outbound INVITE, both in-dialog
@@ -1049,6 +1061,7 @@ const
   InviteTimeout             = 'Incoming call timed out';
   LocalCancel               = 'Local end cancelled call';
   LocalHangUp               = 'Local end hung up';
+  OneMinute                 = 60*1000;
   RedirectWithNoContacts    = 'Call redirected to nowhere';
   RedirectWithNoMoreTargets = 'Call redirected but no more targets';
   RedirectWithNoSuccess     = 'Call redirected but no target answered';
@@ -1826,12 +1839,14 @@ begin
 
   Self.AddAllowedScheme(SipScheme);
 
-  Self.DoNotDisturb        := false;
-  Self.DoNotDisturbMessage := RSSIPTemporarilyUnavailable;
-  Self.From.Value          := Self.DefaultFrom;
-  Self.HasProxy            := false;
-  Self.HostName            := Self.DefaultHostName;
-  Self.UserAgentName       := Self.DefaultUserAgent;
+  Self.DoNotDisturb           := false;
+  Self.DoNotDisturbMessage    := RSSIPTemporarilyUnavailable;
+  Self.From.Value             := Self.DefaultFrom;
+  Self.HasProxy               := false;
+  Self.HostName               := Self.DefaultHostName;
+  Self.InitialResendInterval  := DefaultT1;
+  Self.ProgressResendInterval := OneMinute;
+  Self.UserAgentName          := Self.DefaultUserAgent;
 end;
 
 destructor TIdSipUserAgentCore.Destroy;
@@ -2121,6 +2136,29 @@ begin
 
       if Assigned(Action) then
         Action.ResendOk;
+
+      Self.CleanOutTerminatedActions;
+    finally
+      Self.ActionLock.Release;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.OnSessionProgress(Event: TObject);
+var
+  Action: TIdSipInboundInvite;
+  Invite: TIdSipRequest;
+begin
+  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
+  try
+    Self.ActionLock.Acquire;
+    try
+      Action := Self.FindAction(Invite) as TIdSipInboundInvite;
+
+      if Assigned(Action) then
+        Action.SendSessionProgress;
 
       Self.CleanOutTerminatedActions;
     finally
@@ -3119,7 +3157,7 @@ begin
 
   Self.LastResponse   := TIdSipResponse.Create;
   Self.ReceivedAck    := false;
-  Self.ResendInterval := DefaultT1;
+  Self.ResendInterval := Self.InitialResendInterval;
 
   Self.Ring;
 end;
@@ -3209,7 +3247,24 @@ end;
 
 procedure TIdSipInboundInvite.Ring;
 begin
-  Self.SendSimpleResponse(SIPRinging);
+  if not Self.SentFinalResponse then begin
+    Self.SendSimpleResponse(SIPRinging);
+
+    Self.UA.ScheduleEvent(Self.UA.OnSessionProgress,
+                          Self.ProgressResendInterval,
+                          Self.InitialRequest.Copy);
+  end;
+end;
+
+procedure TIdSipInboundInvite.SendSessionProgress;
+begin
+  if not Self.SentFinalResponse then begin
+    Self.SendSimpleResponse(SIPSessionProgress);
+
+    Self.UA.ScheduleEvent(Self.UA.OnSessionProgress,
+                          Self.ProgressResendInterval,
+                          Self.InitialRequest.Copy);
+  end;
 end;
 
 procedure TIdSipInboundInvite.Terminate;
@@ -3278,6 +3333,16 @@ end;
 
 //* TIdSipInboundInvite Private methods ****************************************
 
+function TIdSipInboundInvite.GetInitialResendInterval: Cardinal;
+begin
+  Result := Self.UA.InitialResendInterval;
+end;
+
+function TIdSipInboundInvite.GetProgressResendInterval: Cardinal;
+begin
+  Result := Self.UA.ProgressResendInterval;
+end;
+
 procedure TIdSipInboundInvite.NotifyOfFailure;
 var
   Notification: TIdSipInboundInviteFailureMethod;
@@ -3317,6 +3382,16 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TIdSipInboundInvite.SetInitialResendInterval(const Value: Cardinal);
+begin
+  Self.UA.InitialResendInterval := Value;
+end;
+
+procedure TIdSipInboundInvite.SetProgressResendInterval(const Value: Cardinal);
+begin
+  Self.UA.ProgressResendInterval := Value;
 end;
 
 //******************************************************************************
