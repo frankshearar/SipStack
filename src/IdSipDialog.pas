@@ -318,7 +318,7 @@ begin
   Result.From.Tag         := Self.ID.LocalTag;
   Result.CallID           := Self.ID.CallID;
 
-  Result.CSeq.Method     := MethodAck;
+  Result.CSeq.Method     := Result.Method;
   Result.CSeq.SequenceNo := Self.LocalSequenceNo;
 
   Result.AddHeader(Self.InitialRequest.LastHop);

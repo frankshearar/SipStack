@@ -5786,7 +5786,7 @@ begin
       Result.CSeq.SequenceNo := Response.CSeq.SequenceNo;
       Result.From            := Self.From;
       Result.MaxForwards     := Result.DefaultMaxForwards;
-      Result.Method          := MethodAck;
+      Result.Method          := Result.CSeq.Method;
       Result.RequestUri      := Self.RequestUri;
       Result.ToHeader        := Response.ToHeader;
 
