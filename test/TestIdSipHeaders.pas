@@ -338,31 +338,30 @@ type
     procedure TestValueWithUtf8Comment;
   end;
 
-  TestTIdSipRouteHeader = class(THeaderTestCase)
-  private
-    R: TIdSipRouteHeader;
+  TRouteHeaderTestCase = class(THeaderTestCase)
   protected
-    function HeaderType: TIdSipHeaderClass; override;
+    R: TIdSipRouteHeader;
   public
     procedure SetUp; override;
   published
-    procedure TestIsLooseRoutable;
-    procedure TestName;
     procedure TestValue; override;
+    procedure TestValueWithLeadingSpaceParam;
     procedure TestValueWithParamsAndHeaderParams;
   end;
 
-  TestTIdSipRecordRouteHeader = class(THeaderTestCase)
-  private
-    R: TIdSipRecordRouteHeader;
+  TestTIdSipRouteHeader = class(TRouteHeaderTestCase)
   protected
     function HeaderType: TIdSipHeaderClass; override;
-  public
-    procedure SetUp; override;
+  published
+    procedure TestIsLooseRoutable;
+    procedure TestName;
+  end;
+
+  TestTIdSipRecordRouteHeader = class(TRouteHeaderTestCase)
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   published
     procedure TestName;
-    procedure TestValue; override;
-    procedure TestValueWithParamsAndHeaderParams;
   end;
 
   TestTIdSipTimestampHeader = class(THeaderTestCase)
@@ -3198,17 +3197,72 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipRouteHeader                                                      *
+//* TRouteHeaderTestCase                                                       *
 //******************************************************************************
-//* TestTIdSipRouteHeader Public methods ***************************************
+//* TRouteHeaderTestCase Public methods ****************************************
 
-procedure TestTIdSipRouteHeader.SetUp;
+procedure TRouteHeaderTestCase.SetUp;
 begin
   inherited SetUp;
 
   Self.R := Self.Header as TIdSipRouteHeader;
 end;
 
+//* TRouteHeaderTestCase Public methods ****************************************
+
+procedure TRouteHeaderTestCase.TestValue;
+begin
+  Self.R.Value := '<sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
+  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
+
+  Self.R.Value := 'localhost <sip:127.0.0.1>';
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
+  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
+
+  Self.R.Value := '';
+  Check(Self.R.IsMalformed,
+        'Failed to bail on empty string');
+
+  Self.R.Value := 'sip:127.0.0.1';
+  Check(Self.R.IsMalformed,
+        'Failed to bail on lack of angle brackets');
+
+  Self.R.Value := '<127.0.0.1>';
+  Check(Self.R.IsMalformed,
+        'Failed to bail on no scheme');
+end;
+
+procedure TRouteHeaderTestCase.TestValueWithLeadingSpaceParam;
+begin
+  Self.R.Value := '<sip:127.0.0.1>;   unknownParameterWithLeadingLWS=   unknownValueWithLeadingLWS';
+  CheckEquals('sip:127.0.0.1',
+              Self.R.Address.URI,
+              'Address');
+  Check(Self.R.HasParam('unknownParameterWithLeadingLWS'),
+        'Parameter not added');
+  CheckEquals('unknownValueWithLeadingLWS',
+              Self.R.Params['unknownParameterWithLeadingLWS'],
+              'Parameter value incorrect');
+  CheckEquals('<sip:127.0.0.1>;unknownParameterWithLeadingLWS=unknownValueWithLeadingLWS',
+              Self.R.FullValue,
+              'FullValue');
+end;
+
+procedure TRouteHeaderTestCase.TestValueWithParamsAndHeaderParams;
+begin
+  Self.R.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
+
+  CheckEquals('Count Zero', Self.R.DisplayName, 'DisplayName');
+  CheckEquals('sip:countzero@jacks-bar.com;paranoid',
+              Self.R.Address.URI,
+              'Address');
+  CheckEquals(';very', Self.R.ParamsAsString, 'Header parameters');
+end;
+
+//******************************************************************************
+//* TestTIdSipRouteHeader                                                      *
+//******************************************************************************
 //* TestTIdSipRouteHeader Protected methods ************************************
 
 function TestTIdSipRouteHeader.HeaderType: TIdSipHeaderClass;
@@ -3238,52 +3292,9 @@ begin
   CheckEquals(RouteHeader, Self.R.Name, 'Name after set');
 end;
 
-procedure TestTIdSipRouteHeader.TestValue;
-begin
-  Self.R.Value := '<sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
-
-  Self.R.Value := 'localhost <sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
-
-  Self.R.Value := '';
-  Check(Self.R.IsMalformed,
-        'Failed to bail on empty string');
-
-  Self.R.Value := 'sip:127.0.0.1';
-  Check(Self.R.IsMalformed,
-        'Failed to bail on lack of angle brackets');
-
-  Self.R.Value := '<127.0.0.1>';
-  Check(Self.R.IsMalformed,
-        'Failed to bail on no scheme');
-end;
-
-procedure TestTIdSipRouteHeader.TestValueWithParamsAndHeaderParams;
-begin
-  Self.R.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
-
-  CheckEquals('Count Zero', Self.R.DisplayName, 'DisplayName');
-  CheckEquals('sip:countzero@jacks-bar.com;paranoid',
-              Self.R.Address.URI,
-              'Address');
-  CheckEquals(';very', Self.R.ParamsAsString, 'Header parameters');
-end;
-
 //******************************************************************************
 //* TestTIdSipRecordRouteHeader                                                *
 //******************************************************************************
-//* TestTIdSipRecordRouteHeader Public methods *********************************
-
-procedure TestTIdSipRecordRouteHeader.SetUp;
-begin
-  inherited SetUp;
-
-  Self.R := Self.Header as TIdSipRecordRouteHeader;
-end;
-
 //* TestTIdSipRecordRouteHeader Protected methods ******************************
 
 function TestTIdSipRecordRouteHeader.HeaderType: TIdSipHeaderClass;
@@ -3299,36 +3310,6 @@ begin
 
   Self.R.Name := 'foo';
   CheckEquals(RecordRouteHeader, Self.R.Name, 'Name after set');
-end;
-
-procedure TestTIdSipRecordRouteHeader.TestValue;
-begin
-  Self.R.Value := '<sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('',              Self.R.DisplayName, 'DisplayName');
-
-  Self.R.Value := 'localhost <sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
-  CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
-
-  Self.R.Value := '';
-  Check(Self.R.IsMalformed,
-        'Failed to bail on empty string');
-
-  Self.R.Value := '127.0.0.1';
-  Check(Self.R.IsMalformed,
-        'Failed to bail on lack of angle brackets');
-end;
-
-procedure TestTIdSipRecordRouteHeader.TestValueWithParamsAndHeaderParams;
-begin
-  Self.R.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
-
-  CheckEquals('Count Zero', Self.R.DisplayName, 'DisplayName');
-  CheckEquals('sip:countzero@jacks-bar.com;paranoid',
-              Self.R.Address.URI,
-              'Address');
-  CheckEquals(';very', Self.R.ParamsAsString, 'Header parameters');
 end;
 
 //******************************************************************************
