@@ -30,7 +30,14 @@ uses
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipSession in 'test\TestIdSipSession.pas',
-  TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',  TestIdSipTimer in 'test\TestIdSipTimer.pas',  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',  TestIdSipTransport in 'test\TestIdSipTransport.pas',  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',  TestIdUri in 'test\TestIdUri.pas';
+  TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
+  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
+  TestIdSipTimer in 'test\TestIdSipTimer.pas',
+  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
+  TestIdSipTransport in 'test\TestIdSipTransport.pas',
+  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
+  TestIdUri in 'test\TestIdUri.pas';
+
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}
 

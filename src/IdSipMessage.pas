@@ -49,6 +49,7 @@ type
     function  AsString: String;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsRequest: Boolean; virtual; abstract;
+    function  LastHop: TIdSipViaHeader;
     function  MalformedException: ExceptClass; virtual; abstract;
     procedure ReadBody(const S: TStream);
 
@@ -305,16 +306,14 @@ end;
 procedure TIdSipMessage.Assign(Src: TPersistent);
 var
   S: TIdSipMessage;
-  I: Integer;
 begin
-  if (Src is Self.ClassType) then begin
+  if (Src is TIdSipMessage) then begin
     S := Src as TIdSipMessage;
 
     Self.SIPVersion := S.SIPVersion;
 
     Self.Headers.Clear;
-    for I := 0 to S.Headers.Count - 1 do
-      Self.Headers.Add(S.Headers.Items[I]);
+    Self.Headers.Add(S.Headers);
   end
   else
     inherited Assign(Src);
@@ -333,6 +332,11 @@ end;
 function TIdSipMessage.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.Headers.HasHeader(HeaderName);
+end;
+
+function TIdSipMessage.LastHop: TIdSipViaHeader;
+begin
+  Result := Self.Path.LastHop;
 end;
 
 procedure TIdSipMessage.ReadBody(const S: TStream);

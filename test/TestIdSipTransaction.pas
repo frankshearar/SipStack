@@ -5,10 +5,6 @@ interface
 uses
   IdSipCore, IdSipMessage, IdSipTransport, IdSipTransaction, TestFramework;
 
-  // Transactions behave slightly differently if a reliable transport is used -
-  // certain messages are not resent. To this end, we test unreliable transports
-  // by default, only checking that those certain messages are not resent when
-  // using reliable transports in tests like TestReliableTransportFoo
 type
   TestTIdSipTransactionDispatcher = class(TTestCase)
   private
@@ -49,6 +45,10 @@ type
     procedure TestGetTransactionType;
   end;
 
+  // Transactions behave slightly differently if a reliable transport is used -
+  // certain messages are not resent. To this end, we test unreliable transports
+  // by default, only checking that those certain messages are not resent when
+  // using reliable transports in tests like TestReliableTransportFoo
   TTestTransaction = class(TTestCase)
   protected
     Core:                  TIdSipAbstractCore;
@@ -317,8 +317,8 @@ begin
   Self.ReceivedRequest.SIPVersion := 'SIP/1.0';
   Self.TranRequest.SIPVersion     := 'SIP/1.0';
 
-  Self.ReceivedRequest.Path.LastHop.Value := 'SIP/1.0/TCP localhost';
-  Self.TranRequest.Path.LastHop.Value     := 'SIP/1.0/TCP localhost';
+  Self.ReceivedRequest.LastHop.Value := 'SIP/1.0/TCP localhost';
+  Self.TranRequest.LastHop.Value     := 'SIP/1.0/TCP localhost';
 end;
 }
 //* TestTIdSipTransactionDispatcher Published methods **************************
@@ -453,7 +453,7 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientDifferentViaBranch;
 begin
-  Self.ReceivedResponse.Path.LastHop.Branch := BranchMagicCookie + 'foo';
+  Self.ReceivedResponse.LastHop.Branch := BranchMagicCookie + 'foo';
 
   Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
         'Different Via branch');
@@ -464,25 +464,25 @@ begin
   Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
         'Identical INVITE request');
 
-  Self.ReceivedRequest.Path.LastHop.SentBy := 'cougar';
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
   Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
         'Different sent-by');
-  Self.ReceivedRequest.Path.LastHop.SentBy := Self.TranRequest.Path.LastHop.SentBy;
+  Self.ReceivedRequest.LastHop.SentBy := Self.TranRequest.LastHop.SentBy;
 
-  Self.ReceivedRequest.Path.LastHop.Branch := 'z9hG4bK6';
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
   Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
         'Different branch');
 
-  Self.ReceivedRequest.Path.LastHop.Branch := Self.TranRequest.Path.LastHop.Branch;
+  Self.ReceivedRequest.LastHop.Branch := Self.TranRequest.LastHop.Branch;
   Self.ReceivedRequest.Method := MethodAck;
   Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest), 'ACK');
 
-  Self.ReceivedRequest.Path.LastHop.SentBy := 'cougar';
+  Self.ReceivedRequest.LastHop.SentBy := 'cougar';
   Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
         'ACK but different sent-by');
-  Self.ReceivedRequest.Path.LastHop.SentBy := Self.TranRequest.Path.LastHop.SentBy;
+  Self.ReceivedRequest.LastHop.SentBy := Self.TranRequest.LastHop.SentBy;
 
-  Self.ReceivedRequest.Path.LastHop.Branch := 'z9hG4bK6';
+  Self.ReceivedRequest.LastHop.Branch := 'z9hG4bK6';
   Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
         'ACK but different branch');
 end;
@@ -539,13 +539,13 @@ begin
 
     Check(Self.D.WillUseReliableTranport(R), 'TCP');
 
-    R.Path.LastHop.Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.LastHop.Value := 'SIP/2.0/TLS gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     Check(Self.D.WillUseReliableTranport(R), 'TLS');
 
-    R.Path.LastHop.Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.LastHop.Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     Check(not Self.D.WillUseReliableTranport(R), 'TCP');
 
-    R.Path.LastHop.Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+    R.LastHop.Value := 'SIP/2.0/SCTP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
     Check(Self.D.WillUseReliableTranport(R), 'SCTP');
   finally
     R.Free;
@@ -662,6 +662,9 @@ begin
   Self.TransactionProceeding := false;
   Self.TransactionTerminated := false;
 
+  Self.MockDispatcher.Transport.TransportType := sttUDP;
+  Self.MockDispatcher.Transport.HostName      := 'gw1.leo-ix.org';
+
   Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
 end;
 
@@ -718,8 +721,8 @@ begin
   CheckEquals(R.ToHeader.Value,               Ack.ToHeader.Value, 'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
-              Ack.Path.LastHop.Value,
+  CheckEquals(Self.InitialRequest.LastHop.Value,
+              Ack.LastHop.Value,
               'Topmost Via');
 
   CheckEquals(Self.InitialRequest.CSeq.SequenceNo, Ack.CSeq.SequenceNo, 'CSeq sequence no');
@@ -1017,7 +1020,9 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReliableTransportNoInviteRetransmissions;
 begin
-  Self.InitialRequest.Path.LastHop.Transport := sttTCP;
+  Self.MockDispatcher.Transport.TransportType := sttTCP;
+
+//  Self.InitialRequest.LastHop.Transport := sttTCP;
   Self.MockDispatcher.Transport.ResetSentRequestCount;
   Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
 
@@ -1340,7 +1345,8 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestReliableTransportNoFinalResponseRetransmissions;
 begin
-  Self.InitialRequest.Path.LastHop.Transport := sttTLS;
+  Self.MockDispatcher.Transport.TransportType := sttTLS;
+  Self.InitialRequest.LastHop.Transport := sttTLS;
   Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
 
   Self.MoveToCompletedState;

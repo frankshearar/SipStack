@@ -17,8 +17,10 @@ type
     procedure DoOnUnhandledResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure SetDispatcher(const Value: TIdSipTransactionDispatcher);
   protected
-    procedure DoOnNewSession(const Session: TIdSipSession);  
+    procedure DoOnNewSession(const Session: TIdSipSession);
   public
+    constructor Create; virtual;
+
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; virtual; abstract;
     function  CreateResponse(const Request:      TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
@@ -32,15 +34,21 @@ type
 
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
-    fContact: TIdSipContactHeader;
-    fFrom:    TIdSipFromHeader;
+    fContact:    TIdSipContactHeader;
+    fFrom:       TIdSipFromHeader;
+    fLastBranch: Cardinal;
 
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
+    procedure IncLastBranch;
+    procedure ResetLastBranch;
     procedure SetContact(const Value: TIdSipContactHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
+
+    property LastBranch: Cardinal read fLastBranch;
   public
-    destructor Destroy; override;
+    constructor Create; override;
+    destructor  Destroy; override;
 
     procedure Call(const Dest: TIdSipToHeader);
     function  CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
@@ -49,6 +57,7 @@ type
                              const ResponseCode: Cardinal): TIdSipResponse; override;
     procedure HandleUnmatchedRequest(const Request: TIdSipRequest); override;
     procedure HandleUnmatchedResponse(const Response: TIdSipResponse); override;
+    function  NextBranch: String;
     function  NextTag: String;
 
     property Contact: TIdSipContactHeader read GetContact write SetContact;
@@ -81,6 +90,10 @@ uses
 //* TIdSipAbstractCore                                                         *
 //******************************************************************************
 //* TIdSipAbstractCore Public methods ******************************************
+
+constructor TIdSipAbstractCore.Create;
+begin
+end;
 
 function TIdSipAbstractCore.NextCallID: String;
 var
@@ -130,6 +143,13 @@ end;
 //******************************************************************************
 //* TIdSipUserAgentCore Public methods *****************************************
 
+constructor TIdSipUserAgentCore.Create;
+begin
+  inherited Create;
+
+  Self.ResetLastBranch;
+end;
+
 destructor TIdSipUserAgentCore.Destroy;
 begin
   Self.Contact.Free;
@@ -170,6 +190,9 @@ begin
     Result.From     := Self.From;
     Result.From.Tag := Self.NextTag;
     Result.ToHeader := Dest;
+
+    Result.Headers.Add(ViaHeaderFull).Value := SipVersion + '/TCP localhost';
+    Result.LastHop.Branch := Self.NextBranch;
   except
     Result.Free;
 
@@ -235,6 +258,16 @@ end;
 procedure TIdSipUserAgentCore.HandleUnmatchedResponse(const Response: TIdSipResponse);
 begin
   // User Agents drop unmatched responses on the floor.
+
+  // However, if we store our INVITEs we can use this to trigger the creation
+  // of dialog and session objects! TODO
+end;
+
+function TIdSipUserAgentCore.NextBranch: String;
+begin
+  Result := BranchMagicCookie + IntToStr(Self.LastBranch);
+
+  Self.IncLastBranch;
 end;
 
 function TIdSipUserAgentCore.NextTag: String;
@@ -264,6 +297,16 @@ begin
   Result := fFrom;
 end;
 
+procedure TIdSipUserAgentCore.IncLastBranch;
+begin
+  Inc(Self.fLastBranch);
+end;
+
+procedure TIdSipUserAgentCore.ResetLastBranch;
+begin
+  Self.fLastBranch := 0;
+end;
+
 procedure TIdSipUserAgentCore.SetContact(const Value: TIdSipContactHeader);
 begin
   Assert(not Value.IsWildCard,
@@ -289,8 +332,15 @@ end;
 //* TIdSipMockCore Public methods **********************************************
 
 function TIdSipMockCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
+var
+  UA: TIdSipUserAgentCore;
 begin
-  Result := nil;
+  UA := TIdSipUserAgentCore.Create;
+  try
+    Result := UA.CreateRequest(Dest);
+  finally
+    UA.Free;
+  end;
 end;
 
 function TIdSipMockCore.CreateResponse(const Request:      TIdSipRequest;

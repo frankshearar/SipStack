@@ -3,8 +3,12 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdSipTcpServer, IdSipUdpServer,
-  IdTCPClient, IdTCPServer, IdUDPClient, IdUDPServer, SysUtils;
+  Classes, Contnrs, IdSipConsts, IdSipHeaders, IdSipMessage, IdSipTcpClient,
+  IdSipTcpServer, IdSipUdpServer, IdTCPClient, IdTCPServer, IdUDPClient,
+  IdUDPServer, SyncObjs, SysUtils;
+
+const
+  DefaultTimeout = 5000;
 
 type
   TIdSipNotifyEvent = TNotifyEvent;
@@ -13,8 +17,11 @@ type
 
   TIdSipAbstractTransport = class(TObject)
   private
+    fHostName:   String;
     fOnRequest:  TIdSipRequestEvent;
     fOnResponse: TIdSipResponseEvent;
+
+    procedure RewriteOwnVia(Message: TIdSipMessage);
   protected
     procedure DoOnRequest(Sender: TObject; const R: TIdSipRequest);
     procedure DoOnResponse(Sender: TObject; const R: TIdSipResponse);
@@ -24,15 +31,18 @@ type
   public
     constructor Create(const Port: Cardinal = IdPORT_SIP); virtual;
 
+    function GetTransportType: TIdSipTransportType; virtual; abstract;
     // This should raise an appropriate exception if a transport or suchlike
     // error occurs.
-    procedure SendRequest(const R: TIdSipRequest); virtual; abstract;
+    procedure SendRequest(const R: TIdSipRequest;
+                          const Timeout: Cardinal = DefaultTimeout); virtual;
     procedure SendResponse(const R: TIdSipResponse); virtual; abstract;
     procedure Start; virtual; abstract;
     procedure Stop; virtual; abstract;
 
     property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property HostName:   String              read fHostName write fHostName;
     property Port:       Cardinal            read GetPort write SetPort;
   end;
 
@@ -40,10 +50,15 @@ type
 
   TIdSipTCPTransport = class(TIdSipAbstractTransport)
   private
-    Transport: TIdSipTcpServer;
+    Clients: TObjectList;
+    Lock:    TCriticalSection;
+    Server:  TIdSipTcpServer;
 
+    function  AddClient: TIdSipTcpClient;
+    procedure DoOnClientFinished(Sender: TObject);
     procedure DoOnTcpRequest(Sender: TObject; const Request: TIdSipRequest);
     procedure DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure RemoveClient(Client: TIdSipTcpClient);
   protected
     function  GetPort: Cardinal; override;
     procedure SetPort(const Value: Cardinal); override;
@@ -51,7 +66,9 @@ type
     constructor Create(const Port: Cardinal = IdPORT_SIP); override;
     destructor  Destroy; override;
 
-    procedure SendRequest(const R: TIdSipRequest); override;
+    function  GetTransportType: TIdSipTransportType; override;
+    procedure SendRequest(const R: TIdSipRequest;
+                          const Timeout: Cardinal = DefaultTimeout); override;
     procedure SendResponse(const R: TIdSipResponse); override;
     procedure Start; override;
     procedure Stop; override;
@@ -72,7 +89,9 @@ type
     constructor Create(const Port: Cardinal = IdPORT_SIP); override;
     destructor  Destroy; override;
 
-    procedure SendRequest(const R: TIdSipRequest); override;
+    function  GetTransportType: TIdSipTransportType; override;
+    procedure SendRequest(const R: TIdSipRequest;
+                          const Timeout: Cardinal = DefaultTimeout); override;
     procedure SendResponse(const R: TIdSipResponse); override;
     procedure Start; override;
     procedure Stop; override;
@@ -82,40 +101,43 @@ type
   private
     fACKCount:          Cardinal;
     fLastACK:           TIdSipRequest;
+    fLastRequest:       TIdSipRequest;
     fLastResponse:      TIdSipResponse;
     fFailWith:          ExceptClass;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
+    fTransportType:     TIdSipTransportType;
   public
     constructor Create(const Port: Cardinal = IdPORT_SIP); override;
     destructor  Destroy; override;
 
     procedure FireOnRequest(const R: TIdSipRequest);
     procedure FireOnResponse(const R: TIdSipResponse);
+    function  GetTransportType: TIdSipTransportType; override;
     procedure RaiseException(const E: ExceptClass);
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
     procedure ResetSentResponseCount;
-    procedure SendRequest(const R: TIdSipRequest); override;
+    procedure SendRequest(const R: TIdSipRequest;
+                          const Timeout: Cardinal = DefaultTimeout); override;
     procedure SendResponse(const R: TIdSipResponse); override;
     procedure Start; override;
     procedure Stop; override;
 
-    property ACKCount:          Cardinal       read fACKCount;
-    property FailWith:          ExceptClass    read fFailWith write fFailWith;
-    property LastACK:           TIdSipRequest  read fLastACK;
-    property LastResponse:      TIdSipResponse read fLastResponse;
-    property SentRequestCount:  Cardinal       read fSentRequestCount;
-    property SentResponseCount: Cardinal       read fSentResponseCount;
+    property ACKCount:          Cardinal            read fACKCount;
+    property FailWith:          ExceptClass         read fFailWith write fFailWith;
+    property LastACK:           TIdSipRequest       read fLastACK;
+    property LastRequest:       TIdSipRequest       read fLastRequest;
+    property LastResponse:      TIdSipResponse      read fLastResponse;
+    property SentRequestCount:  Cardinal            read fSentRequestCount;
+    property SentResponseCount: Cardinal            read fSentResponseCount;
+    property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
   end;
-
-const
-  DefaultTimeout = 1000; // milliseconds
 
 implementation
 
 uses
-  IdSipTcpClient, IdURI;
+  IdURI;
 
 //******************************************************************************
 //* TIdSipAbstractTransport                                                    *
@@ -125,6 +147,12 @@ uses
 constructor TIdSipAbstractTransport.Create(const Port: Cardinal = IdPORT_SIP);
 begin
   inherited Create;
+end;
+
+procedure TIdSipAbstractTransport.SendRequest(const R: TIdSipRequest;
+                                              const Timeout: Cardinal = DefaultTimeout);
+begin
+  Self.RewriteOwnVia(R);
 end;
 
 //* TIdSipAbstractTransport Protected methods **********************************
@@ -157,6 +185,13 @@ begin
   end;
 end;
 
+//* TIdSipAbstractTransport Private methods ************************************
+
+procedure TIdSipAbstractTransport.RewriteOwnVia(Message: TIdSipMessage);
+begin
+  Message.LastHop.Transport := Self.GetTransportType;
+  Message.LastHop.SentBy    := Self.HostName;
+end;
 
 //******************************************************************************
 //* TIdSipTcpTransport                                                         *
@@ -167,40 +202,48 @@ constructor TIdSipTcpTransport.Create(const Port: Cardinal = IdPORT_SIP);
 begin
   inherited Create(Port);
 
-  Self.Transport := TIdSipTcpServer.Create(nil);
+  Self.Clients := TObjectList.Create(true);
+  Self.Lock    := TCriticalSection.Create;
+  Self.Server  := TIdSipTcpServer.Create(nil);
   Self.SetPort(Port);
-  Self.Transport.OnRequest  := Self.DoOnTcpRequest;
-  Self.Transport.OnResponse := Self.DoOnTcpResponse;
+  Self.Server.OnRequest  := Self.DoOnTcpRequest;
+  Self.Server.OnResponse := Self.DoOnTcpResponse;
 end;
 
 destructor TIdSipTcpTransport.Destroy;
 begin
-  Self.Transport.Free;
+  Self.Server.Free;
+  Self.Lock.Free;
+  Self.Clients.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipTcpTransport.SendRequest(const R: TIdSipRequest);
+function TIdSipTcpTransport.GetTransportType: TIdSipTransportType;
+begin
+  Result := sttTCP;
+end;
+
+procedure TIdSipTcpTransport.SendRequest(const R: TIdSipRequest;
+                                         const Timeout: Cardinal = DefaultTimeout);
 var
   Client: TIdSipTcpClient;
   Host:   String;
   Port:   Cardinal;
 begin
-  Client := TIdSipTcpClient.Create(nil);
+  inherited SendRequest(R, Timeout);
+
+  Client := Self.AddClient;
   try
     Self.ExtractHostAndPort(R.RequestUri, Host, Port);
-    Client.Host := Host;
-    Client.Port := Port;
-    Client.OnResponse := Self.DoOnTcpResponse;
+    Client.Host    := Host;
+    Client.Port    := Port;
+    Client.Timeout := Timeout;
 
-    Client.Connect(DefaultTimeout);
-    try
-      Client.Send(R);
-    finally
-      Client.Disconnect;
-    end;
+    Client.Connect(Timeout);
+    Client.Send(R);
   finally
-    Client.Free;
+    Self.RemoveClient(Client);
   end;
 end;
 
@@ -210,8 +253,8 @@ var
 begin
   Client := TIdTcpClient.Create(nil);
   try
-    Client.Host := R.Path.LastHop.SentBy;
-    Client.Port := R.Path.LastHop.Port;
+    Client.Host := R.LastHop.SentBy;
+    Client.Port := R.LastHop.Port;
 
     Client.Connect(DefaultTimeout);
     try
@@ -226,27 +269,41 @@ end;
 
 procedure TIdSipTcpTransport.Start;
 begin
-  Self.Transport.Active := true;
+  Self.Server.Active := true;
 end;
 
 procedure TIdSipTcpTransport.Stop;
 begin
-  Self.Transport.Active := false;
+  Self.Server.Active := false;
 end;
 
 //* TIdSipTcpTransport Protected methods ***************************************
 
 function TIdSipTcpTransport.GetPort: Cardinal;
 begin
-  Result := Self.Transport.DefaultPort;
+  Result := Self.Server.DefaultPort;
 end;
 
 procedure TIdSipTcpTransport.SetPort(const Value: Cardinal);
 begin
-  Self.Transport.DefaultPort := Value;
+  Self.Server.DefaultPort := Value;
 end;
 
 //* TIdSipTcpTransport Private methods *****************************************
+
+function TIdSipTcpTransport.AddClient: TIdSipTcpClient;
+begin
+  Result := TIdSipTcpClient.Create(nil);
+  Self.Clients.Add(Result);
+
+  Result.OnFinished := Self.DoOnClientFinished;
+  Result.OnResponse := Self.DoOnTcpResponse;
+end;
+
+procedure TIdSipTcpTransport.DoOnClientFinished(Sender: TObject);
+begin
+  Self.RemoveClient(Sender as TIdSipTcpClient);
+end;
 
 procedure TIdSipTcpTransport.DoOnTcpRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
@@ -256,6 +313,16 @@ end;
 procedure TIdSipTcpTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
   Self.DoOnResponse(Sender, Response);
+end;
+
+procedure TIdSipTcpTransport.RemoveClient(Client: TIdSipTcpClient);
+begin
+  Self.Lock.Acquire;
+  try
+    Self.Clients.Remove(Client);
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 //******************************************************************************
@@ -280,7 +347,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipUdpTransport.SendRequest(const R: TIdSipRequest);
+function TIdSipUdpTransport.GetTransportType: TIdSipTransportType;
+begin
+  Result := sttUDP;
+end;
+
+procedure TIdSipUdpTransport.SendRequest(const R: TIdSipRequest;
+                                         const Timeout: Cardinal = DefaultTimeout);
 var
   Client:   TIdUdpClient;
   Host:     String;
@@ -289,6 +362,8 @@ var
   Response: TIdSipResponse;
   Reply:    String;
 begin
+  inherited SendRequest(R, Timeout);
+
   Client := TIdUdpClient.Create(nil);
   try
     Self.ExtractHostAndPort(R.RequestUri, Host, Port);
@@ -367,13 +442,15 @@ begin
 
   Self.ResetSentRequestCount;
   Self.fLastACK := TIdSipRequest.Create;
+  Self.fLastRequest := TIdSipRequest.Create;
   Self.fLastResponse := TIdSipResponse.Create;
 end;
 
 destructor TIdSipMockTransport.Destroy;
 begin
-  Self.fLastResponse.Free;
-  Self.fLastACK.Free;
+  Self.LastResponse.Free;
+  Self.LastRequest.Free;
+  Self.LastACK.Free;
 
   inherited Destroy;
 end;
@@ -386,6 +463,11 @@ end;
 procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
 begin
   Self.DoOnResponse(Self, R);
+end;
+
+function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
+begin
+  Result := Self.TransportType;
 end;
 
 procedure TIdSipMockTransport.RaiseException(const E: ExceptClass);
@@ -408,8 +490,11 @@ begin
   Self.fSentResponseCount := 0;
 end;
 
-procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest;
+                                          const Timeout: Cardinal = DefaultTimeout);
 begin
+  inherited SendRequest(R, Timeout);
+
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipMockTransport.SendRequest');
 
@@ -419,6 +504,8 @@ begin
   end
   else
     Inc(Self.fSentRequestCount);
+
+  Self.LastRequest.Assign(R);
 
   Self.DoOnRequest(Self, R);
 end;

@@ -7,12 +7,12 @@ uses
 
 type
   TestTIdSipMessage = class(TExtendedTestCase)
-  private
+  protected
     Message: TIdSipMessage;
   public
-    procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestLastHop;
     procedure TestReadBody;
     procedure TestSetCallID;
     procedure TestSetContentLength;
@@ -72,12 +72,6 @@ end;
 //******************************************************************************
 //* TestTIdSipMessage Public methods *******************************************
 
-procedure TestTIdSipMessage.SetUp;
-begin
-  inherited SetUp;
-
-end;
-
 procedure TestTIdSipMessage.TearDown;
 begin
   Self.Message.Free;
@@ -86,6 +80,14 @@ begin
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
+
+procedure TestTIdSipMessage.TestLastHop;
+begin
+  CheckNull(Self.Message.LastHop, 'Unexpected return for empty path');
+
+  Self.Message.Headers.Add(ViaHeaderFull);
+  Check(Self.Message.LastHop = Self.Message.Path.LastHop, 'Unexpected return');
+end;
 
 procedure TestTIdSipMessage.TestReadBody;
 var
@@ -399,34 +401,9 @@ begin
     H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw3.leo-ix.org;branch=z9hG4bK776asdhds';
     P := TIdSipViaPath.Create(H);
     try
-      CheckEquals('SIP/2.0/TCP gw1.leo-ix.org',
-                  Self.Request.Path.FirstHop.Value,
-                  'Before, FirstHop');
-      CheckEquals(';branch=z9hG4bK776asdhds',
-                  Self.Request.Path.FirstHop.ParamsAsString,
-                  'Before, FirstHop.ParamsAsString');
-      CheckEquals('SIP/2.0/TCP gw1.leo-ix.org',
-                  Self.Request.Path.LastHop.Value,
-                  'Before, LastHop');
-      CheckEquals(';branch=z9hG4bK776asdhds',
-                  Self.Request.Path.LastHop.ParamsAsString,
-                  'Before, LastHop.ParamsAsString');
-
       Self.Request.Path := P;
 
-      CheckEquals(2, Self.Request.Path.Length, 'Path length');
-      CheckEquals('SIP/2.0/TCP gw2.leo-ix.org',
-                  Self.Request.Path.LastHop.Value,
-                  'After, LastHop');
-      CheckEquals(';branch=z9hG4bK776asdhds',
-                  Self.Request.Path.LastHop.ParamsAsString,
-                  'After, LastHop.ParamsAsString');
-      CheckEquals('SIP/2.0/TCP gw3.leo-ix.org',
-                  Self.Request.Path.FirstHop.Value,
-                  'After, FirstHop');
-      CheckEquals(';branch=z9hG4bK776asdhds',
-                  Self.Request.Path.FirstHop.ParamsAsString,
-                  'After, FirstHop.ParamsAsString');
+      Check(Self.Request.Path.IsEqualTo(P), 'Path not correctly set');
     finally
       P.Free;
     end;

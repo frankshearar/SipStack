@@ -220,7 +220,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
+    procedure TestAssignFromBadlyFormedVia;
     procedure TestBranch;
+    procedure TestHasBranch;
     procedure TestIsRFC3261Branch;
     procedure TestIsEqualTo;
     procedure TestMaddr;
@@ -332,7 +335,6 @@ type
   published
     procedure TestAddAndLastHop;
     procedure TestClear;
-    procedure TestFirstHop;
     procedure TestRemoveLastHop;
   end;
 
@@ -2036,6 +2038,35 @@ end;
 
 //* TestTIdSipViaHeader Published methods **************************************
 
+procedure TestTIdSipViaHeader.TestAssign;
+var
+  V2: TIdSipViaHeader;
+begin
+  V2 := TIdSipViaHeader.Create;
+  try
+    Self.V.Value := 'SIP/7.0/SCTP localhost;branch=' + BranchMagicCookie + 'f00';
+    V2.Assign(Self.V);
+    Check(V2.IsEqualTo(Self.V), 'V2 not properly assigned to');
+  finally
+    V2.Free;
+  end;
+end;
+
+procedure TestTIdSipViaHeader.TestAssignFromBadlyFormedVia;
+var
+  V2: TIdSipViaHeader;
+begin
+  V2 := TIdSipViaHeader.Create;
+  try
+    Self.V.Branch := BranchMagicCookie + 'f00';
+    V2.Assign(Self.V);
+    Check(V2.IsEqualTo(Self.V), 'V2 not properly assigned to');
+    CheckEquals(Self.V.Branch, V2.Branch, 'Branch');
+  finally
+    V2.Free;
+  end;
+end;
+
 procedure TestTIdSipViaHeader.TestBranch;
 begin
   Self.V.Branch := BranchMagicCookie;
@@ -2057,6 +2088,14 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+procedure TestTIdSipViaHeader.TestHasBranch;
+begin
+  Check(not Self.V.HasBranch, 'No branch should be assigned on creation');
+
+  Self.V.Branch := BranchMagicCookie + 'f00';
+  Check(Self.V.HasBranch, 'Branch should have been set');
 end;
 
 procedure TestTIdSipViaHeader.TestIsRFC3261Branch;
@@ -3532,38 +3571,6 @@ begin
   CheckEquals(0, Self.Headers.Count, 'After Clear()');
 end;
 
-procedure TestTIdSipViaPath.TestFirstHop;
-var
-  Hop: TIdSipViaHeader;
-begin
-  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-
-  Hop.SentBy       := '127.0.0.1';
-  Hop.Port       := 5060;
-  Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttSCTP;
-
-  CheckEquals('127.0.0.1', Self.Path.FirstHop.SentBy,       'SentBy');
-  CheckEquals(5060,        Self.Path.FirstHop.Port,       'Port');
-  CheckEquals('SIP/2.0',   Self.Path.FirstHop.SipVersion, 'SipVersion');
-  Check      (sttSCTP =    Self.Path.FirstHop.Transport,  'Transport');
-
-  Check(Self.Path.FirstHop = Self.Path.LastHop, 'Sanity check on single-node Path');
-
-  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-  Hop.SentBy     := '192.168.0.1';
-  Hop.Port       := 5061;
-  Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttTLS;
-
-  CheckEquals('192.168.0.1', Self.Path.FirstHop.SentBy,     'SentBy');
-  CheckEquals(5061,          Self.Path.FirstHop.Port,       'Port');
-  CheckEquals('SIP/2.0',     Self.Path.FirstHop.SipVersion, 'SipVersion');
-  Check      (sttTLS =       Self.Path.FirstHop.Transport,  'Transport');
-
-  Check(Self.Path.FirstHop <> Self.Path.LastHop, 'Sanity check on two-node Path');
-end;
-
 procedure TestTIdSipViaPath.TestRemoveLastHop;
 begin
   (Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader).SentBy := '1';
@@ -3573,7 +3580,7 @@ begin
   CheckEquals('1', Self.Path.LastHop.SentBy, 'Sanity check');
   Self.Path.RemoveLastHop;
   CheckEquals('2', (Self.Headers.Items[0] as TIdSipViaHeader).SentBy, 'new LastHop');
-  CheckEquals('3', (Self.Headers.Items[1] as TIdSipViaHeader).SentBy, 'FirstHop');
+  CheckEquals('3', (Self.Headers.Items[1] as TIdSipViaHeader).SentBy, 'First Hop');
 end;
 
 initialization

@@ -9,6 +9,7 @@ type
   TestTIdSipTcpClient = class(TThreadingTestCase)
   private
     Client:                TIdSipTcpClient;
+    Finished:              Boolean;
     Invite:                TIdSipRequest;
     InviteCount:           Cardinal;
     ReceivedResponseCount: Cardinal;
@@ -19,6 +20,7 @@ type
     procedure CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
+    procedure DoOnFinished(Sender: TObject);
     procedure SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
   public
@@ -26,6 +28,8 @@ type
     procedure TearDown; override;
   published
     procedure TestConnectAndDisconnect;
+    procedure TestOnFinished;
+    procedure TestOnFinishedWithServerDisconnect;
     procedure TestReceiveOkResponse;
     procedure TestReceiveProvisionalAndOkResponse;
     procedure TestSendInvite;
@@ -72,6 +76,7 @@ begin
     P.Free;
   end;
 
+  Self.Finished              := false;
   Self.InviteCount           := 0;
   Self.ReceivedResponseCount := 0;
   Self.Server.Active         := true;
@@ -178,6 +183,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpClient.DoOnFinished(Sender: TObject);
+begin
+  try
+    Self.Finished := true;
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
 var
   Threads: TList;
@@ -216,6 +235,34 @@ begin
   finally
     Self.Client.Disconnect;
   end;
+end;
+
+procedure TestTIdSipTcpClient.TestOnFinished;
+begin
+  Self.Client.OnFinished := Self.DoOnFinished;
+  Self.Server.OnRequest  := Self.SendOkResponse;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+  Check(Self.Finished, 'Client never notified us of its finishing');
+end;
+
+procedure TestTIdSipTcpClient.TestOnFinishedWithServerDisconnect;
+begin
+  Self.Client.OnFinished := Self.DoOnFinished;
+  Self.Server.OnRequest  := Self.CutConnection;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+  Check(Self.Finished, 'Client never notified us of its finishing');
 end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponse;

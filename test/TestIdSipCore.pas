@@ -203,6 +203,13 @@ begin
   CheckEquals(Request.RequestUri,
               Request.ToHeader.Address.GetFullURI,
               'To header incorrectly set');
+
+  CheckEquals(1,
+              Request.Path.Length,
+              'New requests MUST have a Via header; cf. RFC 3261 section 8.1.1.7');
+  Check(Request.LastHop.HasBranch,
+        'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
+
 end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************

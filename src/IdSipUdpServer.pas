@@ -86,9 +86,9 @@ begin
 
       Msg.ReadBody(Self.Parser.Source);
 
-      if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
-        or (Msg.Path.LastHop.SentBy <> ABinding.IP) then
-        Msg.Path.LastHop.Received := ABinding.IP;
+      if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
+        or (Msg.LastHop.SentBy <> ABinding.IP) then
+        Msg.LastHop.Received := ABinding.IP;
 
       if (Msg is TIdSipRequest) then
         Self.DoOnRequest(ABinding, Msg as TIdSipRequest)

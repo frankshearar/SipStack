@@ -11,16 +11,21 @@ type
   // * keep the connection alive for "long enough"
   TIdSipTcpClient = class(TIdTCPClient)
   private
+    fOnFinished: TNotifyEvent;
     fOnResponse: TIdSipTcpResponseEvent;
     fTimeout:    Cardinal;
 
+    procedure DoOnFinished;
     procedure DoOnResponse(const R: TIdSipResponse);
     procedure ReadResponses;
+  protected
+    procedure DoOnDisconnected; override;
   public
     constructor Create(AOwner: TComponent); override;
 
     procedure Send(const Request: TIdSipRequest);
 
+    property OnFinished: TNotifyEvent           read fOnFinished write fOnFinished;
     property OnResponse: TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
     property Timeout:    Cardinal               read fTimeout write fTimeout;
   end;
@@ -48,7 +53,21 @@ begin
   Self.ReadResponses;
 end;
 
+//* TIdSipTcpClient Protected methods ******************************************
+
+procedure TIdSipTcpClient.DoOnDisconnected;
+begin
+  inherited DoOnDisconnected;
+  Self.DoOnFinished;
+end;
+
 //* TIdSipTcpClient Private methods ********************************************
+
+procedure TIdSipTcpClient.DoOnFinished;
+begin
+  if Assigned(Self.OnFinished) then
+    Self.OnFinished(Self);
+end;
 
 procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse);
 begin
@@ -102,6 +121,7 @@ begin
   except
     on EIdConnClosedGracefully do;
   end;
+  Self.DoOnFinished;
 end;
 
 end.

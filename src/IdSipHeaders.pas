@@ -297,9 +297,11 @@ type
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
-    function DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
-    function IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
-    function IsRFC3261Branch: Boolean;
+    procedure Assign(Src: TPersistent); override;
+    function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
+    function  HasBranch: Boolean;
+    function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
+    function  IsRFC3261Branch: Boolean;
 
     property Branch:     String              read GetBranch write SetBranch;
     property SentBy:     String              read fSentBy write fSentBy;
@@ -424,7 +426,6 @@ type
   public
     constructor Create(const Headers: TIdSipHeaders);
 
-    function  FirstHop: TIdSipViaHeader;
     function  LastHop: TIdSipViaHeader;
     function  Length: Integer;
     procedure RemoveLastHop;
@@ -1636,12 +1637,41 @@ end;
 //******************************************************************************
 //* TIdSipViaHeader Public methods *********************************************
 
+procedure TIdSipViaHeader.Assign(Src: TPersistent);
+var
+  V: TIdSipViaHeader;
+begin
+  if (Src is TIdSipViaHeader) then begin
+    V := Src as TIdSipViaHeader;
+
+    // Yes, we're referencing private variables directly. We do this so we
+    // avoid the parse checking that the setters normally do. For instance,
+    // a blank or RFC 2543 style branch is invalid in RFC 3261, but we still
+    // need to be able to work with the (malformed) Via.
+//    fBranch     := V.Branch;
+    fSentBy     := V.SentBy;
+    fSipVersion := V.SipVersion;
+    fPort       := V.Port;
+    fTransport  := V.Transport;
+
+    // And we use the usual way of setting everything else.
+    Self.Parameters := V.Parameters;
+  end
+  else
+    inherited Assign(Src);
+end;
+
 function TIdSipViaHeader.DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
 begin
   if (T = sttTLS) then
     Result := IdPort_SIP_TLS
   else
     Result := IdPORT_SIP;
+end;
+
+function TIdSipViaHeader.HasBranch: Boolean;
+begin
+  Result := Self.Branch <> '';
 end;
 
 function TIdSipViaHeader.IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
@@ -2344,20 +2374,6 @@ begin
   inherited Create(Headers, ViaHeaderFull);
 end;
 
-function TIdSipViaPath.FirstHop: TIdSipViaHeader;
-var
-  I: Integer;
-begin
-  Result := nil;
-  I := Self.Headers.Count - 1;
-
-  while (I >= 0) and not Assigned(Result) do
-    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
-      Result := Self.Headers.Items[I] as TIdSipViaHeader
-    else
-      Dec(I);
-end;
-
 function TIdSipViaPath.LastHop: TIdSipViaHeader;
 var
   I: Integer;
@@ -2384,6 +2400,6 @@ end;
 
 initialization
 finalization
-  GIdSipHeadersMap.Free;
   GCanonicalHeaderNames.Free;
+  GIdSipHeadersMap.Free;
 end.

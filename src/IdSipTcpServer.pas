@@ -99,9 +99,9 @@ begin
               Msg.ContentLength := 0;
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
-            if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
-              or (Msg.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
-              Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
+            if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
+              or (Msg.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
+              Msg.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
             Msg.Accept(Self);
           finally

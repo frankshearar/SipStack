@@ -154,7 +154,7 @@ end;
 procedure TestTIdSipUdpServer.CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
-    CheckNotEquals('', Request.Path.LastHop.Received, 'Received param not appended by transport layer');
+    CheckNotEquals('', Request.LastHop.Received, 'Received param not appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -168,7 +168,7 @@ end;
 procedure TestTIdSipUdpServer.CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
-    CheckEquals('', Request.Path.LastHop.Received, 'Received param appended by transport layer');
+    CheckEquals('', Request.LastHop.Received, 'Received param appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except

@@ -112,9 +112,10 @@ type
     property InitialRequest: TIdSipRequest               read fInitialRequest;
     property Dispatcher:     TIdSipTransactionDispatcher read fDispatcher;
   public
-    class function GetTransactionType(const Request: TIdSipRequest): TIdSipTransactionClass; 
+    class function GetTransactionType(const Request: TIdSipRequest): TIdSipTransactionClass;
 
     constructor Create; virtual;
+    destructor  Destroy; override;
 
     procedure HandleRequest(const R: TIdSipRequest); virtual;
     procedure HandleResponse(const R: TIdSipResponse); virtual;
@@ -307,9 +308,9 @@ function TIdSipTransactionDispatcher.Match(const ReceivedRequest,
                                                  TranRequest: TIdSipRequest): Boolean;
 begin
   // cf. RFC 3261 Section 17.2.3
-  if ReceivedRequest.Path.LastHop.IsRFC3261Branch then begin
-    Result := (ReceivedRequest.Path.LastHop.Branch = TranRequest.Path.LastHop.Branch)
-          and (ReceivedRequest.Path.LastHop.SentBy = TranRequest.Path.LastHop.SentBy);
+  if ReceivedRequest.LastHop.IsRFC3261Branch then begin
+    Result := (ReceivedRequest.LastHop.Branch = TranRequest.LastHop.Branch)
+          and (ReceivedRequest.LastHop.SentBy = TranRequest.LastHop.SentBy);
 
     if ReceivedRequest.IsACK then
       Result := Result and TranRequest.IsInvite
@@ -329,7 +330,7 @@ begin
         and (TranRequest.Path.Length > 0);
 
   Result := Result
-        and (ReceivedResponse.Path.LastHop.Branch = TranRequest.Path.LastHop.Branch);
+        and (ReceivedResponse.LastHop.Branch = TranRequest.LastHop.Branch);
 
   if (ReceivedResponse.CSeq.Method = MethodAck) then
     Result := Result
@@ -350,17 +351,17 @@ begin
   // We must keep an association between open connections and transactions. If
   // the TCP connection that gave us the Request is still open then we MUST use
   // that connection to send back R. Otherwise we must open a new connection to
-  // the IP address in R.Path.LastHop.Received. Should that fail we must use
+  // the IP address in R.LastHop.Received. Should that fail we must use
   // RFC:3263 to get the details we need to open a new connection.
 
-  // If R.Path.LastHop.Maddr <> '' then the response must be forwarded there. If
+  // If R.LastHop.Maddr <> '' then the response must be forwarded there. If
   // the address is a multicast address then send R using the TTL of
-  // R.Path.LastHop.TTL or 1 if TTL = 0.
+  // R.LastHop.TTL or 1 if TTL = 0.
 
-  // For unreliable unicast transports if R.Path.LastHop.Received <> '' then
+  // For unreliable unicast transports if R.LastHop.Received <> '' then
   // send the response there. If this fails follow RFC:3263 section 5.
 
-  // Otherwise, send the response to the address in R.Path.LastHop.SentBy using
+  // Otherwise, send the response to the address in R.LastHop.SentBy using
   // the procedures of RFC:3263 section 5.
 end;
 
@@ -383,7 +384,7 @@ function TIdSipTransactionDispatcher.WillUseReliableTranport(const R: TIdSipMess
 begin
   Assert(R.Path.Length > 0, 'Messages must have at least one Via header');
 
-  Result := R.Path.LastHop.Transport <> sttUDP;
+  Result := R.LastHop.Transport <> sttUDP;
 end;
 
 //* TIdSipTransactionDispatcher Protected methods ******************************
@@ -539,6 +540,15 @@ end;
 constructor TIdSipTransaction.Create;
 begin
   inherited Create;
+
+  Self.fInitialRequest := TIdSipRequest.Create;
+end;
+
+destructor TIdSipTransaction.Destroy;
+begin
+  Self.InitialRequest.Free;
+
+  inherited Create;
 end;
 
 procedure TIdSipTransaction.HandleRequest(const R: TIdSipRequest);
@@ -554,7 +564,8 @@ procedure TIdSipTransaction.Initialise(const Dispatcher:     TIdSipTransactionDi
                                        const Timeout:        Cardinal = InitialT1_64);
 begin
   Self.fDispatcher     := Dispatcher;
-  Self.fInitialRequest := InitialRequest;
+
+  Self.InitialRequest.Assign(InitialRequest);
 end;
 
 //* TIdSipTransaction Protected methods ****************************************
@@ -774,7 +785,7 @@ begin
     Result.CallID          := Self.InitialRequest.CallID;
     Result.From            := Self.InitialRequest.From;
     Result.ToHeader        := R.ToHeader;
-    Result.Path.Add(Self.InitialRequest.Path.LastHop);
+    Result.Path.Add(Self.InitialRequest.LastHop);
     Result.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo;
     Result.CSeq.Method     := MethodAck;
     Result.ContentLength   := 0;
@@ -1246,7 +1257,7 @@ begin
     TimestampHeaders.Free;
   end;
 
-  Res.Path.Add(Self.InitialRequest.Path.LastHop);
+  Res.Path.Add(Self.InitialRequest.LastHop);
 end;
 
 procedure TIdSipServerNonInviteTransaction.OnTimerJ(Sender: TObject);
