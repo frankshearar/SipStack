@@ -219,9 +219,9 @@ begin
   Self.Log(R.AsString, dirOut);
 
   if R.IsAck then
-    Self.LastACK.Assign(R);
-
-  Self.LastRequest.Assign(R);
+    Self.LastACK.Assign(R)
+  else
+    Self.LastRequest.Assign(R);
 
   if Assigned(Self.FailWith) then
     raise EIdSipTransport.Create(Self,
