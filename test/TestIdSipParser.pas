@@ -1234,7 +1234,7 @@ procedure TestTIdSipParser.TestParseResponseFoldedHeader;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('SIP/1.0 200 OK'#13#10
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
                           + 'From: Case'#13#10
                           + ' <sip:case@fried.neurons.org>'#13#10
                           + #9';tag=1928301774'#13#10
@@ -1247,7 +1247,7 @@ begin
     Self.P.Source := Str;
     Self.P.ParseResponse(Response);
 
-    CheckEquals('SIP/1.0', Response.SipVersion, 'SipVersion');
+    CheckEquals('SIP/2.0', Response.SipVersion, 'SipVersion');
     CheckEquals(200,       Response.StatusCode, 'StatusCode');
     CheckEquals('OK',      Response.StatusText, 'StatusTest');
 
@@ -1266,7 +1266,7 @@ procedure TestTIdSipParser.TestParseResponseInvalidStatusCode;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('SIP/1.0 Aheh OK'#13#10);
+  Str := TStringStream.Create('SIP/2.0 Aheh OK'#13#10);
   try
     Self.P.Source := Str;
     Self.P.ParseResponse(Self.Response);
