@@ -111,9 +111,9 @@ type
     function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Receiver: TIdSipTransport): Boolean; override;
-    procedure ReceiveResponse(Response: TIdSipResponse;
+    function  ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
-                              Receiver: TIdSipTransport); override;
+                              Receiver: TIdSipTransport): Boolean; override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
     property DefaultExpiryTime: Cardinal                      read GetDefaultExpiryTime write SetDefaultExpiryTime;
@@ -410,10 +410,11 @@ begin
   end;
 end;
 
-procedure TIdSipRegistrar.ReceiveResponse(Response: TIdSipResponse;
+function TIdSipRegistrar.ReceiveResponse(Response: TIdSipResponse;
                                           Transaction: TIdSipTransaction;
-                                          Receiver: TIdSipTransport);
+                                          Receiver: TIdSipTransport): Boolean;
 begin
+  Result := inherited ReceiveResponse(Response, Transaction, Receiver);
   // We don't expect to receive responses, so we just drop them on the floor.
 end;
 
