@@ -213,12 +213,17 @@ type
     property UserAgentName: String              read fUserAgentName write fUserAgentName;
   end;
 
+  // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
+  // to an INVITE until it receives an ACK. Thus I provide an exponential
+  // back-off timer starting with an interval of T1 milliseconds and capping
+  // the interval at T2 milliseconds.
   TIdSipSessionTimer = class(TObject)
   private
-    Lock:  TCriticalSection;
-    T1:    Cardinal;
-    T2:    Cardinal;
-    Timer: TIdSipTimer;
+    Lock:    TCriticalSection;
+    T1:      Cardinal;
+    T2:      Cardinal;
+    Session: TIdSipSession;
+    Timer:   TIdSipTimer;
 
     procedure OnTimer(Sender: TObject);
   public
@@ -1279,8 +1284,9 @@ begin
 
   Self.Lock := TCriticalSection.Create;
 
-  Self.T1 := T1;
-  Self.T2 := T2;
+  Self.Session := Session;
+  Self.T1      := T1;
+  Self.T2      := T2;
 
   Self.Timer := TIdSipTimer.Create;
   Self.Timer.Interval := Self.T1;
@@ -1301,10 +1307,12 @@ procedure TIdSipSessionTimer.Fire;
 begin
   Self.Lock.Acquire;
   try
-    Self.Timer.Interval := 2*Self.Timer.Interval;
+    Self.Timer.Interval := Min(2*Self.Timer.Interval, Self.T2);
   finally
-    Self.Lock.Free;
+    Self.Lock.Release;
   end;
+
+  Self.Session.ResendLastResponse;
 end;
 
 procedure TIdSipSessionTimer.Start;
@@ -1323,7 +1331,7 @@ begin
   try
     Result := Self.Timer.Interval;
   finally
-    Self.Lock.Free;
+    Self.Lock.Release;
   end;
 end;
 

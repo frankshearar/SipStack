@@ -196,6 +196,7 @@ type
   private
     Session: TIdSipMockSession;
     Timer:   TIdSipSessionTimer;
+    UA:      TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -219,6 +220,7 @@ begin
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipSession.Suite);
+  Result.AddTest(TestTIdSipSessionTimer.Suite);
 end;
 
 //******************************************************************************
@@ -2703,7 +2705,8 @@ procedure TestTIdSipSessionTimer.SetUp;
 begin
   inherited SetUp;
 
-  Self.Session := TIdSipMockSession.Create;
+  Self.UA      := TIdSipUserAgentCore.Create;
+  Self.Session := TIdSipMockSession.Create(UA);
   Self.Timer := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
 end;
 
@@ -2711,6 +2714,7 @@ procedure TestTIdSipSessionTimer.TearDown;
 begin
   Self.Timer.Free;
   Self.Session.Free;
+  Self.UA.Free;
 
   inherited TearDown;
 end;

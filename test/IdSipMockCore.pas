@@ -31,7 +31,7 @@ type
   private
     fResponseResent: Boolean;
   public
-    constructor Create;
+    constructor Create(UA: TIdSipUserAgentCore);
 
     procedure ResendLastResponse; override;
 
@@ -88,9 +88,9 @@ end;
 //******************************************************************************
 //* TIdSipMockSession Public methods *******************************************
 
-constructor TIdSipMockSession.Create;
+constructor TIdSipMockSession.Create(UA: TIdSipUserAgentCore);
 begin
-  inherited Create;
+  inherited Create(UA);
 
   Self.fResponseResent := false;
 end;
