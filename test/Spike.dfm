@@ -84,9 +84,9 @@ object rnidSpike: TrnidSpike
     TabOrder = 1
     object Log: TMemo
       Left = 0
-      Top = 40
+      Top = 89
       Width = 547
-      Height = 413
+      Height = 364
       Align = alClient
       ScrollBars = ssVertical
       TabOrder = 0
@@ -95,48 +95,48 @@ object rnidSpike: TrnidSpike
       Left = 0
       Top = 0
       Width = 547
-      Height = 40
+      Height = 89
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
       object Label1: TLabel
-        Left = 0
+        Left = 368
         Top = 26
         Width = 71
         Height = 13
         Caption = 'Session Count:'
       end
       object SessionCounter: TLabel
-        Left = 74
+        Left = 442
         Top = 26
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label2: TLabel
-        Left = 101
-        Top = 26
+        Left = 387
+        Top = 42
         Width = 50
         Height = 13
         Caption = 'RTP bytes'
       end
       object RTPDataCount: TLabel
-        Left = 156
-        Top = 26
+        Left = 442
+        Top = 42
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label3: TLabel
-        Left = 195
-        Top = 26
+        Left = 385
+        Top = 58
         Width = 51
         Height = 13
         Caption = 'UDP bytes'
       end
       object UDPDataCount: TLabel
-        Left = 252
-        Top = 26
+        Left = 442
+        Top = 58
         Width = 6
         Height = 13
         Caption = '0'
@@ -178,17 +178,34 @@ object rnidSpike: TrnidSpike
       end
     end
   end
+  object Register: TButton
+    Left = 0
+    Top = 24
+    Width = 75
+    Height = 25
+    Caption = 'Register'
+    TabOrder = 2
+    OnClick = RegisterClick
+  end
+  object RegistrarUri: TEdit
+    Left = 76
+    Top = 25
+    Width = 290
+    Height = 21
+    TabOrder = 3
+    Text = 'sip:wsjames;transport=udp'
+  end
   object UiTimer: TTimer
     Enabled = False
     Interval = 100
     OnTimer = UiTimerTimer
-    Left = 8
-    Top = 48
+    Left = 584
+    Top = 8
   end
   object TextTimer: TTimer
     Interval = 300
     OnTimer = TextTimerTimer
-    Left = 40
-    Top = 48
+    Left = 616
+    Top = 8
   end
 end
