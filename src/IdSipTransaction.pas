@@ -199,11 +199,11 @@ type
   // Bar, and Bar is the last line of Foo.
   TIdSipTransaction = class(TIdInterfacedObject)
   private
-    fInitialRequest:  TIdSipRequest;
-    fState:           TIdSipTransactionState;
-    fDispatcher:      TIdSipTransactionDispatcher;
-    fLastResponse:    TIdSipResponse;
-    TranListeners:    TIdNotificationList;
+    fInitialRequest: TIdSipRequest;
+    fState:          TIdSipTransactionState;
+    fDispatcher:     TIdSipTransactionDispatcher;
+    fLastResponse:   TIdSipResponse;
+    TranListeners:   TIdNotificationList;
   protected
     FirstTime: Boolean;
 
