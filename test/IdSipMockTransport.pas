@@ -12,7 +12,7 @@ unit IdSipMockTransport;
 interface
 
 uses
-  IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
+  IdSipLocator, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
 
 type
   TIdMessageDirection = (dirIn, dirOut);
@@ -51,8 +51,10 @@ type
     function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
-    procedure SendRequest(R: TIdSipRequest); override;
-    procedure SendResponse(R: TIdSipResponse); override;
+    procedure SendRequest(R: TIdSipRequest;
+                          Dest: TIdSipLocation); override;
+    procedure SendResponse(R: TIdSipResponse;
+                           Dest: TIdSipLocation); override;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
     class function DefaultPort: Cardinal; override;
@@ -304,7 +306,8 @@ begin
   Result := Self.fPort;
 end;
 
-procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);
+procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest;
+                                          Dest: TIdSipLocation);
 begin
   Self.NotifyTransportSendingListeners(R);
 
@@ -328,7 +331,8 @@ begin
   Self.DispatchRequest(R);
 end;
 
-procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
+procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse;
+                                           Dest: TIdSipLocation);
 begin
   Self.NotifyTransportSendingListeners(R);
 

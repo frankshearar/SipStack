@@ -12,9 +12,9 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTcpServer, IdSipTransport, IdSocketHandle,
-  IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx,
-  TestFrameworkSip;
+  Classes, IdSipLocator, IdSipMessage, IdSipTcpServer, IdSipTransport,
+  IdSocketHandle, IdTcpServer, SyncObjs, SysUtils, TestFramework,
+  TestFrameworkEx, TestFrameworkSip;
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
@@ -95,7 +95,9 @@ type
   protected
     CheckingRequestEvent:  TTestIdSipRequestEvent;
     CheckingResponseEvent: TTestIdSipResponseEvent;
+    HighPortLocation:      TIdSipLocation;
     HighPortTransport:     TIdSipTransport;
+    LowPortLocation:       TIdSipLocation;
     LowPortTransport:      TIdSipTransport;
     Parser:                TIdSipParser;
     ReceivedRequest:       Boolean;
@@ -814,6 +816,13 @@ begin
                           Self.DefaultPort);
   Self.LowPortTransport.Start;
 
+  Self.HighPortLocation := TIdSipLocation.Create(Self.TransportType.GetTransportType,
+                                                 Self.HighPortTransport.Address,
+                                                 Self.HighPortTransport.Port);
+  Self.LowPortLocation := TIdSipLocation.Create(Self.TransportType.GetTransportType,
+                                                Self.LowPortTransport.Address,
+                                                Self.LowPortTransport.Port);
+
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy    := Self.LowPortTransport.Address;
   Self.Request.LastHop.Transport := Self.LowPortTransport.GetTransportType;
@@ -839,6 +848,9 @@ begin
 
   Self.LowPortTransport.Stop;
   Self.HighPortTransport.Stop;
+
+  Self.LowPortLocation.Free;
+  Self.HighPortLocation.Free;
 
   Self.LowPortTransport.Free;
   Self.HighPortTransport.Free;
@@ -1124,7 +1136,7 @@ procedure TestTIdSipTransport.SendOkResponse(Transport: TIdSipTransport);
 begin
   Self.Response.StatusCode := SIPOK;
 
-  Transport.Send(Self.Response);
+  Transport.Send(Self.Response, Self.HighPortLocation);
 end;
 
 procedure TestTIdSipTransport.SetEvent(Sender: TObject;
@@ -1161,7 +1173,7 @@ begin
   // We check that HighPortTransport did actually get it.
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1177,7 +1189,7 @@ begin
   Self.CheckingRequestEvent  := Self.ReturnResponse;
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1189,7 +1201,7 @@ procedure TestTIdSipTransport.TestCanReceiveUnsolicitedResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.HighPortTransport.Send(Self.Response);
+  Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1231,7 +1243,7 @@ begin
   // in production, because it's wilfully wrong.
   Self.Response.LastHop.SentBy := 'unknown.host';
   Self.Response.LastHop.Received := Self.LowPortTransport.Address;
-  Self.LowPortTransport.Send(Self.Response);
+  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
   Self.WaitForSignaled;
   Check(not Self.ReceivedResponse,
@@ -1305,7 +1317,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamDifferentIPv4SentBy;
 
   Self.Request.LastHop.SentBy := '127.0.0.3';
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1315,7 +1327,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamFQDNSentBy;
 
   Self.Request.LastHop.SentBy := 'localhost';
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1325,7 +1337,7 @@ begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
   // This is a bit of a hack. We want to make sure the sent-by's an IP.
   Self.HighPortTransport.HostName := Self.HighPortTransport.Address;
-  Self.HighPortTransport.Send(Self.Request);
+  Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1334,7 +1346,7 @@ procedure TestTIdSipTransport.TestSendRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1347,7 +1359,7 @@ begin
   Self.Request.RequestUri.Host := Self.LowPortTransport.HostName;
   Self.Request.RequestUri.Port := Self.LowPortTransport.Port;
   Self.CheckingRequestEvent := Self.CheckSendRequestFromNonStandardPort;
-  Self.HighPortTransport.Send(Self.Request);
+  Self.HighPortTransport.Send(Self.Request, Self.LowPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1355,7 +1367,7 @@ end;
 procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1364,7 +1376,7 @@ procedure TestTIdSipTransport.TestSendResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.LowPortTransport.Send(Self.Response);
+  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -1376,7 +1388,7 @@ procedure TestTIdSipTransport.TestSendResponseFromNonStandardPort;
 begin
   Self.Response.LastHop.Port := Self.LowPortTransport.Port;
   Self.CheckingResponseEvent := Self.CheckSendResponseFromNonStandardPort;
-  Self.HighPortTransport.Send(Self.Response);
+  Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1400,7 +1412,7 @@ begin
         Self.LowPortTransport.AddTransportListener(LowPortListener);
         try
           Self.Response.LastHop.Received := Self.LowPortTransport.Address;
-          Self.HighPortTransport.Send(Self.Response);
+          Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
           // It's not perfect, but anyway. We need to wait long enough for
           // LowPortTransport to get its response.
@@ -1512,7 +1524,7 @@ begin
   Self.ExceptionMessage := 'Waiting for rport request';
   Self.LowPortTransport.UseRport := true;
   Self.CheckingRequestEvent := Self.CheckUseRport;
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 end;
@@ -1895,7 +1907,7 @@ end;
 procedure TestTIdSipUDPTransport.TestLeaveNonRportRequestsUntouched;
 begin
   Self.CheckingRequestEvent := Self.CheckLeaveNonRportRequestsUntouched;
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;  
 
@@ -1910,7 +1922,7 @@ begin
     Self.Response.LastHop.Maddr  := Self.MaddrTransport.Address;
     Self.Response.LastHop.SentBy := Self.MaddrTransport.Address;
 
-    Self.LowPortTransport.Send(Self.Response);
+    Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
 
     Self.WaitForSignaled;
   finally
@@ -2011,7 +2023,7 @@ procedure TestTIdSipUDPTransport.TestRportParamFilledIn;
 begin
   Self.CheckingRequestEvent := Self.CheckRportParamFilledIn;
   Self.Request.LastHop.Params[RportParam] := '';
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 
@@ -2027,7 +2039,7 @@ begin
   // port x for responses, as per RFC 3581
   Self.CheckingRequestEvent := Self.NoteSourcePort;
   Self.Request.LastHop.Params[RportParam] := '';
-  Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
 
   Self.WaitForSignaled;
 

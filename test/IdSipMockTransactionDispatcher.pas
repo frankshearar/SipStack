@@ -21,6 +21,7 @@ type
     fTransportType: String;
     Transports:     TStrings;
 
+    function GetMockLocator: TIdSipMockLocator;
     function GetTransport: TIdSipMockTransport;
     function TransportAt(Index: Integer): TIdSipMockTransport;
   public
@@ -33,6 +34,7 @@ type
     procedure SendToTransport(Response: TIdSipResponse;
                               Dests: TIdSipLocations); override;
 
+    property MockLocator:   TIdSipMockLocator   read GetMockLocator;
     property Transport:     TIdSipMockTransport read GetTransport;
     property TransportType: String              read fTransportType write fTransportType;
   end;
@@ -41,6 +43,11 @@ implementation
 
 uses
   IdSipConsts, SysUtils;
+
+const
+  NoDestinationsForResponse = 'Couldn''t send the response because there are '
+                            + 'no destinations: check your A/AAAA/etc setup in '
+                            + 'your mock locator';
 
 //******************************************************************************
 //* TIdSipMockTransactionDispatcher                                            *
@@ -107,16 +114,24 @@ end;
 procedure TIdSipMockTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
                                                           Dest: TIdSipLocation);
 begin
-  Self.Transport.Send(Request);
+  Self.Transport.Send(Request, Dest);
 end;
 
 procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipResponse;
                                                           Dests: TIdSipLocations);
 begin
-  Self.Transport.Send(Response);
+  if Dests.IsEmpty then
+    raise Exception.Create(NoDestinationsForResponse);
+
+  Self.Transport.Send(Response, Dests[0]);
 end;
 
 //* TIdSipMockTransactionDispatcher Private methods ****************************
+
+function TIdSipMockTransactionDispatcher.GetMockLocator: TIdSipMockLocator;
+begin
+  Result := Self.Locator as TIdSipMockLocator;
+end;
 
 function TIdSipMockTransactionDispatcher.GetTransport: TIdSipMockTransport;
 var

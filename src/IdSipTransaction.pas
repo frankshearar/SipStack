@@ -765,7 +765,7 @@ begin
   T := Self.FindAppropriateTransport(Dest);
 
   if Assigned(T) then
-    T.Send(Request)
+    T.Send(Request, Dest)
   else
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
@@ -785,7 +785,7 @@ begin
 
     if Assigned(Transport) then begin
       try
-        Transport.Send(Response);
+        Transport.Send(Response, Dests[Current]);
         Sent := true;
       except
         on EIdSipTransport do;

@@ -12,7 +12,7 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification,
+  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification, IdSipLocator,
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
   IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
 
@@ -50,7 +50,6 @@ type
   // in various ways, and present them to my listeners. Together, all the
   // instances of my subclasses form the Transport layer of the SIP stack.
   TIdSipTransport = class(TIdInterfacedObject,
-                          IIdSipMessageVisitor,
                           IIdSipMessageListener)
   private
     fHostName:                 String;
@@ -84,8 +83,10 @@ type
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure ReturnBadRequest(Request: TIdSipRequest;
                                Target: TIdSipConnectionBindings);
-    procedure SendRequest(R: TIdSipRequest); virtual;
-    procedure SendResponse(R: TIdSipResponse); virtual;
+    procedure SendRequest(R: TIdSipRequest;
+                          Dest: TIdSipLocation); virtual;
+    procedure SendResponse(R: TIdSipResponse;
+                           Dest: TIdSipLocation); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetAddress(const Value: String); virtual;
     procedure SetPort(Value: Cardinal);
@@ -110,11 +111,10 @@ type
     function  IsReliable: Boolean; virtual;
     procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure RemoveTransportSendingListener(const Listener: IIdSipTransportSendingListener);
-    procedure Send(Msg: TIdSipMessage);
+    procedure Send(Msg: TIdSipMessage;
+                   Dest: TIdSipLocation);
     procedure Start; virtual;
     procedure Stop; virtual;
-    procedure VisitRequest(Request: TIdSipRequest);
-    procedure VisitResponse(Response: TIdSipResponse);
 
     property Address:  String   read GetAddress write SetAddress;
     property HostName: String   read fHostName write fHostName;
@@ -164,8 +164,10 @@ type
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure InstantiateServer; override;
-    procedure SendRequest(R: TIdSipRequest); override;
-    procedure SendResponse(R: TIdSipResponse); override;
+    procedure SendRequest(R: TIdSipRequest;
+                          Dest: TIdSipLocation); override;
+    procedure SendResponse(R: TIdSipResponse;
+                           Dest: TIdSipLocation); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
   public
@@ -230,8 +232,10 @@ type
     procedure InstantiateServer; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings); override;
-    procedure SendRequest(R: TIdSipRequest); override;
-    procedure SendResponse(R: TIdSipResponse); override;
+    procedure SendRequest(R: TIdSipRequest;
+                          Dest: TIdSipLocation); override;
+    procedure SendResponse(R: TIdSipResponse;
+                           Dest: TIdSipLocation); override;
   public
     class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
@@ -429,13 +433,17 @@ begin
   Self.TransportSendingListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSipTransport.Send(Msg: TIdSipMessage);
+procedure TIdSipTransport.Send(Msg: TIdSipMessage;
+                               Dest: TIdSipLocation);
 begin
   try
     Assert(not Msg.IsMalformed,
            'A Transport must NEVER send invalid messages onto the network ('
          + Msg.ParseFailReason + ')');
-    Msg.Accept(Self);
+    if Msg.IsRequest then
+      Self.SendRequest(Msg as TIdSipRequest, Dest)
+    else
+      Self.SendResponse(Msg as TIdSipResponse, Dest);
   except
     on E: EIdException do
       raise EIdSipTransport.Create(Self, Msg, E.Message);
@@ -448,16 +456,6 @@ end;
 
 procedure TIdSipTransport.Stop;
 begin
-end;
-
-procedure TIdSipTransport.VisitRequest(Request: TIdSipRequest);
-begin
-  Self.SendRequest(Request);
-end;
-
-procedure TIdSipTransport.VisitResponse(Response: TIdSipResponse);
-begin
-  Self.SendResponse(Response);
 end;
 
 //* TIdSipTransport Protected methods ******************************************
@@ -622,25 +620,35 @@ end;
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
                                            Target: TIdSipConnectionBindings);
 var
-  Res: TIdSipResponse;
+  Destination: TIdSipLocation;
+  Res:         TIdSipResponse;
 begin
   Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
   try
     Res.StatusText := Request.ParseFailReason;
 
-    Self.SendResponse(Res);
+    Destination := TIdSipLocation.Create(Self.GetTransportType,
+                                         Target.PeerIP,
+                                         Target.PeerPort);
+    try
+      Self.SendResponse(Res, Destination);
+    finally
+      Destination.Free;
+    end;
   finally
     Res.Free;
   end;
 end;
 
-procedure TIdSipTransport.SendRequest(R: TIdSipRequest);
+procedure TIdSipTransport.SendRequest(R: TIdSipRequest;
+                                      Dest: TIdSipLocation);
 begin
   Self.RewriteOwnVia(R);
   Self.NotifyTransportSendingListeners(R);
 end;
 
-procedure TIdSipTransport.SendResponse(R: TIdSipResponse);
+procedure TIdSipTransport.SendResponse(R: TIdSipResponse;
+                                       Dest: TIdSipLocation);
 begin
   Self.NotifyTransportSendingListeners(R);
 end;
@@ -871,11 +879,12 @@ begin
   Self.Transport.AddMessageListener(Self);
 end;
 
-procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest);
+procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest;
+                                         Dest: TIdSipLocation);
 var
   Client: TIdSipTcpClient;
 begin
-  inherited SendRequest(R);
+  inherited SendRequest(R, Dest);
 
   Client := Self.AddClient;
 
@@ -883,13 +892,15 @@ begin
   Client.Port        := R.RequestUri.Port;
   Client.ReadTimeout := Self.Timeout;
 
+  // Race condition here? Connect, but during the send the client disconnects?
   Client.Connect(Self.Timeout);
   Client.Send(R);
 end;
 
-procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse);
+procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse;
+                                          Dest: TIdSipLocation);
 begin
-  inherited SendResponse(R);
+  inherited SendResponse(R, Dest);
 
   Self.Transport.SendResponse(R);
 end;
@@ -1173,18 +1184,20 @@ begin
   inherited OnReceiveRequest(Request, ReceivedFrom);
 end;
 
-procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest);
+procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest;
+                                         Dest: TIdSipLocation);
 begin
-  inherited SendRequest(R);
+  inherited SendRequest(R, Dest);
 
   Self.Transport.Send(R.RequestUri.Host,
                       R.RequestUri.Port,
                       R.AsString);
 end;
 
-procedure TIdSipUDPTransport.SendResponse(R: TIdSipResponse);
+procedure TIdSipUDPTransport.SendResponse(R: TIdSipResponse;
+                                          Dest: TIdSipLocation);
 begin
-  inherited SendResponse(R);
+  inherited SendResponse(R, Dest);
 
   // cf RFC 3581 section 4.
   // TODO: this isn't quite right. We have to send the response
