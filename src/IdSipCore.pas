@@ -1555,6 +1555,8 @@ procedure TIdSipAbstractUserAgent.RejectRequestUnknownContentLanguage(Request: T
 var
   Response: TIdSipResponse;
 begin
+  // It seems a stretch to say that an unsupported language would fall under
+  //"unsupported media type, but the RFC says so (RFC 3261, cf section 8.2.3)
   Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
   try
     Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
