@@ -4924,7 +4924,8 @@ function TIdSipMessage.HasInvalidSyntax: Boolean;
 begin
   Result := Self.fHasInvalidSyntax    // something went wrong parsing the first line
     or Self.MissingRequiredHeaders
-    or Self.Headers.HasInvalidSyntax;
+    or Self.Headers.HasInvalidSyntax
+    or (Self.ContentLength <> Length(Self.Body));
 end;
 
 function TIdSipMessage.HeaderCount: Integer;

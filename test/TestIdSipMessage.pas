@@ -56,6 +56,7 @@ type
     procedure TestFirstMinExpires;
     procedure TestFirstRequire;
     procedure TestHasExpiry;
+    procedure TestHasInvalidSyntaxContentLength;
     procedure TestHasInvalidSyntaxMissingCallID;
     procedure TestHasInvalidSyntaxMissingCseq;
     procedure TestHasInvalidSyntaxMissingFrom;
@@ -579,6 +580,29 @@ begin
   Self.Msg.AddHeader(ExpiresHeader);
   Check(Self.Msg.HasExpiry,
         'Expires header and Contact with Expires parameter');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxContentLength;
+begin
+  Self.Msg.AddHeader(CallIDHeaderFull).Value  := 'foo';
+  Self.Msg.AddHeader(CSeqHeader).Value        := '1 INVITE';
+  Self.Msg.AddHeader(FromHeaderFull).Value    := 'sip:foo';
+  Self.Msg.AddHeader(MaxForwardsHeader).Value := '70';
+  Self.Msg.AddHeader(ToHeaderFull).Value      := 'sip:foo';
+  Self.Msg.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP foo';
+
+  Self.Msg.ContentLength := 0;
+  Check(not Self.Msg.HasInvalidSyntax,
+        'Content-Length = 0; empty body');
+
+  Self.Msg.Body := 'foo';
+  Check(Self.Msg.HasInvalidSyntax,
+        'Content-Length = 0; body = ''foo''');
+
+  Self.Msg.Body := 'foo';
+  Self.Msg.ContentLength := 3;
+  Check(not Self.Msg.HasInvalidSyntax,
+        'Content-Length = 3; body = ''foo''');
 end;
 
 procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingCallID;
