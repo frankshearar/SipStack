@@ -124,6 +124,7 @@ type
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteYieldsTrying;
     procedure TestListenerSaysDontTryAgain;
+    procedure TestLoopDetected;
     procedure TestNotifyOnAuthenticationChallengeHasRejectedRequest;
     procedure TestOnClientInviteTransactionTimerA;
     procedure TestOnClientInviteTransactionTimerB;
@@ -135,7 +136,6 @@ type
     procedure TestOnServerInviteTransactionTimerH;
     procedure TestOnServerInviteTransactionTimerI;
     procedure TestOnServerNonInviteTransactionTimerJ;
-    procedure TestLoopDetected;
     procedure TestProxyAuthentication;
     procedure TestProxyAuthenticationQopAuth;
     procedure TestProxyAuthenticationQopAuthInt;
@@ -1302,6 +1302,23 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
+begin
+  // cf. RFC 3261, section 8.2.2.2
+  Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
+
+  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
+
+  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+  Check(not Self.D.LoopDetected(Self.Invite),
+        'Loop should not be detected - requests match (same branch)');
+
+  Self.Invite.LastHop.Branch := Self.TranRequest.LastHop.Branch + '1';
+  Check(Self.D.LoopDetected(Self.Invite),
+        'Loop should be detected - same From tag, Call-ID, CSeq but no match '
+      + '(differing branch)');
+end;
+
 procedure TestTIdSipTransactionDispatcher.TestNotifyOnAuthenticationChallengeHasRejectedRequest;
 var
   Tran: TIdSipTransaction;
@@ -1606,23 +1623,6 @@ begin
 
   Check(Self.D.TransactionCount < TranCount,
         'Timer J didn''t fire');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
-begin
-  // cf. RFC 3261, section 8.2.2.2
-  Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
-
-  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
-
-  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
-  Check(not Self.D.LoopDetected(Self.Invite),
-        'Loop should not be detected - requests match (same branch)');
-
-  Self.Invite.LastHop.Branch := Self.TranRequest.LastHop.Branch + '1';
-  Check(Self.D.LoopDetected(Self.Invite),
-        'Loop should be detected - same From tag, Call-ID, CSeq but no match '
-      + '(differing branch)');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestProxyAuthentication;
