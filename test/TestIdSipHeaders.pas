@@ -103,10 +103,10 @@ type
     procedure TestOpaque;
     procedure TestQop;
     procedure TestRealm;
-    procedure TestSetValue;
     procedure TestUnknownResponses;
     procedure TestUnquotedResponse;
     procedure TestUsername;
+    procedure TestValue; override;
   end;
 
   TestTIdSipCallIDHeader = class(THeaderTestCase)
@@ -472,13 +472,10 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipHeaders unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
-}
   Result.AddTest(TestTIdSipAuthorizationHeader.Suite);
-{
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
@@ -500,7 +497,6 @@ begin
   Result.AddTest(TestTIdSipContacts.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
-}
 end;
 
 //******************************************************************************
@@ -1462,7 +1458,52 @@ begin
               'Realm');
 end;
 
-procedure TestTIdSipAuthorizationHeader.TestSetValue;
+procedure TestTIdSipAuthorizationHeader.TestUnknownResponses;
+var
+  Value: String;
+begin
+  Value := 'Wonky';
+  Self.A.UnknownResponses['skew'] := Value;
+  CheckEquals(Value,
+              Self.A.UnknownResponses['skew'],
+              'Unknown response');
+
+  Value := '';
+  Self.A.UnknownResponses['skew'] := Value;
+  CheckEquals(Value,
+              Self.A.UnknownResponses['skew'],
+              'Unknown response, blanked out');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUnquotedResponse;
+begin
+  try
+    Self.A.Value := 'Digest username=Alice"';
+    Fail('Failed to bail out on quoted-string without leading quote');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.A.Value := 'Digest username="Alice';
+    Fail('Failed to bail out on quoted-string without trailing quote');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestUsername;
+var
+  Value: String;
+begin
+  Value := 'Alice';
+  Self.A.Username := Value;
+  CheckEquals(Value,
+              Self.A.Username,
+              'Username');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestValue;
 begin
   Self.A.Value := 'Digest username="Alice",realm="atlanta.com", '
                 + 'algorithm="MD5", '
@@ -1509,51 +1550,6 @@ begin
   CheckEquals('foo',
               Self.A.UnknownResponses['otherparam'],
               'otherparam');
-end;
-
-procedure TestTIdSipAuthorizationHeader.TestUnknownResponses;
-var
-  Value: String;
-begin
-  Value := 'Wonky';
-  Self.A.UnknownResponses['skew'] := Value;
-  CheckEquals(Value,
-              Self.A.UnknownResponses['skew'],
-              'Unknown response');
-
-  Value := '';
-  Self.A.UnknownResponses['skew'] := Value;
-  CheckEquals(Value,
-              Self.A.UnknownResponses['skew'],
-              'Unknown response, blanked out');
-end;
-
-procedure TestTIdSipAuthorizationHeader.TestUnquotedResponse;
-begin
-  try
-    Self.A.Value := 'Digest username=Alice"';
-    Fail('Failed to bail out on quoted-string without leading quote');
-  except
-    on EBadHeader do;
-  end;
-
-  try
-    Self.A.Value := 'Digest username="Alice';
-    Fail('Failed to bail out on quoted-string without trailing quote');
-  except
-    on EBadHeader do;
-  end;
-end;
-
-procedure TestTIdSipAuthorizationHeader.TestUsername;
-var
-  Value: String;
-begin
-  Value := 'Alice';
-  Self.A.Username := Value;
-  CheckEquals(Value,
-              Self.A.Username,
-              'Username');
 end;
 
 //******************************************************************************
