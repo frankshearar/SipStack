@@ -13,6 +13,10 @@ v0.4 ()
   creates a new client transaction with the credentials. This
   (currently) completely empties the ActionListener interface.
 * TIdMethod renamed to TIdNotification.
+* The (Abstract) UserAgent now farms out events (things that you
+  schedule in a TimerQueue) to separate objects, rather than using
+  TNotifyEvents. In fact, anything involving its Actions property now
+  works exclusively off blocks/closures sent to the Actions.
 
 v0.3 (2004/12/24)
 

@@ -320,6 +320,7 @@ type
     Observed:   TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
+    function  FindAction(Msg: TIdSipMessage): TIdSipAction;
     function  FindSession(Msg: TIdSipMessage): TIdSipSession;
     procedure NullProc(Action: TIdSipAction);
   public
@@ -335,7 +336,6 @@ type
     procedure CleanOutTerminatedActions;
     function  Count: Integer;
     function  CountOf(const MethodName: String): Integer;
-    function  FindAction(Msg: TIdSipMessage): TIdSipAction;
     procedure FindActionAndPerform(Event: TIdSipMessageWait;
                                    Proc: TIdSipActionProc); overload;
     procedure FindActionAndPerform(Event: TIdSipMessageWait;
@@ -2066,29 +2066,6 @@ begin
   end;
 end;
 
-function TIdSipActions.FindAction(Msg: TIdSipMessage): TIdSipAction;
-var
-  Action: TIdSipAction;
-  I:      Integer;
-begin
-  Result := nil;
-
-  Self.ActionLock.Acquire;
-  try
-    I := 0;
-
-    while (I < Self.Actions.Count) and not Assigned(Result) do begin
-      Action := Self.Actions[I] as TIdSipAction;
-      if not Action.IsTerminated and Action.Match(Msg) then
-        Result := Action
-      else
-        Inc(I);
-    end;
-  finally
-    Self.ActionLock.Release;
-  end;
-end;
-
 procedure TIdSipActions.FindActionAndPerform(Event: TIdSipMessageWait;
                                              Proc: TIdSipActionProc);
 begin
@@ -2262,6 +2239,29 @@ function TIdSipActions.ActionAt(Index: Integer): TIdSipAction;
 begin
   // Precondition: you've invoked Self.ActionLock.Acquire
   Result := Self.Actions[Index] as TIdSipAction;
+end;
+
+function TIdSipActions.FindAction(Msg: TIdSipMessage): TIdSipAction;
+var
+  Action: TIdSipAction;
+  I:      Integer;
+begin
+  Result := nil;
+
+  Self.ActionLock.Acquire;
+  try
+    I := 0;
+
+    while (I < Self.Actions.Count) and not Assigned(Result) do begin
+      Action := Self.Actions[I] as TIdSipAction;
+      if not Action.IsTerminated and Action.Match(Msg) then
+        Result := Action
+      else
+        Inc(I);
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 function TIdSipActions.FindSession(Msg: TIdSipMessage): TIdSipSession;
