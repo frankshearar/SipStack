@@ -2778,31 +2778,33 @@ begin
 end;
 
 function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+  procedure DumpHeaders(Headers: TIdSipHeaderList; List: TStringList);
+  begin
+    Headers.First;
+    while Headers.HasNext do begin
+      List.Add(Headers.CurrentHeader.AsString);
+      Headers.Next;
+    end;
+
+    List.Sort;
+  end;
 var
   I:            Integer;
   OurHeaders:   TStringList;
   TheirHeaders: TStringList;
 begin
+  // In brief: TStringLists allow handy. We dump our headers in one TStringList
+  // and their headers in another, sort the lists and compare them. First
+  // though we try short-circuit the comparison.
+
   Result := Self.Count = OtherHeaders.Count;
 
   OurHeaders := TStringList.Create;
   try
     TheirHeaders := TStringList.Create;
     try
-      Self.First;
-      while Self.HasNext do begin
-        OurHeaders.Add(Self.CurrentHeader.AsString);
-        Self.Next;
-      end;
-
-      OtherHeaders.First;
-      while OtherHeaders.HasNext do begin
-        TheirHeaders.Add(OtherHeaders.CurrentHeader.AsString);
-        OtherHeaders.Next;
-      end;
-
-      OurHeaders.Sort;
-      TheirHeaders.Sort;
+      DumpHeaders(Self, OurHeaders);
+      DumpHeaders(OtherHeaders, TheirHeaders);
 
       for I := 0 to OurHeaders.Count - 1 do
         Result := (OurHeaders[I] = TheirHeaders[I]);
