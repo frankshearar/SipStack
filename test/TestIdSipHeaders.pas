@@ -1407,9 +1407,9 @@ var
   Value: String;
 begin
   Value := 'f00f00f00f00';
-  Self.A.DigestResponse := Value;
+  Self.A.Response := Value;
   CheckEquals(Value,
-              Self.A.DigestResponse,
+              Self.A.Response,
               'DigestResponse');
 end;
 
@@ -1428,12 +1428,13 @@ procedure TestTIdSipAuthorizationHeader.TestGetValue;
 begin
   Self.A.AuthorizationScheme := 'foo';
   Self.A.Nonce := 'aefbb';
+  Self.A.NonceCount := $f00f;
   Self.A.Algorithm := 'sha1-512';
   Self.A.Realm := 'tessier-ashpool.co.luna';
   Self.A.Username := 'Wintermute';
   Self.A.UnknownResponses['paranoid'] := '\very';
 
-  CheckEquals('foo nonce="aefbb",algorithm="sha1-512",'
+  CheckEquals('foo nonce="aefbb",nonceount="0000f00f",algorithm="sha1-512",'
             + 'realm="tessier-ashpool.co.luna",username="Wintermute",'
             + 'paranoid="\\very"',
               Self.A.Value,
@@ -1602,7 +1603,7 @@ begin
               Self.A.CNonce,
               'CNonce');
   CheckEquals('7587245234b3434cc3412213e5f113a5432',
-              Self.A.DigestResponse,
+              Self.A.Response,
               'DigestResponse');
   CheckEquals('tel://112',
               Self.A.DigestUri,
