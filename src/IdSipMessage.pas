@@ -724,6 +724,8 @@ type
                                         const Transport: String): Boolean;
     function  IsRFC3261Branch: Boolean;
     procedure RemoveBranch;
+    function  RoutingAddress: String;
+    function  RoutingPort: Cardinal;
     function  SrvQuery: String;
     function  UsesSecureTransport: Boolean;
 
@@ -4672,6 +4674,24 @@ begin
   // good, healthy RFC 3261 Via headers into twisted, perverted RFC 2543 Via
   // headers.
   Self.RemoveParameter(BranchParam);
+end;
+
+function TIdSipViaHeader.RoutingAddress: String;
+begin
+  if Self.HasMaddr then
+    Result := Self.Maddr
+  else if Self.HasReceived then
+    Result := Self.Received
+  else
+    Result := Self.SentBy;
+end;
+
+function TIdSipViaHeader.RoutingPort: Cardinal;
+begin
+  if Self.HasRport then
+    Result := Self.Rport
+  else
+    Result := Self.Port;
 end;
 
 function TIdSipViaHeader.SrvQuery: String;

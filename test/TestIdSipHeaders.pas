@@ -418,6 +418,8 @@ type
     procedure TestName;
     procedure TestReceived;
     procedure TestRemoveBranch;
+    procedure TestRoutingAddress;
+    procedure TestRoutingPort;
     procedure TestSrvQuery;
     procedure TestTTL;
     procedure TestValue; override;
@@ -3874,6 +3876,39 @@ begin
               'AsString after RemoveBranch');
   Check(not Self.V.HasBranch,
         'HasBranch claims there''s still a branch');
+end;
+
+procedure TestTIdSipViaHeader.TestRoutingAddress;
+const
+  Domain   = 'gw1.leo-ix.net';
+  Maddr    = 'bcast.earth.net';
+  Received = '::dead:beef';
+begin
+  Self.V.Value := 'SIP/2.0/UDP ' + Domain;
+  CheckEquals(Domain, Self.V.RoutingAddress, 'Just a domain');
+
+  Self.V.Received := Received;
+  CheckEquals(Received, Self.V.RoutingAddress, 'Received must override sent-by');
+
+  Self.V.Maddr := Maddr;
+  CheckEquals(Maddr, Self.V.RoutingAddress, 'Maddr must override everything');
+end;
+
+procedure TestTIdSipViaHeader.TestRoutingPort;
+const
+  Port  = 5060;
+  RPort = 6666;
+begin
+  Self.V.Value := 'SIP/2.0/UDP gw1.leo-ix.net';
+  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+              Self.V.RoutingPort,
+              'Implicit port');
+
+  Self.V.Port := Port;
+  CheckEquals(Port, Self.V.RoutingPort, 'Explicit port');
+
+  Self.V.RPort := RPort;
+  CheckEquals(RPort, Self.V.RoutingPort, 'Rport must override port');
 end;
 
 procedure TestTIdSipViaHeader.TestSrvQuery;
