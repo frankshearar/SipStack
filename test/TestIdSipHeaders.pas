@@ -57,6 +57,8 @@ type
     procedure TestEquals;
     procedure TestParamCount;
     procedure TestParamsAsString;
+    procedure TestRemoveAbsentParameter;
+    procedure TestRemoveParameter;
     procedure TestValueParameterClearing;
     procedure TestValueWithNewParams;
     procedure TestValueWithQuotedParams;
@@ -1144,6 +1146,25 @@ begin
   CheckEquals(';branch=z9hG4bK776asdhds;ttl=5;foo="foo bar\\"',
               Self.H.ParamsAsString,
               'ParamsAsString');
+end;
+
+procedure TestTIdSipHeader.TestRemoveAbsentParameter;
+const
+  Param = 'branch';
+begin
+  Self.H.RemoveParameter(Param);
+  Check(not Self.H.HasParam(Param),
+        'Parameter somehow added during RemoveParameter');
+end;
+
+procedure TestTIdSipHeader.TestRemoveParameter;
+const
+  Param = 'branch';
+begin
+  Self.H.Params[Param] := 'z9hG4bK776asdhds';
+  Self.H.RemoveParameter(Param);
+  Check(not Self.H.HasParam(Param),
+        'Parameter not removed');
 end;
 
 procedure TestTIdSipHeader.TestValueParameterClearing;

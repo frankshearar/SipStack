@@ -218,6 +218,7 @@ type
     function  Equals(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
+    procedure RemoveParameter(const ParamName: String);
 
     property IsMalformed:                Boolean read fIsMalformed;
     property Name:                       String  read GetName write SetName;
@@ -2669,6 +2670,16 @@ begin
   end;
 end;
 
+procedure TIdSipHeader.RemoveParameter(const ParamName: String);
+var
+  Index: Integer;
+begin
+  Index := Self.Parameters.IndexOfName(ParamName);
+
+  if (Index <> -1) then
+    Self.Parameters.Delete(Index);
+end;
+
 //* TIdSipHeader Protected methods *********************************************
 
 procedure TIdSipHeader.FailParse(const Reason: String);
@@ -3518,8 +3529,7 @@ end;
 
 procedure TIdSipContactHeader.RemoveExpires;
 begin
-  if Self.HasParam(ExpiresParam) then
-    Self.Parameters.Delete(Self.Parameters.IndexOfName(ExpiresParam));
+  Self.RemoveParameter(ExpiresParam);
 end;
 
 function TIdSipContactHeader.WillExpire: Boolean;
