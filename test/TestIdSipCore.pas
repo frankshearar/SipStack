@@ -628,6 +628,8 @@ uses
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
   public
+    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     procedure TriggerNotify;
   end;
 
@@ -665,6 +667,16 @@ end;
 //* TIdSipCoreWithExposedNotify                                                *
 //******************************************************************************
 //* TIdSipCoreWithExposedNotify Public methods *********************************
+
+function TIdSipCoreWithExposedNotify.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+begin
+  Result := nil;
+end;
+
+function TIdSipCoreWithExposedNotify.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  Result := nil;
+end;
 
 procedure TIdSipCoreWithExposedNotify.TriggerNotify;
 begin
