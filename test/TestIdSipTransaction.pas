@@ -18,7 +18,6 @@ uses
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase,
-                                          IIdSipSessionListener,
                                           IIdSipTransactionListener,
                                           IIdSipUserAgentListener)
   private
@@ -36,19 +35,11 @@ type
 
     function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
-    procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
-    procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnInboundCall(Session: TIdSipInboundSession);
-    procedure OnModifiedSession(Session: TIdSipSession;
-                                Invite: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport);
@@ -589,26 +580,9 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                                    Challenge: TIdSipResponse;
-                                                                    var Password: String);
-begin
-end;
-
 procedure TestTIdSipTransactionDispatcher.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                                      Receiver: TIdSipTransport);
 begin
-end;
-
-procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession;
-                                                         const Reason: String);
-begin
-  // Do nothing
-end;
-
-procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(Session: TIdSipSession);
-begin
-  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
@@ -620,12 +594,6 @@ end;
 procedure TestTIdSipTransactionDispatcher.OnInboundCall(Session: TIdSipInboundSession);
 begin
 //  Session.AcceptCall('', '');
-end;
-
-procedure TestTIdSipTransactionDispatcher.OnModifiedSession(Session: TIdSipSession;
-                                                            Invite: TIdSipRequest);
-begin
-  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
