@@ -41,8 +41,8 @@ interface
 uses
   Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
-  IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, SyncObjs;
+  IdSipMessage, IdSipRegistration, IdSipTransaction, IdSipTransport,
+  IdTimerQueue, SyncObjs;
 
 const
   SipStackVersion = '0.3';
@@ -546,18 +546,30 @@ type
   // not.
   TIdSipInboundInvite = class(TIdSipInvite)
   private
+    LastResponse:      TIdSipResponse;
+    ReceivedAck:       Boolean;
+    SentFinalResponse: Boolean;
+
     procedure SendSimpleResponse(StatusCode: Cardinal);
   protected
+    procedure ReceiveAck(Ack: TIdSipRequest); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
+    procedure SendResponse(Response: TIdSipResponse); override;
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Invite: TIdSipRequest); reintroduce;
+    destructor  Destroy; override;
 
     procedure Accept(Dialog: TIdSipDialog;
                      const Offer, ContentType: String);
+    procedure Redirect(NewDestination: TIdSipAddressHeader;
+                       Temporary: Boolean = true);
     procedure RejectCallBusy;
+    procedure ResendOk;
     procedure Ring;
+    procedure Terminate; override;
+    procedure TimeOut;
   end;
 
   // I encapsulate the call flows around an outbound INVITE, both in-dialog
@@ -788,6 +800,7 @@ type
     procedure TerminatePendingInvite;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
+    procedure ReceiveAck(Ack: TIdSipRequest); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipUserAgentCore;
@@ -796,9 +809,8 @@ type
     destructor  Destroy; override;
 
     function  AcceptCall(const Offer, ContentType: String): String;
-    procedure ForwardCall(NewDestination: TIdSipAddressHeader);
+    procedure RedirectCall(NewDestination: TIdSipAddressHeader);
     function  IsInboundCall: Boolean; override;
-    procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RejectCallBusy;
     procedure Ring;
     procedure ResendLastResponse; virtual;
@@ -3018,7 +3030,17 @@ begin
 
   Self.InitialRequest.Assign(Invite);
 
+  Self.LastResponse := TIdSipResponse.Create;
+  Self.ReceivedAck  := false;
+
   Self.Ring;
+end;
+
+destructor TIdSipInboundInvite.Destroy;
+begin
+  Self.LastResponse.Free;
+
+  inherited Destroy;
 end;
 
 procedure TIdSipInboundInvite.Accept(Dialog: TIdSipDialog;
@@ -3039,10 +3061,36 @@ begin
   end;
 end;
 
+procedure TIdSipInboundInvite.Redirect(NewDestination: TIdSipAddressHeader;
+                                       Temporary: Boolean = true);
+var
+  RedirectResponse: TIdSipResponse;
+  RedirectType:     Cardinal;
+begin
+  if Temporary then
+    RedirectType := SIPMovedTemporarily
+  else
+    RedirectType := SIPMovedPermanently;
+
+  RedirectResponse := Self.UA.CreateResponse(Self.InitialRequest,
+                                             RedirectType);
+  try
+    RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
+    Self.SendResponse(RedirectResponse);
+  finally
+    RedirectResponse.Free;
+  end;
+end;
+
 procedure TIdSipInboundInvite.RejectCallBusy;
 begin
   Self.SendSimpleResponse(SIPBusyHere);
-  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipInboundInvite.ResendOk;
+begin
+  if Self.SentFinalResponse and not Self.ReceivedAck then
+    Self.SendResponse(Self.LastResponse);
 end;
 
 procedure TIdSipInboundInvite.Ring;
@@ -3050,7 +3098,31 @@ begin
   Self.SendSimpleResponse(SIPRinging);
 end;
 
+procedure TIdSipInboundInvite.Terminate;
+begin
+  if not Self.SentFinalResponse then
+    Self.SendSimpleResponse(SIPRequestTerminated);
+
+  inherited Terminate;
+end;
+
+procedure TIdSipInboundInvite.TimeOut;
+begin
+  // Either the INVITE that caused my creation had an Expires header (and that
+  // time has now arrived), or my UA has decided that the user's taken too long
+  // to answer. Either way, we've decided to time out the inbound INVITE.
+
+  Self.SendSimpleResponse(SIPRequestTimeout);
+end;
+
 //* TIdSipInboundInvite Protected methods **************************************
+
+procedure TIdSipInboundInvite.ReceiveAck(Ack: TIdSipRequest);
+begin
+  inherited ReceiveAck(Ack);
+
+  Self.ReceivedAck := true;
+end;
 
 procedure TIdSipInboundInvite.ReceiveCancel(Cancel: TIdSipRequest);
 begin
@@ -3060,6 +3132,25 @@ end;
 procedure TIdSipInboundInvite.ReceiveInvite(Invite: TIdSipRequest);
 begin
   inherited ReceiveInvite(Invite);
+
+  // Do nothing. Invite contains a resend of the INVITE that made the UA create
+  // this action, and we've already sent a response (at the least a 180
+  // Ringing). That response should stop the far side resending the INVITEs, but
+  // the far side might have sent Invite before it received our response. Either
+  // way, we need do nothing.
+end;
+
+procedure TIdSipInboundInvite.SendResponse(Response: TIdSipResponse);
+begin
+  if not Self.SentFinalResponse then begin
+    Self.SentFinalResponse := Response.IsFinal;
+    Self.LastResponse.Assign(Response);
+  end;
+
+  if not Response.IsOK and Response.IsFinal then
+    Self.MarkAsTerminated;
+
+  inherited SendResponse(Response);
 end;
 
 //* TIdSipInboundInvite Private methods ****************************************
@@ -4394,7 +4485,7 @@ begin
   Self.FullyEstablished := true;
 end;
 
-procedure TIdSipInboundSession.ForwardCall(NewDestination: TIdSipAddressHeader);
+procedure TIdSipInboundSession.RedirectCall(NewDestination: TIdSipAddressHeader);
 var
   RedirectResponse: TIdSipResponse;
 begin
@@ -4413,25 +4504,6 @@ end;
 function TIdSipInboundSession.IsInboundCall: Boolean;
 begin
   Result := true;
-end;
-
-procedure TIdSipInboundSession.ReceiveRequest(Request: TIdSipRequest);
-begin
-  if Request.IsAck then begin
-    Self.fReceivedAck := true;
-
-    Self.TimerLock.Acquire;
-    try
-      if Assigned(Self.OkTimer) then begin
-        Self.OkTimer.Terminate;
-        Self.OkTimer := nil;
-      end;
-    finally
-      Self.TimerLock.Release;
-    end;
-  end
-  else
-    inherited ReceiveRequest(Request);
 end;
 
 procedure TIdSipInboundSession.RejectCallBusy;
@@ -4482,6 +4554,21 @@ begin
   Result := TIdSipDialogID.Create(Msg.CallID,
                                   Msg.ToHeader.Tag,
                                   Msg.From.Tag);
+end;
+
+procedure TIdSipInboundSession.ReceiveAck(Ack: TIdSipRequest);
+begin
+  Self.fReceivedAck := true;
+
+  Self.TimerLock.Acquire;
+  try
+    if Assigned(Self.OkTimer) then begin
+      Self.OkTimer.Terminate;
+      Self.OkTimer := nil;
+    end;
+  finally
+    Self.TimerLock.Release;
+  end;
 end;
 
 procedure TIdSipInboundSession.ReceiveCancel(Cancel: TIdSipRequest);

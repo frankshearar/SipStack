@@ -135,6 +135,7 @@ type
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
     procedure TestInviteExpires;
+    procedure TestInviteRaceCondition;
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
@@ -203,8 +204,15 @@ type
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestMethod;
+    procedure TestRedirectCall;
+    procedure TestRedirectCallPermanent;
     procedure TestRejectCallBusy;
+    procedure TestResendOk;
     procedure TestRing;
+    procedure TestTerminateAfterAccept;
+    procedure TestTerminateBeforeAccept;
+    procedure TestTimeOut;
   end;
 
   TestTIdSipOutboundInvite = class(TestTIdSipAction,
@@ -235,6 +243,7 @@ type
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
     procedure TestIsInvite; override;
+    procedure TestMethod;
     procedure TestProxyAuthentication;
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveRedirect;
@@ -369,7 +378,6 @@ type
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
-    procedure SimulateRemoteDecline;
   protected
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
@@ -382,25 +390,20 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure Test2xxRetransmission;
     procedure TestAcceptCall;
-    procedure TestAcceptCallRespectsContentType;
     procedure TestAddSessionListener;
+    procedure TestCancelAfterAccept;
+    procedure TestCancelBeforeAccept;
     procedure TestCancelNotifiesSession;
-    procedure TestForwardCall;
-    procedure TestGlobalFailureEndsSession;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
-    procedure TestNewSessionRings;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
-    procedure TestCancelAfterAccept;
-    procedure TestCancelBeforeAccept;
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestReceiveReInvite;
+    procedure TestRedirectCall;
     procedure TestRejectCallBusy;
-    procedure TestRing;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
     procedure TestTerminateUnestablishedSession;
@@ -415,6 +418,7 @@ type
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure SimulateRemoteDecline;
     procedure SimulateForbidden;
     procedure SimulateMovedTemporarily(const Contact: String);
     procedure SimulateOKWithRecordRoute;
@@ -440,6 +444,7 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
+    procedure TestGlobalFailureEndsSession;
     procedure TestHangUp;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
@@ -2019,6 +2024,29 @@ begin
   CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
+procedure TestTIdSipUserAgentCore.TestInviteRaceCondition;
+var
+  ResponseCount: Cardinal;
+begin
+  CheckEquals(0,
+              Self.Core.InviteCount,
+              'Sanity check - new test should have no ongoing INVITE actions');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteInvite;
+  CheckEquals(1,
+              Self.Core.InviteCount,
+              'First INVITE didn''t make a new INVITE action');
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Self.SimulateRemoteInvite;
+  CheckEquals(1,
+              Self.Core.InviteCount,
+              'INVITE resend made a new INVITE action');
+end;
+
 procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
 begin
   Check(not Self.Core.IsMethodAllowed(MethodRegister),
@@ -2911,6 +2939,87 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundInvite.TestMethod;
+begin
+  CheckEquals(MethodInvite,
+              TIdSipInboundInvite.Method,
+              'Inbound INVITE; Method');
+end;
+
+procedure TestTIdSipInboundInvite.TestRedirectCall;
+var
+  Dest:          TIdSipAddressHeader;
+  ResponseCount: Cardinal;
+  SentResponse:  TIdSipResponse;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.DisplayName := 'Wintermute';
+    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
+    Self.InviteAction.Redirect(Dest);
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No response sent');
+
+    SentResponse := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPMovedTemporarily,
+                SentResponse.StatusCode,
+                'Wrong response sent');
+    Check(SentResponse.HasHeader(ContactHeaderFull),
+          'No Contact header');
+    CheckEquals(Dest.DisplayName,
+                SentResponse.FirstContact.DisplayName,
+                'Contact display name');
+    CheckEquals(Dest.Address.Uri,
+                SentResponse.FirstContact.Address.Uri,
+                'Contact address');
+
+    Check(Self.InviteAction.IsTerminated,
+          'Action didn''t terminate');
+  finally
+    Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestRedirectCallPermanent;
+var
+  Dest:          TIdSipAddressHeader;
+  ResponseCount: Cardinal;
+  SentResponse:  TIdSipResponse;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.DisplayName := 'Wintermute';
+    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
+    Self.InviteAction.Redirect(Dest, false);
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No response sent');
+
+    SentResponse := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPMovedPermanently,
+                SentResponse.StatusCode,
+                'Wrong response sent');
+    Check(SentResponse.HasHeader(ContactHeaderFull),
+          'No Contact header');
+    CheckEquals(Dest.DisplayName,
+                SentResponse.FirstContact.DisplayName,
+                'Contact display name');
+    CheckEquals(Dest.Address.Uri,
+                SentResponse.FirstContact.Address.Uri,
+                'Contact address');
+
+    Check(Self.InviteAction.IsTerminated,
+          'Action didn''t terminate');
+  finally
+    Dest.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundInvite.TestRejectCallBusy;
 var
   Response:      TIdSipResponse;
@@ -2926,7 +3035,60 @@ begin
               Response.StatusCode,
               'Unexpected Status-Code');
   Check(Self.InviteAction.IsTerminated,
-        'Action not terminated');            
+        'Action not terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestResendOk;
+var
+  Ack:           TIdSipRequest;
+  I:             Integer;
+  OriginalOk:    TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  // Does nothing if the Invite's not yet sent an OK
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.InviteAction.ResendOk;
+  CheckEquals(ResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
+              'The action sent an OK before it accepted the call');
+
+  // Then we send an OK
+  Self.InviteAction.Accept(Self.Dialog, '', '');
+
+  // And we make sure that repeated calls to ResendOk, well, resend the OK.
+  OriginalOk := TIdSipResponse.Create;
+  try
+    OriginalOk.Assign(Self.Dispatcher.Transport.LastResponse);
+
+    for I := 1 to 2 do begin
+      ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+      Self.InviteAction.ResendOk;
+
+      Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+            IntToStr(I) + ': Response not resent');
+      CheckEquals(SIPOK,
+                  Self.Dispatcher.Transport.LastResponse.StatusCode,
+                  IntToStr(I) + ': Unexpected response code');
+      Check(OriginalOk.Equals(Self.Dispatcher.Transport.LastResponse),
+            IntToStr(I) + ': Unexpected OK');
+    end;
+  finally
+    OriginalOk.Free;
+  end;
+
+  // But once we receive an ACK, we don't want to resend the OK.
+  Ack := Self.Invite.AckFor(Self.Dispatcher.Transport.LastResponse);
+  try
+    Self.InviteAction.ReceiveRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.InviteAction.ResendOk;
+  CheckEquals(ResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
+              'The action sent an OK after it received an ACK');
 end;
 
 procedure TestTIdSipInboundInvite.TestRing;
@@ -2940,6 +3102,65 @@ begin
   CheckEquals(SIPRinging,
               Response.StatusCode,
               'Unexpected Status-Code');
+end;
+
+procedure TestTIdSipInboundInvite.TestTerminateAfterAccept;
+var
+  ResponseCount: Cardinal;
+begin
+  // This should never happen, really. If you accept a call then InviteAction
+  // terminates. Thus by calling Terminate you try to terminate an
+  // already-terminated action - which should do nothing. In fact, the UA should
+  // have already destroyed the action.
+
+  Self.InviteAction.Accept(Self.Dialog, '', '');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.InviteAction.Terminate;
+
+  CheckEquals(ResponseCount,
+              Self.Dispatcher.Transport.SentResponseCount,
+              'Response sent');
+  Check(Self.InviteAction.IsTerminated,
+        'Action not marked as terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestTerminateBeforeAccept;
+var
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Self.InviteAction.Terminate;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  CheckEquals(SIPRequestTerminated,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Unexpected Status-Code');
+
+  Check(Self.InviteAction.IsTerminated,
+        'Action not marked as terminated');
+end;
+
+procedure TestTIdSipInboundInvite.TestTimeOut;
+var
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Self.InviteAction.TimeOut;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  CheckEquals(SIPRequestTimeout,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Unexpected Status-Code');
+
+  Check(Self.InviteAction.IsTerminated,
+        'Action not marked as terminated');
 end;
 
 //******************************************************************************
@@ -3204,6 +3425,13 @@ end;
 procedure TestTIdSipOutboundInvite.TestIsInvite;
 begin
   Check(Self.CreateAction.IsInvite, 'INVITE action not marked as such');
+end;
+
+procedure TestTIdSipOutboundInvite.TestMethod;
+begin
+  CheckEquals(MethodInvite,
+              TIdSipOutboundInvite.Method,
+              'Outbound INVITE; Method');
 end;
 
 procedure TestTIdSipOutboundInvite.TestProxyAuthentication;
@@ -4327,74 +4555,16 @@ begin
     Self.SentRequestTerminated := true;
 end;
 
-procedure TestTIdSipInboundSession.SimulateRemoteDecline;
-var
-  Decline: TIdSipResponse;
-begin
-  Decline := TIdSipResponse.InResponseTo(Self.Invite, SIPDecline);
-  try
-    Self.SimulateRemoteResponse(Decline);
-  finally
-    Decline.Free;
-  end;
-end;
-
 //* TestTIdSipInboundSession Published methods ****************************************
 
-procedure TestTIdSipInboundSession.Test2xxRetransmission;
-begin
-  Self.Session.AcceptCall('', '');
-  Self.Dispatcher.Transport.ResetSentResponseCount;
-  Self.Session.ResendLastResponse;
-  CheckEquals(1,
-              Self.Dispatcher.Transport.SentResponseCount,
-              'Response not resent');
-  CheckEquals(SIPOK,
-              Self.Dispatcher.Transport.LastResponse.StatusCode,
-              'Unexpected response code');
-end;
-
 procedure TestTIdSipInboundSession.TestAcceptCall;
-var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
 begin
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-  Self.Dispatcher.Transport.TransportType := sttTCP;
-
   Self.Session.AcceptCall('', '');
 
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'no responses sent');
-  CheckNotNull(Session.Dialog, 'Dialog object wasn''t created');
-
-  Response := Self.Dispatcher.Transport.LastResponse;
-  CheckEquals(SIPOK, Response.StatusCode,      'Status-Code');
-  Check(Response.From.HasTag,                  'No From tag');
-  Check(Response.ToHeader.HasTag,              'No To tag');
-  Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
-//  CheckEquals('', Response.Body,               'Body should be empty');
-end;
-
-procedure TestTIdSipInboundSession.TestAcceptCallRespectsContentType;
-var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
-begin
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-
-  Self.Session.AcceptCall(Self.SimpleSdp.AsString,
-                          SdpMimeType);
-
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'no responses sent');
-
-  Response := Self.Dispatcher.Transport.LastResponse;
-  Check(Response.HasHeader(ContentTypeHeaderFull),
-        'No Content-Type header');
-  CheckEquals(SdpMimeType,
-              Response.FirstHeader(ContentTypeHeaderFull).Value,
-              'Content-Type');
+  Check(Self.Session.DialogEstablished,
+        'Dialog not established');
+  CheckNotNull(Self.Session.Dialog,
+               'Dialog object wasn''t created');
 end;
 
 procedure TestTIdSipInboundSession.TestAddSessionListener;
@@ -4422,133 +4592,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
-var
-  SessionCount: Integer;
-begin
-  SessionCount := Self.Core.SessionCount;
-
-  Self.SimulateRemoteCancel;
-
-  Check(Self.OnEndedSessionFired,
-        'No notification of ended session');
-
-  Check(Self.Core.SessionCount < SessionCount,
-        'Session not marked as terminated');
-end;
-
-procedure TestTIdSipInboundSession.TestForwardCall;
-var
-  Dest:          TIdSipAddressHeader;
-  ResponseCount: Cardinal;
-  SentResponse:  TIdSipResponse;
-begin
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-
-  Dest := TIdSipAddressHeader.Create;
-  try
-    Dest.DisplayName := 'Wintermute';
-    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
-
-    Self.Session.ForwardCall(Dest);
-    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-          'No response sent');
-
-    SentResponse := Self.Dispatcher.Transport.LastResponse;
-    CheckEquals(SIPMovedTemporarily,
-                SentResponse.StatusCode,
-                'Wrong response sent');
-    Check(SentResponse.HasHeader(ContactHeaderFull),
-          'No Contact header');
-    CheckEquals(Dest.DisplayName,
-                SentResponse.FirstContact.DisplayName,
-                'Contact display name');
-    CheckEquals(Dest.Address.Uri,
-                SentResponse.FirstContact.Address.Uri,
-                'Contact address');
-
-    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-  finally
-    Dest.Free;
-  end;
-end;
-
-procedure TestTIdSipInboundSession.TestGlobalFailureEndsSession;
-var
-  SessionCount: Integer;
-begin
-  SessionCount := Self.Core.SessionCount;
-
-  Self.SimulateRemoteDecline;
-
-  Check(Self.OnEndedSessionFired,
-        'No notification of ended session');
-
-  Check(Self.Core.SessionCount < SessionCount,
-        'Session not torn down because of a global failure');
-end;
-
-procedure TestTIdSipInboundSession.TestIsInboundCall;
-begin
-  Check(Self.Session.IsInboundCall,
-        'Inbound session; IsInboundCall');
-end;
-
-procedure TestTIdSipInboundSession.TestIsOutboundCall;
-begin
-  Check(not Self.Session.IsOutboundCall,
-        'Inbound session; IsOutboundCall');
-end;
-
-procedure TestTIdSipInboundSession.TestMethod;
-begin
-  CheckEquals(MethodInvite,
-              TIdSipInboundSession.Method,
-              'Inbound session; Method');
-end;
-
-procedure TestTIdSipInboundSession.TestNewSessionRings;
-begin
-  Check(Self.Dispatcher.Transport.SentResponseCount > 0,
-        'No responses automatically sent');
-
-  CheckEquals(SIPRinging,
-              Self.Dispatcher.Transport.LastResponse.StatusCode,
-              'New session didn''t Ring automatically');
-end;
-
-procedure TestTIdSipInboundSession.TestReceiveBye;
-begin
-  Self.Session.AcceptCall('', '');
-
-  Self.Session.AddSessionListener(Self);
-
-  Self.SimulateRemoteBye(Self.Session.Dialog);
-
-  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-end;
-{
-procedure TestTIdSipInboundSession.TestReceiveByeWithPendingRequests;
-var
-  ReInvite: TIdSipRequest;
-begin
-  Self.Session.AcceptCall('', '');
-
-  Self.Dispatcher.Transport.AddTransportSendingListener(Self);
-
-  // This must be a CLIENT transaction!
-  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
-  try
-    Self.Dispatcher.Transport.FireOnRequest(ReInvite);
-    Self.SimulateRemoteBye(Self.Session.Dialog);
-
-    Check(Self.SentRequestTerminated,
-          'Pending request wasn''t responded to with a 487 Request Terminated');
-  finally
-    ReInvite.Free;
-  end;
-end;
-}
 procedure TestTIdSipInboundSession.TestCancelAfterAccept;
 var
   CancelResponse: TIdSipResponse;
@@ -4639,6 +4682,72 @@ begin
               'Unexpected response, status text');
 end;
 
+procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteCancel;
+
+  Check(Self.OnEndedSessionFired,
+        'No notification of ended session');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
+end;
+
+procedure TestTIdSipInboundSession.TestIsInboundCall;
+begin
+  Check(Self.Session.IsInboundCall,
+        'Inbound session; IsInboundCall');
+end;
+
+procedure TestTIdSipInboundSession.TestIsOutboundCall;
+begin
+  Check(not Self.Session.IsOutboundCall,
+        'Inbound session; IsOutboundCall');
+end;
+
+procedure TestTIdSipInboundSession.TestMethod;
+begin
+  CheckEquals(MethodInvite,
+              TIdSipInboundSession.Method,
+              'Inbound session; Method');
+end;
+
+procedure TestTIdSipInboundSession.TestReceiveBye;
+begin
+  Self.Session.AcceptCall('', '');
+
+  Self.Session.AddSessionListener(Self);
+
+  Self.SimulateRemoteBye(Self.Session.Dialog);
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+end;
+{
+procedure TestTIdSipInboundSession.TestReceiveByeWithPendingRequests;
+var
+  ReInvite: TIdSipRequest;
+begin
+  Self.Session.AcceptCall('', '');
+
+  Self.Dispatcher.Transport.AddTransportSendingListener(Self);
+
+  // This must be a CLIENT transaction!
+  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
+  try
+    Self.Dispatcher.Transport.FireOnRequest(ReInvite);
+    Self.SimulateRemoteBye(Self.Session.Dialog);
+
+    Check(Self.SentRequestTerminated,
+          'Pending request wasn''t responded to with a 487 Request Terminated');
+  finally
+    ReInvite.Free;
+  end;
+end;
+}
 procedure TestTIdSipInboundSession.TestReceiveReInvite;
 var
   ReInvite: TIdSipRequest;
@@ -4655,6 +4764,42 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSession.TestRedirectCall;
+var
+  Dest:          TIdSipAddressHeader;
+  ResponseCount: Cardinal;
+  SentResponse:  TIdSipResponse;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.DisplayName := 'Wintermute';
+    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
+    Self.Session.RedirectCall(Dest);
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No response sent');
+
+    SentResponse := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPMovedTemporarily,
+                SentResponse.StatusCode,
+                'Wrong response sent');
+    Check(SentResponse.HasHeader(ContactHeaderFull),
+          'No Contact header');
+    CheckEquals(Dest.DisplayName,
+                SentResponse.FirstContact.DisplayName,
+                'Contact display name');
+    CheckEquals(Dest.Address.Uri,
+                SentResponse.FirstContact.Address.Uri,
+                'Contact address');
+
+    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+  finally
+    Dest.Free;
+  end;
+end;
+
 procedure TestTIdSipInboundSession.TestRejectCallBusy;
 var
   ResponseCount: Cardinal;
@@ -4668,20 +4813,6 @@ begin
               'Wrong response sent');
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-end;
-
-procedure TestTIdSipInboundSession.TestRing;
-var
-  ResponseCount: Cardinal;
-begin
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-  Self.Session.Ring;
-
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'No response sent');
-  CheckEquals(SIPRinging,
-              Self.Dispatcher.Transport.LastResponse.StatusCode,
-              'Wrong response sent');
 end;
 
 procedure TestTIdSipInboundSession.TestRemoveSessionListener;
@@ -4808,6 +4939,19 @@ end;
 
 procedure TestTIdSipOutboundSession.OnInboundCall(Session: TIdSipInboundSession);
 begin
+end;
+
+procedure TestTIdSipOutboundSession.SimulateRemoteDecline;
+var
+  Decline: TIdSipResponse;
+begin
+  Decline := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                         SIPDecline);
+  try
+    Self.SimulateRemoteResponse(Decline);
+  finally
+    Decline.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.SimulateForbidden;
@@ -5158,6 +5302,21 @@ begin
   Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
   Check(Self.Dispatcher.Transport.LastRequest.ContentDisposition.IsSession,
         'Content-Disposition');
+end;
+
+procedure TestTIdSipOutboundSession.TestGlobalFailureEndsSession;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteDecline;
+
+  Check(Self.OnEndedSessionFired,
+        'No notification of ended session');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not torn down because of a global failure');
 end;
 
 procedure TestTIdSipOutboundSession.TestHangUp;
