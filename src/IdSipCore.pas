@@ -1182,6 +1182,7 @@ type
 
     procedure AddNewRedirect(OriginalInvite: TIdSipRequest;
                              Contact: TIdSipContactHeader);
+    procedure CancelRedirectedInvites;
     function  NoMoreRedirectedInvites: Boolean;
     procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
     procedure SetDestination(Value: TIdSipAddressHeader);
@@ -6147,6 +6148,7 @@ begin
   if Self.FullyEstablished then Exit;
 
   Self.InitialInvite.Cancel;
+  Self.CancelRedirectedInvites;
 end;
 
 function TIdSipOutboundSession.CanForkOn(Response: TIdSipResponse): Boolean;
@@ -6389,6 +6391,19 @@ begin
   Redirect.OriginalInvite := OriginalInvite;
   Redirect.AddListener(Self);
   Redirect.Send;
+end;
+
+procedure TIdSipOutboundSession.CancelRedirectedInvites;
+var
+  I: Integer;
+begin
+  Self.RedirectedInviteLock.Acquire;
+  try
+    for I := 0 to Self.RedirectedInvites.Count - 1 do
+      (Self.RedirectedInvites[I] as TIdSipOutboundInvite).Terminate;
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
 end;
 
 function TIdSipOutboundSession.NoMoreRedirectedInvites: Boolean;

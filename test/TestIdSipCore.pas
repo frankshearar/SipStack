@@ -689,6 +689,7 @@ type
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
     procedure TestRedirectWithMultipleContacts;
+    procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateUnestablishedSession;
   end;
@@ -8010,6 +8011,57 @@ begin
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
               'Session didn''t attempt to contact all Contacts');
+end;
+
+procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;
+var
+  Contacts: array of String;
+  I:        Integer;
+begin
+  //                             Request count
+  //  ---       INVITE      ---> #0
+  // <---   302 (foo,bar)   ---
+  //  ---        ACK        --->
+  //  ---    INVITE (foo)   ---> #1
+  //  ---    INVITE (bar)   ---> #2
+  // <---     100 (foo)     --- (we receive 100s so the InviteActions will send CANCELs immediately)
+  // <---     100 (bar)     ---
+  //  ---    CANCEL (foo)   ---> #3
+  // <--- 200 (foo, CANCEL) ---
+  //  ---    CANCEL (bar)   ---> #4
+  // <--- 200 (bar, CANCEL) ---
+
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  Check(Self.SentRequestCount >= 3,
+        'Not enough requests sent: 1 + 2 INVITEs');
+
+  Self.ReceiveTrying(Self.SentRequestAt(1));
+  Self.ReceiveTrying(Self.SentRequestAt(2));
+
+  Self.MarkSentRequestCount;
+  Self.Session.Terminate;
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to terminate all INVITEs');
+
+  Check(Self.SentRequestCount >= 5,
+        'Not enough requests sent: 1 + 2 INVITEs, 2 CANCELs');
+
+  for I := 0 to 1 do begin
+    CheckEquals(Contacts[I],
+                Self.SentRequestAt(I + 3).RequestUri.Uri,
+                'CANCEL to ' + Contacts[I]);
+    CheckEquals(MethodCancel,
+                Self.SentRequestAt(I + 3).Method,
+                'Request method to ' + Contacts[I]);
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
