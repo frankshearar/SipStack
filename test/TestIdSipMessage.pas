@@ -129,7 +129,9 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestCopy;
+    procedure TestFirstProxyAuthenticate;
     procedure TestFirstUnsupported;
+    procedure TestFirstWWWAuthenticate;
     procedure TestInResponseToRecordRoute;
     procedure TestInResponseToSipsRecordRoute;
     procedure TestInResponseToSipsRequestUri;
@@ -142,6 +144,7 @@ type
     procedure TestEqualsDifferentStatusText;
     procedure TestEqualsRequest;
     procedure TestEqualsTrivial;
+    procedure TestHasAuthenticationInfo;
     procedure TestHasProxyAuthenticate;
     procedure TestHasWWWAuthenticate;
     procedure TestIsFinal;
@@ -1757,6 +1760,25 @@ begin
   end;
 end;
 
+procedure TestTIdSipResponse.TestFirstProxyAuthenticate;
+var
+  P: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstProxyAuthenticate,
+               'Proxy-Authenticate not present');
+  CheckEquals(1,
+              Self.Response.HeaderCount,
+              'Proxy-Authenticate not auto-added');
+
+  P := Self.Response.FirstHeader(ProxyAuthenticateHeader);
+  Self.Response.AddHeader(ProxyAuthenticateHeader);
+
+  Check(P = Self.Response.FirstProxyAuthenticate,
+        'Wrong Proxy-Authenticate');
+end;
+
 procedure TestTIdSipResponse.TestFirstUnsupported;
 var
   U: TIdSipHeader;
@@ -1770,6 +1792,25 @@ begin
   Self.Response.AddHeader(UnsupportedHeader);
 
   Check(U = Self.Response.FirstUnsupported, 'Wrong Unsupported');
+end;
+
+procedure TestTIdSipResponse.TestFirstWWWAuthenticate;
+var
+  P: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstWWWAuthenticate,
+               'WWW-Authenticate not present');
+  CheckEquals(1,
+              Self.Response.HeaderCount,
+              'WWW-Authenticate not auto-added');
+
+  P := Self.Response.FirstHeader(WWWAuthenticateHeader);
+  Self.Response.AddHeader(WWWAuthenticateHeader);
+
+  Check(P = Self.Response.FirstWWWAuthenticate,
+        'Wrong WWW-Authenticate');
 end;
 
 procedure TestTIdSipResponse.TestInResponseToRecordRoute;
@@ -2019,6 +2060,20 @@ begin
   finally
     R1.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestHasAuthenticationInfo;
+begin
+  Check(not Self.Response.HasHeader(AuthenticationInfoHeader),
+        'Sanity check');
+
+  Check(not Self.Response.HasAuthenticationInfo,
+        'New response');
+
+
+  Self.Response.AddHeader(AuthenticationInfoHeader);
+  Check(Self.Response.HasAuthenticationInfo,
+        'Lies! There is too an Authentication-Info header!');
 end;
 
 procedure TestTIdSipResponse.TestHasProxyAuthenticate;

@@ -932,8 +932,11 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  Description: String;
+    function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
+    function  FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
+    function  HasAuthenticationInfo: Boolean;
     function  HasProxyAuthenticate: Boolean;
     function  HasWWWAuthenticate: Boolean;
     function  IsFinal: Boolean;
@@ -5326,9 +5329,19 @@ begin
   Result := IntToStr(Self.StatusCode) + ' ' + Self.StatusText;
 end;
 
+function TIdSipResponse.FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
+begin
+  Result := Self.FirstHeader(ProxyAuthenticateHeader) as TIdSipProxyAuthenticateHeader;
+end;
+
 function TIdSipResponse.FirstUnsupported: TIdSipCommaSeparatedHeader;
 begin
   Result := Self.FirstHeader(UnsupportedHeader) as TIdSipCommaSeparatedHeader;
+end;
+
+function TIdSipResponse.FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
+begin
+  Result := Self.FirstHeader(WWWAuthenticateHeader) as TIdSipWWWAuthenticateHeader;
 end;
 
 function TIdSipResponse.Equals(Msg: TIdSipMessage): Boolean;
@@ -5345,6 +5358,11 @@ begin
   end
   else
     Result := false;
+end;
+
+function TIdSipResponse.HasAuthenticationInfo: Boolean;
+begin
+  Result := Self.HasHeader(AuthenticationInfoHeader);
 end;
 
 function TIdSipResponse.HasProxyAuthenticate: Boolean;
