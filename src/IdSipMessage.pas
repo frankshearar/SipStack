@@ -427,7 +427,7 @@ type
     function GetName: String; override;
   public
     function IsSession: Boolean;
-    
+
     property Handling: String read GetHandling write SetHandling;
   end;
 
@@ -1203,6 +1203,7 @@ const
   UserChars             = Alphabet + Digits + UnreservedChars + UserUnreservedChars;
 
   BadStatusCode               = -1;
+  BadContentLength            = 'Content-Length must match body length';
   ConvertErrorMsg             = 'Failed to convert ''%s'' to type %s';
   CSeqMethodMismatch          = 'CSeq header method doesn''t match request method';
   InvalidBranchId             = 'Invalid branch-id';
@@ -5373,6 +5374,11 @@ function TIdSipMessage.ParseFailReason: String;
 var
   H: TIdSipHeader;
 begin
+  if not Self.IsMalformed then begin
+    Result := '';
+    Exit;
+  end;
+  
   Result := Self.fParseFailReason;
 
   if (Result = '') then begin
@@ -5461,11 +5467,35 @@ end;
 
 function TIdSipMessage.MissingRequiredHeaders: Boolean;
 begin
-  Result := not Self.HasHeader(CallIDHeaderFull)
-         or not Self.HasHeader(CSeqHeader)
-         or not Self.HasHeader(FromHeaderFull)
-         or not Self.HasHeader(ToHeaderFull)
-         or not Self.HasHeader(ViaHeaderFull)
+  if not Self.HasHeader(CallIDHeaderFull) then begin
+    Result := true;
+
+    Self.MarkAsInvalid(MissingCallID);
+  end;
+
+  if not Self.HasHeader(CSeqHeader) then begin
+    Result := true;
+
+    Self.MarkAsInvalid(MissingCSeq);
+  end;
+
+  if not Self.HasHeader(FromHeaderFull) then begin
+    Result := true;
+
+    Self.MarkAsInvalid(MissingFrom);
+  end;
+
+  if not Self.HasHeader(ToHeaderFull) then begin
+    Result := true;
+
+    Self.MarkAsInvalid(MissingTo);
+  end;
+
+  if not Self.HasHeader(ViaHeaderFull) then begin
+    Result := true;
+
+    Self.MarkAsInvalid(MissingVia);
+  end;
 end;
 
 procedure TIdSipMessage.ParseCompoundHeader(const Header: String;
@@ -5559,6 +5589,9 @@ begin
     CL := 0;
 
   Result := CL = Length(Self.Body);
+
+  if not Result then
+    Self.MarkAsInvalid(BadContentLength);
 end;
 
 function TIdSipMessage.FirstMalformedHeader: TIdSipHeader;
@@ -5617,6 +5650,9 @@ function TIdSipMessage.HasBodyButMissingContentType: Boolean;
 begin
   Result := (Length(Self.Body) > 0)
     and not Self.HasHeader(ContentTypeHeaderFull);
+
+  if Result then
+    Self.MarkAsInvalid(MissingContentType);
 end;
 
 procedure TIdSipMessage.Initialize;
@@ -6043,7 +6079,7 @@ begin
   end;
 
   if not TIdSipParser.IsMethod(RawMethod) then begin
-    Self.MarkAsInvalid(Format(MalformedToken, ['Method', RawMethod]));
+    Self.MarkAsInvalid(Format(MalformedToken, [MethodToken, RawMethod]));
     Exit;
   end;
 
@@ -6103,7 +6139,7 @@ begin
     Self.Method := Tokens[0];
     // we want to check the Method
     if not Parser.IsMethod(Self.Method) then
-      Self.FailParse(Format(MalformedToken, ['Method', Self.Method]));
+      Self.FailParse(Format(MalformedToken, [MethodToken, Self.Method]));
 
     URI := Tokens[1];
 
@@ -6126,6 +6162,8 @@ end;
 function TIdSipRequest.CSeqMatchesMethod: Boolean;
 begin
   Result := Self.CSeq.Method = Self.Method;
+
+  Self.MarkAsInvalid(CSeqMethodMismatch);
 end;
 
 function TIdSipRequest.FindAuthorizationHeader(const Realm: String;

@@ -70,7 +70,6 @@ type
     procedure TestIsMalformedMissingCseq;
     procedure TestIsMalformedMissingFrom;
     procedure TestIsMalformedMissingTo;
-    procedure TestIsMalformedMissingVia;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestQuickestExpiry;
@@ -720,6 +719,9 @@ begin
   Self.Msg.Body := 'foo';
   Check(Self.Msg.IsMalformed,
         'Content-Length = 0; body = ''foo''');
+  CheckEquals(BadContentLength,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
 
   Self.Msg.Body := 'foo';
   Self.Msg.ContentLength := 3;
@@ -769,9 +771,17 @@ begin
   Check(Self.Msg.IsMalformed,
         'Length(Body) > 0 but no Content-Type');
 
+  CheckEquals(MissingContentType,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
+
   Self.Msg.ContentType := 'text/plain';
   Check(not Self.Msg.IsMalformed,
         'Content-Type present');
+
+  CheckEquals('',
+              Self.Msg.ParseFailReason,
+              'ParseFailReason when not malformed');
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingCallID;
@@ -780,6 +790,9 @@ begin
   Self.Msg.RemoveAllHeadersNamed(CallIDHeaderFull);
 
   Check(Self.Msg.IsMalformed, 'Missing Call-ID header');
+  CheckEquals(MissingCallID,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingCseq;
@@ -788,6 +801,9 @@ begin
   Self.Msg.RemoveAllHeadersNamed(CSeqHeader);
 
   Check(Self.Msg.IsMalformed, 'Missing CSeq header');
+  CheckEquals(MissingCSeq,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingFrom;
@@ -796,6 +812,9 @@ begin
   Self.Msg.RemoveAllHeadersNamed(FromHeaderFull);
 
   Check(Self.Msg.IsMalformed, 'Missing From header');
+  CheckEquals(MissingFrom,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingTo;
@@ -804,14 +823,9 @@ begin
   Self.Msg.RemoveAllHeadersNamed(ToHeaderFull);
 
   Check(Self.Msg.IsMalformed, 'Missing To header');
-end;
-
-procedure TestTIdSipMessage.TestIsMalformedMissingVia;
-begin
-  Self.AddRequiredHeaders(Self.Msg);
-  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
-
-  Check(Self.Msg.IsMalformed, 'Missing Via header');
+  CheckEquals(MissingTo,
+              Self.Msg.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;
@@ -1952,12 +1966,16 @@ procedure TestTIdSipRequest.TestIsMalformedCSeqMethod;
 begin
   Self.Request.Method := MethodInvite;
   Self.Request.CSeq.Method := Self.Request.Method;
+
   Check(not Self.Request.IsMalformed,
        'CSeq method matches request method');
 
   Self.Request.CSeq.Method := Self.Request.CSeq.Method + '1';;
   Check(Self.Request.IsMalformed,
        'CSeq method matches request method');
+  CheckEquals(CSeqMethodMismatch,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipRequest.TestIsMalformedSipVersion;
@@ -1992,12 +2010,19 @@ begin
 end;
 
 procedure TestTIdSipRequest.TestIsMalformedMethod;
+var
+  ExpectedReason: String;
 begin
   Self.Request.ClearHeaders;
   Self.AddRequiredHeaders(Self.Request);
   Self.Request.Method := 'Bad"Method';
 
-  Check(Self.Msg.IsMalformed, 'Bad Method');
+  ExpectedReason := Format(MalformedToken, [MethodToken, Self.Request.Method]);
+
+  Check(Self.Request.IsMalformed, 'Bad Method');
+  CheckEquals(ExpectedReason,
+              Self.Request.ParseFailReason,
+              'ParseFailReason');
 end;
 
 procedure TestTIdSipRequest.TestIsMalformedMissingVia;

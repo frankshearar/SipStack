@@ -125,6 +125,9 @@ const
   WWWAuthenticateHeader      = 'WWW-Authenticate';
 
 const
+  MethodToken = 'Method';
+
+const
   SIPVersion  = SipName + '/2.0';
   SIPVersion1 = SIPVersion;
 
