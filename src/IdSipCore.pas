@@ -332,6 +332,8 @@ type
   TIdSipInboundRegistration = class;
   TIdSipOutboundSession = class;
 
+  TIdSipActionProc = procedure(Action: TIdSipAction) of object;
+
   // I (usually) represent a human being in the SIP network. I:
   // * inform any listeners when new sessions become established, modified or
   //   terminated;
@@ -365,9 +367,12 @@ type
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
+    procedure FindActionAndPerform(Event: TObject;
+                                   Proc: TIdSipActionProc);
     function  FindSession(Msg: TIdSipMessage): TIdSipSession;
     function  GetContact: TIdSipContactHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
+    procedure InboundSessionExpire(Action: TIdSipAction);
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
@@ -375,7 +380,9 @@ type
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
     function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+    procedure ResendOk(Action: TIdSipAction);
     function  ResponseForInvite: Cardinal;
+    procedure SessionProgress(Action: TIdSipAction);
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
@@ -390,6 +397,7 @@ type
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
+    procedure TransactionComplete(Action: TIdSipAction);
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
   public
     constructor Create; override;
@@ -2179,49 +2187,13 @@ begin
 end;
 
 procedure TIdSipUserAgentCore.OnInboundSessionExpire(Event: TObject);
-var
-  ExpiredInvite: TIdSipRequest;
-  Action:        TIdSipInboundInvite;
 begin
-  ExpiredInvite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
-  try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(ExpiredInvite) as TIdSipInboundInvite;
-
-      if Assigned(Action) then
-        Action.TimeOut;
-
-      Self.CleanOutTerminatedActions;
-    finally
-      Self.ActionLock.Release;
-    end;
-  finally
-    ExpiredInvite.Free;
-  end;
+  Self.FindActionAndPerform(Event, Self.InboundSessionExpire);
 end;
 
 procedure TIdSipUserAgentCore.OnResendOk(Event: TObject);
-var
-  Action: TIdSipInboundInvite;
-  Invite: TIdSipRequest;
 begin
-  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
-  try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(Invite) as TIdSipInboundInvite;
-
-      if Assigned(Action) then
-        Action.ResendOk;
-
-      Self.CleanOutTerminatedActions;
-    finally
-      Self.ActionLock.Release;
-    end;
-  finally
-    Invite.Free;
-  end;
+  Self.FindActionAndPerform(Event, Self.ResendOk);
 end;
 
 procedure TIdSipUserAgentCore.OnResendReInvite(Event: TObject);
@@ -2249,49 +2221,13 @@ begin
 end;
 
 procedure TIdSipUserAgentCore.OnSessionProgress(Event: TObject);
-var
-  Action: TIdSipInboundInvite;
-  Invite: TIdSipRequest;
 begin
-  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
-  try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(Invite) as TIdSipInboundInvite;
-
-      if Assigned(Action) then
-        Action.SendSessionProgress;
-
-      Self.CleanOutTerminatedActions;
-    finally
-      Self.ActionLock.Release;
-    end;
-  finally
-    Invite.Free;
-  end;
+  Self.FindActionAndPerform(Event, Self.SessionProgress);
 end;
 
 procedure TIdSipUserAgentCore.OnTransactionComplete(Event: TObject);
-var
-  Action: TIdSipOutboundInvite;
-  Invite: TIdSipRequest;
 begin
-  Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
-  try
-    Self.ActionLock.Acquire;
-    try
-      Action := Self.FindAction(Invite) as TIdSipOutboundInvite;
-
-      if Assigned(Action) then
-        Action.TransactionCompleted;
-
-      Self.CleanOutTerminatedActions;
-    finally
-      Self.ActionLock.Release;
-    end;
-  finally
-    Invite.Free;
-  end;
+  Self.FindActionAndPerform(Event, Self.TransactionComplete);
 end;
 
 function TIdSipUserAgentCore.OptionsCount: Integer;
@@ -2460,6 +2396,12 @@ begin
   end;
 end;
 
+procedure TIdSipUserAgentCore.TransactionComplete(Action: TIdSipAction);
+begin
+  if (Action is TIdSipOutboundInvite) then
+    (Action as TIdSipOutboundInvite).TransactionCompleted;
+end;
+
 function TIdSipUserAgentCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
   Result := inherited WillAcceptRequest(Request);
@@ -2574,6 +2516,30 @@ begin
   end;
 end;
 
+procedure TIdSipUserAgentCore.FindActionAndPerform(Event: TObject;
+                                                   Proc: TIdSipActionProc);
+var
+  Action:  TIdSipAction;
+  Request: TIdSipRequest;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Self.ActionLock.Acquire;
+    try
+      Action := Self.FindAction(Request);
+
+      if Assigned(Action) then
+        Proc(Action);
+
+      Self.CleanOutTerminatedActions;
+    finally
+      Self.ActionLock.Release;
+    end;
+  finally
+    Request.Free;
+  end;
+end;
+
 function TIdSipUserAgentCore.FindSession(Msg: TIdSipMessage): TIdSipSession;
 var
   Action: TIdSipAction;
@@ -2609,6 +2575,12 @@ end;
 function TIdSipUserAgentCore.GetDefaultRegistrationExpiryTime: Cardinal;
 begin
   Result := Self.BindingDB.DefaultExpiryTime;
+end;
+
+procedure TIdSipUserAgentCore.InboundSessionExpire(Action: TIdSipAction);
+begin
+  if (Action is TIdSipInboundInvite) then
+    (Action as TIdSipInboundInvite).TimeOut;
 end;
 
 function TIdSipUserAgentCore.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
@@ -2677,6 +2649,12 @@ begin
   Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
+procedure TIdSipUserAgentCore.ResendOk(Action: TIdSipAction);
+begin
+  if (Action is TIdSipInboundInvite) then
+    (Action as TIdSipInboundInvite).ResendOk;
+end;
+
 function TIdSipUserAgentCore.ResponseForInvite: Cardinal;
 begin
   // If we receive an INVITE (or an OPTIONS), what response code
@@ -2688,6 +2666,12 @@ begin
     Result := SIPTemporarilyUnavailable
   else
     Result := SIPOK;
+end;
+
+procedure TIdSipUserAgentCore.SessionProgress(Action: TIdSipAction);
+begin
+  if (Action is TIdSipInboundInvite) then
+    (Action as TIdSipInboundInvite).SendSessionProgress;
 end;
 
 procedure TIdSipUserAgentCore.SetContact(Value: TIdSipContactHeader);
@@ -3723,7 +3707,7 @@ function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipRespo
 begin
   Result := inherited ReceiveGlobalFailureResponse(Response);
 
-  Self.ReceivedFinalResponse := true;  
+  Self.ReceivedFinalResponse := true;
 end;
 
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
