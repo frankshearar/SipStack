@@ -73,31 +73,36 @@ type
   // I track the information a UAC needs to authenticate against a particular
   // realm.
   // I implement the (client-side) authentication scheme defined by RFC 2617.
+  // Note that in order to create an authorization header, you need to give
+  // me a password. I don't store this password anywhere, so any caching of
+  // passwords is up to whoever uses me.
   TIdRealmInfo = class(TObject)
   private
     fDigestUri:  String;
+    fDigest:     String;
     fNonce:      String;
     fNonceCount: Cardinal;
-    fPassword:   String;
     fRealm:      String;
     fUsername:   String;
 
     procedure CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                    Challenge: TIdSipAuthenticateHeader;
                                    const Method: String;
-                                   const Body: String);
+                                   const Body: String;
+                                   const Password: String);
     procedure IncNonceCount;
     procedure ResetNonceCount;
     procedure SetNonce(const Value: String);
   public
     function CreateAuthorization(Challenge: TIdSipAuthenticateHeader;
                                  const Method: String;
-                                 const Body: String): TIdSipAuthorizationHeader;
+                                 const Body: String;
+                                 const Password: String): TIdSipAuthorizationHeader;
 
     property DigestUri:  String   read fDigestUri write fDigestUri;
+    property Digest:     String   read fDigest write fDigest;
     property Nonce:      String   read fNonce write SetNonce;
     property NonceCount: Cardinal read fNonceCount write fNonceCount;
-    property Password:   String   read fPassword write fPassword;
     property Realm:      String   read fRealm write fRealm;
     property Username:   String   read fUsername write fUsername;
   end;
@@ -114,8 +119,7 @@ type
 
     procedure AddKey(Challenge: TIdSipAuthenticateHeader;
                      const Target: String;
-                     const Username: String;
-                     const Password: String);
+                     const Username: String);
     function  Find(const Realm, Target: String): TIdRealmInfo;
     function  KeyCount: Integer;
   end;
@@ -145,69 +149,88 @@ type
                                       const A2: String;
                                       Auth: TIdSipAuthorizationHeader): String;
 
-function A1For(const Algorithm: String): TIdAlgorithmFunction;
-function A2For(const QopType: String): TIdQopFunction;
-function AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
-                                 const Password: String): String;
-function HashFor(const AlgorithmName: String): TIdHashFunction;
-function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
-function MD5(const S: String): String;
-function MD5A1(Auth: TIdSipAuthorizationHeader;
-               const Password: String): String;
-function MD5SessionA1(Auth: TIdSipAuthorizationHeader;
-                   const Password: String): String;
-function QopAuthA2(Auth: TIdSipAuthorizationHeader;
-                   const Method: String;
-                   const Body: String): String;
-function QopAuthIntA2(Auth: TIdSipAuthorizationHeader;
-                      const Method: String;
-                      const Body: String): String;
-function QopAuthRequestDigest(const A1: String;
-                              const A2: String;
-                              Auth: TIdSipAuthorizationHeader): String;
-function QopAuthIntRequestDigest(const A1: String;
-                                 const A2: String;
-                                 Auth: TIdSipAuthorizationHeader): String;
-function QopNotSpecifiedA2(Auth: TIdSipAuthorizationHeader;
-                           const Method: String;
-                           const Body: String): String;
-function QopNotSpecifiedRequestDigest(const A1: String;
-                                      const A2: String;
-                                      Auth: TIdSipAuthorizationHeader): String;
-function RequestDigestFor(const QopType: String): TIdRequestDigestFunction;
+function  A1For(const Algorithm: String): TIdAlgorithmFunction;
+function  A2For(const QopType: String): TIdQopFunction;
+function  AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
+                                  const Password: String): String;
+function  HashFor(const AlgorithmName: String): TIdHashFunction;
+function  KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
+function  MD5(const S: String): String;
+function  MD5A1(Auth: TIdSipAuthorizationHeader;
+                const Password: String): String;
+function  MD5SessionA1(Auth: TIdSipAuthorizationHeader;
+                       const Password: String): String;
+function  QopAuthA2(Auth: TIdSipAuthorizationHeader;
+                    const Method: String;
+                    const Body: String): String;
+function  QopAuthIntA2(Auth: TIdSipAuthorizationHeader;
+                       const Method: String;
+                       const Body: String): String;
+function  QopAuthRequestDigest(const A1: String;
+                               const A2: String;
+                               Auth: TIdSipAuthorizationHeader): String;
+function  QopAuthIntRequestDigest(const A1: String;
+                                  const A2: String;
+                                  Auth: TIdSipAuthorizationHeader): String;
+function  QopNotSpecifiedA2(Auth: TIdSipAuthorizationHeader;
+                            const Method: String;
+                            const Body: String): String;
+function  QopNotSpecifiedRequestDigest(const A1: String;
+                                       const A2: String;
+                                       Auth: TIdSipAuthorizationHeader): String;
+procedure RegisterAlgorithm(const Name: String; Func: TIdAlgorithmFunction);
+procedure RegisterHash(const Name: String; Func: TIdHashFunction);
+procedure RegisterQop(const Name: String; Func: TIdQopFunction);
+procedure RegisterRequestDigest(const QopType: String; Func: TIdRequestDigestFunction);
+function  RequestDigestFor(const QopType: String): TIdRequestDigestFunction;
 
 implementation
 
 uses
   Classes, IdRandom;
 
+var
+  GAlgorithmFunctions:     TStrings;
+  GHashFunctions:          TStrings;
+  GQopFunctions:           TStrings;
+  GRequestDigestFunctions: TStrings;
+
 //*******************************************************************************
 //* Unit functions & procedures                                                 *
 //*******************************************************************************
-//* Unit Public functions & procedures ******************************************
+//* Unit Private functions & procedures *****************************************
 
-function A1For(const Algorithm: String): TIdAlgorithmFunction;
+function FunctionAt(FuncList: TStrings;
+                    const Name: String): Pointer;
+var
+  Index: Integer;
 begin
-  if (Algorithm = '') then
-    Result := AlgorithmNotSpecifiedA1
-  else if IsEqual(Algorithm, MD5Name) then
-    Result := MD5A1
-  else if IsEqual(Algorithm, MD5SessionName) then
-    Result := MD5SessionA1
+
+  Index := FuncList.IndexOf(Lowercase(Name));
+
+  if (Index >= 0) then
+    Result := FuncList.Objects[Index]
   else
     Result := nil;
 end;
 
+procedure RegisterFunction(FuncList: TStrings;
+                           const Name: String;
+                           Func: Pointer);
+begin
+  FuncList.AddObject(Lowercase(Name), Func)
+end;
+
+//* Unit Public functions & procedures ******************************************
+
+function A1For(const Algorithm: String): TIdAlgorithmFunction;
+begin
+  Result := TIdAlgorithmFunction(FunctionAt(GAlgorithmFunctions, Algorithm));
+end;
+
 function A2For(const QopType: String): TIdQopFunction;
 begin
-  if (QopType = '') then
-    Result := QopNotSpecifiedA2
-  else if IsEqual(QopType, QopAuth) then
-    Result := QopAuthA2
-  else if IsEqual(QopType, QopAuthInt) then
-    Result := QopAuthIntA2
-  else
-    Result := nil;
+  Result := TIdQopFunction(FunctionAt(GQopFunctions, QopType));
 end;
 
 function AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
@@ -218,14 +241,7 @@ end;
 
 function HashFor(const AlgorithmName: String): TIdHashFunction;
 begin
-       if (AlgorithmName = '') then
-    Result := MD5
-  else if IsEqual(AlgorithmName, MD5Name) then
-    Result := MD5
-  else if IsEqual(AlgorithmName, MD5SessionName) then
-    Result := MD5
-  else
-    Result := nil;
+  Result := TIdHashFunction(FunctionAt(GHashFunctions, AlgorithmName));
 end;
 
 function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
@@ -252,10 +268,10 @@ begin
 end;
 
 function MD5SessionA1(Auth: TIdSipAuthorizationHeader;
-                   const Password: String): String;
+                      const Password: String): String;
 begin
   Result := Auth.Username + ':' + Auth.Realm + ':' + Password
-          + ':' + Auth.Nonce + ':' + Auth.CNonce; 
+          + ':' + Auth.Nonce + ':' + Auth.CNonce;
 end;
 
 function QopAuthA2(Auth: TIdSipAuthorizationHeader;
@@ -323,16 +339,29 @@ begin
                H);
 end;
 
+procedure RegisterAlgorithm(const Name: String; Func: TIdAlgorithmFunction);
+begin
+  RegisterFunction(GAlgorithmFunctions, Name, @Func);
+end;
+
+procedure RegisterHash(const Name: String; Func: TIdHashFunction);
+begin
+  RegisterFunction(GHashFunctions, Name, @Func);
+end;
+
+procedure RegisterQop(const Name: String; Func: TIdQopFunction);
+begin
+  RegisterFunction(GQopFunctions, Name, @Func);
+end;
+
+procedure RegisterRequestDigest(const QopType: String; Func: TIdRequestDigestFunction);
+begin
+  RegisterFunction(GRequestDigestFunctions, QopType, @Func);
+end;
+
 function RequestDigestFor(const QopType: String): TIdRequestDigestFunction;
 begin
-  if (QopType = '') then
-    Result := QopNotSpecifiedRequestDigest
-  else if IsEqual(QopType, QopAuth) then
-    Result := QopAuthRequestDigest
-  else if IsEqual(QopType, QopAuthInt) then
-    Result := QopAuthIntRequestDigest
-  else
-    Result := nil;
+  Result := TIdRequestDigestFunction(FunctionAt(GRequestDigestFunctions, QopType));
 end;
 
 //*******************************************************************************
@@ -482,11 +511,12 @@ end;
 
 function TIdRealmInfo.CreateAuthorization(Challenge: TIdSipAuthenticateHeader;
                                           const Method: String;
-                                          const Body: String): TIdSipAuthorizationHeader;
+                                          const Body: String;
+                                          const Password: String): TIdSipAuthorizationHeader;
 begin
   Result := Challenge.CredentialHeaderType.Create;
 
-  Self.CalculateCredentials(Result, Challenge, Method, Body);
+  Self.CalculateCredentials(Result, Challenge, Method, Body, Password);
 end;
 
 //* TIdRealmInfo Private methods ***********************************************
@@ -494,7 +524,8 @@ end;
 procedure TIdRealmInfo.CalculateCredentials(Authorization: TIdSipAuthorizationHeader;
                                             Challenge: TIdSipAuthenticateHeader;
                                             const Method: String;
-                                            const Body: String);
+                                            const Body: String;
+                                            const Password: String);
 var
   DigestMaker: TIdRequestDigestFunction;
   QopData:     TIdQopFunction;
@@ -516,7 +547,7 @@ begin
     Authorization.NonceCount := Self.NonceCount;
   end;
 
-  Authorization.Response := DigestMaker(UserData(Authorization, Self.Password),
+  Authorization.Response := DigestMaker(UserData(Authorization, Password),
                                         QopData(Authorization, Method, Body),
                                         Authorization);
 end;
@@ -558,8 +589,7 @@ end;
 
 procedure TIdKeyRing.AddKey(Challenge: TIdSipAuthenticateHeader;
                             const Target: String;
-                            const Username: String;
-                            const Password: String);
+                            const Username: String);
 var
   NewInfo: TIdRealmInfo;
 begin
@@ -571,8 +601,7 @@ begin
       NewInfo.DigestUri := Target;
       NewInfo.Nonce     := Challenge.Nonce;
       NewInfo.Realm     := Challenge.Realm;
-      NewInfo.Password  := Password;
-      NewInfo.Username  := Username;       
+      NewInfo.Username  := Username;
     except
       if (Self.List.IndexOf(NewInfo) <> -1) then
         Self.List.Remove(NewInfo)
@@ -631,4 +660,30 @@ begin
     Result := inherited Authenticate(Request);
 end;
 
+initialization
+  GAlgorithmFunctions     := TStringList.Create;
+  GHashFunctions          := TStringList.Create;
+  GQopFunctions           := TStringList.Create;
+  GRequestDigestFunctions := TStringList.Create;
+
+  RegisterAlgorithm('',             AlgorithmNotSpecifiedA1);
+  RegisterAlgorithm(MD5Name,        MD5A1);
+  RegisterAlgorithm(MD5SessionName, MD5SessionA1);
+
+  RegisterHash('',             MD5);
+  RegisterHash(MD5Name,        MD5);
+  RegisterHash(MD5SessionName, MD5);
+
+  RegisterQop('',         QopNotSpecifiedA2);
+  RegisterQop(QopAuth,    QopAuthA2);
+  RegisterQop(QopAuthInt, QopAuthIntA2);
+
+  RegisterRequestDigest('',         QopNotSpecifiedRequestDigest);
+  RegisterRequestDigest(QopAuth,    QopAuthRequestDigest);
+  RegisterRequestDigest(QopAuthInt, QopAuthIntRequestDigest);
+finalization
+  GRequestDigestFunctions.Free;
+  GQopFunctions.Free;
+  GHashFunctions.Free;
+  GAlgorithmFunctions.Free;
 end.
