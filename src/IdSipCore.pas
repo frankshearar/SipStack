@@ -605,6 +605,7 @@ type
     procedure AddOpenTransaction(Request: TIdSipRequest);
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
     procedure MarkAsTerminated; override;
     procedure NotifyOfEndedSession(const Reason: String);
@@ -629,7 +630,7 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
-    property Dialog:      TIdSipDialog read fDialog;
+    property Dialog:      TIdSipDialog read GetDialog;
     property ReceivedAck: Boolean      read fReceivedAck;
   end;
 
@@ -3330,6 +3331,12 @@ begin
   Self.OpenTransactions.Free;
   Self.OpenTransactionLock.Free;
 
+  Self.DialogLock.Acquire;
+  try
+    Self.fDialog.Free;
+  finally
+    Self.DialogLock.Release;
+  end;
   Self.DialogLock.Free;
 
   inherited Destroy;
@@ -3350,7 +3357,7 @@ function TIdSipSession.DialogEstablished: Boolean;
 begin
   Self.DialogLock.Acquire;
   try
-    Result := Assigned(Self.fDialog);
+    Result := Self.Dialog <> nil;
   finally
     Self.DialogLock.Release;
   end;
@@ -3453,6 +3460,11 @@ begin
   Result := Self.UA.CreateInvite(Challenge.ToHeader,
                                  Self.CurrentRequest.Body,
                                  Self.CurrentRequest.ContentType);
+end;
+
+function TIdSipSession.GetDialog: TIdSipDialog;
+begin
+  Result := fDialog;
 end;
 
 function TIdSipSession.GetInvite: TIdSipRequest;
