@@ -181,6 +181,7 @@ type
     function  IsClient: Boolean; virtual; abstract;
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
+    function  IsServer: Boolean;
     procedure ReceiveRequest(const R: TIdSipRequest;
                             const T: TIdSipTransport); virtual;
     procedure ReceiveResponse(const R: TIdSipResponse;
@@ -530,10 +531,11 @@ begin
   try
     I := 0;
     while (I < Self.Transactions.Count) and not Result do begin
-      Result := Request.From.IsEqualTo(Self.TransactionAt(I).InitialRequest.From)
-            and (Request.CallID = Self.TransactionAt(I).InitialRequest.CallID)
-            and (Request.CSeq.IsEqualTo(Self.TransactionAt(I).InitialRequest.CSeq))
-            and not Request.Match(Self.TransactionAt(I).InitialRequest);
+      if Self.TransactionAt(I).IsServer then
+        Result := Request.From.IsEqualTo(Self.TransactionAt(I).InitialRequest.From)
+              and (Request.CallID = Self.TransactionAt(I).InitialRequest.CallID)
+              and (Request.CSeq.IsEqualTo(Self.TransactionAt(I).InitialRequest.CSeq))
+              and not Request.Match(Self.TransactionAt(I).InitialRequest);
       Inc(I);
     end;
   finally
@@ -829,6 +831,11 @@ begin
   finally
     Self.TranListenerLock.Release;
   end;
+end;
+
+function TIdSipTransaction.IsServer: Boolean;
+begin
+  Result := not Self.IsClient;
 end;
 
 procedure TIdSipTransaction.ReceiveRequest(const R: TIdSipRequest;

@@ -152,6 +152,7 @@ type
     procedure TestInitialState;
     procedure TestIsClient;
     procedure TestIsInvite;
+    procedure TestIsServer;
     procedure TestReceive2xxFromTUInProceedingState;
     procedure TestReceiveAckInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
@@ -188,6 +189,7 @@ type
     procedure TestInitialState;
     procedure TestIsClient;
     procedure TestIsInvite;
+    procedure TestIsServer;
     procedure TestReceiveFinalResponseFromTUInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
     procedure TestReceiveFinalResponseFromTUInTerminatedState;
@@ -219,6 +221,7 @@ type
     procedure TestInviteWithHostUnreachable;
     procedure TestIsClient;
     procedure TestIsInvite;
+    procedure TestIsServer;
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
@@ -254,6 +257,7 @@ type
     procedure TestInitialState;
     procedure TestIsClient;
     procedure TestIsInvite;
+    procedure TestIsServer;
     procedure TestMultipleRequestSendingInProceedingState;
     procedure TestMultipleRequestSendingInTryingState;
     procedure TestReceive1xxInCompletedState;
@@ -733,7 +737,7 @@ begin
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
 
-  Self.D.AddClientTransaction(Self.TranRequest);
+  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
   Check(not Self.D.LoopDetected(Self.Invite),
         'Loop should not be detected - requests match (same branch)');
 
@@ -1479,6 +1483,11 @@ begin
   Check(Self.Tran.IsInvite, 'IsInvite not true');
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestIsServer;
+begin
+  Check(Self.Tran.IsServer, 'IsServer');
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestReceive2xxFromTUInProceedingState;
 var
   ResponseCount: Cardinal;
@@ -1953,6 +1962,11 @@ begin
   Check(not Self.Tran.IsInvite, 'IsInvite not false');
 end;
 
+procedure TestTIdSipServerNonInviteTransaction.TestIsServer;
+begin
+  Check(Self.Tran.IsServer, 'IsServer');
+end;
+
 procedure TestTIdSipServerNonInviteTransaction.TestReceiveFinalResponseFromTUInCompletedState;
 var
   SentResponseCount: Cardinal;
@@ -2424,6 +2438,11 @@ begin
   Check(Self.Tran.IsInvite, 'IsInvite not true');
 end;
 
+procedure TestTIdSipClientInviteTransaction.TestIsServer;
+begin
+  Check(not Self.Tran.IsServer, 'IsServer');
+end;
+
 procedure TestTIdSipClientInviteTransaction.TestMultipleInviteSending;
 begin
   (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
@@ -2854,6 +2873,11 @@ end;
 procedure TestTIdSipClientNonInviteTransaction.TestIsInvite;
 begin
   Check(not Self.Tran.IsInvite, 'IsInvite not false');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestIsServer;
+begin
+  Check(not Self.Tran.IsServer, 'IsServer');
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestMultipleRequestSendingInProceedingState;
