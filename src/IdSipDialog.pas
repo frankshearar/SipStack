@@ -322,6 +322,12 @@ begin
   Result.CSeq.SequenceNo := Self.LocalSequenceNo;
 
   Result.AddHeader(Self.InitialRequest.LastHop);
+  Result.CopyHeaders(Self.InitialRequest,
+                     AuthorizationHeader);
+  Result.CopyHeaders(Self.InitialRequest,
+                     ProxyAuthorizationHeader);
+
+
   // We create an ACK as an in-dialog request. Further, an ACK to a 2xx
   // _cannot_ match a transaction since the 2xx _terminated_ the transaction.
   // Therefore we use a completely new branch/transaction ID.

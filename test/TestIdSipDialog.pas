@@ -38,6 +38,8 @@ type
     procedure TestCopy;
     procedure TestCopyConfirmed;
     procedure TestCreateAck;
+    procedure TestCreateAckUsesInviteAuthorization;
+    procedure TestCreateAckUsesInviteProxyAuthorization;
     procedure TestCreateFromAnotherDialog;
     procedure TestCreateInboundDialog;
     procedure TestCreateOutboundDialog;
@@ -291,9 +293,82 @@ begin
                 Self.Dlg.LocalSequenceNo,
                 'Sequence number must not change when generating an ACK');
 
-//    Check(Ack.Path.Equals(Self.
+    CheckEquals(Self.Req.LastHop.Value,
+                Ack.LastHop.Value,
+                'ACK topmost Via');
+
   finally
     Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateAckUsesInviteAuthorization;
+var
+  Ack:      TIdSipRequest;
+  AuthDlg:  TIdSipDialog;
+  Expected: TIdSipHeadersFilter;
+  Received: TIdSipHeadersFilter;
+begin
+  Self.Req.AddHeader(AuthorizationHeader).Value := 'Digest realm="tessier-ashpool.co.luna" nonce="f00" digest="f00f00"';
+  Self.Req.AddHeader(AuthorizationHeader).Value := 'Digest realm="gw1.leo-ix.net" nonce="f00" digest="f00f00"';
+  AuthDlg := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+
+  try
+    Ack := AuthDlg.CreateAck;
+    try
+      Expected := TIdSipHeadersFilter.Create(Self.Req.Headers,
+                                             AuthorizationHeader);
+      try
+        Received := TIdSipHeadersFilter.Create(Ack.Headers,
+                                               AuthorizationHeader);
+        try
+          CheckEquals(Expected, Received, 'Authorization headers');
+        finally
+          Received.Free;
+        end;
+      finally
+        Expected.Free;
+      end;
+    finally
+      Ack.Free;
+    end;
+  finally
+    AuthDlg.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateAckUsesInviteProxyAuthorization;
+var
+  Ack:      TIdSipRequest;
+  AuthDlg:  TIdSipDialog;
+  Expected: TIdSipHeadersFilter;
+  Received: TIdSipHeadersFilter;
+begin
+  Self.Req.AddHeader(ProxyAuthorizationHeader).Value := 'Digest realm="tessier-ashpool.co.luna" nonce="f00" digest="f00f00"';
+  Self.Req.AddHeader(ProxyAuthorizationHeader).Value := 'Digest realm="gw1.leo-ix.net" nonce="f00" digest="f00f00"';
+
+  AuthDlg := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+  try
+    Ack := AuthDlg.CreateAck;
+    try
+      Expected := TIdSipHeadersFilter.Create(Self.Req.Headers,
+                                             ProxyAuthorizationHeader);
+      try
+        Received := TIdSipHeadersFilter.Create(Ack.Headers,
+                                               ProxyAuthorizationHeader);
+        try
+          CheckEquals(Expected, Received, 'Proxy-Authorization headers');
+        finally
+          Received.Free;
+        end;
+      finally
+        Expected.Free;
+      end;
+    finally
+      Ack.Free;
+    end;
+  finally
+    AuthDlg.Free;
   end;
 end;
 
