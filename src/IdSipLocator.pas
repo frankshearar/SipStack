@@ -284,6 +284,7 @@ type
   TIdSrvRecords = class(TIdBaseList)
   private
     function GetItems(Index: Integer): TIdSrvRecord;
+    function ItemFor(const Target: String): TIdSrvRecord;
   public
     procedure Add(Copy: TIdSrvRecord); overload;
     procedure Add(const Domain: String;
@@ -292,6 +293,9 @@ type
                   Weight: Word;
                   Port: Cardinal;
                   const Target: String); overload;
+    procedure AddNameRecord(const RecordType: String;
+                            const Domain: String;
+                            const IPAddress: String);
     function  Last: TIdSrvRecord;
     procedure Sort;
 
@@ -344,6 +348,9 @@ implementation
 uses
   IdGlobal, IdSimpleParser, SysUtils;
 
+const
+  NoRecordFound = 'No record found: %s';
+
 //******************************************************************************
 //* Unit functions & procedures                                                *
 //******************************************************************************
@@ -356,8 +363,10 @@ end;
 
 function NaptrSort(Item1, Item2: Pointer): Integer;
 var
-  A: TIdNaptrRecord;
-  B: TIdNaptrRecord;
+  A:         TIdNaptrRecord;
+  B:         TIdNaptrRecord;
+  AIsSecure: Boolean;
+  BIsSecure: Boolean;
 begin
   // Result < 0 if Item1 is less than Item2,
   // Result = 0 if they are equal, and
@@ -382,6 +391,16 @@ begin
     Result := A.Order - B.Order;
 
   if (Result = 0) then begin
+    AIsSecure := IndyPos(NaptrSipsService, A.Service) > 0;
+    BIsSecure := IndyPos(NaptrSipsService, B.Service) > 0;
+
+    // If the A and B have the Protocol, prefer the one that
+    // uses a secure Transport. Thus,
+    //   SIP+D2T < SIP+D2U;
+    //   SIPS+D2T < SIP+D2T
+
+    raise Exception.Create('Read the comment above'); 
+
     if (A.Service < B.Service) then
       Result := -1
     else if (A.Service > B.Service) then
@@ -1229,6 +1248,18 @@ begin
   Self.List.Add(NewRec);
 end;
 
+procedure TIdSrvRecords.AddNameRecord(const RecordType: String;
+                                      const Domain: String;
+                                      const IPAddress: String);
+var
+  Srv: TIdSrvRecord;
+begin
+  Srv := Self.ItemFor(Domain);
+
+  if Assigned(Srv) then
+    Srv.NameRecords.Add(RecordType, Domain, IPAddress);
+end;
+
 function TIdSrvRecords.Last: TIdSrvRecord;
 begin
   Result := Self[Self.Count - 1];
@@ -1244,6 +1275,20 @@ end;
 function TIdSrvRecords.GetItems(Index: Integer): TIdSrvRecord;
 begin
   Result := Self.List[Index] as TIdSrvRecord;
+end;
+
+function TIdSrvRecords.ItemFor(const Target: String): TIdSrvRecord;
+var
+  I: Integer;
+begin
+  I      := 0;
+  Result := nil;
+
+  while (I < Self.Count) and not Assigned(Result) do
+    if IsEqual(Self[I].Target, Target) then
+      Result := Self[I]
+    else
+      Inc(I);
 end;
 
 end.

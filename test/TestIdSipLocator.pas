@@ -201,6 +201,7 @@ type
   published
     procedure TestAdd;
     procedure TestAddWithParameters;
+    procedure TestAddNameRecord;
     procedure TestClear;
     procedure TestLast;
     procedure TestIsEmpty;
@@ -1995,6 +1996,35 @@ begin
   CheckEquals(Weight,   Self.List[0].Weight,   'Weight');
   CheckEquals(Port,     Self.List[0].Port,     'Port');
   CheckEquals(Target,   Self.List[0].Target,   'Target');
+end;
+
+procedure TestTIdSrvRecords.TestAddNameRecord;
+const
+  Targets: array[1..3] of String = ('target1', 'target2', 'target3');
+var
+  I: Integer;
+begin
+  // SRV -> 'targetN'; 'targetN' via AAAA -> ::N
+  for I := Low(Targets) to High(Targets) do begin
+    Self.List.Add('', '', 0, 0, 0, Targets[I]);
+
+    Self.List.AddNameRecord(DnsAAAARecord, Targets[I], '::' + IntToStr(I));
+  end;
+
+  for I := 0 to Self.List.Count - 1 do begin
+    CheckEquals(1,
+                Self.List[I].NameRecords.Count,
+                IntToStr(I) + 'th record has no name record');
+    CheckEquals(Targets[I + 1],
+                Self.List[I].NameRecords[0].Domain,
+                IntToStr(I) + 'th record has wrong domain');
+    CheckEquals(DnsAAAARecord,
+                Self.List[I].NameRecords[0].RecordType,
+                IntToStr(I) + 'th record has wrong record type');
+    CheckEquals('::' + IntToStr(I + 1),
+                Self.List[I].NameRecords[0].IPAddress,
+                IntToStr(I) + 'th record has wrong IP address');
+  end;
 end;
 
 procedure TestTIdSrvRecords.TestClear;
