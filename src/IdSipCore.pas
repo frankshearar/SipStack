@@ -348,6 +348,7 @@ type
                                      NotFoundBlock: TIdSipActionClosure); overload;
     procedure FindSessionAndPerform(Event: TIdSipMessageWait;
                                     Proc: TIdSipSessionProc);
+    procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
     function  RegistrationCount: Integer;
@@ -367,6 +368,33 @@ type
 
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
+  end;
+
+  TIdUserAgentClosure = class(TIdSipActionClosure)
+  private
+    fReceiver:  TIdSipTransport;
+    fUserAgent: TIdSipAbstractUserAgent;
+  public
+    property Receiver:  TIdSipTransport         read fReceiver write fReceiver;
+    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
+  end;
+
+  TIdSipUserAgentActOnRequest = class(TIdUserAgentClosure)
+  private
+    fRequest: TIdSipRequest;
+  public
+    procedure Execute(Action: TIdSipAction); override;
+
+    property Request: TIdSipRequest read fRequest write fRequest;
+  end;
+
+  TIdSipUserAgentActOnResponse = class(TIdUserAgentClosure)
+  private
+    fResponse: TIdSipResponse;
+  public
+    procedure Execute(Action: TIdSipAction); override;
+
+    property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
   TIdSipInboundOptions = class;
@@ -408,6 +436,10 @@ type
     KnownRegistrars: TIdSipRegistrations;
 
     function  ConvertToHeader(ValueList: TStrings): String;
+    function  CreateRequestHandler(Request: TIdSipRequest;
+                                   Receiver: TIdSipTransport): TIdSipUserAgentActOnRequest;
+    function  CreateResponseHandler(Response: TIdSipResponse;
+                                    Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
@@ -2044,6 +2076,7 @@ begin
   Self.ActionLock.Acquire;
   try
     I := 0;
+
     while (I < Self.Actions.Count) and not Assigned(Result) do begin
       Action := Self.Actions[I] as TIdSipAction;
       if not Action.IsTerminated and Action.Match(Msg) then
@@ -2079,8 +2112,8 @@ procedure TIdSipActions.FindActionAndPerformOr(Event: TIdSipMessageWait;
                                                FoundProc: TIdSipActionProc;
                                                NotFoundProc: TIdSipActionProc);
 var
-  Action:  TIdSipAction;
-  Msg:     TIdSipMessage;
+  Action: TIdSipAction;
+  Msg:    TIdSipMessage;
 begin
   Msg := Event.Message;
   try
@@ -2098,14 +2131,16 @@ begin
   finally
     Msg.Free;
   end;
+
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipActions.FindActionAndPerformOr(Event: TIdSipMessageWait;
                                                FoundBlock: TIdSipActionClosure;
                                                NotFoundBlock: TIdSipActionClosure);
 var
-  Action:  TIdSipAction;
-  Msg:     TIdSipMessage;
+  Action: TIdSipAction;
+  Msg:    TIdSipMessage;
 begin
   Msg := Event.Message;
   try
@@ -2117,12 +2152,15 @@ begin
         FoundBlock.Execute(Action)
       else
         NotFoundBlock.Execute(nil);
+
     finally
       Self.ActionLock.Release;
     end;
   finally
     Msg.Free;
   end;
+
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipActions.FindSessionAndPerform(Event: TIdSipMessageWait;
@@ -2139,14 +2177,30 @@ begin
 
       if Assigned(Session) then
         Proc(Session, Invite);
-
-      Self.CleanOutTerminatedActions;
     finally
       Invite.Free;
     end;
   finally
     Self.ActionLock.Release;
   end;
+
+  Self.CleanOutTerminatedActions;
+end;
+
+procedure TIdSipActions.Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
+var
+  Action: TIdSipAction;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.FindAction(Msg);
+
+    Block.Execute(Action);
+  finally
+    Self.ActionLock.Release;
+  end;
+
+  Self.CleanOutTerminatedActions;
 end;
 
 function TIdSipActions.InviteCount: Integer;
@@ -2253,6 +2307,47 @@ begin
   finally
     Block.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentActOnRequest                                                *
+//******************************************************************************
+//* TIdSipUserAgentActOnRequest Public methods *********************************
+
+procedure TIdSipUserAgentActOnRequest.Execute(Action: TIdSipAction);
+begin
+  // Processing the request - 8.2.5
+  if not Assigned(Action) then
+    Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Receiver);
+
+  if Assigned(Action) then
+    Action.ReceiveRequest(Request)
+  else begin
+    if Request.IsAck then
+      Self.UserAgent.NotifyOfDroppedMessage(Self.Request, Self.Receiver)
+    else
+      Self.UserAgent.ReturnResponse(Self.Request,
+                                    SIPCallLegOrTransactionDoesNotExist);
+  end;
+
+  // Action generates the response - 8.2.6
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentActOnResponse                                               *
+//******************************************************************************
+//* TIdSipUserAgentActOnResponse Public methods ********************************
+
+procedure TIdSipUserAgentActOnResponse.Execute(Action: TIdSipAction);
+begin
+  // User Agents drop unmatched responses on the floor.
+  // Except for 2xx's on a client INVITE. And these no longer belong to
+  // a transaction, since the receipt of a 200 terminates a client INVITE
+  // immediately.
+  if Assigned(Action) then
+    Action.ReceiveResponse(Self.Response, Self.Receiver.IsSecure)
+  else
+    Self.UserAgent.NotifyOfDroppedMessage(Self.Response, Self.Receiver);
 end;
 
 //******************************************************************************
@@ -2810,51 +2905,32 @@ end;
 procedure TIdSipAbstractUserAgent.ActOnRequest(Request: TIdSipRequest;
                                                Receiver: TIdSipTransport);
 var
-  Action: TIdSipAction;
+  Actor: TIdSipUserAgentActOnRequest;
 begin
   inherited ActOnRequest(Request, Receiver);
 
-  Action := Self.Actions.FindAction(Request);
-
-  // Processing the request - 8.2.5
-  if not Assigned(Action) then
-    Action := Self.AddInboundAction(Request, Receiver);
-
-  if Assigned(Action) then
-    Action.ReceiveRequest(Request)
-  else begin
-    if Request.IsAck then
-      Self.NotifyOfDroppedMessage(Request, Receiver)
-    else
-      Self.ReturnResponse(Request,
-                          SIPCallLegOrTransactionDoesNotExist);
+  Actor := Self.CreateRequestHandler(Request, Receiver);
+  try
+    Self.Actions.Perform(Request, Actor);
+  finally
+    Actor.Free;
   end;
-
-  // Action generates the response - 8.2.6
-
-  Self.Actions.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipAbstractUserAgent.ActOnResponse(Response: TIdSipResponse;
                                                 Receiver: TIdSipTransport);
 var
-  Action: TIdSipAction;
+  Actor: TIdSipUserAgentActOnResponse;
 begin
   inherited ActOnResponse(Response, Receiver);
 
-  // User Agents drop unmatched responses on the floor.
-  // Except for 2xx's on a client INVITE. And these no longer belong to
-  // a transaction, since the receipt of a 200 terminates a client INVITE
-  // immediately.
-  Action := Self.Actions.FindAction(Response);
-
-  if Assigned(Action) then
-    Action.ReceiveResponse(Response, Receiver.IsSecure)
-  else
-    Self.NotifyOfDroppedMessage(Response, Receiver);
-
-  Self.Actions.CleanOutTerminatedActions;
-end;
+  Actor := Self.CreateResponseHandler(Response, Receiver);
+  try
+    Self.Actions.Perform(Response, Actor);
+  finally
+    Actor.Free;
+  end;
+end;  
 
 function TIdSipAbstractUserAgent.AddInboundAction(Request: TIdSipRequest;
                                                   Receiver: TIdSipTransport): TIdSipAction;
@@ -3060,6 +3136,26 @@ end;
 function TIdSipAbstractUserAgent.ConvertToHeader(ValueList: TStrings): String;
 begin
   Result := StringReplace(ValueList.CommaText, ',', ', ', [rfReplaceAll]);
+end;
+
+function TIdSipAbstractUserAgent.CreateRequestHandler(Request: TIdSipRequest;
+                                                      Receiver: TIdSipTransport): TIdSipUserAgentActOnRequest;
+begin
+  Result := TIdSipUserAgentActOnRequest.Create;
+
+  Result.Receiver  := Receiver;
+  Result.Request   := Request;
+  Result.UserAgent := Self;
+end;
+
+function TIdSipAbstractUserAgent.CreateResponseHandler(Response: TIdSipResponse;
+                                                       Receiver: TIdSipTransport): TIdSipUserAgentActOnResponse;
+begin
+  Result := TIdSipUserAgentActOnResponse.Create;
+
+  Result.Receiver  := Receiver;
+  Result.Response   := Response;
+  Result.UserAgent := Self;
 end;
 
 function TIdSipAbstractUserAgent.DefaultFrom: String;
