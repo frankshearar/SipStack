@@ -1113,6 +1113,7 @@ type
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
+    function  AuthenticateHeader: TIdSipAuthenticateHeader;
     function  Description: String;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
@@ -6771,6 +6772,16 @@ begin
 
   Self.StatusCode := R.StatusCode;
   Self.StatusText := R.StatusText;
+end;
+
+function TIdSipResponse.AuthenticateHeader: TIdSipAuthenticateHeader;
+begin
+  if Self.HasProxyAuthenticate then
+    Result := Self.FirstProxyAuthenticate
+  else if Self.HasWWWAuthenticate then
+    Result := Self.FirstWWWAuthenticate
+  else
+    Result := nil;
 end;
 
 function TIdSipResponse.Description: String;

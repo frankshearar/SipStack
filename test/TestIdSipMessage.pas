@@ -185,6 +185,9 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestAuthenticateHeaderWithNoAuthorization;
+    procedure TestAuthenticateHeaderWithProxy;
+    procedure TestAuthenticateHeaderWithUser;
     procedure TestCopy;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentHeaders;
@@ -2599,6 +2602,26 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestAuthenticateHeaderWithNoAuthorization;
+begin
+  Check(nil = Self.Response.AuthenticateHeader,
+        'No (Proxy-)Authorization header'); 
+end;
+
+procedure TestTIdSipResponse.TestAuthenticateHeaderWithProxy;
+begin
+  Self.Response.AddHeader(ProxyAuthenticateHeader);
+  Check(Self.Response.AuthenticateHeader = Self.Response.FirstProxyAuthenticate,
+        'AuthenticateHeader with a Proxy-Authenticate header');
+end;
+
+procedure TestTIdSipResponse.TestAuthenticateHeaderWithUser;
+begin
+  Self.Response.AddHeader(WWWAuthenticateHeader);
+  Check(Self.Response.AuthenticateHeader = Self.Response.FirstWWWAuthenticate,
+        'AuthenticateHeader with a WWW-Authenticate header');
 end;
 
 procedure TestTIdSipResponse.TestCopy;
