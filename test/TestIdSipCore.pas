@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
-  TestFramework, TestFrameworkSip;
+  IdSipDialogID, IdSipMessage, IdSipMockTransactionDispatcher, IdSipTransport,
+  IdTimerQueue, SyncObjs, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCaseTU)
@@ -704,8 +704,9 @@ type
 
   TActionMethodTestCase = class(TTestCase)
   private
-    Response: TIdSipResponse;
-    UA:       TIdSipUserAgent;
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Response:   TIdSipResponse;
+    UA:         TIdSipUserAgent;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -898,8 +899,8 @@ type
 implementation
 
 uses
-  IdException, IdSipAuthentication, IdSipDns, IdSipLocator,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, SysUtils;
+  IdException, IdSipAuthentication, IdSipDns, IdSipLocator, IdSipMockTransport,
+  SysUtils;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -3100,6 +3101,8 @@ begin
     Options.ContentLength := 0;
     Options.MaxForwards := 0;
     Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
+
+    Self.Locator.AddA(Options.LastHop.SentBy, '127.0.0.1');
 
     Self.ReceiveRequest(Options);
 
@@ -8549,8 +8552,10 @@ procedure TActionMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
   Self.UA := TIdSipUserAgent.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+  Self.UA.Dispatcher := Self.Dispatcher;
 
   Self.Response := TIdSipResponse.Create;
 end;
@@ -8558,8 +8563,8 @@ end;
 procedure TActionMethodTestCase.TearDown;
 begin
   Self.Response.Free;
-  Self.UA.Dispatcher.Free;
   Self.UA.Free;
+  Self.Dispatcher.Free;  
 
   inherited TearDown;
 end;
@@ -9362,6 +9367,8 @@ begin
   inherited SetUp;
 
   Self.Request := TIdSipTestResources.CreateBasicRequest;
+
+  Self.Dispatcher.MockLocator.AddA(Self.Request.LastHop.SentBy, '127.0.0.1');
 
   Self.Session := TIdSipInboundSession.Create(Self.UA,
                                               Self.Request,
