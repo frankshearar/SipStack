@@ -565,8 +565,8 @@ class function TIdSipTestResources.CreateCommonRequest: TIdSipRequest;
 begin
   Result := TIdSipRequest.Create;
   Result.Method := MethodInvite;
-  Result.ContentType := 'text/plain';
-  Result.Body := 'I am a message. Hear me roar!';
+  Result.ContentType := SdpMimeType;
+  Result.Body := Self.BasicSDP('127.0.0.1');
   Result.ContentLength := Length(Result.Body);
   Result.MaxForwards := 70;
   Result.SIPVersion := SipVersion;
