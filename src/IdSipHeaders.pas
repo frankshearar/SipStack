@@ -61,6 +61,8 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    function HasSipsUri: Boolean;
+
     property Address: TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
@@ -826,6 +828,11 @@ begin
   fAddress.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipAddressHeader.HasSipsUri: Boolean;
+begin
+  Result := Self.Address.Protocol = SipsScheme;
 end;
 
 //* TIdSipAddressHeader Protected methods **************************************
@@ -2398,6 +2405,9 @@ begin
       Result := Self.Headers.Items[I] as TIdSipViaHeader
     else
       Inc(I);
+
+//  if not Assigned(Result) then
+//    Result := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
 end;
 
 function TIdSipViaPath.Length: Integer;

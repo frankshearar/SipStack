@@ -589,7 +589,7 @@ begin
                 Self.Request.FirstHeader(CallIdHeaderFull).AsString,
                 'Call-ID');
     CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
-                Self.Request.FirstHeader(ContactHeaderFull).AsString,
+                Self.Request.FirstContact.AsString,
                 'Contact');
     CheckEquals('Content-Length: 29',
                 Self.Request.FirstHeader(ContentLengthHeaderFull).AsString,
@@ -1581,7 +1581,7 @@ begin
               Msg.FirstHeader(CSeqHeader).AsString,
               'CSeq');
   CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
-              Msg.FirstHeader(ContactHeaderFull).AsString,
+              Msg.FirstContact.AsString,
               'Contact');
   CheckEquals('Content-Type: text/plain',
               Msg.FirstHeader(ContentTypeHeaderFull).AsString,

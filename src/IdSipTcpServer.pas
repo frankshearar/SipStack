@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipTcpClient, IdSipTimer,
-  IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
+  IdSipUdpServer, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
 
 type
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
@@ -61,8 +61,8 @@ type
   TIdSipTcpServer = class(TIdTCPServer, IIdSipMessageVisitor)
   private
     ConnectionMap:    TIdSipConnectionTableLock;
-    fOnRequest:       TIdSipTcpRequestEvent;
-    fOnResponse:      TIdSipTcpResponseEvent;
+    fOnRequest:       TIdSipRequestEvent;
+    fOnResponse:      TIdSipResponseEvent;
     fReadBodyTimeout: Cardinal;
 
     procedure AddConnection(const Connection: TIdTCPConnection; const Request: TIdSipRequest);
@@ -73,6 +73,7 @@ type
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
     procedure ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
+    procedure SendResponseTo(const Response: TIdSipResponse; Dest: TIdSipIPTarget);
     procedure WriteMessage(Connection: TIdTCPConnection; AMessage: TIdSipMessage);
   protected
     procedure DoDisconnect(AThread: TIdPeerThread); override;
@@ -89,9 +90,9 @@ type
     procedure VisitResponse(const Response: TIdSipResponse);
   published
     property DefaultPort default IdPORT_SIP;
-    property OnRequest:       TIdSipTcpRequestEvent  read fOnRequest write fOnRequest;
-    property OnResponse:      TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
-    property ReadBodyTimeout: Cardinal               read fReadBodyTimeout write fReadBodyTimeout;
+    property OnRequest:       TIdSipRequestEvent  read fOnRequest write fOnRequest;
+    property OnResponse:      TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property ReadBodyTimeout: Cardinal            read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
@@ -102,7 +103,7 @@ const
 implementation
 
 uses
-  IdSipTransaction;
+  IdSipTransaction, IdSipHeaders;
 
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *
@@ -269,9 +270,9 @@ end;
 
 procedure TIdSipTcpServer.SendResponse(const Response: TIdSipResponse);
 var
-  Client:     TIdSipTcpClient;
-  Connection: TIdTCPConnection;
-  Table:      TIdSipConnectionTable;
+  Connection:  TIdTCPConnection;
+  Table:       TIdSipConnectionTable;
+  Destination: TIdSipIPTarget;
 begin
   Table := Self.ConnectionMap.LockList;
   try
@@ -280,20 +281,16 @@ begin
     if Assigned(Connection) and Connection.Connected then
       Connection.Write(Response.AsString)
     else begin
-      Client := Self.CreateClient;
-      try
-        Client.Host := Response.LastHop.SentBy;
-        Client.Port := Response.LastHop.Port;
-
-        Client.Connect(DefaultTimeout);
-        try
-          Client.Send(Response);
-        finally
-          Client.Disconnect;
-        end;
-      finally
-        Self.DestroyClient(Client);
+      if Response.LastHop.HasReceived then begin
+        Destination.IP   := Response.LastHop.Received;
+        Destination.Port := Response.LastHop.Port;
+      end
+      else begin
+        Destination.IP   := Response.LastHop.SentBy;
+        Destination.Port := Response.LastHop.Port;
       end;
+
+      Self.SendResponseTo(Response, Destination);
     end;
   finally
     Self.ConnectionMap.UnlockList;
@@ -452,7 +449,8 @@ end;
 
 procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
 var
-  Res: TIdSipResponse;
+  OwnVia: TIdSipViaHeader;
+  Res:    TIdSipResponse;
 begin
   Res := TIdSipResponse.Create;
   try
@@ -461,6 +459,12 @@ begin
     Res.StatusCode := SIPBadRequest;
     Res.StatusText := Reason;
     Res.SipVersion := SipVersion;
+
+    OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+    OwnVia.Port       := Connection.Socket.Binding.Port;
+    OwnVia.SentBy     := Connection.Socket.Binding.IP;
+    OwnVia.SipVersion := 'SIP/2.0';
+    OwnVia.Transport  := sttUDP;
 
     Self.WriteMessage(Connection, Res);
   finally
@@ -482,6 +486,27 @@ begin
     Self.WriteMessage(Connection, Res);
   finally
     Res.Free;
+  end;
+end;
+
+procedure TIdSipTcpServer.SendResponseTo(const Response: TIdSipResponse;
+                                               Dest: TIdSipIPTarget);
+var
+  Client: TIdSipTcpClient;
+begin
+  Client := Self.CreateClient;
+  try
+    Client.Host := Dest.IP;
+    Client.Port := Dest.Port;
+
+    Client.Connect(DefaultTimeout);
+    try
+      Client.Send(Response);
+    finally
+      Client.Disconnect;
+    end;
+  finally
+    Self.DestroyClient(Client);
   end;
 end;
 

@@ -3,19 +3,13 @@ unit IdSipTcpClient;
 interface
 
 uses
-  Classes, IdSipMessage, IdTCPClient{, IdSipTcpServer};
+  Classes, IdSipMessage, IdTCPClient, IdSipUdpServer;
 
 type
-  TIdSipTcpRequestEvent = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
-  TIdSipTcpResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
-
-  // todo:
-  // * resend requests on the same connection
-  // * keep the connection alive for "long enough"
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fOnFinished: TNotifyEvent;
-    fOnResponse: TIdSipTcpResponseEvent;
+    fOnResponse: TIdSipResponseEvent;
     fTimeout:    Cardinal;
 
     procedure DoOnFinished;
@@ -30,9 +24,9 @@ type
     procedure Send(const Request: TIdSipRequest); overload;
     procedure Send(const Response: TIdSipResponse); overload;
 
-    property OnFinished: TNotifyEvent           read fOnFinished write fOnFinished;
-    property OnResponse: TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
-    property Timeout:    Cardinal               read fTimeout write fTimeout;
+    property OnFinished: TNotifyEvent        read fOnFinished write fOnFinished;
+    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property Timeout:    Cardinal            read fTimeout write fTimeout;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;

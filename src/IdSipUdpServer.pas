@@ -6,30 +6,33 @@ uses
   Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer;
 
 type
-  TPeerInfo = record
-    PeerIP:   String;
-    PeerPort: Integer;
+  TIdSipIPTarget = record
+    IP:   String;
+    Port: Integer;
   end;
 
-  TIdSipRequestEvent = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
+  TIdSipRequestEvent  = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
   TIdSipResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
 
-  TIdSipUdpServer = class(TIdUDPServer)
+  TIdSipUdpServer = class(TIdUDPServer, IIdSipMessageVisitor)
   private
     fOnRequest:  TIdSipRequestEvent;
     fOnResponse: TIdSipResponseEvent;
     Parser:      TIdSipParser;
-    procedure DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure DoOnRequest(const Request: TIdSipRequest);
+    procedure DoOnResponse(const Response: TIdSipResponse);
 
-    procedure SendBadRequestResponse(PeerInfo: TPeerInfo;
-                               const Reason: String;
-                                     Parser: TIdSipParser);
+    procedure ReturnBadRequest(Binding: TIdSocketHandle;
+                         const Reason:  String;
+                               Parser:  TIdSipParser);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
+
+    procedure VisitRequest(const Request: TIdSipRequest);
+    procedure VisitResponse(const Response: TIdSipResponse);
   published
     property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
@@ -38,12 +41,12 @@ type
 implementation
 
 uses
-  SysUtils;
+  IdSipHeaders, IdUDPBase, SysUtils;
 
 //*******************************************************************************
-//* TestFoo                                                                     *
+//* TIdSipUdpServer                                                             *
 //*******************************************************************************
-//* TestFoo Public methods ******************************************************
+//* TIdSipUdpServer Public methods **********************************************
 
 constructor TIdSipUdpServer.Create(AOwner: TComponent);
 begin
@@ -61,18 +64,24 @@ begin
   inherited Destroy;
 end;
 
-//* TestFoo Protected methods ***************************************************
+procedure TIdSipUdpServer.VisitRequest(const Request: TIdSipRequest);
+begin
+  Self.DoOnRequest(Request);
+end;
+
+procedure TIdSipUdpServer.VisitResponse(const Response: TIdSipResponse);
+begin
+  Self.DoOnResponse(Response);
+end;
+
+//* TIdSipUdpServer Protected methods ******************************************
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
   RemainingBytes: Cardinal;
   Msg:            TIdSipMessage;
-  PeerInfo:       TPeerInfo;
 begin
   inherited DoUDPRead(AData, ABinding);
-
-  PeerInfo.PeerIP   := ABinding.PeerIP;
-  PeerInfo.PeerPort := ABinding.PeerPort;
 
   Self.Parser.Source := AData;
 
@@ -90,16 +99,13 @@ begin
         or (Msg.LastHop.SentBy <> ABinding.IP) then
         Msg.LastHop.Received := ABinding.IP;
 
-      if (Msg is TIdSipRequest) then
-        Self.DoOnRequest(ABinding, Msg as TIdSipRequest)
-      else
-        Self.DoOnResponse(ABinding, Msg as TIdSipResponse);
+      Msg.Accept(Self);
     finally
       Msg.Free;
     end;
   except
     on E: EBadRequest do begin
-      Self.SendBadRequestResponse(PeerInfo, E.Message, Parser);
+      Self.ReturnBadRequest(ABinding, E.Message, Parser);
     end;
     on E: EBadResponse do begin
       // drop it on the floor
@@ -107,25 +113,26 @@ begin
   end;
 end;
 
-//* TestFoo Private methods *****************************************************
+//* TIdSipUdpServer Private methods ********************************************
 
-procedure TIdSipUdpServer.DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
+procedure TIdSipUdpServer.DoOnRequest(const Request: TIdSipRequest);
 begin
   if Assigned(Self.OnRequest) then
-    Self.OnRequest(Sender, Request);
+    Self.OnRequest(Self, Request);
 end;
 
-procedure TIdSipUdpServer.DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TIdSipUdpServer.DoOnResponse(const Response: TIdSipResponse);
 begin
   if Assigned(Self.OnResponse) then
-    Self.OnResponse(Sender, Response);
+    Self.OnResponse(Self, Response);
 end;
 
-procedure TIdSipUdpServer.SendBadRequestResponse(PeerInfo: TPeerInfo;
-                                           const Reason: String;
-                                                 Parser: TIdSipParser);
+procedure TIdSipUdpServer.ReturnBadRequest(Binding: TIdSocketHandle;
+                                     const Reason:  String;
+                                           Parser:  TIdSipParser);
 var
-  Res: TIdSipResponse;
+  OwnVia: TIdSipViaHeader;
+  Res:    TIdSipResponse;
 begin
   Res := TIdSipResponse.Create;
   try
@@ -135,7 +142,13 @@ begin
     Res.StatusText := Reason;
     Res.SipVersion := SipVersion;
 
-    Self.Send(PeerInfo.PeerIP, PeerInfo.PeerPort, Res.AsString);
+    OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+    OwnVia.Port       := Binding.Port;
+    OwnVia.SentBy     := Binding.IP;
+    OwnVia.SipVersion := 'SIP/2.0';
+    OwnVia.Transport  := sttUDP;
+
+    Self.Send(Binding.PeerIP, Binding.PeerPort, Res.AsString);
   finally
     Res.Free;
   end;

@@ -19,6 +19,7 @@ type
     procedure TestAddHeaders;
     procedure TestAsStringNoMaxForwardsSet;
     procedure TestClearHeaders;
+    procedure TestFirstContact;
     procedure TestFirstHeader;
     procedure TestHeaderAt;
     procedure TestHeaderCount;
@@ -204,6 +205,21 @@ begin
   CheckEquals(0, Self.Message.HeaderCount, 'Headers not cleared');
 end;
 
+procedure TestTIdSipMessage.TestFirstContact;
+var
+  C: TIdSipHeader;
+begin
+  Self.Message.ClearHeaders;
+
+  CheckNotNull(Self.Message.FirstContact, 'Contact not present');
+  CheckEquals(1, Self.Message.HeaderCount, 'Contact not auto-added');
+
+  C := Self.Message.FirstHeader(ContactHeaderFull);
+  Self.Message.AddHeader(ContactHeaderFull);
+
+  Check(C = Self.Message.FirstContact, 'Wrong Contact');
+end;
+
 procedure TestTIdSipMessage.TestFirstHeader;
 var
   H: TIdSipHeader;
@@ -251,7 +267,7 @@ end;
 procedure TestTIdSipMessage.TestLastHop;
 begin
   Self.Message.ClearHeaders;
-  CheckNull(Self.Message.LastHop, 'Unexpected return for empty path');
+  Check(Self.Message.LastHop = Self.Message.FirstHeader(ViaHeaderFull), 'Unexpected return for empty path');
 
   Self.Message.AddHeader(ViaHeaderFull);
   Check(Self.Message.LastHop = Self.Message.Path.LastHop, 'Unexpected return');
@@ -407,7 +423,6 @@ begin
     P.Free;
   end;
 
-//  Self.Message := TIdSipRequest.Create;
   Self.Request := Self.Message as TIdSipRequest;
 end;
 

@@ -12,12 +12,12 @@ type
     Parser: TIdSipParser;
     Server: TIdSipUdpServer;
 
-    procedure CheckMalformedRequestResponse(const Msg, ExpectedError: String);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckRequest(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckTortureTest16;
+    procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
     procedure CheckTortureTest22;
@@ -25,6 +25,7 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
+    function ReadResponse: String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -36,6 +37,7 @@ type
     procedure TestReceivedParamIPv4SentBy;
     procedure TestRequest;
     procedure TestTortureTest16;
+    procedure TestTortureTest17;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -114,38 +116,6 @@ end;
 
 //* TestTIdSipUdpServer Private methods *****************************************
 
-procedure TestTIdSipUdpServer.CheckMalformedRequestResponse(const Msg, ExpectedError: String);
-var
-  Expected: TStrings;
-  Received: TStrings;
-  Message:  TIdSipResponse;
-begin
-  Expected := TStringList.Create;
-  try
-    Message := TIdSipResponse.Create;
-    try
-      Message.StatusCode := SIPBadRequest;
-      Message.StatusText := ExpectedError;
-      Message.SipVersion := SipVersion;
-
-      Expected.Text := Message.AsString;
-    finally
-      Message.Free;
-    end;
-
-    Received := TStringList.Create;
-    try
-      Received.Text := Msg;
-
-      CheckEquals(Expected, Received, 'Malformed request');
-    finally
-      Received.Free;
-    end;
-  finally
-    Expected.Free;
-  end;
-end;
-
 procedure TestTIdSipUdpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
   Self.CheckReceivedParamFQDNSentBy(Sender, Request);
@@ -201,191 +171,152 @@ end;
 procedure TestTIdSipUdpServer.CheckTortureTest16;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
 
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-      
-      CheckEquals(Format(UnexpectedMessageLength, [154, 9999]),
-                  Response.StatusText,
-                  'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(Format(UnexpectedMessageLength, [154, 9999]),
+                Response.StatusText,
+                'StatusText');
   finally
-    S.Free;
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipUdpServer.CheckTortureTest17;
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
+  try
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+
+    CheckEquals(Format(MalformedToken, [ContentLengthHeaderFull, 'Content-Length: -999']),
+                Response.StatusText,
+              'StatusText');
+  finally
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest19;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-      CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
-                  Response.StatusText,
-                  'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
+                Response.StatusText,
+                'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest21;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest,             Response.StatusCode, 'StatusCode');
-      CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest,             Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest22;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-      CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest23;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-      CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
+    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest35;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-      CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
-                  Response.StatusText,
-                  'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
+                Response.StatusText,
+                'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 
 procedure TestTIdSipUdpServer.CheckTortureTest40;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-      CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
-                  Response.StatusText,
-                  'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
+                Response.StatusText,
+                'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 {
 procedure TestTIdSipUdpServer.CheckTortureTest41;
 var
   Response: TIdSipResponse;
-  S:        TStringStream;
 begin
-  S := TStringStream.Create(Self.Client.ReceiveString(DefaultTimeout));
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Self.Parser.Source := S;
-
-    Response := Self.Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
-      CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
+    CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
   finally
-    S.Free;
+    Response.Free;
   end;
 end;
 }
+
+function TestTIdSipUdpServer.ReadResponse: String;
+begin
+  Result := Self.Client.ReceiveString(DefaultTimeout);
+end;
+
 //* TestTIdSipUdpServer Published methods ***************************************
 
 procedure TestTIdSipUdpServer.TestMalformedRequest;
+var
+  Response: TIdSipResponse;
 begin
   // note the semicolon in the SIP-version
   Self.Client.Send('INVITE sip:tentacleface@rlyeh.org.au SIP/;2.0'#13#10
@@ -397,8 +328,19 @@ begin
                  + 'Via: SIP/2.0/UDP 127.0.0.1:5060'#13#10
                  + #13#10);
 
-  Self.CheckMalformedRequestResponse(Client.ReceiveString(DefaultTimeout),
-                                     Format(InvalidSipVersion, ['SIP/;2.0']));
+  Response := Self.Parser.ParseAndMakeResponse(Client.ReceiveString(DefaultTimeout));
+  try
+    CheckEquals(SipVersion,
+                Response.SipVersion,
+                'SIP-Version');
+    CheckEquals(SIPBadRequest,
+                Response.StatusCode,
+                'Status-Code');
+    CheckEquals(Format(InvalidSipVersion, ['SIP/;2.0']),
+                Response.StatusText, 'Status-Text');
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TestTIdSipUdpServer.TestMalformedResponse;
@@ -462,6 +404,13 @@ begin
   Self.Client.Send(TortureTest16);
 
   Self.CheckTortureTest16;
+end;
+
+procedure TestTIdSipUdpServer.TestTortureTest17;
+begin
+  Self.Client.Send(TortureTest17);
+
+  Self.CheckTortureTest17;
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest19;

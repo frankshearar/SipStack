@@ -3,8 +3,8 @@ unit SpikeClient;
 interface
 
 uses
-  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ExtCtrls;
+  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipTransaction,
+  IdSipTransport, StdCtrls;
 
 type
   TForm1 = class(TForm)
@@ -13,7 +13,13 @@ type
     Log: TMemo;
     procedure InviteClick(Sender: TObject);
   private
+    UA:   TIdSipUserAgentCore;
+    Tran: TIdSipAbstractTransport;
 
+    procedure OnNewSession(Sender: TObject; const Session: TIdSipSession);
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
   end;
 
 var
@@ -24,7 +30,34 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts, IdSipCore, IdSipHeaders, IdSipMessage, IdTcpClient, IdURI;
+  IdSipConsts, IdSipHeaders, IdSipMessage, IdTcpClient, IdURI;
+
+constructor TForm1.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+
+  UA := TIdSipUserAgentCore.Create;
+
+  UA.From.Address.URI    := 'sip:franks@127.0.0.1';
+  UA.From.Tag            := '1';
+  UA.Contact.Address.URI := 'sip:franks@127.0.0.1';
+  UA.HostName := '127.0.0.1';
+
+  UA.Dispatcher := TIdSipTransactionDispatcher.Create;
+
+  Tran := TIdSipTCPTransport.Create(IdPORT_SIP + 10000);
+  UA.Dispatcher.AddTransport(Tran);
+  Tran.Start;
+end;
+
+destructor TForm1.Destroy;
+begin
+  Tran.Free;
+  UA.Dispatcher.Free;
+  UA.Free;
+
+  inherited Destroy;
+end;
 
 procedure TForm1.InviteClick(Sender: TObject);
 var
@@ -32,53 +65,20 @@ var
   Line:     String;
   Request:  TIdSipRequest;
   ToHeader: TIdSipToHeader;
-  UA:       TIdSipUserAgentCore;
 begin
-  UA := TIdSipUserAgentCore.Create;
+  ToHeader := TIdSipToHeader.Create;
   try
-    UA.From.Address.URI    := 'sip:franks@127.0.0.1';
-    UA.From.Tag            := '1';
-    UA.Contact.Address.URI := 'sip:franks@127.0.0.1';
-    UA.HostName := '127.0.0.1';
+    ToHeader.Value := 'sip:franks@127.0.0.1';
 
-    ToHeader := TIdSipToHeader.Create;
-    try
-      ToHeader.Value := 'sip:franks@127.0.0.1';
-
-      Request := UA.CreateInvite(ToHeader);
-      try
-        Request.CSeq.Value := '314159 INVITE';
-        Request.MaxForwards := 70;
-
-        Client := TIdTcpClient.Create(nil);
-        try
-          Client.Host := 'wsfrank';
-          Client.Port := IdPORT_SIP;
-          Client.Connect;
-          try
-            Client.Write(Request.AsString);
-
-            Line := Client.ReadLn(#$A, 1000);
-            while (Line <> '') do begin
-              Self.Log.Lines.Add(Line);
-              Line := Client.ReadLn(#$A, 1000);
-            end;
-          finally
-            Client.Disconnect;
-          end;
-        finally
-          Client.Free;
-        end;
-      finally
-        Request.Free;
-      end;
-    finally
-      ToHeader.Free;
-    end;
+    UA.Call(ToHeader);
   finally
-    UA.Free;
+    ToHeader.Free;
   end;
 end;
 
+procedure TForm1.OnNewSession(Sender: TObject; const Session: TIdSipSession);
+begin
+  ShowMessage('New session');
+end;
+
 end.
- 

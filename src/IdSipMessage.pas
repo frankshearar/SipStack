@@ -55,6 +55,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     procedure ClearHeaders;
+    function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HeaderAt(const Index: Cardinal): TIdSipHeader;
     function  HeaderCount: Integer;
@@ -374,6 +375,11 @@ end;
 procedure TIdSipMessage.ClearHeaders;
 begin
   Self.Headers.Clear;
+end;
+
+function TIdSipMessage.FirstContact: TIdSipContactHeader;
+begin
+  Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
 end;
 
 function TIdSipMessage.FirstHeader(const HeaderName: String): TIdSipHeader;

@@ -297,7 +297,7 @@ end;
 procedure TIdSipDialog.HandleMessage(const Response: TIdSipResponse);
 begin
   if (Self.RemoteTarget.GetFullUri = '') then
-    Self.RemoteTarget.URI := (Response.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.GetFullUri;
+    Self.RemoteTarget.URI := Response.FirstContact.Address.GetFullUri;
 
   if (Self.RemoteSequenceNo = 0) then
     Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);

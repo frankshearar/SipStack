@@ -249,6 +249,28 @@ const
                 + 'm=video 3227 RTP/AVP 31'#13#10
                 + 'a=rtpmap:31 LPC';
 
+
+  //   This is a request message with a negative value for Content-Length.
+  //
+  //   The server should respond with an error.
+
+
+  TortureTest17 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+                + 'Max-Forwards: 254'#13#10
+                + 'To: sip:j.user@company.com'#13#10
+                + 'From: sip:caller@university.edu;tag=3'#13#10
+                + 'Call-ID: 0ha0isndaksdj@10.0.0.1'#13#10
+                + 'CSeq: 8 INVITE'#13#10
+                + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
+                + 'Content-Type: application/sdp'#13#10
+                + 'Content-Length: -999'#13#10
+                + #13#10
+                + 'v=0'#13#10
+                + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                + 's=-'#13#10
+                + 'c=IN IP4 135.180.130.88'#13#10
+                + 't=0 0'#13#10;
+
   //   This is a request with an unterminated quote in the display name of
   //   the To field.
   //

@@ -52,6 +52,9 @@ type
                                      const Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                const Response: TIdSipResponse);
+    procedure CheckSendResponsesReceivedParam(Sender: TObject;
+                                        const Response: TIdSipResponse);
+    procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
     procedure CheckTortureTest22;
@@ -70,9 +73,10 @@ type
     Client:                 TIdTcpClient;
     ClientReceivedResponse: Boolean;
     ConnectionDropped:      Boolean;
+    LocalAddressServer:     TIdSipTcpServer;
+    LocalHostServer:        TIdSipTcpServer;
     MethodCallCount:        Cardinal;
     Parser:                 TIdSipParser;
-    Server:                 TIdSipTcpServer;
     ServerReceivedResponse: Boolean;
     SipClient:              TIdSipTcpClient;
 
@@ -90,9 +94,11 @@ type
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
-    procedure TestSendResponsesClientClosedConnection;
-    procedure TestSendResponsesDownExistingConnection;
+    procedure TestSendResponsesClosedConnection;
+    procedure TestSendResponsesClosedConnectionReceivedParam;
+    procedure TestSendResponsesOpenConnection;
     procedure TestTortureTest16;
+    procedure TestTortureTest17;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -119,11 +125,12 @@ const
   ViaIP          = '127.0.0.1';
   ViaDifferentIP = '196.25.1.1';
   DefaultTimeout = 1000;
+  LocalHost      = '127.0.0.1';
 
 implementation
 
 uses
-  Classes, IdSipConsts, IdSimpleParser, TestMessages;
+  Classes, IdSocketHandle, IdSipConsts, IdSimpleParser, IdStack, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -289,31 +296,47 @@ end;
 //* TestTIdSipTcpServer Public methods *****************************************
 
 procedure TestTIdSipTcpServer.SetUp;
+var
+  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
-  Self.Client    := TIdTcpClient.Create(nil);
-  Self.Parser    := TIdSipParser.Create;
-  Self.Server    := Self.ServerType.Create(nil);
-  Self.SipClient := Self.SipClientType.Create(nil);
+  Self.Client             := TIdTcpClient.Create(nil);
+  Self.Parser             := TIdSipParser.Create;
+  Self.LocalAddressServer := Self.ServerType.Create(nil);
+  Self.LocalHostServer    := Self.ServerType.Create(nil);
+  Self.SipClient          := Self.SipClientType.Create(nil);
 
-  Self.Client.Host := '127.0.0.1';
-  Self.Client.Port := Self.Server.DefaultPort;
+  Self.Client.Host := LocalHost;
+  Self.Client.Port := LocalHostServer.DefaultPort;
 
   Self.ClientReceivedResponse := false;
   Self.ConnectionDropped      := false;
   Self.MethodCallCount        := 0;
   Self.ServerReceivedResponse := false;
 
-  Self.Server.Active := true;
+  LocalHostServer.Bindings.Clear;
+  Binding := LocalHostServer.Bindings.Add;
+  Binding.IP   := LocalHost;
+  Binding.Port := IdPORT_SIP;
+
+  Self.LocalAddressServer.Bindings.Clear;
+  Binding := Self.LocalAddressServer.Bindings.Add;
+  Binding.IP   := GStack.LocalAddress;
+  Binding.Port := IdPORT_SIP;
+
+  Self.LocalHostServer.Active := true;
+  Self.LocalAddressServer.Active := true;
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
-  Self.Server.Active := false;
+  Self.LocalAddressServer.Active := false;
+  Self.LocalHostServer.Active := false;
 
   Self.SipClient.Free;
-  Self.Server.Free;
+  Self.LocalHostServer.Free;
+  Self.LocalAddressServer.Free;
   Self.Parser.Free;
   Self.Client.Free;
 
@@ -441,6 +464,38 @@ begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
       Self.ExceptionMessage := E.Message;
     end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckSendResponsesReceivedParam(Sender: TObject;
+                                                        const Response: TIdSipResponse);
+begin
+  try
+    Check(Sender = Self.LocalAddressServer, 'Wrong server received response');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.CheckTortureTest17;
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Parser.ParseAndMakeResponse(Self.ReadResponse);
+  try
+    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+
+    CheckEquals(Format(MalformedToken, [ContentLengthHeaderFull, 'Content-Length: -999']),
+                Response.StatusText,
+                'StatusText');
+  finally
+    Response.Free;
   end;
 end;
 
@@ -601,7 +656,7 @@ begin
   Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
   try
     Response.StatusCode := SIPOK;
-    Self.Server.SendResponse(Response);
+    LocalHostServer.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -613,13 +668,13 @@ procedure TestTIdSipTcpServer.TestInternalServerError;
 var
   Request: TIdSipRequest;
 begin
-  Self.Server.OnRequest := Self.RaiseException;
+  LocalHostServer.OnRequest := Self.RaiseException;
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
     SipClient.OnResponse := Self.CheckInternalServerError;
     SipClient.Host       := '127.0.0.1';
-    SipClient.Port       := Self.Server.DefaultPort;
+    SipClient.Port       := LocalHostServer.DefaultPort;
     SipClient.Timeout    := 1000;
 
     SipClient.Connect;
@@ -635,7 +690,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestLeadingEmptyLines;
 begin
-  Self.Server.OnRequest := Self.CheckMethodEvent;
+  LocalHostServer.OnRequest := Self.CheckMethodEvent;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(#13#10#13#10#13#10
@@ -647,50 +702,40 @@ end;
 
 procedure TestTIdSipTcpServer.TestMalformedRequest;
 var
-  Expected: TStrings;
-  Received: TStrings;
-  Temp:     TIdSipResponse;
-  P:        TIdSipParser;
+  Response: TIdSipResponse;
+  P:    TIdSipParser;
 begin
   // For the weak of eyes - the SIP-Version is malformed. Spot the semicolon.
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10
                   + #13#10);
 
-  Expected := TStringList.Create;
+  P := TIdSipParser.Create;
   try
-    P := TIdSipParser.Create;
+    Response := P.ParseAndMakeResponse(Self.Client.AllData);
     try
-      Temp := TIdSipResponse.Create;
-      try
-        Temp.StatusCode := SIPBadRequest;
-        Temp.StatusText := Format(InvalidSipVersion, ['SIP/;2.0']);
-        Temp.SipVersion := SipVersion;
+      Response.SipVersion := SipVersion;
 
-        Expected.Text := Temp.AsString;
-      finally
-        Temp.Free;
-      end;
+      CheckEquals(SipVersion,
+                  Response.SipVersion,
+                  'SIP-Version');
+      CheckEquals(SIPBadRequest,
+                  Response.StatusCode,
+                  'Status-Code');
+      CheckEquals(Format(InvalidSipVersion, ['SIP/;2.0']),
+                  Response.StatusText,
+                  'Status-Text');
     finally
-      P.Free;
-    end;
-
-    Received := TStringList.Create;
-    try
-      Received.Text := Self.Client.AllData;
-
-      CheckEquals(Expected, Received, 'Malformed SIP-Version');
-    finally
-      Received.Free;
+      Response.Free;
     end;
   finally
-    Expected.Free;
+    P.Free;
   end;
 end;
 
 procedure TestTIdSipTcpServer.TestMethodEvent;
 begin
-  Self.Server.OnRequest := Self.CheckMethodEvent;
+  LocalHostServer.OnRequest := Self.CheckMethodEvent;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
@@ -701,7 +746,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestMultipleMessages;
 begin
-  Self.Server.OnRequest := Self.CheckMultipleMessages;
+  LocalHostServer.OnRequest := Self.CheckMultipleMessages;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN])
@@ -715,7 +760,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamDifferentIPv4SentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
+  LocalHostServer.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaDifferentIP]));
@@ -726,7 +771,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamFQDNSentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
+  LocalHostServer.OnRequest := Self.CheckReceivedParamFQDNSentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
@@ -737,7 +782,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamIPv4SentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
+  LocalHostServer.OnRequest := Self.CheckReceivedParamIPv4SentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaIP]));
@@ -746,12 +791,12 @@ begin
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
-procedure TestTIdSipTcpServer.TestSendResponsesClientClosedConnection;
+procedure TestTIdSipTcpServer.TestSendResponsesClosedConnection;
 var
   Request:  TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Self.Server.OnResponse := Self.CheckSendResponsesDownClosedConnection;
+  Self.LocalHostServer.OnResponse := Self.CheckSendResponsesDownClosedConnection;
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
@@ -774,7 +819,7 @@ begin
     Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
     try
       Response.StatusCode := SIPOK;
-      Self.Server.SendResponse(Response);
+      LocalHostServer.SendResponse(Response);
     finally
       Response.Free;
     end;
@@ -789,12 +834,54 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.TestSendResponsesDownExistingConnection;
+procedure TestTIdSipTcpServer.TestSendResponsesClosedConnectionReceivedParam;
+var
+  Request:  TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Self.LocalAddressServer.OnResponse := Self.CheckSendResponsesReceivedParam;
+  Self.LocalHostServer.OnResponse    := Self.CheckSendResponsesReceivedParam;
+
+  Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
+  try
+    Self.SipClient.OnResponse := Self.ClientOnResponseDownClosedConnection;
+    Self.SipClient.Host       := '127.0.0.1';
+    Self.SipClient.Port       := IdPORT_SIP;
+    Self.SipClient.Timeout    := 100;
+
+    Self.SipClient.Connect;
+    try
+      Self.SipClient.Send(Request);
+    finally
+      Self.SipClient.Disconnect;
+    end;
+
+    // I can't say WHY we need to pause here, but it seems to work...
+    // Not exactly an ideal situation.
+    Sleep(500);
+
+    Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
+    try
+      Response.LastHop.Received := GStack.LocalAddress;
+      Response.StatusCode       := SIPOK;
+      LocalHostServer.SendResponse(Response);
+    finally
+      Response.Free;
+    end;
+
+    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipTcpServer.TestSendResponsesOpenConnection;
 var
   Request:   TIdSipRequest;
   SipClient: TIdSipTcpClient;
 begin
-  Self.Server.OnRequest := Self.Send200OK;
+  LocalHostServer.OnRequest := Self.Send200OK;
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
@@ -827,13 +914,21 @@ end;
 
 procedure TestTIdSipTcpServer.TestTortureTest16;
 begin
-  Self.Server.OnDisconnect := Self.OnServerDisconnect;
-  Self.Server.ReadBodyTimeout := 50;
+  LocalHostServer.OnDisconnect := Self.OnServerDisconnect;
+  LocalHostServer.ReadBodyTimeout := 50;
 
   Self.Client.Connect(DefaultTimeout);
 
   Self.Client.Write(TortureTest16);
   Sleep(100);
+end;
+
+procedure TestTIdSipTcpServer.TestTortureTest17;
+begin
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Write(TortureTest17);
+
+  Self.CheckTortureTest17;
 end;
 
 procedure TestTIdSipTcpServer.TestTortureTest19;

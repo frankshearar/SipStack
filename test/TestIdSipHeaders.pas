@@ -43,6 +43,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
+    procedure TestHasSipsUri;
     procedure TestSetAddress;
     procedure TestValue;
     procedure TestValueEmptyDisplayName;
@@ -765,6 +766,15 @@ begin
   CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
+end;
+
+procedure TestTIdSipAddressHeader.TestHasSipsUri;
+begin
+  Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+  Check(not Self.A.HasSipsUri, 'SIP');
+
+  Self.A.Address.URI := 'sips:wintermute@tessier-ashpool.co.lu';
+  Check(Self.A.HasSipsUri, 'SIPS');
 end;
 
 procedure TestTIdSipAddressHeader.TestSetAddress;
