@@ -856,7 +856,6 @@ begin
   Self.Destination.Value := 'sip:franks@localhost';
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatcher.Transport.LocalEchoMessages := false;
   Self.Dispatcher.Transport.TransportType := sttTCP;
 
   Self.Core := TIdSipUserAgentCore.Create;
