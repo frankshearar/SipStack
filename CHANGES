@@ -1,7 +1,7 @@
 v0.4 ()
 
 * The stack now passes the 3xx STFT tests.
-* The Spike.pas unit used a hardcoded username/password, whcih of
+* The Spike.pas unit used a hardcoded username/password, which of
   course made the torture tests fail.
 * Authentication's changed a lot: the Transaction layer (i.e., the
   TransactionDispatcher) resends challenged requests, but the
