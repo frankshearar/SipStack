@@ -16,18 +16,19 @@ type
   public
     // This should raise an appropriate exception if a transport or suchlike
     // error occurs.
-    procedure SendACK(const R: TIdSipResponse); virtual; abstract;
     procedure SendRequest(const R: TIdSipRequest); virtual; abstract;
+    procedure SendResponse(const R: TIdSipResponse); virtual; abstract;
 
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
 
   TIdSipMockTransport = class(TIdSipAbstractTransport)
   private
-    fACKCount:  Cardinal;
-    fLastACK:   TIdSipRequest;
-    fFailWith:  ExceptClass;
-    fSentCount: Cardinal;
+    fACKCount:          Cardinal;
+    fLastACK:           TIdSipRequest;
+    fFailWith:          ExceptClass;
+    fSentRequestCount:  Cardinal;
+    fSentResponseCount: Cardinal;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -35,14 +36,16 @@ type
     procedure FireOnResponse(const R: TIdSipResponse);
     procedure RaiseException(const E: ExceptClass);
     procedure ResetACKCount;
-    procedure ResetSentCount;
-    procedure SendACK(const R: TIdSipResponse); override;
+    procedure ResetSentRequestCount;
+    procedure ResetSentResponseCount;
     procedure SendRequest(const R: TIdSipRequest); override;
+    procedure SendResponse(const R: TIdSipResponse); override;
 
-    property ACKCount:  Cardinal      read fACKCount;
-    property FailWith:  ExceptClass   read fFailWith write fFailWith;
-    property LastACK:   TIdSipRequest read fLastACK;
-    property SentCount: Cardinal      read fSentCount;
+    property ACKCount:          Cardinal      read fACKCount;
+    property FailWith:          ExceptClass   read fFailWith write fFailWith;
+    property LastACK:           TIdSipRequest read fLastACK;
+    property SentRequestCount:  Cardinal      read fSentRequestCount;
+    property SentResponseCount: Cardinal      read fSentResponseCount;
   end;
 
 implementation
@@ -70,7 +73,7 @@ constructor TIdSipMockTransport.Create;
 begin
   inherited Create;
 
-  Self.ResetSentCount;
+  Self.ResetSentRequestCount;
   Self.fLastACK := TIdSipRequest.Create;
 end;
 
@@ -96,17 +99,14 @@ begin
   Self.fACKCount := 0;
 end;
 
-procedure TIdSipMockTransport.ResetSentCount;
+procedure TIdSipMockTransport.ResetSentRequestCount;
 begin
-  Self.fSentCount := 0;
+  Self.fSentRequestCount := 0;
 end;
 
-procedure TIdSipMockTransport.SendACK(const R: TIdSipResponse);
+procedure TIdSipMockTransport.ResetSentResponseCount;
 begin
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipMockTransport.SendACK');
-
-  Inc(Self.fACKCount);
+  Self.fSentResponseCount := 0;
 end;
 
 procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
@@ -119,7 +119,17 @@ begin
     Inc(Self.fACKCount)
   end
   else
-    Inc(Self.fSentCount);
+    Inc(Self.fSentRequestCount);
+end;
+
+procedure TIdSipMockTransport.SendResponse(const R: TIdSipResponse);
+begin
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipMockTransport.SendResponse');
+
+  Self.DoOnResponse(R);
+
+  Inc(Self.fSentResponseCount);
 end;
 
 end.

@@ -64,6 +64,7 @@ type
   published
     procedure TestName;
     procedure TestValue;
+    procedure TestValueWithParams;
   end;
 
   TestTIdSipContactHeader = class(TTestCase)
@@ -212,6 +213,7 @@ type
     procedure TestAddResultTypes;
     procedure TestAsString;
     procedure TestClear;
+    procedure TestDelete;
     procedure TestHasHeader;
     procedure TestHeaders;
     procedure TestItems;
@@ -239,6 +241,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndLastHop;
+    procedure TestClear;
     procedure TestFirstHop;
   end;
 
@@ -266,6 +269,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestReadBody;
+    procedure TestSetPath;
   end;
 
   TestTIdSipResponse = class(TExtendedTestCase)
@@ -816,6 +820,16 @@ begin
   try
     Self.C.Value := 'aaaaaaaa@@bbbbb';
     Fail('Failed to bail out optional non-word');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipCallIDHeader.TestValueWithParams;
+begin
+  try
+    Self.C.Value := 'one@two;tag=f00';
+    Fail('Failed to bail out with params - semicolon is an invalid character');
   except
     on EBadHeader do;
   end;
@@ -1958,6 +1972,32 @@ begin
   CheckEquals(0, Self.H.Count, 'Count after Clearing a non-empty list');
 end;
 
+procedure TestTIdSipHeaders.TestDelete;
+begin
+  Self.H.Add('foo');
+  Self.H.Add('bar');
+  Self.H.Add('baz');
+  Self.H.Add('quaax');
+
+  Self.H.Delete(1);
+  CheckEquals(3, Self.H.Count, 'Count after 1st Delete');
+  CheckEquals('foo',   Self.H.Items[0].Name, '1: 1st header');
+  CheckEquals('baz',   Self.H.Items[1].Name, '1: 2nd header');
+  CheckEquals('quaax', Self.H.Items[2].Name, '1: 3rd header');
+
+  Self.H.Delete(2);
+  CheckEquals(2, Self.H.Count, 'Count after 2nd Delete');
+  CheckEquals('foo',   Self.H.Items[0].Name, '2: 1st header');
+  CheckEquals('baz',   Self.H.Items[1].Name, '2: 2nd header');
+
+  Self.H.Delete(0);
+  CheckEquals(1, Self.H.Count, 'Count after 3rd Delete');
+  CheckEquals('baz', Self.H.Items[0].Name, '3: 1st header');
+
+  Self.H.Delete(0);
+  CheckEquals(0, Self.H.Count, 'Count after 4th Delete');
+end;
+
 procedure TestTIdSipHeaders.TestHasHeader;
 begin
   Check(not Self.H.HasHeader(''), '''''');
@@ -2213,7 +2253,7 @@ var
 begin
   CheckEquals(0, Self.Path.Length, 'Has hops, but is newly created');
 
-  Hop := Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
 
   Hop.Host       := '127.0.0.1';
   Hop.Port       := 5060;
@@ -2229,11 +2269,23 @@ begin
   Check      (sttSCTP =      Self.Path.LastHop.Transport,  'Transport');
 end;
 
+procedure TestTIdSipViaPath.TestClear;
+begin
+  CheckEquals(0, Self.Headers.Count, 'Unexpected headers');
+  Self.Headers.Add(ViaHeaderFull);
+  Self.Headers.Add(ViaHeaderFull);
+  Self.Headers.Add(ViaHeaderFull);
+  CheckEquals(3, Self.Headers.Count, 'After 3 Add()s');
+
+  Self.Path.Clear;
+  CheckEquals(0, Self.Headers.Count, 'After Clear()');
+end;
+
 procedure TestTIdSipViaPath.TestFirstHop;
 var
   Hop: TIdSipViaHeader;
 begin
-  Hop := Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
 
   Hop.Host       := '127.0.0.1';
   Hop.Port       := 5060;
@@ -2247,7 +2299,7 @@ begin
 
   Check(Self.Path.FirstHop = Self.Path.LastHop, 'Sanity check on single-node Path');
 
-  Hop := Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
   Hop.Host       := '192.168.0.1';
   Hop.Port       := 5061;
   Hop.SipVersion := 'SIP/2.0';
@@ -2470,6 +2522,55 @@ begin
     CheckEquals(' perambuians in tenebris', S, 'Unread bits of the stream');
   finally
     Str.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestSetPath;
+var
+  H: TIdSipHeaders;
+  P: TIdSipViaPath;
+begin
+  Self.Request.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+
+  H := TIdSipHeaders.Create;
+  try
+    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw3.leo-ix.org;branch=z9hG4bK776asdhds';
+    P := TIdSipViaPath.Create(H);
+    try
+      CheckEquals('SIP/2.0/TCP gw1.leo-ix.org',
+                  Self.Request.Path.FirstHop.Value,
+                  'Before, FirstHop');
+      CheckEquals(';branch=z9hG4bK776asdhds',
+                  Self.Request.Path.FirstHop.ParamsAsString,
+                  'Before, FirstHop.ParamsAsString');
+      CheckEquals('SIP/2.0/TCP gw1.leo-ix.org',
+                  Self.Request.Path.LastHop.Value,
+                  'Before, LastHop');
+      CheckEquals(';branch=z9hG4bK776asdhds',
+                  Self.Request.Path.LastHop.ParamsAsString,
+                  'Before, LastHop.ParamsAsString');
+
+      Self.Request.Path := P;
+
+      CheckEquals(2, Self.Request.Path.Length, 'Path length');
+      CheckEquals('SIP/2.0/TCP gw2.leo-ix.org',
+                  Self.Request.Path.LastHop.Value,
+                  'After, LastHop');
+      CheckEquals(';branch=z9hG4bK776asdhds',
+                  Self.Request.Path.LastHop.ParamsAsString,
+                  'After, LastHop.ParamsAsString');
+      CheckEquals('SIP/2.0/TCP gw3.leo-ix.org',
+                  Self.Request.Path.FirstHop.Value,
+                  'After, FirstHop');
+      CheckEquals(';branch=z9hG4bK776asdhds',
+                  Self.Request.Path.FirstHop.ParamsAsString,
+                  'After, FirstHop.ParamsAsString');
+    finally
+      P.Free;
+    end;
+  finally
+    H.Free;
   end;
 end;
 

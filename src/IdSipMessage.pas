@@ -272,6 +272,7 @@ type
     procedure Add(const Header: TIdSipHeader); overload;
     function  AsString: String;
     procedure Clear;
+    procedure Delete(const I: Integer);
     function  Count: Integer;
 
     function  HasHeader(const HeaderName: String): Boolean;
@@ -279,20 +280,6 @@ type
     property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
     property  Items[const I: Integer]:      TIdSipHeader read GetItems;
     property  Values[const Header: String]: String read GetValues write SetValues;
-  end;
-
-  TIdSipViaPath = class(TObject)
-  private
-    fHeaders: TIdSipHeaders;
-
-    property Headers: TIdSipHeaders read fHeaders write fHeaders;
-  public
-    constructor Create(const Headers: TIdSipHeaders);
-
-    procedure Add(Hop: TIdSipViaHeader);
-    function  FirstHop: TIdSipViaHeader;
-    function  LastHop: TIdSipViaHeader;
-    function  Length: Integer;
   end;
 
   TIdSipHeadersFilter = class(TObject)
@@ -308,6 +295,16 @@ type
     function  Count: Integer;
 
     property Items[const Index: Integer]: TIdSipHeader read GetItems;
+  end;
+
+  TIdSipViaPath = class(TIdSipHeadersFilter)
+  public
+    constructor Create(const Headers: TIdSipHeaders);
+
+    procedure Clear;
+    function  FirstHop: TIdSipViaHeader;
+    function  LastHop: TIdSipViaHeader;
+    function  Length: Integer;
   end;
 
   TIdSipMessage = class(TPersistent)
@@ -352,7 +349,7 @@ type
     property From:          TIdSipFromToHeader  read GetFrom write SetFrom;
     property Headers:       TIdSipHeaders       read fHeaders;
     property MaxForwards:   Byte                read GetMaxForwards write SetMaxForwards;
-    property Path:          TIdSipViaPath          read fPath write SetPath;
+    property Path:          TIdSipViaPath       read fPath write SetPath;
     property SIPVersion:    String              read fSIPVersion write fSIPVersion;
     property ToHeader:      TIdSipFromToHeader  read GetTo write SetTo;
   end;
@@ -523,8 +520,8 @@ begin
   if Src is TIdSipHeader then begin
     H := Src as TIdSipHeader;
     Self.Name       := H.Name;
-    Self.Parameters := H.Parameters;
     Self.Value      := H.Value;
+    Self.Parameters := H.Parameters;
   end
   else inherited Assign(Src);
 end;
@@ -799,7 +796,7 @@ begin
   else if not TIdSipParser.IsWord(Value) then
     Self.FailParse;
 
-  inherited SetValue(Value);    
+  inherited SetValue(Value);
 end;
 
 //******************************************************************************
@@ -1529,7 +1526,6 @@ var
   H: TIdSipHeader;
 begin
   H := Self.ConstructHeader(Header.Name);
-  H.Name := Header.Name;
   H.Assign(Header);
 
   Self.List.Add(H);
@@ -1547,6 +1543,11 @@ end;
 procedure TIdSipHeaders.Clear;
 begin
   Self.List.Clear;
+end;
+
+procedure TIdSipHeaders.Delete(const I: Integer);
+begin
+  Self.List.Delete(I);
 end;
 
 function TIdSipHeaders.Count: Integer;
@@ -1664,61 +1665,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipViaPath                                                              *
-//******************************************************************************
-//* TIdSipViaPath Public methods ***********************************************
-
-constructor TIdSipViaPath.Create(const Headers: TIdSipHeaders);
-begin
-  inherited Create;
-
-  Self.Headers := Headers;
-end;
-
-procedure TIdSipViaPath.Add(Hop: TIdSipViaHeader);
-begin
-  Self.Headers.Add(ViaHeaderFull).Assign(Hop);
-end;
-
-function TIdSipViaPath.FirstHop: TIdSipViaHeader;
-var
-  I: Integer;
-begin
-  Result := nil;
-  I := Self.Headers.Count - 1;
-
-  while (I >= 0) and not Assigned(Result) do
-    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
-      Result := Self.Headers.Items[I] as TIdSipViaHeader
-    else
-      Dec(I);
-end;
-
-function TIdSipViaPath.LastHop: TIdSipViaHeader;
-var
-  I: Integer;
-begin
-  Result := nil;
-  I := 0;
-
-  while (I < Self.Headers.Count) and not Assigned(Result) do
-    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
-      Result := Self.Headers.Items[I] as TIdSipViaHeader
-    else
-      Inc(I);
-end;
-
-function TIdSipViaPath.Length: Integer;
-var
-  I: Integer;
-begin
-  Result := 0;
-  for I := 0 to Self.Headers.Count - 1 do
-    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
-      Inc(Result);
-end;
-
-//******************************************************************************
 //* TIdSipHeadersFilter                                                        *
 //******************************************************************************
 //* TIdSipHeadersFilter Public methods *****************************************
@@ -1764,6 +1710,62 @@ begin
 
     Inc(I);
   end;
+end;
+
+//******************************************************************************
+//* TIdSipViaPath                                                              *
+//******************************************************************************
+//* TIdSipViaPath Public methods ***********************************************
+
+constructor TIdSipViaPath.Create(const Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, ViaHeaderFull);
+end;
+
+procedure TIdSipViaPath.Clear;
+var
+  I: Integer;
+begin
+  I := 0;
+  while (I < Self.Headers.Count) do
+    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
+      Self.Headers.Delete(I)
+    else
+      Inc(I);
+
+end;
+
+function TIdSipViaPath.FirstHop: TIdSipViaHeader;
+var
+  I: Integer;
+begin
+  Result := nil;
+  I := Self.Headers.Count - 1;
+
+  while (I >= 0) and not Assigned(Result) do
+    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
+      Result := Self.Headers.Items[I] as TIdSipViaHeader
+    else
+      Dec(I);
+end;
+
+function TIdSipViaPath.LastHop: TIdSipViaHeader;
+var
+  I: Integer;
+begin
+  Result := nil;
+  I := 0;
+
+  while (I < Self.Headers.Count) and not Assigned(Result) do
+    if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
+      Result := Self.Headers.Items[I] as TIdSipViaHeader
+    else
+      Inc(I);
+end;
+
+function TIdSipViaPath.Length: Integer;
+begin
+  Result := Self.Count;
 end;
 
 //******************************************************************************
@@ -1905,8 +1907,13 @@ begin
 end;
 
 procedure TIdSipMessage.SetPath(const Value: TIdSipViaPath);
+var
+  I: Integer;
 begin
-//  Self.Path.Assign(Value);
+  Self.Path.Clear;
+
+  for I := 0 to Value.Count - 1 do
+    Self.Path.Add(Value.Items[I]);
 end;
 
 procedure TIdSipMessage.SetTo(const Value: TIdSipFromToHeader);
