@@ -736,6 +736,7 @@ var
   Contacts: TIdSipContacts;
 begin
   Self.DB.AddBindings(Self.Request);
+  Self.Request.CSeq.Increment;
   Self.Request.FirstContact.Expires := 0;
   Self.DB.AddBindings(Self.Request);
 
