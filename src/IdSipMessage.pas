@@ -58,6 +58,7 @@ type
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
     function  FirstContact: TIdSipContactHeader;
+    function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
@@ -424,6 +425,11 @@ end;
 function TIdSipMessage.FirstContact: TIdSipContactHeader;
 begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
+end;
+
+function TIdSipMessage.FirstExpires: TIdSipNumericHeader;
+begin
+  Result := Self.FirstHeader(ExpiresHeader) as TIdSipNumericHeader;
 end;
 
 function TIdSipMessage.FirstHeader(const HeaderName: String): TIdSipHeader;

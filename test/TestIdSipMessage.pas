@@ -40,6 +40,7 @@ type
     procedure TestClearHeaders;
     procedure TestContactCount;
     procedure TestFirstContact;
+    procedure TestFirstExpires;
     procedure TestFirstHeader;
     procedure TestHasExpiry;
     procedure TestHeaderCount;
@@ -389,6 +390,21 @@ begin
   Self.Msg.AddHeader(ContactHeaderFull);
 
   Check(C = Self.Msg.FirstContact, 'Wrong Contact');
+end;
+
+procedure TestTIdSipMessage.TestFirstExpires;
+var
+  E: TIdSipHeader;
+begin
+  Self.Msg.ClearHeaders;
+
+  CheckNotNull(Self.Msg.FirstExpires, 'Expires not present');
+  CheckEquals(1, Self.Msg.HeaderCount, 'Expires not auto-added');
+
+  E := Self.Msg.FirstHeader(ExpiresHeader);
+  Self.Msg.AddHeader(ExpiresHeader);
+
+  Check(E = Self.Msg.FirstExpires, 'Wrong Expires');
 end;
 
 procedure TestTIdSipMessage.TestFirstHeader;
