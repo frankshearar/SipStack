@@ -4697,7 +4697,7 @@ end;
 
 function TIdSipViaHeader.UsesSecureTransport: Boolean;
 begin
-  Result := TIdSipTransportRegistry.TransportFor(Self.Transport).IsSecure;
+  Result := TIdSipTransportRegistry.IsSecure(Self.Transport);
 end;
 
 //* TIdSipViaHeader Protected methods ******************************************

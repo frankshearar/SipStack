@@ -130,6 +130,7 @@ type
   public
     class function  DefaultPortFor(const Transport: String): Cardinal;
     class procedure InsecureTransports(Result: TStrings);
+    class function  IsSecure(const Transport: String): Boolean;
     class procedure RegisterTransport(const Name: String;
                                       const TransportType: TIdSipTransportClass);
     class procedure SecureTransports(Result: TStrings);
@@ -715,6 +716,11 @@ begin
     if not Self.TransportAt(I).IsSecure then
       Result.Add(Self.TransportRegistry[I]);
   end;
+end;
+
+class function TIdSipTransportRegistry.IsSecure(const Transport: String): Boolean;
+begin
+  Result := Self.TransportFor(Transport).IsSecure;
 end;
 
 class procedure TIdSipTransportRegistry.RegisterTransport(const Name: String;
