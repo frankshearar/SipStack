@@ -158,7 +158,7 @@ const
       SIPRequestTimeout, SIPGone, SIPRequestEntityTooLarge,
       SIPRequestURITooLarge, SIPUnsupportedMediaType, SIPUnsupportedURIScheme,
       SIPBadExtension, SIPExtensionRequired, SIPIntervalTooBrief,
-      SIPTemporarilyNotAvailable, SIPCallLegOrTransactionDoesNotExist,
+      SIPTemporarilyUnavailable, SIPCallLegOrTransactionDoesNotExist,
       SIPLoopDetected, SIPTooManyHops, SIPAddressIncomplete, SIPAmbiguous,
       SIPBusyHere, SIPRequestTerminated, SIPNotAcceptableHere,
       SIPRequestPending, SIPUndecipherable, SIPInternalServerError,
