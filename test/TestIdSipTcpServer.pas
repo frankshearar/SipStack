@@ -661,7 +661,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(BasicRequest);
 
-  Self.WaitForTimeout('Listener wasn''t removed');
+  Self.WaitForTimeout('Listener wasn''t removed: ' + Self.ClassName);
 end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnection;
