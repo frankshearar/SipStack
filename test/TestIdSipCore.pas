@@ -72,7 +72,6 @@ type
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private
-    CheckOnInboundCall:  TIdSipSessionEvent;
     Dlg:                 TIdSipDialog;
     ID:                  TIdSipDialogID;
     LocalSequenceNo:     Cardinal;
@@ -1080,8 +1079,6 @@ begin
 
   Self.Core.AddUserAgentListener(Self);
 
-  Self.CheckOnInboundCall := nil;
-
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
   Self.LocalSequenceNo := 13;
@@ -1247,9 +1244,6 @@ end;
 
 procedure TestTIdSipUserAgentCore.OnInboundCall(Session: TIdSipInboundSession);
 begin
-  if Assigned(Self.CheckOnInboundCall) then
-    Self.CheckOnInboundCall(Session);
-
   Self.OnInboundCallFired := true;
 
   Session.AddSessionListener(Self);

@@ -40,10 +40,6 @@ uses
 
 type
   TIdSipAction = class;
-  TIdSipOutboundOptions = class;
-  TIdSipOutboundRegistration = class;
-  TIdSipSession = class;
-  TIdSipSessionEvent = procedure(Session: TIdSipSession) of object;
 
   // I provide a protocol for generic Actions.
   //
@@ -58,6 +54,8 @@ type
                                         var Password: String);
   end;
 
+  TIdSipOutboundOptions = class;
+
   IIdSipOptionsListener = interface(IIdSipActionListener)
     ['{3F2ED4DF-4854-4255-B156-F4581AEAEDA3}']
     procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
@@ -66,6 +64,8 @@ type
     procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
                         Response: TIdSipResponse);
   end;
+
+  TIdSipOutboundRegistration = class;
 
   // I provide a protocol for using a registrar. You send a REGISTER, and
   // listen for the events below.
@@ -81,6 +81,8 @@ type
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
   end;
+
+  TIdSipSession = class;
 
   // I am the protocol of things that listen for Sessions:
   // * OnNewSession tells us that someone wants to talk to us - we may refuse or
