@@ -2662,11 +2662,7 @@ procedure TIdSipAuthorizationHeader.SetNonceCount(Value: Cardinal);
 var
   H: String;
 begin
-  H := IntToHex(Value, 8);
-
-  // Strip off leading zeroes, but leave '0' unchanged
-  while (Length(H) > 1) and (H[1] = '0') do
-    Delete(H, 1, 1);
+  H := Lowercase(IntToHex(Value, 8));
 
   Self.DigestResponses.Values[NonceCountParam] := H;
 end;
