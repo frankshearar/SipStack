@@ -412,23 +412,23 @@ type
   TIdSipTestUserAgentListener = class(TIdSipMockListener,
                                       IIdSipUserAgentListener)
   private
-    fDroppedUnmatchedResponse: Boolean;
-    fInboundCall:              Boolean;
-    fReceiverParam:            TIdSipTransport;
-    fResponseParam:            TIdSipResponse;
-    fSessionParam:             TIdSipInboundSession;
+    fDroppedUnmatchedMessage: Boolean;
+    fInboundCall:             Boolean;
+    fReceiverParam:           TIdSipTransport;
+    fMessageParam:            TIdSipMessage;
+    fSessionParam:            TIdSipInboundSession;
 
-    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                          Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
   public
     constructor Create; override;
 
-    property DroppedUnmatchedResponse: Boolean              read fDroppedUnmatchedResponse;
-    property InboundCall:              Boolean              read fInboundCall;
-    property ReceiverParam:            TIdSipTransport      read fReceiverParam;
-    property ResponseParam:            TIdSipResponse       read fResponseParam;
-    property SessionParam:             TIdSipInboundSession read fSessionParam;
+    property DroppedUnmatchedMessage: Boolean              read fDroppedUnmatchedMessage;
+    property InboundCall:             Boolean              read fInboundCall;
+    property ReceiverParam:           TIdSipTransport      read fReceiverParam;
+    property MessageParam:            TIdSipMessage        read fMessageParam;
+    property SessionParam:            TIdSipInboundSession read fSessionParam;
   end;
 
   // constants used in tests
@@ -1175,21 +1175,21 @@ constructor TIdSipTestUserAgentListener.Create;
 begin
   inherited Create;
 
-  Self.fDroppedUnmatchedResponse := false;
-  Self.fInboundCall              := false;
+  Self.fDroppedUnmatchedMessage := false;
+  Self.fInboundCall             := false;
 end;
 
 //* TIdSipTestUserAgentListener Private methods ********************************
 
-procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
-                                                                 Receiver: TIdSipTransport);
+procedure TIdSipTestUserAgentListener.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+                                                                Receiver: TIdSipTransport);
 begin
-  Self.fDroppedUnmatchedResponse := true;
-  Self.fReceiverParam            := Receiver;
-  Self.fResponseParam            := Response;
+  Self.fDroppedUnmatchedMessage := true;
+  Self.fReceiverParam           := Receiver;
+  Self.fMessageParam            := Message;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnDroppedUnmatchedResponse');
+    raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnDroppedUnmatchedMessage');
 end;
 
 procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipInboundSession);
