@@ -45,6 +45,7 @@ type
     procedure SimulateRemoteInvite;
 
     procedure SimulateRemoteAccept(Invite: TIdSipRequest);
+    procedure SimulateRemoteMovedPermanently(const SipUrl: String);
     procedure SimulateRemoteResponse(StatusCode: Cardinal);
     procedure SimulateRemoteRinging(Invite: TIdSipRequest);
     procedure SimulateRemoteTryingWithNoToTag(Invite: TIdSipRequest);
@@ -184,7 +185,6 @@ type
                          Redirect: TIdSipResponse);
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
-    procedure SimulateRemoteMovedPermanently(const SipUrl: String);
     procedure SimulateRemoteOK;
     procedure SimulateRemoteResponse(StatusCode: Cardinal);
   public
@@ -752,6 +752,20 @@ begin
   Response := Self.Core.CreateResponse(Invite, SIPOK);
   try
     Response.ToHeader.Tag := Self.Core.NextTag;
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TTestCaseTU.SimulateRemoteMovedPermanently(const SipUrl: String);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                          SIPMovedPermanently);
+  try
+    Response.AddHeader(ContactHeaderFull).Value := SipUrl;
     Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
     Response.Free;
@@ -2559,20 +2573,6 @@ end;
 procedure TestTIdSipAction.SimulateRemoteBadExtensionResponse;
 begin
   Self.SimulateRemoteResponse(SIPBadExtension);
-end;
-
-procedure TestTIdSipAction.SimulateRemoteMovedPermanently(const SipUrl: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
-                                          SIPMovedPermanently);
-  try
-    Response.AddHeader(ContactHeaderFull).Value := SipUrl;
-    Self.Dispatcher.Transport.FireOnResponse(Response);
-  finally
-    Response.Free;
-  end;
 end;
 
 procedure TestTIdSipAction.SimulateRemoteOK;
