@@ -4665,8 +4665,7 @@ end;
 function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
                                                    const Transport: String): Boolean;
 begin
-  Result := ((Transport = TlsTransport) and (Port = IdPORT_SIPS))
-         or (Port = IdPORT_SIP);
+  Result := TIdSipTransport.TransportFor(Transport).DefaultPort = Port;
 end;
 
 function TIdSipViaHeader.IsRFC3261Branch: Boolean;

@@ -400,6 +400,7 @@ type
     function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestAssign;
     procedure TestAssignWithDefaultPortSpecified;
@@ -408,6 +409,7 @@ type
     procedure TestHasMaddr;
     procedure TestHasReceived;
     procedure TestHasRport;
+    procedure TestIsDefaultPortForTransport;
     procedure TestIsRFC3261Branch;
     procedure TestEquals;
     procedure TestEqualsBranchIsCaseInsensitive;
@@ -3545,6 +3547,23 @@ begin
   inherited SetUp;
 
   Self.V := TIdSipViaHeader.Create;
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
+  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
+end;
+
+procedure TestTIdSipViaHeader.TearDown;
+begin
+  TIdSipTransport.UnregisterTransport(UdpTransport);
+  TIdSipTransport.UnregisterTransport(TlsTransport);
+  TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
+  TIdSipTransport.UnregisterTransport(TcpTransport);
+  TIdSipTransport.UnregisterTransport(SctpTransport);
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipViaHeader Protected methods **************************************
@@ -3644,6 +3663,32 @@ begin
 
   Self.V.Rport := 1024;
   Check(Self.V.HasRport, 'Rport should have been set');
+end;
+
+procedure TestTIdSipViaHeader.TestIsDefaultPortForTransport;
+var
+  AllTransports: TStrings;
+  I:             Integer;
+  Port:          Cardinal;
+  Transport:     String;
+begin
+  AllTransports := TStringList.Create;
+  try
+    TIdSipTransport.SecureTransports(AllTransports);
+    TIdSipTransport.InsecureTransports(AllTransports);
+
+    for I := 0 to AllTransports.Count - 1 do begin
+      Transport := AllTransports[I];
+      Port      := TIdSipTransport.TransportFor(Transport).DefaultPort;
+
+      Check(Self.V.IsDefaultPortForTransport(Port, Transport),
+            'Default port for ' + Transport);
+      Check(not Self.V.IsDefaultPortForTransport(Port + 1, Transport),
+            'Default port + 1 for ' + Transport);
+    end;
+  finally
+    AllTransports.Free;
+  end;
 end;
 
 procedure TestTIdSipViaHeader.TestIsRFC3261Branch;
@@ -3795,35 +3840,20 @@ procedure TestTIdSipViaHeader.TestSrvQuery;
 const
   Domain = 'gw1.leo-ix.net';
 begin
-  // No, it's not hugely safe to not use a try..finally for each transport, but
-  // really. It's a test. We really don't need THAT much work!
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
-  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
-  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
-  try
-    Self.V.Value := 'SIP/2.0/TLS ' + Domain;
-    CheckEquals('_sips._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  Self.V.Value := 'SIP/2.0/TLS ' + Domain;
+  CheckEquals('_sips._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-    Self.V.Transport := TcpTransport;
-    CheckEquals('_sip._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  Self.V.Transport := TcpTransport;
+  CheckEquals('_sip._tcp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-    Self.V.Transport := UdpTransport;
-    CheckEquals('_sip._udp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  Self.V.Transport := UdpTransport;
+  CheckEquals('_sip._udp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-    Self.V.Transport := SctpTransport;
-    CheckEquals('_sip._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
+  Self.V.Transport := SctpTransport;
+  CheckEquals('_sip._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 
-    Self.V.Transport := TlsOverSctpTransport;
-    CheckEquals('_sips._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
-  finally
-    TIdSipTransport.UnregisterTransport(UdpTransport);
-    TIdSipTransport.UnregisterTransport(TlsTransport);
-    TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
-    TIdSipTransport.UnregisterTransport(TcpTransport);
-    TIdSipTransport.UnregisterTransport(SctpTransport);
-  end;
+  Self.V.Transport := TlsOverSctpTransport;
+  CheckEquals('_sips._sctp.' + Domain, Self.V.SrvQuery, Self.V.Transport);
 end;
 
 procedure TestTIdSipViaHeader.TestTTL;
