@@ -748,7 +748,9 @@ type
   // destroy me, and your reference to me will no longer be valid. The same
   // thing goes for when I notify you that I have terminated via
   // OnEndedSession.
-  TIdSipSession = class(TIdSipAction)
+  TIdSipSession = class(TIdSipAction,
+                        IIdSipActionListener,
+                        IIdSipInviteListener)
   private
     DialogLock:           TCriticalSection;
     fDialog:              TIdSipDialog;
@@ -769,6 +771,18 @@ type
     procedure NotifyOfEndedSession(const Reason: String);
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String); virtual;
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog); virtual;
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String); virtual;
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse); virtual;
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); override;
     procedure ReceiveInvite(Invite: TIdSipRequest); override;
     procedure SendBye; virtual;
@@ -799,9 +813,11 @@ type
     InitialInvite: TIdSipInboundInvite;
 
     function  CreateInboundDialog(const LocalTag: String): TIdSipDialog;
-    procedure OnFailure(InviteAgent: TIdSipInboundInvite);
+    procedure OnFailure(InviteAgent: TIdSipInboundInvite); reintroduce; overload;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipUserAgentCore;
@@ -824,9 +840,7 @@ type
   // to false to true etc etc. And the Dialog property can return completely
   // different objects, possibly landing you in hot water (a la dangling
   // pointer style) should you keep a reference to the Dialog property.
-  TIdSipOutboundSession = class(TIdSipSession,
-                                IIdSipActionListener,
-                                IIdSipInviteListener)
+  TIdSipOutboundSession = class(TIdSipSession)
   private
     InCall:               Boolean;
     InitialInvite:        TIdSipOutboundInvite;
@@ -837,22 +851,19 @@ type
     procedure AddNewRedirect(OriginalInvite: TIdSipRequest;
                              Contact: TIdSipContactHeader);
     function  NoMoreRedirectedInvites: Boolean;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
-    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
-                                  NewDialog: TIdSipDialog);
-    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse;
-                        const Reason: String);
-    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
-                         Redirect: TIdSipResponse);
-    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
-                        Response: TIdSipResponse);
     function  RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
     procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
+    procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                  NewDialog: TIdSipDialog); override;
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String); override;
+    procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                         Redirect: TIdSipResponse); override;
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse); override;
     procedure SendBye; override;
   public
     constructor Create(UA: TIdSipUserAgentCore); overload; override;
@@ -1216,6 +1227,7 @@ end;
 
 function TIdSipAbstractCore.AuthenticationHeaderValue: String;
 begin
+  // TODO: Change the nonce value
   Result := 'realm="' + Self.Realm + '",algorith="MD5",qop="auth",nonce="f00f"';
 end;
 
@@ -2991,6 +3003,7 @@ var
   A2:              String;
   AuthHeader:      TIdSipAuthorizationHeader;
   ChallengeHeader: TIdSipHttpAuthHeader;
+  H:               TIdHashFunction;
   Password:        String;
   ReAttempt:       TIdSipRequest;
 begin
@@ -3010,11 +3023,15 @@ begin
     AuthHeader.Realm     := ChallengeHeader.Realm;
     AuthHeader.Username  := Self.Username;
 
-    if   (ChallengeHeader.Algorithm = MD5Name)
+    H := HashFor(ChallengeHeader.Algorithm);
+
+    if    IsEqual(ChallengeHeader.Algorithm, MD5Name)
       or (ChallengeHeader.Algorithm = '') then
       A1 := AuthHeader.Username + ':' + AuthHeader.Realm + ':' + Password
-    else
+    else begin
       A1 := 'completely wrong';
+      Assert(false, 'Implement non-MD5 digests');
+    end;
 
     if (ChallengeHeader.Qop <> '') then begin
       AuthHeader.CNonce     := GRandomNumber.NextHexString;
@@ -3024,20 +3041,21 @@ begin
           + AuthHeader.DigestUri + ':'
           + MD5(ReAttempt.Body);
 
-      AuthHeader.Response := KD(MD5(A1),
+      AuthHeader.Response := KD(H(A1),
                                 AuthHeader.Nonce + ':'
                               + AuthHeader.NC + ':'
                               + AuthHeader.CNonce + ':'
                               + AuthHeader.Qop + ':'
-                              + MD5(A2),
-                                MD5);
+                              + H(A2),
+                                H);
     end
     else begin
+      // For compatibility with RFC 2069. cf RFC 2617, section 3.2.2.1
       A2 := ReAttempt.Method + ':' + AuthHeader.DigestUri;
 
-      AuthHeader.Response := KD(MD5(A1),
-                                ChallengeHeader.Nonce + ':' + MD5(A2),
-                                MD5);
+      AuthHeader.Response := KD(H(A1),
+                                ChallengeHeader.Nonce + ':' + H(A2),
+                                H);
     end;
 
     Self.InitialRequest.Assign(ReAttempt);
@@ -3526,10 +3544,9 @@ end;
 
 procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
 begin
-  if not Self.IsTerminated then
-    Self.UA.ScheduleEvent(Self.UA.OnTransactionComplete,
-                          64*DefaultT1,
-                          Request.Copy);
+  Self.UA.ScheduleEvent(Self.UA.OnTransactionComplete,
+                        64*DefaultT1,
+                        Request.Copy);
 
   inherited SendRequest(Request);
 end;
@@ -4302,13 +4319,11 @@ procedure TIdSipSession.Modify(const Offer, ContentType: String);
 var
   ReInvite: TIdSipOutboundInvite;
 begin
-{
   if not Self.FullyEstablished then Exit;
 
   ReInvite := Self.UA.AddOutboundInvite;
-//  ReInvite.AddListener(Self);
+  ReInvite.AddListener(Self);
   ReInvite.ReInvite(Self.Dialog, Offer, ContentType);
-}
 end;
 
 procedure TIdSipSession.ReceiveRequest(Request: TIdSipRequest);
@@ -4383,6 +4398,41 @@ procedure TIdSipSession.NotifyOfFailure(Response: TIdSipResponse);
 begin
   Self.MarkAsTerminated;
   Self.NotifyOfEndedSession(Response.Description);
+end;
+
+procedure TIdSipSession.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                  Challenge: TIdSipResponse;
+                                                  var Password: String);
+begin
+  Password := Self.NotifyOfAuthenticationChallenge(Challenge);
+end;
+
+procedure TIdSipSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
+                                            NewDialog: TIdSipDialog);
+begin
+end;
+
+procedure TIdSipSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
+                                  Response: TIdSipResponse;
+                                  const Reason: String);
+begin
+end;
+
+procedure TIdSipSession.OnRedirect(InviteAgent: TIdSipOutboundInvite;
+                                   Redirect: TIdSipResponse);
+begin
+end;
+
+procedure TIdSipSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                                  Response: TIdSipResponse);
+begin
+  Self.DialogLock.Acquire;
+  try
+    if Self.DialogEstablished then
+      Self.Dialog.ReceiveResponse(Response);
+  finally
+    Self.DialogLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.ReceiveBye(Bye: TIdSipRequest);
@@ -4564,6 +4614,14 @@ begin
                                   Msg.From.Tag);
 end;
 
+procedure TIdSipInboundSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                                         Response: TIdSipResponse);
+begin
+  inherited OnSuccess(InviteAgent, Response);
+
+  Self.NotifyOfModifiedSession(InviteAgent.InitialRequest);
+end;
+
 procedure TIdSipInboundSession.ReceiveCancel(Cancel: TIdSipRequest);
 begin
   inherited ReceiveCancel(Cancel);
@@ -4717,58 +4775,6 @@ begin
                                     Msg.ToHeader.Tag);
 end;
 
-procedure TIdSipOutboundSession.SendBye;
-var
-  Bye: TIdSipRequest;
-begin
-  Bye := Self.UA.CreateBye(Self.Dialog);
-  try
-    // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
-    Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
-
-    // We don't listen to the new transaction because we assume the BYE
-    // succeeds immediately.
-    Self.SendRequest(Bye);
-  finally
-    Bye.Free;
-  end;
-
-  Self.MarkAsTerminated;
-end;
-
-//* TIdSipOutboundSession Private methods **************************************
-
-procedure TIdSipOutboundSession.AddNewRedirect(OriginalInvite: TIdSipRequest;
-                                               Contact: TIdSipContactHeader);
-var
-  Redirect: TIdSipOutboundInvite;
-begin
-  // TODO: This is very dodgy - the Invite's about to fail, and, well, it's
-  // ugly to have to refer to InitialInvite. Perhaps we need a
-  // CurrentSessionDescription or something.
-  Redirect := Self.UA.AddOutboundInvite;
-  Redirect.AddListener(Self);
-  Redirect.RedirectedInvite(Contact,
-                            OriginalInvite);
-end;
-
-function TIdSipOutboundSession.NoMoreRedirectedInvites: Boolean;
-begin
-  Self.RedirectedInviteLock.Acquire;
-  try
-    Result := Self.RedirectedInvites.Count = 0;
-  finally
-    Self.RedirectedInviteLock.Release;
-  end;
-end;
-
-procedure TIdSipOutboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                          Challenge: TIdSipResponse;
-                                                          var Password: String);
-begin
-  Password := Self.NotifyOfAuthenticationChallenge(Challenge);
-end;
-
 procedure TIdSipOutboundSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                                     NewDialog: TIdSipDialog);
 begin
@@ -4861,28 +4867,67 @@ end;
 procedure TIdSipOutboundSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
                                           Response: TIdSipResponse);
 begin
-  Self.InitialRequest.Assign(InviteAgent.InitialRequest);
-  Self.DialogLock.Acquire;
-  try
-    if Self.DialogEstablished then
-      Self.Dialog.ReceiveResponse(Response);
-  finally
-    Self.DialogLock.Release;
-  end;
-  Self.FullyEstablished := true;
+  inherited OnSuccess(InviteAgent, Response);
+
+  if not Self.FullyEstablished then begin
+    Self.InitialRequest.Assign(InviteAgent.InitialRequest);
+
+    Self.FullyEstablished := true;
+
+    Self.RemoveFinishedRedirectedInvite(InviteAgent);
+    Self.NotifyOfEstablishedSession;
+  end
+  else
+    Self.NotifyOfModifiedSession(InviteAgent.InitialRequest);
 
   InviteAgent.SendAck(Self.Dialog, Response);
+end;
 
-  Self.RemoveFinishedRedirectedInvite(InviteAgent);
-  Self.NotifyOfEstablishedSession;
+procedure TIdSipOutboundSession.SendBye;
+var
+  Bye: TIdSipRequest;
+begin
+  Bye := Self.UA.CreateBye(Self.Dialog);
+  try
+    // TODO: Verify this as correct behaviour. Otherwise we must use SIP discovery stuff
+    Bye.LastHop.Transport := Self.InitialRequest.LastHop.Transport;
 
-  if (InviteAgent = Self.InitialInvite) then
-    Self.InitialInvite := nil;
+    // We don't listen to the new transaction because we assume the BYE
+    // succeeds immediately.
+    Self.SendRequest(Bye);
+  finally
+    Bye.Free;
+  end;
+
+  Self.MarkAsTerminated;
+end;
+
+//* TIdSipOutboundSession Private methods **************************************
+
+procedure TIdSipOutboundSession.AddNewRedirect(OriginalInvite: TIdSipRequest;
+                                               Contact: TIdSipContactHeader);
+var
+  Redirect: TIdSipOutboundInvite;
+begin
+  Redirect := Self.UA.AddOutboundInvite;
+  Redirect.AddListener(Self);
+  Redirect.RedirectedInvite(Contact,
+                            OriginalInvite);
+end;
+
+function TIdSipOutboundSession.NoMoreRedirectedInvites: Boolean;
+begin
+  Self.RedirectedInviteLock.Acquire;
+  try
+    Result := Self.RedirectedInvites.Count = 0;
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
 end;
 
 function TIdSipOutboundSession.RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
 begin
-  // Precondition: Something's acquired RedirectLock
+  // Precondition: You've acquired RedirectLock
   Result := Self.RedirectedInvites[Index] as TIdSipOutboundInvite;
 end;
 

@@ -28,6 +28,7 @@ type
     Invite:      TIdSipRequest;
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
+    function  CreateRemoteOk(Invite: TIdSipRequest): TIdSipResponse;
     procedure SimulateAck;
     procedure SimulateRemoteBye(LocalDialog: TIdSipDialog);
     procedure SimulateRemoteCancel;
@@ -362,7 +363,8 @@ type
     procedure SetUp; override;
   published
     procedure TestIsSession; override;
-//    procedure TestModify;
+    procedure TestModifyBeforeFullyEstablished;
+    procedure TestModify;
   end;
 
   TestTIdSipInboundSession = class(TestTIdSipSession,
@@ -371,8 +373,6 @@ type
                                    IIdSipUserAgentListener)
   private
     MultiStreamSdp:         TIdSdpPayload;
-    OnEndedSessionFired:    Boolean;
-    OnModifiedSessionFired: Boolean;
     SentRequestTerminated:  Boolean;
     Session:                TIdSipInboundSession;
     SimpleSdp:              TIdSdpPayload;
@@ -395,8 +395,6 @@ type
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String); override;
     procedure OnEstablishedSession(Session: TIdSipSession); override;
-    procedure OnModifiedSession(Session: TIdSipSession;
-                                Invite: TIdSipRequest); override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -412,7 +410,6 @@ type
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
-    procedure TestReceiveReInvite;
     procedure TestRedirectCall;
     procedure TestRejectCallBusy;
     procedure TestRemoveSessionListener;
@@ -432,7 +429,7 @@ type
     procedure SimulateRemoteDecline;
     procedure SimulateForbidden;
     procedure SimulateMovedTemporarily(const Contact: String);
-    procedure SimulateOKWithRecordRoute;
+    procedure SimulateRemoteOKWithRecordRoute;
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRejectUnauthorized;
   protected
@@ -460,6 +457,7 @@ type
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
+    procedure TestModifyUsesAuthentication;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestDoubleRedirect;
     procedure TestReceive2xxSendsAck;
@@ -785,6 +783,15 @@ begin
   end;
 end;
 
+function TTestCaseTU.CreateRemoteOk(Invite: TIdSipRequest): TIdSipResponse;
+begin
+  // This message appears to originate from the network. Invite originates from
+  // us so presumably has no To tag. Having come from the network, the response
+  // WILL have a To tag.
+  Result := Self.Core.CreateResponse(Invite, SIPOK);
+  Result.ToHeader.Tag := Self.Core.NextTag;
+end;
+
 procedure TTestCaseTU.SimulateAck;
 var
   Ack: TIdSipRequest;
@@ -807,9 +814,8 @@ begin
   // This message appears to originate from the network. Invite originates from
   // us so presumably has no To tag. Having come from the network, the response
   // WILL have a To tag.
-  Response := Self.Core.CreateResponse(Invite, SIPOK);
+  Response := Self.CreateRemoteOk(Invite);
   try
-    Response.ToHeader.Tag := Self.Core.NextTag;
     Self.SimulateRemoteResponse(Response);
   finally
     Response.Free;
@@ -2826,7 +2832,21 @@ begin
   Check(Action.IsSession,
         Action.ClassName + ' not marked as a Session');
 end;
-{
+
+procedure TestTIdSipSession.TestModifyBeforeFullyEstablished;
+var
+  RequestCount: Cardinal;
+  Session:      TIdSipSession;
+begin
+  Session := Self.CreateAction as TIdSipSession;
+
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Session.Modify('', '');
+  CheckEquals(RequestCount,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'INVITE sent before session established');
+end;
+
 procedure TestTIdSipSession.TestModify;
 var
   RequestCount: Cardinal;
@@ -2840,10 +2860,9 @@ begin
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
         'No INVITE sent');
 
-  Self.SimulateRemoteOK;
+  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
   Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
 end;
-}
 
 //******************************************************************************
 //* TestTIdSipInboundInvite                                                    *
@@ -4630,7 +4649,7 @@ end;
 procedure TestTIdSipInboundSession.OnEndedSession(Session: TIdSipSession;
                                                   const Reason: String);
 begin
-  Self.OnEndedSessionFired := true;
+  inherited OnEndedSession(Session, Reason);
   Self.ActionFailed := true;
 
   Self.ThreadEvent.SetEvent;
@@ -4644,12 +4663,6 @@ procedure TestTIdSipInboundSession.OnInboundCall(Session: TIdSipInboundSession);
 begin
   Self.Session := Session;
   Self.Session.AddSessionListener(Self);
-end;
-
-procedure TestTIdSipInboundSession.OnModifiedSession(Session: TIdSipSession;
-                                                     Invite: TIdSipRequest);
-begin
-  Self.OnModifiedSessionFired := true;
 end;
 
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
@@ -4875,22 +4888,6 @@ begin
   end;
 end;
 }
-procedure TestTIdSipInboundSession.TestReceiveReInvite;
-var
-  ReInvite: TIdSipRequest;
-begin
-  Self.Session.AcceptCall('', '');
-
-  ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
-  try
-    Self.Dispatcher.Transport.FireOnRequest(ReInvite);
-
-    Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
-  finally
-    ReInvite.Free;
-  end;
-end;
-
 procedure TestTIdSipInboundSession.TestRedirectCall;
 var
   Dest:          TIdSipAddressHeader;
@@ -5108,7 +5105,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.SimulateOKWithRecordRoute;
+procedure TestTIdSipOutboundSession.SimulateRemoteOKWithRecordRoute;
 var
   Response: TIdSipResponse;
 begin
@@ -5198,7 +5195,7 @@ procedure TestTIdSipOutboundSession.TestAckFromRecordRouteResponse;
 var
   Ack: TIdSipRequest;
 begin
-  Self.SimulateOKWithRecordRoute;
+  Self.SimulateRemoteOKWithRecordRoute;
   Ack := Self.Dispatcher.Transport.LastACK;
 
   Check(not Ack.Route.IsEmpty, 'No Route headers');
@@ -5482,6 +5479,45 @@ begin
               'Outbound session; Method');
 end;
 
+procedure TestTIdSipOutboundSession.TestModifyUsesAuthentication;
+var
+  Invite:       TIdSipRequest;
+  Modify:       TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  //  ---      INVITE      --->
+  // <--- 401 Unauthorized ---
+  //  ---      INVITE      --->
+  // <---      200 OK      ---
+  //  ---        ACK       --->
+  //  ---      INVITE      ---> (modify)
+
+  Invite := TIdSipRequest.Create;
+  try
+    RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+    Self.SimulateRejectUnauthorized;
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+    Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+          'No resend of INVITE with Authorization');
+    Check(Invite.HasAuthorization,
+          'Resend INVITE has no Authorization header');
+
+    Self.SimulateRemoteOK;
+
+    Self.Session.Modify('', '');
+
+    Modify := Self.Dispatcher.Transport.LastRequest;
+    Check(Modify.HasAuthorization,
+          'No Authorization header');
+    CheckEquals(Invite.FirstAuthorization.Value,
+                Modify.FirstAuthorization.Value,
+                'Authorization header');
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
 var
   RequestCount: Cardinal;
@@ -5541,27 +5577,33 @@ procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
 var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
+  Ok:     TIdSipResponse;
 begin
-  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+  Ok := Self.CreateRemoteOk(Self.Dispatcher.Transport.LastRequest);
+  try
+    Self.SimulateRemoteResponse(Ok);
 
- CheckEquals(1,
-              Self.Dispatcher.Transport.ACKCount,
-              'Original ACK');
+    CheckEquals(1,
+                Self.Dispatcher.Transport.ACKCount,
+                'Original ACK');
 
-  Self.SimulateRemoteResponse(Self.Dispatcher.Transport.LastResponse);
-  CheckEquals(2,
-              Self.Dispatcher.Transport.ACKCount,
-              'Retransmission');
+    Self.SimulateRemoteResponse(Ok);
+    CheckEquals(2,
+                Self.Dispatcher.Transport.ACKCount,
+                'Retransmission');
 
-  Ack := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-  Invite := Self.Session.InitialRequest;
-  CheckEquals(Invite.CSeq.SequenceNo,
-              Ack.CSeq.SequenceNo,
-              'CSeq numerical portion');
-  CheckEquals(MethodAck,
-              Ack.CSeq.Method,
-              'CSeq method');
+    Ack := Self.Dispatcher.Transport.LastRequest;
+    CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
+    Invite := Self.Session.InitialRequest;
+    CheckEquals(Invite.CSeq.SequenceNo,
+                Ack.CSeq.SequenceNo,
+                'CSeq numerical portion');
+    CheckEquals(MethodAck,
+                Ack.CSeq.Method,
+                'CSeq method');
+  finally
+    Ok.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive3xxSendsNewInvite;
