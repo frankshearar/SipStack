@@ -123,6 +123,7 @@ type
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     function  Address: String;
+    procedure CreateUi;
     function  LocalSDP(const Address: String): String;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
@@ -206,6 +207,8 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.CreateUi;
+
   TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTcpTransport);
   TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
@@ -214,37 +217,6 @@ begin
 
   Self.Transports := TObjectList.Create(true);
   Self.RTPProfile := TIdAudioVisualProfile.Create;
-
-  Self.DTMFPanel := TIdDTMFPanel.Create(nil);
-  Self.DTMFPanel.Align  := alLeft;
-  Self.DTMFPanel.Left   := -1; // Forces the panel left of the splitter
-  Self.DTMFPanel.Parent := Self.UpperInput;
-  Self.DTMFPanel.Top    := 0;
-
-  Self.HistogramPanel := TIdHistogramPanel.Create(nil);
-  Self.HistogramPanel.Align      := alLeft;
-  Self.HistogramPanel.BevelInner := bvNone;
-  Self.HistogramPanel.BevelOuter := bvNone;
-  Self.HistogramPanel.Left       := -1; // Forces the panel left of the splitter
-  Self.HistogramPanel.Parent     := Self.LowerInput;
-  Self.HistogramPanel.Top        := 0;
-  Self.HistogramPanel.Width      := Self.DTMFPanel.Width;
-
-  Self.HistListener := TIdRTPPayloadHistogram.Create;
-  Self.HistListener.AddObserver(Self.HistogramPanel);
-
-  Self.Lock        := TCriticalSection.Create;
-  Self.CounterLock := TCriticalSection.Create;
-  Self.TextLock    := TCriticalSection.Create;
-
-  Self.DataStore := TMemoryStream.Create;
-  Self.AudioPlayer := TAudioData.Create;
-  Self.AudioPlayer.AutoFreeSource := false;
-  Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
-  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
-  Self.AudioPlayer.Assign(Self.DataStore);
-
-  Self.StopEvent := TSimpleEvent.Create;
 
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
@@ -342,6 +314,40 @@ end;
 function TrnidSpike.Address: String;
 begin
   Result := (Self.Transports[0] as TIdSipTransport).Address;
+end;
+
+procedure TrnidSpike.CreateUi;
+begin
+  Self.DTMFPanel := TIdDTMFPanel.Create(nil);
+  Self.DTMFPanel.Align  := alLeft;
+  Self.DTMFPanel.Left   := -1; // Forces the panel left of the splitter
+  Self.DTMFPanel.Parent := Self.UpperInput;
+  Self.DTMFPanel.Top    := 0;
+
+  Self.HistogramPanel := TIdHistogramPanel.Create(nil);
+  Self.HistogramPanel.Align      := alLeft;
+  Self.HistogramPanel.BevelInner := bvNone;
+  Self.HistogramPanel.BevelOuter := bvNone;
+  Self.HistogramPanel.Left       := -1; // Forces the panel left of the splitter
+  Self.HistogramPanel.Parent     := Self.LowerInput;
+  Self.HistogramPanel.Top        := 0;
+  Self.HistogramPanel.Width      := Self.DTMFPanel.Width;
+
+  Self.HistListener := TIdRTPPayloadHistogram.Create;
+  Self.HistListener.AddObserver(Self.HistogramPanel);
+
+  Self.Lock        := TCriticalSection.Create;
+  Self.CounterLock := TCriticalSection.Create;
+  Self.TextLock    := TCriticalSection.Create;
+
+  Self.DataStore := TMemoryStream.Create;
+  Self.AudioPlayer := TAudioData.Create;
+  Self.AudioPlayer.AutoFreeSource := false;
+  Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
+  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
+  Self.AudioPlayer.Assign(Self.DataStore);
+
+  Self.StopEvent := TSimpleEvent.Create;
 end;
 
 function TrnidSpike.LocalSDP(const Address: String): String;
