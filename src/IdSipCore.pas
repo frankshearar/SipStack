@@ -479,36 +479,6 @@ type
     procedure Terminate; override;
   end;
 
-  TIdSipSessionMethod = class(TIdMethod)
-  private
-    fSession: TIdSipSession;
-  public
-    property Session: TIdSipSession read fSession write fSession;
-  end;
-
-  TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
-  private
-    fReason:  String;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Reason: String read fReason write fReason;
-  end;
-
-  TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
-  end;
-
-  TIdSipModifiedSessionMethod = class(TIdSipSessionMethod)
-  private
-    fRequest: TIdSipRequest;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Request: TIdSipRequest read fRequest write fRequest;
-  end;
-
   // I am a SIP session. As such, I represent both what my dialog represents
   // (a long-term relationship between two peers in a SIP network) and also
   // the media streams initiated between those peers.
@@ -781,6 +751,36 @@ type
   TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
   public
     procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipSessionMethod = class(TIdMethod)
+  private
+    fSession: TIdSipSession;
+  public
+    property Session: TIdSipSession read fSession write fSession;
+  end;
+
+  TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fReason:  String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipModifiedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fRequest: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
   TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
@@ -2655,38 +2655,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipUserAgentFailMethod                                                  *
-//******************************************************************************
-//* TIdSipUserAgentFailMethod Public methods ***********************************
-
-procedure TIdSipEndedSessionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSessionListener).OnEndedSession(Self.Session,
-                                                    Self.Reason);
-end;
-
-//******************************************************************************
-//* TIdSipEstablishedSessionMethod                                             *
-//******************************************************************************
-//* TIdSipEstablishedSessionMethod Public methods ******************************
-
-procedure TIdSipEstablishedSessionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSessionListener).OnEstablishedSession(Self.Session);
-end;
-
-//******************************************************************************
-//* TIdSipModifiedSessionMethod                                                *
-//******************************************************************************
-//* TIdSipModifiedSessionMethod Public methods *********************************
-
-procedure TIdSipModifiedSessionMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipSessionListener).OnModifiedSession(Self.Session,
-                                                       Self.Request);
-end;
-
-//******************************************************************************
 //* TIdSipSession                                                              *
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
@@ -4089,6 +4057,38 @@ procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
                                                     Self.CurrentBindings);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentFailMethod                                                  *
+//******************************************************************************
+//* TIdSipUserAgentFailMethod Public methods ***********************************
+
+procedure TIdSipEndedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnEndedSession(Self.Session,
+                                                    Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipEstablishedSessionMethod                                             *
+//******************************************************************************
+//* TIdSipEstablishedSessionMethod Public methods ******************************
+
+procedure TIdSipEstablishedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnEstablishedSession(Self.Session);
+end;
+
+//******************************************************************************
+//* TIdSipModifiedSessionMethod                                                *
+//******************************************************************************
+//* TIdSipModifiedSessionMethod Public methods *********************************
+
+procedure TIdSipModifiedSessionMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipSessionListener).OnModifiedSession(Self.Session,
+                                                       Self.Request);
 end;
 
 //******************************************************************************
