@@ -1936,6 +1936,8 @@ begin
   try
     Result := 0;
 
+    // We don't count Sessions because Sessions contain other Actions - they
+    // look and act more like containers of Actions than Actions themselves.
     for I := 0 to Self.Actions.Count - 1 do
       if not Self.ActionAt(I).IsSession
         and (Self.ActionAt(I).Method = MethodName)
