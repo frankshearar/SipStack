@@ -49,8 +49,10 @@ type
   TIdSipTestActionListener = class(TIdSipMockListener,
                                IIdSipActionListener)
   private
+    fActionParam:             TIdSipAction;
     fAuthenticationChallenge: Boolean;
     fRedirect:                Boolean;
+    fResponseParam:           TIdSipResponse;
     fPassword:                String;
   public
     constructor Create; override;
@@ -61,9 +63,11 @@ type
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
 
-    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
-    property Redirect:                Boolean read fRedirect;
-    property Password:                String  read fPassword write fPassword;
+    property ActionParam:             TIdSipAction   read fActionParam;
+    property AuthenticationChallenge: Boolean        read fAuthenticationChallenge;
+    property Password:                String         read fPassword write fPassword;
+    property Redirect:                Boolean        read fRedirect;
+    property ResponseParam:           TIdSipResponse read fResponseParam;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -483,10 +487,14 @@ begin
 end;
 
 procedure TIdSipTestActionListener.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                         Response: TIdSipResponse;
-                                                         var Password: String);
+                                                             Response: TIdSipResponse;
+                                                             var Password: String);
 begin
+  Self.fActionParam             := Action;
   Self.fAuthenticationChallenge := true;
+  Self.fResponseParam           := Response;
+
+  // We set the var parameter, not our instance variable!
   Password := Self.Password;
 
   if Assigned(Self.FailWith) then
@@ -496,7 +504,9 @@ end;
 procedure TIdSipTestActionListener.OnRedirect(Action: TIdSipAction;
                                               Redirect: TIdSipResponse);
 begin
-  Self.fRedirect := true;
+  Self.fActionParam   := Action;
+  Self.fRedirect      := true;
+  Self.fResponseParam := Redirect;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
