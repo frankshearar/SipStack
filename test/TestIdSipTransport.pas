@@ -717,11 +717,9 @@ end;
 procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
 begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
-  // This is a bit of a hack. Messages from the loopback interface
-  // to the NIC interface arrive with a source address of the NIC
-  // interface's IP, not the loopback interface's IP.
-  Self.LowPortTransport.HostName := Self.HighPortTransport.Bindings[0].IP;
-  Self.LowPortTransport.Send(Self.Request);
+  // This is a bit of a hack. We want to make sure the sent-by's an IP.
+  Self.HighPortTransport.HostName := Self.HighPortTransport.Bindings[0].IP;
+  Self.HighPortTransport.Send(Self.Request);
 
   Self.WaitForSignaled;
 end;
