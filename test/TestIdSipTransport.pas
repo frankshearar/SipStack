@@ -609,9 +609,10 @@ begin
   Self.LowPortTransport.Start;
 
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
-  Self.Request.LastHop.SentBy  := Self.LowPortTransport.Address;
-  Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
-  Self.Request.RequestUri.Port := Self.HighPortTransport.Port;
+  Self.Request.LastHop.SentBy    := Self.LowPortTransport.Address;
+  Self.Request.LastHop.Transport := Self.LowPortTransport.GetTransportType;
+  Self.Request.RequestUri.Host   := Self.HighPortTransport.HostName;
+  Self.Request.RequestUri.Port   := Self.HighPortTransport.Port;
 
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;

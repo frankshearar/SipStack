@@ -251,7 +251,7 @@ end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);
 begin
-  inherited SendRequest(R);
+  Self.NotifyTransportSendingListeners(R);
 
   Self.Log(R.AsString, dirOut);
 
@@ -275,6 +275,8 @@ end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
+  Self.NotifyTransportSendingListeners(R);
+
   Self.Log(R.AsString, dirOut);
   Self.fResponses.AddCopy(R);
 
@@ -285,10 +287,6 @@ begin
                                + Self.FailWith.ClassName + ')');
 
   Inc(Self.fSentResponseCount);
-
-  // We call inherited at the end because we want to update our state first,
-  // so listeners get a true idea of, for instance, SentResponseCount.
-  inherited SendResponse(R);
 
   Self.DispatchResponse(R);
 end;

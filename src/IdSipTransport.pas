@@ -307,6 +307,8 @@ const
   MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
                           + 'Via, namely, this stack.';
   ResponseNotSentFromHere = 'Received response could not have been sent from here';
+  WrongTransport          = 'This transport only supports %s  messages but '
+                          + 'received a %s message';
 
 implementation
 
@@ -676,9 +678,11 @@ begin
   Assert(Msg.Path.Length > 0,
          MustHaveAtLeastOneVia);
 
-  Msg.LastHop.Transport := Self.GetTransportType;
-  Msg.LastHop.SentBy    := Self.HostName;
-  Msg.LastHop.Port      := Self.Port;
+  Assert(Msg.LastHop.Transport = Self.GetTransportType,
+         Format(WrongTransport, [Self.GetTransportType, Msg.LastHop.Transport]));
+
+  Msg.LastHop.SentBy := Self.HostName;
+  Msg.LastHop.Port   := Self.Port;
 
   if Self.UseRport then
     Msg.LastHop.Params[RportParam] := '';
