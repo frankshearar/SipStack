@@ -247,7 +247,7 @@ type
 
   // I keep track of information a User Agent needs when making a REGISTER to
   // a particular registrar.
-  TIdSipOutboundRegistrationInfo = class(TObject)
+  TIdSipRegistrationInfo = class(TObject)
   private
     fCallID:     String;
     fRegistrar:  TIdSipUri;
@@ -314,7 +314,7 @@ type
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
     procedure OnInboundSessionExpire(Sender: TObject);
-    function  RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
+    function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
     procedure RejectDoNotDisturb(Request: TIdSipRequest;
                                  const Reason: String);
     procedure SetContact(Value: TIdSipContactHeader);
@@ -1222,18 +1222,18 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOutboundRegistrationInfo                                                     *
+//* TIdSipRegistrationInfo                                                     *
 //******************************************************************************
-//* TIdSipOutboundRegistrationInfo Public methods **************************************
+//* TIdSipRegistrationInfo Public methods **************************************
 
-constructor TIdSipOutboundRegistrationInfo.Create;
+constructor TIdSipRegistrationInfo.Create;
 begin
   inherited Create;
 
   Self.fRegistrar := TIdSipUri.Create;
 end;
 
-destructor TIdSipOutboundRegistrationInfo.Destroy;
+destructor TIdSipRegistrationInfo.Destroy;
 begin
   Self.Registrar.Free;
 
@@ -1722,10 +1722,10 @@ procedure TIdSipUserAgentCore.AddKnownRegistrar(Registrar: TIdSipUri;
                                                 const CallID: String;
                                                 SequenceNo: Cardinal);
 var
-  NewReg: TIdSipOutboundRegistrationInfo;
+  NewReg: TIdSipRegistrationInfo;
 begin
   if not Self.KnowsRegistrar(Registrar) then begin
-    NewReg := TIdSipOutboundRegistrationInfo.Create;
+    NewReg := TIdSipRegistrationInfo.Create;
     Self.KnownRegistrars.Add(NewReg);
 
     NewReg.CallID        := CallID;
@@ -1880,7 +1880,7 @@ end;
 
 function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
 var
-  RegInfo: TIdSipOutboundRegistrationInfo;
+  RegInfo: TIdSipRegistrationInfo;
 begin
   Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
 
@@ -1947,9 +1947,9 @@ begin
   (Sender as TIdSipSingleShotTimer).Data.Free;
 end;
 
-function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipOutboundRegistrationInfo;
+function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
 begin
-  Result := Self.KnownRegistrars[Index] as TIdSipOutboundRegistrationInfo;
+  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
 procedure TIdSipUserAgentCore.RejectDoNotDisturb(Request: TIdSipRequest;
