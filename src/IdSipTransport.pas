@@ -304,6 +304,8 @@ type
   EUnknownTransport = class(EIdException);
 
 const
+  MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
+                          + 'Via, namely, this stack.';
   ResponseNotSentFromHere = 'Received response could not have been sent from here';
 
 implementation
@@ -672,8 +674,7 @@ end;
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
 begin
   Assert(Msg.Path.Length > 0,
-         'An outbound message must always have at least one Via, '
-       + 'namely, this stack.');
+         MustHaveAtLeastOneVia);
 
   Msg.LastHop.Transport := Self.GetTransportType;
   Msg.LastHop.SentBy    := Self.HostName;
