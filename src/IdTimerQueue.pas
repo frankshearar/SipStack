@@ -80,6 +80,7 @@ type
     procedure Add(MillisecsWait: Cardinal;
                   Event: TIdWait;
                   Data: TObject);
+    procedure ClearEvents;
     function  EarliestEvent: TIdWait;
     function  EventAt(Index: Integer): TIdWait;
     procedure InternalRemove(Event: Pointer);
@@ -251,7 +252,7 @@ begin
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
-  Self.fEventList := TObjectList.Create(true);
+  Self.fEventList := TObjectList.Create(false);
   Self.fLock      := TCriticalSection.Create;
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
@@ -267,6 +268,7 @@ begin
   Self.LockTimer;
   try
     Self.WaitEvent.Free;
+    Self.ClearEvents;
     Self.EventList.Free;
   finally
     Self.UnlockTimer;
@@ -375,20 +377,31 @@ end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;
 var
+  FireEvent: Boolean;
   NextEvent: TIdWait;
 begin
+  FireEvent := false;
+
   Self.LockTimer;
   try
     NextEvent := Self.EarliestEvent;
     if Assigned(NextEvent) and NextEvent.Due then begin
-      NextEvent.Trigger;
-
+      FireEvent := true;
       Self.EventList.Remove(NextEvent);
     end;
 
+    // Let the worker thread go back to sleep.
     Self.WaitEvent.ResetEvent;
   finally
     Self.UnlockTimer;
+  end;
+
+  if FireEvent then begin
+    try
+      NextEvent.Trigger;
+    finally
+      NextEvent.Free;
+    end;
   end;
 end;
 
@@ -424,6 +437,14 @@ begin
     Self.WaitEvent.SetEvent;
   finally
     Self.UnlockTimer;
+  end;
+end;
+
+procedure TIdTimerQueue.ClearEvents;
+begin
+  while Self.EventList.Count > 0 do begin
+    Self.EventList[0].Free;
+    Self.EventList.Delete(0);
   end;
 end;
 
