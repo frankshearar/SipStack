@@ -109,7 +109,7 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipMessage tests (parsing)');
+  Result := TTestSuite.Create('IdSipMessage tests (Parsing)');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipParser.Suite);
 end;
