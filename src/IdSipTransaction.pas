@@ -86,6 +86,7 @@ type
                                    Receiver: TIdSipTransport); overload;
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
+    procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
@@ -126,7 +127,6 @@ type
                                    Receiver: TIdSipTransport): TIdSipTransaction;
     procedure ClearTransports;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
-    procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     procedure RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
     procedure Send(Msg: TIdSipMessage); virtual;
     procedure SendRequest(Request: TIdSipRequest); virtual;
@@ -211,6 +211,7 @@ type
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
     function  IsServer: Boolean;
+    function  IsTerminated: Boolean;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
@@ -686,19 +687,6 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
-begin
-  Assert(itsTerminated = TerminatedTransaction.State,
-         'Transactions must only be removed when they''re terminated');
-
-  Self.TransactionLock.Acquire;
-  try
-    Self.Transactions.Remove(TerminatedTransaction);
-  finally
-    Self.TransactionLock.Release;
-  end;
-end;
-
 procedure TIdSipTransactionDispatcher.RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
   Self.MsgListeners.RemoveListener(Listener);
@@ -750,7 +738,7 @@ begin
       Tran.SendRequest;
     end;
 
-    if (Tran.State = itsTerminated) then
+    if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
   end;
 end;
@@ -767,7 +755,7 @@ begin
 
   if Assigned(Tran) then begin
     Tran.SendResponse(Response);
-    if (Tran.State = itsTerminated) then
+    if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
   end
   else
@@ -939,7 +927,7 @@ begin
 
   if Assigned(Tran) then begin
     Tran.ReceiveResponse(Response, Receiver);
-    if (Tran.State = itsTerminated) then
+    if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
   end
   else begin
@@ -969,6 +957,19 @@ begin
         Result := Self.TransactionAt(I)
       else
        Inc(I);
+  finally
+    Self.TransactionLock.Release;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
+begin
+  Assert(TerminatedTransaction.IsTerminated,
+         'Transactions must only be removed when they''re terminated');
+
+  Self.TransactionLock.Acquire;
+  try
+    Self.Transactions.Remove(TerminatedTransaction);
   finally
     Self.TransactionLock.Release;
   end;
@@ -1046,6 +1047,11 @@ end;
 function TIdSipTransaction.IsServer: Boolean;
 begin
   Result := not Self.IsClient;
+end;
+
+function TIdSipTransaction.IsTerminated: Boolean;
+begin
+  Result := Self.State = itsTerminated;
 end;
 
 function TIdSipTransaction.Match(Msg: TIdSipMessage): Boolean;
