@@ -26,6 +26,7 @@ type
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
+    procedure TestAssignCopiesBody;
     procedure TestClearHeaders;
     procedure TestFirstContact;
     procedure TestFirstHeader;
@@ -253,6 +254,23 @@ begin
     Self.Msg.Headers.IsEqualTo(Headers);
   finally
     Headers.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestAssignCopiesBody;
+var
+  AnotherMsg: TIdSipMessage;
+begin
+  AnotherMsg := TIdSipTrivialMessage.Create;
+  try
+    Self.Msg.Body := 'I am a body';
+
+    AnotherMsg.Assign(Self.Msg);
+    CheckEquals(Self.Msg.Body,
+                AnotherMsg.Body,
+                'Body not assigned properly');
+  finally
+    AnotherMsg.Free;
   end;
 end;
 

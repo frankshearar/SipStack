@@ -201,10 +201,6 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
-  // MIME types etc
-const
-  SdpMimeType = 'application/sdp';
-
 implementation
 
 end.

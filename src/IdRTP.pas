@@ -23,6 +23,8 @@ type
     fName:       String;
     fParameters: String;
   public
+    class function CreateEncoding(Value: String): TIdRTPEncoding;
+
     constructor Create(const Name: String;
                        const ClockRate: Cardinal;
                        const Parameters: String = ''); overload; virtual;
@@ -38,6 +40,8 @@ type
     property Name:       String   read fName;
     property Parameters: String   read fParameters;
   end;
+
+  TIdRTPEncodingClass = class of TIdRTPEncoding;
 
   TIdRTPT140Encoding = class(TIdRTPEncoding);
 
@@ -68,8 +72,6 @@ type
     function Clone: TIdRTPEncoding; override;
     function IsReserved: Boolean; override;
   end;
-
-  TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPEncoding;
 
   // I am the payload in an RTP packet. My subclasses implement appropriate
   // parsing and outputting.
@@ -119,9 +121,13 @@ type
     property Data: String read fData write fData;
   end;
 
+  TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPEncoding;
+
   // I am a 1-1 association map between encodings and RTP Payload Types. RTP
   // packets use me to determine how their payload should be interpreted.
-  TIdRTPProfile = class(TObject)
+  // Because I am 1-1, you cannot add the same encoding to me twice. If you try,
+  // the payload type you try will remain unchanged.
+  TIdRTPProfile = class(TPersistent)
   private
     Encodings:    TIdPayloadArray;
     NullEncoding: TIdRTPEncoding;
@@ -142,6 +148,7 @@ type
 
     procedure AddEncoding(const Encoding: TIdRTPEncoding;
                           const PayloadType: TIdRTPPayloadType);
+    procedure Assign(Src: TPersistent); override;
     procedure Clear;
     function  Count: Integer;
     function  FirstFreePayloadType: TIdRTPPayloadType;
@@ -153,20 +160,24 @@ type
     function  TransportDesc: String; virtual;
   end;
 
-  // I am the profile defined in RFC 3551
+  // I am the profile defined in RFC 3551. As such, don't bother trying to
+  // change the encodings of any reserved or assigned payload types. The
+  // only payload types I allow to be altered are the dynamic payload types -
+  // 96-127.
   TIdAudioVisualProfile = class(TIdRTPProfile)
   private
     procedure ReserveRange(const LowPT, HighPT: TIdRTPPayloadType);
   public
     constructor Create; override;
 
+    procedure Assign(Src: TPersistent); override;
     function  TransportDesc: String; override;
   end;
 
   // I am a packet of the Real-time Transport Protocol.
   //
   // I currently do not support the Header Extension as defined in RFC 3550,
-  // section 5.3.1
+  // section 5.3.1, nor do I have timestamp (either RTP or NTP) information.
   TIdRTPPacket = class(TObject)
   private
     fCsrcCount:    TIdRTPCsrcCount;
@@ -228,16 +239,39 @@ procedure WriteWord(Dest: TStream; Value: Word);
 const
   AudioVisualProfile = 'RTP/AVP'; // defined in RFC 3551
 
+  CelBEncoding                = 'CelB';
+  CNEncoding                  = 'CN';
+  DVI4Encoding                = 'DVI4';
+  G722Encoding                = 'G722';
+  G723Encoding                = 'G723';
+  G728Encoding                = 'G728';
+  G729Encoding                = 'G729';
+  GSMEncoding                 = 'GSM';
+  H261Encoding                = 'H261';
+  H263Encoding                = 'H263';
   InterleavedT140ClockRate    = 8000;
+  JPEGEncoding                = 'JPEG';
+  L16Encoding                 = 'L16';
+  LPCEncoding                 = 'LPC';
+  MP2TEncoding                = 'MP2T';
+  MPAEncoding                 = 'MPA';
+  MPVEncoding                 = 'MPV';
+  NVEncoding                  = 'nv';
+  PCMMuLawEncoding            = 'PCMU';
+  PCMALawEncoding             = 'PCMA';
+  QCELPEncoding               = 'QCELP';
   RedundancyEncodingParameter = 'red';
   T140ClockRate               = 1000;
-  T140EncodingName            = 't140';
+  T140Encoding                = 't140';
 
   InterleavedT140MimeType = 'audio/t140';
   RedundantT140MimeType   = 'text/RED';
   T140MimeType            = 'text/t140';
 
 implementation
+
+uses
+  IdGlobal;
 
 var
   GNullPayload: TIdRTPPayload;
@@ -327,6 +361,22 @@ end;
 //******************************************************************************
 //* TIdRTPEncoding Public methods **********************************************
 
+class function TIdRTPEncoding.CreateEncoding(Value: String): TIdRTPEncoding;
+var
+  Name:       String;
+  ClockRate:  Cardinal;
+  Parameters: String;
+begin
+  Name       := Fetch(Value, '/');
+  ClockRate  := StrToInt(Fetch(Value, '/'));
+  Parameters := Value;
+
+  if (Name = T140Encoding) then
+    Result := TIdRTPT140Encoding.Create(Name, ClockRate, Parameters)
+  else
+    Result := TIdRTPEncoding.Create(Name, ClockRate, Parameters);
+end;
+
 constructor TIdRTPEncoding.Create(const Name: String;
                                   const ClockRate: Cardinal;
                                   const Parameters: String = '');
@@ -357,7 +407,7 @@ end;
 
 function TIdRTPEncoding.Clone: TIdRTPEncoding;
 begin
-  Result := TIdRTPEncoding.Create(Self);
+  Result := TIdRTPEncodingClass(Self.ClassType).Create(Self);
 end;
 
 function TIdRTPEncoding.IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
@@ -450,7 +500,7 @@ class function TIdRTPPayload.CreatePayload(const Encoding: TIdRTPEncoding): TIdR
 begin
   if Encoding.IsNull then
     Result := TIdRawPayload.Create
-  else if (Encoding.Name = T140EncodingName) then
+  else if (Encoding.Name = T140Encoding) then
     Result := TIdT140Payload.Create
   else
     Result := TIdRawPayload.Create;
@@ -562,7 +612,25 @@ end;
 procedure TIdRTPProfile.AddEncoding(const Encoding: TIdRTPEncoding;
                                     const PayloadType: TIdRTPPayloadType);
 begin
-  Self.AddEncodingAsReference(Encoding.Clone, PayloadType);
+  if Encoding.IsNull then
+    Self.RemoveEncoding(PayloadType)
+  else
+    Self.AddEncodingAsReference(Encoding.Clone, PayloadType);
+end;
+
+procedure TIdRTPProfile.Assign(Src: TPersistent);
+var
+  I:            TIdRTPPayloadType;
+  OtherProfile: TIdRTPProfile;
+begin
+  if (Src is TIdRTPProfile) then begin
+    OtherProfile := Src as TIdRTPProfile;
+
+    for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do
+      Self.AddEncoding(OtherProfile.EncodingFor(I), I);
+  end
+  else
+    inherited Assign(Src);
 end;
 
 procedure TIdRTPProfile.Clear;
@@ -649,6 +717,10 @@ end;
 
 procedure TIdRTPProfile.ReservePayloadType(const PayloadType: TIdRTPPayloadType);
 begin
+  if    (Self.Encodings[PayloadType] <> Self.NullEncoding)
+    and (Self.Encodings[PayloadType] <> Self.Reserved) then
+    Self.Encodings[PayloadType].Free;
+    
   Self.Encodings[PayloadType] := Self.Reserved;
 end;
 
@@ -681,8 +753,11 @@ end;
 
 procedure TIdRTPProfile.RemoveEncoding(const PayloadType: TIdRTPPayloadType);
 begin
-  Self.Encodings[PayloadType].Free;
-  Self.Encodings[PayloadType] := Self.NullEncoding;
+  if    (Self.Encodings[PayloadType] <> Self.NullEncoding)
+    and (Self.Encodings[PayloadType] <> Self.Reserved) then begin
+    Self.Encodings[PayloadType].Free;
+    Self.Encodings[PayloadType] := Self.NullEncoding;
+  end;
 end;
 
 //******************************************************************************
@@ -694,30 +769,30 @@ constructor TIdAudioVisualProfile.Create;
 begin
   inherited Create;
 
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('PCMU',  8000),        0);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('GSM',   8000),        3);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('G723',  8000),        4);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('DVI4',  8000),        5);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('DVI4',  16000),       6);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('LPC',   8000),        7);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('PCMA',  8000),        8);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('G722',  8000),        9);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('L16',   44100, '2'), 10);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('L16',   44100, '1'), 11);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('QCELP', 8000),       12);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('CN',    8000),       13);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('MPA',   90000),      14);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('G728',  8000),       15);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('DVI4',  11025),      16);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('DVI4',  22050),      17);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('G729',  8000),       18);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('CelB',  90000),      25);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('JPEG',  90000),      26);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('nv',    90000),      28);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('H261',  90000),      31);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('MPV',   90000),      32);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('MP2T',  90000),      33);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create('H263',  90000),      34);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(PCMMuLawEncoding, 8000),        0);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(GSMEncoding,      8000),        3);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G723Encoding,     8000),        4);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     8000),        5);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     16000),       6);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(LPCEncoding,      8000),        7);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(PCMALawEncoding,  8000),        8);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G722Encoding,     8000),        9);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(L16Encoding,      44100, '2'), 10);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(L16Encoding,      44100, '1'), 11);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(QCELPEncoding,    8000),       12);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(CNEncoding,       8000),       13);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MPAEncoding,      90000),      14);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G728Encoding,     8000),       15);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     11025),      16);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     22050),      17);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G729Encoding,     8000),       18);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(CelBEncoding,     90000),      25);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(JPEGEncoding,     90000),      26);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(NVEncoding,       90000),      28);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(H261Encoding,     90000),      31);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MPVEncoding,      90000),      32);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MP2TEncoding,     90000),      33);
+  Self.AddEncodingAsReference(TIdRTPEncoding.Create(H263Encoding,     90000),      34);
 
   Self.ReserveRange(1,  2);
   Self.ReserveRange(19, 24);
@@ -726,6 +801,21 @@ begin
 
   Self.ReserveRange(29, 30);
   Self.ReserveRange(35, 95);
+end;
+
+procedure TIdAudioVisualProfile.Assign(Src: TPersistent);
+var
+  I:            TIdRTPPayloadType;
+  OtherProfile: TIdRTPProfile;
+begin
+  if (Src is TIdRTPProfile) then begin
+    OtherProfile := Src as TIdRTPProfile;
+
+    for I := 96 to 127 do
+      Self.AddEncoding(OtherProfile.EncodingFor(I), I);
+  end
+  else
+    inherited Assign(Src);
 end;
 
 function TIdAudioVisualProfile.TransportDesc: String;

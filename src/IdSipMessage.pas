@@ -378,6 +378,8 @@ begin
 
     Self.ClearHeaders;
     Self.AddHeaders(S.Headers);
+    
+    Self.Body := S.Body;
   end
   else
     inherited Assign(Src);

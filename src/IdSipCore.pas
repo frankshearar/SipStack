@@ -22,9 +22,9 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdSipHeaders,
-  IdSipInterfacedObject, IdSipMessage, IdSipTransaction, IdSipTransport, IdUri,
-  SyncObjs;
+  Classes, Contnrs, IdSipDialog, IdException, IdRTP, IdRTPClient, IdRTPServer,
+  IdSdpParser, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
+  IdSipTransaction, IdSipTransport, IdSocketHandle, IdUri, SyncObjs;
 
 type
   TIdSipSession = class;
@@ -54,6 +54,13 @@ type
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
     procedure OnNewSession(const Session: TIdSipSession);
+  end;
+
+  // I am the protocol of things that listen for Data - for instance, RTP
+  // streams.
+  IIdSipDataListener = interface
+    ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
+    procedure OnNewData(const Data: TStream);
   end;
 
   TIdSipAbstractCore = class(TIdSipInterfacedObject,
@@ -209,16 +216,21 @@ type
   // OnEndedSession.
   TIdSipSession = class(TIdSipInterfacedObject, IIdSipTransactionListener)
   private
+    DataListeners:       TList;
+    DataListenerLock:    TCriticalSection;
     fCore:               TIdSipUserAgentCore;
     fDialog:             TIdSipDialog;
     fInvite:             TIdSipRequest;
     fIsEstablished:      Boolean;
     fIsTerminated:       Boolean;
+    fProfile:            TIdRTPProfile;
     InitialTran:         TIdSipTransaction;
     InitialTransport:    TIdSipTransport;
     IsInboundCall:       Boolean;
     OpenTransactionLock: TCriticalSection;
     OpenTransactions:    TList;
+    RTPClients:          TObjectList;
+    RTPServers:          TObjectList;
     SessionListenerLock: TCriticalSection;
     SessionListeners:    TList;
 
@@ -232,12 +244,19 @@ type
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(const Invite: TIdSipRequest);
+    procedure NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
+    procedure NotifyOfNewData(Data: TStream);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transaction: TIdSipTransaction;
                                 const Receiver: TIdSipTransport);
+    procedure OnReceiveRTP(Sender: TObject;
+                           APacket: TIdRTPPacket;
+                           ABinding: TIdSocketHandle);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure ProcessInviteBody(const Invite: TIdSipRequest);
+    procedure SetUpMediaStreams(const Payload: TIdSdpPayload);
     procedure RejectRequest(const Request: TIdSipRequest;
                             const Transaction: TIdSipTransaction);
     procedure RemoveTransaction(const Transaction: TIdSipTransaction);
@@ -255,6 +274,7 @@ type
     destructor  Destroy; override;
 
     procedure AcceptCall;
+    procedure AddDataListener(const Listener: IIdSipDataListener);
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
     procedure Call(const Dest: TIdSipToHeader);
@@ -263,10 +283,12 @@ type
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
                                const Receiver: TIdSipTransport);
+    procedure RemoveDataListener(const Listener: IIdSipDataListener);
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
-    property Dialog:       TIdSipDialog read fDialog;
-    property IsTerminated: Boolean      read fIsTerminated;
+    property Dialog:       TIdSipDialog  read fDialog;
+    property IsTerminated: Boolean       read fIsTerminated;
+    property Profile:      TIdRTPProfile read fProfile;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -948,7 +970,7 @@ begin
   if Assigned(Session) then
     Session.OnReceiveRequest(Invite, Transaction, Receiver)
   else
-  Self.AddInboundSession(Invite, Transaction, Receiver);
+    Self.AddInboundSession(Invite, Transaction, Receiver);
 end;
 
 procedure TIdSipUserAgentCore.RejectBadRequest(const Request: TIdSipRequest;
@@ -1127,6 +1149,7 @@ begin
 
   Self.CreateInternal(UA);
   Self.Invite.Assign(Invite);
+  Self.ProcessInviteBody(Self.Invite);
 
   Self.IsInboundCall    := true;
   Self.InitialTran      := InitialTransaction;
@@ -1140,10 +1163,17 @@ begin
   Self.SessionListeners.Free;
   Self.SessionListenerLock.Free;
 
+  Self.RTPServers.Free;
+  Self.RTPClients.Free;
+
   Self.OpenTransactions.Free;
   Self.OpenTransactionLock.Free;
 
+  Self.Profile.Free;
   Self.Invite.Free;
+
+  Self.DataListeners.Free;
+  Self.DataListenerLock.Free;
 
   inherited Destroy;
 end;
@@ -1191,6 +1221,16 @@ begin
     finally
       Response.Free;
     end;
+  end;
+end;
+
+procedure TIdSipSession.AddDataListener(const Listener: IIdSipDataListener);
+begin
+  Self.DataListenerLock.Acquire;
+  try
+    Self.DataListeners.Add(Pointer(Listener));
+  finally
+    Self.DataListenerLock.Release;
   end;
 end;
 
@@ -1276,6 +1316,16 @@ begin
   end;
 end;
 
+procedure TIdSipSession.RemoveDataListener(const Listener: IIdSipDataListener);
+begin
+  Self.DataListenerLock.Acquire;
+  try
+    Self.DataListeners.Remove(Pointer(Listener));
+  finally
+    Self.DataListenerLock.Release;
+  end;
+end;
+
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
   Self.SessionListenerLock.Acquire;
@@ -1315,12 +1365,19 @@ end;
 
 procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore);
 begin
+  Self.DataListenerLock := TCriticalSection.Create;
+  Self.DataListeners    := TList.Create;
+
   Self.fCore := UA;
   Self.fInvite := TIdSipRequest.Create;
+  Self.fProfile := TIdAudioVisualProfile.Create;
   Self.IsEstablished := false;
 
   Self.OpenTransactionLock := TCriticalSection.Create;
   Self.OpenTransactions    := TList.Create;
+
+  Self.RTPClients := TObjectList.Create(true);
+  Self.RTPServers := TObjectList.Create(true);
 
   Self.SessionListenerLock := TCriticalSection.Create;
   Self.SessionListeners    := TList.Create;
@@ -1369,16 +1426,27 @@ begin
 end;
 
 procedure TIdSipSession.NotifyOfModifiedSession(const Invite: TIdSipRequest);
+begin
+  Self.ApplyTo(Self.SessionListeners,
+               Self.SessionListenerLock,
+               Self.NotifyOfModifiedSessionProc);
+end;
+
+procedure TIdSipSession.NotifyOfModifiedSessionProc(ObjectOrIntf: Pointer);
+begin
+  IIdSipSessionListener(ObjectOrIntf).OnModifiedSession(Self, Invite);
+end;
+
+procedure TIdSipSession.NotifyOfNewData(Data: TStream);
 var
   I: Integer;
 begin
-  Self.SessionListenerLock.Acquire;
+  Self.DataListenerLock.Acquire;
   try
-    for I := 0 to Self.SessionListeners.Count - 1 do
-      IIdSipSessionListener(Self.SessionListeners[I]).OnModifiedSession(Self,
-                                                                        Invite);
+    for I := 0 to Self.DataListeners.Count - 1 do
+      IIdSipDataListener(Self.DataListeners[I]).OnNewData(Data);
   finally
-    Self.SessionListenerLock.Release;
+    Self.DataListenerLock.Release;
   end;
 end;
 
@@ -1430,12 +1498,94 @@ begin
   end;
 end;
 
+procedure TIdSipSession.OnReceiveRTP(Sender: TObject;
+                                     APacket: TIdRTPPacket;
+                                     ABinding: TIdSocketHandle);
+var
+  Data: TMemoryStream;
+begin
+  Data := TMemoryStream.Create;
+  try
+    APacket.Payload.PrintOn(Data);
+    Self.NotifyOfNewData(Data);
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TIdSipSession.OnTerminated(const Transaction: TIdSipTransaction);
 begin
   Self.RemoveTransaction(Transaction);
 
   if Self.IsTerminated then
-    Self.NotifyOfEndedSession;    
+    Self.NotifyOfEndedSession;
+end;
+
+procedure TIdSipSession.ProcessInviteBody(const Invite: TIdSipRequest);
+var
+  Parser: TIdSdpParser;
+  S:      TStringStream;
+  SDP:    TIdSdpPayload;
+begin
+  if (Invite.ContentType = SdpMimeType) then begin
+    S := TStringStream.Create(Invite.Body);
+    try
+      Parser := TIdSdpParser.Create;
+      try
+        Parser.Source := S;
+
+        SDP := TIdSdpPayload.Create;
+        try
+          Parser.Parse(SDP);
+
+          SDP.InitializeProfile(Self.Profile);
+          Self.SetUpMediaStreams(SDP);
+        finally
+          SDP.Free;
+        end;
+      finally
+        Parser.Free;
+      end;
+    finally
+      S.Free;
+    end;
+  end;
+end;
+
+procedure TIdSipSession.SetUpMediaStreams(const Payload: TIdSdpPayload);
+var
+  Binding:   TIdSocketHandle;
+  I:         Integer;
+  NewClient: TIdRTPClient;
+  NewServer: TIdRTPServer;
+begin
+  for I := 0 to Payload.MediaDescriptions.Count - 1 do begin
+    NewClient := TIdRTPClient.Create(nil);
+    try
+      Self.RTPClients.Add(NewClient);
+
+      NewClient.Host := Payload.Connection.Address;
+      NewClient.Port := Payload.MediaDescriptions[I].Port;
+
+      NewServer := TIdRTPServer.Create(nil);
+      try
+        Self.RTPServers.Add(NewServer);
+
+        NewServer.Profile.Assign(Self.Profile);
+        NewServer.OnRTPRead := Self.OnReceiveRTP;
+
+        Binding := NewServer.Bindings.Add;
+        Binding.Port := NewClient.Port;
+        NewServer.Active := true;
+      except
+        Self.RTPServers.Remove(NewServer);
+        FreeAndNil(NewServer);
+      end;
+    except
+      Self.RTPClients.Remove(NewClient);
+      FreeAndNil(NewClient);
+    end;
+  end;
 end;
 
 procedure TIdSipSession.RejectRequest(const Request: TIdSipRequest;

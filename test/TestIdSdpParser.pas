@@ -26,9 +26,26 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateAttribute;
     procedure TestClone;
+    procedure TestIsRTPMap;
     procedure TestPrintOnNoValue;
     procedure TestPrintOnWithValue;
+  end;
+
+  TestTIdSdpRTPMapAttribute = class(TTestCase)
+  private
+    A: TIdSdpRTPMapAttribute;
+    S: TStringStream;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestClone;
+    procedure TestGetName;
+    procedure TestIsRTPMap;
+    procedure TestSetValue;
+    procedure TestSetValueWithParameters;
   end;
 
   TestTIdSdpBandwidth = class(TTestCase)
@@ -113,6 +130,20 @@ type
   TestTIdSdpAttributes = class(TTestCase)
   private
     A: TIdSdpAttributes;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestAddUsingString;
+    procedure TestClear;
+    procedure TestContains;
+    procedure TestPrintOn;
+  end;
+
+  TestTIdSdpRTPMapAttributes = class(TTestCase)
+  private
+    A: TIdSdpRTPMapAttributes;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -306,6 +337,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestGetRtpMapAttributes;
     procedure TestInitializeOnEmptySdpPayload;
     procedure TestInitializeOnSingleMediaSdp;
@@ -340,6 +372,7 @@ begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
+  Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
   Result.AddTest(TestTIdSdpBandwidth.Suite);
   Result.AddTest(TestTIdSdpConnection.Suite);
   Result.AddTest(TestTIdSdpKey.Suite);
@@ -347,6 +380,7 @@ begin
   Result.AddTest(TestTIdSdpOrigin.Suite);
   Result.AddTest(TestTIdSdpTime.Suite);
   Result.AddTest(TestTIdSdpAttributes.Suite);
+  Result.AddTest(TestTIdSdpRTPMapAttributes.Suite);
   Result.AddTest(TestTIdSdpBandwidths.Suite);
   Result.AddTest(TestTIdSdpMediaDescriptions.Suite);
   Result.AddTest(TestTIdSdpRepeats.Suite);
@@ -582,6 +616,33 @@ end;
 
 //* TestTIdSdpAttribute Published methods **************************************
 
+procedure TestTIdSdpAttribute.TestCreateAttribute;
+var
+  Att: TIdSdpAttribute;
+begin
+  Att := TIdSdpAttribute.CreateAttribute('rtpmap:98 t140/1000');
+  try
+    CheckEquals(TIdSdpRTPMapAttribute.ClassName,
+                Att.ClassName,
+                'Incorrect class for rtpmap attribute');
+    CheckEquals('rtpmap',       Att.Name,  'rtpmap attribute name');
+    CheckEquals('98 t140/1000', Att.Value, 'rtpmap attribute value');
+  finally
+    Att.Free;
+  end;
+
+  Att := TIdSdpAttribute.CreateAttribute('98 t140/1000');
+  try
+    CheckEquals(TIdSdpAttribute.ClassName,
+                Att.ClassName,
+                'Incorrect class for "unspecial" attribute');
+    CheckEquals('98 t140/1000', Att.Name,  'attribute name');
+    CheckEquals('',             Att.Value, 'attribute value');
+  finally
+    Att.Free;
+  end;
+end;
+
 procedure TestTIdSdpAttribute.TestClone;
 var
   Clone: TIdSdpAttribute;
@@ -596,6 +657,11 @@ begin
   finally
     Clone.Free;
   end;
+end;
+
+procedure TestTIdSdpAttribute.TestIsRTPMap;
+begin
+  Check(not Self.A.IsRTPMap, 'Shouldn''t be an RTP map');
 end;
 
 procedure TestTIdSdpAttribute.TestPrintOnNoValue;
@@ -615,6 +681,90 @@ begin
   Self.A.PrintOn(Self.S);
 
   CheckEquals(#13#10'a=rtpmap:98 t140', Self.S.DataString, 'PrintOn');
+end;
+
+//******************************************************************************
+//* TestTIdSdpRTPMapAttribute                                                  *
+//******************************************************************************
+//* TestTIdSdpRTPMapAttribute Public methods ***********************************
+
+procedure TestTIdSdpRTPMapAttribute.SetUp;
+begin
+  inherited SetUp;
+
+  Self.A := TIdSdpRTPMapAttribute.Create;
+  Self.S := TStringStream.Create('');
+end;
+
+procedure TestTIdSdpRTPMapAttribute.TearDown;
+begin
+  Self.S.Free;
+  Self.A.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpRTPMapAttribute Published methods ********************************
+
+procedure TestTIdSdpRTPMapAttribute.TestClone;
+var
+  Clone: TIdSdpAttribute;
+begin
+  Self.A.Name  := 'rtpmap';
+  Self.A.Value := '98 t140/8000';
+
+  Clone := Self.A.Clone;
+  try
+    CheckEquals(Self.A.ClassName,
+                Clone.ClassName,
+                'Type');
+    CheckEquals(Self.A.Name,  Clone.Name,  'Name');
+    CheckEquals(Self.A.Value, Clone.Value, 'Value');
+  finally
+    Clone.Free;
+  end;
+end;
+
+procedure TestTIdSdpRTPMapAttribute.TestGetName;
+begin
+  CheckEquals(RTPMapAttribute, Self.A.Name, 'New rtpmap attribute');
+
+  Self.A.Name := 'foo';
+
+  CheckEquals(RTPMapAttribute, Self.A.Name, 'After trying to change its name');
+end;
+
+procedure TestTIdSdpRTPMapAttribute.TestIsRTPMap;
+begin
+  Check(Self.A.IsRTPMap, 'Should be an RTP map');
+end;
+
+procedure TestTIdSdpRTPMapAttribute.TestSetValue;
+begin
+  Self.A.Value := '98 t140/1000';
+
+  CheckEquals(TIdRTPT140Encoding.ClassName,
+              Self.A.Encoding.ClassName,
+              'Encoding');
+  CheckEquals(T140Encoding,
+              Self.A.Encoding.Name,
+              'Encoding name');
+  CheckEquals(T140ClockRate,
+              Self.A.Encoding.ClockRate,
+              'Encoding clock rate');
+  CheckEquals('',
+              Self.A.Encoding.Parameters,
+              'Encoding parameters');
+  CheckEquals(98,
+              Self.A.PayloadType,
+              'Payload type');
+end;
+
+procedure TestTIdSdpRTPMapAttribute.TestSetValueWithParameters;
+begin
+  Self.A.Value := '98 t140/1000/1';
+
+  CheckEquals('1', Self.A.Encoding.Parameters, 'Encoding parameters');
 end;
 
 //******************************************************************************
@@ -1078,6 +1228,19 @@ begin
   CheckEquals(2, Self.A.Count, 'Count after 2nd Add()');
 end;
 
+procedure TestTIdSdpAttributes.TestAddUsingString;
+begin
+  Self.A.Add('foo:bar');
+  CheckEquals(TIdSdpAttribute.ClassName,
+              Self.A[0].ClassName,
+              'Incorrect class added from ''foo:bar''');
+
+  Self.A.Add('rtpmap:98 t140/1000');
+  CheckEquals(TIdSdpRTPMapAttribute.ClassName,
+              Self.A[1].ClassName,
+              'Incorrect class added from ''rtpmap:98 t140/1000''');
+end;
+
 procedure TestTIdSdpAttributes.TestClear;
 begin
   Self.A.Add(TIdSdpAttribute.Create);
@@ -1116,6 +1279,81 @@ begin
     CheckEquals(#13#10
               + 'a=rtpmap:98 t140/1000'#13#10
               + 'a=dead:beef',
+                S.DataString,
+                'PrintOn');
+  finally
+    S.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpRTPMapAttributes                                                 *
+//******************************************************************************
+//* TestTIdSdpRTPMapAttributes Public methods **********************************
+
+procedure TestTIdSdpRTPMapAttributes.SetUp;
+begin
+  inherited SetUp;
+
+  Self.A := TIdSdpRTPMapAttributes.Create;
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TearDown;
+begin
+  Self.A.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpRTPMapAttributes Published methods *******************************
+
+procedure TestTIdSdpRTPMapAttributes.TestAddAndCount;
+begin
+  CheckEquals(0, Self.A.Count, 'Count on new list');
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  CheckEquals(1, Self.A.Count, 'Count after Add()');
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  CheckEquals(2, Self.A.Count, 'Count after 2nd Add()');
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestClear;
+begin
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+
+  Self.A.Clear;
+  CheckEquals(0, Self.A.Count, 'Count after clear');
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestContains;
+var
+  O: TIdSdpRTPMapAttribute;
+begin
+  O := TIdSdpRTPMapAttribute.Create;
+  Check(not Self.A.Contains(O), 'Contains object when it shouldn''t');
+  Self.A.Add(O);
+  Check(Self.A.Contains(O), 'Doesn''t contain object when it should');
+end;
+
+procedure TestTIdSdpRTPMapAttributes.TestPrintOn;
+var
+  S: TStringStream;
+begin
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+  Self.A.Add(TIdSdpRTPMapAttribute.Create);
+
+  Self.A[0].Name  := 'rtpmap';
+  Self.A[0].Value := '98 t140/1000';
+  Self.A[1].Name  := 'rtpmap';
+  Self.A[1].Value := '99 dead/8000';
+
+  S := TStringStream.Create('');
+  try
+    Self.A.PrintOn(S);
+    CheckEquals(#13#10
+              + 'a=rtpmap:98 t140/1000'#13#10
+              + 'a=rtpmap:99 dead/8000',
                 S.DataString,
                 'PrintOn');
   finally
@@ -3214,9 +3452,16 @@ end;
 
 //* TestTIdSdpPayload Published methods ****************************************
 
+procedure TestTIdSdpPayload.TestAsString;
+begin
+  Self.SetToMinimumPayload(Self.Payload);
+
+  CheckEquals(MinimumPayload, Self.Payload.AsString, 'AsString');
+end;
+
 procedure TestTIdSdpPayload.TestGetRtpMapAttributes;
 var
-  Attributes: TIdSdpAttributes;
+  Attributes: TIdSdpRTPMapAttributes;
   P:          TIdSdpParser;
   S:          TStringStream;
 begin
@@ -3234,7 +3479,7 @@ begin
       P.Source := S;
       P.Parse(Self.Payload);
 
-      Attributes := TIdSdpAttributes.Create;
+      Attributes := TIdSdpRTPMapAttributes.Create;
       try
         Self.Payload.GetRtpMapAttributes(Attributes);
         CheckEquals(4, Attributes.Count, 'Number of attributes');
@@ -3273,19 +3518,14 @@ end;
 
 procedure TestTIdSdpPayload.TestInitializeOnSingleMediaSdp;
 var
-  P:       TIdSdpParser;
   Profile: TIdRTPProfile;
   PT:      TIdRTPPayloadType;
-  S:       TStringStream;
 begin
-{
-  S := TStringStream.Create('v=0'#13#10
-                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's=Minimum Session Info'#13#10
-                          + 'c=IN IP4 224.2.17.12/127'#13#10
-                          + 'm=text 11000 RTP/AVP 98'#13#10
-                          + 'a=rtpmap:98 t140/1000');
-}
+  Self.Payload.MediaDescriptions.Add(TIdSdpMediaDescription.Create);
+  Self.Payload.MediaDescriptions[0].Attributes.Add(TIdSdpRTPMapAttribute.Create);
+  Self.Payload.MediaDescriptions[0].Attributes[0].Name := RTPMapAttribute;
+  Self.Payload.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
+
   Profile := TIdRTPProfile.Create;
   try
     Self.Payload.InitializeProfile(Profile);

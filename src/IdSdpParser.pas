@@ -25,22 +25,37 @@ type
     fValue: String;
 
   protected
+    function  GetName: String; virtual;
     procedure SetValue(const Value: String); virtual;
   public
+    class function CreateAttribute(Value: String): TIdSdpAttribute;
+
+    constructor Create; virtual;
+
     function  Clone: TIdSdpAttribute;
+    function  IsRTPMap: Boolean; virtual;
     procedure PrintOn(Dest: TStream); override;
 
-    property Name:  String read fName write fName;
-    property Value: String read fValue write SetValue;
+    property Name:  String read GetName write fName;
+    property Value: String read fValue  write SetValue;
   end;
+
+  TIdSdpAttributeClass = class of TIdSdpAttribute;
 
   TIdSdpRTPMapAttribute = class(TIdSdpAttribute)
   private
     fPayloadType: TIdRTPPayloadType;
     fEncoding:    TIdRTPEncoding;
+
+    procedure SetEncoding(const Value: TIdRTPEncoding);
+  protected
+    function  GetName: String; override;
+    procedure SetValue(const Value: String); override;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
+
+    function IsRTPMap: Boolean; override;
 
     property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
     property Encoding:    TIdRTPEncoding    read fEncoding;
@@ -207,9 +222,19 @@ type
   private
     function GetItems(Index: Integer): TIdSdpAttribute;
   public
-    procedure Add(Att: TIdSdpAttribute);
+    procedure Add(Att: TIdSdpAttribute); overload;
+    procedure Add(NameAndValue: String); overload;
 
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
+  end;
+
+  TIdSdpRTPMapAttributes = class(TIdSdpList)
+  private
+    function GetItems(Index: Integer): TIdSdpRTPMapAttribute;
+  public
+    procedure Add(Att: TIdSdpRTPMapAttribute);
+
+    property Items[Index: Integer]: TIdSdpRTPMapAttribute read GetItems; default;
   end;
 
   TIdSdpBandwidths = class(TIdSdpList)
@@ -293,7 +318,8 @@ type
     destructor Destroy; override;
 
     function  AllDescriptionsHaveConnections: Boolean;
-    procedure GetRtpMapAttributes(Atts: TIdSdpAttributes);
+    function  AsString: String;
+    procedure GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
     function  HasConnection: Boolean;
     function  HasKey: Boolean;
     procedure InitializeProfile(Profile: TIdRTPProfile);
@@ -382,6 +408,10 @@ const
   MediaHeaderOrder   = 'micbka';
   RTPMapAttribute    = 'rtpmap';
   TimeTypes          = ['d', 'h', 'm', 's'];
+
+  // MIME types etc
+const
+  SdpMimeType = 'application/sdp';  
 
 // for IdAssignedNumbers
 const
@@ -559,9 +589,35 @@ end;
 //******************************************************************************
 //* TIdSdpAttribute Public methods *********************************************
 
+class function TIdSdpAttribute.CreateAttribute(Value: String): TIdSdpAttribute;
+var
+  Name: String;
+begin
+  Name := Fetch(Value, ':');
+
+  if (Name = RTPMapAttribute) then
+    Result := TIdSdpRTPMapAttribute.Create
+  else
+    Result := TIdSdpAttribute.Create;
+
+  if (Value = '') then begin
+    Result.Name  := Name;
+    Result.Value := '';
+  end
+  else begin
+    Result.Name  := Name;
+    Result.Value := Value;
+  end;
+end;
+
+constructor TIdSdpAttribute.Create;
+begin
+  inherited Create;
+end;
+
 function TIdSdpAttribute.Clone: TIdSdpAttribute;
 begin
-  Result := TIdSdpAttribute.Create;
+  Result := TIdSdpAttributeClass(Self.ClassType).Create;
   try
     Result.Name  := Self.Name;
     Result.Value := Self.Value;
@@ -570,6 +626,11 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSdpAttribute.IsRTPMap: Boolean;
+begin
+  Result := false;
 end;
 
 procedure TIdSdpAttribute.PrintOn(Dest: TStream);
@@ -586,6 +647,11 @@ end;
 
 //* TIdSdpAttribute Private methods ********************************************
 
+function TIdSdpAttribute.GetName: String;
+begin
+  Result := fName;
+end;
+
 procedure TIdSdpAttribute.SetValue(const Value: String);
 begin
   fValue := Value;
@@ -598,6 +664,8 @@ end;
 
 constructor TIdSdpRTPMapAttribute.Create;
 begin
+  inherited Create;
+
   Self.fEncoding := TIdRTPNullEncoding.Create;
 end;
 
@@ -606,6 +674,39 @@ begin
   Self.Encoding.Free;
 
   inherited Destroy;
+end;
+
+function TIdSdpRTPMapAttribute.IsRTPMap: Boolean;
+begin
+  Result := true;
+end;
+
+//* TIdSdpRTPMapAttribute Protected methods ************************************
+
+function TIdSdpRTPMapAttribute.GetName: String;
+begin
+  Result := RTPMapAttribute;
+end;
+
+procedure TIdSdpRTPMapAttribute.SetValue(const Value: String);
+var
+  EncodingDesc: String;
+  PayloadType:  String;
+begin
+  inherited SetValue(Value);
+
+  EncodingDesc := Value;
+  PayloadType := Fetch(EncodingDesc);
+  Self.PayloadType := StrToInt(PayloadType);
+  Self.SetEncoding(TIdRTPEncoding.CreateEncoding(EncodingDesc));
+end;
+
+//* TIdSdpRTPMapAttribute Private methods **************************************
+
+procedure TIdSdpRTPMapAttribute.SetEncoding(const Value: TIdRTPEncoding);
+begin
+  Self.Encoding.Free;
+  Self.fEncoding := Value;
 end;
 
 //******************************************************************************
@@ -938,11 +1039,33 @@ begin
   Self.List.Add(Att);
 end;
 
+procedure TIdSdpAttributes.Add(NameAndValue: String);
+begin
+  Self.Add(TIdSdpAttribute.CreateAttribute(NameAndValue));
+end;
+
 //* TIdSdpAttributes Private methods *******************************************
 
 function TIdSdpAttributes.GetItems(Index: Integer): TIdSdpAttribute;
 begin
   Result := Self.List[Index] as TIdSdpAttribute;
+end;
+
+//******************************************************************************
+//* TIdSdpRTPMapAttributes                                                     *
+//******************************************************************************
+//* TIdSdpRTPMapAttributes Public methods **************************************
+
+procedure TIdSdpRTPMapAttributes.Add(Att: TIdSdpRTPMapAttribute);
+begin
+  Self.List.Add(Att);
+end;
+
+//* TIdSdpRTPMapAttributes Private methods *************************************
+
+function TIdSdpRTPMapAttributes.GetItems(Index: Integer): TIdSdpRTPMapAttribute;
+begin
+  Result := Self.List[Index] as TIdSdpRTPMapAttribute;
 end;
 
 //******************************************************************************
@@ -1066,19 +1189,32 @@ begin
   Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
 end;
 
-procedure TIdSdpPayload.GetRtpMapAttributes(Atts: TIdSdpAttributes);
+function TIdSdpPayload.AsString: String;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.PrintOn(S);
+    Result := S.DataString;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TIdSdpPayload.GetRtpMapAttributes(Atts: TIdSdpRTPMapAttributes);
 var
   I: Integer;
   J: Integer;
 begin
   for I := 0 to Self.Attributes.Count - 1 do
-    if (Self.Attributes[I].Name = RTPMapAttribute) then
-      Atts.Add(Self.Attributes[I].Clone);
+    if (Self.Attributes[I].IsRTPMap) then
+      Atts.Add(Self.Attributes[I].Clone as TIdSdpRTPMapAttribute);
 
   for I := 0 to Self.MediaDescriptions.Count - 1 do
     for J := 0 to Self.MediaDescriptions[I].Attributes.Count - 1 do
-      if (Self.MediaDescriptions[I].Attributes[J].Name = RTPMapAttribute) then
-        Atts.Add(Self.MediaDescriptions[I].Attributes[J].Clone);
+      if (Self.MediaDescriptions[I].Attributes[J].IsRTPMap) then
+        Atts.Add(Self.MediaDescriptions[I].Attributes[J].Clone as TIdSdpRTPMapAttribute);
 end;
 
 function TIdSdpPayload.HasConnection: Boolean;
@@ -1094,13 +1230,15 @@ end;
 procedure TIdSdpPayload.InitializeProfile(Profile: TIdRTPProfile);
 var
   I:       Integer;
-  RTPMaps: TIdSdpAttributes;
+  RTPMaps: TIdSdpRTPMapAttributes;
 begin
-  RTPMaps := TIdSdpAttributes.Create;
+  RTPMaps := TIdSdpRTPMapAttributes.Create;
   try
     Self.GetRtpMapAttributes(RTPMaps);
 
     for I := 0 to RTPMaps.Count - 1 do begin
+      Profile.AddEncoding(RTPMaps[I].Encoding,
+                          RTPMaps[I].PayloadType);
     end;
   finally
     RTPMaps.Free;
@@ -1530,17 +1668,8 @@ begin
   Self.ParseHeader(Name, Value);
   OriginalValue := Value;
 
-  Att := TIdSdpAttribute.Create;
+  Att := TIdSdpAttribute.CreateAttribute(Value);
   try
-    if (IndyPos(':', Value) > 0) then begin
-      Att.Name := Fetch(Value, ':');
-      Att.Value := Value;
-    end
-    else begin
-      Att.Name := Value;
-      Att.Value := '';
-    end;
-
     if not Self.IsAlphaNumeric(Att.Name) then
       raise EParser.Create(Format(MalformedToken, [RSSDPAttributeName, OriginalValue]));
 
@@ -1796,7 +1925,7 @@ begin
   end;
 
   Self.LastSessionHeader := RSSDPMediaDescriptionName;
-  LastMediaHeader := RSSDPMediaDescriptionName;
+  Self.LastMediaHeader   := RSSDPMediaDescriptionName;
 end;
 
 procedure TIdSdpParser.ParseMediaOptionalHeaders(const MediaDescription: TIdSdpMediaDescription);

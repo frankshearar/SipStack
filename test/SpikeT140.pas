@@ -27,14 +27,14 @@ type
     PacketCounter: Cardinal;
     RecvText:      String;
     Server:        TIdUDPServer;
-    T140Encoding:  TIdRTPEncoding;
+    T140:          TIdRTPEncoding;
 
     procedure CountUDP(Sender: TObject;
                        Data: TStream;
                        Binding: TIdSocketHandle);
-    procedure ReadRTP(Sender: TObject;
-                      APacket: TIdRTPPacket;
-                      ABinding: TIdSocketHandle);
+//    procedure ReadRTP(Sender: TObject;
+//                      APacket: TIdRTPPacket;
+//                      ABinding: TIdSocketHandle);
     procedure Reset;
     procedure SendData(Data: TStream);
   public
@@ -61,7 +61,7 @@ constructor TIdSpikeT140.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.T140Encoding := TIdRTPEncoding.Create(T140EncodingName, T140ClockRate);
+  Self.T140 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate);
 
   Self.Server := TIdUDPServer.Create(nil);
   Self.Server.DefaultPort   := 5004;
@@ -88,7 +88,7 @@ begin
   Self.Server.Active := false;
   Self.Client.Free;
   Self.Server.Free;
-  Self.T140Encoding.Free;
+  Self.T140.Free;
 
   inherited Destroy;
 end;
@@ -119,19 +119,19 @@ begin
 //    Self.Lock.Release;
 //  end;
 end;
-
+{
 procedure TIdSpikeT140.ReadRTP(Sender: TObject;
                                APacket: TIdRTPPacket;
                                ABinding: TIdSocketHandle);
 begin
-//  Self.Lock.Acquire;
-//  try
-//    Self.RecvText := Self.RecvText + TIdRawPayload(APacket.Payload).Data;
-//  finally
-//    Self.Lock.Release;
-//  end;
+  Self.Lock.Acquire;
+  try
+    Self.RecvText := Self.RecvText + TIdRawPayload(APacket.Payload).Data;
+  finally
+    Self.Lock.Release;
+  end;
 end;
-
+}
 procedure TIdSpikeT140.Reset;
 begin
   Self.Lock.Acquire;

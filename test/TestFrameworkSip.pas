@@ -3,7 +3,7 @@ unit TestFrameworkSip;
 interface
 
 uses
-  IdURI, IdSipInterfacedObject, IdRTP, IdSipMessage, IdSipCore,
+  Classes, IdURI, IdSipInterfacedObject, IdRTP, IdSipMessage, IdSipCore,
   IdSipTransaction, IdSipTransport, TestFrameworkEx;
 
 type
@@ -14,6 +14,18 @@ type
 
   TTestCaseSip = class(TThreadingTestCase)
     procedure CheckEquals(Expected, Received: TIdURI; Message: String); overload;
+  end;
+
+  TIdSipTestDataListener = class(TIdSipInterfacedObject,
+                                    IIdSipDataListener)
+  private
+    fNewData: Boolean;
+  public
+    constructor Create;
+
+    procedure OnNewData(const Data: TStream);
+
+    property NewData: Boolean read fNewData;
   end;
 
   TIdSipTestMessageListener = class(TIdSipInterfacedObject, IIdSipMessageListener)
@@ -159,6 +171,23 @@ end;
 procedure TTestCaseSip.CheckEquals(Expected, Received: TIdURI; Message: String);
 begin
   CheckEquals(Expected.GetFullURI, Received.GetFullURI, Message);
+end;
+
+//******************************************************************************
+//* TIdSipTestDataListener                                                     *
+//******************************************************************************
+//* TIdSipTestDataListener Public methods **************************************
+
+constructor TIdSipTestDataListener.Create;
+begin
+  inherited Create;
+
+  Self.fNewData := false;
+end;
+
+procedure TIdSipTestDataListener.OnNewData(const Data: TStream);
+begin
+  Self.fNewData := true;
 end;
 
 //******************************************************************************

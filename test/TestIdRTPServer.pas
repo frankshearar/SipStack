@@ -209,7 +209,7 @@ end;
 
 procedure TestT140.SetUp;
 var
-  T140Encoding: TIdRTPEncoding;
+  T140: TIdRTPEncoding;
 begin
   inherited SetUp;
 
@@ -219,16 +219,16 @@ begin
   Self.Server := TIdRTPServer.Create(nil);
   Self.Server.DefaultPort := 5004;
 
-  T140Encoding := TIdRTPEncoding.Create(T140EncodingName, T140ClockRate);
+  T140 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate);
   try
-    Self.Server.Profile.AddEncoding(T140Encoding, Self.T140PT);
+    Self.Server.Profile.AddEncoding(T140, Self.T140PT);
   finally
-    T140Encoding.Free;
+    T140.Free;
   end;
 
   Self.Client := TIdRTPClient.Create(nil);
-  Self.Client.Host := '127.0.0.1';
-  Self.Client.Port := Self.Server.DefaultPort;
+  Self.Client.Host    := '127.0.0.1';
+  Self.Client.Port    := Self.Server.DefaultPort;
   Self.Client.Profile := Self.Server.Profile;
 end;
 

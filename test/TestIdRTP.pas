@@ -31,9 +31,20 @@ type
   published
     procedure TestAsString;
     procedure TestCreate;
+    procedure TestCreateEncoding;
     procedure TestCreateFromEncoding;
     procedure TestClone;
     procedure TestIsNull;
+  end;
+
+  TestTIdRTPT140Encoding = class(TTestCase)
+  private
+    Encoding: TIdRTPT140Encoding;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestClone;
   end;
 
   TestTIdRTPNullEncoding = class(TTestCase)
@@ -72,6 +83,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddEncoding;
+    procedure TestAssign;
     procedure TestClear;
     procedure TestCount;
     procedure TestEncodingFor;
@@ -92,6 +104,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAssign;
     procedure TestDefinedPayloads;
     procedure TestDynamicPayloadTypes;
     procedure TestReservedAndUnassignedPayloadTypes;
@@ -356,6 +369,23 @@ begin
   CheckEquals('1',    Self.Encoding.Parameters, 'Parameters');
 end;
 
+procedure TestTIdRTPEncoding.TestCreateEncoding;
+var
+  Enc: TIdRTPEncoding;
+begin
+  Enc := TIdRTPEncoding.CreateEncoding('t140/1000/1');
+  try
+    CheckEquals(TIdRTPT140Encoding.ClassName,
+                Enc.ClassName,
+                'Encoding type');
+    CheckEquals(T140Encoding,  Enc.Name,       'Name');
+    CheckEquals(T140ClockRate, Enc.ClockRate,  'Clock rate');
+    CheckEquals('1',           Enc.Parameters, 'Parameters');
+  finally
+    Enc.Free;
+  end;
+end;
+
 procedure TestTIdRTPEncoding.TestCreateFromEncoding;
 var
   Enc: TIdRTPEncoding;
@@ -385,6 +415,49 @@ end;
 procedure TestTIdRTPEncoding.TestIsNull;
 begin
   Check(not Self.Encoding.IsNull, 'non-Null Encoding marked as null');
+end;
+
+//******************************************************************************
+//* TestTIdRTPT140Encoding                                                     *
+//******************************************************************************
+//* TestTIdRTPT140Encoding Public methods **************************************
+//* TestTIdRTPT140Encoding Published methods ***********************************
+
+procedure TestTIdRTPT140Encoding.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Encoding := TIdRTPT140Encoding.Create(T140Encoding, T140ClockRate, '');
+end;
+
+procedure TestTIdRTPT140Encoding.TearDown;
+begin
+  Self.Encoding.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdRTPT140Encoding.TestClone;
+var
+  Enc: TIdRTPEncoding;
+begin
+  Enc := Self.Encoding.Clone;
+  try
+    CheckEquals(TIdRTPT140Encoding.ClassName,
+                Enc.ClassName,
+                'Type');
+    CheckEquals(Self.Encoding.Name,
+                Enc.Name,
+                'Name');
+    CheckEquals(Self.Encoding.ClockRate,
+                Enc.ClockRate,
+                'Clock Rate');
+    CheckEquals(Self.Encoding.Parameters,
+                Enc.Parameters,
+                'Parameters');
+  finally
+    Enc.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -558,6 +631,57 @@ begin
   CheckEquals(2, Self.Profile.Count, 'New, different, MIME type not added');
 end;
 
+procedure TestTIdRTPProfile.TestAssign;
+var
+  Dvi4Vid:    TIdRTPEncoding;
+  GSM:        TIdRTPEncoding;
+  I:          Integer;
+  NewProfile: TIdRTPProfile;
+begin
+  NewProfile := TIdRTPProfile.Create;
+  try
+    GSM := TIdRTPEncoding.Create(GSMEncoding, 8000);
+    try
+      Dvi4Vid := TIdRTPEncoding.Create(DVI4Encoding, 22050);
+      try
+        NewProfile.AddEncoding(GSM, 5);
+        NewProfile.AddEncoding(Dvi4Vid, 10);
+
+        Self.Profile.Assign(NewProfile);
+
+        CheckEquals(NewProfile.Count,
+                    Self.Profile.Count,
+                    'Encoding count');
+
+        for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
+          CheckEquals(NewProfile.EncodingFor(I).ClassName,
+                      Self.Profile.EncodingFor(I).ClassName,
+                      IntToStr(I) + '''s type');
+
+          CheckEquals(NewProfile.EncodingFor(I).Name,
+                      Self.Profile.EncodingFor(I).Name,
+                      IntToStr(I) + '''s name');
+
+          CheckEquals(NewProfile.EncodingFor(I).ClockRate,
+                      Self.Profile.EncodingFor(I).ClockRate,
+                      IntToStr(I) + '''s clock rate');
+
+          CheckEquals(NewProfile.EncodingFor(I).Parameters,
+                      Self.Profile.EncodingFor(I).Parameters,
+                      IntToStr(I) + '''s parameters');
+        end;
+
+      finally
+        Dvi4Vid.Free;
+      end;
+    finally
+      GSM.Free;
+    end;
+  finally
+    NewProfile.Free;
+  end;
+end;
+
 procedure TestTIdRTPProfile.TestClear;
 begin
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
@@ -721,6 +845,55 @@ begin
 end;
 
 //* TIdAudioVisualProfile Published methods ************************************
+
+procedure TestTIdAudioVisualProfile.TestAssign;
+var
+  Dvi4Vid:       TIdRTPEncoding;
+  GSM:           TIdRTPEncoding;
+  NewProfile:    TIdRTPProfile;
+  VirginProfile: TIdAudioVisualProfile;
+begin
+  VirginProfile := TIdAudioVisualProfile.Create;
+  try
+    NewProfile := TIdRTPProfile.Create;
+    try
+      GSM := TIdRTPEncoding.Create(GSMEncoding, 44100);
+      try
+        Dvi4Vid := TIdRTPEncoding.Create(DVI4Encoding, 666);
+        try
+          NewProfile.AddEncoding(GSM, 0);
+          NewProfile.AddEncoding(Dvi4Vid, 98);
+
+          Self.Profile.Assign(NewProfile);
+
+          CheckEquals(VirginProfile.EncodingFor(0).ClassName,
+                      Self.Profile.EncodingFor(0).ClassName,
+                      '0''s type');
+
+          CheckEquals(VirginProfile.EncodingFor(0).AsString,
+                      Self.Profile.EncodingFor(0).AsString,
+                      '0''s details');
+
+          CheckEquals(NewProfile.EncodingFor(98).ClassName,
+                      Self.Profile.EncodingFor(98).ClassName,
+                      '98''s type');
+
+          CheckEquals(NewProfile.EncodingFor(98).AsString,
+                      Self.Profile.EncodingFor(98).AsString,
+                      '98''s details');
+        finally
+          Dvi4Vid.Free;
+        end;
+      finally
+        GSM.Free;
+      end;
+    finally
+      NewProfile.Free;
+    end;
+  finally
+    VirginProfile.Free;
+  end;
+end;
 
 procedure TestTIdAudioVisualProfile.TestDefinedPayloads;
 begin
