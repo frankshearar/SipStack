@@ -7,7 +7,6 @@ uses
   audioclasses in 'src\audioclasses.pas',
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
-  IdRTPClient in 'src\IdRTPClient.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
   IdRTPTimerQueue in 'src\IdRTPTimerQueue.pas',
   IdSdp in 'src\IdSdp.pas',

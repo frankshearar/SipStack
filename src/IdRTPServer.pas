@@ -31,12 +31,18 @@ type
   end;
 
 
-  TIdRTPServer = class;
+  TIdAbstractRTPPeer = class(TIdUDPServer)
+  public
+    procedure SendPacket(Host: String;
+                         Port: Cardinal;
+                         Packet: TIdRTPBasePacket); virtual; abstract;
+  end;
+
 
   // I provide a self-contained SSRC space.
   TIdRTPSession = class(TObject)
   private
-    Agent:       TIdRTPServer;
+    Agent:       TIdAbstractRTPPeer;
     CurrentTime: Cardinal;
     List:        TObjectList;
     NoDataSent:  Boolean;
@@ -45,7 +51,8 @@ type
 
     function Find(SSRC: Cardinal): TIdRTPMember;
   public
-    constructor Create(Agent: TIdRTPServer; Profile: TIdRTPProfile);
+    constructor Create(Agent: TIdAbstractRTPPeer;
+                       Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
     function  Add(SSRC: Cardinal): TIdRTPMember;
@@ -70,7 +77,7 @@ type
   // As an implementation detail, the SSRC with value zero has a special
   // meaning. It represents the null SSRC. Equivalently, if CurrentSSRC has a
   // value of zero then I have not joined an RTP session.
-  TIdRTPServer = class(TIdUDPServer)
+  TIdRTPServer = class(TIdAbstractRTPPeer)
   private
     CurrentSSRC:  Cardinal;
     FControlPort: Cardinal;
@@ -81,9 +88,6 @@ type
 
     procedure DoOnRTCPRead(APacket: TIdRTCPPacket; ABinding: TIdSocketHandle);
     procedure DoOnRTPRead(APacket: TIdRTPPacket; ABinding: TIdSocketHandle);
-    procedure SendPacket(Host: String;
-                         Port: Cardinal;
-                         Packet: TIdRTPBasePacket);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
   public
@@ -95,6 +99,9 @@ type
     procedure LeaveSession;
     function  NewSSRC: Cardinal;
     procedure SendData(Data: TIdRTPPayload);
+    procedure SendPacket(Host: String;
+                         Port: Cardinal;
+                         Packet: TIdRTPBasePacket); override;
     procedure SendSenderReport;
 
     property Profile: TIdRTPProfile read FProfile;
@@ -134,7 +141,8 @@ end;
 //******************************************************************************
 //* TIdRTPSession Public methods ***********************************************
 
-constructor TIdRTPSession.Create(Agent: TIdRTPServer; Profile: TIdRTPProfile);
+constructor TIdRTPSession.Create(Agent: TIdAbstractRTPPeer;
+                                 Profile: TIdRTPProfile);
 begin
   inherited Create;
 
@@ -383,6 +391,29 @@ begin
   end;
 end;
 
+procedure TIdRTPServer.SendPacket(Host: String;
+                                  Port: Cardinal;
+                                  Packet: TIdRTPBasePacket);
+var
+  S: TStringStream;
+begin
+  if (Self.CurrentSSRC = ZeroSSRC) then begin
+    Self.CurrentSSRC  := Self.NewSSRC;
+    Self.Session.Add(Self.CurrentSSRC);
+  end;
+
+//  Self.CurrentSeqNo := AddModulo(Self.CurrentSeqNo, 1, High(Self.CurrentSeqNo));
+  Packet.SyncSrcID := Self.CurrentSSRC;
+
+  S := TStringStream.Create('');
+  try
+    Packet.PrintOn(S);
+    Self.Send(Host, Port, S.DataString);
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TIdRTPServer.SendSenderReport;
 var
   SR: TIdRTCPSenderReportPacket;
@@ -444,29 +475,6 @@ procedure TIdRTPServer.DoOnRTPRead(APacket: TIdRTPPacket;
 begin
   if Assigned(Self.OnRTPRead) then
     Self.OnRTPRead(Self, APacket, ABinding);
-end;
-
-procedure TIdRTPServer.SendPacket(Host: String;
-                                  Port: Cardinal;
-                                  Packet: TIdRTPBasePacket);
-var
-  S: TStringStream;
-begin
-  if (Self.CurrentSSRC = ZeroSSRC) then begin
-    Self.CurrentSSRC  := Self.NewSSRC;
-    Self.Session.Add(Self.CurrentSSRC);
-  end;
-
-//  Self.CurrentSeqNo := AddModulo(Self.CurrentSeqNo, 1, High(Self.CurrentSeqNo));
-  Packet.SyncSrcID := Self.CurrentSSRC;
-
-  S := TStringStream.Create('');
-  try
-    Packet.PrintOn(S);
-    Self.Send(Host, Port, S.DataString);
-  finally
-    S.Free;
-  end;
 end;
 
 end.
