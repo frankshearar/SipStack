@@ -503,7 +503,8 @@ type
   // You can give me a remote session description too, which allows you to
   // use me to send (RTP) data to the remote peer.
   TIdSdpPayloadProcessor = class(TIdInterfacedObject,
-                                 IIdRTPListener)
+                                 IIdRTPListener,
+                                 IIdRTPDataListener)
   private
     DataListenerLock:          TCriticalSection;
     DataListeners:             TList;
@@ -528,6 +529,8 @@ type
     function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TIdRTPPayload;
                                  Binding: TIdSocketHandle);
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdSocketHandle);
     procedure OnRTP(Packet: TIdRTPPacket;
@@ -3047,7 +3050,7 @@ begin
   fRemoteDescription := TIdSdpMediaDescription.Create;
   fRemoteDescription.Assign(RemoteDescription);
 
-  fPeer              := Pointer(Peer);
+  fPeer := Pointer(Peer);
 
   Self.Peer.AddListener(Self);
 end;
@@ -3313,6 +3316,7 @@ begin
                                         Result.Bindings[Result.Bindings.Count - 2].Port);
 
     Result.DefaultPort := Result.Bindings[0].Port;
+    Result.Session.AddListener(Self);
   except
     if (List.IndexOf(Result) <> -1) then
       List.Remove(Result)
@@ -3350,6 +3354,12 @@ begin
   finally
     Self.DataListenerLock.Release;
   end;
+end;
+
+procedure TIdSdpPayloadProcessor.OnNewData(Data: TIdRTPPayload;
+                                           Binding: TIdSocketHandle);
+begin
+  Self.NotifyOfNewRTPData(Data, Binding);
 end;
 
 procedure TIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
@@ -3435,6 +3445,7 @@ begin
     try
       NewPeer.Profile := Self.Profile;
       NewPeer.AddListener(Self);
+      Self.Filters.Add(NewPeer);
     except
       if (Self.Filters.IndexOf(NewPeer) <> -1) then
         Self.Filters.Remove(NewPeer)

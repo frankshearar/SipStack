@@ -136,6 +136,17 @@ type
     property UserParameter: String        read GetUserParameter write SetUserParameter;
   end;
 
+  // I represent a header in a SIP message.
+  // Say I hold Contact information:
+  //   '"Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'.
+  // The Value property will return everything except the parameters, i.e.,
+  //   '"Count Zero" <sip:countzero@jacksbar.com;paranoid>'
+  // ParamsAsString returns just my parameters, that is,
+  //   ';very'.
+  // FullValue will return absolutely everything, that is,
+  //   '"Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
+  // Lastly, AsString returns what will go down the wire, so to speak:
+  //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   TIdSipHeader = class(TPersistent)
   private
     fName:   String;
@@ -192,6 +203,8 @@ type
     property Address: TIdSipUri read fAddress write SetAddress;
   end;
 
+  TIdSipToHeader = class;
+
   TIdSipAddressHeader = class(TIdSipUriHeader)
   private
     fDisplayName: String;
@@ -200,6 +213,7 @@ type
     procedure SetValue(const Value: String); override;
   public
     function AsAddressOfRecord: String;
+    function AsToHeader: TIdSipToHeader;
     function HasSipsUri: Boolean;
 
     property DisplayName: String read fDisplayName write fDisplayName;
@@ -2149,6 +2163,12 @@ end;
 function TIdSipAddressHeader.AsAddressOfRecord: String;
 begin
   Result := Self.Address.CanonicaliseAsAddressOfRecord;
+end;
+
+function TIdSipAddressHeader.AsToHeader: TIdSipToHeader;
+begin
+  Result := TIdSipToHeader.Create;
+  Result.Value := Self.FullValue
 end;
 
 function TIdSipAddressHeader.HasSipsUri: Boolean;

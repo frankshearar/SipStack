@@ -60,6 +60,7 @@ type
   published
     procedure TestAsAddressOfRecord;
     procedure TestAsString;
+    procedure TestAsToHeader;
     procedure TestHasSipsUri;
     procedure TestSetAddress;
     procedure TestValue; override;
@@ -985,6 +986,24 @@ begin
   CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
+end;
+
+procedure TestTIdSipAddressHeader.TestAsToHeader;
+var
+  ToHeader: TIdSipToHeader;
+begin
+  Self.A.Address.Uri    := 'sip:countzero@jacks-bar.com;paranoid';
+  Self.A.DisplayName    := 'Count Zero';
+  Self.A.Params['very'] := '';
+
+  ToHeader := Self.A.AsToHeader;
+  try
+    Check(Self.A.Address.Equals(ToHeader.Address), 'Address');
+    CheckEquals(Self.A.DisplayName, ToHeader.DisplayName, 'Display name');
+    CheckEquals(Self.A.ParamsAsString, ToHeader.ParamsAsString, 'Params');
+  finally
+    ToHeader.Free;
+  end;
 end;
 
 procedure TestTIdSipAddressHeader.TestHasSipsUri;

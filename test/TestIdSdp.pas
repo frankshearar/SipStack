@@ -4991,8 +4991,8 @@ end;
 
 procedure TestTIdFilteredRTPPeer.Send(RTP: TIdRTPPacket);
 begin
-  (Self.Server as IIdAbstractRTPPeer).NotifyListenersOfRTP(RTP,
-                                                           Self.Binding);
+  Self.Server.NotifyListenersOfRTP(RTP,
+                                   Self.Binding);
 end;
 
 procedure TestTIdFilteredRTPPeer.SendNormalData;
