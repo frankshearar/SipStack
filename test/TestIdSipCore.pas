@@ -222,6 +222,7 @@ type
     procedure TestByeWithAuthentication;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
+    procedure TestConcurrentCalls;
     procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateInvite;
@@ -2534,6 +2535,119 @@ begin
         'UA not notified of remote CANCEL');
   Check(Self.Core.SessionCount < SessCount,
         'UA didn''t remove cancelled session');
+end;
+
+procedure TestTIdSipUserAgent.TestConcurrentCalls;
+var
+  AckOne:    TIdSipRequest;
+  AckTwo:    TIdSipRequest;
+  ByeOne:    TIdSipRequest;
+  ByeTwo:    TIdSipRequest;
+  DialogOne: TIdSipDialog;
+  DialogTwo: TIdSipDialog;
+  InviteOne: TIdSipRequest;
+  InviteTwo: TIdSipRequest;
+begin
+  // <---    INVITE #1   ---
+  //  ---     100 #1     --->
+  //  ---     180 #1     --->
+  //  ---     200 #1     --->
+  // <---     ACK #1     ---
+  //  ---   200 #1 (ACK) --->
+  // <---    INVITE #2   ---
+  //  ---     100 #2     --->
+  //  ---     180 #2     --->
+  //  ---     200 #2     --->
+  // <---     ACK #2     ---
+  //  ---   200 #2 (ACK) --->
+  // <---     BYE #1     ---
+  //  ---   200 #1 (BYE) --->
+  // <---     BYE #2     ---
+  //  ---   200 #2 (BYE) --->
+
+  Self.Dispatcher.Transport.WriteLog := true;
+
+  InviteOne := TIdSipTestResources.CreateBasicRequest;
+  try
+    InviteTwo := TIdSipTestResources.CreateBasicRequest;
+    try
+      InviteOne.CallID         := '1.' + InviteOne.CallID;
+      InviteOne.From.Tag       := '1';
+      InviteOne.LastHop.Branch := InviteOne.LastHop.Branch + '1';
+      InviteTwo.CallID         := '2.' + InviteTwo.CallID;
+      InviteTwo.From.Tag       := '2';
+      InviteTwo.LastHop.Branch := InviteTwo.LastHop.Branch + '2';
+
+      Self.ReceiveRequest(InviteOne);
+      Check(Self.OnInboundCallFired, 'OnInboundCall didn''t fire for 1st INVITE');
+      Self.Session.AcceptCall('', '');
+
+      // DialogOne represents the remote agent's dialog for the 1st INVITE.
+      DialogOne := TIdSipDialog.CreateInboundDialog(InviteOne,
+                                                    Self.LastSentResponse,
+                                                    InviteOne.RequestUri.IsSecure);
+      try
+        AckOne := DialogOne.CreateAck;
+        try
+          Self.ReceiveRequest(AckOne);
+        finally
+          AckOne.Free;
+        end;
+
+        Self.OnInboundCallFired := false;
+        Self.ReceiveRequest(InviteTwo);
+        Check(Self.OnInboundCallFired, 'OnInboundCall didn''t fire for 2nd INVITE');
+        Self.Session.AcceptCall('', '');
+
+        // DialogTwo represents the remote agent's dialog for the 2nd INVITE.
+        DialogTwo := TIdSipDialog.CreateInboundDialog(InviteTwo,
+                                                      Self.LastSentResponse,
+                                                      InviteTwo.RequestUri.IsSecure);
+        try
+          AckTwo := DialogTwo.CreateAck;
+          try
+            Self.ReceiveRequest(AckTwo);
+          finally
+            AckTwo.Free;
+          end;
+
+          Self.MarkSentResponseCount;
+          ByeOne := DialogOne.CreateRequest;
+          try
+            Self.ReceiveBye(DialogOne);
+          finally
+            ByeOne.Free;
+          end;
+
+          CheckResponseSent('No response sent for the 1st INVITE''s BYE');
+          CheckEquals(SIPOK,
+                      Self.LastSentResponse.StatusCode,
+                      'Unexpected response for the 1st INVITE''s BYE');
+
+          Self.MarkSentResponseCount;
+          ByeTwo := DialogTwo.CreateRequest;
+          try
+            Self.ReceiveBye(DialogTwo);
+          finally
+            ByeTwo.Free;
+          end;
+
+          CheckResponseSent('No response sent for the 2nd INVITE''s BYE');
+          CheckEquals(SIPOK,
+                      Self.LastSentResponse.StatusCode,
+                      'Unexpected response for the 2nd INVITE''s BYE');
+        finally
+          DialogTwo.Free;
+        end;
+      finally
+        DialogOne.Free;
+      end;
+    finally
+      InviteTwo.Free;
+    end;
+  finally
+    InviteOne.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestContentTypeDefault;
