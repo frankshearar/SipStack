@@ -12,8 +12,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdInterfacedObject, IdNotification,  IdSipMessage, IdSipTimer,
-  IdSipTransport, IdThread, IdTimerQueue, SyncObjs, SysUtils;
+  Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,  IdSipMessage,
+  IdSipTimer, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils;
 
 const
   DefaultT1    = 500;   // milliseconds
@@ -257,7 +257,7 @@ type
     T2:               Cardinal;
     Timer:            TIdTimerQueue;
 
-    procedure OnException(T: TIdThread;
+    procedure OnException(T: TIdBaseThread;
                           E: Exception);
     procedure OnTimerG(Sender: TObject);
     procedure OnTimerH(Sender: TObject);
@@ -357,7 +357,7 @@ type
     State:                 TIdSipTransactionState;
     Timer:                 TIdTimerQueue;
 
-    procedure OnException(T: TIdThread;
+    procedure OnException(T: TIdBaseThread;
                           E: Exception);
     procedure OnCancelTimer(Sender: TObject);
     procedure OnTimerA(Sender: TObject);
@@ -434,7 +434,7 @@ type
     T2:               Cardinal;
     Timer:            TIdTimerQueue;
 
-    procedure OnException(T: TIdThread;
+    procedure OnException(T: TIdBaseThread;
                           E: Exception);
     procedure OnTimerE(Sender: TObject);
     procedure OnTimerF(Sender: TObject);
@@ -1489,7 +1489,7 @@ end;
 
 //* TIdSipServerInviteTransactionTimer Private methods *************************
 
-procedure TIdSipServerInviteTransactionTimer.OnException(T: TIdThread;
+procedure TIdSipServerInviteTransactionTimer.OnException(T: TIdBaseThread;
                                                          E: Exception);
 begin
   Self.Owner.ExceptionRaised(E);
@@ -1754,7 +1754,7 @@ procedure TIdSipServerNonInviteTransaction.ChangeToCompleted;
 begin
   inherited ChangeToCompleted;
 
-  Self.TimerJ.Start;
+  Self.TimerJ.Resume;
 end;
 
 procedure TIdSipServerNonInviteTransaction.ReceiveNonCancel(R: TIdSipRequest;
@@ -1980,7 +1980,7 @@ end;
 
 //* TIdSipClientInviteTransactionTimer Private methods *************************
 
-procedure TIdSipClientInviteTransactionTimer.OnException(T: TIdThread;
+procedure TIdSipClientInviteTransactionTimer.OnException(T: TIdBaseThread;
                                                           E: Exception);
 begin
   Self.Owner.ExceptionRaised(E);
@@ -2352,7 +2352,7 @@ end;
 
 //* TIdSipClientNonInviteTransactionTimer Private methods **********************
 
-procedure TIdSipClientNonInviteTransactionTimer.OnException(T: TIdThread;
+procedure TIdSipClientNonInviteTransactionTimer.OnException(T: TIdBaseThread;
                                                             E: Exception);
 begin
   Self.Owner.ExceptionRaised(E);

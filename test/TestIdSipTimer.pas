@@ -12,7 +12,7 @@ unit TestIdSipTimer;
 interface
 
 uses
-  IdSipTimer, IdThread, SysUtils, TestFrameworkEx;
+  IdBaseThread, IdSipTimer, SysUtils, TestFrameworkEx;
 
 type
   TestTIdSipTimer = class(TThreadingTestCase)
@@ -21,7 +21,8 @@ type
     Tick:                Boolean;
     Timer:               TIdSipTimer;
 
-    procedure OnException(AThread: TIdThread; AException: Exception);
+    procedure OnException(Thread: TIdBaseThread;
+                          Exception: Exception);
     procedure OnRaiseExceptionTimer(Sender: TObject);
     procedure OnTickTimer(Sender: TObject);
   public
@@ -85,7 +86,8 @@ end;
 
 //* TestTIdSipTimer Private methods ********************************************
 
-procedure TestTIdSipTimer.OnException(AThread: TIdThread; AException: Exception);
+procedure TestTIdSipTimer.OnException(Thread: TIdBaseThread;
+                                      Exception: Exception);
 begin
   Self.ThreadEvent.SetEvent;
 end;
@@ -112,7 +114,7 @@ begin
   Self.Timer.OnException := Self.OnException;
   Self.Timer.OnTimer     := Self.OnRaiseExceptionTimer;
   Self.Timer.Interval    := 100;
-  Self.Timer.Start;
+  Self.Timer.Resume;
 
   Self.WaitForSignaled;
 end;
@@ -123,7 +125,7 @@ begin
   Self.Timer.OnTimer := Self.OnTickTimer;
 
   Self.Timer.Interval := 100;
-  Self.Timer.Start;
+  Self.Timer.Resume;
 
   Self.WaitForSignaled;
 end;

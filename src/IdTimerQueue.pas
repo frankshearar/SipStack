@@ -12,7 +12,7 @@ unit IdTimerQueue;
 interface
 
 uses
-  Classes, Contnrs, IdThread, SyncObjs;
+  Classes, Contnrs, IdBaseThread, SyncObjs;
 
 type
   TIdWait = class(TObject)
@@ -55,7 +55,7 @@ type
   //
   // WaitEvent lets me re-evaluate the shortest wait time whenever something
   //  adds or removes events. Or when something's Terminated me.
-  TIdTimerQueue = class(TIdThread)
+  TIdTimerQueue = class(TIdBaseThread)
   private
     EventList: TObjectList;
     Lock:      TCriticalSection;

@@ -12,12 +12,12 @@ unit IdSipTimer;
 interface
 
 uses
-  Classes, IdThread, SyncObjs;
+  Classes, IdBaseThread, SyncObjs;
 
 type
   // I represent a recurring timer. Use me whenever you want an event to be
   // triggered over and over at a (more or less) constant interval.
-  TIdSipTimer = class(TIdThread)
+  TIdSipTimer = class(TIdBaseThread)
   private
     CoarseTiming: Boolean;
     fInterval:    Cardinal;
@@ -39,7 +39,7 @@ type
 
   // I provide a one-shot timer. I free myself once I've executed the notify
   // event you supply.
-  TIdSipSingleShotTimer = class(TIdThread)
+  TIdSipSingleShotTimer = class(TIdBaseThread)
   private
     Event:     TNotifyEvent;
     fData:     TObject;

@@ -39,10 +39,10 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdSipDialogID, IdException,
+  Classes, Contnrs, IdBaseThread, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdNotification, IdObservable, IdSipAuthentication,
   IdSipMessage, IdSipRegistration, IdSipTimer, IdSipTransaction,
-  IdSipTransport, IdThread, SyncObjs;
+  IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -559,7 +559,7 @@ type
   // to an INVITE until it receives an ACK. Thus I provide an exponential
   // back-off timer starting with an interval of T1 milliseconds and capping
   // the interval at T2 milliseconds.
-  TIdSipSessionTimer = class(TIdThread)
+  TIdSipSessionTimer = class(TIdBaseThread)
   private
     InitialInterval: Cardinal;
     MaximumInterval: Cardinal;
@@ -3297,7 +3297,7 @@ begin
   Self.MaximumInterval := T2;
   Self.WaitEvent       := TSimpleEvent.Create;
 
-  Self.Start;
+  Self.Resume;
 end;
 
 destructor TIdSipSessionTimer.Destroy;
