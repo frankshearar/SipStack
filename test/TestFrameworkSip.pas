@@ -135,6 +135,34 @@ type
     property Changed: Boolean read fChanged;
   end;
 
+  TIdSipTestInviteListener = class(TIdSipTestActionListener,
+                                   IIdSipInviteListener)
+  private
+    fFailure:          Boolean;
+    fInviteAgentParam: TIdSipOutboundInvite;
+    fProvisional:      Boolean;
+    fReasonParam:      String;
+    fResponseParam:    TIdSipResponse;
+    fSuccess:          Boolean;
+
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnProvisional(InviteAgent: TIdSipOutboundInvite;
+                            Response: TIdSipResponse);
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
+  public
+    constructor Create; override;
+
+    property Failure:          Boolean              read fFailure;
+    property InviteAgentParam: TIdSipOutboundInvite read fInviteAgentParam;
+    property Provisional:      Boolean              read fProvisional;
+    property ReasonParam:      String               read fReasonParam;
+    property ResponseParam:    TIdSipResponse       read fResponseParam;
+    property Success:          Boolean              read fSuccess;
+  end;
+
   TIdSipTestOptionsListener = class(TIdSipTestActionListener,
                                     IIdSipOptionsListener)
   private
@@ -623,6 +651,57 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestObserver.OnChanged');
+end;
+
+//******************************************************************************
+//* TIdSipTestInviteListener                                                   *
+//******************************************************************************
+//* TIdSipTestInviteListener Public methods ************************************
+
+constructor TIdSipTestInviteListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailure     := false;
+  Self.fProvisional := false;
+  Self.fSuccess     := false;
+end;
+
+//* TIdSipTestInviteListener Private methods **********************************
+
+procedure TIdSipTestInviteListener.OnFailure(InviteAgent: TIdSipOutboundInvite;
+                                             Response: TIdSipResponse;
+                                             const Reason: String);
+begin
+  Self.fFailure           := true;
+  Self.fInviteAgentParam := InviteAgent;
+  Self.fResponseParam     := Response;
+  Self.fReasonParam       := Reason;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestInviteListener.OnFailure');
+end;
+
+procedure TIdSipTestInviteListener.OnProvisional(InviteAgent: TIdSipOutboundInvite;
+                                                 Response: TIdSipResponse);
+begin
+  Self.fInviteAgentParam := InviteAgent;
+  Self.fResponseParam    := Response;
+  Self.fProvisional      := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestInviteListener.OnProvisional');
+end;
+
+procedure TIdSipTestInviteListener.OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                                             Response: TIdSipResponse);
+begin
+  Self.fInviteAgentParam := InviteAgent;
+  Self.fResponseParam     := Response;
+  Self.fSuccess           := true;
+
+  if Assigned(Self.FailWith) then
+    raise Self.FailWith.Create('TIdSipTestInviteListener.OnSuccess');
 end;
 
 //******************************************************************************

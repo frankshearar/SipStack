@@ -66,6 +66,19 @@ type
                          Redirect: TIdSipResponse);
   end;
 
+  TIdSipOutboundInvite = class;
+
+  IIdSipInviteListener = interface(IIdSipActionListener)
+    ['{8694DF86-3012-41AE-9854-A623A486743F}']
+    procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse;
+                        const Reason: String);
+    procedure OnProvisional(InviteAgent: TIdSipOutboundInvite;
+                            Response: TIdSipResponse);
+    procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
+                        Response: TIdSipResponse);
+  end;
+
   TIdSipOutboundOptions = class;
 
   IIdSipOptionsListener = interface(IIdSipActionListener)
@@ -476,7 +489,7 @@ type
     procedure MarkAsTerminated; virtual;
     function  NotifyOfAuthenticationChallenge(Response: TIdSipResponse): String;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
-    procedure NotifyOfRedirect(Response: TIdSipResponse);
+    procedure NotifyOfRedirect(Response: TIdSipResponse); virtual;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
@@ -513,6 +526,28 @@ type
     property InitialRequest: TIdSipRequest read fInitialRequest;
     property IsTerminated:   Boolean       read fIsTerminated;
     property Username:       String        read GetUsername write SetUsername;
+  end;
+
+  TIdSipOutboundInvite = class(TIdSipAction)
+  private
+    procedure NotifyOfProvisional(Response: TIdSipResponse);
+    procedure NotifyOfSuccess(Response: TIdSipResponse);
+  protected
+    procedure ActionSucceeded(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
+    function  ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                         UsingSecureTransport: Boolean): Boolean; override;
+  public
+    class function Method: String; override;
+
+    procedure AddListener(const Listener: IIdSipInviteListener);
+    procedure Invite(Destination: TIdSipAddressHeader;
+                     const Offer: String;
+                     const MimeType: String);
+    procedure ReInvite(Dialog: TIdSipDialog;
+                       const Offer: String;
+                       const MimeType: String);
+    procedure RemoveListener(const Listener: IIdSipInviteListener);
   end;
 
   TIdSipOptions = class(TIdSipAction)
@@ -786,6 +821,34 @@ type
   end;
 
   TIdSipActionRedirectMethod = class(TIdActionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipInviteMethod = class(TIdMethod)
+  private
+    fInvite:   TIdSipOutboundInvite;
+    fResponse: TIdSipResponse;
+  public
+    property Invite:   TIdSipOutboundInvite read fInvite write fInvite;
+    property Response: TIdSipResponse       read fResponse write fResponse;
+  end;
+
+  TIdSipInviteFailureMethod = class(TIdSipInviteMethod)
+  private
+    fReason: String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdSipInviteProvisionalMethod = class(TIdSipInviteMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipInviteSuccessMethod = class(TIdSipInviteMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
@@ -2602,6 +2665,7 @@ end;
 
 procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
 begin
+  // By default do nothing
 end;
 
 procedure TIdSipAction.NotifyOfRedirect(Response: TIdSipResponse);
@@ -2699,6 +2763,9 @@ function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;
 begin
   Result := false;
+
+  Self.NotifyOfRedirect(Response);
+  Self.Terminate;
 end;
 
 procedure TIdSipAction.ReceiveRegister(Register: TIdSipRequest);
@@ -2829,6 +2896,123 @@ end;
 procedure TIdSipAction.SetUsername(const Value: String);
 begin
   Self.UA.From.DisplayName := Value;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundInvite                                                       *
+//******************************************************************************
+//* TIdSipOutboundInvite Public methods ****************************************
+
+class function TIdSipOutboundInvite.Method: String;
+begin
+  Result := MethodInvite;
+end;
+
+procedure TIdSipOutboundInvite.AddListener(const Listener: IIdSipInviteListener);
+begin
+  Self.Listeners.AddListener(Listener);
+end;
+
+procedure TIdSipOutboundInvite.Invite(Destination: TIdSipAddressHeader;
+                                      const Offer: String;
+                                      const MimeType: String);
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := Self.UA.CreateInvite(Destination, Offer, MimeType);
+  try
+    Self.InitialRequest.Assign(Invite);
+    Self.SendRequest(Invite);
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.ReInvite(Dialog: TIdSipDialog;
+                                        const Offer: String;
+                                        const MimeType: String);
+var
+  Invite: TIdSipRequest;
+begin
+  Invite := Self.UA.CreateReInvite(Dialog, Offer, MimeType);
+  try
+    Self.InitialRequest.Assign(Invite);
+    Self.SendRequest(Invite);
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.RemoveListener(const Listener: IIdSipInviteListener);
+begin
+  Self.Listeners.RemoveListener(Listener);
+end;
+
+//* TIdSipOutboundInvite Protected methods *************************************
+
+procedure TIdSipOutboundInvite.ActionSucceeded(Response: TIdSipResponse);
+begin
+  Self.NotifyOfSuccess(Response);
+end;
+
+procedure TIdSipOutboundInvite.NotifyOfFailure(Response: TIdSipResponse);
+var
+  Notification: TIdSipInviteFailureMethod;
+begin
+  Notification := TIdSipInviteFailureMethod.Create;
+  try
+    Notification.Invite   := Self;
+    Notification.Reason   := Response.Description;
+    Notification.Response := Response;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  Self.Terminate;
+end;
+
+function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;
+                                                         UsingSecureTransport: Boolean): Boolean;
+begin
+  Result := inherited ReceiveProvisionalResponse(Response, UsingSecureTransport);
+
+  Self.NotifyOfProvisional(Response);
+end;
+
+//* TIdSipOutboundInvite Private methods ***************************************
+
+procedure TIdSipOutboundInvite.NotifyOfProvisional(Response: TIdSipResponse);
+var
+  Notification: TIdSipInviteProvisionalMethod;
+begin
+  Notification := TIdSipInviteProvisionalMethod.Create;
+  try
+    Notification.Invite   := Self;
+    Notification.Response := Response;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.NotifyOfSuccess(Response: TIdSipResponse);
+var
+  Notification: TIdSipInviteSuccessMethod;
+begin
+  Notification := TIdSipInviteSuccessMethod.Create;
+  try
+    Notification.Invite   := Self;
+    Notification.Response := Response;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  Self.Terminate;
 end;
 
 //******************************************************************************
@@ -3378,7 +3562,7 @@ begin
 end;
 
 procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
-                                            MinimumExpiry: Cardinal);
+                                                    MinimumExpiry: Cardinal);
 var
   Bindings: TIdSipContacts;
   Request: TIdSipRequest;
@@ -3408,7 +3592,7 @@ begin
 end;
 
 procedure TIdSipOutboundRegistration.RetryWithoutExtensions(Registrar: TIdSipUri;
-                                                    Response: TIdSipResponse);
+                                                            Response: TIdSipResponse);
 var
   Bindings: TIdSipContacts;
   Request: TIdSipRequest;
@@ -4322,6 +4506,40 @@ procedure TIdSipActionRedirectMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipActionListener).OnRedirect(Self.Action,
                                                Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipInviteFailureMethod                                                  *
+//******************************************************************************
+//* TIdSipInviteFailureMethod Public methods ***********************************
+
+procedure TIdSipInviteFailureMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipInviteListener).OnFailure(Self.Invite,
+                                              Self.Response,
+                                              Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipInviteProvisionalMethod                                              *
+//******************************************************************************
+//* TIdSipInviteProvisionalMethod Public methods *******************************
+
+procedure TIdSipInviteProvisionalMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipInviteListener).OnProvisional(Self.Invite,
+                                                  Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipInviteSuccessMethod                                                  *
+//******************************************************************************
+//* TIdSipInviteSuccessMethod Public methods ***********************************
+
+procedure TIdSipInviteSuccessMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipInviteListener).OnSuccess(Self.Invite,
+                                              Self.Response);
 end;
 
 //******************************************************************************
