@@ -2428,10 +2428,12 @@ begin
   try
     try
       C.Value := '*';
+      Self.Core.Contact := C;
       Fail('Wildcard Contact headers make no sense in a response that sets up '
          + 'a dialog');
     except
       on EBadHeader do;
+      on EAssertionFailed do;
     end;
   finally
     C.Free;
