@@ -6588,7 +6588,7 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipUserAgentAuthenticationChallengeMethod                               (
+//* TIdSipUserAgentAuthenticationChallengeMethod                               *
 //******************************************************************************
 //* TIdSipUserAgentAuthenticationChallengeMethod Public methods ****************
 
