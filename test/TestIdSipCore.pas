@@ -5345,8 +5345,6 @@ procedure TestTIdSipInboundSession.TestReceiveBye;
 begin
   Self.Session.AcceptCall('', '');
 
-  Self.Session.AddSessionListener(Self);
-
   Self.SimulateRemoteBye(Self.Session.Dialog);
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
@@ -5517,8 +5515,7 @@ begin
 
   Self.Core.AddUserAgentListener(Self);
 
-  Self.Session := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
-  Self.Session.AddSessionListener(Self);
+  Self.Session := Self.CreateAction as TIdSipOutboundSession;
 
   Self.OnDroppedResponse      := false;
   Self.OnEndedSessionFired    := false;
@@ -5529,7 +5526,7 @@ end;
 
 function TestTIdSipOutboundSession.CreateAction: TIdSipAction;
 begin
-  Result := Self.Core.Call(Self.Destination, '', '');
+  Result := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
   (Result as TIdSipSession).AddSessionListener(Self);
 end;
 
@@ -5825,8 +5822,6 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
 begin
-  Session := Self.Core.Call(Self.Destination, '', '');
-  Session.AddSessionListener(Self);
   Self.SimulateForbidden;
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
@@ -6310,8 +6305,7 @@ procedure TestProxyAuthentication.SetUp;
 begin
   inherited SetUp;
 
-  Self.Session := Self.Core.Call(Self.Destination, '', '');
-  Self.Session.AddSessionListener(Self);
+  Self.Session := Self.CreateAction as TIdSipOutboundSession;
 
   Self.Opaque := 'decafbadcafebabe';
   Self.Password := 'f00L';
