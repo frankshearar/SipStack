@@ -428,7 +428,7 @@ end;
 procedure TIdSipDialog.ReceiveResponse(Response: TIdSipResponse);
 begin
   if (Self.RemoteTarget.Uri = '') then
-    Self.RemoteTarget.URI := Response.FirstContact.Address.URI;
+    Self.RemoteTarget := Response.FirstContact.Address;
 
   if (Self.RemoteSequenceNo = 0) then
     Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
@@ -491,7 +491,7 @@ end;
 
 procedure TIdSipDialog.SetRemoteTarget(Value: TIdSipURI);
 begin
-  Self.RemoteTarget.URI := Value.URI;
+  Self.RemoteTarget.Uri := Value.Uri;
 end;
 
 procedure TIdSipDialog.SetState(Value: TIdSipDialogState);
