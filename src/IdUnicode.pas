@@ -233,8 +233,12 @@ var
   StartPos: Integer;
   TokenLen: Integer;
 begin
+  // Consider the substring of Haystack from the Start'th index to the right.
+  // What is the rightmost occurence of Needle?
+
   Result := 0;
   TokenLen := Length(Needle);
+  
   // Get starting position
   if Start < 0 then
     Start := Length(Haystack);
