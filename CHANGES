@@ -2,6 +2,16 @@ v0.4 ()
 
 * The Spike.pas unit used a hardcoded username/password, whcih of
   course made the torture tests fail.
+* Authentication's changed a lot: the Transaction layer (i.e., the
+  TransactionDispatcher) resends challenged requests, but the
+  Transaction-User layer (i.e., the AbstractUserAgent) supplies the
+  authentication credentials. Thus, a Transaction receives a 401
+  response, the TransactionDispatcher notifies its listeners, the
+  UserAgent (which always listens) notifies the user, asking for a
+  username/password for the response. The user specifies if they want
+  to re-issue the request, and if they do, the TransactionDispatcher
+  creates a new client transaction with the credentials. This
+  (currently) completely empties the ActionListener interface.
 
 v0.3 (2004/12/24)
 
