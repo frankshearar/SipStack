@@ -38,6 +38,7 @@ type
     procedure TestIsIpv4Address;
     procedure TestIsIpv6Address;
     procedure TestIsIpv6Reference;
+    procedure TestIsNumericAddress;
     procedure TestParseIpv6Address;
   end;
 
@@ -364,6 +365,15 @@ begin
   Check(not TIdIPAddressParser.IsIPv6Reference('x'),                          'x');
   Check(    TIdIPAddressParser.IsIPv6Reference('[::]'),                       '[::]');
   Check(    TIdIPAddressParser.IsIPv6Reference('[1::1:129.144.52.38]'),       '[1::1:129.144.52.38]');
+end;
+
+procedure TestTIdIPAddressParser.TestIsNumericAddress;
+begin
+  Check(not TIdIPAddressParser.IsNumericAddress(''),                     '''''');
+  Check(not TIdIPAddressParser.IsNumericAddress('x'),                    'x');
+  Check(    TIdIPAddressParser.IsNumericAddress('127.0.0.1'),            '127.0.0.1');
+  Check(    TIdIPAddressParser.IsNumericAddress('[1::1:129.144.52.38]'), '[1::1:129.144.52.38]');
+  Check(    TIdIPAddressParser.IsNumericAddress('1::1:129.144.52.38'),   '1::1:129.144.52.38');
 end;
 
 procedure TestTIdIPAddressParser.TestParseIpv6Address;

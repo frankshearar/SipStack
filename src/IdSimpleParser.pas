@@ -35,6 +35,7 @@ type
     class function  IsIPv4Address(const Token: String): Boolean;
     class function  IsIPv6Address(const Token: String): Boolean;
     class function  IsIPv6Reference(const Token: String): Boolean;
+    class function  IsNumericAddress(const Token: String): Boolean;
     class procedure ParseIPv6Address(const IPv6Address: String;
                                      var Address: TIdIPv6AddressRec);
   end;
@@ -324,6 +325,13 @@ begin
 
   Result := Result
         and Self.IsIPv6Address(WithoutFirstAndLastChars(Token));
+end;
+
+class function TIdIPAddressParser.IsNumericAddress(const Token: String): Boolean;
+begin
+  Result := Self.IsIPv6Reference(Token)
+         or Self.IsIPv6Address(Token)
+         or Self.IsIPv4Address(Token);
 end;
 
 class procedure TIdIPAddressParser.ParseIPv6Address(const IPv6Address: String;
