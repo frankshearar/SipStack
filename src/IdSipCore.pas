@@ -4455,6 +4455,8 @@ var
   Ack: TIdSipRequest;
   Dlg: TIdSipDialog;
 begin
+  // We only call this when we've no interest in establishing a dialog - when
+  // we get a 2xx to our INVITE after sending a CANCEL.
   Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
                                            Response,
                                            UsingSecureTransport);
@@ -5728,8 +5730,13 @@ procedure TIdSipSession.OnSuccess(InviteAgent: TIdSipInboundInvite;
                                   Ack: TIdSipRequest);
 begin
   // TODO: Notify listeners of modification, possibly
-  if (InviteAgent = Self.ModifyAttempt) then
-    Self.ModifyAttempt := nil;
+  Self.ModifyLock.Acquire;
+  try
+    if (InviteAgent = Self.ModifyAttempt) then
+      Self.ModifyAttempt := nil;
+  finally
+    Self.ModifyLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
@@ -5743,8 +5750,13 @@ begin
     Self.DialogLock.Release;
   end;
 
-  if (InviteAgent = Self.ModifyAttempt) then
-    Self.ModifyAttempt := nil;
+  Self.ModifyLock.Acquire;
+  try
+    if (InviteAgent = Self.ModifyAttempt) then
+      Self.ModifyAttempt := nil;
+  finally
+    Self.ModifyLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.ReceiveBye(Bye: TIdSipRequest);
