@@ -680,8 +680,6 @@ type
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
-  TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
-
   // I represent an asynchronous message send between SIP entities - INVITEs,
   // REGISTERs and the like - where we care what the remote end answers.
   // With CANCELs and BYEs, for instance, we don't care how the remote end
@@ -1427,10 +1425,6 @@ const
   FiveMinutes             = 5*OneMinute;
   TwentyMinutes           = 20*OneMinute;
 
-procedure ApplyTo(List: TList;
-                  Lock: TCriticalSection;
-                  Proc: TIdSipProcedure); overload;
-
 implementation
 
 uses
@@ -1454,51 +1448,6 @@ const
   RedirectWithNoSuccess          = 'Call redirected but no target answered';
   RemoteCancel                   = 'Remote end cancelled call';
   RemoteHangUp                   = 'Remote end hung up';
-
-//******************************************************************************
-//* Unit Private procedures and functions                                      *
-//******************************************************************************
-
-procedure CopyList(Source: TList;
-                   Lock: TCriticalSection;
-                   Copy: TList);
-var
-  I: Integer;
-begin
-  Copy.Clear;
-  Lock.Acquire;
-  try
-    for I := 0 to Source.Count - 1 do
-      Copy.Add(Source[I]);
-  finally
-    Lock.Release;
-  end;
-end;
-
-//******************************************************************************
-//* Unit Public procedures and functions                                       *
-//******************************************************************************
-
-procedure ApplyTo(List: TList;
-                  Lock: TCriticalSection;
-                  Proc: TIdSipProcedure);
-var
-  Copy: TList;
-  I: Integer;
-begin
-  Copy := TList.Create;
-  try
-    CopyList(List, Lock, Copy);
-
-    for I := 0 to Copy.Count - 1 do
-      try
-        Proc(Copy[I]);
-      except
-      end;
-  finally
-    Copy.Free;
-  end;
-end;
 
 //******************************************************************************
 //* TIdSipActionClosure                                                        *
