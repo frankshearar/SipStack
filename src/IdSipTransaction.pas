@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
-  IdSipAuthentication, IdSipMessage, IdSipTimer, IdSipTransport, IdTimerQueue,
-  SyncObjs, SysUtils;
+  IdSipAuthentication, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
+  SysUtils;
 
 const
   DefaultT1    = 500;   // milliseconds
