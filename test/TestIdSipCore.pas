@@ -13,73 +13,10 @@ interface
 
 uses
   Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
-  IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockLocator,
-  IdSipMockTransactionDispatcher, IdSipRegistration, IdSipTransaction,
-  IdSipTransport, IdTimerQueue, SyncObjs, TestFramework, TestFrameworkEx,
-  TestFrameworkSip;
+  IdSipDialogID, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
+  TestFramework, TestFrameworkSip;
 
 type
-  TTestCaseTU = class(TTestCaseSip)
-  private
-    procedure RemoveBody(Msg: TIdSipMessage);
-  protected
-    AckCount:      Cardinal;
-    Core:          TIdSipUserAgent;
-    DebugTimer:    TIdDebugTimerQueue;
-    Destination:   TIdSipToHeader;
-    Dispatcher:    TIdSipMockTransactionDispatcher;
-    Invite:        TIdSipRequest;
-    Locator:       TIdSipMockLocator;
-    RequestCount:  Cardinal;
-    ResponseCount: Cardinal;
-
-    function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
-    function  CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
-    function  LastSentAck: TIdSipRequest;
-    function  LastSentRequest: TIdSipRequest;
-    function  LastSentResponse: TIdSipResponse;
-    procedure MarkSentAckCount;
-    procedure MarkSentRequestCount;
-    procedure MarkSentResponseCount;
-    function  SecondLastSentResponse: TIdSipResponse;
-    procedure ReceiveRequest(Request: TIdSipRequest);
-    procedure ReceiveResponse(Response: TIdSipResponse); overload;
-    function  SecondLastSentRequest: TIdSipRequest;
-    function  SentAckCount: Cardinal;
-    function  SentRequestCount: Cardinal;
-    function  SentResponseCount: Cardinal;
-    function  ThirdLastSentRequest: TIdSipRequest;
-    procedure ReceiveAck;
-    procedure ReceiveAckFor(Request: TIdSipRequest;
-                            Response: TIdSipResponse);
-    procedure ReceiveBye(LocalDialog: TIdSipDialog);
-    procedure ReceiveCancel;
-    procedure ReceiveInvite;
-
-    procedure ReceiveOk(Invite: TIdSipRequest);
-    procedure ReceiveOkFrom(Invite: TIdSipRequest;
-                            const Contact: String);
-    procedure ReceiveMovedPermanently(const SipUrl: String);
-    procedure ReceiveResponse(StatusCode: Cardinal); overload;
-    procedure ReceiveRinging(Invite: TIdSipRequest);
-    procedure ReceiveTrying(Invite: TIdSipRequest);
-    procedure ReceiveTryingFrom(Invite: TIdSipRequest;
-                                const Contact: String);
-    procedure ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
-    procedure ReceiveUnauthorized(const AuthHeaderName: String;
-                                  const Qop: String);
-    function  SentRequestAt(Index: Integer): TIdSipRequest;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-
-    procedure CheckAckSent(const Msg: String);
-    procedure CheckNoRequestSent(const Msg: String);
-    procedure CheckRequestSent(const Msg: String);
-    procedure CheckNoResponseSent(const Msg: String);
-    procedure CheckResponseSent(const Msg: String);
-  end;
-
   TestTIdSipAbstractCore = class(TTestCaseTU)
   private
     ScheduledEventFired: Boolean;
@@ -961,9 +898,8 @@ type
 implementation
 
 uses
-  IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdNotification, IdSipAuthentication, IdSipConsts, IdSipDns, IdSipLocator,
-  IdSipMockTransport, IdUdpServer, SysUtils, TestMessages, Windows;
+  IdException, IdSipAuthentication, IdSipDns, IdSipLocator,
+  IdSipMockTransactionDispatcher, IdSipMockTransport, SysUtils;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -1073,389 +1009,6 @@ end;
 procedure TIdSipCoreWithExposedNotify.TriggerNotify;
 begin
   Self.NotifyOfChange;
-end;
-
-//******************************************************************************
-//* TTestCaseTU                                                                *
-//******************************************************************************
-//* TTestCaseTU Public methods *************************************************
-
-procedure TTestCaseTU.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Destination := TIdSipToHeader.Create;
-  Self.Destination.Value := 'sip:franks@localhost';
-
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Locator := TIdSipMockLocator.Create;
-
-  Self.Core := TIdSipUserAgent.Create;
-  Self.Core.Dispatcher := Self.Dispatcher;
-  Self.Core.Locator    := Self.Locator;
-
-  Self.Core.Contact.Value := 'sip:case@localhost';
-  Self.Core.From.Value    := 'sip:case@localhost';
-
-  Self.Invite := TIdSipTestResources.CreateBasicRequest;
-  Self.RemoveBody(Self.Invite);
-
-  Self.DebugTimer := TIdDebugTimerQueue.Create;
-  Self.Core.Timer := DebugTimer;
-
-  // Make sure we have a sane DNS setup so that actions don't terminate
-  // themselves after they try find locations to which to send their messages.
-  Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
-  Self.Locator.AddA(Self.Core.From.Address.Host,   '127.0.0.1');
-  Self.Locator.AddA('localhost',                   '127.0.0.1');
-end;
-
-procedure TTestCaseTU.TearDown;
-begin
-  Self.Core.Timer := nil;
-  Self.DebugTimer.Terminate;
-
-  Self.Invite.Free;
-  Self.Core.Free;
-  Self.Locator.Free;
-  Self.Dispatcher.Free;
-  Self.Destination.Free;
-
-  inherited TearDown;
-end;
-
-procedure TTestCaseTU.CheckAckSent(const Msg: String);
-begin
-  Check(Self.AckCount < Self.SentACKCount,
-        Msg);
-end;
-
-procedure TTestCaseTU.CheckNoRequestSent(const Msg: String);
-begin
-  CheckEquals(Self.RequestCount,
-              Self.SentRequestCount,
-              Msg);
-end;
-
-procedure TTestCaseTU.CheckRequestSent(const Msg: String);
-begin
-  Check(Self.RequestCount < Self.SentRequestCount, Msg);
-end;
-
-procedure TTestCaseTU.CheckNoResponseSent(const Msg: String);
-begin
-  CheckEquals(Self.ResponseCount,
-              Self.SentResponseCount,
-              Msg);
-end;
-
-procedure TTestCaseTU.CheckResponseSent(const Msg: String);
-begin
-  Check(Self.ResponseCount < Self.SentResponseCount, Msg);
-end;
-
-//* TTestCaseTU Protected methods **********************************************
-
-function TTestCaseTU.CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
-begin
-  Result := Self.Core.CreateBye(LocalDialog);
-  try
-    Result.ToHeader.Tag := LocalDialog.ID.LocalTag;
-    Result.From.Tag     := LocalDialog.ID.RemoteTag;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TTestCaseTU.CreateRemoteOk(Request: TIdSipRequest): TIdSipResponse;
-begin
-  // This message appears to originate from the network. Invite originates from
-  // us so presumably has no To tag. Having come from the network, the response
-  // WILL have a To tag.
-  Result := Self.Core.CreateResponse(Request, SIPOK);
-  Result.ToHeader.Tag := Self.Core.NextTag;
-end;
-
-function TTestCaseTU.LastSentAck: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.LastACK;
-end;
-
-function TTestCaseTU.LastSentRequest: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.LastRequest;
-end;
-
-function TTestCaseTU.LastSentResponse: TIdSipResponse;
-begin
-  Result := Self.Dispatcher.Transport.LastResponse;
-end;
-
-procedure TTestCaseTU.MarkSentAckCount;
-begin
-  Self.AckCount := Self.SentAckCount;
-end;
-
-procedure TTestCaseTU.MarkSentRequestCount;
-begin
-  Self.RequestCount := Self.SentRequestCount;
-end;
-
-procedure TTestCaseTU.MarkSentResponseCount;
-begin
-  Self.ResponseCount := Self.SentResponseCount;
-end;
-
-function TTestCaseTU.SecondLastSentResponse: TIdSipResponse;
-begin
-  Result := Self.Dispatcher.Transport.SecondLastResponse;
-end;
-
-procedure TTestCaseTU.ReceiveRequest(Request: TIdSipRequest);
-begin
-  Self.Dispatcher.Transport.FireOnRequest(Request);
-end;
-
-procedure TTestCaseTU.ReceiveResponse(Response: TIdSipResponse);
-begin
-  Self.Dispatcher.Transport.FireOnResponse(Response);
-end;
-
-function TTestCaseTU.SecondLastSentRequest: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.SecondLastRequest;
-end;
-
-function TTestCaseTU.SentAckCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.ACKCount;
-end;
-
-function TTestCaseTU.SentRequestCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.SentRequestCount;
-end;
-
-function TTestCaseTU.SentResponseCount: Cardinal;
-begin
-  Result := Self.Dispatcher.Transport.SentResponseCount;
-end;
-
-function TTestCaseTU.ThirdLastSentRequest: TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.ThirdLastRequest;
-end;
-
-procedure TTestCaseTU.ReceiveAck;
-var
-  Ack: TIdSipRequest;
-  T:   TIdSipMockTransport;
-begin
-  T := Self.Dispatcher.Transport;
-
-  Ack := T.LastRequest.AckFor(T.LastResponse);
-  try
-    T.FireOnRequest(Ack);
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveAckFor(Request: TIdSipRequest;
-                                    Response: TIdSipResponse);
-var
-  Ack: TIdSipRequest;
-begin
-  Ack := Request.AckFor(Response);
-  try
-    Self.ReceiveRequest(Ack);
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveOk(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  // This message appears to originate from the network. Invite originates from
-  // us so presumably has no To tag. Having come from the network, the response
-  // WILL have a To tag.
-  Response := Self.CreateRemoteOk(Invite);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveOkFrom(Invite: TIdSipRequest;
-                                    const Contact: String);
-var
-  Response: TIdSipResponse;
-begin
-  // This message appears to originate from the network. Invite originates from
-  // us so presumably has no To tag. Having come from the network, the response
-  // WILL have a To tag.
-  Response := Self.CreateRemoteOk(Invite);
-  try
-    Response.FirstContact.Value := Contact;
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveMovedPermanently(const SipUrl: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                          SIPMovedPermanently);
-  try
-    Response.AddHeader(ContactHeaderFull).Value := SipUrl;
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveResponse(StatusCode: Cardinal);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Core.CreateResponse(Self.LastSentRequest,
-                                       StatusCode);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveBye(LocalDialog: TIdSipDialog);
-var
-  Bye: TIdSipRequest;
-begin
-  Bye := Self.CreateRemoteBye(LocalDialog);
-  try
-    Self.ReceiveRequest(Bye);
-  finally
-    Bye.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.Invite.CreateCancel;
-  try
-    Self.ReceiveRequest(Cancel);
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveInvite;
-begin
-  Self.ReceiveRequest(Self.Invite);
-end;
-
-procedure TTestCaseTU.ReceiveRinging(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Core.CreateResponse(Invite, SIPRinging);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveTrying(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Core.CreateResponse(Invite, SIPTrying);
-  try
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveTryingFrom(Invite: TIdSipRequest;
-                                        const Contact: String);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Core.CreateResponse(Invite, SIPTrying);
-  try
-    Response.FirstContact.Value := Contact;
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.Core.CreateResponse(Invite, SIPTrying);
-  try
-    // strip the To header tag
-    Response.ToHeader.Value := Response.ToHeader.Value;
-
-    Self.ReceiveResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveUnauthorized(const AuthHeaderName: String;
-                                          const Qop: String);
-var
-  Auth:      TIdSipAuthenticateHeader;
-  Challenge: TIdSipResponse;
-begin
-  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                           SIPUnauthorized);
-  try
-    Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
-    Auth.AuthorizationScheme := DigestAuthorizationScheme;
-    Auth.Realm               := 'SFTF';
-    Auth.Nonce               := '5369704365727434313433';
-    Auth.Qop                 := Qop;
-
-    Challenge.AddHeader(AuthenticationInfoHeader);
-
-    Self.ReceiveResponse(Challenge);
-  finally
-    Challenge.Free;
-  end;
-end;
-
-function TTestCaseTU.SentRequestAt(Index: Integer): TIdSipRequest;
-begin
-  Result := Self.Dispatcher.Transport.RequestAt(Index);
-end;
-
-//* TTestCaseTU Private methods ************************************************
-
-procedure TTestCaseTU.RemoveBody(Msg: TIdSipMessage);
-begin
-  Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-  Msg.Body := '';
-  Msg.ToHeader.Value := Msg.ToHeader.DisplayName
-                               + ' <' + Msg.ToHeader.Address.URI + '>';
-  Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-  Msg.ContentLength := 0;
 end;
 
 //******************************************************************************
@@ -4375,7 +3928,7 @@ begin
                       SrvTcpPrefix,
                       0,
                       0,
-                      IdPORT_SIP,
+                      5060,
                       Self.Destination.Address.Host);
   Self.Locator.AddA   (Self.Destination.Address.Host, '127.0.0.1');
   Self.Locator.AddAAAA(Self.Destination.Address.Host, '::1');
@@ -4414,11 +3967,11 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy  := true;
 
-  Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, IdPORT_SIP, ProxyHost);
+  Self.Locator.AddSRV(ProxyHost, SrvSctpPrefix, 0, 0, 5060, ProxyHost);
   Self.Locator.AddAAAA(ProxyHost, ProxyAAAARecord);
 
   Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix, 0, 0,
-                      IdPORT_SIP, Self.Destination.Address.Host);
+                      5060, Self.Destination.Address.Host);
 
   Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
 
@@ -4465,8 +4018,8 @@ begin
   // NAPTR record points to SCTP SRV record whose target resolves to the A
   // record.
   Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
-  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
-  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
+  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, 5060, Domain);
+  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, 5060, Domain);
 
   Self.MarkSentRequestCount;
   Action := Self.CreateAction;
