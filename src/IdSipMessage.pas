@@ -967,7 +967,7 @@ type
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  FirstMinExpires: TIdSipNumericHeader;
     function  FirstRequire: TIdSipCommaSeparatedHeader;
-    function  FirstRetryAfter: TIdSipNumericHeader;
+    function  FirstRetryAfter: TIdSipRetryAfterHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsMalformed: Boolean; virtual;
@@ -5257,9 +5257,9 @@ begin
   Result := Self.FirstHeader(RequireHeader) as TIdSipCommaSeparatedHeader;
 end;
 
-function TIdSipMessage.FirstRetryAfter: TIdSipNumericHeader;
+function TIdSipMessage.FirstRetryAfter: TIdSipRetryAfterHeader;
 begin
-  Result := Self.FirstHeader(RetryAfterHeader) as TIdSipNumericHeader;
+  Result := Self.FirstHeader(RetryAfterHeader) as TIdSipRetryAfterHeader;
 end;
 
 function TIdSipMessage.HasExpiry: Boolean;
