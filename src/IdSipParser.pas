@@ -11,15 +11,22 @@ const
 type
   TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP);
 
-  TIdSipHeader = class(TObject)
+  TIdSipHeader = class(TPersistent)
   private
     fParams: TStrings;
 
-    procedure SetParams(const Value: TStrings);
+    function  GetParam(const Name: String): String;
+    procedure SetParam(const Name, Value: String);
+    procedure SetParameters(const Value: TStrings);
+
   public
     constructor Create; virtual;
+    destructor  Destroy; override;
 
-    property Params: TStrings read fParams write SetParams;
+    procedure Assign(Src: TPersistent); override;
+
+    property Parameters: TStrings read fParams write SetParameters;
+    property Params[const Name: String]: String read GetParam write SetParam;
   end;
 
   // Via header
@@ -30,7 +37,8 @@ type
     fPort:       Cardinal;
     fTransport:  TIdSipTransportType;
   public
-    function IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
+    procedure Assign(Src: TPersistent); override;
+    function  IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
 
     property Host:       String              read fHost write fHost;
     property Port:       Cardinal            read fPort write fPort;
@@ -115,6 +123,7 @@ type
     procedure IncCurrentLine;
     procedure InitialiseMessage(Msg: TIdSipMessage);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
+    procedure ParseHeaderParams(const Header: TIdSipHeader; const Params: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
     procedure ParseRequestLine(const Request: TIdSipRequest);
     procedure ParseStatusLine(const Response: TIdSipResponse);
@@ -323,19 +332,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipViaHeader                                                            *
-//******************************************************************************
-//* TIdSipViaHeader Public methods *********************************************
-
-function TIdSipViaHeader.IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
-begin
-  Result := (Self.Host = Hop.Host)
-        and (Self.Port = Hop.Port)
-        and (Self.SipVersion = Hop.SipVersion)
-        and (Self.Transport = Hop.Transport);
-end;
-
-//******************************************************************************
 //* TIdSipHeader                                                               *
 //******************************************************************************
 //* TIdSipHeader Public methods ************************************************
@@ -347,12 +343,68 @@ begin
   fParams := TStringList.Create;
 end;
 
-//* TIdSipHeader Protected methods *********************************************
+destructor TIdSipHeader.Destroy;
+begin
+  fParams.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipHeader.Assign(Src: TPersistent);
+var
+  H: TIdSipHeader;
+begin
+  if Src is TIdSipHeader then begin
+    H := Src as TIdSipHeader;
+    Self.Parameters := H.Parameters;
+  end
+  else inherited Assign(Src);
+end;
+
 //* TIdSipHeader Private methods ***********************************************
 
-procedure TIdSipHeader.SetParams(const Value: TStrings);
+function TIdSipHeader.GetParam(const Name: String): String;
 begin
-  fParams.Assign(Value);
+  Result := Self.Parameters.Values[Name];
+end;
+
+procedure TIdSipHeader.SetParam(const Name, Value: String);
+begin
+  Self.Parameters.Values[Name] := Value;
+end;
+
+procedure TIdSipHeader.SetParameters(const Value: TStrings);
+begin
+  Self.Parameters.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipViaHeader                                                            *
+//******************************************************************************
+//* TIdSipViaHeader Public methods *********************************************
+
+procedure TIdSipViaHeader.Assign(Src: TPersistent);
+var
+  V: TIdSipViaHeader;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdSipViaHeader) then begin
+    V := Src as TIdSipViaHeader;
+
+    Self.Host       := V.Host;
+    Self.Port       := V.Port;
+    Self.SipVersion := V.SipVersion;
+    Self.Transport  := V.Transport;
+  end;
+end;
+
+function TIdSipViaHeader.IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
+begin
+  Result := (Self.Host = Hop.Host)
+        and (Self.Port = Hop.Port)
+        and (Self.SipVersion = Hop.SipVersion)
+        and (Self.Transport = Hop.Transport);
 end;
 
 //******************************************************************************
@@ -379,10 +431,7 @@ var
   NewHop: TIdSipViaHeader;
 begin
   NewHop := TIdSipViaHeader.Create;
-  NewHop.Host       := Hop.Host;
-  NewHop.Port       := Hop.Port;
-  NewHop.SipVersion := Hop.SipVersion;
-  NewHop.Transport  := Hop.Transport;
+  NewHop.Assign(Hop);
 
   Self.Headers.Add(NewHop);
 end;
@@ -832,7 +881,7 @@ var
   Token:  String;
   S:      String;
 begin
-  if Self.IsVia(Header) then
+  if Self.IsVia(Header) then begin
     NewHop := TIdSipViaHeader.Create;
     try
       S := Header;
@@ -849,6 +898,9 @@ begin
         NewHop.Port := IdPORT_SIP
       else
         NewHop.Port := StrToInt(Token);
+
+      // parse the parameters. Dump the rest of the header up to the first ;
+      Self.ParseHeaderParams(NewHop, S);
     except
       NewHop.Free;
       NewHop := nil;
@@ -856,8 +908,31 @@ begin
 
     if Assigned(NewHop) then
       Msg.Path.Add(NewHop)
+  end
   else
     Self.AddHeader(Msg, Header);
+end;
+
+procedure TIdSipParser.ParseHeaderParams(const Header: TIdSipHeader; const Params: String);
+var
+  Name, Value: String;
+  S:           String;
+begin
+  S := Params;
+  if (Pos(';', S) = 0) then begin
+    Value := S;
+    Name := Fetch(Value, '=');
+
+    Header.Params[Name] := Value;
+  end
+  else begin
+    while (S <> '') do begin
+      Value := Fetch(S, ';');
+      Name := Fetch(Value, '=');
+
+      Header.Params[Name] := Value;
+    end;
+  end;
 end;
 
 procedure TIdSipParser.ParseHeaders(const Msg: TIdSipMessage);
