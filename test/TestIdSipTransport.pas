@@ -1015,11 +1015,24 @@ end;
 
 procedure TestTIdSipTransport.TestTransportFor;
 begin
-  // TODO: use transport registry
-  CheckEquals(TIdSipTCPTransport,  TIdSipTransport.TransportFor(TcpTransport),  'TCP');
-  CheckEquals(TIdSipTLSTransport,  TIdSipTransport.TransportFor(TlsTransport),  'TLS');
-  CheckEquals(TIdSipUDPTransport,  TIdSipTransport.TransportFor(UdpTransport),  'UDP');
-  CheckEquals(TIdSipSCTPTransport, TIdSipTransport.TransportFor(SctpTransport), 'SCTP');
+  CheckEquals(TIdSipTCPTransport,
+              TIdSipTransport.TransportFor(TcpTransport),
+              TcpTransport);
+  CheckEquals(TIdSipTLSTransport,
+              TIdSipTransport.TransportFor(TlsTransport),
+              TlsTransport);
+  CheckEquals(TIdSipUDPTransport,
+              TIdSipTransport.TransportFor(UdpTransport),
+              UdpTransport);
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSCTPTransport);
+  try
+    CheckEquals(TIdSipSCTPTransport,
+                TIdSipTransport.TransportFor(SctpTransport),
+                SctpTransport);
+  finally
+    TIdSipTransport.UnregisterTransport(SctpTransport);
+  end;
 end;
 
 procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
