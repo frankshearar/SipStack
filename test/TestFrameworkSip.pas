@@ -29,7 +29,12 @@ type
 
   TTestCaseSip = class(TThreadingTestCase)
   public
-    procedure CheckEquals(Expected, Received: TIdSipURI; Message: String); overload;
+    procedure CheckEquals(Expected,
+                          Received: TIdSipURI;
+                          const Msg: String); overload;
+    procedure CheckEquals(Expected,
+                          Received: TIdSipHeadersFilter;
+                          const Msg: String); overload;
   end;
 
   TIdSipExceptionRaisingHeader = class(TIdSipHeader)
@@ -496,9 +501,35 @@ end;
 //******************************************************************************
 //* TTestCaseSip Public methods ************************************************
 
-procedure TTestCaseSip.CheckEquals(Expected, Received: TIdSipURI; Message: String);
+procedure TTestCaseSip.CheckEquals(Expected,
+                                   Received: TIdSipURI;
+                                   const Msg: String);
 begin
-  CheckEquals(Expected.URI, Received.URI, Message);
+  CheckEquals(Expected.URI, Received.URI, Msg);
+end;
+
+procedure TTestCaseSip.CheckEquals(Expected,
+                                       Received: TIdSipHeadersFilter;
+                                       const Msg: String);
+var
+  I: Cardinal;
+begin
+  Expected.First;
+  Received.First;
+
+  I := 1;
+  while Expected.HasNext and Received.HasNext do begin
+    CheckEquals(Expected.CurrentHeader.Value,
+                Received.CurrentHeader.Value,
+                Msg + ': ' + IntToStr(I) + 'st header');
+    Expected.Next;
+    Received.Next;
+    Inc(I);
+  end;
+
+  CheckEquals(Expected.Count,
+              Received.Count,
+              Msg + ': Number of headers');
 end;
 
 //******************************************************************************
