@@ -125,6 +125,8 @@ type
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
+    procedure TryAgainWithAuthentication(Transaction: TIdSipTransaction;
+                                         Challenge: TIdSipResponse);
   protected
     function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
@@ -895,26 +897,9 @@ end;
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
-var
-  NewAttempt: TIdSipTransaction;
-  ReAttempt:  TIdSipRequest;
-  TryAgain:   Boolean;
 begin
-  if (Response.StatusCode = SIPUnauthorized)
-  or (Response.StatusCode = SIPProxyAuthenticationRequired) then begin
-    ReAttempt := TIdSipRequest.Create;
-    try
-      ReAttempt.Assign(Transaction.InitialRequest);
-      Self.NotifyOfAuthenticationChallenge(Response, ReAttempt, TryAgain);
-
-      if TryAgain then begin
-        NewAttempt := Self.AddClientTransaction(ReAttempt);
-        NewAttempt.SendRequest;
-      end;
-    finally
-      ReAttempt.Free;
-    end;
-  end
+  if Response.IsAuthenticationChallenge then
+    Self.TryAgainWithAuthentication(Transaction, Response)
   else
     Self.NotifyListenersOfResponse(Response, Receiver);
 end;
@@ -1149,6 +1134,27 @@ end;
 function TIdSipTransactionDispatcher.TransportAt(Index: Cardinal): TIdSipTransport;
 begin
   Result := Self.Transports[Index] as TIdSipTransport;
+end;
+
+procedure TIdSipTransactionDispatcher.TryAgainWithAuthentication(Transaction: TIdSipTransaction;
+                                                                 Challenge: TIdSipResponse);
+var
+  NewAttempt: TIdSipTransaction;
+  ReAttempt:  TIdSipRequest;
+  TryAgain:   Boolean;
+begin
+  ReAttempt := TIdSipRequest.Create;
+  try
+    ReAttempt.Assign(Transaction.InitialRequest);
+    Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
+
+    if TryAgain then begin
+      NewAttempt := Self.AddClientTransaction(ReAttempt);
+      NewAttempt.SendRequest;
+    end;
+  finally
+    ReAttempt.Free;
+  end;
 end;
 
 //******************************************************************************
