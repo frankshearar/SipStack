@@ -12,6 +12,7 @@ type
   TrnidSpike = class(TForm,
                      IIdRTPDataListener,
                      IIdSipObserver,
+                     IIdSipOptionsListener,
                      IIdSipRegistrationListener,
                      IIdSipSessionListener,
                      IIdSipTransportListener,
@@ -44,6 +45,7 @@ type
     OutputText: TMemo;
     Unregister: TButton;
     Register: TButton;
+    Options: TButton;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -54,6 +56,7 @@ type
     procedure RegisterClick(Sender: TObject);
     procedure FormResize(Sender: TObject);
     procedure UnregisterClick(Sender: TObject);
+    procedure OptionsClick(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -89,7 +92,10 @@ type
                           const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String);
+                        const Reason: String); overload;
+    procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
+                        Response: TIdSipResponse;
+                        const Reason: String); overload;
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
@@ -107,7 +113,9 @@ type
     procedure OnSendResponse(Response: TIdSipResponse;
                              Transport: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                        CurrentBindings: TIdSipContacts);
+                        CurrentBindings: TIdSipContacts); overload;
+    procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
+                        Response: TIdSipResponse); overload;
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure StartReadingData(const SDP: String);
@@ -182,7 +190,7 @@ begin
   Self.StopEvent := TSimpleEvent.Create;
 
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
-//  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
+  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
   Self.UA := TIdSipUserAgentCore.Create;
@@ -221,9 +229,10 @@ begin
                 + 'kill it and restart this');
   end;
 
-//  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
-//  Self.UA.Contact.Value := Self.UA.From.Value;
-  Self.UA.HasProxy := false;
+  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
+  Self.UA.Contact.Value := Self.UA.From.Value;
+  Self.UA.HasProxy := true;
+  Self.UA.Proxy.Uri := 'sip:193.116.120.160';
 end;
 
 destructor TrnidSpike.Destroy;
@@ -371,6 +380,12 @@ procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
 begin
 end;
 
+procedure TrnidSpike.OnFailure(OptionsAgent: TIdSipOutboundOptions;
+                               Response: TIdSipResponse;
+                               const Reason: String);
+begin
+end;                               
+
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
 var
   Address: String;
@@ -457,6 +472,11 @@ end;
 
 procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts);
+begin
+end;
+
+procedure TrnidSpike.OnSuccess(OptionsAgent: TIdSipOutboundOptions;
+                               Response: TIdSipResponse);
 begin
 end;
 
@@ -647,6 +667,19 @@ begin
     Self.UA.UnregisterFrom(Registrar).AddListener(Self);
   finally
     Registrar.Free;
+  end;
+end;
+
+procedure TrnidSpike.OptionsClick(Sender: TObject);
+var
+  Dest: TIdSipAddressHeader;
+begin
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.Value := Self.RegistrarUri.Text;
+    Self.UA.QueryOptions(Dest).AddListener(Self);
+  finally
+    Dest.Free;
   end;
 end;
 

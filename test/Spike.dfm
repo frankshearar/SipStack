@@ -213,6 +213,15 @@ object rnidSpike: TrnidSpike
         TabOrder = 4
         OnClick = UnregisterClick
       end
+      object Options: TButton
+        Left = 74
+        Top = 48
+        Width = 75
+        Height = 25
+        Caption = 'Options'
+        TabOrder = 6
+        OnClick = OptionsClick
+      end
     end
   end
   object RegistrarUri: TEdit
