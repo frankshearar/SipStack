@@ -25,6 +25,7 @@ type
     procedure FailParse;
     function  GetName: String; virtual;
     function  GetValue: String; virtual;
+    procedure ParseParameters(Value: String; Parameters: TStrings);
     procedure SetName(const Value: String); virtual;
     procedure SetValue(const Value: String); virtual;
   public
@@ -66,8 +67,53 @@ type
 
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
-    function  GetName: String; override;
     procedure SetValue(const Value: String); override;
+  end;
+
+  TIdSipCommaSeparatedHeader = class(TIdSipHeader)
+  private
+    fValues: TStrings;
+  protected
+    procedure SetValue(const Value: String); override;
+  public
+    constructor Create; override;
+    destructor Destroy; override;
+
+    property Values: TStrings read fValues;
+  end;
+
+  TIdSipWeightedValue = class(TObject)
+  private
+    fParameters: TStrings;
+    fValue:  String;
+    fWeight: Currency;
+
+    function GetParameters: TStrings;
+  public
+    destructor  Destroy; override;
+
+    property Parameters: TStrings read GetParameters;
+    property Value:      String   read fValue write fValue;
+    property Weight:     Currency read fWeight write fWeight;
+  end;
+
+  TIdSipWeightedCommaSeparatedHeader = class(TIdSipHeader)
+  private
+    fValues: TObjectList;
+
+    function  GetValues(const Index: Integer): TIdSipWeightedValue;
+    procedure SetValues(const Index: Integer; const Value: TIdSipWeightedValue);
+  protected
+    procedure SetValue(const Value: String); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure AddValue(const Value: String; const Weight: Currency = 1);
+    procedure ClearValues;
+    function  ValueCount: Integer;
+
+    property Values[const Index: Integer]: TIdSipWeightedValue read GetValues write SetValues;
   end;
 
   TIdSipContactHeader = class(TIdSipAddressHeader)
@@ -257,7 +303,7 @@ type
     class function CanonicaliseName(HeaderName: String): String;
     class function GetHeaderName(Header: String): String;
     class function IsCallID(Header: String): Boolean;
-    class function IsCommaSeparatedHeader(Header: String): Boolean;
+    class function IsCompoundHeader(Header: String): Boolean;
     class function IsContact(Header: String): Boolean;
     class function IsContentLength(Header: String): Boolean;
     class function IsCSeq(Header: String): Boolean;
@@ -598,6 +644,39 @@ begin
   Result := fValue;
 end;
 
+procedure TIdSipHeader.ParseParameters(Value: String; Parameters: TStrings);
+  procedure AddParam(Parameters: TStrings; ParamName, ParamValue: String);
+  begin
+    ParamName  := Trim(ParamName);
+    ParamValue := Trim(ParamValue);
+
+    if (ParamValue = '') then
+        Parameters.Add(ParamName)
+    else
+      Parameters.Values[ParamName] := ParamValue;
+  end;
+var
+  ParamName:  String;
+  ParamValue: String;
+begin
+  if (Value <> '') then begin
+    if (IndyPos(';', Value) = 0) then begin
+      ParamValue := Value;
+      ParamName := Fetch(ParamValue, '=');
+
+      AddParam(Parameters, ParamName, ParamValue);
+    end
+    else begin
+      while (Value <> '') do begin
+        ParamValue := Fetch(Value, ';');
+        ParamName  := Fetch(ParamValue, '=');
+
+        AddParam(Parameters, ParamName, ParamValue);
+      end;
+    end;
+  end;
+end;
+
 procedure TIdSipHeader.SetName(const Value: String);
 begin
   fName := Value;
@@ -605,9 +684,7 @@ end;
 
 procedure TIdSipHeader.SetValue(const Value: String);
 var
-  ParamName:  String;
-  ParamValue: String;
-  S:          String;
+  S: String;
 begin
   Self.Parameters.Clear;
 
@@ -618,20 +695,8 @@ begin
   end
   else begin
     fValue := Trim(Fetch(S, ';'));
-    if (IndyPos(';', S) = 0) then begin
-      ParamValue := S;
-      ParamName := Trim(Fetch(ParamValue, '='));
 
-      Self.Params[ParamName] := ParamValue;
-    end
-    else begin
-      while (S <> '') do begin
-        ParamValue := Fetch(S, ';');
-        ParamName  := Fetch(ParamValue, '=');
-
-        Self.Params[ParamName] := ParamValue;
-      end;
-    end;
+    Self.ParseParameters(S, Self.Parameters);
   end;
 end;
 
@@ -782,11 +847,6 @@ end;
 //******************************************************************************
 //* TIdSipCallIdHeader Protected methods ***************************************
 
-function TIdSipCallIdHeader.GetName: String;
-begin
-  Result := CallIdHeaderFull;
-end;
-
 procedure TIdSipCallIdHeader.SetValue(const Value: String);
 var
   Val: String;
@@ -802,6 +862,161 @@ begin
     Self.FailParse;
 
   inherited SetValue(Value);
+end;
+
+//******************************************************************************
+//* TIdSipCommaSeparatedHeader                                                 *
+//******************************************************************************
+//* TIdSipCommaSeparatedHeader Public methods **********************************
+
+constructor TIdSipCommaSeparatedHeader.Create;
+begin
+  inherited Create;
+
+  fValues := TStringList.Create;
+end;
+
+destructor TIdSipCommaSeparatedHeader.Destroy;
+begin
+  fValues.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipCommaSeparatedHeader Protected methods *******************************
+
+procedure TIdSipCommaSeparatedHeader.SetValue(const Value: String);
+var
+  S: String;
+begin
+  S := Value;
+
+  Self.Values.Clear;
+
+  while (S <> '') do begin
+    Self.Values.Add(Trim(Fetch(S, ',')));
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipWeightedValue                                                        *
+//******************************************************************************
+//* TIdSipWeightedValue Public methods *****************************************
+
+destructor TIdSipWeightedValue.Destroy;
+begin
+  fParameters.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipWeightedValue Private methods ****************************************
+
+function TIdSipWeightedValue.GetParameters: TStrings;
+begin
+  if not Assigned(fParameters) then
+    fParameters := TStringList.Create;
+
+  Result := fParameters;
+end;
+
+//******************************************************************************
+//* TIdSipWeightedCommaSeparatedHeader                                         *
+//******************************************************************************
+//* TIdSipWeightedCommaSeparatedHeader Public methods **************************
+
+constructor TIdSipWeightedCommaSeparatedHeader.Create;
+begin
+  inherited Create;
+
+  fValues := TObjectList.Create(true);
+end;
+
+destructor TIdSipWeightedCommaSeparatedHeader.Destroy;
+begin
+  fValues.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipWeightedCommaSeparatedHeader.AddValue(const Value: String; const Weight: Currency = 1);
+var
+  NewValue: TIdSipWeightedValue;
+  OldCount: Integer;
+begin
+  OldCount := Self.ValueCount;
+  NewValue := TIdSipWeightedValue.Create;
+  try
+    NewValue.Value := Value;
+    NewValue.Weight := Weight;
+
+    fValues.Add(NewValue);
+  except
+    if (Self.ValueCount = OldCount) then
+      NewValue.Free;
+  end;
+end;
+
+procedure TIdSipWeightedCommaSeparatedHeader.ClearValues;
+begin
+  fValues.Clear;
+end;
+
+function TIdSipWeightedCommaSeparatedHeader.ValueCount: Integer;
+begin
+  Result := fValues.Count;
+end;
+
+//* TIdSipWeightedCommaSeparatedHeader Protected methods ***********************
+
+procedure TIdSipWeightedCommaSeparatedHeader.SetValue(const Value: String);
+var
+  S:          String;
+  MediaRange: String;
+  Params:     String;
+  NewParams:  TStrings;
+begin
+  Self.ClearValues;
+
+  S := Value;
+
+  while (S <> '') do begin
+    MediaRange := Trim(Fetch(S, ','));
+
+    if (IndyPos(';', MediaRange) > 0) then begin
+      Params := MediaRange;
+      MediaRange := Fetch(Params, ';');
+    end
+    else
+      Params := '';
+
+    NewParams := TStringList.Create;
+    try
+      Self.ParseParameters(Params, NewParams);
+
+      Self.AddValue(MediaRange, StrToCurrDef(NewParams.Values[Qparam], 1));
+
+      if (NewParams.IndexOfName(QParam) <> -1) then
+        NewParams.Delete(NewParams.IndexOfName(QParam));
+
+      Self.Values[Self.ValueCount - 1].Parameters.AddStrings(NewParams);
+    finally
+      NewParams.Free;
+    end;
+  end;
+end;
+
+//* TIdSipWeightedCommaSeparatedHeader Private methods *************************
+
+function TIdSipWeightedCommaSeparatedHeader.GetValues(const Index: Integer): TIdSipWeightedValue;
+begin
+  Result := fValues[Index] as TIdSipWeightedValue;
+end;
+
+procedure TIdSipWeightedCommaSeparatedHeader.SetValues(const Index: Integer; const Value: TIdSipWeightedValue);
+begin
+  (fValues[Index] as TIdSipWeightedValue).Value  := Value.Value;
+  (fValues[Index] as TIdSipWeightedValue).Weight := Value.Weight;
 end;
 
 //******************************************************************************
@@ -1407,6 +1622,7 @@ end;
 class function TIdSipHeaders.CanonicaliseName(HeaderName: String): String;
 begin
   Result := '';
+
   if not Assigned(GCanonicalHeaderNames) then begin
     GCanonicalHeaderNames := TStringList.Create;
     GCanonicalHeaderNames.Add(AcceptHeader               + '=' + AcceptHeader);
@@ -1483,7 +1699,7 @@ begin
   Result := Self.IsHeader(Header, CallIDHeaderFull);
 end;
 
-class function TIdSipHeaders.IsCommaSeparatedHeader(Header: String): Boolean;
+class function TIdSipHeaders.IsCompoundHeader(Header: String): Boolean;
 begin
   Result := Self.IsContact(Header)
          or Self.IsErrorInfo(Header)
@@ -1610,24 +1826,39 @@ class function TIdSipHeaders.HeaderTypes: TObjectList;
 begin
   if not Assigned(GIdSipHeadersMap) then begin
     GIdSipHeadersMap := TObjectList.Create(true);
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,        TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,       TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,       TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,      TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull, TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,              TIdSipCSeqHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,              TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,           TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,          TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,         TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,       TIdSipMaxForwardsHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,       TIdSipRecordRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,             TIdSipRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,         TIdSipTimestampHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,            TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,           TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,           TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,          TIdSipViaHeader));
+
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,                TIdSipWeightedCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,        TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,             TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                 TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,            TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,           TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,           TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,          TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderFull,   TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderShort,  TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLanguageHeader,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,     TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                  TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                  TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,               TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,              TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,             TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,             TIdSipCallIdHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,           TIdSipMaxForwardsHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,          TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,           TIdSipRecordRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,               TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                 TIdSipRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,         TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,        TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,             TIdSipTimestampHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,                TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,               TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,           TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,               TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,              TIdSipViaHeader));
+//    WarningHeader
   end;
 
   Result := GIdSipHeadersMap;

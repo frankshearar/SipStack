@@ -73,7 +73,7 @@ const
 implementation
 
 uses
-  Classes, IdSimpleParser, TestFramework, TortureTests;
+  Classes, IdSimpleParser, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin

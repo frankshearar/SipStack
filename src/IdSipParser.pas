@@ -35,7 +35,7 @@ type
     procedure CheckCSeqMethod(const Request: TIdSipRequest);
     procedure CheckRequiredHeaders(const Request: TIdSipRequest);
     procedure InitialiseMessage(Msg: TIdSipMessage);
-    procedure ParseCommaSeparatedHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
+    procedure ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
     procedure ParseRequestLine(const Request: TIdSipRequest);
@@ -601,7 +601,7 @@ begin
 end;
 
 
-procedure TIdSipParser.ParseCommaSeparatedHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
+procedure TIdSipParser.ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
 begin
   while (Parms <> '') do
     Msg.Headers.Add(Header).Value := Fetch(Parms, ',');
@@ -610,8 +610,8 @@ end;
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
 begin
   try
-    if TIdSipHeaders.IsCommaSeparatedHeader(Header) then
-      Self.ParseCommaSeparatedHeader(Msg, Self.GetHeaderName(Header), Self.GetHeaderValue(Header))
+    if TIdSipHeaders.IsCompoundHeader(Header) then
+      Self.ParseCompoundHeader(Msg, Self.GetHeaderName(Header), Self.GetHeaderValue(Header))
     else
       Self.AddHeader(Msg, Header);
   except

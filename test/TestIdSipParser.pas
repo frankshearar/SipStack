@@ -87,62 +87,10 @@ type
     procedure TestTortureTest40;
   end;
 
-const
-  BasicContentLengthHeader = 'Content-Length: 29'#13#10;
-  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-               + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-               + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-               + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-               + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
-               + 'Content-Type: text/plain'#13#10
-               + BasicContentLengthHeader
-               + #13#10
-               + 'I am a message. Hear me roar!';
-  BasicResponse = 'SIP/2.0 486 Busy Here'#13#10
-                + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                + 'Max-Forwards: 70'#13#10
-                + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                + 'CSeq: 314159 INVITE'#13#10
-                + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
-                + 'Content-Type: text/plain'#13#10
-                + BasicContentLengthHeader
-                + #13#10
-                + 'I am a message. Hear me roar!';
-  EmptyRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-               + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-               + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-               + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-               + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10;
-  ExtensiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                   + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
-                   + 'Content-Length: 29'#13#10
-                   + 'Content-Type: text/plain'#13#10
-                   + 'CSeq: 314159 INVITE'#13#10
-                   + 'Date: Thu, 1 Jan 1970 00:00:00 GMT'#13#10
-                   + 'Expires: 1000'#13#10
-                   + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                   + 'Max-Forwards: 70'#13#10
-                   + 'Route: localhost <sip:127.0.0.1>;lr'#13#10
-                   + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
-                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                   + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-                   + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
-                   + #13#10
-                   + 'I am a message. Hear me roar!';
-
 implementation
 
 uses
-  DateUtils, IdSimpleParser, SysUtils, TortureTests;
+  DateUtils, IdSimpleParser, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -629,6 +577,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Request);
+//    CheckEquals('
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',
                 Self.Request.Headers[CallIdHeaderFull].Value,
                 'Call-ID');

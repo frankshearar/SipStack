@@ -64,7 +64,7 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework, TortureTests;
+  IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin

@@ -62,9 +62,18 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestName;
     procedure TestValue;
     procedure TestValueWithParams;
+  end;
+
+  TestTIdSipCommaSeparatedHeader = class(TTestCase)
+  private
+    C: TIdSipCommaSeparatedHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestValue;
   end;
 
   TestTIdSipContactHeader = class(TTestCase)
@@ -166,7 +175,6 @@ type
     procedure TestValueWithParamsAndHeaderParams;
   end;
 
-
   TestTIdSipTimestampHeader = class(TTestCase)
   private
     T: TIdSipTimestampHeader;
@@ -202,9 +210,23 @@ type
     procedure TestValueWithTTL;
   end;
 
+  TestTIdSipWeightedCommaSeparatedHeader = class(TTestCase)
+  private
+    W: TIdSipWeightedCommaSeparatedHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddValue;
+    procedure TestClearValues;
+    procedure TestValue;
+  end;
+
   TestTIdSipHeaders = class(TTestCase)
   private
     H: TIdSipHeaders;
+
+    procedure CheckType(ExpectedClassType: TClass; ReceivedObject: TObject; Message: String = '');
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -219,7 +241,7 @@ type
     procedure TestHeaders;
     procedure TestItems;
     procedure TestIsCallID;
-    procedure TestIsCommaSeparatedHeader;
+    procedure TestIsCompoundHeader;
     procedure TestIsContact;
     procedure TestIsContentLength;
     procedure TestIsCSeq;
@@ -290,7 +312,7 @@ type
 implementation
 
 uses
-  Classes, IdSipParser, SysUtils, TestIdSipParser;
+  Classes, IdSipParser, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -299,6 +321,7 @@ begin
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
+  Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
@@ -311,6 +334,7 @@ begin
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+  Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
@@ -790,14 +814,6 @@ end;
 
 //* TestTIdSipCallIDHeader Published methods ***********************************
 
-procedure TestTIdSipCallIDHeader.TestName;
-begin
-  CheckEquals(CallIDHeaderFull, Self.C.Name, 'Name');
-
-  Self.C.Name := 'foo';
-  CheckEquals(CallIDHeaderFull, Self.C.Name, 'Name after set');
-end;
-
 procedure TestTIdSipCallIDHeader.TestValue;
 begin
   Self.C.Value := 'fdjhasdfa';
@@ -835,6 +851,52 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipCommaSeparatedHeader                                             *
+//******************************************************************************
+//* TestTIdSipCommaSeparatedHeader Public methods ******************************
+
+procedure TestTIdSipCommaSeparatedHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := TIdSipCommaSeparatedHeader.Create;
+end;
+
+procedure TestTIdSipCommaSeparatedHeader.TearDown;
+begin
+  Self.C.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipCommaSeparatedHeader Published methods ***************************
+
+procedure TestTIdSipCommaSeparatedHeader.TestValue;
+begin
+  Self.C.Value := '';
+  CheckEquals(0, Self.C.Values.Count, 'Empty value');
+
+  Self.C.Value := 'a b';
+  CheckEquals(1, Self.C.Values.Count, 'a b');
+  CheckEquals('a b', Self.C.Values[0], '1: First value');
+
+  Self.C.Value := 'a,b';
+  CheckEquals(2, Self.C.Values.Count, 'a,b');
+  CheckEquals('a', Self.C.Values[0], '2: First value');
+  CheckEquals('b', Self.C.Values[1], '2: Second value');
+
+  Self.C.Value := 'a, b';
+  CheckEquals(2, Self.C.Values.Count, 'a, b');
+  CheckEquals('a', Self.C.Values[0], '3: First value');
+  CheckEquals('b', Self.C.Values[1], '3: Second value');
+
+  Self.C.Value := 'a;q=0.1, b;q=1';
+  CheckEquals(2, Self.C.Values.Count, 'a;q=0.1, b;q=1');
+  CheckEquals('a;q=0.1', Self.C.Values[0], '4: First value');
+  CheckEquals('b;q=1', Self.C.Values[1],   '4: Second value');
 end;
 
 //******************************************************************************
@@ -1895,6 +1957,89 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipWeightedCommaSeparatedHeader                                     *
+//******************************************************************************
+//* TestTIdSipWeightedCommaSeparatedHeader Public methods **********************
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.W := TIdSipWeightedCommaSeparatedHeader.Create;
+end;
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TearDown;
+begin
+  Self.W.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipWeightedCommaSeparatedHeader Published methods *******************
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestAddValue;
+begin
+  CheckEquals(0, Self.W.ValueCount, 'Empty string');
+
+  Self.W.AddValue('text/plain');
+  CheckEquals(1, Self.W.ValueCount, 'One Add');
+  CheckEquals('text/plain', Self.W.Values[0].Value,  '[0].Value');
+  CheckEquals(1,            Self.W.Values[0].Weight, '[0].Weight');
+
+  Self.W.AddValue('text/xml', 0.7);
+  CheckEquals(2, Self.W.ValueCount, 'Two Adds');
+  CheckEquals('text/xml', Self.W.Values[1].Value,  '[1].Value');
+  CheckEquals(0.7,        Self.W.Values[1].Weight, '[1].Weight');
+end;
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestClearValues;
+begin
+  Self.W.AddValue('text/plain');
+  Self.W.AddValue('text/plain');
+  Self.W.AddValue('text/plain');
+
+  Self.W.ClearValues;
+
+  CheckEquals(0, Self.W.ValueCount, 'ClearValues didn''t');
+end;
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestValue;
+begin
+  Self.W.Value := '';
+  CheckEquals(0, Self.W.ValueCount, 'Empty string');
+
+  Self.W.Value := 'text/plain';
+  CheckEquals(1,            Self.W.ValueCount,                 '1: Count');
+  CheckEquals(0,            Self.W.Values[0].Parameters.Count, '1: Parameter count');
+  CheckEquals('text/plain', Self.W.Values[0].Value,            '1: Value');
+  CheckEquals(1,            Self.W.Values[0].Weight,           '1: Weight');
+
+  Self.W.Value := 'text/plain;q=0.7';
+  CheckEquals(1,            Self.W.ValueCount,                 '2: Count');
+  CheckEquals(0,            Self.W.Values[0].Parameters.Count, '2: Parameter count');
+  CheckEquals('text/plain', Self.W.Values[0].Value,            '2: Value');
+  CheckEquals(0.7,          Self.W.Values[0].Weight,           '2: Weight');
+
+  Self.W.Value := 'text/plain;q=0.7;foo=bar';
+  CheckEquals(1,            Self.W.ValueCount,                 '3: Count');
+  CheckEquals(1,            Self.W.Values[0].Parameters.Count, '3: Parameter count');
+  CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '3: Parameters[0]');
+  CheckEquals('text/plain', Self.W.Values[0].Value,            '3: Value');
+  CheckEquals(0.7,          Self.W.Values[0].Weight,           '3: Weight');
+
+  Self.W.Value := 'text/plain;q=0.7;foo=bar, text/t140';
+  CheckEquals(2,            Self.W.ValueCount,                 '4: Count');
+  CheckEquals(1,            Self.W.Values[0].Parameters.Count, '4: [0].Parameter count');
+  CheckEquals('foo=bar',    Self.W.Values[0].Parameters[0],    '4: [0].Parameters[0]');
+  CheckEquals('text/plain', Self.W.Values[0].Value,            '4: [0].Value');
+  CheckEquals(0.7,          Self.W.Values[0].Weight,           '4: [0].Weight');
+
+  CheckEquals(0,            Self.W.Values[1].Parameters.Count, '4: [0].Parameter count');
+  CheckEquals('text/t140',  Self.W.Values[1].Value,            '4: [1].Value');
+  CheckEquals(1,            Self.W.Values[1].Weight,           '4: [1].Weight');
+end;
+
+//******************************************************************************
 //* TestTIdSipHeaders                                                          *
 //******************************************************************************
 //* TestTIdSipHeaders Public methods *******************************************
@@ -1913,6 +2058,13 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipHeaders Private methods ******************************************
+
+procedure TestTIdSipHeaders.CheckType(ExpectedClassType: TClass; ReceivedObject: TObject; Message: String = '');
+begin
+  Self.CheckEquals(ExpectedClassType.ClassName, ReceivedObject.ClassName, Message);
+end;
+
 //* TestTIdSipHeaders Published methods ****************************************
 
 procedure TestTIdSipHeaders.TestAddAndCount;
@@ -1926,19 +2078,60 @@ end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
-  CheckEquals(TIdSipCallIdHeader.ClassName,      Self.H.Add(CallIDHeaderFull).ClassName,        CallIDHeaderFull);
-  CheckEquals(TIdSipContactHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
-  CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
-  CheckEquals(TIdSipCSeqHeader.ClassName,        Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
-  CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(DateHeader).ClassName,              DateHeader);
-  CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
-  CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
-  CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
-  CheckEquals(TIdSipRecordRouteHeader.ClassName, Self.H.Add(RecordRouteHeader).ClassName,       RecordRouteHeader);
-  CheckEquals(TIdSipRouteHeader.ClassName,       Self.H.Add(RouteHeader).ClassName,             RouteHeader);
-  CheckEquals(TIdSipTimestampHeader.ClassName,   Self.H.Add(TimestampHeader).ClassName,         TimestampHeader);
-  CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
-  CheckEquals(TIdSipViaHeader.ClassName,         Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
+  CheckType(TIdSipWeightedCommaSeparatedHeader, Self.H.Add(AcceptHeader),               AcceptHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AcceptEncodingHeader),       AcceptEncodingHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AllowHeader),                AllowHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(AuthorizationHeader),        AuthorizationHeader);
+  CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderFull),           CallIDHeaderFull);
+  CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderShort),          CallIDHeaderShort);
+  CheckType(TIdSipHeader,                       Self.H.Add(CallInfoHeader),             CallInfoHeader);
+  CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderFull),          ContactHeaderFull);
+  CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderShort),         ContactHeaderShort);
+  CheckType(TIdSipHeader,                       Self.H.Add(ContentDispositionHeader),   ContentDispositionHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentLanguageHeader),      ContentLanguageHeader);
+  CheckType(TIdSipNumericHeader,                Self.H.Add(ContentLengthHeaderFull),    ContentLengthHeaderFull);
+  CheckType(TIdSipNumericHeader,                Self.H.Add(ContentLengthHeaderShort),   ContentLengthHeaderShort);
+  CheckType(TIdSipHeader,                       Self.H.Add(ContentTypeHeaderFull),      ContentTypeHeaderFull);
+  CheckType(TIdSipHeader,                       Self.H.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
+  CheckType(TIdSipCSeqHeader,                   Self.H.Add(CSeqHeader),                 CSeqHeader);
+  CheckType(TIdSipDateHeader,                   Self.H.Add(DateHeader),                 DateHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(ErrorInfoHeader),            ErrorInfoHeader); // break into own class
+  CheckType(TIdSipNumericHeader,                Self.H.Add(ExpiresHeader),              ExpiresHeader);
+  CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderFull),             FromHeaderFull);
+  CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderShort),            FromHeaderShort);
+  CheckType(TIdSipCallIdHeader,                 Self.H.Add(InReplyToHeader),            InReplyToHeader);
+  CheckType(TIdSipMaxForwardsHeader,            Self.H.Add(MaxForwardsHeader),          MaxForwardsHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(MIMEVersionHeader),          MIMEVersionHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(OrganizationHeader),         OrganizationHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(PriorityHeader),             PriorityHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ProxyRequireHeader),         ProxyRequireHeader);
+  CheckType(TIdSipRecordRouteHeader,            Self.H.Add(RecordRouteHeader),          RecordRouteHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(RequireHeader),              RequireHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(ReplyToHeader),              ReplyToHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(RetryAfterHeader),           RetryAfterHeader);
+  CheckType(TIdSipRouteHeader,                  Self.H.Add(RouteHeader),                RouteHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(ServerHeader),               ServerHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(SubjectHeaderFull),          SubjectHeaderFull);
+  CheckType(TIdSipHeader,                       Self.H.Add(SubjectHeaderShort),         SubjectHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderFull),        SupportedHeaderFull);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderShort),       SupportedHeaderShort);
+  CheckType(TIdSipTimestampHeader,              Self.H.Add(TimestampHeader),            TimestampHeader);
+  CheckType(TIdSipFromToHeader,                 Self.H.Add(ToHeaderFull),               ToHeaderFull);
+  CheckType(TIdSipFromToHeader,                 Self.H.Add(ToHeaderShort),              ToHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(UnsupportedHeader),          UnsupportedHeader);
+  CheckType(TIdSipHeader,                       Self.H.Add(UserAgentHeader),            UserAgentHeader);
+  CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderFull),              ViaHeaderFull);
+  CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderShort),             ViaHeaderShort);
+  CheckType(TIdSipHeader,                       Self.H.Add(WarningHeader),              WarningHeader); // break into own class
+  CheckType(TIdSipHeader,                       Self.H.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
 procedure TestTIdSipHeaders.TestAsString;
@@ -2264,64 +2457,64 @@ begin
   Check(not TIdSipHeaders.IsCallID('Content-Length'),  'Content-Length');
 end;
 
-procedure TestTIdSipHeaders.TestIsCommaSeparatedHeader;
+procedure TestTIdSipHeaders.TestIsCompoundHeader;
 begin
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(''),                         '''''');
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader('New-Header'),               'New-Header');
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptHeader),               AcceptHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptEncodingHeader),       AcceptEncodingHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AcceptLanguageHeader),       AcceptLanguageHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AlertInfoHeader),            AlertInfoHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AllowHeader),                AllowHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AuthenticationInfoHeader),   AuthenticationInfoHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(AuthorizationHeader),        AuthorizationHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallIDHeaderFull),           CallIDHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallIDHeaderShort),          CallIDHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CallInfoHeader),             CallInfoHeader);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ContactHeaderFull),          ContactHeaderFull);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ContactHeaderShort),         ContactHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentDispositionHeader),   ContentDispositionHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLanguageHeader),      ContentLanguageHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLengthHeaderFull),    ContentLengthHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentLengthHeaderShort),   ContentLengthHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentTypeHeaderFull),      ContentTypeHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ContentTypeHeaderShort),     ContentTypeHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(CSeqHeader),                 CSeqHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(DateHeader),                 DateHeader);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ErrorInfoHeader),            ErrorInfoHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ExpiresHeader),              ExpiresHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(FromHeaderFull),             FromHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(FromHeaderShort),            FromHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(InReplyToHeader),            InReplyToHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MaxForwardsHeader),          MaxForwardsHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MIMEVersionHeader),          MIMEVersionHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(MinExpiresHeader),           MinExpiresHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(OrganizationHeader),         OrganizationHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(PriorityHeader),             PriorityHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ProxyRequireHeader),         ProxyRequireHeader);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(RecordRouteHeader),          RecordRouteHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ReplyToHeader),              ReplyToHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(RequireHeader),              RequireHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(RetryAfterHeader),           RetryAfterHeader);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(RouteHeader),                RouteHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ServerHeader),               ServerHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SubjectHeaderFull),          SubjectHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SubjectHeaderShort),         SubjectHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SupportedHeaderFull),        SupportedHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(SupportedHeaderShort),       SupportedHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(TimestampHeader),            TimestampHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ToHeaderFull),               ToHeaderFull);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(ToHeaderShort),              ToHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(UnsupportedHeader),          UnsupportedHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(UserAgentHeader),            UserAgentHeader);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ViaHeaderFull),              ViaHeaderFull);
-  Check(    TIdSipHeaders.IsCommaSeparatedHeader(ViaHeaderShort),             ViaHeaderShort);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(WarningHeader),              WarningHeader);
-  Check(not TIdSipHeaders.IsCommaSeparatedHeader(WWWAuthenticateHeader),      WWWAuthenticateHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(''),                         '''''');
+  Check(not TIdSipHeaders.IsCompoundHeader('New-Header'),               'New-Header');
+  Check(not TIdSipHeaders.IsCompoundHeader(AcceptHeader),               AcceptHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AcceptEncodingHeader),       AcceptEncodingHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AcceptLanguageHeader),       AcceptLanguageHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AlertInfoHeader),            AlertInfoHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AllowHeader),                AllowHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(AuthorizationHeader),        AuthorizationHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(CallIDHeaderFull),           CallIDHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(CallIDHeaderShort),          CallIDHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(CallInfoHeader),             CallInfoHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(ContactHeaderFull),          ContactHeaderFull);
+  Check(    TIdSipHeaders.IsCompoundHeader(ContactHeaderShort),         ContactHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentDispositionHeader),   ContentDispositionHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentLanguageHeader),      ContentLanguageHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentLengthHeaderFull),    ContentLengthHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentLengthHeaderShort),   ContentLengthHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentTypeHeaderFull),      ContentTypeHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(ContentTypeHeaderShort),     ContentTypeHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(CSeqHeader),                 CSeqHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(DateHeader),                 DateHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(ErrorInfoHeader),            ErrorInfoHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ExpiresHeader),              ExpiresHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(FromHeaderFull),             FromHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(FromHeaderShort),            FromHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(InReplyToHeader),            InReplyToHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(MaxForwardsHeader),          MaxForwardsHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(MIMEVersionHeader),          MIMEVersionHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(MinExpiresHeader),           MinExpiresHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(OrganizationHeader),         OrganizationHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(PriorityHeader),             PriorityHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ProxyRequireHeader),         ProxyRequireHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(RecordRouteHeader),          RecordRouteHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ReplyToHeader),              ReplyToHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(RequireHeader),              RequireHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(RetryAfterHeader),           RetryAfterHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(RouteHeader),                RouteHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ServerHeader),               ServerHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(SubjectHeaderFull),          SubjectHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(SubjectHeaderShort),         SubjectHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(SupportedHeaderFull),        SupportedHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(SupportedHeaderShort),       SupportedHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(TimestampHeader),            TimestampHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(ToHeaderFull),               ToHeaderFull);
+  Check(not TIdSipHeaders.IsCompoundHeader(ToHeaderShort),              ToHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(UnsupportedHeader),          UnsupportedHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(UserAgentHeader),            UserAgentHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(ViaHeaderFull),              ViaHeaderFull);
+  Check(    TIdSipHeaders.IsCompoundHeader(ViaHeaderShort),             ViaHeaderShort);
+  Check(not TIdSipHeaders.IsCompoundHeader(WarningHeader),              WarningHeader);
+  Check(not TIdSipHeaders.IsCompoundHeader(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
 procedure TestTIdSipHeaders.TestIsContact;

@@ -237,6 +237,7 @@ begin
   Self.InitialRequest.Method                           := MethodInvite;
   Self.InitialRequest.MaxForwards                      := 70;
   Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.InitialRequest.From.DisplayName                 := 'Case';
   Self.InitialRequest.From.Address.URI                 := 'sip:case@fried.neurons.org';
   Self.InitialRequest.From.Tag                         := '1928301774';
@@ -288,7 +289,7 @@ begin
   CheckEquals(R.ToHeader.Value,               Ack.ToHeader.Value, 'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
+  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
               Ack.Path.LastHop.Value,
               'Topmost Via');
 
@@ -547,6 +548,7 @@ begin
   Self.InitialRequest.Method                           := MethodInvite;
   Self.InitialRequest.MaxForwards                      := 70;
   Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.InitialRequest.From.DisplayName                 := 'Case';
   Self.InitialRequest.From.Address.URI                 := 'sip:case@fried.neurons.org';
   Self.InitialRequest.From.Tag                         := '1928301774';
@@ -595,6 +597,11 @@ procedure TestTIdSipServerInviteTransaction.CheckReceiveInvite(Sender: TObject; 
 begin
   CheckEquals(SIPRinging, R.StatusCode, 'Unexpected response sent');
 
+  CheckEquals(1, R.Path.Length, 'Too many Via headers');
+  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
+              R.Path.LastHop.Value,
+              'Topmost Via');
+
   Self.CheckReceiveInviteFired := true;
 end;
 
@@ -621,12 +628,9 @@ begin
   CheckEquals('100', R.Headers[TimestampHeader].Value, 'Timestamp');
 
   CheckEquals(1, R.Path.Length, 'Via path');
-  CheckEquals('SIP/2.0/UDP gw1.leo-ix.org',
+  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
               R.Path.LastHop.Value,
-              'Via last hop');
-  CheckEquals(';branch=z9hG4bK776asdhds',
-              R.Path.LastHop.ParamsAsString,
-              'Via last hop params');
+              'Topmost Via');
 
   Self.CheckSending100Fired := true;
 end;

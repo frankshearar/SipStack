@@ -322,7 +322,7 @@ begin
   Req.CallID          := Self.InitialRequest.CallID;
   Req.From            := Self.InitialRequest.From;
   Req.ToHeader        := R.ToHeader;
-  Req.Path.Add(Self.InitialRequest.Path.LastHop);
+  Req.Path.Add(Self.InitialRequest.Path.FirstHop);
   Req.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo;
   Req.CSeq.Method     := MethodAck;
   Req.ContentLength   := 0;
@@ -540,7 +540,6 @@ begin
   Res.ToHeader := R.ToHeader;
   Res.CallID   := R.CallID;
   Res.CSeq     := R.CSeq;
-  Res.Path     := R.Path;
 
   TimestampHeaders := TIdSipHeadersFilter.Create(R.Headers, TimestampHeader);
   try
@@ -550,7 +549,7 @@ begin
     TimestampHeaders.Free;
   end;
 
-  Res.Path := R.Path;
+  Res.Path.Add(Self.InitialRequest.Path.FirstHop);
 end;
 
 procedure TIdSipServerInviteTransaction.OnRequest(Sender: TObject; const R: TIdSipRequest);
