@@ -251,11 +251,10 @@ end;
 procedure TIdSipAbstractLocator.FindServersFor(AddressOfRecord: TIdSipUri;
                                                Result: TIdSipLocations);
 var
-  ARecords:  TIdDomainNameRecords;
-  Naptr:     TIdNaptrRecords;
-  Srv:       TIdSrvRecords;
-  Target:    TIdUri;
-  Transport: String;
+  ARecords: TIdDomainNameRecords;
+  Naptr:    TIdNaptrRecords;
+  Srv:      TIdSrvRecords;
+  Target:   TIdSipUri;
 begin
   // See doc/locating_servers.txt for a nice flow chart of this algorithm.begin
 
@@ -263,17 +262,16 @@ begin
   try
     Result.Clear;
 
-    Target := TIdUri.Create;
+    Target := TIdSipUri.Create;
     try
-      Target.Scheme := AddressOfRecord.Scheme;
-
       Naptr := TIdNaptrRecords.Create;
       try
         Srv := TIdSrvRecords.Create;
         try
           ARecords := TIdDomainNameRecords.Create;
           try
-            Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+            Target.Uri := AddressOfRecord.Uri;
+            Target.Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
 
             if AddressOfRecord.HasMaddr then
               Target.Host := AddressOfRecord.Maddr
@@ -281,7 +279,7 @@ begin
               Target.Host := AddressOfRecord.Host;
 
             if TIdIPAddressParser.IsNumericAddress(Target.Host) then begin
-              Result.AddLocation(Transport, Target.Host, AddressOfRecord.Port);
+              Result.AddLocation(Target.Transport, Target.Host, Target.Port);
               Exit;
             end;
 
@@ -289,8 +287,8 @@ begin
               // AddressOfRecord's Host is a domain name
               Self.ResolveNameRecords(Target.Host, ARecords);
 
-              Result.AddLocationsFromNames(Transport,
-                                           AddressOfRecord.Port,
+              Result.AddLocationsFromNames(Target.Transport,
+                                           Target.Port,
                                            ARecords);
 
               Exit;
@@ -300,24 +298,25 @@ begin
               Self.ResolveSRVs(Naptr, Srv);
 
               Self.AddLocationsFromSRVsOrNames(Result,
-                                               Transport,
+                                               Target.Transport,
                                                Target.Host,
-                                               AddressOfRecord.Port,
-                                               Srv, ARecords);
+                                               Target.Port,
+                                               Srv,
+                                               ARecords);
 
               Exit;
             end;
 
             if AddressOfRecord.TransportIsSpecified then begin
-              Self.ResolveSRV(Self.SrvTarget(Target,
-                                             Transport),
+              Self.ResolveSRV(Self.SrvTarget(Target, Target.Transport),
                               Srv);
 
               Self.AddLocationsFromSRVsOrNames(Result,
-                                               Transport,
+                                               Target.Transport,
                                                Target.Host,
-                                               AddressOfRecord.Port,
-                                               Srv, ARecords);
+                                               Target.Port,
+                                               Srv,
+                                               ARecords);
 
               Exit;
             end;
@@ -325,10 +324,11 @@ begin
             Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
 
             Self.AddLocationsFromSRVsOrNames(Result,
-                                             Transport,
+                                             Target.Transport,
                                              Target.Host,
-                                             AddressOfRecord.Port,
-                                             Srv, ARecords);
+                                             Target.Port,
+                                             Srv,
+                                             ARecords);
           finally
             ARecords.Free;
           end;
