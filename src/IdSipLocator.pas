@@ -164,7 +164,7 @@ const
 //* TIdSipLocation Public methods **********************************************
 
 constructor TIdSipLocation.Create(const Transport: String;
-                                  const IPAddress:   String;
+                                  const IPAddress: String;
                                   Port: Cardinal);
 begin
   inherited Create;
@@ -272,9 +272,9 @@ begin
         Srv := TIdSrvRecords.Create;
         try
           ARecords := TIdDomainNameRecords.Create;
-
-          Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
           try
+            Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+
             if AddressOfRecord.HasMaddr then
               Target.Host := AddressOfRecord.Maddr
             else
