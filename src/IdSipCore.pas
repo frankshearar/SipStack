@@ -148,9 +148,9 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Receiver: TIdSipTransport); override;
-    procedure RejectRequest(Request: TIdSipRequest;
-                            Reason: Cardinal;
-                            Transaction: TIdSipTransaction);
+    procedure ReturnResponse(Request: TIdSipRequest;
+                             Reason: Cardinal;
+                             Transaction: TIdSipTransaction);
 
     property From:          TIdSipFromHeader read GetFrom write SetFrom;
     property UserAgentName: String           read fUserAgentName write fUserAgentName;
@@ -628,13 +628,13 @@ begin
 
   // To & Request-URI - 8.2.2.1
   if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then begin
-    Self.RejectRequest(Request, SIPUnsupportedURIScheme, Transaction);
+    Self.ReturnResponse(Request, SIPUnsupportedURIScheme, Transaction);
     Exit;
   end;
 
   // Merged requests - 8.2.2.2
   if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then begin
-    Self.RejectRequest(Request, SIPLoopDetected, Transaction);
+    Self.ReturnResponse(Request, SIPLoopDetected, Transaction);
     Exit;
   end;
 
@@ -661,9 +661,9 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractUserAgent.RejectRequest(Request: TIdSipRequest;
-                                                Reason: Cardinal;
-                                                Transaction: TIdSipTransaction);
+procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
+                                                 Reason: Cardinal;
+                                                 Transaction: TIdSipTransaction);
 var
   Response: TIdSipResponse;
 begin
@@ -1335,9 +1335,9 @@ begin
                              Transaction,
                              Receiver)
   else
-    Self.RejectRequest(Bye,
-                       SIPCallLegOrTransactionDoesNotExist,
-                       Transaction);
+    Self.ReturnResponse(Bye,
+                        SIPCallLegOrTransactionDoesNotExist,
+                        Transaction);
 
 end;
 
