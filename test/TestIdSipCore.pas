@@ -82,6 +82,19 @@ type
     procedure TestScheduleEvent;
   end;
 
+  TestTIdSipRegistrations = class(TTestCase)
+  private
+    Regs: TIdSipRegistrations;
+    Uri:  TIdSipUri;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddKnownRegistrar;
+    procedure TestCallIDFor;
+    procedure TestNextSequenceNoFor;
+  end;
+
   TestTIdSipUserAgentCore = class(TTestCaseTU,
                                   IIdObserver,
                                   IIdSipTransportSendingListener,
@@ -792,6 +805,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -1229,6 +1243,80 @@ begin
   finally
     T.Terminate;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipRegistrations                                                    *
+//******************************************************************************
+//* TestTIdSipRegistrations Public methods *************************************
+
+procedure TestTIdSipRegistrations.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Regs := TIdSipRegistrations.Create;
+  Self.Uri  := TIdSipUri.Create('sip:registrar.tessier-ashpool.co.luna');
+end;
+
+procedure TestTIdSipRegistrations.TearDown;
+begin
+  Self.Uri.Free;
+  Self.Regs.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRegistrations Published methods **********************************
+
+procedure TestTIdSipRegistrations.TestAddKnownRegistrar;
+begin
+  try
+    Self.Regs.CallIDFor(Self.Uri);
+  except
+    on EIdSipRegistrarNotFound do;
+  end;
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', 0);
+
+  Self.Regs.CallIDFor(Self.Uri);
+end;
+
+procedure TestTIdSipRegistrations.TestCallIDFor;
+const
+  CallID = '329087234@casephone.fried-neurons.org';
+begin
+  // Registrar not known:
+  try
+    Self.Regs.CallIDFor(Self.Uri);
+  except
+    on EIdSipRegistrarNotFound do;
+  end;
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, CallID, 0);
+  CheckEquals(CallID,
+              Self.Regs.CallIDFor(Self.Uri),
+              'Call-ID');
+end;
+
+procedure TestTIdSipRegistrations.TestNextSequenceNoFor;
+const
+  SequenceNo = $decafbad;
+var
+  I: Cardinal;
+begin
+  // Registrar not known:
+  try
+    Self.Regs.NextSequenceNoFor(Self.Uri);
+  except
+    on EIdSipRegistrarNotFound do;
+  end;
+
+  Self.Regs.AddKnownRegistrar(Self.Uri, '', SequenceNo);
+
+  for I := 0 to 9 do
+  CheckEquals(IntToHex(SequenceNo + I, 8),
+              IntToHex(Self.Regs.NextSequenceNoFor(Self.Uri), 8),
+              'Next sequence number #' + IntToStr(I + 1));
 end;
 
 //******************************************************************************

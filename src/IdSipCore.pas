@@ -260,6 +260,25 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
+  TIdSipRegistrations = class(TObject)
+  private
+    KnownRegistrars: TObjectList;
+    Lock:            TCriticalSection;
+
+    function IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+    function KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+    function RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure AddKnownRegistrar(Registrar: TIdSipUri;
+                                const CallID: String;
+                                SequenceNo: Cardinal);
+    function  CallIDFor(Registrar: TIdSipUri): String;
+    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+  end;
+
   TIdSipInboundOptions = class;
   TIdSipInboundRegistration = class;
   TIdSipMessageModule = class;
@@ -298,21 +317,17 @@ type
     fMinimumExpiryTime:      Cardinal; // in seconds
     fProgressResendInterval: Cardinal; // in milliseconds
     fProxy:                  TIdSipUri;
-    KnownRegistrars:         TObjectList;
+    KnownRegistrars:         TIdSipRegistrations;
     ModuleLock:              TCriticalSection;
     Modules:                 TObjectList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddInboundAction(Request: TIdSipRequest;
                                Receiver: TIdSipTransport): TIdSipAction;
-    procedure AddKnownRegistrar(Registrar: TIdSipUri;
-                                const CallID: String;
-                                SequenceNo: Cardinal);
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest);
     function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AddOutboundRegistration: TIdSipOutboundRegistration;
     function  AddOutboundSession: TIdSipOutboundSession;
-    function  CallIDFor(Registrar: TIdSipUri): String;
     function  ConvertToHeader(ValueList: TStrings): String;
     function  DefaultFrom: String;
     function  DefaultUserAgent: String;
@@ -324,13 +339,9 @@ type
     function  GetFrom: TIdSipFromHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     procedure InboundSessionExpire(Action: TIdSipAction);
-    function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-    function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-    function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
-    function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest);
@@ -1098,6 +1109,10 @@ type
   end;
 
   EIdSipBadSyntax = class(EIdException);
+  EIdSipRegistrarNotFound = class(EIdException)
+  public
+    constructor Create(const Msg: string); reintroduce;
+  end;
   EIdSipTransactionUser = class(EIdException);
 
 const
@@ -1124,6 +1139,7 @@ const
   InviteTimeout                  = 'Incoming call timed out';
   LocalCancel                    = 'Local end cancelled call';
   LocalHangUp                    = 'Local end hung up';
+  NoSuchRegistrar                = 'No such registrar known: %s';
   OneMinute                      = 60*1000;
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
   RedirectWithNoContacts         = 'Call redirected to nowhere';
@@ -1469,6 +1485,117 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipRegistrations                                                        *
+//******************************************************************************
+//* TIdSipRegistrations Public methods *****************************************
+
+constructor TIdSipRegistrations.Create;
+begin
+  inherited Create;
+
+  Self.Lock            := TCriticalSection.Create;
+  Self.KnownRegistrars := TObjectList.Create(true);
+end;
+
+destructor TIdSipRegistrations.Destroy;
+begin
+  Self.Lock.Acquire;
+  try
+    Self.KnownRegistrars.Free;
+  finally
+    Self.Lock.Release;
+  end;
+  Self.Lock.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipRegistrations.AddKnownRegistrar(Registrar: TIdSipUri;
+                                                const CallID: String;
+                                                SequenceNo: Cardinal);
+var
+  NewReg: TIdSipRegistrationInfo;
+begin
+  Self.Lock.Acquire;
+  try
+    if not Self.KnowsRegistrar(Registrar) then begin
+      NewReg := TIdSipRegistrationInfo.Create;
+      Self.KnownRegistrars.Add(NewReg);
+
+      NewReg.CallID        := CallID;
+      NewReg.Registrar.Uri := Registrar.Uri;
+      NewReg.SequenceNo    := SequenceNo;
+    end;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdSipRegistrations.CallIDFor(Registrar: TIdSipUri): String;
+var
+  Index: Integer;
+begin
+  Self.Lock.Acquire;
+  try
+    Index := Self.IndexOfRegistrar(Registrar);
+
+    if (Index = -1) then
+      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+    Result := Self.RegistrarAt(Index).CallID;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdSipRegistrations.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
+var
+  Index:   Integer;
+  RegInfo: TIdSipRegistrationInfo;
+begin
+  Result := 0; 
+
+  Self.Lock.Acquire;
+  try
+    Index := Self.IndexOfRegistrar(Registrar);
+
+    if (Index = -1) then
+      raise EIdSipRegistrarNotFound.Create(Registrar.Uri);
+
+    RegInfo := Self.RegistrarAt(Index);
+    Result := RegInfo.SequenceNo;
+    RegInfo.SequenceNo := Result + 1;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+//* TIdSipRegistrations Private methods ****************************************
+
+function TIdSipRegistrations.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
+begin
+  Result := 0;
+  while (Result < Self.KnownRegistrars.Count) do
+    if Self.RegistrarAt(Result).Registrar.Equals(Registrar) then
+      Break
+    else
+      Inc(Result);
+
+  if (Result >= Self.KnownRegistrars.Count) then
+    Result := -1;
+end;
+
+function TIdSipRegistrations.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
+begin
+  Result := Self.IndexOfRegistrar(Registrar) <> -1;
+end;
+
+function TIdSipRegistrations.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
+begin
+  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
+end;
+
+//******************************************************************************
 //* TIdSipUserAgentCore                                                        *
 //******************************************************************************
 //* TIdSipUserAgentCore Public methods *****************************************
@@ -1489,7 +1616,7 @@ begin
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fProxy                  := TIdSipUri.Create('');
-  Self.KnownRegistrars         := TObjectList.Create(true);
+  Self.KnownRegistrars         := TIdSipRegistrations.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
 
@@ -1758,17 +1885,17 @@ function TIdSipUserAgentCore.CreateRegister(Registrar: TIdSipToHeader): TIdSipRe
 begin
   Result := Self.CreateRequest(Registrar);
   try
-    Self.AddKnownRegistrar(Registrar.Address,
-                           Result.CallID,
-                           Result.CSeq.SequenceNo);
+    Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
+                                           Result.CallID,
+                                           Result.CSeq.SequenceNo);
 
     Result.Method := MethodRegister;
     Result.RequestUri.EraseUserInfo;
 
     Result.CSeq.Method     := MethodRegister;
-    Result.CSeq.SequenceNo := Self.NextSequenceNoFor(Registrar.Address);
+    Result.CSeq.SequenceNo := Self.KnownRegistrars.NextSequenceNoFor(Registrar.Address);
 
-    Result.CallID := Self.CallIDFor(Registrar.Address);
+    Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
 
     Result.ToHeader.Value := Self.Contact.Value;
     Result.From.Value     := Self.Contact.Value;
@@ -2270,22 +2397,6 @@ begin
     Result := nil;
 end;
 
-procedure TIdSipUserAgentCore.AddKnownRegistrar(Registrar: TIdSipUri;
-                                                const CallID: String;
-                                                SequenceNo: Cardinal);
-var
-  NewReg: TIdSipRegistrationInfo;
-begin
-  if not Self.KnowsRegistrar(Registrar) then begin
-    NewReg := TIdSipRegistrationInfo.Create;
-    Self.KnownRegistrars.Add(NewReg);
-
-    NewReg.CallID        := CallID;
-    NewReg.Registrar.Uri := Registrar.Uri;
-    NewReg.SequenceNo    := SequenceNo;
-  end;
-end;
-
 procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
 var
   Transport: String;
@@ -2329,12 +2440,6 @@ end;
 function TIdSipUserAgentCore.AddOutboundSession: TIdSipOutboundSession;
 begin
   Result := Self.AddOutboundAction(TIdSipOutboundSession) as TIdSipOutboundSession;
-end;
-
-function TIdSipUserAgentCore.CallIDFor(Registrar: TIdSipUri): String;
-begin
-  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
-  Result := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar)).CallID
 end;
 
 function TIdSipUserAgentCore.ConvertToHeader(ValueList: TStrings): String;
@@ -2449,37 +2554,6 @@ begin
     (Action as TIdSipInboundInvite).TimeOut;
 end;
 
-function TIdSipUserAgentCore.IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-begin
-  // Precondition: something's acquired the RegistrationLock
-  Result := 0;
-  while (Result < Self.KnownRegistrars.Count) do
-    if Self.RegistrarAt(Result).Registrar.Equals(Registrar) then
-      Break
-    else
-      Inc(Result);
-
-  if (Result >= Self.KnownRegistrars.Count) then
-    Result := -1;
-end;
-
-function TIdSipUserAgentCore.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
-begin
-  // Precondition: something's acquired the RegistrationLock
-  Result := Self.IndexOfRegistrar(Registrar) <> -1;
-end;
-
-function TIdSipUserAgentCore.NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
-var
-  RegInfo: TIdSipRegistrationInfo;
-begin
-  Assert(Self.KnowsRegistrar(Registrar), 'A registrar wasn''t added');
-
-  RegInfo := Self.RegistrarAt(Self.IndexOfRegistrar(Registrar));
-  Result := RegInfo.SequenceNo;
-  RegInfo.SequenceNo := Result + 1;
-end;
-
 procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
   Notification: TIdSipUserAgentInboundCallMethod;
@@ -2508,11 +2582,6 @@ begin
   finally
     Notification.Free;
   end;
-end;
-
-function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
-begin
-  Result := Self.KnownRegistrars[Index] as TIdSipRegistrationInfo;
 end;
 
 procedure TIdSipUserAgentCore.RejectRequestBadExtension(Request: TIdSipRequest);
@@ -5532,6 +5601,16 @@ end;
 procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
+end;
+
+//******************************************************************************
+//* EIdSipRegistrarNotFound                                                    *
+//******************************************************************************
+//* EIdSipRegistrarNotFound Public methods *************************************
+
+constructor EIdSipRegistrarNotFound.Create(const Msg: string);
+begin
+  inherited Create(Format(NoSuchRegistrar, [Msg]));
 end;
 
 end.
