@@ -14,8 +14,8 @@ type
 
   IIdSipMessageVisitor = interface
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
-    procedure VisitRequest(const Request: TIdSipRequest);
-    procedure VisitResponse(const Response: TIdSipResponse);
+    procedure VisitRequest(Request: TIdSipRequest);
+    procedure VisitResponse(Response: TIdSipResponse);
   end;
 
   TIdSipMessage = class(TPersistent)
@@ -197,8 +197,8 @@ type
     procedure ParseRequest(const Request: TIdSipRequest);
     procedure ParseResponse(const Response: TIdSipResponse);
 
-    procedure VisitRequest(const Request: TIdSipRequest);
-    procedure VisitResponse(const Response: TIdSipResponse);
+    procedure VisitRequest(Request: TIdSipRequest);
+    procedure VisitResponse(Response: TIdSipResponse);
   end;
 
   EBadHeader = class(EParser);
@@ -1108,12 +1108,12 @@ begin
 //  Self.CheckRequiredResponseHeaders(Response);
 end;
 
-procedure TIdSipParser.VisitRequest(const Request: TIdSipRequest);
+procedure TIdSipParser.VisitRequest(Request: TIdSipRequest);
 begin
   Self.ParseRequest(Request);
 end;
 
-procedure TIdSipParser.VisitResponse(const Response: TIdSipResponse);
+procedure TIdSipParser.VisitResponse(Response: TIdSipResponse);
 begin
   Self.ParseResponse(Response);
 end;

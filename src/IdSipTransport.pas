@@ -75,8 +75,8 @@ type
     procedure Send(const Msg: TIdSipMessage);
     procedure Start; virtual;
     procedure Stop; virtual;
-    procedure VisitRequest(const Request: TIdSipRequest);
-    procedure VisitResponse(const Response: TIdSipResponse);
+    procedure VisitRequest(Request: TIdSipRequest);
+    procedure VisitResponse(Response: TIdSipResponse);
 
     property Bindings: TIdSocketHandles read GetBindings;
     property HostName: String           read fHostName write fHostName;
@@ -321,12 +321,12 @@ procedure TIdSipTransport.Stop;
 begin
 end;
 
-procedure TIdSipTransport.VisitRequest(const Request: TIdSipRequest);
+procedure TIdSipTransport.VisitRequest(Request: TIdSipRequest);
 begin
   Self.SendRequest(Request);
 end;
 
-procedure TIdSipTransport.VisitResponse(const Response: TIdSipResponse);
+procedure TIdSipTransport.VisitResponse(Response: TIdSipResponse);
 begin
   Self.SendResponse(Response);
 end;
