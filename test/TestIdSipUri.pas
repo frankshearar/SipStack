@@ -24,7 +24,9 @@ type
     procedure TestGetUriHeadersWithParameters;
     procedure TestGetUriNormalParameters;
     procedure TestGetUriNoUsername;
+    procedure TestGetUriWithDefaultPort;
     procedure TestGetUriWithPassword;
+    procedure TestGetUriWithSpecialPort;
     procedure TestHasHeaders;
     procedure TestHasValidSyntax;
     procedure TestIsLooseRoutable;
@@ -312,6 +314,25 @@ begin
   end;
 end;
 
+procedure TestTIdSipUri.TestGetUriWithDefaultPort;
+var
+  Uri: TIdSipUri;
+begin
+  Uri := TIdSipUri.Create('');
+  try
+    Uri.Scheme   := 'sip';
+    Uri.Username := 'wintermute';
+    Uri.Host     := 'tessier-ashpool.co.lu';
+    Uri.Port     := IdPORT_SIP;
+
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+                Uri.Uri,
+                'URI');
+  finally
+    Uri.Free;
+  end;
+end;
+
 procedure TestTIdSipUri.TestGetUriWithPassword;
 var
   Uri: TIdSipUri;
@@ -324,6 +345,25 @@ begin
     Uri.Host     := 'tessier-ashpool.co.lu';
 
     CheckEquals('sip:wintermute:song@tessier-ashpool.co.lu',
+                Uri.Uri,
+                'URI');
+  finally
+    Uri.Free;
+  end;
+end;
+
+procedure TestTIdSipUri.TestGetUriWithSpecialPort;
+var
+  Uri: TIdSipUri;
+begin
+  Uri := TIdSipUri.Create('');
+  try
+    Uri.Scheme   := 'sip';
+    Uri.Username := 'wintermute';
+    Uri.Port     := IdPORT_SIP + 10000;
+    Uri.Host     := 'tessier-ashpool.co.lu';
+
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu:15060',
                 Uri.Uri,
                 'URI');
   finally
