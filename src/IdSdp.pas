@@ -218,7 +218,7 @@ type
 
   TIdSdpRepeats = class;
   TIdSdpZoneAdjustments = class;
-  
+
   TIdSdpTime = class(TIdPrintable)
   private
     fEndTime:         TIdNtpTimestamp;
@@ -890,10 +890,12 @@ procedure TIdSdpAttribute.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10'a=' + Self.Name;
+  S := 'a=' + Self.Name;
 
   if (Self.Value <> '') then
     S := S + ':' + Self.Value;
+
+  S := S + #13#10;  
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1003,8 +1005,8 @@ procedure TIdSdpBandwidth.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10'b=' + BandwidthTypeToStr(Self.BandwidthType) + ':'
-                  + IntToStr(Self.Bandwidth);
+  S := 'b=' + BandwidthTypeToStr(Self.BandwidthType) + ':'
+            + IntToStr(Self.Bandwidth) + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1046,7 +1048,7 @@ procedure TIdSdpConnection.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := S + #13#10'c=' + Self.NetType + ' '
+  S := S + 'c=' + Self.NetType + ' '
          + AddressTypeToStr(Self.AddressType)
          + ' ' + Self.Address;
 
@@ -1057,6 +1059,8 @@ begin
       S := S + '/' + IntToStr(Self.NumberOfAddresses);
     end;
   end;
+
+  S := S + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1083,10 +1087,12 @@ procedure TIdSdpKey.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10'k=' + KeyTypeToStr(Self.KeyType);
+  S := 'k=' + KeyTypeToStr(Self.KeyType);
 
   if (Self.KeyType <> ktPrompt) then
     S := S + ':' + Self.Value;
+
+  S := S + #13#10;   
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1286,7 +1292,7 @@ var
   S: String;
 begin
   if (Self.Info <> '') then begin
-    S := #13#10'i=' + Self.Info;
+    S := 'i=' + Self.Info + #13#10;
 
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -1297,8 +1303,7 @@ var
   I: Integer;
   S: String;
 begin
-  S := #13#10
-     + 'm=' + MediaTypeToStr(Self.MediaType) + ' '
+  S := 'm=' + MediaTypeToStr(Self.MediaType) + ' '
      + IntToStr(Self.Port);
 
   if (Self.PortCount > 1) then
@@ -1309,6 +1314,8 @@ begin
   for I := 0 to Self.FormatCount - 1 do
     S := S + ' ' + Self.Formats[I];
 
+  S := S + #13#10;
+     
   Dest.Write(PChar(S)^, Length(S));
 end;
 
@@ -1338,13 +1345,13 @@ procedure TIdSdpOrigin.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10
-     + 'o=' + Self.Username + ' '
+  S := 'o=' + Self.Username + ' '
      + Self.SessionID + ' '
      + Self.SessionVersion + ' '
      + Self.NetType + ' '
      + AddressTypeToStr(Self.AddressType) + ' '
-     + Self.Address;
+     + Self.Address
+     + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1370,8 +1377,7 @@ procedure TIdSdpRepeat.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10
-     + 'r=' + Self.Value;
+  S := 'r=' + Self.Value + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1397,8 +1403,7 @@ procedure TIdSdpZoneAdjustment.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10
-     + 'z=' + Self.Value;
+  S := 'z=' + Self.Value + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -1435,7 +1440,7 @@ procedure TIdSdpTime.PrintOn(Dest: TStream);
 var
   S: String;
 begin
-  S := #13#10't=' + IntToStr(Self.StartTime) + ' ' + IntToStr(Self.EndTime);
+  S := 't=' + IntToStr(Self.StartTime) + ' ' + IntToStr(Self.EndTime) + #13#10;
   Dest.Write(PChar(S)^, Length(S));
 
   Self.Repeats.PrintOn(Dest);
@@ -1545,7 +1550,7 @@ var
   I: Integer;
 begin
   for I := 0 to Self.Count - 1 do
-    (Self.List[I] as TIdPrintable).PrintOn(Dest);
+    Self.ItemAt(I).PrintOn(Dest);
 end;
 
 procedure TIdSdpList.Remove(O: TObject);
@@ -2229,7 +2234,7 @@ var
   S: String;
 begin
   if (Self.EmailAddress.Address <> '') then begin
-    S := #13#10'e=' + Self.EmailAddress.Address;
+    S := 'e=' + Self.EmailAddress.Address + #13#10;
     
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2240,7 +2245,7 @@ var
   S: String;
 begin
   if (Self.Info <> '') then begin
-    S := #13#10'i=' + Self.Info;
+    S := 'i=' + Self.Info + #13#10;
 
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2251,7 +2256,7 @@ var
   S: String;
 begin
   if (Self.PhoneNumber <> '') then begin
-    S := #13#10'p=' + Self.PhoneNumber;
+    S := 'p=' + Self.PhoneNumber + #13#10;
     
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2262,7 +2267,7 @@ var
   S: String;
 begin
   if (Self.SessionName <> '') then begin
-    S := #13#10's=' + Self.SessionName;
+    S := 's=' + Self.SessionName + #13#10;
 
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2274,7 +2279,7 @@ var
 begin
   // TODO: I hate stinking TIdURI
   if (Self.URI <> '') then begin
-    S := #13#10'u=' + Self.URI;
+    S := 'u=' + Self.URI + #13#10;
 
     Dest.Write(PChar(S)^, Length(S));
   end;
@@ -2284,7 +2289,7 @@ procedure TIdSdpPayload.PrintVersionField(Dest: TStream);
 var
   S: String;
 begin
-  S := 'v=' + IntToStr(Self.Version);
+  S := 'v=' + IntToStr(Self.Version) + #13#10;
 
   Dest.Write(PChar(S)^, Length(S));
 end;
@@ -2484,7 +2489,7 @@ procedure TIdSdpParser.Parse(Payload: TIdSdpPayload);
 begin
   Self.ParseSessionHeaders(Payload);
 
-  while not Self.Eof do
+  while (Self.PeekLine <> '') do
     Self.ParseMediaDescription(Payload);
 
   if (Payload.Connections.Count = 0)

@@ -506,7 +506,7 @@ const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
                  + 's=Minimum Session Info';
-  DefaultConnection = 'c=IN IP4 224.2.17.12/127';
+  DefaultConnection = 'c=IN IP4 224.2.17.12/127'#13#10;
 
   MinimumPayload = MinimumPayloadSansConnection + #13#10
                  + DefaultConnection;
@@ -865,7 +865,7 @@ begin
 
   Self.A.PrintOn(Self.S);
 
-  CheckEquals(#13#10'a=rtpmap', Self.S.DataString, 'PrintOn');
+  CheckEquals('a=rtpmap'#13#10, Self.S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpAttribute.TestPrintOnWithValue;
@@ -875,7 +875,7 @@ begin
 
   Self.A.PrintOn(Self.S);
 
-  CheckEquals(#13#10'a=rtpmap:98 T140', Self.S.DataString, 'PrintOn');
+  CheckEquals('a=rtpmap:98 T140'#13#10, Self.S.DataString, 'PrintOn');
 end;
 
 //******************************************************************************
@@ -1019,7 +1019,7 @@ begin
 
   Self.B.PrintOn(Self.S);
 
-  CheckEquals(#13#10'b=CT:42', S.DataString, 'PrintOn');
+  CheckEquals('b=CT:42'#13#10, S.DataString, 'PrintOn');
 end;
 
 //******************************************************************************
@@ -1099,7 +1099,7 @@ begin
 
   Self.C.PrintOn(Self.S);
 
-  CheckEquals(#13#10'c=IN IP4 224.0.0.0', S.DataString, 'PrintOn');
+  CheckEquals('c=IN IP4 224.0.0.0'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpConnection.TestPrintOnMulticastWithNumberNoTtl;
@@ -1111,7 +1111,7 @@ begin
 
   Self.C.PrintOn(Self.S);
 
-  CheckEquals(#13#10'c=IN IP4 224.0.0.0', S.DataString, 'PrintOn');
+  CheckEquals('c=IN IP4 224.0.0.0'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpConnection.TestPrintOnMulticastWithTtl;
@@ -1123,7 +1123,7 @@ begin
 
   Self.C.PrintOn(Self.S);
 
-  CheckEquals(#13#10'c=IN IP4 224.0.0.0/127', S.DataString, 'PrintOn');
+  CheckEquals('c=IN IP4 224.0.0.0/127'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpConnection.TestPrintOnMulticastWithTtlAndNumber;
@@ -1136,7 +1136,7 @@ begin
 
   Self.C.PrintOn(Self.S);
 
-  CheckEquals(#13#10'c=IN IP4 224.0.0.0/127/4', S.DataString, 'PrintOn');
+  CheckEquals('c=IN IP4 224.0.0.0/127/4'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpConnection.TestPrintOnUnicast;
@@ -1147,7 +1147,7 @@ begin
 
   Self.C.PrintOn(Self.S);
 
-  CheckEquals(#13#10'c=IN IP4 0.0.0.255', S.DataString, 'PrintOn');
+  CheckEquals('c=IN IP4 0.0.0.255'#13#10, S.DataString, 'PrintOn');
 end;
 
 //******************************************************************************
@@ -1196,7 +1196,7 @@ begin
 
   Self.K.PrintOn(Self.S);
 
-  CheckEquals(#13#10'k=prompt', S.DataString, 'PrintOn');
+  CheckEquals('k=prompt'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpKey.TestPrintOnMethodPlusValue;
@@ -1206,7 +1206,7 @@ begin
 
   Self.K.PrintOn(Self.S);
 
-  CheckEquals(#13#10'k=uri:tel://42', S.DataString, 'PrintOn');
+  CheckEquals('k=uri:tel://42'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpKey.TestPrintOnPromptWithKeyData;
@@ -1216,7 +1216,7 @@ begin
 
   Self.K.PrintOn(Self.S);
 
-  CheckEquals(#13#10'k=prompt', S.DataString, 'PrintOn');
+  CheckEquals('k=prompt'#13#10, S.DataString, 'PrintOn');
 end;
 
 procedure TestTIdSdpKey.TestPrintOnUriWithNoKeyData;
@@ -1225,7 +1225,7 @@ begin
 
   Self.K.PrintOn(Self.S);
 
-  CheckEquals(#13#10'k=uri:', S.DataString, 'PrintOn');
+  CheckEquals('k=uri:'#13#10, S.DataString, 'PrintOn');
 end;
 
 //******************************************************************************
@@ -1434,8 +1434,7 @@ begin
   S := TStringStream.Create('');
   try
     Self.M.PrintOn(S);
-    CheckEquals(#13#10
-              + 'm=audio 49230 RTP/AVP',
+    CheckEquals('m=audio 49230 RTP/AVP'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -1477,15 +1476,14 @@ begin
   S := TStringStream.Create('');
   try
     Self.M.PrintOn(S);
-    CheckEquals(#13#10
-              + 'm=audio 49230 RTP/AVP'#13#10
+    CheckEquals('m=audio 49230 RTP/AVP'#13#10
               + 'i=Cthulhu Speaks'#13#10
               + 'c=IN IP4 127.0.0.1/5/5'#13#10
               + 'b=RS:666'#13#10
               + 'b=CT:42'#13#10
               + 'k=base64:DEADBEEF'#13#10
               + 'a=rtpmap:98 L16/16000/2'#13#10
-              + 'a=rtpmap:100 T140/1000',
+              + 'a=rtpmap:100 T140/1000'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -1507,7 +1505,7 @@ begin
   try
     Self.M.PrintOn(S);
 
-    CheckEquals(#13#10'm=audio 49230/4 RTP/AVP 0',
+    CheckEquals('m=audio 49230/4 RTP/AVP 0'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -1574,7 +1572,7 @@ begin
 
   Self.O.PrintOn(S);
 
-  CheckEquals(#13#10'o=Holy_Cow side0f beef IN IP6 www.example.com',
+  CheckEquals('o=Holy_Cow side0f beef IN IP6 www.example.com'#13#10,
               S.DataString,
               'PrintOn');
 end;
@@ -1629,7 +1627,7 @@ begin
   Self.R.Value := OrigValue;
   Self.R.PrintOn(Self.S);
 
-  CheckEquals(#13#10'r=' + OrigValue,
+  CheckEquals('r=' + OrigValue + #13#10,
               Self.S.DataString,
               'PrintOn');
 end;
@@ -1692,7 +1690,7 @@ begin
 
   Self.T.PrintOn(S);
 
-  CheckEquals(#13#10't=3405691582 3735928559',
+  CheckEquals('t=3405691582 3735928559'#13#10,
               S.DataString,
               'PrintOn');
 end;
@@ -1706,9 +1704,8 @@ begin
 
   Self.T.PrintOn(S);
 
-  CheckEquals(#13#10
-            + 't=3405691582 3735928559'#13#10
-            + 'r=1d',
+  CheckEquals('t=3405691582 3735928559'#13#10
+            + 'r=1d'#13#10,
               S.DataString,
               'PrintOn');
 end;
@@ -1721,9 +1718,8 @@ begin
 
   Self.T.PrintOn(S);
 
-  CheckEquals(#13#10
-            + 't=3405691582 3735928559'#13#10
-            + 'z=3735928559 -2h',
+  CheckEquals('t=3405691582 3735928559'#13#10
+            + 'z=3735928559 -2h'#13#10,
               S.DataString,
               'PrintOn');
 end;
@@ -1901,9 +1897,8 @@ begin
   S := TStringStream.Create('');
   try
     Self.A.PrintOn(S);
-    CheckEquals(#13#10
-              + 'a=rtpmap:98 T140/1000'#13#10
-              + 'a=dead:beef',
+    CheckEquals('a=rtpmap:98 T140/1000'#13#10
+              + 'a=dead:beef'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2050,9 +2045,8 @@ begin
   S := TStringStream.Create('');
   try
     Self.A.PrintOn(S);
-    CheckEquals(#13#10
-              + 'a=rtpmap:98 T140/1000'#13#10
-              + 'a=rtpmap:99 dead/8000',
+    CheckEquals('a=rtpmap:98 T140/1000'#13#10
+              + 'a=rtpmap:99 dead/8000'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2174,9 +2168,8 @@ begin
   S := TStringStream.Create('');
   try
     Self.B.PrintOn(S);
-    CheckEquals(#13#10
-              + 'b=CT:666'#13#10
-              + 'b=AS:13',
+    CheckEquals('b=CT:666'#13#10
+              + 'b=AS:13'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2334,9 +2327,8 @@ begin
   S := TStringStream.Create('');
   try
     Self.C.PrintOn(S);
-    CheckEquals(#13#10
-              + 'c=IN IP4 127.0.0.1'#13#10
-              + 'c=IN IP6 ::1/1/2',
+    CheckEquals('c=IN IP4 127.0.0.1'#13#10
+              + 'c=IN IP6 ::1/1/2'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2457,9 +2449,8 @@ begin
   S := TStringStream.Create('');
   try
     Self.M.PrintOn(S);
-    CheckEquals(#13#10
-              + 'm=audio 0 TCP 0'#13#10
-              + 'm=text 1 RTP/AVP 1 2 3',
+    CheckEquals('m=audio 0 TCP 0'#13#10
+              + 'm=text 1 RTP/AVP 1 2 3'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2552,9 +2543,8 @@ begin
 
     Self.R.PrintOn(S);
 
-    CheckEquals(#13#10
-              + 'r=1w'#13#10
-              + 'r=1h 1d 1w',
+    CheckEquals('r=1w'#13#10
+              + 'r=1h 1d 1w'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2654,9 +2644,8 @@ begin
 
     Self.T.PrintOn(S);
 
-    CheckEquals(#13#10
-              + 't=3405691582 3735928559'#13#10
-              + 't=1000000000 1000000001',
+    CheckEquals('t=3405691582 3735928559'#13#10
+              + 't=1000000000 1000000001'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2746,9 +2735,8 @@ begin
 
     Self.Z.PrintOn(S);
 
-    CheckEquals(#13#10
-              + 'z=3405691582 -2s'#13#10
-              + 'z=3735928559 5d',
+    CheckEquals('z=3405691582 -2s'#13#10
+              + 'z=3735928559 5d'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3107,7 +3095,7 @@ var
   P:          TIdSdpParser;
   S:          TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'a=rtpmap:96 T140/8000'#13#10
                           + 'a=fmtp:96 98/98'#13#10
                           + 'm=text 11000 RTP/AVP 98'#13#10
@@ -3276,7 +3264,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 'a=dead:beef',
+              + 'a=dead:beef'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3301,7 +3289,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 'b=AS:13',
+              + 'b=AS:13'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3324,7 +3312,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'e=azathoth@centre.of.chaos.net'#13#10
-              + 'c=IN IP4 224.2.17.12/127',
+              + 'c=IN IP4 224.2.17.12/127'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3347,7 +3335,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'i=Like a murder of ravens in fugue'#13#10
-              + 'c=IN IP4 224.2.17.12/127',
+              + 'c=IN IP4 224.2.17.12/127'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3371,7 +3359,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 'k=base64:5ideofbeef',
+              + 'k=base64:5ideofbeef'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3402,7 +3390,7 @@ begin
               + 's=Minimum Session Info'#13#10
               + 'm=text 8000 RTP/AVP 98'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 'a=rtpmap:98 T140/1000',
+              + 'a=rtpmap:98 T140/1000'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3425,7 +3413,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'p=+44 404 0000'#13#10
-              + 'c=IN IP4 224.2.17.12/127',
+              + 'c=IN IP4 224.2.17.12/127'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3450,7 +3438,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 't=1000000000 1000000001',
+              + 't=1000000000 1000000001'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3473,7 +3461,7 @@ begin
               + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
               + 's=Minimum Session Info'#13#10
               + 'u=mailto:nyarlathotep@crawling.chaos.net'#13#10
-              + 'c=IN IP4 224.2.17.12/127',
+              + 'c=IN IP4 224.2.17.12/127'#13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -3585,7 +3573,7 @@ procedure TestTIdSdpParser.CheckMalformedMediaDescription(const Value: String);
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=' + Value + #13#10
                           + 'i=Information');
   try
@@ -3610,8 +3598,8 @@ procedure TestTIdSdpParser.CheckMalformedOptionalSessionHeader(const Name, Value
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + Name + '=' + Value);
+  S := TStringStream.Create(MinimumPayload
+                          + Name + '=' + Value + #13#10);
   try
     Self.P.Source := S;
 
@@ -3633,7 +3621,7 @@ procedure TestTIdSdpParser.CheckMalformedTimeWithRepeat(const RepeatValue: Strin
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
                           + 'r=' + RepeatValue);
   try
@@ -3882,8 +3870,8 @@ procedure TestTIdSdpParser.TestParseAttribute;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'a=recvonly');
+  S := TStringStream.Create(MinimumPayload
+                          + 'a=recvonly'#13#10);
   try
     Self.P.Source := S;
 
@@ -3900,8 +3888,8 @@ procedure TestTIdSdpParser.TestParseAttributeWithValue;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'a=orient:landscape');
+  S := TStringStream.Create(MinimumPayload
+                          + 'a=orient:landscape'#13#10);
   try
     Self.P.Source := S;
 
@@ -3928,8 +3916,8 @@ procedure TestTIdSdpParser.TestParseBandwidth;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'b=RR:666');
+  S := TStringStream.Create(MinimumPayload
+                          + 'b=RR:666'#13#10);
   try
     Self.P.Source := S;
 
@@ -3946,8 +3934,8 @@ procedure TestTIdSdpParser.TestParseBandwidthMalformed;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'b=:');
+  S := TStringStream.Create(MinimumPayload
+                          + 'b=:'#13#10);
   try
     Self.P.Source := S;
 
@@ -3969,9 +3957,9 @@ procedure TestTIdSdpParser.TestParseBandwidthMultipleHeaders;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'b=RR:666'#13#10
-                          + 'b=CT:123');
+                          + 'b=CT:123'#13#10);
   try
     Self.P.Source := S;
 
@@ -3994,7 +3982,7 @@ begin
                           + 'c=IN IP4 224.2.17.12/127'#13#10
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
-                          + 'c=IN IP4 224.2.17.11/127'); // note the difference compared with the session c.
+                          + 'c=IN IP4 224.2.17.11/127'#13#10); // note the difference compared with the session c.
   try
     Self.P.Source := S;
 
@@ -4049,8 +4037,8 @@ procedure TestTIdSdpParser.TestParseConnectionMulticastAddress;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'c=IN IP4 224.2.17.12/127');
+  S := TStringStream.Create(MinimumPayload
+                          + 'c=IN IP4 224.2.17.12/127'#13#10);
   try
     Self.P.Source := S;
 
@@ -4069,7 +4057,7 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
-                          + 'c=IN IP4 224.2.17.12/127/3');
+                          + 'c=IN IP4 224.2.17.12/127/3'#13#10);
   try
     Self.P.Source := S;
 
@@ -4104,7 +4092,7 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
-                          + 'c=IN IP6 FF02:5156:4019:2::FFFF/127/3');
+                          + 'c=IN IP6 FF02:5156:4019:2::FFFF/127/3'#13#10);
   try
     Self.P.Source := S;
 
@@ -4149,7 +4137,7 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
-                          + 'c=IN IP4 127.2.17.12');
+                          + 'c=IN IP4 127.2.17.12'#13#10);
   try
     Self.P.Source := S;
 
@@ -4248,8 +4236,8 @@ procedure TestTIdSdpParser.TestParseHeaderMissingName;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + '=Missing name');
+  S := TStringStream.Create(MinimumPayload
+                          + '=Missing name'#13#10);
   try
     Self.P.Source := S;
 
@@ -4271,8 +4259,8 @@ procedure TestTIdSdpParser.TestParseHeaderMissingValue;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'b=');
+  S := TStringStream.Create(MinimumPayload
+                          + 'b='#13#10);
   try
     Self.P.Source := S;
 
@@ -4298,7 +4286,7 @@ begin
                           + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
                           + 's=Minimum Session Info'#13#10
                           + 'u=http://127.0.0.1/'#13#10
-                          + 'i=My u & i headers are swopped round');
+                          + 'i=My u & i headers are swopped round'#13#10);
   try
     Self.P.Source := S;
 
@@ -4315,10 +4303,10 @@ begin
     S.Free;
   end;
 
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'b=RR:666'#13#10
                           + 'c=IN IP4 224.2.17.12/127'#13#10
-                          + 'b=CT:666');
+                          + 'b=CT:666'#13#10);
   try
     Self.P.Source := S;
 
@@ -4382,8 +4370,8 @@ procedure TestTIdSdpParser.TestParseKey;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna');
+  S := TStringStream.Create(MinimumPayload
+                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna'#13#10);
   try
     Self.P.Source := S;
 
@@ -4436,7 +4424,7 @@ begin
                           + 'a=rtpmap:110 speex/8000/1'#13#10
                           + 'a=rtpmap:115 1015/8000/1'#13#10
                           + 'a=rtpmap:101 telephone-event/8000'#13#10
-                          + 'a=fmtp:101 0-11');
+                          + 'a=fmtp:101 0-11'#13#10);
   try
     Self.P.Source := S;
 
@@ -4457,9 +4445,9 @@ procedure TestTIdSdpParser.TestParseMediaDescription;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=data 6666 RTP/AVP 1'#13#10
-                          + 'i=Information');
+                          + 'i=Information'#13#10);
   try
     Self.P.Source := S;
 
@@ -4499,7 +4487,7 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithSessionAttributes;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'c=IN IP4 127.0.0.1'#13#10
                           + 'a=recvonly'#13#10
                           + 'a=tool:RNID SDP'#13#10
@@ -4521,7 +4509,7 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithSessionConnections;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'c=IN IP4 127.0.0.1'#13#10
                           + 'm=data 6666 RTP/AVP 1'#13#10);
   try
@@ -4546,9 +4534,9 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionMissingInformation;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
-                          + 'c=IN IP4 224.2.17.12/127');
+                          + 'c=IN IP4 224.2.17.12/127'#13#10);
   try
     Self.P.Source := S;
     Self.P.Parse(Self.Payload);
@@ -4561,9 +4549,9 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionMissingKey;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
-                          + 'c=IN IP4 224.2.17.12/127');
+                          + 'c=IN IP4 224.2.17.12/127'#13#10);
   try
     Self.P.Source := S;
     Self.P.Parse(Self.Payload);
@@ -4580,9 +4568,11 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionMalformedPort;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  // A port number of 65536 makes no sense for UDP or TCP, but SDP doesn't
+  // care - a port consists of a sequence of digits.
+  S := TStringStream.Create(MinimumPayload
                           + 'm=data 65536 RTP/AVP 1'#13#10 // Note the port number
-                          + 'i=Information');
+                          + 'i=Information'#13#10);
   try
     Self.P.Source := S;
 
@@ -4617,7 +4607,7 @@ begin
                           + 'b=RR:666'#13#10
                           + 'a=recvonly'#13#10
                           + 'a=T38FaxTranscodingJBIG'#13#10
-                          + 'a=type:broadcast');
+                          + 'a=type:broadcast'#13#10);
   try
     Self.P.Source := S;
 
@@ -4702,13 +4692,13 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithAttributes;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
                           + 'b=RR:666'#13#10
                           + 'a=recvonly'#13#10
                           + 'a=T38FaxTranscodingJBIG'#13#10
-                          + 'a=type:broadcast');
+                          + 'a=type:broadcast'#13#10);
   try
     Self.P.Source := S;
 
@@ -4744,19 +4734,28 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithBandwidth;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
-                          + 'b=RR:666');
+                          + 'b=RR:666'#13#10);
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
-    CheckEquals(0,     Self.Payload.Bandwidths.Count,                                 'Bandwidths.Count');
-    CheckEquals(1,     Self.Payload.MediaDescriptionCount,                          'MediaDescriptionCount');
-    CheckEquals(1,     Self.Payload.MediaDescriptionAt(0).Bandwidths.Count,            'MediaDescriptions.Bandwidths.Count');
-    Check      (btRR = Self.Payload.MediaDescriptionAt(0).Bandwidths[0].BandwidthType, 'BandwidthType');
-    CheckEquals(666,   Self.Payload.MediaDescriptionAt(0).Bandwidths[0].Bandwidth,     'Bandwidth');
+    CheckEquals(0,
+                Self.Payload.Bandwidths.Count,
+                'Bandwidths.Count');
+    CheckEquals(1,
+                Self.Payload.MediaDescriptionCount,
+                'MediaDescriptionCount');
+    CheckEquals(1,
+                Self.Payload.MediaDescriptionAt(0).Bandwidths.Count,
+                'MediaDescriptions.Bandwidths.Count');
+    Check(btRR = Self.Payload.MediaDescriptionAt(0).Bandwidths[0].BandwidthType,
+                'BandwidthType');
+    CheckEquals(666,
+                Self.Payload.MediaDescriptionAt(0).Bandwidths[0].Bandwidth,
+                'Bandwidth');
   finally
     S.Free;
   end;
@@ -4766,10 +4765,10 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithConnection;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
-                          + 'c=IN IP4 224.2.17.14/127/2');
+                          + 'c=IN IP4 224.2.17.14/127/2'#13#10);
   try
     Self.P.Source := S;
 
@@ -4809,10 +4808,10 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithKey;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
-                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna');
+                          + 'k=uri:sip:wintermute@tessier-ashpool.co.luna'#13#10);
   try
     Self.P.Source := S;
 
@@ -4838,20 +4837,34 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithMultipleFormats;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 31 23 ape convolution 3vilution'#13#10
-                          + 'i=Information');
+                          + 'i=Information'#13#10);
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
-    CheckEquals(1,             Self.Payload.MediaDescriptionCount,          'MediaDescriptionCount');
-    CheckEquals(5,             Self.Payload.MediaDescriptionAt(0).FormatCount, 'MediaDescriptionAt(0).FormatCount');
-    CheckEquals('31',          Self.Payload.MediaDescriptionAt(0).Formats[0],  'MediaDescriptionAt(0).Formats[0]');
-    CheckEquals('23',          Self.Payload.MediaDescriptionAt(0).Formats[1],  'MediaDescriptionAt(0).Formats[1]');
-    CheckEquals('ape',         Self.Payload.MediaDescriptionAt(0).Formats[2],  'MediaDescriptionAt(0).Formats[2]');
-    CheckEquals('convolution', Self.Payload.MediaDescriptionAt(0).Formats[3],  'MediaDescriptionAt(0).Formats[3]');
-    CheckEquals('3vilution',   Self.Payload.MediaDescriptionAt(0).Formats[4],  'MediaDescriptionAt(0).Formats[4]');
+    CheckEquals(1,
+                Self.Payload.MediaDescriptionCount,
+                'MediaDescriptionCount');
+    CheckEquals(5,
+                Self.Payload.MediaDescriptionAt(0).FormatCount,
+                'MediaDescriptionAt(0).FormatCount');
+    CheckEquals('31',
+                Self.Payload.MediaDescriptionAt(0).Formats[0],
+                'MediaDescriptionAt(0).Formats[0]');
+    CheckEquals('23',
+                Self.Payload.MediaDescriptionAt(0).Formats[1],
+                'MediaDescriptionAt(0).Formats[1]');
+    CheckEquals('ape',
+                Self.Payload.MediaDescriptionAt(0).Formats[2],
+                'MediaDescriptionAt(0).Formats[2]');
+    CheckEquals('convolution',
+                Self.Payload.MediaDescriptionAt(0).Formats[3],
+                'MediaDescriptionAt(0).Formats[3]');
+    CheckEquals('3vilution',
+                Self.Payload.MediaDescriptionAt(0).Formats[4],
+                'MediaDescriptionAt(0).Formats[4]');
   finally
     S.Free;
   end;
@@ -4861,20 +4874,29 @@ procedure TestTIdSdpParser.TestParseMediaDescriptionWithPortCount;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 'm=video 49170/2 RTP/AVP 2 2'#13#10
-                          + 'i=Information');
+                          + 'i=Information'#13#10);
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
     CheckEquals(1, Self.Payload.MediaDescriptionCount, 'MediaDescriptionCount');
 
-    Check      (mtVideo      = Self.Payload.MediaDescriptionAt(0).MediaType, 'MediaDescriptionAt(0).MediaType');
-    CheckEquals(49170,         Self.Payload.MediaDescriptionAt(0).Port,      'MediaDescriptionAt(0).Port');
-    CheckEquals(2,             Self.Payload.MediaDescriptionAt(0).PortCount, 'MediaDescriptionAt(0).PortCount');
-    CheckEquals('RTP/AVP',     Self.Payload.MediaDescriptionAt(0).Transport, 'MediaDescriptionAt(0).Transport');
-    CheckEquals('Information', Self.Payload.MediaDescriptionAt(0).Info,      'MediaDescriptionAt(0).Info');
+    Check(mtVideo = Self.Payload.MediaDescriptionAt(0).MediaType,
+                'MediaDescriptionAt(0).MediaType');
+    CheckEquals(49170,
+                Self.Payload.MediaDescriptionAt(0).Port,
+                'MediaDescriptionAt(0).Port');
+    CheckEquals(2,
+                Self.Payload.MediaDescriptionAt(0).PortCount,
+                'MediaDescriptionAt(0).PortCount');
+    CheckEquals('RTP/AVP',
+                Self.Payload.MediaDescriptionAt(0).Transport,
+                'MediaDescriptionAt(0).Transport');
+    CheckEquals('Information',
+                Self.Payload.MediaDescriptionAt(0).Info,
+                'MediaDescriptionAt(0).Info');
   finally
     S.Free;
   end;
@@ -4916,7 +4938,7 @@ var
   S: TStringStream;
 begin
   S := TStringStream.Create('v=1'#13#10
-                          + 's=Missing Origin. Like We Bad Syntax');
+                          + 's=Missing Origin. Like We Bad Syntax'#13#10);
   try
     Self.P.Source := S;
 
@@ -4938,7 +4960,7 @@ var
 begin
   S := TStringStream.Create('v=1'#13#10
                           + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 'i=Session Information');
+                          + 'i=Session Information'#13#10);
   try
     Self.P.Source := S;
 
@@ -4980,7 +5002,7 @@ procedure TestTIdSdpParser.TestParseMissingVersion;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create('o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4');
+  S := TStringStream.Create('o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10);
   try
     Self.P.Source := S;
 
@@ -5003,7 +5025,7 @@ begin
   S := TStringStream.Create('v=0'#13#10
                           + 'o=mhandley 2890844526 2890842807 IN IP6 2002:5156:4019:1::1'#13#10
                           + 's=Minimum Session Info'#13#10
-                          + 'c=IN IP6 2002:5156:4019:1::1');
+                          + 'c=IN IP6 2002:5156:4019:1::1'#13#10);
   try
     Self.P.Source := S;
 
@@ -5155,11 +5177,11 @@ begin
   // separate RTP server), or (c) ignore the second definition. We choose
   // interpretation (c) because it seems simplest.
   S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
-                          + DefaultConnection + #13#10
+                          + DefaultConnection
                           + 'm=audio 4000 RTP/AVP 98'#13#10
                           + 'a=rtpmap:98 pcm/8000'#13#10
                           + 'm=text 8000 RTP/AVP 98'#13#10
-                          + 'a=rtpmap:98 T140/1000');
+                          + 'a=rtpmap:98 T140/1000'#13#10);
   try
     Self.P.Source := S;
 
@@ -5185,7 +5207,7 @@ var
 begin
   S := TStringStream.Create('v=0'#13#10
                           + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's='#0);
+                          + 's='#0#13#10);
   try
     Self.P.Source := S;
 
@@ -5234,10 +5256,10 @@ procedure TestTIdSdpParser.TestParseTimeMultipleHeaders;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
                           + 't=0 0'#13#10
-                          + 't=3034423619 0');
+                          + 't=3034423619 0'#13#10);
   try
     Self.P.Source := S;
 
@@ -5264,8 +5286,8 @@ procedure TestTIdSdpParser.TestParseTimeSingleBounded;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 't=3034423619 3042462419');
+  S := TStringStream.Create(MinimumPayload
+                          + 't=3034423619 3042462419'#13#10);
   try
     Self.P.Source := S;
 
@@ -5285,8 +5307,8 @@ procedure TestTIdSdpParser.TestParseTimeSingleUnbounded;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 't=0 0');
+  S := TStringStream.Create(MinimumPayload
+                          + 't=0 0'#13#10);
   try
     Self.P.Source := S;
 
@@ -5303,8 +5325,8 @@ procedure TestTIdSdpParser.TestParseTimeSingleUnboundedEndTime;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 't=3034423619 0');
+  S := TStringStream.Create(MinimumPayload
+                          + 't=3034423619 0'#13#10);
   try
     Self.P.Source := S;
 
@@ -5331,10 +5353,10 @@ procedure TestTIdSdpParser.TestParseTimeWithRepeatAndZoneAdjustment;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
                           + 'z=1 -2 3 4'#13#10
-                          + 'r=1');
+                          + 'r=1'#13#10);
   try
     Self.P.Source := S;
 
@@ -5351,10 +5373,10 @@ procedure TestTIdSdpParser.TestParseTimeWithRepeatBeforeZoneAdjustment;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
                           + 'r=1'#13#10
-                          + 'z=1 -2 3 4');
+                          + 'z=1 -2 3 4'#13#10);
   try
     Self.P.Source := S;
 
@@ -5376,9 +5398,9 @@ procedure TestTIdSdpParser.TestParseTimeWithSingleRepeat;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
-                          + 'r=1');
+                          + 'r=1'#13#10);
   try
     Self.P.Source := S;
 
@@ -5395,9 +5417,9 @@ procedure TestTIdSdpParser.TestParseTimeWithSingleTypedRepeat;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
-                          + 'r=1d');
+                          + 'r=1d'#13#10);
   try
     Self.P.Source := S;
 
@@ -5414,9 +5436,9 @@ procedure TestTIdSdpParser.TestParseTimeWithSingleZoneAdjustment;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayload
                           + 't=3034423619 3042462419'#13#10
-                          + 'z=0 -1');
+                          + 'z=0 -1'#13#10);
   try
     Self.P.Source := S;
 
@@ -5453,7 +5475,7 @@ var
 begin
   S := TStringStream.Create('v=a'#13#10 // v must be a number
                           + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's=Minimum Session Info');
+                          + 's=Minimum Session Info'#13#10);
   try
     Self.P.Source := S;
 
@@ -5475,8 +5497,8 @@ procedure TestTIdSdpParser.TestParseVersionMultipleHeaders;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'v=1');
+  S := TStringStream.Create(MinimumPayload
+                          + 'v=1'#13#10);
   try
     Self.P.Source := S;
 
@@ -5754,7 +5776,7 @@ begin
   RTP := TIdRTPServer.Create(nil);
   try
     RTP.DefaultPort := Port + 2;
-    RTP.Profile := Self.Proc.Profile;    
+    RTP.Profile := Self.Proc.Profile;
     RTP.Session.AddReceiver('127.0.0.1', 8000);
     RTP.Session.SendReport;
 
