@@ -919,10 +919,8 @@ begin
 {
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
-}
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
-{
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -932,8 +930,10 @@ begin
   Result.AddTest(TestTIdSipOutboundRegister.Suite);
   Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
+}
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
+{
   Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
@@ -1736,6 +1736,11 @@ begin
 
   Self.Actions.Add(TIdSipOutboundInvite.Create(Self.Core));
   CheckEquals(2, Self.Actions.InviteCount, 'Two INVITEs, one OPTIONS');
+
+  Self.Actions.Add(TIdSipOutboundSession.Create(Self.Core));
+  CheckEquals(2,
+              Self.Actions.InviteCount,
+              'Two INVITEs, one OPTIONS, and a Session');
 end;
 
 procedure TestTIdSipActions.TestOptionsCount;
@@ -4480,10 +4485,11 @@ begin
     ReInvite.Assign(Self.Invite);
 
     Self.MarkSentResponseCount;
-    Self.ReceiveBye(Session.Dialog);
 
     Bye := Self.CreateRemoteBye(Session.Dialog);
     try
+      Self.ReceiveRequest(Bye);
+
       Check(Self.ResponseCount + 2 <= Self.SentResponseCount,
             Self.ClassName + ': No responses to both BYE and re-INVITE');
 
