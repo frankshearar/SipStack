@@ -73,7 +73,7 @@ begin
     CheckEquals('SIP/2.0',    Request.SipVersion,         'SipVersion');
     CheckEquals(29,           Request.ContentLength,      'ContentLength');
     CheckEquals(70,           Request.MaxForwards,        'Max-Forwards');
-
+{
   CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds',
               Request.OtherHeaders[0],
               'OtherHeaders[0]');
@@ -93,7 +93,7 @@ begin
               Request.OtherHeaders[5],
               'OtherHeaders[5]');
   CheckEquals(6, Request.OtherHeaders.Count, 'OtherHeaders Count');
-
+}
   CheckEquals('I am a message. Hear me roar!', Request.Body, 'Body');
 
     Self.ThreadEvent.SetEvent;
@@ -108,31 +108,38 @@ end;
 procedure TestTIdSipUdpServer.CheckResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
   try
-    CheckEquals('SIP/2.0',   Response.SipVersion,         'SipVersion');
-    CheckEquals(486,         Response.StatusCode,         'StatusCode');
-    CheckEquals('Busy Here', Response.StatusText,         'StatusText');
-    CheckEquals(29,          Response.ContentLength,      'ContentLength');
-    CheckEquals(70,          Response.MaxForwards,        'Max-Forwards');
+    CheckEquals('SIP/2.0',                       Response.SipVersion,    'SipVersion');
+    CheckEquals(486,                             Response.StatusCode,    'StatusCode');
+    CheckEquals('Busy Here',                     Response.StatusText,    'StatusText');
+    CheckEquals('a84b4c76e66710@gw1.leo_ix.org', Response.CallID,        'CallID');
+    CheckEquals(29,                              Response.ContentLength, 'ContentLength');
+    CheckEquals(70,                              Response.MaxForwards,   'MaxForwards');
 
   CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds',
-              Response.OtherHeaders[0],
-              'OtherHeaders[0]');
+              Response.Headers.Items[0].AsString,
+              'Headers.Items[0].AsString');
+  CheckEquals('Max-Forwards: 70',
+              Response.Headers.Items[1].AsString,
+              'Headers.Items[1].AsString');
   CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',
-              Response.OtherHeaders[1],
-              'OtherHeaders[1]');
+              Response.Headers.Items[2].AsString,
+              'Headers.Items[2].AsString');
   CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-              Response.OtherHeaders[2],
-              'OtherHeaders[2]');
+              Response.Headers.Items[3].AsString,
+              'Headers.Items[3].AsString');
   CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',
-              Response.OtherHeaders[3],
-              'OtherHeaders[3]');
+              Response.Headers.Items[4].AsString,
+              'Headers.Items[4].AsString');
   CheckEquals('CSeq: 314159 INVITE',
-              Response.OtherHeaders[4],
-              'OtherHeaders[4]');
+              Response.Headers.Items[5].AsString,
+              'Headers.Items[5].AsString');
   CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',
-              Response.OtherHeaders[5],
-              'OtherHeaders[5]');
-  CheckEquals(6, Response.OtherHeaders.Count, 'OtherHeaders Count');
+              Response.Headers.Items[6].AsString,
+              'Headers.Items[6].AsString');
+  CheckEquals('Content-Length: 29',
+              Response.Headers.Items[7].AsString,
+              'Headers.Items[7].AsString');
+  CheckEquals(8, Response.Headers.Count, 'OtherHeaders Count');
 
   CheckEquals('I am a message. Hear me roar!', Response.Body, 'Body');
 

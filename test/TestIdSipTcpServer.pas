@@ -99,15 +99,18 @@ begin
     CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.Request,       'Request');
     CheckEquals('SIP/2.0',                              Request.SIPVersion,    'SipVersion');
     CheckEquals(29,                                     Request.ContentLength, 'ContentLength');
+    CheckEquals('a84b4c76e66710@gw1.leo_ix.org',        Request.CallID,        'CallID');
     CheckEquals(70,                                     Request.MaxForwards,   'Max-Forwards');
 
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Request.OtherHeaders[0], 'Via');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Request.OtherHeaders[1], 'To');
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.OtherHeaders[2], 'From');
-    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.OtherHeaders[3], 'Call-ID');
-    CheckEquals('CSeq: 314159 INVITE',                                     Request.OtherHeaders[4], 'CSeq');
-    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.OtherHeaders[5], 'Contact');
-    CheckEquals(6, Request.OtherHeaders.Count, 'Header count');
+    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Request.Headers.Items[0].AsString, 'Via');
+    CheckEquals('Max-Forwards: 70',                                        Request.Headers.Items[1].AsString, 'Max-Forwards');
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Request.Headers.Items[2].AsString, 'To');
+    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.Headers.Items[3].AsString, 'From');
+    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.Headers.Items[4].AsString, 'Call-ID');
+    CheckEquals('CSeq: 314159 INVITE',                                     Request.Headers.Items[5].AsString, 'CSeq');
+    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.Headers.Items[6].AsString, 'Contact');
+    CheckEquals('Content-Length: 29',                                      Request.Headers.Items[7].AsString, 'Content-Length');
+    CheckEquals(8, Request.Headers.Count, 'Header count');
 
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
 
