@@ -22,6 +22,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
     procedure TestCreationFromParameters;
     procedure TestCreationFromDialogID;
     procedure TestEqualsSameID;
@@ -31,6 +32,9 @@ type
   end;
 
 implementation
+
+uses
+  SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -57,9 +61,17 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipDialogID Private methods *****************************************
-
 //* TestTIdSipDialogID Published methods ***************************************
+
+procedure TestTIdSipDialogID.TestAsString;
+begin
+  CheckEquals(Format(DialogIdStringForm,
+                     [Self.ID.CallID,
+                      Self.ID.LocalTag,
+                      Self.ID.RemoteTag]),
+              Self.ID.AsString,
+              'AsString');
+end;
 
 procedure TestTIdSipDialogID.TestCreationFromParameters;
 begin

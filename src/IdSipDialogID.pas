@@ -23,6 +23,7 @@ type
                        const RemoteTag: String); overload;
     constructor Create(ID: TIdSipDialogID); overload;
 
+    function AsString: String;
     function Equals(ID: TIdSipDialogID): Boolean;
 
     property CallID:    String read fCallID;
@@ -30,7 +31,13 @@ type
     property RemoteTag: String read fRemoteTag;
   end;
 
+const
+  DialogIdStringForm = '(ID callid: %s localtag: %s remotetag: %s)';
+
 implementation
+
+uses
+  SysUtils;
 
 //******************************************************************************
 //* TIdSipDialogID                                                             *
@@ -55,6 +62,12 @@ begin
   Self.fCallID    := ID.CallID;
   Self.fLocalTag  := ID.LocalTag;
   Self.fRemoteTag := ID.RemoteTag;
+end;
+
+function TIdSipDialogID.AsString: String;
+begin
+  Result := Format(DialogIdStringForm,
+                   [Self.CallID, Self.LocalTag, Self.RemoteTag]);
 end;
 
 function TIdSipDialogID.Equals(ID: TIdSipDialogID): Boolean;
