@@ -25,8 +25,8 @@ interface
 
 uses
   Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
-  IdSipAuthentication, IdSipMessage, IdSipRegistration, IdSipTimer,
-  IdSipTransaction, IdSipTransport, SyncObjs;
+  IdObservable, IdSipAuthentication, IdSipMessage, IdSipRegistration,
+  IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -34,16 +34,6 @@ type
   TIdSipOutboundRegistration = class;
   TIdSipSession = class;
   TIdSipSessionEvent = procedure(Session: TIdSipSession) of object;
-
-  // I watch other objects for changes. When they change (in their arbitrary
-  // fashion) they tell me, and I update my own state accordingly.
-  // Unfortunately I never know the type of Observed and have to typecast
-  // the Observed, but c'est la vie.
-  IIdSipObserver = interface
-    ['{665CFE94-8EFD-4710-A5CC-ED01BCF7961E}']
-    procedure OnChanged(Observed: TObject);
-  end;
-
 
   // I provide a protocol for generic Actions.
   //
@@ -295,8 +285,7 @@ type
     fMinimumExpiryTime:       Cardinal; // in seconds
     fProxy:                   TIdSipUri;
     KnownRegistrars:          TObjectList;
-    ObserverLock:             TCriticalSection;
-    Observers:                TList;
+    Observed:                 TIdObservable;
     RegistrationListenerLock: TCriticalSection;
     RegistrationListeners:    TList;
     UserAgentListenerLock:    TCriticalSection;
@@ -1312,8 +1301,7 @@ begin
 
   Self.ActionLock               := TCriticalSection.Create;
   Self.Actions                  := TObjectList.Create;
-  Self.ObserverLock             := TCriticalSection.Create;
-  Self.Observers                := TList.Create;
+  Self.Observed                 := TIdObservable.Create;
   Self.RegistrationListenerLock := TCriticalSection.Create;
   Self.RegistrationListeners    := TList.Create;
   Self.UserAgentListenerLock    := TCriticalSection.Create;
@@ -1345,8 +1333,7 @@ begin
   Self.UserAgentListenerLock.Free;
   Self.RegistrationListeners.Free;
   Self.RegistrationListenerLock.Free;
-  Self.Observers.Free;
-  Self.ObserverLock.Free;
+  Self.Observed.Free;
   Self.Actions.Free;
   Self.ActionLock.Free;  
   Self.KnownRegistrars.Free;
@@ -1357,12 +1344,7 @@ end;
 
 procedure TIdSipUserAgentCore.AddObserver(const Listener: IIdSipObserver);
 begin
-  Self.ObserverLock.Acquire;
-  try
-    Self.Observers.Add(Pointer(Listener));
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Self.Observed.AddObserver(Listener);
 end;
 
 procedure TIdSipUserAgentCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
@@ -1541,12 +1523,7 @@ end;
 
 procedure TIdSipUserAgentCore.RemoveObserver(const Listener: IIdSipObserver);
 begin
-  Self.ObserverLock.Acquire;
-  try
-    Self.Observers.Remove(Pointer(Listener));
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Self.Observed.RemoveObserver(Listener);
 end;
 
 procedure TIdSipUserAgentCore.RemoveAction(Action: TIdSipAction);
@@ -2036,16 +2013,8 @@ begin
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfChange;
-var
-  I: Integer;
 begin
-  Self.ObserverLock.Acquire;
-  try
-    for I := 0 to Self.Observers.Count - 1 do
-      IIdSipObserver(Self.Observers[I]).OnChanged(Self);
-  finally
-    Self.ObserverLock.Release;
-  end;
+  Self.Observed.NotifyListenersOfChange;
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;

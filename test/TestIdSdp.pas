@@ -438,12 +438,11 @@ type
   end;
 
   TestTIdFilteredRTPPeer = class(TTestCase,
-                                 IIdRTPListener)
+                                 IIdRTPFilteredListener)
   private
     Binding:          TIdSocketHandle;
     NormalPacket:     TIdRTPPacket;
     LocalDesc:        TIdSdpMediaDescription;
-    ReceivedRTCP:     Boolean;
     ReceivedRTP:      Boolean;
     Profile:          TIdRTPProfile;
     RemoteDesc:       TIdSdpMediaDescription;
@@ -452,9 +451,7 @@ type
     T140PT:           TIdRTPPayloadType;
     UnexpectedPacket: TIdRTPPacket;
 
-    procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
-    procedure OnRTP(Packet: TIdRTPPacket;
+    procedure OnFilteredRTP(Packet: TIdRTPPacket;
                     Binding: TIdSocketHandle);
     procedure Send(RTP: TIdRTPPacket);
     procedure SendNormalData;
@@ -5554,7 +5551,7 @@ begin
   Self.Peer := TIdFilteredRTPPeer.Create(Self.Server,
                                          Self.LocalDesc,
                                          Self.RemoteDesc);
-  Self.Peer.AddListener(Self);
+  Self.Peer.AddFilteredListener(Self);
 
   Self.NormalPacket := TIdRTPPacket.Create(Self.Profile);
   Self.NormalPacket.PayloadType := Self.T140PT;
@@ -5564,8 +5561,7 @@ begin
   Self.UnexpectedPacket.PayloadType := 0;
   Self.UnexpectedPacket.Payload := Self.Profile.EncodingFor(Self.UnexpectedPacket.PayloadType).Clone;
 
-  Self.ReceivedRTCP := false;
-  Self.ReceivedRTCP := false;
+  Self.ReceivedRTP := false;
 end;
 
 procedure TestTIdFilteredRTPPeer.TearDown;
@@ -5584,14 +5580,8 @@ end;
 
 //* TestTIdFilteredRTPPeer Private methods *************************************
 
-procedure TestTIdFilteredRTPPeer.OnRTCP(Packet: TIdRTCPPacket;
-                                        Binding: TIdSocketHandle);
-begin
-  Self.ReceivedRTCP := true;
-end;
-
-procedure TestTIdFilteredRTPPeer.OnRTP(Packet: TIdRTPPacket;
-                                       Binding: TIdSocketHandle);
+procedure TestTIdFilteredRTPPeer.OnFilteredRTP(Packet: TIdRTPPacket;
+                                               Binding: TIdSocketHandle);
 begin
   Self.ReceivedRTP := true;
 end;

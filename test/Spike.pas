@@ -4,8 +4,9 @@ interface
 
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
-  IdRTP, IdSdp, IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport,
-  IdSocketHandle, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
+  IdObservable, IdRTPDiagnostics, IdSipCore, IdRTP, IdSdp, IdSipMessage,
+  IdSipTransaction, IdSipTransport, IdSocketHandle, IdTimerQueue, StdCtrls,
+  SyncObjs, SysUtils;
 
 type
   TrnidSpike = class(TForm,
@@ -59,7 +60,9 @@ type
     AudioPlayer:    TAudioData;
     DataStore:      TStream;
     Dispatch:       TIdSipTransactionDispatcher;
-    LowerDTMFPanel: TIdDTMFPanel;
+    DTMFPanel:      TIdDTMFPanel;
+    HistListener:   TIdRTPPayloadHistogram;
+    HistogramPanel: TIdHistogramPanel;
     Media:          TIdSdpPayloadProcessor;
     RTPByteCount:   Integer;
     RunningPort:    Cardinal;
@@ -68,7 +71,6 @@ type
     Transports:     TObjectList;
     UA:             TIdSipUserAgentCore;
     UDPByteCount:   Integer;
-    UpperDTMFPanel: TIdDTMFPanel;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
@@ -146,17 +148,23 @@ begin
   Self.Transports := TObjectList.Create(true);
   Self.RunningPort := IdPORT_SIP;
 
-  Self.UpperDTMFPanel := TIdDTMFPanel.Create(nil);
-  Self.UpperDTMFPanel.Align  := alLeft;
-  Self.UpperDTMFPanel.Left   := -1;
-  Self.UpperDTMFPanel.Parent := Self.UpperInput;
-  Self.UpperDTMFPanel.Top    := 0;
+  Self.DTMFPanel := TIdDTMFPanel.Create(nil);
+  Self.DTMFPanel.Align  := alLeft;
+  Self.DTMFPanel.Left   := -1; // Forces the panel left of the splitter
+  Self.DTMFPanel.Parent := Self.UpperInput;
+  Self.DTMFPanel.Top    := 0;
 
-  Self.LowerDTMFPanel := TIdDTMFPanel.Create(nil);
-  Self.LowerDTMFPanel.Align  := alLeft;
-  Self.LowerDTMFPanel.Left   := -1;
-  Self.LowerDTMFPanel.Parent := Self.LowerInput;
-  Self.LowerDTMFPanel.Top    := 0;
+  Self.HistogramPanel := TIdHistogramPanel.Create(nil);
+  Self.HistogramPanel.Align      := alLeft;
+  Self.HistogramPanel.BevelInner := bvNone;
+  Self.HistogramPanel.BevelOuter := bvNone;
+  Self.HistogramPanel.Left       := -1; // Forces the panel left of the splitter
+  Self.HistogramPanel.Parent     := Self.LowerInput;
+  Self.HistogramPanel.Top        := 0;
+  Self.HistogramPanel.Width      := Self.DTMFPanel.Width;
+
+  Self.HistListener := TIdRTPPayloadHistogram.Create;
+  Self.HistListener.AddObserver(Self.HistogramPanel);
 
   Self.Lock        := TCriticalSection.Create;
   Self.CounterLock := TCriticalSection.Create;
@@ -235,8 +243,11 @@ begin
 
   Self.DataStore.Free;
   Self.StopEvent.Free;
-  Self.LowerDTMFPanel.Free;
-  Self.UpperDTMFPanel.Free;
+
+
+  Self.HistListener.Free;
+  Self.HistogramPanel.Free;
+  Self.DTMFPanel.Free;
 
   Self.Transports.Free;
 
@@ -320,8 +331,9 @@ begin
     Self.Lock.Release;
   end;
   Self.StopReadingData;
-  Session.PayloadProcessor.RemoveDataListener(Self.UpperDTMFPanel);
-  Self.UpperDTMFPanel.Processor := nil;
+  Session.PayloadProcessor.RemoveRTPListener(Self.HistListener);
+  Session.PayloadProcessor.RemoveDataListener(Self.DTMFPanel);
+  Self.DTMFPanel.Processor := nil;
 end;
 
 procedure TrnidSpike.OnException(E: Exception;
@@ -367,8 +379,9 @@ begin
   Session.AddSessionListener(Self);
   Session.AcceptCall(SDP, SdpMimeType);
 
-  Session.PayloadProcessor.AddDataListener(Self.UpperDTMFPanel);
-  Self.UpperDTMFPanel.Processor := Session.PayloadProcessor;
+  Session.PayloadProcessor.AddRTPListener(Self.HistListener);
+  Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
+  Self.DTMFPanel.Processor := Session.PayloadProcessor;
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -491,6 +504,7 @@ end;
 procedure TrnidSpike.StopReadingData;
 begin
   Self.Media.StopListening;
+
   Self.Invite.Enabled := true;
 end;
 
@@ -543,8 +557,8 @@ begin
                             SdpMimeType);
 
     Session.AddSessionListener(Self);
-    Session.PayloadProcessor.AddDataListener(Self.UpperDTMFPanel);
-    Self.UpperDTMFPanel.Processor := Session.PayloadProcessor;
+    Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
+    Self.DTMFPanel.Processor := Session.PayloadProcessor;
   finally
     Target.Free;
   end;

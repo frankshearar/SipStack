@@ -5,11 +5,13 @@ uses
   GuiTestRunner,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
-  BasicClient in 'src\client\BasicClient.pas' {fmBasicClient},  
+  BasicClient in 'src\client\BasicClient.pas' {fmBasicClient},
   IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
+  IdObservable in 'src\IdObservable.pas',
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
+  IdRTPDiagnostics in 'src\IdRTPDiagnostics.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
   IdSdp in 'src\IdSdp.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
@@ -42,7 +44,9 @@ uses
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestMessages in 'test\TestMessages.pas',
+  TestIdObservable in 'test\TestIdObservable.pas',
   TestIdRTP in 'test\TestIdRTP.pas',
+  TestIdRTPDiagnostics in 'test\TestIdRTPDiagnostics.pas',
   TestIdRTPServer in 'test\TestIdRTPServer.pas',
   TestIdSdp in 'test\TestIdSdp.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
@@ -68,8 +72,8 @@ uses
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
-{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE SPIKE}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
@@ -81,7 +85,7 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-  Application.CreateForm(TfmBasicClient, fmBasicClient);
+//  Forms.Application.CreateForm(TfmBasicClient, fmBasicClient);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

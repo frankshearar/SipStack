@@ -1,6 +1,6 @@
 object fmBasicClient: TfmBasicClient
-  Left = 192
-  Top = 103
+  Left = 94
+  Top = 187
   Width = 870
   Height = 640
   Caption = 'fmBasicClient'
@@ -13,54 +13,49 @@ object fmBasicClient: TfmBasicClient
   OldCreateOrder = False
   PixelsPerInch = 96
   TextHeight = 13
-  object Splitter2: TSplitter
-    Left = 185
-    Top = 0
-    Width = 5
-    Height = 613
-    Cursor = crHSplit
+  object Splitter1: TSplitter
+    Left = 0
+    Top = 30
+    Width = 862
+    Height = 5
+    Cursor = crVSplit
+    Align = alTop
   end
-  object Panel1: TPanel
-    Left = 190
-    Top = 0
-    Width = 672
-    Height = 613
+  object Holder: TPanel
+    Left = 0
+    Top = 35
+    Width = 862
+    Height = 578
     Align = alClient
     BevelOuter = bvNone
+    Color = clBlue
     TabOrder = 0
-    object Splitter1: TSplitter
-      Left = 0
-      Top = 225
-      Width = 672
-      Height = 5
-      Cursor = crVSplit
-      Align = alTop
-    end
-    object Memo1: TMemo
-      Left = 0
-      Top = 0
-      Width = 672
-      Height = 225
-      Align = alTop
-      TabOrder = 0
-    end
-    object Memo2: TMemo
-      Left = 0
-      Top = 230
-      Width = 672
-      Height = 383
-      Align = alClient
-      TabOrder = 1
-    end
   end
-  object Panel2: TPanel
+  object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 185
-    Height = 613
-    Align = alLeft
+    Width = 862
+    Height = 30
+    Align = alTop
     BevelOuter = bvNone
-    Color = clMaroon
     TabOrder = 1
+    object Event: TEdit
+      Left = 4
+      Top = 4
+      Width = 121
+      Height = 21
+      TabOrder = 0
+      Text = 'foo'
+    end
+    object Trigger: TButton
+      Left = 130
+      Top = 2
+      Width = 75
+      Height = 25
+      Caption = 'Trigger'
+      Default = True
+      TabOrder = 1
+      OnClick = TriggerClick
+    end
   end
 end

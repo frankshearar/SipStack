@@ -3,7 +3,7 @@ unit TestIdSipCore;
 interface
 
 uses
-  Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
+  Classes, IdObservable, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipMessage, IdSipMockCore, IdSipMockTransactionDispatcher,
   IdSipRegistration, IdSipTransaction, IdSipTransport, IdSocketHandle,
   TestFramework, TestFrameworkEx, TestFrameworkSip;
@@ -417,8 +417,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdUdpServer, SyncObjs, SysUtils,
-  TestMessages, IdSipMockTransport;
+  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer, SyncObjs,
+  SysUtils, TestIdObservable, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -1096,11 +1096,11 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestAddObserver;
 var
-  L1, L2: TIdSipTestObserver;
+  L1, L2: TIdObserverListener;
 begin
-  L1 := TIdSipTestObserver.Create;
+  L1 := TIdObserverListener.Create;
   try
-    L2 := TIdSipTestObserver.Create;
+    L2 := TIdObserverListener.Create;
     try
       Self.Core.AddObserver(L1);
       Self.Core.AddObserver(L2);
@@ -1853,11 +1853,11 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestRemoveObserver;
 var
-  L1, L2: TIdSipTestObserver;
+  L1, L2: TIdObserverListener;
 begin
-  L1 := TIdSipTestObserver.Create;
+  L1 := TIdObserverListener.Create;
   try
-    L2 := TIdSipTestObserver.Create;
+    L2 := TIdObserverListener.Create;
     try
       Self.Core.AddObserver(L1);
       Self.Core.AddObserver(L2);

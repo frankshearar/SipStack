@@ -3,21 +3,22 @@ unit BasicClient;
 interface
 
 uses
-  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls;
+  Forms, IdRTPDiagnostics, StdCtrls, Controls, ExtCtrls, Classes;
 
 type
   TfmBasicClient = class(TForm)
-    Panel1: TPanel;
-    Memo1: TMemo;
+    Holder: TPanel;
     Splitter1: TSplitter;
-    Memo2: TMemo;
-    Panel2: TPanel;
-    Splitter2: TSplitter;
+    Panel1: TPanel;
+    Event: TEdit;
+    Trigger: TButton;
+    procedure TriggerClick(Sender: TObject);
   private
-    { Private declarations }
+    Hist:      TIdRTPPayloadHistogram;
+    HistPanel: TIdHistogramPanel;
   public
-    { Public declarations }
+    constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
   end;
 
 var
@@ -26,5 +27,33 @@ var
 implementation
 
 {$R *.dfm}
+
+constructor TfmBasicClient.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+
+  Self.Hist      := TIdRTPPayloadHistogram.Create;
+  Self.HistPanel := TIdHistogramPanel.Create(nil);
+
+  Self.HistPanel.Align      := alClient;
+  Self.HistPanel.BevelInner := bvNone;
+  Self.HistPanel.BevelOuter := bvNone;
+  Self.HistPanel.Parent     := Self.Holder;
+
+  Self.Hist.AddObserver(Self.HistPanel);
+end;
+
+destructor TfmBasicClient.Destroy;
+begin
+  Self.HistPanel.Free;
+  Self.Hist.Free;
+
+  inherited Destroy;
+end;
+
+procedure TfmBasicClient.TriggerClick(Sender: TObject);
+begin
+  Self.Hist.RecordEvent(Self.Event.Text);
+end;
 
 end.

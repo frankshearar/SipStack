@@ -502,17 +502,28 @@ type
     procedure Parse(Payload: TIdSdpPayload);
   end;
 
+  IIdRTPFilteredListener = interface
+    ['{0ADBA37A-F9D2-4051-9CB6-4CDC62B882B2}']
+
+    procedure OnFilteredRTP(Packet: TIdRTPPacket;
+                            Binding: TIdSocketHandle);
+  end;
+
   // I represent an RTP peer that filters. In other words, I only notify
   // my listeners if I receive RTP packets of the packet type given in
   // my LocalDescription.
   TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
                              IIdRTPListener)
   private
-    fLocalDescription:  TIdSdpMediaDescription;
-    fRemoteDescription: TIdSdpMediaDescription;
-    fPeer:              Pointer;
+    FilteredListenerLock: TCriticalSection;
+    FilteredListeners:    TList;
+    fLocalDescription:    TIdSdpMediaDescription;
+    fRemoteDescription:   TIdSdpMediaDescription;
+    fPeer:                Pointer;
 
     function  GetPeer: IIdAbstractRTPPeer;
+    procedure NotifyFilteredListeners(Packet: TIdRTPPacket;
+                                      Binding: TIdSocketHandle);
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdSocketHandle);
     procedure OnRTP(Packet: TIdRTPPacket;
@@ -523,6 +534,8 @@ type
                        RemoteDescription: TIdSdpMediaDescription); reintroduce;
     destructor  Destroy; override;
 
+    procedure AddFilteredListener(const Listener: IIdRTPFilteredListener);
+    procedure RemoveFilteredListener(const Listener: IIdRTPFilteredListener);
     procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); override;
@@ -537,6 +550,7 @@ type
   // You can give me a remote session description too, which allows you to
   // use me to send (RTP) data to the remote peer.
   TIdSdpPayloadProcessor = class(TIdInterfacedObject,
+                                 IIdRTPFilteredListener,
                                  IIdRTPListener,
                                  IIdRTPDataListener)
   private
@@ -551,6 +565,8 @@ type
     fTransportType:            TIdIPVersion;
     RTPClients:                TObjectList;
     RTPClientLock:             TCriticalSection;
+    RTPListenerLock:           TCriticalSection;
+    RTPListeners:              TList;
     RTPServerLock:             TCriticalSection;
     RTPServers:                TObjectList;
 
@@ -563,6 +579,12 @@ type
     function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TIdRTPPayload;
                                  Binding: TIdSocketHandle);
+    procedure NotifyRTPListenersOfRTCP(Packet: TIdRTCPPacket;
+                                       Binding: TIdSocketHandle);
+    procedure NotifyRTPListenersOfRTP(Packet: TIdRTPPacket;
+                                      Binding: TIdSocketHandle);
+    procedure OnFilteredRTP(Packet: TIdRTPPacket;
+                            Binding: TIdSocketHandle);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
     procedure OnRTCP(Packet: TIdRTCPPacket;
@@ -579,11 +601,13 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
+    procedure AddRTPListener(const Listener: IIdRTPListener);
 //    function  FirstPeerFor(PayloadType: TIdRTPPayloadType): TIdFilteredRTPPeer;
     function  IsListening: Boolean;
     function  LocalSessionDescription: String;
     function  MediaType: String;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
+    procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure SendData(Payload: TIdRTPPayload);
     function  SessionCount: Integer;
     procedure StartListening(const LocalSessionDescription: String);
@@ -3235,6 +3259,9 @@ constructor TIdFilteredRTPPeer.Create(Peer: IIdAbstractRTPPeer;
 begin
   inherited Create;
 
+  Self.FilteredListenerLock := TCriticalSection.Create;
+  Self.FilteredListeners    := TList.Create;
+
   fLocalDescription := TIdSdpMediaDescription.Create;
   fLocalDescription.Assign(LocalDescription);
 
@@ -3251,7 +3278,31 @@ begin
   fRemoteDescription.Free;
   fLocalDescription.Free;
 
+  Self.FilteredListeners.Free;
+  Self.FilteredListenerLock.Free;
+
+
   inherited Destroy;
+end;
+
+procedure TIdFilteredRTPPeer.AddFilteredListener(const Listener: IIdRTPFilteredListener);
+begin
+  Self.FilteredListenerLock.Acquire;
+  try
+    Self.FilteredListeners.Add(Pointer(Listener));
+  finally
+    Self.FilteredListenerLock.Release;
+  end;
+end;
+
+procedure TIdFilteredRTPPeer.RemoveFilteredListener(const Listener: IIdRTPFilteredListener);
+begin
+  Self.FilteredListenerLock.Acquire;
+  try
+    Self.FilteredListeners.Remove(Pointer(Listener));
+  finally
+    Self.FilteredListenerLock.Release;
+  end;
 end;
 
 procedure TIdFilteredRTPPeer.SendPacket(const Host: String;
@@ -3268,6 +3319,21 @@ begin
   Result := IIdAbstractRTPPeer(Self.fPeer);
 end;
 
+procedure TIdFilteredRTPPeer.NotifyFilteredListeners(Packet: TIdRTPPacket;
+                                                     Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  Self.FilteredListenerLock.Acquire;
+  try
+    for I := 0 to Self.FilteredListeners.Count - 1 do
+      IIdRTPFilteredListener(Self.FilteredListeners[I]).OnFilteredRTP(Packet,
+                                                                      Binding);
+  finally
+    Self.FilteredListenerLock.Release;
+  end;
+end;
+
 procedure TIdFilteredRTPPeer.OnRTCP(Packet: TIdRTCPPacket;
                                     Binding: TIdSocketHandle);
 begin
@@ -3278,7 +3344,9 @@ procedure TIdFilteredRTPPeer.OnRTP(Packet: TIdRTPPacket;
                                    Binding: TIdSocketHandle);
 begin
   if Self.LocalDescription.HasFormat(IntToStr(Packet.PayloadType)) then
-    Self.NotifyListenersOfRTP(Packet, Binding);
+    Self.NotifyFilteredListeners(Packet, Binding);
+
+  Self.NotifyListenersOfRTP(Packet, Binding);  
 end;
 
 //******************************************************************************
@@ -3300,6 +3368,9 @@ begin
   Self.RTPClients    := TObjectList.Create(true);
   Self.RTPClientLock := TCriticalSection.Create;
 
+  Self.RTPListeners := TList.Create;
+  Self.RTPListenerLock := TCriticalSection.Create;
+
   Self.RTPServers    := TObjectList.Create(true);
   Self.Filters       := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
@@ -3315,6 +3386,12 @@ begin
   Self.Filters.Free;
   Self.RTPServers.Free;
   Self.RTPServerLock.Free;
+
+  Self.DataListeners := TList.Create;
+  Self.DataListenerLock := TCriticalSection.Create;
+
+  Self.RTPListeners.Free;
+  Self.RTPListenerLock.Free;
 
   Self.RTPClients.Free;
   Self.RTPClientLock.Free;
@@ -3332,6 +3409,16 @@ begin
     Self.DataListeners.Add(Pointer(Listener));
   finally
     Self.DataListenerLock.Release;
+  end;
+end;
+
+procedure TIdSdpPayloadProcessor.AddRTPListener(const Listener: IIdRTPListener);
+begin
+  Self.RTPListenerLock.Acquire;
+  try
+    Self.RTPListeners.Add(Pointer(Listener));
+  finally
+    Self.RTPListenerLock.Release;
   end;
 end;
 
@@ -3392,6 +3479,16 @@ begin
     Self.DataListeners.Remove(Pointer(Listener));
   finally
     Self.DataListenerLock.Release;
+  end;
+end;
+
+procedure TIdSdpPayloadProcessor.RemoveRTPListener(const Listener: IIdRTPListener);
+begin
+  Self.RTPListenerLock.Acquire;
+  try
+    Self.RTPListeners.Remove(Pointer(Listener));
+  finally
+    Self.RTPListenerLock.Release;
   end;
 end;
 
@@ -3547,6 +3644,41 @@ begin
   end;
 end;
 
+procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTCP(Packet: TIdRTCPPacket;
+                                                          Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  Self.RTPListenerLock.Acquire;
+  try
+    for I := 0 to Self.RTPListeners.Count - 1 do
+      IIdRTPListener(Self.RTPListeners[I]).OnRTCP(Packet, Binding);
+  finally
+    Self.RTPListenerLock.Release;
+  end;
+end;
+
+procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTP(Packet: TIdRTPPacket;
+                                                         Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  Self.RTPListenerLock.Acquire;
+  try
+    for I := 0 to Self.RTPListeners.Count - 1 do
+      IIdRTPListener(Self.RTPListeners[I]).OnRTP(Packet, Binding);
+  finally
+    Self.RTPListenerLock.Release;
+  end;
+end;
+
+procedure TIdSdpPayloadProcessor.OnFilteredRTP(Packet: TIdRTPPacket;
+                                               Binding: TIdSocketHandle);
+begin
+  Self.NotifyOfNewRTPData(Packet.Payload,
+                          Binding);
+end;
+
 procedure TIdSdpPayloadProcessor.OnNewData(Data: TIdRTPPayload;
                                            Binding: TIdSocketHandle);
 begin
@@ -3556,13 +3688,13 @@ end;
 procedure TIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
                                         Binding: TIdSocketHandle);
 begin
+  Self.NotifyRTPListenersOfRTCP(Packet, Binding);
 end;
 
 procedure TIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
                                        Binding: TIdSocketHandle);
 begin
-  Self.NotifyOfNewRTPData(Packet.Payload,
-                          Binding);
+  Self.NotifyRTPListenersOfRTP(Packet, Binding);
 end;
 
 function TIdSdpPayloadProcessor.PeerAt(Index: Integer): TIdFilteredRTPPeer;
@@ -3636,6 +3768,7 @@ begin
     try
       NewPeer.Profile := Self.Profile;
       NewPeer.AddListener(Self);
+      NewPeer.AddFilteredListener(Self);
       Self.Filters.Add(NewPeer);
     except
       if (Self.Filters.IndexOf(NewPeer) <> -1) then
