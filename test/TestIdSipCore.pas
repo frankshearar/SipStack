@@ -205,6 +205,7 @@ type
     procedure TestAddObserver;
     procedure TestAddUserAgentListener;
     procedure TestAuthenticateWithNoAttachedAuthenticator;
+    procedure TestByeWithAuthentication;
     procedure TestCallUsingProxy;
     procedure TestCancelNotifiesTU;
     procedure TestContentTypeDefault;
@@ -2356,6 +2357,35 @@ begin
   Self.Core.RequireAuthentication := true;
   Self.Invite.AddHeader(AuthorizationHeader);
   Self.ReceiveInvite;
+end;
+
+procedure TestTIdSipUserAgent.TestByeWithAuthentication;
+var
+  Session: TIdSipOutboundSession;
+begin
+  //  ---      INVITE      --->
+  // <---      200 OK      --->
+  //  ---        ACK       --->
+  // ==========================
+  //       Media streams
+  // ==========================
+  //  ---        BYE       --->
+  // <--- 401 Unauthorized ---
+  //  ---        BYE       --->
+  // <---      200 OK      --->
+
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Session.Send;
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Session.Terminate;
+
+  // This is a bit tricky - the Transaction layer reissues the request, not the
+  // Transaction-User layer. All the TU layer does is provide an authentication
+  // token.p
+  Self.MarkSentRequestCount;
+  Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
+  Self.CheckRequestSent('No re-issue of a BYE');
 end;
 
 procedure TestTIdSipUserAgent.TestCallUsingProxy;

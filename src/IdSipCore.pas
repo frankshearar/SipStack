@@ -206,8 +206,7 @@ type
     procedure NotifyOfChange;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); virtual;
+                                        ChallengeResponse: TIdSipRequest); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -416,8 +415,7 @@ type
                                   const HeaderName: String): Boolean;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); override;
+                                        ChallengeResponse: TIdSipRequest); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; virtual;
@@ -1559,8 +1557,7 @@ end;
 
 procedure TIdSipAbstractCore.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                        Challenge: TIdSipResponse;
-                                                       var Username: String;
-                                                       var Password: String);
+                                                       ChallengeResponse: TIdSipRequest);
 begin
   // do nothing
 end;
@@ -2788,12 +2785,67 @@ end;
 
 procedure TIdSipAbstractUserAgent.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                             Challenge: TIdSipResponse;
-                                                            var Username: String;
-                                                            var Password: String);
+                                                            ChallengeResponse: TIdSipRequest);
+var
+  AffectedAction:  TIdSipAction;
+  AuthHeader:      TIdSipAuthorizationHeader;
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  RealmInfo:       TIdRealmInfo;
+  Username:        String;
+  Password:        String;
 begin
-  inherited OnAuthenticationChallenge(Dispatcher, Challenge, Username, Password);
+  // We've received a 401 or 407 response. At this level of the stack we know
+  // this response matches a request that we sent out since the transaction
+  // layer drops unmatched responses.
+  //
+  // Now we've a few cases:
+  // 1. The response matches something like an INVITE, OPTIONS, etc. FindAction
+  //    will return a reference to this action;
+  // 2. The response matches a BYE, in which case FindAction will return nil.
+  //    Since we consider the session terminated as soon as we send the BYE,
+  //    we cannot match the response to an action.
+  //
+  // In case 1, we find the action and update its initial request. In case 2,
+  // we just fake things a bit - we re-issue the request with incremented
+  // sequence number and an authentication token, and hope for the best. Really,
+  // UASs shouldn't challenge BYEs - since the UAC has left the session,
+  // there's no real way to defend against a spoofed BYE: if the UAC did send
+  // the BYE, it's left the conversation. If it didn't, the UAC will simply
+  // drop your challenge.
+
+  inherited OnAuthenticationChallenge(Dispatcher, Challenge, ChallengeResponse);
 
   Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
+  try
+    ChallengeResponse.CSeq.Increment;
+    ChallengeResponse.LastHop.Branch := Self.NextBranch;
+
+    ChallengeHeader := Challenge.AuthenticateHeader;
+
+    Self.Keyring.AddKey(ChallengeHeader,
+                        ChallengeResponse.RequestUri.AsString,
+                        Username);
+
+    RealmInfo := Self.Keyring.Find(ChallengeHeader.Realm,
+                                   ChallengeResponse.RequestUri.AsString);
+
+    AuthHeader := RealmInfo.CreateAuthorization(Challenge,
+                                                ChallengeResponse.Method,
+                                                ChallengeResponse.Body,
+                                                Password);
+    try
+      ChallengeResponse.AddHeader(AuthHeader);
+    finally
+      AuthHeader.Free;
+    end;
+
+    AffectedAction := Self.Actions.FindAction(Challenge);
+    if Assigned(AffectedAction) then
+      AffectedAction.InitialRequest.Assign(ChallengeResponse);
+  finally
+    // Write over the buffer that held the password.
+    FillChar(Password, Length(Password), 0);
+  end;
 end;
 
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;

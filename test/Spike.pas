@@ -123,11 +123,7 @@ type
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String); overload;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); overload;
+                                        var Password: String); 
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
@@ -359,15 +355,6 @@ procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgen
                                                var Password: String);
 begin
   Username := UserAgent.Contact.Address.Username;
-  Password := Self.Password.Text;
-end;
-
-procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
-                                               Response: TIdSipResponse;
-                                               var Username: String;
-                                               var Password: String);
-begin
-  Username := Self.UA.Contact.Address.Username;
   Password := Self.Password.Text;
 end;
 

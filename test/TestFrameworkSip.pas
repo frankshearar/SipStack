@@ -399,8 +399,8 @@ type
   private
     fAuthenticationChallenge:   Boolean;
     fChallengeParam:            TIdSipResponse;
+    fChallengeResponseBranch:   String;
     fDispatcherParam:           TIdSipTransactionDispatcher;
-    fPassword:                  String;
     fReceivedRequest:           Boolean;
     fReceivedResponse:          Boolean;
     fReceivedUnhandledRequest:  Boolean;
@@ -408,12 +408,10 @@ type
     fReceiverParam:             TIdSipTransport;
     fRequestParam:              TIdSipRequest;
     fResponseParam:             TIdSipResponse;
-    fUsername:                  String;
 
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
+                                        ChallengeResponse: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -423,8 +421,8 @@ type
 
     property AuthenticationChallenge:   Boolean                     read fAuthenticationChallenge;
     property ChallengeParam:            TIdSipResponse              read fChallengeParam;
+    property ChallengeResponseBranch:   String                      read fChallengeResponseBranch write fChallengeResponseBranch;
     property DispatcherParam:           TIdSipTransactionDispatcher read fDispatcherParam;
-    property Password:                  String                      read fPassword write fPassword;
     property ReceivedRequest:           Boolean                     read fReceivedRequest;
     property ReceivedResponse:          Boolean                     read fReceivedResponse;
     property ReceivedUnhandledRequest:  Boolean                     read fReceivedUnhandledRequest;
@@ -432,7 +430,6 @@ type
     property ReceiverParam:             TIdSipTransport             read fReceiverParam;
     property RequestParam:              TIdSipRequest               read fRequestParam;
     property ResponseParam:             TIdSipResponse              read fResponseParam;
-    property Username:                  String                      read fUsername write fUsername;
   end;
 
   TIdSipTestUserAgentListener = class(TIdSipMockListener,
@@ -1206,16 +1203,12 @@ end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                                             Challenge: TIdSipResponse;
-                                                                            var Username: String;
-                                                                            var Password: String);
+                                                                            ChallengeResponse: TIdSipRequest);
 begin
   Self.fAuthenticationChallenge := true;
-  Self.fDispatcherParam := Dispatcher;
-  Self.fChallengeParam  := Challenge;
-
-  // We set the var parameter, not our instance variable!
-  Password := Self.Password;
-  Username := Self.Username;
+  Self.fDispatcherParam         := Dispatcher;
+  Self.fChallengeParam          := Challenge;
+  Self.fChallengeResponseBranch := ChallengeResponse.LastHop.Branch;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge');

@@ -55,12 +55,21 @@ type
   TIdSipTransactionDispatcher = class;
   // I allow interested parties to listen for requests/responses that do not
   // match any current transactions.
+  //
+  // OnAuthenticationChallenge warrants some detailed explanation: When you send
+  // a message, a SIP element may challenge your request with a 401 Unauthorized
+  // or 407 Proxy Authentication Required. Then you construct an authentication
+  // token and resend the request. Now, when I call your
+  // OnAuthenticationChallenge, the TransactionDispatcher must assign the
+  // contents of the original request to ChallengeResponse. (The name comes from
+  // "challenge/response". Don't confuse it with "request/response"!) In your
+  // implementation, add the authentication token to ChallengeResponse - the
+  // TransactionDispatcher then sends this new request down the stack.
   IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
+                                        ChallengeResponse: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -79,7 +88,6 @@ type
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
-    fKeyring:        TIdKeyRing;
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
@@ -91,7 +99,6 @@ type
     Transactions:    TObjectList;
     TransactionLock: TCriticalSection;
 
-    function  AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
     procedure ClientInviteTransactionTimerA(Tran: TIdSipTransaction);
     procedure ClientInviteTransactionTimerB(Tran: TIdSipTransaction);
     procedure ClientInviteTransactionTimerD(Tran: TIdSipTransaction);
@@ -112,15 +119,10 @@ type
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                              var Username: String;
-                                              var Password: String);
+                                              ChallengeResponse: TIdSipRequest);
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
-    procedure TryAgainWithAuthentication(InitialRequest: TIdSipRequest;
-                                         Challenge: TIdSipResponse;
-                                         const Username: String;
-                                         const Password: String);
   protected
     function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
@@ -180,7 +182,6 @@ type
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property Keyring:    TIdKeyRing    read fKeyring;
     property T1Interval: Cardinal      read fT1Interval write fT1Interval;
     property T2Interval: Cardinal      read fT2Interval write fT2Interval;
     property T4Interval: Cardinal      read fT4Interval write fT4Interval;
@@ -413,17 +414,15 @@ type
 
   TIdSipTransactionDispatcherAuthenticationChallengeMethod = class(TIdSipTransactionDispatcherMethod)
   private
-    fDispatcher:    TIdSipTransactionDispatcher;
-    fFirstPassword: String;
-    fFirstUsername: String;
-    fChallenge:     TIdSipResponse;
+    fChallengeResponse: TIdSipRequest;
+    fDispatcher:        TIdSipTransactionDispatcher;
+    fChallenge:         TIdSipResponse;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Dispatcher:    TIdSipTransactionDispatcher read fDispatcher write fDispatcher;
-    property FirstPassword: String                      read fFirstPassword write fFirstPassword;
-    property FirstUsername: String                      read fFirstUsername write fFirstUsername;
-    property Challenge:     TIdSipResponse              read fChallenge write fChallenge;
+    property Challenge:         TIdSipResponse              read fChallenge write fChallenge;
+    property ChallengeResponse: TIdSipRequest               read fChallengeResponse write fChallengeResponse;
+    property Dispatcher:        TIdSipTransactionDispatcher read fDispatcher write fDispatcher;
   end;
 
   TIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
@@ -501,7 +500,6 @@ constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.fKeyring     := TIdKeyRing.Create;
   Self.MsgListeners := TIdNotificationList.Create;
   Self.TimerLock    := TCriticalSection.Create;
 
@@ -536,7 +534,6 @@ begin
 
   Self.TimerLock.Free;
   Self.MsgListeners.Free;
-  Self.Keyring.Free;
 
   inherited Destroy;
 end;
@@ -895,20 +892,21 @@ procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
 var
-  Password: String;
-  Username: String;
+  NewAttempt: TIdSipTransaction;
+  ReAttempt:  TIdSipRequest;
 begin
   if (Response.StatusCode = SIPUnauthorized)
   or (Response.StatusCode = SIPProxyAuthenticationRequired) then begin
-    Self.NotifyOfAuthenticationChallenge(Response, Username, Password);
+    ReAttempt := TIdSipRequest.Create;
     try
-      Self.TryAgainWithAuthentication(Transaction.InitialRequest,
-                                      Response,
-                                      Username,
-                                      Password);
+      ReAttempt.Assign(Transaction.InitialRequest);
+      Self.NotifyOfAuthenticationChallenge(Response, ReAttempt);
+
+      // XXX Assume, FOR NOW, that something did actually supply auth info
+      NewAttempt := Self.AddClientTransaction(ReAttempt);
+      NewAttempt.SendRequest;
     finally
-      // Clear the memory containing the password as a security measure.
-      FillChar(Password, Length(Password), 0);
+      ReAttempt.Free;
     end;
   end
   else
@@ -942,16 +940,6 @@ begin
 end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
-
-function TIdSipTransactionDispatcher.AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
-begin
-  if Challenge.HasProxyAuthenticate then
-    Result := Challenge.FirstProxyAuthenticate
-  else if Challenge.HasWWWAuthenticate then
-    Result := Challenge.FirstWWWAuthenticate
-  else
-    Result := nil;
-end;
 
 procedure TIdSipTransactionDispatcher.ClientInviteTransactionTimerA(Tran: TIdSipTransaction);
 begin
@@ -1105,8 +1093,7 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                                                      var Username: String;
-                                                                      var Password: String);
+                                                                      ChallengeResponse: TIdSipRequest);
 var
   Notification: TIdSipTransactionDispatcherAuthenticationChallengeMethod;
 begin
@@ -1116,13 +1103,11 @@ begin
 
   Notification := TIdSipTransactionDispatcherAuthenticationChallengeMethod.Create;
   try
-    Notification.Dispatcher := Self;
-    Notification.Challenge  := Response;
+    Notification.Dispatcher        := Self;
+    Notification.Challenge         := Response;
+    Notification.ChallengeResponse := ChallengeResponse;
 
     Self.MsgListeners.Notify(Notification);
-
-    Password := Notification.FirstPassword;
-    Username := Notification.FirstUsername;
   finally
     Notification.Free;
   end;
@@ -1155,48 +1140,6 @@ end;
 function TIdSipTransactionDispatcher.TransportAt(Index: Cardinal): TIdSipTransport;
 begin
   Result := Self.Transports[Index] as TIdSipTransport;
-end;
-
-procedure TIdSipTransactionDispatcher.TryAgainWithAuthentication(InitialRequest: TIdSipRequest;
-                                                                 Challenge: TIdSipResponse;
-                                                                 const Username: String;
-                                                                 const Password: String);
-var
-  AuthHeader:      TIdSipAuthorizationHeader;
-  ChallengeHeader: TIdSipAuthenticateHeader;
-  RealmInfo:       TIdRealmInfo;
-  ReAttempt:       TIdSipRequest;
-  Tran:            TIdSipTransaction;
-begin
-  ChallengeHeader := Self.AuthenticateHeader(Challenge);
-
-  ReAttempt := TIdSipRequest.Create;
-  try
-    ReAttempt.Assign(InitialRequest);
-    ReAttempt.CSeq.SequenceNo := InitialRequest.CSeq.SequenceNo + 1;
-    ReAttempt.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
-
-    Self.Keyring.AddKey(ChallengeHeader,
-                        ReAttempt.RequestUri.AsString,
-                        Username);
-    RealmInfo := Self.Keyring.Find(ChallengeHeader.Realm,
-                                   ReAttempt.RequestUri.AsString);
-
-    AuthHeader := RealmInfo.CreateAuthorization(Challenge,
-                                                InitialRequest.Method,
-                                                InitialRequest.Body,
-                                                Password);
-    try
-      ReAttempt.AddHeader(AuthHeader);
-    finally
-      AuthHeader.Free;
-    end;
-
-    Tran := Self.AddClientTransaction(ReAttempt);
-    Tran.SendRequest;
-  finally
-    ReAttempt.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -2195,21 +2138,13 @@ end;
 
 procedure TIdSipTransactionDispatcherAuthenticationChallengeMethod.Run(const Subject: IInterface);
 var
-  Password: String;
-  Username: String;
   Listener: IIdSipTransactionDispatcherListener;
 begin
   Listener := Subject as IIdSipTransactionDispatcherListener;
 
   Listener.OnAuthenticationChallenge(Self.Dispatcher,
                                      Self.Challenge,
-                                     Username,
-                                     Password);
-
-  if (Self.FirstPassword = '') then
-    Self.FirstPassword := Password;
-  if (Self.FirstUsername = '') then
-    Self.FirstUsername := Username;
+                                     Self.ChallengeResponse);
 end;
 
 //******************************************************************************

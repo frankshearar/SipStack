@@ -56,6 +56,7 @@ type
     Password:               String;
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
+    RejectedRequest:        TIdSipRequest;
     RequestCount:           Cardinal;
     Response200:            TIdSipResponse;
     TranRequest:            TIdSipRequest;
@@ -82,8 +83,7 @@ type
     procedure MoveTranToConfirmed(Tran: TIdSipServerInviteTransaction);
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
+                                        ChallengeResponse: TIdSipRequest);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -125,6 +125,7 @@ type
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteYieldsTrying;
+    procedure TestNotifyOnAuthenticationChallengeHasRejectedRequest;
     procedure TestOnClientInviteTransactionTimerA;
     procedure TestOnClientInviteTransactionTimerB;
     procedure TestOnClientInviteTransactionTimerD;
@@ -136,7 +137,7 @@ type
     procedure TestOnServerInviteTransactionTimerI;
     procedure TestOnServerNonInviteTransactionTimerJ;
     procedure TestLoopDetected;
-    procedure TestProxyAuthentication;
+    procedure TestProxyAuthentication; //(*)
     procedure TestProxyAuthenticationQopAuth;
     procedure TestProxyAuthenticationQopAuthInt;
     procedure TestSendAckWontCreateTransaction;
@@ -424,19 +425,18 @@ type
 
   TestTIdSipTransactionDispatcherAuthenticationChallengeMethod = class(TTransactionDispatcherListenerMethodTestCase)
   private
-    Dispatcher:  TIdSipMockTransactionDispatcher;
-    L1:          TIdSipTestTransactionDispatcherListener;
-    L2:          TIdSipTestTransactionDispatcherListener;
-    Method:      TIdSipTransactionDispatcherAuthenticationChallengeMethod;
-    Response:    TIdSipResponse;
+    Challenge:         TIdSipResponse;
+    ChallengeResponse: TIdSipRequest;
+    Dispatcher:        TIdSipMockTransactionDispatcher;
+    L1:                TIdSipTestTransactionDispatcherListener;
+    L2:                TIdSipTestTransactionDispatcherListener;
+    Method:            TIdSipTransactionDispatcherAuthenticationChallengeMethod;
+    OriginalBranch:    String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestFirstListenerDoesntSetPassword;
-    procedure TestFirstListenerSetsPassword;
-    procedure TestFirstListenerDoesntSetUsername;
-    procedure TestFirstListenerSetsUsername;
+    procedure TestLastListenerSetsChallengeResponse;
     procedure TestNoListenerSetsPassword;
     procedure TestRun;
   end;
@@ -517,8 +517,8 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSdp, IdSipConsts, IdTimerQueue, Math, SysUtils,
-  TypInfo;
+  Classes, IdException, IdRandom, IdSdp, IdSipConsts, IdTimerQueue, Math,
+  SysUtils, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -661,6 +661,8 @@ begin
   Self.Options.Method := MethodOptions;
   Self.Options.CSeq.Method := Self.Options.Method;
 
+  Self.RejectedRequest := TIdSipRequest.Create;
+
   Self.Response200 := TIdSipResponse.Create;
   Self.Response200.Assign(Self.ReceivedResponse);
   Self.Response200.StatusCode := SIPOK;
@@ -675,6 +677,7 @@ end;
 procedure TestTIdSipTransactionDispatcher.TearDown;
 begin
   Self.Response200.Free;
+  Self.RejectedRequest.Free;
   Self.Options.Free;
   Self.Invite.Free;
   Self.ReceivedResponse.Free;
@@ -704,9 +707,25 @@ end;
 procedure TestTIdSipTransactionDispatcher.CheckAuthentication(const AuthenticationHeaderName: String;
                                                               const AuthorizationHeaderName: String;
                                                               const QopType: String);
+var
+  Bye: TIdSipRequest;
 begin
   Self.CheckAuthenticationOf(Self.Options, AuthenticationHeaderName, AuthorizationHeaderName, QopType);
   Self.CheckAuthenticationOf(Self.Invite,  AuthenticationHeaderName, AuthorizationHeaderName, QopType);
+
+  Bye := TIdSipRequest.Create;
+  try
+    Bye.Assign(Self.Invite);
+    Bye.Method      := MethodBye;
+    Bye.CSeq.Method := MethodBye;
+
+    Self.CheckAuthenticationOf(Bye,
+                               AuthenticationHeaderName,
+                               AuthorizationHeaderName,
+                               QopType);
+  finally
+    Bye.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.CheckAuthenticationOf(Request: TIdSipRequest;
@@ -879,9 +898,39 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                                     Challenge: TIdSipResponse;
-                                                                    var Username: String;
-                                                                    var Password: String);
+                                                                    ChallengeResponse: TIdSipRequest);
+var
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  Response:        TIdSipAuthorizationHeader;
+  KeyRing:         TIdKeyRing;
+  RI:              TIdRealmInfo;
+  Target:          String;
 begin
+  Self.RejectedRequest.Assign(ChallengeResponse);
+
+  ChallengeResponse.Assign(Self.LastSentRequest);
+  ChallengeResponse.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
+  ChallengeResponse.CSeq.Increment;
+  KeyRing := TIdKeyRing.Create;
+  try
+    Target := Self.LastSentRequest.RequestUri.AsString;
+
+    ChallengeHeader := Challenge.AuthenticateHeader;
+
+    KeyRing.AddKey(ChallengeHeader, Target, Self.Username);
+    RI := KeyRing.Find(ChallengeHeader.Realm, Target);
+    Response := RI.CreateAuthorization(Challenge,
+                                       Self.LastSentRequest.Method,
+                                       Self.LastSentRequest.Body,
+                                       Self.Password);
+    try
+      ChallengeResponse.AddHeader(Response);
+    finally
+      Response.Free;
+    end;
+  finally
+    KeyRing.Free;
+  end;
   Password := Self.Password;
   Username := Self.Username;
 end;
@@ -1239,6 +1288,20 @@ begin
   CheckEquals(SIPTrying,
               Self.LastSentResponse.StatusCode,
               'First response');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestNotifyOnAuthenticationChallengeHasRejectedRequest;
+var
+  Tran: TIdSipTransaction;
+begin
+  Tran := Self.D.AddClientTransaction(Self.Invite);
+  Tran.SendRequest;
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
+  CheckRequestSent('No re-issue of ' + Tran.InitialRequest.Method + ' attempt');
+  Check(Self.RejectedRequest.Equals(Tran.InitialRequest),
+        'Unexpected request in the authentication challenge notification');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestOnClientInviteTransactionTimerA;
@@ -4997,16 +5060,19 @@ procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Response := TIdSipResponse.Create;
+  Self.Challenge         := TIdSipResponse.Create;
+  Self.ChallengeResponse := TIdSipTestResources.CreateBasicRequest;
+  Self.Dispatcher        := TIdSipMockTransactionDispatcher.Create;
 
   Self.Method := TIdSipTransactionDispatcherAuthenticationChallengeMethod.Create;
-  Self.Method.Response   := Self.Response;
-  Self.Method.Dispatcher := Self.Dispatcher;
+  Self.Method.Challenge         := Self.Challenge;
+  Self.Method.ChallengeResponse := Self.ChallengeResponse;
+  Self.Method.Dispatcher        := Self.Dispatcher;
 
   Self.L1 := TIdSipTestTransactionDispatcherListener.Create;
   Self.L2 := TIdSipTestTransactionDispatcherListener.Create;
+
+  Self.OriginalBranch := Self.ChallengeResponse.LastHop.Branch;
 end;
 
 procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TearDown;
@@ -5014,92 +5080,26 @@ begin
   Self.L2.Free;
   Self.L1.Free;
   Self.Method.Free;
-  Self.Response.Free;
   Self.Dispatcher.Free;
+  Self.ChallengeResponse.Free;
+  Self.Challenge.Free;
 
   inherited TearDown;
 end;
 
 //* TestTIdSipTransactionDispatcherAuthenticationChallengeMethod Published methods
 
-procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerDoesntSetPassword;
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestLastListenerSetsChallengeResponse;
 begin
-  Self.L2.Password := 'foo';
+  Self.L1.ChallengeResponseBranch := 'foo';
+  Self.L2.ChallengeResponseBranch := 'bar';
 
   Self.Method.Run(Self.L1);
   Self.Method.Run(Self.L2);
 
-  CheckEquals(Self.L2.Password,
-              Self.Method.FirstPassword,
-              '2nd listener didn''t set password');
-end;
-
-procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerSetsPassword;
-begin
-  Self.L1.Password := 'foo';
-  Self.L2.Password := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'Returned password not 1st listener''s');
-end;
-
-procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerDoesntSetUsername;
-begin
-  Self.L2.Username := 'foo';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L2.Username,
-              Self.Method.FirstUsername,
-              '2nd listener didn''t set Username');
-end;
-
-procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerSetsUsername;
-begin
-  Self.L1.Username := 'foo';
-  Self.L2.Username := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'Returned Username not 1st listener''s');
-end;
-
-procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestRun;
-begin
-  Self.L1.Password := 'foo';
-  Self.L1.Username := 'foo';
-  Self.L2.Password := 'bar';
-  Self.L2.Username := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Check(Self.L1.AuthenticationChallenge,
-        'L1 not notified');
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'L1 gives us the first password');
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'L1 gives us the first username');
-
-  Self.Method.Run(Self.L2);
-  Check(Self.L2.AuthenticationChallenge,
-        'L2 not notified');
-
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'We ignore L2''s password');
-
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'We ignore L2''s username');
+  CheckEquals(Self.L2.ChallengeResponseBranch,
+              Self.Method.ChallengeResponse.LastHop.Branch,
+              'Returned password not last listener''s');
 end;
 
 procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestNoListenerSetsPassword;
@@ -5107,13 +5107,27 @@ begin
   Self.Method.Run(Self.L1);
   Self.Method.Run(Self.L2);
 
-  CheckEquals('',
-              Self.Method.FirstPassword,
-              'Something other than the listeners set the password');
+  CheckEquals(Self.OriginalBranch,
+              Self.Method.ChallengeResponse.LastHop.Branch,
+              'Something other than the listeners set the authentication attempt');
+end;
 
-  CheckEquals('',
-              Self.Method.FirstUsername,
-              'Something other than the listeners set the username');
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestRun;
+begin
+  Self.L1.ChallengeResponseBranch := 'foo';
+  Self.L2.ChallengeResponseBranch := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Check(Self.L1.AuthenticationChallenge,
+        'L1 not notified');
+
+  Self.Method.Run(Self.L2);
+  Check(Self.L2.AuthenticationChallenge,
+        'L2 not notified');
+
+  CheckEquals(Self.L2.ChallengeResponseBranch,
+              Self.Method.ChallengeResponse.LastHop.Branch,
+              'We ignored L2''s authentication attempt');
 end;
 
 //******************************************************************************
