@@ -15,18 +15,29 @@ uses
   Classes, Contnrs, IdBaseThread, SyncObjs;
 
 type
+  // I represent something that will happen in the future. If you want an alarm
+  // to go off in 10 seconds, you'd instantiate me (well, a subclass of me) with
+  // a TriggerTime of (Now + 10000) (milliseconds) and given me a TEvent or
+  // TNotifyEvent or the like to set/run when you call my Trigger.
+  // TimeToWait tells you how soon my timer expires.
+  //
+  // My DebugWaitTime property aids debugging by giving the wait time specified -
+  // in our example, a TimerQueue would set DebugWaitTime to 10000, and the
+  // TriggerTime to (Now + 10000).
   TIdWait = class(TObject)
   private
-    fData:        TObject;
-    fTriggerTime: Cardinal;
+    fData:          TObject;
+    fDebugWaitTime: Cardinal;
+    fTriggerTime:   Cardinal;
   public
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual; abstract;
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
 
-    property Data:        TObject  read fData write fData;
-    property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;
+    property Data:          TObject  read fData write fData;
+    property DebugWaitTime: Cardinal read fDebugWaitTime write fDebugWaitTime;
+    property TriggerTime:   Cardinal read fTriggerTime write fTriggerTime;
   end;
 
   TIdEventWait = class(TIdWait)
@@ -281,10 +292,11 @@ begin
   try
     try
       Self.EventList.Add(Event);
-      Event.Data        := Data;
-      Event.TriggerTime := AddModulo(GetTickCount,
-                                     MillisecsWait,
-                                     High(MillisecsWait));
+      Event.Data          := Data;
+      Event.DebugWaitTime := MillisecsWait;
+      Event.TriggerTime   := AddModulo(GetTickCount,
+                                       MillisecsWait,
+                                       High(MillisecsWait));
     except
       if (Self.EventList.IndexOf(Event) <> -1) then
         Self.EventList.Remove(Event)

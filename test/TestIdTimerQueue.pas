@@ -88,6 +88,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCount;
+    procedure TestDebugWaitTime;
     procedure TestEventAt;
   end;
 
@@ -560,6 +561,18 @@ begin
     Self.Timer.AddEvent(1000, Self.OnTimer, nil);
 
     CheckEquals(I, Self.Timer.EventCount, IntToStr(I) + 'th AddEvent');
+  end;
+end;
+
+procedure TestTIdDebugTimerQueue.TestDebugWaitTime;
+var
+  I: Integer;
+begin
+  for I := 1 to 2 do begin
+    Self.Timer.AddEvent(I, Self.OnTimer, nil);
+    CheckEquals(I,
+                Self.Timer.EventAt(I - 1).DebugWaitTime,
+                IntToStr(I) + 'th event');
   end;
 end;
 
