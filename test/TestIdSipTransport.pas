@@ -395,6 +395,7 @@ begin
     P.Free;
   end;
   Self.Response.LastHop.Transport := Self.Transport.GetTransportType;
+  Self.Request.RequestUri.Port := Self.Transport.DefaultPort;
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
@@ -723,7 +724,7 @@ begin
   Self.SetUpTls(Self.Transport);
   Self.SetUpTls(Self.LocalLoopTransport);
 
-  Self.Request.RequestUri.Protocol := SipsScheme;
+  Self.Request.RequestUri.Scheme := SipsScheme;
   Self.Response.LastHop.Value := StringReplace(Self.Response.LastHop.AsString, 'TCP', 'TLS', []);
 end;
 
@@ -771,7 +772,7 @@ end;
 
 procedure TestTIdSipTLSTransport.TestIsReliable;
 begin
-  Check(Self.Transport.IsReliable, 'TCP transport not marked as reliable');
+  Check(Self.Transport.IsReliable, 'TLS transport not marked as reliable');
 end;
 
 procedure TestTIdSipTLSTransport.TestIsSecure;

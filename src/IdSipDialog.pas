@@ -20,11 +20,11 @@ type
     fInitialRequest:     TIdSipRequest;
     fIsSecure:           Boolean;
     fLocalSequenceNo:    Cardinal;
-    fLocalURI:           TIdURI;
+    fLocalURI:           TIdSipURI;
     fOnEstablished:      TIdSipDialogEvent;
     fRemoteSequenceNo:   Cardinal;
-    fRemoteTarget:       TIdURI;
-    fRemoteURI:          TIdURI;
+    fRemoteTarget:       TIdSipURI;
+    fRemoteURI:          TIdSipURI;
     fRouteSet:           TIdSipHeaders;
     fState:              TIdSipDialogState;
     LocalSequenceNoLock: TCriticalSection;
@@ -46,7 +46,7 @@ type
     procedure DoOnEstablished;
     procedure SetLocalSequenceNo(const Value: Cardinal);
     procedure SetRemoteSequenceNo(const Value: Cardinal);
-    procedure SetRemoteTarget(const Value: TIdURI);
+    procedure SetRemoteTarget(const Value: TIdSipURI);
     procedure SetState(const Value: TIdSipDialogState);
 
     property CanBeEstablished: Boolean       read fCanBeEstablished;
@@ -56,8 +56,8 @@ type
                        const LocalSequenceNo,
                              RemoteSequenceNo: Cardinal;
                        const LocalUri,
-                             RemoteUri: TIdURI;
-                       const RemoteTarget: TIdURI;
+                             RemoteUri: TIdSipURI;
+                       const RemoteTarget: TIdSipURI;
                        const IsSecure: Boolean;
                        const RouteSet: TIdSipHeaderList); overload;
     constructor Create(const DialogID: TIdSipDialogID;
@@ -80,10 +80,10 @@ type
     property IsEarly:          Boolean        read GetIsEarly;
     property IsSecure:         Boolean        read fIsSecure;
     property LocalSequenceNo:  Cardinal       read GetLocalSequenceNo;
-    property LocalURI:         TIdURI         read fLocalURI;
+    property LocalURI:         TIdSipURI      read fLocalURI;
     property RemoteSequenceNo: Cardinal       read fRemoteSequenceNo;
-    property RemoteTarget:     TIdURI         read fRemoteTarget write SetRemoteTarget;
-    property RemoteURI:        TIdURI         read fRemoteURI;
+    property RemoteTarget:     TIdSipURI      read fRemoteTarget write SetRemoteTarget;
+    property RemoteURI:        TIdSipURI      read fRemoteURI;
     property RouteSet:         TIdSipHeaders  read fRouteSet;
 
     property OnEstablished: TIdSipDialogEvent read fOnEstablished write fOnEstablished;
@@ -127,8 +127,8 @@ constructor TIdSipDialog.Create(const DialogID: TIdSipDialogID;
                                 const LocalSequenceNo,
                                       RemoteSequenceNo: Cardinal;
                                 const LocalUri,
-                                      RemoteUri: TIdURI;
-                                const RemoteTarget: TIdURI;
+                                      RemoteUri: TIdSipURI;
+                                const RemoteTarget: TIdSipURI;
                                 const IsSecure: Boolean;
                                 const RouteSet: TIdSipHeaderList);
 begin
@@ -137,9 +137,9 @@ begin
   Self.CreateInternal(DialogID,
                       LocalSequenceNo,
                       RemoteSequenceNo,
-                      LocalUri.GetFullURI,
-                      RemoteUri.GetFullURI,
-                      RemoteTarget.GetFullURI,
+                      LocalUri.URI,
+                      RemoteUri.URI,
+                      RemoteTarget.URI,
                       IsSecure,
                       RouteSet);
 end;
@@ -172,9 +172,9 @@ begin
   Self.CreateInternal(Dialog.ID,
                       Dialog.LocalSequenceNo,
                       Dialog.RemoteSequenceNo,
-                      Dialog.LocalUri.GetFullURI,
-                      Dialog.RemoteUri.GetFullURI,
-                      Dialog.RemoteTarget.GetFullURI,
+                      Dialog.LocalUri.URI,
+                      Dialog.RemoteUri.URI,
+                      Dialog.RemoteTarget.URI,
                       Dialog.IsSecure,
                       Dialog.RouteSet);
 end;
@@ -199,8 +199,8 @@ end;
 
 procedure TIdSipDialog.HandleMessage(const Response: TIdSipResponse);
 begin
-  if (Self.RemoteTarget.GetFullUri = '') then
-    Self.RemoteTarget.URI := Response.FirstContact.Address.GetFullUri;
+  if (Self.RemoteTarget.Uri = '') then
+    Self.RemoteTarget.URI := Response.FirstContact.Address.URI;
 
   if (Self.RemoteSequenceNo = 0) then
     Self.SetRemoteSequenceNo(Response.CSeq.SequenceNo);
@@ -255,9 +255,9 @@ begin
   Self.fRemoteSequenceNo := Value;
 end;
 
-procedure TIdSipDialog.SetRemoteTarget(const Value: TIdURI);
+procedure TIdSipDialog.SetRemoteTarget(const Value: TIdSipURI);
 begin
-  Self.RemoteTarget.URI := Value.GetFullURI;
+  Self.RemoteTarget.URI := Value.URI;
 end;
 
 procedure TIdSipDialog.SetState(const Value: TIdSipDialogState);
@@ -282,10 +282,10 @@ begin
   Self.SetLocalSequenceNo(LocalSequenceNo);
   Self.SetRemoteSequenceNo(RemoteSequenceNo);
 
-  fLocalUri := TIdURI.Create(LocalUri);
-  fRemoteUri := TIdURI.Create(RemoteUri);
+  fLocalUri := TIdSipURI.Create(LocalUri);
+  fRemoteUri := TIdSipURI.Create(RemoteUri);
 
-  fRemoteTarget := TIdURI.Create(RemoteTarget);
+  fRemoteTarget := TIdSipURI.Create(RemoteTarget);
 
   Self.SetIsSecure(IsSecure);
 

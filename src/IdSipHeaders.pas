@@ -22,7 +22,7 @@ type
     fPassword:  String;
     fPort:      Cardinal;
     fScheme:    String;
-    fUser:      String;
+    fUsername:  String;
     Parameters: TStrings;
 
     class function IsEscapedOrInSet(const Token: String; AcceptableChars: TIdSipChars): Boolean;
@@ -60,10 +60,11 @@ type
     destructor  Destroy; override;
 
     procedure AddParameter(const Name: String; const Value: String = '');
+    function  DefaultPort: Integer; virtual;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
     function  IsLooseRoutable: Boolean;
-    function  IsSecure: Boolean;
+    function  IsSecure: Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamName(const Index: Cardinal): String;
     function  ParamValue(const Index: Cardinal): String; overload;
@@ -71,18 +72,24 @@ type
     function  UserIsIp: Boolean;
     function  UserIsPhoneNumber: Boolean;
 
-    property Headers:       TIdSipHeaders       read fHeaders;
-    property Host:          String              read fHost write fHost;
-    property Maddr:         String              read GetMaddr write SetMaddr;
-    property Method:        String              read GetMethod write SetMethod;
-    property Password:      String              read fPassword write fPassword;
-    property Port:          Cardinal            read fPort write fPort;
-    property Scheme:        String              read fScheme write fScheme;
-    property Transport:     String              read GetTransport write SetTransport;
-    property TTL:           Cardinal            read GetTTL write SetTTL;
-    property Uri:           String              read GetUri write SetUri;
-    property User:          String              read fUser write fUser;
-    property UserParameter: String              read GetUserParameter write SetUserParameter;
+    property Headers:       TIdSipHeaders read fHeaders;
+    property Host:          String        read fHost write fHost;
+    property Maddr:         String        read GetMaddr write SetMaddr;
+    property Method:        String        read GetMethod write SetMethod;
+    property Password:      String        read fPassword write fPassword;
+    property Port:          Cardinal      read fPort write fPort;
+    property Scheme:        String        read fScheme write fScheme;
+    property Transport:     String        read GetTransport write SetTransport;
+    property TTL:           Cardinal      read GetTTL write SetTTL;
+    property Uri:           String        read GetUri write SetUri;
+    property Username:      String        read fUsername write fUsername;
+    property UserParameter: String        read GetUserParameter write SetUserParameter;
+  end;
+
+  TIdSipsUri = class(TIdSipUri)
+  public
+    function DefaultPort: Integer; override;
+    function  IsSecure: Boolean; override;
   end;
 
   TIdSipHeader = class(TPersistent)
@@ -126,10 +133,10 @@ type
 
   TIdSipAddressHeader = class(TIdSipHeader)
   private
-    fAddress:     TIdURI;
+    fAddress:     TIdSipURI;
     fDisplayName: String;
 
-    procedure SetAddress(const Value: TIdURI);
+    procedure SetAddress(const Value: TIdSipURI);
   protected
     function  GetValue: String; override;
     procedure ParseWithoutAngleBrackets;
@@ -140,8 +147,8 @@ type
 
     function HasSipsUri: Boolean;
 
-    property Address:     TIdURI read fAddress write SetAddress;
-    property DisplayName: String read fDisplayName write fDisplayName;
+    property Address:     TIdSipURI read fAddress write SetAddress;
+    property DisplayName: String    read fDisplayName write fDisplayName;
   end;
 
   TIdSipCallIdHeader = class(TIdSipHeader)
@@ -216,6 +223,16 @@ type
     property Q:          TIdSipQValue read GetQ write SetQ;
   end;
 
+  TIdSipContentDispositionHeader = class(TIdSipHeader)
+  private
+    function  GetHandling: String;
+    procedure SetHandling(const Value: String);
+  protected
+    function GetName: String; override;
+  public
+    property Handling: String read GetHandling write SetHandling;
+  end;
+
   TIdSipCSeqHeader = class(TIdSipHeader)
   private
     fMethod:     String;
@@ -281,10 +298,10 @@ type
 
   TIdSipRouteHeader = class(TIdSipHeader)
   private
-    fAddress:     TIdURI;
+    fAddress:     TIdSipURI;
     fDisplayName: String;
 
-    procedure SetAddress(const Value: TIdURI);
+    procedure SetAddress(const Value: TIdSipURI);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
@@ -297,8 +314,8 @@ type
     function HasSipsUri: Boolean;
     function IsLooseRoutable: Boolean;
 
-    property Address:     TIdURI read fAddress write SetAddress;
-    property DisplayName: String read fDisplayName write fDisplayName;
+    property Address:     TIdSipURI read fAddress write SetAddress;
+    property DisplayName: String    read fDisplayName write fDisplayName;
   end;
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
@@ -734,6 +751,11 @@ begin
   Self.Parameters.Add(Name + '=' + TIdUri.URLDecode(Value));
 end;
 
+function TIdSipUri.DefaultPort: Integer;
+begin
+  Result := IdPORT_SIP;
+end;
+
 function TIdSipUri.HasValidSyntax: Boolean;
 begin
   Result := Self.HasValidScheme
@@ -840,9 +862,24 @@ end;
 
 function TIdSipUri.GetUri: String;
 begin
-  Result := Self.Scheme + ':' + Self.User + '@' + Self.Host
-          + Self.ParamsAsString
-          + Self.HeadersAsString;
+  if (Self.Scheme = '') and (Self.Host = '') then
+    Result := ''
+  else begin
+    Result := Self.Scheme + ':';
+
+    if (Self.Username <> '') then begin
+      Result := Result + Self.Username;
+
+      if (Self.Password <> '') then
+        Result := Result + ':' + Self.Password;
+
+      Result := Result + '@';
+    end;
+
+    Result := Result + Self.Host
+            + Self.ParamsAsString
+            + Self.HeadersAsString;
+  end;          
 end;
 
 function TIdSipUri.GetUserParameter: String;
@@ -877,7 +914,7 @@ end;
 
 function TIdSipUri.HasValidUserInfo: Boolean;
 begin
-  Result := ((Self.User = '') or Self.IsUser(Self.User))
+  Result := ((Self.Username = '') or Self.IsUser(Self.Username))
         and ((Self.Password = '') or Self.IsPassword(Self.Password))
 end;
 
@@ -985,7 +1022,7 @@ end;
 
 procedure TIdSipUri.ParseUserInfo(UserInfo: String);
 begin
-  Self.User     := Fetch(UserInfo, ':');
+  Self.Username := Fetch(UserInfo, ':');
   Self.Password := UserInfo;
 end;
 
@@ -997,7 +1034,7 @@ begin
   Self.Password  := '';
   Self.Port      := 0;
   Self.Scheme    := '';
-  Self.User      := '';
+  Self.Username  := '';
 end;
 
 procedure TIdSipUri.SetMaddr(const Value: String);
@@ -1029,6 +1066,21 @@ end;
 procedure TIdSipUri.SetUserParameter(const Value: String);
 begin
   Self.Parameters.Values[UserParam] := Value;
+end;
+
+//******************************************************************************
+//* TIdSipsUri                                                                 *
+//******************************************************************************
+//* TIdSipsUri Public methods **************************************************
+
+function TIdSipsUri.DefaultPort: Integer;
+begin
+  Result := IdPORT_SIPS;
+end;
+
+function TIdSipsUri.IsSecure: Boolean;
+begin
+  Result := true;
 end;
 
 //******************************************************************************
@@ -1245,7 +1297,7 @@ constructor TIdSipAddressHeader.Create;
 begin
   inherited Create;
 
-  fAddress := TIdURI.Create('');
+  fAddress := TIdSipURI.Create('');
 end;
 
 destructor TIdSipAddressHeader.Destroy;
@@ -1257,7 +1309,7 @@ end;
 
 function TIdSipAddressHeader.HasSipsUri: Boolean;
 begin
-  Result := Self.Address.Protocol = SipsScheme;
+  Result := Self.Address.Scheme = SipsScheme;
 end;
 
 //* TIdSipAddressHeader Protected methods **************************************
@@ -1275,7 +1327,7 @@ begin
 //  if (IndyPos(' ', Result) > 0) then
 //    Result := '"' + Result + '"';
 
-  URI := Self.Address.GetFullURI;
+  URI := Self.Address.URI;
   if (IndyPos(';', URI) > 0) or (IndyPos(',', URI) > 0) or (IndyPos('?', URI) > 0) or (Result <> '') then
     URI := '<' + URI + '>';
 
@@ -1306,6 +1358,7 @@ begin
       Self.FailParse;
 
     Self.Address.URI := AddrSpec;
+
     Fetch(S, '>');
   end
   else begin
@@ -1314,6 +1367,11 @@ begin
     PreserveSemicolon := IndyPos(';', S) > 0;
     Self.Address.URI := Trim(Fetch(S, ';'));
   end;
+
+  if (Self.Address.Uri <> '')
+    and (Self.Address.Scheme <> SipScheme)
+    and (Self.Address.Scheme <> SipsScheme) then
+    Self.FailParse;
 
   if PreserveSemicolon then
     S := ';' + S;
@@ -1325,9 +1383,9 @@ end;
 
 //* TIdSipAddressHeader Private methods ****************************************
 
-procedure TIdSipAddressHeader.SetAddress(const Value: TIdURI);
+procedure TIdSipAddressHeader.SetAddress(const Value: TIdSipURI);
 begin
-  fAddress.URI := Value.GetFullURI;
+  fAddress.URI := Value.URI;
 end;
 
 //******************************************************************************
@@ -1603,6 +1661,28 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipContentDispositionHeader                                             *
+//******************************************************************************
+//* TIdSipContentDispositionHeader Protected methods ***************************
+
+function TIdSipContentDispositionHeader.GetName: String;
+begin
+  Result := ContentDispositionHeader;
+end;
+
+//* TIdSipContentDispositionHeader Private methods *****************************
+
+function TIdSipContentDispositionHeader.GetHandling: String;
+begin
+  Result := Self.Params[HandlingParam];
+end;
+
+procedure TIdSipContentDispositionHeader.SetHandling(const Value: String);
+begin
+  Self.Params[HandlingParam] := Value;
+end;
+
+//******************************************************************************
 //* TIdSipCSeqHeader                                                           *
 //******************************************************************************
 //* TIdSipCSeqHeader Protected methods *****************************************
@@ -1712,7 +1792,7 @@ begin
     From := Header as TIdSipFromToHeader;
 
     Result := (Self.Name = Header.Name)
-          and (Self.Address.GetFullURI = From.Address.GetFullURI)
+          and (Self.Address.URI = From.Address.URI)
           and (Self.Tag = From.Tag);
   end;
 end;
@@ -1804,7 +1884,7 @@ constructor TIdSipRouteHeader.Create;
 begin
   inherited Create;
 
-  fAddress := TIdURI.Create('');
+  fAddress := TIdSipURI.Create('');
 end;
 
 destructor TIdSipRouteHeader.Destroy;
@@ -1823,12 +1903,12 @@ end;
 
 function TIdSipRouteHeader.HasSipsUri: Boolean;
 begin
-  Result := Self.Address.Protocol = SipsScheme;
+  Result := Self.Address.Scheme = SipsScheme;
 end;
 
 function TIdSipRouteHeader.IsLooseRoutable: Boolean;
 begin
-  Result := Pos(LooseRoutableParam, Self.Address.GetFullURI) > 0;
+  Result := Pos(LooseRoutableParam, Self.Address.URI) > 0;
 end;
 
 //* TIdSipRouteHeader Protected methods ****************************************
@@ -1880,7 +1960,7 @@ end;
 
 //* TIdSipRouteHeader Private methods ******************************************
 
-procedure TIdSipRouteHeader.SetAddress(const Value: TIdURI);
+procedure TIdSipRouteHeader.SetAddress(const Value: TIdSipURI);
 begin
   fAddress.URI := Value.URI;
 end;
@@ -2621,39 +2701,40 @@ begin
   if not Assigned(GIdSipHeadersMap) then begin
     GIdSipHeadersMap := TObjectList.Create(true);
 
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,                TIdSipWeightedCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,        TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,             TIdSipUriHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                 TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,            TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,           TIdSipCallIDHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,           TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,          TIdSipContactHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderFull,   TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderShort,  TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLanguageHeader,       TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,     TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                  TIdSipCSeqHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                  TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,             TIdSipUriHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,               TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,              TIdSipFromHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,             TIdSipFromHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,             TIdSipCallIdHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,           TIdSipMaxForwardsHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,          TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,           TIdSipRecordRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,               TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                 TIdSipRouteHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,         TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,        TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,             TIdSipTimestampHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,                TIdSipToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,               TIdSipToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,           TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,               TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,              TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,               TIdSipWarningHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptHeader,               TIdSipWeightedCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderShort,          TIdSipCallIDHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,          TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,         TIdSipContactHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentDispositionHeader,   TIdSipContentDispositionHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderFull,  TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentEncodingHeaderShort, TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLanguageHeader,      TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,    TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                 TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                 TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,            TIdSipUriHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,              TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,             TIdSipFromHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,            TIdSipFromHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,            TIdSipCallIdHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,          TIdSipMaxForwardsHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                TIdSipRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,       TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,            TIdSipTimestampHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,               TIdSipToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,              TIdSipToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,          TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,              TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,             TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,              TIdSipWarningHeader));
   end;
 
   Result := GIdSipHeadersMap;

@@ -5,7 +5,7 @@ interface
 uses
   Classes, IdRTPClient, IdSdpParser, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockTransactionDispatcher,
-  IdSipTransaction, IdSipTransport, IdURI, TestFramework, TestFrameworkSip;
+  IdSipTransaction, IdSipTransport, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -43,13 +43,13 @@ type
     Dlg:                       TIdSipDialog;
     ID:                        TIdSipDialogID;
     LocalSequenceNo:           Cardinal;
-    LocalUri:                  TIdURI;
+    LocalUri:                  TIdSipURI;
     OnEndedSessionFired:       Boolean;
     OnEstablishedSessionFired: Boolean;
     OnNewSessionFired:         Boolean;
     RemoteSequenceNo:          Cardinal;
-    RemoteTarget:              TIdURI;
-    RemoteUri:                 TIdURI;
+    RemoteTarget:              TIdSipURI;
+    RemoteUri:                 TIdSipURI;
     RouteSet:                  TIdSipHeaders;
 
     procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
@@ -117,6 +117,7 @@ type
     procedure TestSetContactWildCard;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
+    procedure TestTerminateAllSessions;
   end;
 
   TestTIdSipSession = class(TTestCaseTU,
@@ -134,11 +135,14 @@ type
     function  CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
+    function  LastResponseSdpMediaDescriptionsCount: Integer;
+    function  LastResponseSdpMediaDescriptionsPort(const Index: Integer): Integer;
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream);
+    procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnSendRequest(const Request: TIdSipRequest;
                             const Transport: TIdSipTransport);
@@ -245,6 +249,8 @@ begin
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
 
+  Self.Core.Contact.Value := 'sip:franks@localhost';
+
   P := TIdSipParser.Create;
   try
     Self.Invite := P.ParseAndMakeRequest(BasicRequest);
@@ -308,7 +314,7 @@ begin
   Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
   Msg.Body := '';
   Msg.ToHeader.Value := Msg.ToHeader.DisplayName
-                               + ' <' + Msg.ToHeader.Address.GetFullURI + '>';
+                               + ' <' + Msg.ToHeader.Address.URI + '>';
   Msg.RemoveAllHeadersNamed(ContentTypeHeaderFull);
   Msg.ContentLength := 0;
 end;
@@ -332,10 +338,10 @@ begin
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
   Self.LocalSequenceNo := 13;
-  Self.LocalUri        := TIdUri.Create('sip:case@fried.neurons.org');
+  Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdUri.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
@@ -688,6 +694,8 @@ begin
           + 'To tag. See RFC:3261, section 8.1.1.2');
 
       Check(Request.HasHeader(CSeqHeader), 'No CSeq header');
+      Check(not Request.HasHeader(ContentDispositionHeader),
+            'Needless Content-Disposition header');
     finally
       Request.Free;
     end;
@@ -707,6 +715,12 @@ begin
   try
     CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
     CheckEquals(Body,         Invite.Body,          'Body');
+
+    Check(Invite.HasHeader(ContentDispositionHeader),
+          'Missing Content-Disposition');
+    CheckEquals(DispositionSession,
+                Invite.Disposition.Value,
+                'Content-Disposition value');      
   finally
     Invite.Free;
   end;
@@ -742,6 +756,8 @@ begin
     CheckEquals(Self.Dlg.LocalURI,     R.From.Address,       'From URI');
     CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,           'From tag');
     CheckEquals(Self.Dlg.ID.CallID,    R.CallID,             'Call-ID');
+
+    Check(R.HasHeader(MaxForwardsHeader), 'Max-Forwards header missing');
 
     // we should somehow check that CSeq.SequenceNo has been (randomly) generated. How?
   finally
@@ -846,7 +862,7 @@ begin
       // These are the manipulations the dialog's meant to perform on its route
       // set. Just so you know we're not fiddling our test data.
       Self.Dlg.RouteSet.Delete(0);
-      Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.GetFullURI + '>';
+      Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.URI + '>';
 
       for I := 0 to Routes.Count - 1 do
         CheckEquals(Self.Dlg.RouteSet.Items[I].Value,
@@ -873,7 +889,7 @@ begin
     try
       Contact := Request.FirstContact;
       CheckEquals(SipsScheme,
-                  Contact.Address.Protocol,
+                  Contact.Address.Scheme,
                   'Contact doesn''t have a SIPS URI');
     finally
       Request.Free;
@@ -997,7 +1013,7 @@ begin
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     Contact := Response.FirstContact;
-    CheckEquals(SipsScheme, Contact.Address.Protocol,
+    CheckEquals(SipsScheme, Contact.Address.Scheme,
                 'Must use a SIPS URI in the Contact');
   finally
     Response.Free;
@@ -1014,7 +1030,7 @@ begin
   Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
     Contact := Response.FirstContact;
-    CheckEquals(SipsScheme, Contact.Address.Protocol,
+    CheckEquals(SipsScheme, Contact.Address.Scheme,
                 'Must use a SIPS URI in the Contact');
   finally
     Response.Free;
@@ -1156,7 +1172,7 @@ begin
   Tran := Self.Dispatch.AddServerTransaction(Self.Invite, Self.Dispatch.Transport);
 
   // wipe out the tag & give a different branch
-  Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.GetFullURI;
+  Self.Invite.ToHeader.Value := Self.Invite.ToHeader.Address.URI;
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
@@ -1556,7 +1572,7 @@ begin
       Self.Core.Contact := C;
       Fail('Only a SIP or SIPs URI may be specified');
     except
-      on EAssertionFailed do;
+      on EBadHeader do;
     end;
   finally
     C.Free;
@@ -1607,11 +1623,36 @@ begin
       Self.Core.From := F;
       Fail('Only a SIP or SIPs URI may be specified');
     except
-      on EAssertionFailed do;
+      on EBadHeader do;
     end;
   finally
     F.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestTerminateAllSessions;
+var
+  FirstSession:  TIdSipSession;
+  SecondSession: TIdSipSession;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  FirstSession := Self.Session;
+  FirstSession.AcceptCall;
+  Self.Session := nil;
+
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  SecondSession := Self.Session;
+  SecondSession.AcceptCall;
+
+  CheckEquals(2,
+              Self.Core.SessionCount,
+              'Session count');
+  Self.Core.TerminateAllSessions;
+  CheckEquals(0,
+              Self.Core.SessionCount,
+              'Session count after TerminateAllSessions');
 end;
 
 //******************************************************************************
@@ -1724,6 +1765,62 @@ begin
   Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
 end;
 
+function TestTIdSipSession.LastResponseSdpMediaDescriptionsCount: Integer;
+var
+  P:   TIdSdpParser;
+  S:   TStringStream;
+  SDP: TIdSdpPayload;
+begin
+  S := TStringStream.Create(Self.Dispatch.Transport.LastResponse.Body);
+  try
+    P := TIdSdpParser.Create;
+    try
+      P.Source := S;
+
+      SDP := TIdSdpPayload.Create;
+      try
+        P.Parse(SDP);
+
+        Result := SDP.MediaDescriptions.Count;
+      finally
+        SDP.Free;
+      end;
+    finally
+      P.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+function TestTIdSipSession.LastResponseSdpMediaDescriptionsPort(const Index: Integer): Integer;
+var
+  P:   TIdSdpParser;
+  S:   TStringStream;
+  SDP: TIdSdpPayload;
+begin
+  S := TStringStream.Create(Self.Dispatch.Transport.LastResponse.Body);
+  try
+    P := TIdSdpParser.Create;
+    try
+      P.Source := S;
+
+      SDP := TIdSdpPayload.Create;
+      try
+        P.Parse(SDP);
+
+        Result := SDP.MediaDescriptions[0].Port;
+      finally
+        SDP.Free;
+      end;
+    finally
+      P.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
 begin
   Self.Session := Session;
@@ -1743,6 +1840,10 @@ end;
 procedure TestTIdSipSession.OnNewData(const Data: TStream);
 begin
   Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipSession.OnNewUdpData(const Data: TStream);
+begin
 end;
 
 procedure TestTIdSipSession.OnNewSession(const Session: TIdSipSession);
@@ -1817,9 +1918,9 @@ begin
   try
     SDP := TIdSdpPayload.CreateFrom(S);
     try
-      CheckEquals(Self.Core.From.Address.UserName,
-                  SDP.Origin.UserName,
-                  'Origin username');
+      CheckEquals(Self.Core.From.Address.Username,
+                  SDP.Origin.Username,
+                  'Origin Username');
       Check(SDP.MediaDescriptions.Count > 0,
             'No media descriptions');
       Check(Self.SimpleSdp.MediaDescriptions[0].Port <> 0,
@@ -1848,12 +1949,14 @@ begin
       Self.Session.AddDataListener(L1);
       Self.Session.AddDataListener(L2);
 
+      Self.RTPClient.Port := Self.LastResponseSdpMediaDescriptionsPort(1);
       Self.RTPClient.Send('foo', 0);
 
       if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
         raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-      Check(L1.NewData and L2.NewData, 'Not all Listeners notified, hence not added');
+      Check(L1.NewData and L2.NewData,
+            'Not all Listeners notified, hence not added');
     finally
       L2.Free;
     end;
@@ -2013,7 +2116,7 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTLS;
 
-  Self.Destination.Address.Protocol := SipsScheme;
+  Self.Destination.Address.Scheme := SipsScheme;
   Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
@@ -2035,7 +2138,7 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Self.Destination.Address.Protocol := SipsScheme;
+  Self.Destination.Address.Scheme := SipsScheme;
   Session := Self.Core.Call(Self.Destination);
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
@@ -2062,7 +2165,7 @@ begin
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SipTrying);
   try
-    Response.FirstContact.Address.Protocol := SipsScheme;
+    Response.FirstContact.Address.Scheme := SipsScheme;
     Response.StatusCode := SIPOK;
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -2089,11 +2192,14 @@ var
 begin
   Self.SimulateRemoteInvite;
 
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  Self.Session.AcceptCall;
+
   Server := TIdUdpServer.Create(nil);
   try
     try
       Binding := Server.Bindings.Add;
-      Binding.Port := Self.SimpleSdp.MediaDescriptions[0].Port;
+      Binding.Port := Self.LastResponseSdpMediaDescriptionsPort(0);
       Server.Active := true;
       Fail('(Server) Media stream wasn''t set up');
     except
@@ -2106,47 +2212,28 @@ end;
 
 procedure TestTIdSipSession.TestMediaStreamsSetUp;
 var
-  Binding:  TIdSocketHandle;
-  I:        Integer;
-  Response: TIdSipResponse;
-  ResponseCount: Cardinal;
-  S:        TStringStream;
-  SDP:      TIdSdpPayload;
-  Server:   TIdUdpServer;
+  Binding: TIdSocketHandle;
+  I:       Integer;
+  Server:  TIdUdpServer;
 begin
-  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.Invite.Body := Self.MultiStreamSdp.AsString;
 
   Self.SimulateRemoteInvite;
   Self.Session.AcceptCall;
-  CheckEquals(ResponseCount + 1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  Response := Self.Dispatch.Transport.LastResponse;
 
   Server := TIdUdpServer.Create(nil);
   try
     Binding := Server.Bindings.Add;
 
-    S := TStringStream.Create(Response.Body);
-    try
-      SDP := TIdSdpPayload.CreateFrom(S);
+    for I := 0 to Self.LastResponseSdpMediaDescriptionsCount - 1 do begin
       try
-        for I := 0 to SDP.MediaDescriptions.Count - 1 do begin
-          try
-            Binding.Port := SDP.MediaDescriptions[I].Port;
-            Server.Active := true;
-            Fail('(Server) Media stream wasn''t set up on port '
-               + IntToStr(SDP.MediaDescriptions[I].Port));
-          except
-            on EIdCouldNotBindSocket do;
-          end;
-        end;
-      finally
-        SDP.Free;
+        Binding.Port := Self.LastResponseSdpMediaDescriptionsPort(I);
+        Server.Active := true;
+        Fail('(Server) Media stream wasn''t set up on port '
+           + IntToStr(Self.LastResponseSdpMediaDescriptionsPort(I)));
+      except
+        on EIdCouldNotBindSocket do;
       end;
-    finally
-      S.Free;
     end;
   finally
     Server.Free;
@@ -2224,6 +2311,7 @@ begin
       Self.Session.AddDataListener(L2);
       Self.Session.RemoveDataListener(L2);
 
+      Self.RTPClient.Port := Self.LastResponseSdpMediaDescriptionsPort(1);
       Self.RTPClient.Send('foo', 0);
 
       if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then

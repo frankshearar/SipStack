@@ -464,7 +464,7 @@ begin
 
   Client.LocalHostName := Self.HostName;
   Client.Host          := R.RequestUri.Host;
-  Client.Port          := StrToIntDef(R.RequestUri.Port, Self.DefaultPort);
+  Client.Port          := R.RequestUri.Port;
   Client.Timeout       := Self.Timeout;
 
   Client.Connect(Self.Timeout);
@@ -706,7 +706,7 @@ begin
   Client := TIdUdpClient.Create(nil);
   try
     Client.Host := R.RequestUri.Host;
-    Client.Port := StrToIntDef(R.RequestUri.Port, IdPORT_SIP);
+    Client.Port := R.RequestUri.Port;
 
     Client.Send(R.AsString);
 

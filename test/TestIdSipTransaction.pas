@@ -973,6 +973,8 @@ begin
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method                             := MethodInvite;
   Self.Request.MaxForwards                        := 70;
+  Self.Request.ToHeader.DisplayName               := 'Wintermute';
+  Self.Request.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.lu';
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Request.From.DisplayName                   := 'Case';
@@ -992,6 +994,8 @@ begin
   Self.Response                                    := TIdSipResponse.Create;
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Response.ToHeader.DisplayName               := 'Wintermute';
+  Self.Response.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.lu';
   Self.Response.From.DisplayName                   := 'Case';
   Self.Response.From.Address.URI                   := 'sip:case@fried.neurons.org';
   Self.Response.From.Tag                           := '1928301774';

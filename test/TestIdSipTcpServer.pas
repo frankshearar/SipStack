@@ -414,12 +414,12 @@ procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
                                          const Request: TIdSipRequest);
 begin
   try
-    CheckEquals('INVITE',                               Request.Method,                'Method');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.RequestUri.GetFullURI, 'RequestUri');
-    CheckEquals('SIP/2.0',                              Request.SIPVersion,            'SipVersion');
-    CheckEquals(29,                                     Request.ContentLength,         'ContentLength');
-    CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,                'CallID');
-    CheckEquals(70,                                     Request.MaxForwards,           'Max-Forwards');
+    CheckEquals('INVITE',                               Request.Method,         'Method');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.RequestUri.URI, 'RequestUri');
+    CheckEquals('SIP/2.0',                              Request.SIPVersion,     'SipVersion');
+    CheckEquals(29,                                     Request.ContentLength,  'ContentLength');
+    CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,         'CallID');
+    CheckEquals(70,                                     Request.MaxForwards,    'Max-Forwards');
 
     CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds;received=127.0.0.1',
                 Request.HeaderAt(0).AsString,

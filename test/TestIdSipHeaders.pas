@@ -98,6 +98,17 @@ type
     procedure TestValueWithStar;
   end;
 
+  TestTIdSipContentDispositionHeader = class(TTestCase)
+  private
+    C: TIdSipContentDispositionHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestName;
+    procedure TestGetSetHandling;
+  end;
+
   TestTIdSipCSeqHeader = class(TTestCase)
   private
     C: TIdSipCSeqHeader;
@@ -357,6 +368,7 @@ begin
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipContactHeader.Suite);
+  Result.AddTest(TestTIdSipContentDispositionHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
   Result.AddTest(TestTIdSipFromToHeader.Suite);
@@ -798,7 +810,7 @@ begin
     Addy.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
     Self.A.Address := Addy.Address;
 
-    CheckEquals(Addy.Address.GetFullURI, Self.A.Address.GetFullURI, 'SetAddress');
+    CheckEquals(Addy.Address.URI, Self.A.Address.URI, 'SetAddress');
   finally
     Addy.Free;
   end;
@@ -808,70 +820,70 @@ procedure TestTIdSipAddressHeader.TestValue;
 begin
   Self.A.Value := 'sip:wintermute@tessier-ashpool.co.lu';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('',                                     Self.A.DisplayName,        'DisplayName');
-  CheckEquals('',                                     Self.A.ParamsAsString,     'Params');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Value,              'Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.URI,    'Address');
+  CheckEquals('',                                     Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                     Self.A.ParamsAsString, 'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueEmptyDisplayName;
 begin
   A.Value := '<sip:wintermute@tessier-ashpool.co.lu>';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('',                                     Self.A.DisplayName,        'DisplayName');
-  CheckEquals('',                                     Self.A.ParamsAsString,     'Params');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Value,              'Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.URI,    'Address');
+  CheckEquals('',                                     Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                     Self.A.ParamsAsString, 'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueFolded;
 begin
   Self.A.Value := 'Wintermute'#13#10' <sip:wintermute@tessier-ashpool.co.lu>';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('Wintermute',                                        Self.A.DisplayName,        'DisplayName');
-  CheckEquals('',                                                  Self.A.ParamsAsString,     'Params');
-  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,              'Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.URI,    'Address');
+  CheckEquals('Wintermute',                                        Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                                  Self.A.ParamsAsString, 'Params');
+  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithBlankQuotedName;
 begin
   Self.A.Value := '"" <sip:wintermute@tessier-ashpool.co.lu>';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',  Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('',                                      Self.A.DisplayName,        'DisplayName');
-  CheckEquals('',                                      Self.A.ParamsAsString,     'Params');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',  Self.A.Value,              'Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',  Self.A.Address.URI,    'Address');
+  CheckEquals('',                                      Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                      Self.A.ParamsAsString, 'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',  Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithEncodings;
 begin
   Self.A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com',                  Self.A.Address.GetFullURI, '1: Address');
-  CheckEquals('Count Zero"',                                   Self.A.DisplayName,        '1: DisplayName');
-  CheckEquals('',                                              Self.A.ParamsAsString,     '1: Params');
-  CheckEquals('"Count Zero\"" <sips:countzero@jacks-bar.com>', Self.A.Value,              '1: Value');
+  CheckEquals('sips:countzero@jacks-bar.com',                  Self.A.Address.URI,    '1: Address');
+  CheckEquals('Count Zero"',                                   Self.A.DisplayName,    '1: DisplayName');
+  CheckEquals('',                                              Self.A.ParamsAsString, '1: Params');
+  CheckEquals('"Count Zero\"" <sips:countzero@jacks-bar.com>', Self.A.Value,          '1: Value');
 
   Self.A.Value := '"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.GetFullURI, '2: Address');
-  CheckEquals('Count\" Zero""',               Self.A.DisplayName,        '2: DisplayName');
-  CheckEquals('',                             Self.A.ParamsAsString,     '2: Params');
+  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '2: Address');
+  CheckEquals('Count\" Zero""',               Self.A.DisplayName,    '2: DisplayName');
+  CheckEquals('',                             Self.A.ParamsAsString, '2: Params');
   CheckEquals('"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>',
               Self.A.Value,
               '2: Value');
 
   Self.A.Value := '"\C\o\u\n\t\\\"\ \Z\e\r\o\"\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.GetFullURI,  '3: Address');
-  CheckEquals('Count\" Zero""',               Self.A.DisplayName,         '3: Name');
-  CheckEquals('',                             Self.A.ParamsAsString,      '3: Params');
+  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '3: Address');
+  CheckEquals('Count\" Zero""',               Self.A.DisplayName,    '3: Name');
+  CheckEquals('',                             Self.A.ParamsAsString, '3: Params');
   CheckEquals('"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>',
               Self.A.Value,
               '3: Value');
 
   Self.A.Value := '"Count Zero \\\\\\\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.GetFullURI,  '4: Address');
-  CheckEquals('Count Zero \\\"',              Self.A.DisplayName,         '4: Name');
-  CheckEquals('',                             Self.A.ParamsAsString,      '4: Params');
+  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '4: Address');
+  CheckEquals('Count Zero \\\"',              Self.A.DisplayName,    '4: Name');
+  CheckEquals('',                             Self.A.ParamsAsString, '4: Params');
   CheckEquals('"Count Zero \\\\\\\"" <sips:countzero@jacks-bar.com>',
               Self.A.Value,
               '4: Value');
@@ -908,84 +920,84 @@ procedure TestTIdSipAddressHeader.TestValueWithNormalName;
 begin
   Self.A.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('Wintermute',                                        Self.A.DisplayName,        'DisplayName');
-  CheckEquals('',                                                  Self.A.ParamsAsString,     'Params');
-  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,              'Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.URI,    'Address');
+  CheckEquals('Wintermute',                                        Self.A.DisplayName,    'DisplayName');
+  CheckEquals('',                                                  Self.A.ParamsAsString, 'Params');
+  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithNoWhitespaceBetweenDisplayNameAndUri;
 begin
   Self.A.Value := '"caller"<sip:caller@example.com>';
-  CheckEquals('sip:caller@example.com', Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('caller',                 Self.A.DisplayName,        'Name');
-  CheckEquals('',                       Self.A.ParamsAsString,     'Params');
+  CheckEquals('sip:caller@example.com', Self.A.Address.URI,    'Address');
+  CheckEquals('caller',                 Self.A.DisplayName,    'Name');
+  CheckEquals('',                       Self.A.ParamsAsString, 'Params');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithParam;
 begin
   Self.A.Value := 'sip:wintermute@tessier-ashpool.co.lu;hidden';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('',                                     Self.A.DisplayName,        'Name');
-  CheckEquals(';hidden',                              Self.A.ParamsAsString,     'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.A.Address.URI,    'Address');
+  CheckEquals('',                                     Self.A.DisplayName,    'Name');
+  CheckEquals(';hidden',                              Self.A.ParamsAsString, 'Params');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithQuotedName;
 begin
   Self.A.Value := '"Wintermute" <sip:wintermute@tessier-ashpool.co.lu>';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.GetFullURI, '1: Address');
-  CheckEquals('Wintermute',                                        Self.A.DisplayName,        '1: Name');
-  CheckEquals('',                                                  Self.A.ParamsAsString,     '1: Params');
-  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,              '1: Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu',              Self.A.Address.URI,    '1: Address');
+  CheckEquals('Wintermute',                                        Self.A.DisplayName,    '1: Name');
+  CheckEquals('',                                                  Self.A.ParamsAsString, '1: Params');
+  CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,          '1: Value');
 
   Self.A.Value := '"Count Zero" <sips:countzero@jacks-bar.com>';
 
-  CheckEquals('sips:countzero@jacks-bar.com',                Self.A.Address.GetFullURI, '2: Address');
-  CheckEquals('Count Zero',                                  Self.A.DisplayName,        '2: Name');
-  CheckEquals('',                                            Self.A.ParamsAsString,     '2: Params');
-  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>',   Self.A.Value,              '2: Value');
+  CheckEquals('sips:countzero@jacks-bar.com',                Self.A.Address.URI,    '2: Address');
+  CheckEquals('Count Zero',                                  Self.A.DisplayName,    '2: Name');
+  CheckEquals('',                                            Self.A.ParamsAsString, '2: Params');
+  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>',   Self.A.Value,          '2: Value');
 
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithSpace;
 begin
   Self.A.Value := 'Count Zero <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com',              Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('Count Zero',                                Self.A.DisplayName,        'Name');
-  CheckEquals('',                                          Self.A.ParamsAsString,     'Params');
-  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>', Self.A.Value,              'Value');
+  CheckEquals('sips:countzero@jacks-bar.com',              Self.A.Address.URI,    'Address');
+  CheckEquals('Count Zero',                                Self.A.DisplayName,    'Name');
+  CheckEquals('',                                          Self.A.ParamsAsString, 'Params');
+  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithSpecialChars;
 begin
   Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu;tag=f00';
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu;tag=f00',   Self.A.Address.GetFullURI, ';:Address');
-  CheckEquals('',                                               Self.A.DisplayName,        ';: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString,     ';: Params');
-  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu;tag=f00>', Self.A.Value,              ';: Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu;tag=f00',   Self.A.Address.URI,    ';:Address');
+  CheckEquals('',                                               Self.A.DisplayName,    ';: Name');
+  CheckEquals('',                                               Self.A.ParamsAsString, ';: Params');
+  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu;tag=f00>', Self.A.Value,          ';: Value');
 
   Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu,tag=f00';
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu,tag=f00',   Self.A.Address.GetFullURI, ',:Address');
-  CheckEquals('',                                               Self.A.DisplayName,        ',: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString,     ',: Params');
-  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu,tag=f00>', Self.A.Value,              ',: Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu,tag=f00',   Self.A.Address.URI,    ',:Address');
+  CheckEquals('',                                               Self.A.DisplayName,    ',: Name');
+  CheckEquals('',                                               Self.A.ParamsAsString, ',: Params');
+  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu,tag=f00>', Self.A.Value,          ',: Value');
 
   Self.A.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu?tag=f00';
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu?tag=f00',   Self.A.Address.GetFullURI, '?:Address');
-  CheckEquals('',                                               Self.A.DisplayName,        '?: Name');
-  CheckEquals('',                                               Self.A.ParamsAsString,     '?: Params');
-  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu?tag=f00>', Self.A.Value,              '?: Value');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu?tag=f00',   Self.A.Address.URI,    '?:Address');
+  CheckEquals('',                                               Self.A.DisplayName,    '?: Name');
+  CheckEquals('',                                               Self.A.ParamsAsString, '?: Params');
+  CheckEquals('<sip:wintermute@tessier-ashpool.co.lu?tag=f00>', Self.A.Value,          '?: Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithTrailingWhitespacePlusParam;
 begin
   Self.A.Value := 'sip:vivekg@chair.dnrc.bell-labs.com ; haha=heehee';
-  CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.A.Address.GetFullURI, 'Address');
-  CheckEquals('',                                    Self.A.DisplayName,        'DisplayName');
-  CheckEquals(';haha=heehee',                        Self.A.ParamsAsString,     'Params');
-  CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.A.Value,              'Value');
+  CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.A.Address.URI,    'Address');
+  CheckEquals('',                                    Self.A.DisplayName,    'DisplayName');
+  CheckEquals(';haha=heehee',                        Self.A.ParamsAsString, 'Params');
+  CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithUnquotedNonTokensPlusParam;
@@ -1212,11 +1224,11 @@ procedure TestTIdSipContactHeader.TestValueWithQ;
 begin
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu';
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Address.GetFullURI, 'Address');
-  CheckEquals('',                                     Self.C.DisplayName,        'DisplayName');
-  CheckEquals('',                                     Self.C.ParamsAsString,     'Params');
-  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Value,              'Value');
-  Check(                                              not Self.C.IsWildCard,     'IsWild');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Address.URI,    'Address');
+  CheckEquals('',                                     Self.C.DisplayName,    'DisplayName');
+  CheckEquals('',                                     Self.C.ParamsAsString, 'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Value,          'Value');
+  Check(                                              not Self.C.IsWildCard, 'IsWild');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0';
   CheckEquals(0, C.Q, 'q=0');
@@ -1276,6 +1288,44 @@ begin
   Self.C.Value := '*;q=0.1';
   Check(Self.C.IsWildCard, 'IsWildCard');
   CheckEquals(100, Self.C.Q, 'QValue');
+end;
+
+//******************************************************************************
+//* TestTIdSipContentDispositionHeader                                         *
+//******************************************************************************
+//* TestTIdSipContentDispositionHeader Public methods **************************
+
+procedure TestTIdSipContentDispositionHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.C := TIdSipContentDispositionHeader.Create;
+end;
+
+procedure TestTIdSipContentDispositionHeader.TearDown;
+begin
+  Self.C.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipContentDispositionHeader Published methods ***********************
+
+procedure TestTIdSipContentDispositionHeader.TestName;
+begin
+  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name');
+
+  Self.C.Name := 'foo';
+  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name after set');
+end;
+
+procedure TestTIdSipContentDispositionHeader.TestGetSetHandling;
+begin
+  Self.C.Handling := HandlingRequired;
+  CheckEquals(HandlingRequired, Self.C.Handling, HandlingRequired);
+
+  Self.C.Handling := HandlingOptional;
+  CheckEquals(HandlingOptional, Self.C.Handling, HandlingOptional);
 end;
 
 //******************************************************************************
@@ -1751,7 +1801,7 @@ begin
 
   CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
   CheckEquals('sips:countzero@jacks-bar.com;paranoid',
-              Self.R.Address.GetFullURI,
+              Self.R.Address.URI,
               'Address');
   CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
 end;
@@ -1816,7 +1866,7 @@ begin
 
   CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
   CheckEquals('sips:countzero@jacks-bar.com;paranoid',
-              Self.R.Address.GetFullURI,
+              Self.R.Address.URI,
               'Address');
   CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
 end;
@@ -2796,7 +2846,7 @@ begin
   CheckType(TIdSipHeader,                       Self.H.Add(CallInfoHeader),             CallInfoHeader);
   CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderFull),          ContactHeaderFull);
   CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderShort),         ContactHeaderShort);
-  CheckType(TIdSipHeader,                       Self.H.Add(ContentDispositionHeader),   ContentDispositionHeader);
+  CheckType(TIdSipContentDispositionHeader,     Self.H.Add(ContentDispositionHeader),   ContentDispositionHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentLanguageHeader),      ContentLanguageHeader);
@@ -3399,7 +3449,7 @@ begin
   Self.Headers.Add(MaxForwardsHeader).Value       := '70';
   Self.Headers.Add(ViaHeaderFull).Value           := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
-  Self.Headers.Add(FromHeaderFull).Value          := 'Case sip:case@fried.neurons.org;1928301774';
+  Self.Headers.Add(FromHeaderFull).Value          := 'Case <sip:case@fried.neurons.org>;1928301774';
   Self.Headers.Add(CallIDHeaderFull).Value        := 'a84b4c76e66710@gw1.leo-ix.org';
   Self.Headers.Add(CSeqHeader).Value              := '314159 INVITE';
   Self.Headers.Add(ContactHeaderFull).Value       := 'sip:wintermute@tessier-ashpool.co.lu';

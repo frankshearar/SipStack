@@ -18,16 +18,24 @@ type
     Label1: TLabel;
     SessionCounter: TLabel;
     Label2: TLabel;
-    DataCount: TLabel;
+    RTPDataCount: TLabel;
     UiTimer: TTimer;
+    TargetUri: TEdit;
+    Invite: TButton;
+    Bye: TButton;
+    Label3: TLabel;
+    UDPDataCount: TLabel;
     procedure UiTimerTimer(Sender: TObject);
+    procedure InviteClick(Sender: TObject);
+    procedure ByeClick(Sender: TObject);
   private
-    ByteCount: Integer;
-    DataStore: TStream;
-    Dispatch:  TIdSipTransactionDispatcher;
-    Lock:      TCriticalSection;
-    Transport: TIdSipTransport;
-    UA:        TIdSipUserAgentCore;
+    RTPByteCount: Integer;
+    UDPByteCount: Integer;
+    DataStore:    TStream;
+    Dispatch:     TIdSipTransactionDispatcher;
+    Lock:         TCriticalSection;
+    Transport:    TIdSipTransport;
+    UA:           TIdSipUserAgentCore;
 
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnChanged(const Observed: TObject);
@@ -36,6 +44,7 @@ type
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream);
+    procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -73,14 +82,14 @@ var
 begin
   inherited Create(AOwner);
 
-  Self.ByteCount := 0;
+  Self.RTPByteCount := 0;
   Self.DataStore := TFileStream.Create('..\etc\dump.wav', fmCreate or fmShareDenyWrite);
   Self.Lock      := TCriticalSection.Create;
 
   Self.Transport := TIdSipUdpTransport.Create(IdPORT_SIP);
   Binding := Self.Transport.Bindings.Add;
-  Binding.IP := '192.168.1.43';
-  Binding.Port := 5060;
+  Binding.IP := GStack.LocalAddress;
+  Binding.Port := IdPORT_SIP;
   Self.Transport.HostName := Binding.IP;
 
   Self.Transport.AddTransportListener(Self);
@@ -93,6 +102,7 @@ begin
   Self.UA.AddSessionListener(Self);
   Self.UA.AddObserver(Self);
   Self.UA.HostName := Self.Transport.HostName;
+  Self.UA.UserAgentName := 'X-Lite build 1086';
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -156,9 +166,19 @@ procedure TrnidSpike.OnNewData(const Data: TStream);
 begin
   Self.Lock.Acquire;
   try
-    Inc(Self.ByteCount, Data.Size);
+    Inc(Self.RTPByteCount, Data.Size);
 
     Self.DataStore.CopyFrom(Data, 0);
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+procedure TrnidSpike.OnNewUdpData(const Data: TStream);
+begin
+  Self.Lock.Acquire;
+  try
+    Inc(Self.UDPByteCount, Data.Size);
   finally
     Self.Lock.Release;
   end;
@@ -200,10 +220,30 @@ procedure TrnidSpike.UiTimerTimer(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
-    DataCount.Caption := IntToStr(Self.ByteCount);
+    RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
+    UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
   finally
     Self.Lock.Release;
   end;
+end;
+
+procedure TrnidSpike.InviteClick(Sender: TObject);
+var
+  Target: TIdSipToHeader;
+begin
+  Target := TIdSipToHeader.Create;
+  try
+    Target.Value := Self.TargetUri.Text;
+
+    Self.UA.Call(Target);
+  finally
+    Target.Free;
+  end;
+end;
+
+procedure TrnidSpike.ByeClick(Sender: TObject);
+begin
+  Self.UA.TerminateAllSessions;
 end;
 
 end.

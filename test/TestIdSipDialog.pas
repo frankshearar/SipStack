@@ -12,11 +12,11 @@ type
     Dlg:                TIdSipDialog;
     ID:                 TIdSipDialogID;
     LocalSequenceNo:    Cardinal;
-    LocalUri:           TIdURI;
+    LocalUri:           TIdSipURI;
     OnEstablishedFired: Boolean;
     RemoteSequenceNo:   Cardinal;
-    RemoteTarget:       TIdURI;
-    RemoteUri:          TIdURI;
+    RemoteTarget:       TIdSipURI;
+    RemoteUri:          TIdSipURI;
     Req:                TIdSipRequest;
     Res:                TIdSipResponse;
     RouteSet:           TIdSipHeaders;
@@ -42,10 +42,10 @@ type
     Dlg:              TIdSipDialog;
     ID:               TIdSipDialogID;
     LocalSequenceNo:  Cardinal;
-    LocalUri:         TIdURI;
+    LocalUri:         TIdSipURI;
     RemoteSequenceNo: Cardinal;
-    RemoteTarget:     TIdURI;
-    RemoteUri:        TIdURI;
+    RemoteTarget:     TIdSipURI;
+    RemoteUri:        TIdSipURI;
     RouteSet:         TIdSipHeaders;
   public
     procedure SetUp; override;
@@ -100,10 +100,10 @@ begin
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
   Self.LocalSequenceNo := 13;
-  Self.LocalUri        := TIdUri.Create('sip:case@fried.neurons.org');
+  Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdUri.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
@@ -245,9 +245,9 @@ end;
 procedure TestTIdSipDialog.TestEmptyRemoteTargetAfterResponse;
 var
   D:        TIdSipDialog;
-  EmptyUri: TIdUri;
+  EmptyUri: TIdSipURI;
 begin
-  EmptyUri := TIdUri.Create('');
+  EmptyUri := TIdSipURI.Create('');
   try
     D := TIdSipDialog.Create(Self.ID,
                              Self.LocalSequenceNo,
@@ -353,10 +353,10 @@ begin
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
   Self.LocalSequenceNo := 13;
-  Self.LocalUri        := TIdUri.Create('sip:case@fried.neurons.org');
+  Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdUri.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.lu');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';

@@ -37,12 +37,14 @@ type
     function  GetContentLength: Cardinal;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
+    function  GetDisposition: TIdSipContentDispositionHeader;
     function  GetFrom: TIdSipFromHeader;
     function  GetTo: TIdSipToHeader;
     procedure SetCallID(const Value: String);
     procedure SetContentLength(const Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(const Value: TIdSipCSeqHeader);
+    procedure SetDisposition(const Value: TIdSipContentDispositionHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
     procedure SetPath(const Value: TIdSipViaPath);
     procedure SetTo(const Value: TIdSipToHeader);
@@ -72,16 +74,17 @@ type
     procedure RemoveHeader(const Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
 
-    property Body:          String           read fBody write fBody;
-    property CallID:        String           read GetCallID write SetCallID;
-    property ContentLength: Cardinal         read GetContentLength write SetContentLength;
-    property ContentType:   String           read GetContentType write SetContentType;
-    property CSeq:          TIdSipCSeqHeader read GetCSeq write SetCSeq;
-    property From:          TIdSipFromHeader read GetFrom write SetFrom;
-    property Headers:       TIdSipHeaders    read fHeaders;
-    property Path:          TIdSipViaPath    read fPath write SetPath;
-    property SIPVersion:    String           read fSIPVersion write fSIPVersion;
-    property ToHeader:      TIdSipToHeader   read GetTo write SetTo;
+    property Body:          String                         read fBody write fBody;
+    property CallID:        String                         read GetCallID write SetCallID;
+    property ContentLength: Cardinal                       read GetContentLength write SetContentLength;
+    property ContentType:   String                         read GetContentType write SetContentType;
+    property CSeq:          TIdSipCSeqHeader               read GetCSeq write SetCSeq;
+    property Disposition:   TIdSipContentDispositionHeader read GetDisposition write SetDisposition;
+    property From:          TIdSipFromHeader               read GetFrom write SetFrom;
+    property Headers:       TIdSipHeaders                  read fHeaders;
+    property Path:          TIdSipViaPath                  read fPath write SetPath;
+    property SIPVersion:    String                         read fSIPVersion write fSIPVersion;
+    property ToHeader:      TIdSipToHeader                 read GetTo write SetTo;
   end;
 
   TIdSipMessageClass = class of TIdSipMessage;
@@ -89,11 +92,11 @@ type
   TIdSipRequest = class(TIdSipMessage)
   private
     fMethod:     String;
-    fRequestUri: TIdURI;
+    fRequestUri: TIdSipURI;
 
     function  GetMaxForwards: Byte;
     procedure SetMaxForwards(const Value: Byte);
-    procedure SetRequestUri(const Value: TIdURI);
+    procedure SetRequestUri(const Value: TIdSipURI);
   protected
     function FirstLine: String; override;
   public
@@ -112,9 +115,9 @@ type
     function  MalformedException: ExceptClass; override;
     function  Match(const Msg: TIdSipMessage): Boolean;
 
-    property MaxForwards: Byte   read GetMaxForwards write SetMaxForwards;
-    property Method:      String read fMethod write fMethod;
-    property RequestUri:  TIdURI read fRequestUri write SetRequestUri;
+    property MaxForwards: Byte      read GetMaxForwards write SetMaxForwards;
+    property Method:      String    read fMethod write fMethod;
+    property RequestUri:  TIdSipURI read fRequestUri write SetRequestUri;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -485,6 +488,11 @@ begin
   Result := Self.FirstHeader(CSeqHeader) as TIdSipCSeqHeader;
 end;
 
+function TIdSipMessage.GetDisposition: TIdSipContentDispositionHeader;
+begin
+  Result := Self.FirstHeader(ContentDispositionHeader) as TIdSipContentDispositionHeader;
+end;
+
 function TIdSipMessage.GetFrom: TIdSipFromHeader;
 begin
   Result := Self.FirstHeader(FromHeaderFull) as TIdSipFromHeader;
@@ -513,6 +521,11 @@ end;
 procedure TIdSipMessage.SetCSeq(const Value: TIdSipCSeqHeader);
 begin
   Self.CSeq.Assign(Value);
+end;
+
+procedure TIdSipMessage.SetDisposition(const Value: TIdSipContentDispositionHeader);
+begin
+  Self.Disposition.Assign(Value);
 end;
 
 procedure TIdSipMessage.SetFrom(const Value: TIdSipFromHeader);
@@ -544,7 +557,7 @@ constructor TIdSipRequest.Create;
 begin
   inherited Create;
 
-  fRequestUri := TIdURI.Create('');
+  fRequestUri := TIdSipURI.Create('');
   Self.ContentLength := 0;
 end;
 
@@ -574,7 +587,7 @@ function TIdSipRequest.HasSipsUri: Boolean;
 var
   S: String;
 begin
-  S := Self.RequestUri.GetFullURI;
+  S := Self.RequestUri.URI;
   Result := Lowercase(Fetch(S, ':')) = SipsScheme;
 end;
 
@@ -600,9 +613,9 @@ begin
   if (Msg is Self.ClassType) then begin
     Request := Msg as TIdSipRequest;
 
-    Result := (Self.SIPVersion            = Request.SIPVersion)
-          and (Self.Method                = Request.Method)
-          and (Self.RequestUri.GetFullURI = Request.RequestUri.GetFullURI)
+    Result := (Self.SIPVersion     = Request.SIPVersion)
+          and (Self.Method         = Request.Method)
+          and (Self.RequestUri.URI = Request.RequestUri.URI)
           and (Self.Headers.IsEqualTo(Request.Headers));
   end
   else
@@ -673,7 +686,7 @@ end;
 
 function TIdSipRequest.FirstLine: String;
 begin
-  Result := Format(RequestLine, [Self.Method, Self.RequestUri.GetFullURI, Self.SIPVersion]);
+  Result := Format(RequestLine, [Self.Method, Self.RequestUri.URI, Self.SIPVersion]);
 end;
 
 //* TIdSipRequest Private methods **********************************************
@@ -691,9 +704,9 @@ begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
 end;
 
-procedure TIdSipRequest.SetRequestUri(const Value: TIdURI);
+procedure TIdSipRequest.SetRequestUri(const Value: TIdSipURI);
 begin
-  Self.fRequestUri.URI := Value.GetFullURI
+  Self.fRequestUri.URI := Value.URI
 end;
 
 //*******************************************************************************

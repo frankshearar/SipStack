@@ -15,9 +15,9 @@ object rnidSpike: TrnidSpike
   TextHeight = 13
   object Log: TMemo
     Left = 0
-    Top = 24
+    Top = 35
     Width = 688
-    Height = 429
+    Height = 418
     Align = alClient
     ScrollBars = ssVertical
     TabOrder = 0
@@ -26,37 +26,77 @@ object rnidSpike: TrnidSpike
     Left = 0
     Top = 0
     Width = 688
-    Height = 24
+    Height = 35
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 1
     object Label1: TLabel
-      Left = 5
+      Left = 280
       Top = 4
       Width = 71
       Height = 13
       Caption = 'Session Count:'
     end
     object SessionCounter: TLabel
-      Left = 79
+      Left = 354
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
     end
     object Label2: TLabel
-      Left = 490
+      Left = 381
       Top = 4
-      Width = 57
+      Width = 50
       Height = 13
-      Caption = 'Data Count:'
+      Caption = 'RTP bytes'
     end
-    object DataCount: TLabel
-      Left = 550
+    object RTPDataCount: TLabel
+      Left = 441
       Top = 4
       Width = 6
       Height = 13
       Caption = '0'
+    end
+    object Label3: TLabel
+      Left = 379
+      Top = 18
+      Width = 51
+      Height = 13
+      Caption = 'UDP bytes'
+    end
+    object UDPDataCount: TLabel
+      Left = 441
+      Top = 18
+      Width = 6
+      Height = 13
+      Caption = '0'
+    end
+    object TargetUri: TEdit
+      Left = 76
+      Top = 1
+      Width = 121
+      Height = 21
+      TabOrder = 0
+      Text = 'sip:franks@ltfasil'
+    end
+    object Invite: TButton
+      Left = 0
+      Top = 0
+      Width = 75
+      Height = 25
+      Caption = 'Invite'
+      TabOrder = 1
+      OnClick = InviteClick
+    end
+    object Bye: TButton
+      Left = 200
+      Top = 0
+      Width = 75
+      Height = 25
+      Caption = 'Bye'
+      TabOrder = 2
+      OnClick = ByeClick
     end
   end
   object UiTimer: TTimer
