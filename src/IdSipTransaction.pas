@@ -202,6 +202,7 @@ type
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
     function  IsServer: Boolean;
+    function  Match(Msg: TIdSipMessage): Boolean;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
                              T: TIdSipTransport); virtual;
@@ -835,7 +836,7 @@ begin
   try
     I := 0;
     while (I < Self.Transactions.Count) and not Assigned(Result) do
-      if (Self.TransactionAt(I).IsClient = ClientTran) and Self.TransactionAt(I).InitialRequest.Match(R) then
+      if (Self.TransactionAt(I).IsClient = ClientTran) and Self.TransactionAt(I).Match(R) then
         Result := Self.TransactionAt(I)
       else
        Inc(I);
@@ -921,12 +922,17 @@ begin
   Result := not Self.IsClient;
 end;
 
+function TIdSipTransaction.Match(Msg: TIdSipMessage): Boolean;
+begin
+  Result := Self.InitialRequest.Match(Msg);
+end;
+
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.From.IsEqualTo(Self.InitialRequest.From)
     and (Request.CallID = Self.InitialRequest.CallID)
     and (Request.CSeq.IsEqualTo(Self.InitialRequest.CSeq))
-    and not Request.Match(Self.InitialRequest);
+    and not Self.Match(Request);
 end;
 
 procedure TIdSipTransaction.ReceiveRequest(R: TIdSipRequest;

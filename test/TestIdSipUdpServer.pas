@@ -18,6 +18,7 @@ type
     Client:                   TIdUDPClient;
     NotifiedMalformedMessage: Boolean;
     Parser:                   TIdSipParser;
+    ReceivedResponse:         Boolean;
     Server:                   TIdSipUdpServer;
 
     procedure AcknowledgeEvent(Sender: TObject;
@@ -321,6 +322,7 @@ procedure TestTIdSipUdpServer.OnMalformedMessage(const Msg: String;
                                                  const Reason: String);
 begin
   Self.NotifiedMalformedMessage := true;
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
@@ -335,6 +337,8 @@ procedure TestTIdSipUdpServer.OnReceiveResponse(Response: TIdSipResponse;
 begin
   if Assigned(Self.CheckReceivedResponse) then
     Self.CheckReceivedResponse(Self, Response, ReceivedFrom);
+  Self.ReceivedResponse := true;
+  Self.ThreadEvent.SetEvent;  
 end;
 
 function TestTIdSipUdpServer.ReadResponse: String;
@@ -442,9 +446,10 @@ begin
   Self.Client.Send(Method + ' 200 OK'#13#10
                  + #13#10);
 
-  CheckEquals('',
-              Client.ReceiveString(DefaultTimeout),
-              'Response not just dropped on the floor');
+  Self.WaitForSignaled;
+
+  Check(not Self.ReceivedResponse,
+        'Response not just dropped on the floor');
 
   Check(Self.NotifiedMalformedMessage,
         'Malformed message notification never arrived');

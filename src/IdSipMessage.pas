@@ -690,6 +690,7 @@ type
     procedure SetTo(Value: TIdSipToHeader);
   protected
     function FirstLine: String; virtual; abstract;
+    function MatchRequest(InitialRequest: TIdSipRequest): Boolean; virtual; abstract;
   public
     class function WillEstablishDialog(Request: TIdSipRequest;
                                        Response: TIdSipResponse): Boolean; overload;
@@ -746,12 +747,15 @@ type
     fRoute:       TIdSipRoutePath;
 
     function  GetMaxForwards: Byte;
+    function  MatchSip1Request(InitialRequest: TIdSipRequest): Boolean;
+    function  MatchSip2Request(InitialRequest: TIdSipRequest): Boolean;
     procedure SetMaxForwards(Value: Byte);
     procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
     function FirstLine: String; override;
+    function MatchRequest(InitialRequest: TIdSipRequest): Boolean; override;
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -790,6 +794,7 @@ type
     procedure SetStatusCode(Value: Integer);
   protected
     function FirstLine: String; override;
+    function MatchRequest(InitialRequest: TIdSipRequest): Boolean; override;
   public
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal): TIdSipResponse; overload;
@@ -4524,47 +4529,11 @@ begin
 end;
 
 function TIdSipRequest.Match(Msg: TIdSipMessage): Boolean;
-var
-  Request:  TIdSipRequest;
-  Response: TIdSipResponse;
 begin
-  if (Msg is TIdSipRequest) then begin
-    Request := Msg as TIdSipRequest;
-    // Add RFC 2543 matching
+  // If Self represents an initial request for a transaction, does Msg belong
+  // to the same transaction?
 
-    // cf. RFC 3261 section 17.2.3
-    if Request.LastHop.IsRFC3261Branch then begin
-      Result := (Request.LastHop.Branch = Self.LastHop.Branch)
-            and (Request.LastHop.SentBy = Self.LastHop.SentBy);
-
-      if Request.IsACK then
-        Result := Result and Self.IsInvite
-      else
-        Result := Result and (Request.Method = Self.Method);
-    end
-    else begin
-      raise Exception.Create('matching of SIP/1.0 messages not implemented yet');
-    end;
-  end
-  else if (Msg is TIdSipResponse) then begin
-    Response := Msg as TIdSipResponse;
-    // Add RFC 2543 matching
-
-    // cf. RFC 3261 section 17.1.3
-    Result := (Response.Path.Length > 0)
-          and (Self.Path.Length > 0);
-
-    Result := Result
-          and (Response.LastHop.Branch = Self.LastHop.Branch);
-
-    if (Response.CSeq.Method = MethodAck) then
-      Result := Result
-            and (Self.IsInvite)
-    else
-      Result := Result
-            and (Response.CSeq.Method = Self.Method);
-  end
-  else Result := false;
+  Result := Msg.MatchRequest(Self);
 end;
 
 function TIdSipRequest.RequiresResponse: Boolean;
@@ -4580,6 +4549,15 @@ begin
                    [Self.Method, Self.RequestUri.URI, Self.SIPVersion]);
 end;
 
+function TIdSipRequest.MatchRequest(InitialRequest: TIdSipRequest): Boolean;
+begin
+  // cf. RFC 3261 section 17.2.3
+  if Self.LastHop.IsRFC3261Branch then
+    Result := Self.MatchSip2Request(InitialRequest)
+  else
+    Result := Self.MatchSip1Request(InitialRequest)
+end;
+
 //* TIdSipRequest Private methods **********************************************
 
 function TIdSipRequest.GetMaxForwards: Byte;
@@ -4588,6 +4566,42 @@ begin
     Self.MaxForwards := Self.DefaultMaxForwards;
 
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
+end;
+
+function TIdSipRequest.MatchSip1Request(InitialRequest: TIdSipRequest): Boolean;
+begin
+  // This stack does not support SIP/1.0
+  Result := false;
+{
+  if Self.IsInvite then
+    Result := RequestUri.Equals(InitialRequest.RequestUri)
+         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and (Self.CSeq = InitialRequest.CSeq)
+         and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
+  else if Self.IsAck then
+    Result := RequestUri.Equals(InitialRequest.RequestUri)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo)
+         and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
+  else
+    Result := false;
+}
+end;
+
+function TIdSipRequest.MatchSip2Request(InitialRequest: TIdSipRequest): Boolean;
+begin
+  Result := (Self.LastHop.Branch = InitialRequest.LastHop.Branch)
+             and (Self.LastHop.SentBy = InitialRequest.LastHop.SentBy);
+
+  if not Self.IsCancel then begin
+    if Self.IsACK then
+      Result := Result and InitialRequest.IsInvite
+    else
+      Result := Result and (Self.Method = InitialRequest.Method);
+  end;
 end;
 
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
@@ -4775,6 +4789,23 @@ function TIdSipResponse.FirstLine: String;
 begin
   Result := Format(StatusLine,
                    [Self.SIPVersion, Self.StatusCode, Self.StatusText]);
+end;
+
+function TIdSipResponse.MatchRequest(InitialRequest: TIdSipRequest): Boolean;
+begin
+  // cf. RFC 3261 section 17.1.3
+  Result := not Self.Path.IsEmpty
+        and not InitialRequest.Path.IsEmpty;
+
+  Result := Result
+        and (Self.LastHop.Branch = InitialRequest.LastHop.Branch);
+
+  if (Self.CSeq.Method = MethodAck) then
+    Result := Result
+          and (InitialRequest.IsInvite)
+  else
+    Result := Result
+          and (Self.CSeq.Method = InitialRequest.Method);
 end;
 
 //* TIdSipResponse Private methods **********************************************

@@ -70,7 +70,7 @@ implementation
 
 uses
   Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, TestFramework,
-  TestMessages;
+  TestFrameworkSip, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -84,8 +84,6 @@ end;
 //* TestTIdSipTcpClient Public methods *****************************************
 
 procedure TestTIdSipTcpClient.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
@@ -97,12 +95,7 @@ begin
   Self.Client.Port    := Self.Server.DefaultPort;
   Self.Client.Timeout := 1000;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Invite := P.ParseAndMakeRequest(LocalLoopRequest);
-  finally
-    P.Free;
-  end;
+  Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
   Self.Finished              := false;
   Self.InviteCount           := 0;

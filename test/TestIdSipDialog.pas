@@ -87,20 +87,12 @@ end;
 //* TestTIdSipDialog Public methods ********************************************
 
 procedure TestTIdSipDialog.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Req := P.ParseAndMakeRequest(BasicRequest);
-
-    Self.Res := P.ParseAndMakeResponse(BasicResponse);
-    Self.Res.StatusCode := SIPTrying;
-  finally
-    P.Free;
-  end;
+  Self.Req := TIdSipTestResources.CreateBasicRequest;
+  Self.Res := TIdSipTestResources.CreateBasicResponse;
+  Self.Res.StatusCode := SIPTrying;
 
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
@@ -202,22 +194,16 @@ end;
 
 procedure TestTIdSipDialog.TestCreateRequestInDialogRouteSetEmpty;
 var
-  P:        TIdSipParser;
   R:        TIdSipRequest;
   Response: TIdSipResponse;
   Routes:   TIdSipRoutePath;
 begin
-  P := TIdSipParser.Create;
+  Response := TIdSipTestResources.CreateLocalLoopResponse;
   try
-    Response := P.ParseAndMakeResponse(LocalLoopResponse);
-    try
-      Response.StatusCode := SIPTrying;
-      Self.Dlg.HandleMessage(Response);
-    finally
-      Response.Free;
-    end;
+    Response.StatusCode := SIPTrying;
+    Self.Dlg.HandleMessage(Response);
   finally
-    P.Free;
+    Response.Free;
   end;
 
   Self.Dlg.RouteSet.Clear;
@@ -268,22 +254,16 @@ end;
 procedure TestTIdSipDialog.TestCreateRequestInDialogRouteSetWithoutLrParam;
 var
   DlgRoutes: TIdSipRoutePath;
-  P:         TIdSipParser;
   R:         TIdSipRequest;
   Response:  TIdSipResponse;
   Routes:    TIdSipRoutePath;
 begin
-  P := TIdSipParser.Create;
+  Response := TIdSipTestResources.CreateLocalLoopResponse;
   try
-    Response := P.ParseAndMakeResponse(LocalLoopResponse);
-    try
-      Response.StatusCode := SIPTrying;
-      Self.Dlg.HandleMessage(Response);
-    finally
-      Response.Free;
-    end;
+    Response.StatusCode := SIPTrying;
+    Self.Dlg.HandleMessage(Response);
   finally
-    P.Free;
+    Response.Free;
   end;
 
   R := Self.Dlg.CreateRequest;

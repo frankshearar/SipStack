@@ -333,8 +333,6 @@ end;
 //* TTestCaseTU Public methods *************************************************
 
 procedure TTestCaseTU.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
@@ -351,13 +349,8 @@ begin
   Self.Core.Contact.Value := 'sip:wintermute@localhost';
   Self.Core.From.Value    := 'sip:wintermute@localhost';
 
-  P := TIdSipParser.Create;
-  try
-    Self.Invite := P.ParseAndMakeRequest(BasicRequest);
-    Self.RemoveBody(Self.Invite);
-  finally
-    P.Free;
-  end;
+  Self.Invite := TIdSipTestResources.CreateBasicRequest;
+  Self.RemoveBody(Self.Invite);
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -420,8 +413,6 @@ begin
 end;
 
 procedure TestTIdSipAbstractUserAgent.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
@@ -429,18 +420,13 @@ begin
   Self.UA := TIdSipAbstractUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Request := P.ParseAndMakeRequest(BasicRequest);
-    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-    Self.Request.Body := '';
-    Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
-                                 + ' <' + Self.Request.ToHeader.Address.URI + '>';
-    Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-    Self.Request.ContentLength := 0;
-  finally
-    P.Free;
-  end;
+  Self.Request := TIdSipTestResources.CreateBasicRequest;
+  Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+  Self.Request.Body := '';
+  Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
+                               + ' <' + Self.Request.ToHeader.Address.URI + '>';
+  Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
+  Self.Request.ContentLength := 0;
 end;
 
 procedure TestTIdSipAbstractUserAgent.TearDown;

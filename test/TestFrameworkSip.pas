@@ -8,6 +8,16 @@ uses
   IdSocketHandle, SysUtils, TestFrameworkEx;
 
 type
+  TIdSipTestResources = class(TObject)
+  private
+    class function CreateCommonRequest: TIdSipRequest;
+  public
+    class function CreateBasicRequest: TIdSipRequest;
+    class function CreateBasicResponse: TIdSipResponse;
+    class function CreateLocalLoopRequest: TIdSipRequest;
+    class function CreateLocalLoopResponse: TIdSipResponse;
+  end;
+
   TTestCaseSip = class(TThreadingTestCase)
     procedure CheckEquals(Expected, Received: TIdSipURI; Message: String); overload;
   end;
@@ -217,6 +227,74 @@ const
   ServerKey      = '..\etc\newkey.pem';
 
 implementation
+
+uses
+  IdSipConsts;
+
+//******************************************************************************
+//* TIdSipTestResources                                                        *
+//******************************************************************************
+//* TIdSipTestResources Public methods *****************************************
+
+class function TIdSipTestResources.CreateBasicRequest: TIdSipRequest;
+begin
+  Result := Self.CreateCommonRequest;
+  Result.RequestUri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Result.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Result.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>;tag=1928301775';
+  Result.From.Value := 'Case <sip:case@fried.neurons.org>;tag=1928301774';
+  Result.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
+end;
+
+class function TIdSipTestResources.CreateBasicResponse: TIdSipResponse;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.CreateBasicRequest;
+  try
+    Result := TIdSipResponse.InResponseTo(Request, SIPBusyHere);
+  finally
+    Request.Free;
+  end;
+end;
+
+class function TIdSipTestResources.CreateLocalLoopRequest: TIdSipRequest;
+begin
+  Result := Self.CreateCommonRequest;
+  Result.RequestUri.Uri := 'sip:franks@127.0.0.1';
+  Result.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP 127.0.0.1;branch=z9hG4bK776asdhds';
+  Result.ToHeader.Value := 'Wintermute <sip:franks@127.0.0.1>';
+  Result.From.Value := 'Case <sip:franks@127.0.0.1>;tag=1928301774';
+  Result.AddHeader(ContactHeaderFull).Value := 'sip:franks@127.0.0.1';
+end;
+
+class function TIdSipTestResources.CreateLocalLoopResponse: TIdSipResponse;
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.CreateLocalLoopRequest;
+  try
+    Result := TIdSipResponse.InResponseTo(Request, SIPBusyHere);
+  finally
+    Request.Free;
+  end;
+end;
+
+//* TIdSipTestResources Private methods ****************************************
+
+class function TIdSipTestResources.CreateCommonRequest: TIdSipRequest;
+begin
+  Result := TIdSipRequest.Create;
+  Result.Method := MethodInvite;
+  Result.ContentType := 'text/plain';
+  Result.Body := 'I am a message. Hear me roar!';
+  Result.ContentLength := Length(Result.Body);
+  Result.MaxForwards := 70;
+  Result.SIPVersion := SipVersion;
+  Result.CallID := 'a84b4c76e66710@gw1.leo-ix.org';
+  Result.CSeq.Method := Result.Method;
+  Result.CSeq.SequenceNo := 314159;
+end;
 
 //******************************************************************************
 //* TTestCaseSip                                                               *

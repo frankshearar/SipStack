@@ -424,7 +424,6 @@ end;
 procedure TestTIdSipTransport.SetUp;
 var
   Binding: TIdSocketHandle;
-  P:       TIdSipParser;
 begin
   inherited SetUp;
 
@@ -450,18 +449,13 @@ begin
   Binding.Port := Self.DefaultPort;
   Self.LowPortTransport.Start;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Request  := P.ParseAndMakeRequest(LocalLoopRequest);
-    Self.Response := P.ParseAndMakeResponse(LocalLoopResponse);
-  finally
-    P.Free;
-  end;
+  Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy     := Self.LowPortTransport.Bindings[0].IP;
-  Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
-
   Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
   Self.Request.RequestUri.Port := Self.HighPortTransport.Bindings[0].Port;
+
+  Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
+  Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
@@ -612,6 +606,7 @@ procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
                                                 const Reason: String);
 begin
   Self.RejectedMessage := true;
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
@@ -702,7 +697,8 @@ begin
   Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
   Self.LowPortTransport.Send(Self.Response);
 
-  Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
+  Self.WaitForSignaled;
+  Check(not Self.ReceivedResponse,
         Self.HighPortTransport.ClassName
       + ': Response not silently discarded');
   Check(Self.RejectedMessage,
@@ -855,9 +851,13 @@ begin
       Client.DisconnectSocket;
     end;
 
-    Self.WaitForTimeout('Somehow we received a mangled message');
+    Self.WaitForSignaled;
+    Check(not Self.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Somehow we received a mangled message');
     Check(Self.RejectedMessage,
-          'Notification of message rejection not received');
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
   finally
     Client.Free;
   end;
@@ -1096,9 +1096,13 @@ begin
               + #13#10
               + 'I am a message. Hear me roar!');
 
-    Self.WaitForTimeout('Somehow we received a mangled message');
+    Self.WaitForSignaled;
+    Check(not Self.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Somehow we received a mangled message');
     Check(Self.RejectedMessage,
-          'Notification of message rejection not received');
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
   finally
     Client.Free;
   end;

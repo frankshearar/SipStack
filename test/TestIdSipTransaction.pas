@@ -272,8 +272,8 @@ type
 
   TTestTimer = class(TTestCase)
   protected
-    Dispatch: TIdSipMockTransactionDispatcher;
-    Request:  TIdSipRequest;
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Request:    TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -344,8 +344,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdSdp, IdSipConsts, Math, SyncObjs, SysUtils,
-  TestMessages, TypInfo;
+  IdException, IdSdp, IdSipConsts, Math, SysUtils, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -372,8 +371,6 @@ end;
 //* TestTIdSipTransactionDispatcher Public methods *****************************
 
 procedure TestTIdSipTransactionDispatcher.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
@@ -388,15 +385,9 @@ begin
   Self.MockTransport.TransportType := sttTCP;
   Self.D.AddTransport(Self.MockTransport);
 
-  P := TIdSipParser.Create;
-  try
-    Self.ReceivedRequest := P.ParseAndMakeRequest(LocalLoopRequest);
-    Self.TranRequest     := P.ParseAndMakeRequest(LocalLoopRequest);
-
-    Self.ReceivedResponse := P.ParseAndMakeResponse(LocalLoopResponse);
-  finally
-    P.Free;
-  end;
+  Self.ReceivedRequest  := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.TranRequest      := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.ReceivedResponse := TIdSipTestResources.CreateLocalLoopResponse;
 
   Self.ReceivedResponse.StatusCode := SIPTrying;
   Self.ReceivedResponse.AddHeaders(Self.ReceivedRequest.Headers);
@@ -1199,41 +1190,17 @@ begin
 
   Self.Core := TIdSipMockCore.Create;
 
-  // this is just BasicRequest from TestIdSipParser
-  Self.Request := TIdSipRequest.Create;
-  Self.Request.Method                             := MethodInvite;
-  Self.Request.MaxForwards                        := 70;
-  Self.Request.ToHeader.DisplayName               := 'Wintermute';
-  Self.Request.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Request := TIdSipTestResources.CreateBasicRequest;
+  Self.Request.Path.Clear;
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
   Self.Request.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.Request.From.DisplayName                   := 'Case';
-  Self.Request.From.Address.URI                   := 'sip:case@fried.neurons.org';
-  Self.Request.From.Tag                           := '1928301774';
-  Self.Request.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
-  Self.Request.CSeq.Method                        := 'INVITE';
-  Self.Request.CSeq.SequenceNo                    := 314159;
-  Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Request.ContentType                        := 'text/plain';
-  Self.Request.ContentLength                      := 29;
-  Self.Request.Body                               := 'I am a message. Hear me roar!';
+  Self.Request.ToHeader.Tag := '';
 
-  Self.FailMsg        := '';
+  Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Response                                    := TIdSipResponse.Create;
-  Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
-  Self.Response.ToHeader.DisplayName               := 'Wintermute';
-  Self.Response.ToHeader.Address.URI               := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Response.From.DisplayName                   := 'Case';
-  Self.Response.From.Address.URI                   := 'sip:case@fried.neurons.org';
-  Self.Response.From.Tag                           := '1928301774';
-  Self.Response.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
-  Self.Response.CSeq.Method                        := 'INVITE';
-  Self.Response.CSeq.SequenceNo                    := 314159;
-  Self.Response.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.Request.ContentLength                       := 0;
+  Self.MockDispatcher.Transport.TransportType := sttUDP;
+  Self.MockDispatcher.Transport.HostName      := 'gw1.leo-ix.org';
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);
@@ -1242,15 +1209,14 @@ begin
   Self.TransactionProceeding := false;
   Self.TransactionTerminated := false;
 
-  Self.MockDispatcher.Transport.TransportType := sttUDP;
-  Self.MockDispatcher.Transport.HostName      := 'gw1.leo-ix.org';
+  Self.FailMsg := '';
 end;
 
 procedure TTestTransaction.TearDown;
 begin
   Self.Tran.Free;
-  Self.Response.Free;
   Self.MockDispatcher.Free;
+  Self.Response.Free;
   Self.Request.Free;
   Self.Core.Free;
 
@@ -3053,23 +3019,19 @@ end;
 //* TTestTimer Public methods **************************************************
 
 procedure TTestTimer.SetUp;
-var
-  P: TIdSipParser;
 begin
   inherited SetUp;
 
-  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
 
-  P := TIdSipParser.Create;
-  try
-    Self.Request := P.ParseAndMakeRequest(LocalLoopRequest);
-  finally
-    P.Free;
-  end;
+  Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
 end;
 
 procedure TTestTimer.TearDown;
 begin
+  Self.Request.Free;
+  Self.Dispatcher.Free;
+
   inherited TearDown;
 end;
 
@@ -3083,7 +3045,7 @@ begin
   inherited SetUp;
 
   Self.Request.Method := MethodInvite;
-  Self.Transaction := TIdSipServerInviteTransaction.Create(Self.Dispatch,
+  Self.Transaction := TIdSipServerInviteTransaction.Create(Self.Dispatcher,
                                                            Self.Request);
 
   Self.Timer := TIdSipServerInviteTransactionTimer.Create(Self.Transaction);
@@ -3093,8 +3055,6 @@ procedure TestTIdSipServerInviteTransactionTimer.TearDown;
 begin
   Self.Timer.Free;
   Self.Transaction.Free;
-  Self.Request.Free;
-  Self.Dispatch.Free;
 
   inherited TearDown;
 end;
@@ -3161,7 +3121,7 @@ begin
   inherited SetUp;
 
   Self.Request.Method := MethodInvite;
-  Self.Transaction := TIdSipClientInviteTransaction.Create(Self.Dispatch,
+  Self.Transaction := TIdSipClientInviteTransaction.Create(Self.Dispatcher,
                                                            Self.Request);
 
   Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self.Transaction);
@@ -3171,8 +3131,6 @@ procedure TestTIdSipClientInviteTransactionTimer.TearDown;
 begin
   Self.Timer.Free;
   Self.Transaction.Free;
-  Self.Request.Free;
-  Self.Dispatch.Free;
 
   inherited TearDown;
 end;
@@ -3281,7 +3239,7 @@ begin
 
   Self.Request.Method := MethodOptions;
 
-  Self.Transaction := TIdSipClientNonInviteTransaction.Create(Self.Dispatch,
+  Self.Transaction := TIdSipClientNonInviteTransaction.Create(Self.Dispatcher,
                                                               Self.Request);
 
   Self.Timer := TIdSipClientNonInviteTransactionTimer.Create(Self.Transaction);
