@@ -493,6 +493,7 @@ begin
   Self.Options := TIdSipRequest.Create;
   Self.Options.Assign(Self.ReceivedRequest);
   Self.Options.Method := MethodOptions;
+  Self.Options.CSeq.Method := Self.Options.Method;
 
   Self.Response200 := TIdSipResponse.Create;
   Self.Response200.Assign(Self.ReceivedResponse);
@@ -1043,15 +1044,15 @@ begin
   Wait := TIdNotifyEventWait.Create;
   try
     Wait.Data  := Tran.InitialRequest.Copy;
-    Wait.Event := Self.D.OnClientNonInviteTransactionTimerF;
+    Wait.Event := Self.D.OnClientNonInviteTransactionTimerK;
 
-    Self.D.OnClientNonInviteTransactionTimerF(Wait);
+    Self.D.OnClientNonInviteTransactionTimerK(Wait);
   finally
     Wait.Free;
   end;
 
   Check(Self.D.TransactionCount < TranCount,
-        'Timer E didn''t fire');
+        'Timer K didn''t fire');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestOnServerInviteTransactionTimerG;
@@ -3718,8 +3719,9 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCallingState;
 var
-  ACKCount: Cardinal;
-  Listener: TIdSipTestTransactionListener;
+  ACKCount:     Cardinal;
+  Listener:     TIdSipTestTransactionListener;
+  RequestCount: Cardinal;
 begin
   Listener := TIdSipTestTransactionListener.Create;
   try
@@ -3727,7 +3729,12 @@ begin
     ACKCount := Self.MockDispatcher.Transport.ACKCount;
 
     Self.Response.StatusCode := SIPOK;
+
+    RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
     Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+    CheckEquals(RequestCount,
+                Self.MockDispatcher.Transport.SentRequestCount,
+                'Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
     CheckEquals(ACKCount, Self.MockDispatcher.Transport.ACKCount,
           'ACK sending arrogated by transaction');
@@ -3741,12 +3748,19 @@ begin
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCompletedState;
+var
+  RequestCount: Cardinal;
 begin
   Self.MoveToProceedingState(Self.Tran);
   Self.MoveToCompletedState(Self.Tran);
 
   Self.Response.StatusCode := SIPOK;
+
+  RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+  CheckEquals(RequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
@@ -3755,8 +3769,9 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInProceedingState;
 var
-  ACKCount: Cardinal;
-  Listener: TIdSipTestTransactionListener;
+  ACKCount:     Cardinal;
+  Listener:     TIdSipTestTransactionListener;
+  RequestCount: Cardinal;
 begin
   Listener := TIdSipTestTransactionListener.Create;
   try
@@ -3765,7 +3780,12 @@ begin
     ACKCount := Self.MockDispatcher.Transport.ACKCount;
 
     Self.Response.StatusCode := SIPOK;
+
+    RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
     Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+    CheckEquals(RequestCount,
+                Self.MockDispatcher.Transport.SentRequestCount,
+                'Transactions MUST NOT send an ACK to a 2xx - the TU does that');
 
     CheckEquals(ACKCount, Self.MockDispatcher.Transport.ACKCount,
           'ACK sending arrogated by transaction');
@@ -4097,6 +4117,7 @@ begin
   Self.ClientTran := Self.Tran as TIdSipClientNonInviteTransaction;
 
   Self.Request.Method := MethodOptions;
+  Self.Request.CSeq.Method := Self.Request.Method;
   Self.ClientTran.SendRequest;
 end;
 
