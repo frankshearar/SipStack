@@ -3743,7 +3743,6 @@ begin
     Self.Bindings.Add(ContactHeaderFull);
     Self.Bindings.First;
     Self.Bindings.CurrentContact.IsWildCard := true;
-//    Self.Bindings.CurrentContact.Expires := 0;
 
     Request := Self.CreateRegister(Registrar, Bindings);
     try
