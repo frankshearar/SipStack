@@ -54,6 +54,7 @@ var
   Scheme: String;
 begin
   Scheme := Target.Protocol;
+  Result := sttSCTP;
 end;
 
 procedure TIdSipClient.Invite(const Target: TIdURI);

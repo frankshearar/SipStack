@@ -13,7 +13,6 @@ type
     property Source: TStream read fSource write fSource;
   end;
 
-
 implementation
 
 end.

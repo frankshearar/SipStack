@@ -220,13 +220,6 @@ type
     procedure TestParseResponseInvalidStatusCode;
     procedure TestParseResponseWithLeadingCrLfs;
     procedure TestParseShortFormContentLength;
-    procedure TestPeek;
-    procedure TestPeekLine;
-    procedure TestReadOctet;
-    procedure TestReadOctets;
-    procedure TestReadln;
-    procedure TestReadlnDoubleCrLf;
-    procedure TestReadlnWithNoCrLf;
     procedure TestTortureTest1;
     procedure TestTortureTest13;
     procedure TestTortureTest19;
@@ -264,7 +257,7 @@ const
 implementation
 
 uses
-  DateUtils, SysUtils, TortureTests;
+  DateUtils, IdSimpleParser, SysUtils, TortureTests;
 
 function Suite: ITestSuite;
 begin
@@ -2312,128 +2305,6 @@ begin
     P.Source := Str;
     P.ParseRequest(Request);
     CheckEquals(29, Request.ContentLength, 'ContentLength');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestPeek;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
-  try
-    P.Source := Str;
-
-    CheckEquals('I', P.Peek, 'Peek 1st line');
-    P.ReadLn;
-    CheckEquals('V', P.Peek, 'Peek 2nd line');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestPeekLine;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
-  try
-    P.Source := Str;
-
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', P.PeekLine, 'PeekLine 1st line');
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0', P.PeekLine, 'PeekLine 1st line, 2nd time');
-    P.ReadLn;
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', P.PeekLine, 'PeekLine 2nd line');
-    P.ReadLn;
-    CheckEquals('', P.PeekLine, 'PeekLine past the EOF');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestReadOctet;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
-  try
-    P.Source := Str;
-
-    CheckEquals('I', P.ReadOctet, '1st ReadOctet');
-    CheckEquals('N', P.ReadOctet, '2nd ReadOctet');
-    CheckEquals('V', P.ReadOctet, '3rd ReadOctet');
-    CheckEquals('I', P.ReadOctet, '4th ReadOctet');
-    CheckEquals('T', P.ReadOctet, '5th ReadOctet');
-    CheckEquals('E', P.ReadOctet, '6th ReadOctet');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestReadOctets;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
-  try
-    P.Source := Str;
-
-    CheckEquals('',       P.ReadOctets(0), '0th ReadOctets(0)');
-    CheckEquals('I',      P.ReadOctets(1), '1st ReadOctets(1)');
-    CheckEquals('NVIT',   P.ReadOctets(4), '2nd ReadOctets(4)');
-    CheckEquals('E sip:', P.ReadOctets(6), '3rd ReadOctets(6)');
-    CheckEquals('wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-              + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10,
-                P.ReadOctets(1000), 'ReadOctets(1000)');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestReadln;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10);
-  try
-    P.Source := Str;
-
-    CheckEquals('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0',     P.ReadLn, '1st ReadLn');
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', P.ReadLn, '2nd ReadLn');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestReadlnDoubleCrLf;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('one'#13#10#13#10'three');
-  try
-    P.Source := Str;
-    CheckEquals('one',   P.ReadLn, '1st line');
-    CheckEquals('',      P.ReadLn, '2nd line');
-    CheckEquals('three', P.ReadLn, '3rd line');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestReadlnWithNoCrLf;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('new');
-  try
-    P.Source := Str;
-    CheckEquals('new', P.ReadLn, 'ReadLn');
   finally
     Str.Free;
   end;
