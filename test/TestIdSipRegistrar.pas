@@ -94,7 +94,6 @@ begin
   Self.Registrar.MinimumExpiryTime := 3600;
   Self.Registrar.AddModule(TIdSipRegisterModule);
   Self.Registrar.RemoveModule(TIdSipInviteModule);
-  Self.Registrar.RemoveModule(TIdSipByeModule);
 
   Self.Request := TIdSipRequest.Create;
   Self.Request.Method := MethodRegister;

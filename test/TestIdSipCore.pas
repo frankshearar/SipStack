@@ -3028,7 +3028,6 @@ begin
   Self.Registrar := TIdSipUserAgentCore.Create;
   Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
   Self.Registrar.RemoveModule(TIdSipInviteModule);
-  Self.Registrar.RemoveModule(TIdSipByeModule);
   Self.Registrar.AddModule(TIdSipRegisterModule);
 
   Self.Request := TIdSipRequest.Create;

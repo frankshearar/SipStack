@@ -126,6 +126,7 @@ type
     (uarAccept,
      uarBadAuthorization,
      uarBadRequest,
+     uarDoNotDisturb,
      uarExpireTooBrief,
      uarForbidden,
      uarLoopDetected,
@@ -354,8 +355,6 @@ type
     procedure ActOnResponse(Response: TIdSipResponse;
                            Receiver: TIdSipTransport); override;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport); override;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -414,14 +413,6 @@ type
     function AcceptsMethods: String; virtual;
     function WillAccept(Request: TIdSipRequest): Boolean; virtual;
 
-  end;
-
-  TIdSipByeModule = class(TIdSipMessageModule)
-  public
-    function Accept(Request: TIdSipRequest;
-                    UsingSecureTransport: Boolean): TIdSipAction; override;
-    function AcceptsMethods: String; override;
-    function WillAccept(Request: TIdSipRequest): Boolean; override;
   end;
 
   TIdSipInviteModule = class(TIdSipMessageModule)
@@ -1276,7 +1267,8 @@ begin
     for I := 0 to Self.Modules.Count - 1 do
       Result := Result + (Self.Modules[I] as TIdSipMessageModule).AcceptsMethods + ', ';
 
-    Result := Result + MethodCancel;
+    if (Result <> '') then
+      Delete(Result, Length(Result) - 1, 2);
   finally
     Self.ModuleLock.Release;
   end;
@@ -1330,29 +1322,9 @@ begin
 end;
 
 function TIdSipAbstractUserAgent.IsMethodAllowed(const Method: String): Boolean;
-var
-  I:   Integer;
-  Req: TIdSipRequest;
 begin
-  Result := false;
-
-  Req := TIdSipRequest.Create;
-  try
-    Req.Method := Method;
-
-    I := 0;
-    Self.ModuleLock.Acquire;
-    try
-      while (I < Self.Modules.Count) and not Result do begin
-        Result := (Self.Modules[I] as TIdSipMessageModule).WillAccept(Req);
-        Inc(I);
-      end;
-    finally
-      Self.ModuleLock.Release;
-    end;
-  finally
-    Req.Free;
-  end;
+  Result := TIdSipParser.IsToken(Method)
+        and (Pos(Lowercase(Method), Lowercase(Self.AllowedMethods)) > 0);
 end;
 
 function TIdSipAbstractUserAgent.IsSchemeAllowed(const Scheme: String): Boolean;
@@ -1667,7 +1639,6 @@ begin
 
   Self.AddAllowedContentType(SdpMimeType);
 
-  Self.AddModule(TIdSipByeModule);
   Self.AddModule(TIdSipInviteModule);
   Self.AddModule(TIdSipOptionsModule);
 
@@ -1966,7 +1937,10 @@ begin
     Action := Self.AddInboundRequest(Request, Receiver);
 
   if Assigned(Action) then
-    Action.ReceiveRequest(Request);
+    Action.ReceiveRequest(Request)
+  else
+    Self.ReturnResponse(Request,
+                        SIPCallLegOrTransactionDoesNotExist);    
 
   // TIdSipSession generates the response - 8.2.6
 end;
@@ -2008,18 +1982,6 @@ begin
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 end;
 
-procedure TIdSipUserAgentCore.OnReceiveRequest(Request: TIdSipRequest;
-                                               Receiver: TIdSipTransport);
-var
-  Action: TIdSipAction;
-begin
-  Action := Self.FindAction(Request);
-
-  if Assigned(Action) then
-    Action.ReceiveRequest(Request)
-  else inherited OnReceiveRequest(Request, Receiver);
-end;
-
 procedure TIdSipUserAgentCore.OnReceiveResponse(Response: TIdSipResponse;
                                                 Receiver: TIdSipTransport);
 var
@@ -2044,6 +2006,9 @@ begin
   case Reaction of
     uarMissingContact:
       Self.RejectBadRequest(Request, MissingContactHeader);
+    uarDoNotDisturb:
+          Self.ReturnResponse(Request,
+                              SIPTemporarilyUnavailable);
   end;
 end;
 
@@ -2055,7 +2020,9 @@ begin
     // Section 8.1.1.8 says that a request that can start a dialog (like an
     // INVITE), MUST contain a Contact.
     if Request.IsInvite and not Request.HasHeader(ContactHeaderFull) then
-      Result := uarMissingContact;
+      Result := uarMissingContact
+    else if (Request.IsInvite or Request.IsOptions) and Self.DoNotDisturb then
+      Result := uarDoNotDisturb;
   end;
 end;
 
@@ -2421,30 +2388,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipByeModule                                                            *
-//******************************************************************************
-//* TIdSipByeModule Public methods *********************************************
-
-function TIdSipByeModule.Accept(Request: TIdSipRequest;
-                                UsingSecureTransport: Boolean): TIdSipAction;
-begin
-  Result := nil;
-
-  Self.UserAgent.ReturnResponse(Request,
-                                SIPCallLegOrTransactionDoesNotExist)
-end;
-
-function TIdSipByeModule.AcceptsMethods: String;
-begin
-  Result := MethodBye;
-end;
-
-function TIdSipByeModule.WillAccept(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.IsBye;
-end;
-
-//******************************************************************************
 //* TIdSipInviteModule                                                         *
 //******************************************************************************
 //* TIdSipInviteModule Public methods ******************************************
@@ -2479,7 +2422,10 @@ end;
 
 function TIdSipInviteModule.AcceptsMethods: String;
 begin
-  Result := MethodInvite + ', ' + MethodAck;
+  Result := MethodAck + ', '
+          + MethodBye + ', '
+          + MethodCancel + ', '
+          + MethodInvite;
 end;
 
 function TIdSipInviteModule.WillAccept(Request: TIdSipRequest): Boolean;
