@@ -145,10 +145,10 @@ begin
 
   Self.Timer := TIdTimerQueue.Create(false);
 
-  Self.ButtonHeight     := 25;
-  Self.Height           := 120;
-  Self.OnResize         := Self.DoOnResize;
-  Self.Width            := 96;
+  Self.ButtonHeight := 25;
+  Self.Height       := 120;
+  Self.OnResize     := Self.DoOnResize;
+  Self.Width        := 96;
 
   Self.Buttons[DTMF0]     := Self.CreateButton('0',     Self.SendDTMF0);
   Self.Buttons[DTMF1]     := Self.CreateButton('1',     Self.SendDTMF1);
