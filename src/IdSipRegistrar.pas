@@ -24,11 +24,11 @@ type
                        SequenceNo: Cardinal;
                        AbsoluteTimeout: TDateTime);
 
-    property AddressOfRecord: String read fAddressOfRecord write fAddressOfRecord;
-    property CallID:     String    read fCallID write fCallID;
-    property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
-    property Uri:        String    read fUri write fUri;
-    property ValidUntil: TDateTime read fValidUntil write fValidUntil;
+    property AddressOfRecord: String    read fAddressOfRecord write fAddressOfRecord;
+    property CallID:          String    read fCallID write fCallID;
+    property SequenceNo:      Cardinal  read fSequenceNo write fSequenceNo;
+    property Uri:             String    read fUri write fUri;
+    property ValidUntil:      TDateTime read fValidUntil write fValidUntil;
   end;
 
   // I provide a database that matches a SIP Address-of-record (a SIP or SIPS
