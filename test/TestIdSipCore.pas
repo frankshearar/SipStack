@@ -196,7 +196,7 @@ type
   TestTIdSipSession = class(TestTIdSipAction)
   private
      procedure SimulateRemoteReInvite(Session: TIdSipSession);
-  published
+  published         
     procedure TestIsSession; override;
   end;
 
@@ -343,18 +343,6 @@ type
     procedure TestSuccessfulAuthentication;
   end;
 
-  TestTIdSipActionListenerAuthenticationChallengeMethod = class(TTestCase)
-  private
-    Method:   TIdSipActionListenerAuthenticationChallengeMethod;
-    Response: TIdSipResponse;
-    UA:       TIdSipUserAgentCore;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure Run;
-  end;
-
   TestTIdSipSessionTimer = class(TTestCase)
   private
     Dispatcher: TIdSipMockTransactionDispatcher;
@@ -472,6 +460,18 @@ type
     procedure TestXlitesAckNonBug;
   end;
 
+  TestTIdSipActionListenerAuthenticationChallengeMethod = class(TTestCase)
+  private
+    Method:   TIdSipActionListenerAuthenticationChallengeMethod;
+    Response: TIdSipResponse;
+    UA:       TIdSipUserAgentCore;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure Run;
+  end;
+
   TOptionsMethodTestCase = class(TTestCase)
   private
     UA: TIdSipUserAgentCore;
@@ -581,13 +581,13 @@ begin
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestProxyAuthentication.Suite);
-  Result.AddTest(TestTIdSipActionListenerAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
   Result.AddTest(TestTIdSipOutboundRegistration.Suite);
   Result.AddTest(TestBugHunt.Suite);
+  Result.AddTest(TestTIdSipActionListenerAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipOptionsFailureMethod.Suite);
   Result.AddTest(TestTIdSipOptionsSuccessMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
@@ -4006,79 +4006,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipActionListenerAuthenticationChallengeMethod                              *
-//******************************************************************************
-//* TestTIdSipActionListenerAuthenticationChallengeMethod Public methods ***************
-
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
-begin
-  inherited SetUp;
-
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-
-  Self.Response := TIdSipResponse.Create;
-
-  Self.Method := TIdSipActionListenerAuthenticationChallengeMethod.Create;
-
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Action := Self.UA.Call(Nowhere, '', '');
-  finally
-    Nowhere.Free;
-  end;
-
-  Self.Method.Response := Self.Response;
-end;
-
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.TearDown;
-begin
-  Self.Method.Free;
-  Self.Response.Free;
-  Self.UA.Dispatcher.Free;
-  Self.UA.Free;
-  inherited TearDown;
-end;
-
-//* TestTIdSipActionListenerAuthenticationChallengeMethod Published methods ************
-
-procedure TestTIdSipActionListenerAuthenticationChallengeMethod.Run;
-var
-  L1, L2: TIdSipTestRegistrationListener;
-begin
-  L1 := TIdSipTestRegistrationListener.Create;
-  try
-    L1.Password := 'foo';
-
-    L2 := TIdSipTestRegistrationListener.Create;
-    try
-      L2.Password := 'bar';
-      Self.Method.Run(L1);
-
-      Check(L1.AuthenticationChallenge,
-            'L1 not notified');
-      CheckEquals(L1.Password,
-                  Self.Method.FirstPassword,
-                  'L1 gives us the first password');
-
-      Self.Method.Run(L2);
-      Check(L2.AuthenticationChallenge,
-            'L2 not notified');
-
-      CheckEquals(L1.Password,
-                  Self.Method.FirstPassword,
-                  'We ignore L2''s password');
-    finally
-      L2.Free;
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
-//******************************************************************************
 //* TestTIdSipSessionTimer                                                     *
 //******************************************************************************
 //* TestTIdSipSessionTimer Public methods **************************************
@@ -5060,6 +4987,79 @@ begin
     end;
   finally
     RemoteDlg.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipActionListenerAuthenticationChallengeMethod                      *
+//******************************************************************************
+//* TestTIdSipActionListenerAuthenticationChallengeMethod Public methods *******
+
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.SetUp;
+var
+  Nowhere: TIdSipAddressHeader;
+begin
+  inherited SetUp;
+
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipActionListenerAuthenticationChallengeMethod.Create;
+
+  Nowhere := TIdSipAddressHeader.Create;
+  try
+    Self.Method.Action := Self.UA.Call(Nowhere, '', '');
+  finally
+    Nowhere.Free;
+  end;
+
+  Self.Method.Response := Self.Response;
+end;
+
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+  Self.UA.Dispatcher.Free;
+  Self.UA.Free;
+  inherited TearDown;
+end;
+
+//* TestTIdSipActionListenerAuthenticationChallengeMethod Published methods ****
+
+procedure TestTIdSipActionListenerAuthenticationChallengeMethod.Run;
+var
+  L1, L2: TIdSipTestRegistrationListener;
+begin
+  L1 := TIdSipTestRegistrationListener.Create;
+  try
+    L1.Password := 'foo';
+
+    L2 := TIdSipTestRegistrationListener.Create;
+    try
+      L2.Password := 'bar';
+      Self.Method.Run(L1);
+
+      Check(L1.AuthenticationChallenge,
+            'L1 not notified');
+      CheckEquals(L1.Password,
+                  Self.Method.FirstPassword,
+                  'L1 gives us the first password');
+
+      Self.Method.Run(L2);
+      Check(L2.AuthenticationChallenge,
+            'L2 not notified');
+
+      CheckEquals(L1.Password,
+                  Self.Method.FirstPassword,
+                  'We ignore L2''s password');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
   end;
 end;
 

@@ -456,19 +456,6 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
-  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdMethod)
-  private
-    fAction:        TIdSipAction;
-    fFirstPassword: String;
-    fResponse:      TIdSipResponse;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Action:        TIdSipAction   read fAction write fAction;
-    property FirstPassword: String         read fFirstPassword write fFirstPassword;
-    property Response:      TIdSipResponse read fResponse write fResponse;
-  end;
-
   TIdSipActionClass = class of TIdSipAction;
 
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
@@ -739,13 +726,17 @@ type
     procedure Unregister(Registrar: TIdSipUri);
   end;
 
-  TIdSipRegistrationMethod = class(TIdMethod)
+  TIdSipActionListenerAuthenticationChallengeMethod = class(TIdMethod)
   private
-    fCurrentBindings: TIdSipContacts;
-    fRegistration:    TIdSipOutboundRegistration;
+    fAction:        TIdSipAction;
+    fFirstPassword: String;
+    fResponse:      TIdSipResponse;
   public
-    property CurrentBindings: TIdSipContacts             read fCurrentBindings write fCurrentBindings;
-    property Registration:    TIdSipOutboundRegistration read fRegistration write fRegistration;
+    procedure Run(const Subject: IInterface); override;
+
+    property Action:        TIdSipAction   read fAction write fAction;
+    property FirstPassword: String         read fFirstPassword write fFirstPassword;
+    property Response:      TIdSipResponse read fResponse write fResponse;
   end;
 
   TIdSipOptionsMethod = class(TIdMethod)
@@ -770,6 +761,15 @@ type
   TIdSipOptionsSuccessMethod = class(TIdSipOptionsMethod)
   public
     procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipRegistrationMethod = class(TIdMethod)
+  private
+    fCurrentBindings: TIdSipContacts;
+    fRegistration:    TIdSipOutboundRegistration;
+  public
+    property CurrentBindings: TIdSipContacts             read fCurrentBindings write fCurrentBindings;
+    property Registration:    TIdSipOutboundRegistration read fRegistration write fRegistration;
   end;
 
   TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
@@ -2591,28 +2591,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionListenerAuthenticationChallengeMethod                          *
-//******************************************************************************
-//* TIdSipActionListenerAuthenticationChallengeMethod Public methods ***********
-
-procedure TIdSipActionListenerAuthenticationChallengeMethod.Run(const Subject: IInterface);
-var
-  DiscardedPassword: String;
-  Listener:          IIdSipActionListener;
-begin
-  Listener := Subject as IIdSipActionListener;
-  
-  if (Self.FirstPassword = '') then
-    Listener.OnAuthenticationChallenge(Self.Action,
-                                       Self.Response,
-                                       Self.fFirstPassword)
-  else
-    Listener.OnAuthenticationChallenge(Self.Action,
-                                       Self.Response,
-                                       DiscardedPassword)
-end;
-
-//******************************************************************************
 //* TIdSipSessionTimer                                                         *
 //******************************************************************************
 //* TIdSipSessionTimer Public methods ******************************************
@@ -4023,6 +4001,28 @@ begin
   finally
     Bindings.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipActionListenerAuthenticationChallengeMethod                          *
+//******************************************************************************
+//* TIdSipActionListenerAuthenticationChallengeMethod Public methods ***********
+
+procedure TIdSipActionListenerAuthenticationChallengeMethod.Run(const Subject: IInterface);
+var
+  DiscardedPassword: String;
+  Listener:          IIdSipActionListener;
+begin
+  Listener := Subject as IIdSipActionListener;
+
+  if (Self.FirstPassword = '') then
+    Listener.OnAuthenticationChallenge(Self.Action,
+                                       Self.Response,
+                                       Self.fFirstPassword)
+  else
+    Listener.OnAuthenticationChallenge(Self.Action,
+                                       Self.Response,
+                                       DiscardedPassword)
 end;
 
 //******************************************************************************
