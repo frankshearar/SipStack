@@ -1281,7 +1281,6 @@ function ShortMonthToInt(const Month: String): Integer;
 function StreamToStr(Data: TStream): String;
 function StrToQValue(const S: String): TIdSipQValue;
 function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
-function WithoutFirstAndLastChars(const S: String): String;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
 // Widely known constants. Don't localise them.
@@ -1930,11 +1929,6 @@ begin
     on EConvertError do
       Result := DefaultValue;
   end;
-end;
-
-function WithoutFirstAndLastChars(const S: String): String;
-begin
-  Result := Copy(S, 2, Length(S) - 2);
 end;
 
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;

@@ -25,7 +25,6 @@ type
     procedure TestReadDigit;
     procedure TestStrToQValue;
     procedure TestStrToQValueDef;
-    procedure TestWithoutFirstAndLastChars;
   end;
 
   THeaderTestCase = class(TThreadingTestCase)
@@ -901,14 +900,6 @@ end;
 procedure TestFunctions.TestStrToQValueDef;
 begin
   CheckEquals(666, StrToQValueDef('', 666), '''''');
-end;
-
-procedure TestFunctions.TestWithoutFirstAndLastChars;
-begin
-  CheckEquals('bc', WithoutFirstAndLastChars('abcd'), 'abcd');
-  CheckEquals('',   WithoutFirstAndLastChars('ab'), 'ab');
-  CheckEquals('',   WithoutFirstAndLastChars('a'), 'a');
-  CheckEquals('',   WithoutFirstAndLastChars(''), '''''');
 end;
 
 //******************************************************************************
