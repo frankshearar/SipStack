@@ -24,7 +24,8 @@ type
     destructor  Destroy; override;
 
     procedure AddObserver(const Listener: IIdSipObserver);
-    procedure NotifyListenersOfChange;
+    procedure NotifyListenersOfChange; overload;
+    procedure NotifyListenersOfChange(Data: TObject); overload;
     function  ObserverCount: Integer;
     procedure RemoveObserver(const Listener: IIdSipObserver);
   end;
@@ -63,6 +64,11 @@ begin
 end;
 
 procedure TIdObservable.NotifyListenersOfChange;
+begin
+  Self.NotifyListenersOfChange(Self);
+end;
+
+procedure TIdObservable.NotifyListenersOfChange(Data: TObject);
 var
   I:    Integer;
   Copy: TList;
@@ -78,7 +84,7 @@ begin
         Copy.Add(Self.Observers[I]);
 
       for I := 0 to Copy.Count - 1 do
-        IIdSipObserver(Copy[I]).OnChanged(Self);
+        IIdSipObserver(Copy[I]).OnChanged(Data);
     finally
       Copy.Free;
     end;

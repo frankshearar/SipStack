@@ -13,6 +13,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestNotifyWithData;
     procedure TestOnChanged;
   end;
 
@@ -20,12 +21,14 @@ type
                               IIdSipObserver)
   private
     fChanged: Boolean;
+    fData:    TObject;
   public
     constructor Create;
 
     procedure OnChanged(Observed: TObject);
 
     property Changed: Boolean read fChanged;
+    property Data:    TObject read fData;
   end;
 
 implementation
@@ -56,6 +59,23 @@ begin
 end;
 
 //* TestTIdObservable Published methods ****************************************
+
+procedure TestTIdObservable.TestNotifyWithData;
+var
+  L1: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    Self.Observable.AddObserver(L1);
+
+    Self.Observable.NotifyListenersOfChange(Self);
+
+    Check(L1.Changed,     'L1 not notified of change');
+    Check(Self = L1.Data, 'Data object');
+  finally
+    L1.Free;
+  end;
+end;
 
 procedure TestTIdObservable.TestOnChanged;
 var
@@ -90,11 +110,13 @@ begin
   inherited Create;
 
   Self.fChanged := false;
+  Self.fData    := nil;
 end;
 
 procedure TIdObserverListener.OnChanged(Observed: TObject);
 begin
   Self.fChanged := true;
+  Self.fData    := Observed;
 end;
 
 initialization
