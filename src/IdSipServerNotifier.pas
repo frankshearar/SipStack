@@ -30,9 +30,9 @@ type
     procedure NotifyListenersOfMalformedMessage(const Msg: String;
                                                 const Reason: String);
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
-                              ReceivedFrom: TIdSipConnectionBindings); overload;
+                                       ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings); overload;
+                                        ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
   end;
 
@@ -107,7 +107,7 @@ begin
 end;
 
 procedure TIdSipServerNotifier.NotifyListenersOfException(E: Exception;
-                                                       const Reason: String);
+                                                          const Reason: String);
 var
   Notification: TIdSipServerExceptionMethod;
 begin
@@ -123,7 +123,7 @@ begin
 end;
 
 procedure TIdSipServerNotifier.NotifyListenersOfMalformedMessage(const Msg: String;
-                                                              const Reason: String);
+                                                                 const Reason: String);
 var
   Notification: TIdSipServerMalformedMessageMethod;
 begin
@@ -139,7 +139,7 @@ begin
 end;
 
 procedure TIdSipServerNotifier.NotifyListenersOfRequest(Request: TIdSipRequest;
-                                                     ReceivedFrom: TIdSipConnectionBindings);
+                                                        ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipServerReceiveRequestMethod;
 begin
@@ -155,7 +155,7 @@ begin
 end;
 
 procedure TIdSipServerNotifier.NotifyListenersOfResponse(Response: TIdSipResponse;
-                                                      ReceivedFrom: TIdSipConnectionBindings);
+                                                         ReceivedFrom: TIdSipConnectionBindings);
 var
   Notification: TIdSipServerReceiveResponseMethod;
 begin
