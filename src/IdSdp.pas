@@ -2666,12 +2666,12 @@ destructor TIdSdpPayloadProcessor.Destroy;
 begin
   Self.Profile.Free;
 
-  Self.RTPServerLock.Free;
   Self.Filters.Free;
   Self.RTPServers.Free;
+  Self.RTPServerLock.Free;
 
-  Self.DataListenerLock.Free;
   Self.DataListeners.Free;
+  Self.DataListenerLock.Free;
 
   inherited Destroy;
 end;
