@@ -136,13 +136,16 @@ type
   TestTIdSipUDPTransport = class(TestTIdSipTransport,
                                  IIdSipMessageListener)
   private
-    RPort:      Cardinal;
-    RPortEvent: TEvent;
+    MaddrTransport: TIdSipTransport;
+    RPort:          Cardinal;
+    RPortEvent:     TEvent;
 
     procedure CheckRportParamFilledIn(Sender: TObject;
                                       const R: TIdSipRequest);
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
                                                   const R: TIdSipRequest);
+    procedure CheckMaddrUser(Sender: TObject;
+                             const R: TIdSipResponse);
     procedure NoteSourcePort(Sender: TObject;
                              const R: TIdSipRequest);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -159,6 +162,7 @@ type
     procedure TestIsReliable;
     procedure TestIsSecure;
     procedure TestLeaveNonRportRequestsUntouched;
+    procedure TestMaddrUsed;
     procedure TestRespectRport;
     procedure TestRportParamFilledIn;
     procedure TestRportListening;
@@ -661,7 +665,7 @@ begin
   // the message to the right SIP server. No, you'd never do this
   // in production, because it's wilfully wrong.
   Self.Response.LastHop.SentBy := 'unknown.host';
-  Self.Response.LastHop.Received := '127.0.0.1';
+  Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
   Self.LowPortTransport.Send(Self.Response);
 
   Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
@@ -672,7 +676,7 @@ procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
 begin
   Self.CheckingRequestEvent := Self.CheckReceivedParamDifferentIPv4SentBy;
 
-  Self.Request.LastHop.SentBy := '127.0.0.2';
+  Self.Request.LastHop.SentBy := '127.0.0.3';
   Self.LowPortTransport.Send(Self.Request);
 
   if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
@@ -887,17 +891,28 @@ end;
 //* TestTIdSipUDPTransport Public methods **************************************
 
 procedure TestTIdSipUDPTransport.SetUp;
+var
+  Binding: TIdSocketHandle;
 begin
   inherited SetUp;
 
   (Self.LowPortTransport  as TIdSipUDPTransport).CleanerThreadPollTime := 10;
   (Self.HighPortTransport as TIdSipUDPTransport).CleanerThreadPollTime := 10;
 
+  Self.MaddrTransport := Self.TransportType.Create(IdPORT_SIP);
+  (Self.MaddrTransport as TIdSipUDPTransport).CleanerThreadPollTime := 10;
+  Self.MaddrTransport.AddTransportListener(Self);
+  Self.MaddrTransport.HostName := 'localhost';
+  Binding := Self.MaddrTransport.Bindings.Add;
+  Binding.IP := '127.0.0.2';
+  Binding.Port := IdPORT_SIP;
+
   Self.RPortEvent := TSimpleEvent.Create;
 end;
 
 procedure TestTIdSipUDPTransport.TearDown;
 begin
+  Self.MaddrTransport.Free;
   Self.RPortEvent.Free;
 
   inherited TearDown;
@@ -927,6 +942,21 @@ procedure TestTIdSipUDPTransport.CheckLeaveNonRportRequestsUntouched(Sender: TOb
 begin
   try
     Check(not R.LastHop.HasRport, 'rport param added by transport');
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipUDPTransport.CheckMaddrUser(Sender: TObject;
+                                                const R: TIdSipResponse);
+begin
+  try
+    Check(Sender = Self.MaddrTransport,
+          'An unexpected transport received the response');
     Self.ThreadEvent.SetEvent;
   except
     on E: Exception do begin
@@ -990,6 +1020,23 @@ begin
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
   CheckEquals(0, Self.RPort, 'rport value');
+end;
+
+procedure TestTIdSipUDPTransport.TestMaddrUsed;
+begin
+  Self.CheckingResponseEvent := Self.CheckMaddrUser;
+  Self.MaddrTransport.Start;
+  try
+    Self.Response.LastHop.Maddr  := Self.MaddrTransport.Bindings[0].IP;
+    Self.Response.LastHop.SentBy := Self.MaddrTransport.Bindings[0].IP;
+
+    Self.LowPortTransport.Send(Self.Response);
+
+    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  finally
+    Self.MaddrTransport.Stop;
+  end;
 end;
 
 procedure TestTIdSipUDPTransport.TestRespectRport;

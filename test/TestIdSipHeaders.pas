@@ -29,6 +29,7 @@ type
     procedure TestGetSetParam;
     procedure TestHasParam;
     procedure TestIndexOfParam;
+    procedure TestIsEqualTo;
     procedure TestParamCount;
     procedure TestParamsAsString;
     procedure TestValue;
@@ -69,6 +70,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsEqualTo;
     procedure TestValue;
     procedure TestValueWithParams;
   end;
@@ -238,10 +240,12 @@ type
     procedure TestAssignFromBadlyFormedVia;
     procedure TestBranch;
     procedure TestHasBranch;
+    procedure TestHasMaddr;
     procedure TestHasReceived;
     procedure TestHasRport;
     procedure TestIsRFC3261Branch;
     procedure TestIsEqualTo;
+    procedure TestIsEqualToBranchIsCaseInsensitive;
     procedure TestMaddr;
     procedure TestName;
     procedure TestReceived;
@@ -284,7 +288,9 @@ type
   private
     H: TIdSipHeaders;
 
-    procedure CheckType(ExpectedClassType: TClass; ReceivedObject: TObject; Message: String = '');
+    procedure CheckType(ExpectedClassType: TClass;
+                        ReceivedObject: TObject;
+                        Message: String = '');
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -679,6 +685,38 @@ begin
   CheckEquals(1, Self.H.IndexOfParam('ttl'),    'Index of 2nd param');
 end;
 
+procedure TestTIdSipHeader.TestIsEqualTo;
+var
+  Header: TIdSipHeader;
+begin
+  Self.H.Name := 'X-New-Header';
+  Self.H.Value := 'secure;foo=bar';
+  Header := TIdSipHeader.Create;
+  try
+    Header.Name  := Self.H.Name;
+    Header.Value := Self.H.Value + Self.H.ParamsAsString;
+    Check(Self.H.IsEqualTo(Header), 'H = Header');
+    Check(Header.IsEqualTo(Self.H), 'Header = H');
+
+    Header.Name  := Self.H.Name;
+    Header.Value := Uppercase(Self.H.Value + Self.H.ParamsAsString);
+    Check(Self.H.IsEqualTo(Header), 'H = Header, uppercase(value)');
+    Check(Header.IsEqualTo(Self.H), 'Header = H, uppercase(value)');
+
+    Header.Name  := 'X-Different-Header';
+    Header.Value := Self.H.Value + Self.H.ParamsAsString;
+    Check(not Self.H.IsEqualTo(Header), 'H <> Header, name');
+    Check(not Header.IsEqualTo(Self.H), 'Header <> H, name');
+
+    Header.Name  := Self.H.Name;
+    Header.Value := 'wombat' + Self.H.ParamsAsString;
+    Check(not Self.H.IsEqualTo(Header), 'H <> Header, value');
+    Check(not Header.IsEqualTo(Self.H), 'Header <> H, value');
+  finally
+    Header.Free;
+  end;
+end;
+
 procedure TestTIdSipHeader.TestParamCount;
 begin
   CheckEquals(0, Self.H.ParamCount, 'ParamCount of an empty list');
@@ -1031,6 +1069,42 @@ begin
 end;
 
 //* TestTIdSipCallIDHeader Published methods ***********************************
+
+procedure TestTIdSipCallIDHeader.TestIsEqualTo;
+var
+  CallID: TIdSipCallIDHeader;
+  H:      TIdSipHeader;
+begin
+  CallID := TIdSipCallIDHeader.Create;
+  try
+    Self.C.Value := 'fdjhasdfa';
+
+    CallID.Value := Self.C.Value;
+    Check(Self.C.IsEqualTo(CallID), 'C = CallID');
+    Check(CallID.IsEqualTo(Self.C), 'CallID = C');
+
+    CallID.Value := Uppercase(Self.C.Value);
+    Check(not Self.C.IsEqualTo(CallID), 'C <> CallID, case-sensitive');
+    Check(not CallID.IsEqualTo(Self.C), 'CallID <> C, case-sensitive');
+
+    CallID.Value := Self.C.Value + Self.C.Value;
+    Check(not Self.C.IsEqualTo(CallID), 'C <> CallID, different value');
+    Check(not CallID.IsEqualTo(Self.C), 'CallID <> C, different value');
+  finally
+    CallID.Free;
+  end;
+
+  H := TIdSipHeader.Create;
+  try
+    H.Name := Self.C.Name;
+    H.Value := Self.C.Value;
+
+    Check(H.IsEqualTo(Self.C), 'H = C');
+    Check(H.IsEqualTo(Self.C), 'C = H');
+  finally
+    H.Free;
+  end;
+end;
 
 procedure TestTIdSipCallIDHeader.TestValue;
 begin
@@ -2190,6 +2264,14 @@ begin
   Check(Self.V.HasBranch, 'Branch should have been set');
 end;
 
+procedure TestTIdSipViaHeader.TestHasMaddr;
+begin
+  Check(not Self.V.HasMaddr, 'No maddr should be assigned on creation');
+
+  Self.V.Maddr := '127.0.0.1';
+  Check(Self.V.HasMaddr, 'Maddr should have been set');
+end;
+
 procedure TestTIdSipViaHeader.TestHasReceived;
 begin
   Check(not Self.V.HasReceived, 'No Received should be assigned on creation');
@@ -2266,6 +2348,24 @@ begin
     Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Transport');
   finally
     Hop2.Free;
+  end;
+end;
+
+procedure TestTIdSipViaHeader.TestIsEqualToBranchIsCaseInsensitive;
+var
+  Via: TIdSipViaHeader;
+begin
+  Via := TIdSipViaHeader.Create;
+  try
+    Self.V.Value := 'SIP/2.0/TCP gw1.leo-ix.net;branch=z9hG4bKdecafbad';
+    Via.Value := Self.V.Value + Self.V.ParamsAsString;
+
+    Via.Branch := Uppercase(Via.Branch);
+
+    Check(Self.V.IsEqualTo(Via), 'V = Via');
+    Check(Via.IsEqualTo(Self.V), 'Via = V');
+  finally
+    Via.Free;
   end;
 end;
 
@@ -2714,9 +2814,13 @@ end;
 
 //* TestTIdSipHeaders Private methods ******************************************
 
-procedure TestTIdSipHeaders.CheckType(ExpectedClassType: TClass; ReceivedObject: TObject; Message: String = '');
+procedure TestTIdSipHeaders.CheckType(ExpectedClassType: TClass;
+                                      ReceivedObject: TObject;
+                                      Message: String = '');
 begin
-  Self.CheckEquals(ExpectedClassType.ClassName, ReceivedObject.ClassName, Message);
+  Self.CheckEquals(ExpectedClassType.ClassName,
+                   ReceivedObject.ClassName,
+                   Message);
 end;
 
 //* TestTIdSipHeaders Published methods ****************************************

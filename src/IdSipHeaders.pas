@@ -93,6 +93,7 @@ type
     function  ParamValue(const Index: Cardinal): String; overload;
     function  ParamValue(const Name: String): String; overload;
     function  PortIsSpecified: Boolean;
+    procedure RemoveParameter(const Name: String);
     function  TransportIsSpecified: Boolean;
     function  UserIsIp: Boolean;
     function  UserIsPhoneNumber: Boolean;
@@ -188,6 +189,8 @@ type
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
     procedure SetValue(const Value: String); override;
+  public
+    function IsEqualTo(const Header: TIdSipHeader): Boolean; override;
   end;
 
   TIdSipCommaSeparatedHeader = class(TIdSipHeader)
@@ -419,6 +422,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
     function  HasBranch: Boolean;
+    function  HasMaddr: Boolean;
     function  HasReceived: Boolean;
     function  HasRport: Boolean;
     function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
@@ -957,6 +961,12 @@ begin
   Result := Self.fPortIsSpecified;
 end;
 
+procedure TIdSipUri.RemoveParameter(const Name: String);
+begin
+  if Self.HasParameter(Name) then
+    Self.Parameters.Delete(Self.Parameters.IndexOfName(Name));
+end;
+
 function TIdSipUri.TransportIsSpecified: Boolean;
 begin
   Result := Self.HasParameter(TransportParam);
@@ -1392,8 +1402,7 @@ end;
 
 function TIdSipHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
 begin
-  Result := (Self.Name = Header.Name)
-        and (Self.Value = Header.Value);
+  Result := IsEqual(Self.AsString, Header.AsString);
 end;
 
 function TIdSipHeader.ParamCount: Integer;
@@ -1655,6 +1664,14 @@ end;
 //******************************************************************************
 //* TIdSipCallIdHeader                                                         *
 //******************************************************************************
+//* TIdSipCallIdHeader Public methods ******************************************
+
+function TIdSipCallIdHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+begin
+  Result := IsEqual(Header.Name, Self.Name)
+        and (Self.Value = Header.Value);
+end;
+
 //* TIdSipCallIdHeader Protected methods ***************************************
 
 procedure TIdSipCallIdHeader.SetValue(const Value: String);
@@ -2139,11 +2156,12 @@ end;
 procedure TIdSipNumericHeader.SetValue(const Value: String);
 begin
   if not TIdSipParser.IsNumber(Value) then
-    Self.FailParse;
+    Self.FailParse
+  else begin
+    fNumericValue := StrToInt(Value);
 
-  fNumericValue := StrToInt(Value);
-
-  inherited SetValue(Value);
+    inherited SetValue(Value);
+  end;
 end;
 
 //******************************************************************************
@@ -2406,6 +2424,11 @@ end;
 function TIdSipViaHeader.HasBranch: Boolean;
 begin
   Result := Self.Branch <> '';
+end;
+
+function TIdSipViaHeader.HasMaddr: Boolean;
+begin
+  Result := Self.Maddr <> '';
 end;
 
 function TIdSipViaHeader.HasReceived: Boolean;
@@ -3107,7 +3130,7 @@ var
   I:         Integer;
   ItemCount: Integer;
 begin
-  Result := nil;
+  Result    := nil;
   I         := 0;
   ItemCount := -1;
 

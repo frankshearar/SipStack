@@ -256,6 +256,8 @@ type
                                 const Transaction: TIdSipTransaction;
                                 const Receiver: TIdSipTransport);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
+    procedure RejectOutOfOrderRequest(const Request: TIdSipRequest;
+                                      const Transaction: TIdSipTransaction);
     procedure RejectRequest(const Request: TIdSipRequest;
                             const Transaction: TIdSipTransaction);
     procedure RemoveTransaction(const Transaction: TIdSipTransaction);
@@ -277,7 +279,7 @@ type
     procedure Call(const Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String);
-    function  DialogEstablished: Boolean;                   
+    function  DialogEstablished: Boolean;
     procedure Terminate;
     procedure Modify;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -595,6 +597,9 @@ begin
       end
       else begin
         Result.RequestUri := FirstRoute.Address;
+        // RFC 3261 section 12.2.1.1
+        Result.RequestUri.Headers.Clear;
+        Result.RequestUri.RemoveParameter(MethodParam);
 
         // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
         // remember?
@@ -1336,6 +1341,11 @@ begin
     Self.NotifyOfEndedSession;
   end
   else if Request.IsInvite then begin
+    if Self.Dialog.IsOutOfOrder(Request) then begin
+      Self.RejectOutOfOrderRequest(Request, Transaction);
+      Exit;
+    end;
+
     Self.AddOpenTransaction(Transaction);
     Self.NotifyOfModifiedSession(Request);
   end;
@@ -1549,6 +1559,21 @@ begin
 
   if Self.IsTerminated then
     Self.NotifyOfEndedSession;
+end;
+
+procedure TIdSipSession.RejectOutOfOrderRequest(const Request: TIdSipRequest;
+                                                const Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Request,
+                                       SIPInternalServerError);
+  try
+    Response.StatusText := RSSIPRequestOutOfOrder;
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TIdSipSession.RejectRequest(const Request: TIdSipRequest;

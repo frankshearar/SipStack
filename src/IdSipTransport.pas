@@ -779,9 +779,7 @@ end;
 
 destructor TIdSipUDPTransport.Destroy;
 begin
-  // We don't need to check Stopped - just calling Stop is safe.
-  Self.ClientCleaner.Stop;
-  Self.ClientCleaner.WaitFor;
+  Self.ClientCleaner.TerminateAndWaitFor;
 
   Self.Transport.Free;
   Self.ClientLock.Free;
@@ -867,7 +865,31 @@ var
 begin
   inherited SendResponse(R);
 
-  if R.LastHop.HasReceived then begin
+  if R.LastHop.HasMaddr then begin
+    Host := R.LastHop.Maddr;
+    Port := R.LastHop.Port;
+  end
+  else if R.LastHop.HasRport then begin
+    // cf RFC 3581 section 4.
+    // TODO: this isn't quite right. We have to send the response
+    // from the ip/port that the request was received on.
+    Host := R.LastHop.Received;
+    Port := R.LastHop.RPort;
+  end
+  else if R.LastHop.HasReceived then begin
+    Host := R.LastHop.Received;
+    Port := R.LastHop.Port;
+  end
+  else begin
+    Host := R.LastHop.SentBy;
+    Port := R.LastHop.Port;
+  end;
+{
+  if R.LastHop.HasMaddr then begin
+    Host := R.LastHop.Maddr;
+    Port := R.LastHop.Port;
+  end
+  else if R.LastHop.HasReceived then begin
     Host := R.LastHop.Received;
 
     // cf RFC 3581 section 4.
@@ -882,7 +904,7 @@ begin
     Host := R.LastHop.SentBy;
     Port := R.LastHop.Port;
   end;
-
+}
   Self.Transport.Send(Host, Port, R.AsString);
 end;
 

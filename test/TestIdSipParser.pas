@@ -31,6 +31,7 @@ type
     procedure TestGetHeaderName;
     procedure TestGetHeaderNumberValue;
     procedure TestGetHeaderValue;
+//    procedure TestHasValidSyntax;
     procedure TestIsIPv6Reference;
     procedure TestIsMethod;
     procedure TestIsQuotedString;
@@ -46,7 +47,6 @@ type
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
     procedure TestParseAndMakeRequest;
-    procedure TestParseAndMakeRequestFromAResponseString;
     procedure TestParseAndMakeRequestFromString;
     procedure TestParseAndMakeResponse;
     procedure TestParseAndMakeResponseFromString;
@@ -55,6 +55,7 @@ type
     procedure TestParseRequestBadCSeq;
     procedure TestParseRequestEmptyString;
     procedure TestParseRequestFoldedHeader;
+    procedure TestParseRequestFromAResponseString;
     procedure TestParseRequestMalformedMaxForwards;
     procedure TestParseRequestMalformedMethod;
     procedure TestParseRequestMalformedRequestLine;
@@ -271,27 +272,63 @@ begin
   CheckEquals('',     Self.P.GetHeaderValue(''),            '''''');
   CheckEquals('',     Self.P.GetHeaderValue(#0),            '#0');
 end;
+{
+procedure TestTIdSipParser.TestHasValidSyntax;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.P.ParseAndMakeRequest(LocalLoopRequest);
+  try
+    Check(Self.P.HasValidSyntax, 'Syntactically correct message');
+  finally
+    R.Free;
+  end;
 
+  R := Self.P.ParseAndMakeRequest(StringReplace(LocalLoopRequest,
+                                                'INVITE',
+                                                'INV''TE',
+                                                [rfReplaceAll, rfIgnoreCase]));
+  try
+    Check(not Self.P.HasValidSyntax, 'Malformed method');
+  finally
+    R.Free;
+  end;
+end;
+}
 procedure TestTIdSipParser.TestIsIPv6Reference;
 begin
-  Check(not TIdSipParser.IsIPv6Reference(''),                       '''''');
-  Check(not TIdSipParser.IsIPv6Reference('ff01:0:0:0:0:0:0:101'),   'ff01:0:0:0:0:0:0:101');
-  Check(not TIdSipParser.IsIPv6Reference('[]'),                     '[]');
-  Check(    TIdSipParser.IsIPv6Reference('[ff01:0:0:0:0:0:0:101]'), '[ff01:0:0:0:0:0:0:101]');
+  Check(not TIdSipParser.IsIPv6Reference(''),
+        'Empty string');
+  Check(not TIdSipParser.IsIPv6Reference('ff01:0:0:0:0:0:0:101'),
+        'ff01:0:0:0:0:0:0:101');
+  Check(not TIdSipParser.IsIPv6Reference('[]'),
+        '[]');
+  Check(TIdSipParser.IsIPv6Reference('[ff01:0:0:0:0:0:0:101]'),
+        '[ff01:0:0:0:0:0:0:101]');
 end;
 
 procedure TestTIdSipParser.TestIsMethod;
 begin
-  Check(not TIdSipParser.IsMethod(''),                             '''''');
-  Check(not TIdSipParser.IsMethod('Cra.-zy''+prea"cher%20man~`!'), 'Cra.-zy''+prea"cher%20man~`!'); // no "'s
-  Check(not TIdSipParser.IsMethod('LastChar"'),                    'LastChar"'); // no "'s
-  Check(    TIdSipParser.IsMethod('INVITE'),                       'INVITE');
-  Check(    TIdSipParser.IsMethod('X-INVITE'),                     'X-INVITE');
-  Check(    TIdSipParser.IsMethod('1'),                            '1');
-  Check(    TIdSipParser.IsMethod('a'),                            'a');
-  Check(    TIdSipParser.IsMethod('---'),                          '---');
-  Check(    TIdSipParser.IsMethod('X_CITE'),                       'X_CITE');
-  Check(    TIdSipParser.IsMethod('Cra.-zy''+preacher%20man~`!'),  'Cra.-zy''+preacher%20man~`!');
+  Check(not TIdSipParser.IsMethod(''),
+        'Empty string');
+  Check(not TIdSipParser.IsMethod('Cra.-zy''+prea"cher%20man~`!'),
+        'Cra.-zy''+prea"cher%20man~`!'); // no "'s
+  Check(not TIdSipParser.IsMethod('LastChar"'),
+        'LastChar"'); // no "'s
+  Check(TIdSipParser.IsMethod('INVITE'),
+        'INVITE');
+  Check(TIdSipParser.IsMethod('X-INVITE'),
+        'X-INVITE');
+  Check(TIdSipParser.IsMethod('1'),
+        '1');
+  Check(TIdSipParser.IsMethod('a'),
+        'a');
+  Check(TIdSipParser.IsMethod('---'),
+        '---');
+  Check(TIdSipParser.IsMethod('X_CITE'),
+        'X_CITE');
+  Check(TIdSipParser.IsMethod('Cra.-zy''+preacher%20man~`!'),
+        'Cra.-zy''+preacher%20man~`!');
 end;
 
 procedure TestTIdSipParser.TestIsQuotedString;
@@ -319,8 +356,8 @@ begin
   Check(    TIdSipParser.IsQValue('0.0'),    '0.0');
   Check(    TIdSipParser.IsQValue('0.00'),   '0.00');
   Check(    TIdSipParser.IsQValue('0.000'),  '0.000');
-  Check(    TIdSipParser.IsQValue('0.123'),    '0.123');
-  Check(    TIdSipParser.IsQValue('0.666'),    '0.666');
+  Check(    TIdSipParser.IsQValue('0.123'),  '0.123');
+  Check(    TIdSipParser.IsQValue('0.666'),  '0.666');
   Check(    TIdSipParser.IsQValue('1.0'),    '1.0');
   Check(    TIdSipParser.IsQValue('1.00'),   '1.00');
   Check(    TIdSipParser.IsQValue('1.000'),  '1.000');
@@ -389,7 +426,8 @@ begin
   for C := 'A' to 'Z' do
     Check(TIdSipParser.IsWord(C), C);
 
-  Check(TIdSipParser.IsWord('-.!%*_+`''~()<>:\"/[]?{}'), '-.!%*_+`''~()<>:\"/[]?{}');
+  Check(TIdSipParser.IsWord('-.!%*_+`''~()<>:\"/[]?{}'),
+        '-.!%*_+`''~()<>:\"/[]?{}');
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyStream;
@@ -498,33 +536,6 @@ begin
       Self.CheckBasicRequest(Req);
     finally
       Req.Free;
-    end;
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseAndMakeRequestFromAResponseString;
-var
-  Req: TIdSipRequest;
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create('SIP/;2.0 200 OK'#13#10
-                            + #13#10);
-  try
-    Self.P.Source := Str;
-
-    try
-      Req := Self.P.ParseAndMakeRequest;
-      try
-        Self.CheckBasicRequest(Req);
-      finally
-        Req.Free;
-      end;
-
-      Fail('Failed to bail out creating a request from a malformed response');
-    except
-      on EBadRequest do;
     end;
   finally
     Str.Free;
@@ -728,6 +739,26 @@ begin
   end;
 end;
 
+procedure TestTIdSipParser.TestParseRequestFromAResponseString;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/;2.0 200 OK'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+
+    try
+      Self.P.ParseRequest(Self.Request);
+      Fail('Failed to bail out creating a request from a malformed response');
+    except
+      on EBadRequest do;
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
 procedure TestTIdSipParser.TestParseRequestMalformedMaxForwards;
 var
   Str: TStringStream;
@@ -783,6 +814,7 @@ procedure TestTIdSipParser.TestParseRequestMalformedRequestLine;
 var
   Str: TStringStream;
 begin
+  // Double space between the Method and Request-URI
   Str := TStringStream.Create('INVITE  sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
@@ -797,6 +829,7 @@ begin
     Str.Free;
   end;
 
+  // No space between the Method and Request-URI
   Str := TStringStream.Create('INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0'#13#10);
   try
     Self.P.Source := Str;
@@ -813,6 +846,7 @@ begin
     Str.Free;
   end;
 
+  // No Method
   Str := TStringStream.Create('sip:wintermute@tessier-ashpool.co.luna SIP/2.0');
   try
     Self.P.Source := Str;
@@ -829,6 +863,7 @@ begin
     Str.Free;
   end;
 
+  // No Request-URI or SIP-Version
   Str := TStringStream.Create('INVITE'#13#10);
   try
     Self.P.Source := Str;

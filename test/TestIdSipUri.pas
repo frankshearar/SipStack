@@ -68,6 +68,7 @@ type
     procedure TestPortIsSpecified;
     procedure TestPortWithSipScheme;
     procedure TestPortWithSipsScheme;
+    procedure TestRemoveParameter;
     procedure TestSetUriBasicUri;
     procedure TestSetUriMultipleHeaders;
     procedure TestSetUriMultipleParameters;
@@ -762,6 +763,23 @@ procedure TestTIdSipUri.TestPortWithSipsScheme;
 begin
   Uri.Uri := 'sips:wintermute@tessier-ashpool.co.luna';
   CheckEquals(IdPORT_SIPS, Uri.Port, 'SIPS URI default port');
+end;
+
+procedure TestTIdSipUri.TestRemoveParameter;
+begin
+  Uri.Uri := 'sip:wintermute@tessier-ashpool.co.luna;security=on;transport=tcp';
+  Uri.RemoveParameter('foo');
+  CheckEquals(2, Uri.ParamCount, 'Wrong parameter was removed (removing foo)');
+
+  Uri.RemoveParameter('security');
+  Check(Uri.HasParameter('transport'),
+        'transport parameter was removed, not security');
+  Check(not Uri.HasParameter('security'),
+        'security parameter was not removed');
+
+  Uri.RemoveParameter('transport');
+  Check(not Uri.HasParameter('transport'),
+        'transport parameter was not removed');
 end;
 
 procedure TestTIdSipUri.TestSetUriBasicUri;

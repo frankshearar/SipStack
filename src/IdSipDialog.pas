@@ -74,6 +74,7 @@ type
     procedure HandleMessage(const Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(const Response: TIdSipResponse); overload; virtual;
     function  IsNull: Boolean; virtual;
+    function  IsOutOfOrder(const Request: TIdSipRequest): Boolean;
     function  NextLocalSequenceNo: Cardinal;
 
     property ID:               TIdSipDialogID read fID;
@@ -219,6 +220,12 @@ end;
 function TIdSipDialog.IsNull: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipDialog.IsOutOfOrder(const Request: TIdSipRequest): Boolean;
+begin
+  Result := (Self.RemoteSequenceNo > 0)
+        and (Request.CSeq.SequenceNo < Self.RemoteSequenceNo);
 end;
 
 function TIdSipDialog.NextLocalSequenceNo: Cardinal;

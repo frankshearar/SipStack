@@ -83,6 +83,7 @@ type
     procedure TestCreateRequestInDialogRouteSetEmpty;
     procedure TestCreateRequestInDialogRouteSetWithLrParam;
     procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
+    procedure TestCreateRequestInDialogTopRouteHasForbiddenParameters;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
@@ -168,6 +169,7 @@ type
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
+    procedure TestReceiveOutOfOrderRequest;
     procedure TestReceiveReInvite;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
@@ -340,7 +342,7 @@ begin
   Self.LocalSequenceNo := 13;
   Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
   Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.luna');
   Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 
   Self.RouteSet := TIdSipHeaders.Create;
@@ -888,7 +890,7 @@ begin
     P.Free;
   end;
 
-  R := Self.Core.CreateRequest(Dlg);
+  R := Self.Core.CreateRequest(Self.Dlg);
   try
     CheckEquals((Self.Dlg.RouteSet.Items[0] as TIdSipRouteHeader).Address,
                 R.RequestUri,
@@ -910,6 +912,20 @@ begin
     end;
   finally
     R.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogTopRouteHasForbiddenParameters;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Dlg.RouteSet.Items[0].Value := '<sip:127.0.0.1;transport=tcp;method=REGISTER?Subject=foo>';
+  Request := Self.Core.CreateRequest(Self.Dlg);
+  try
+    CheckEquals('sip:127.0.0.1;transport=tcp',
+                Request.RequestUri.Uri, 'Request-URI; SIP section 12.2.1.1');
+  finally
+    Request.Free;
   end;
 end;
 
@@ -1605,7 +1621,7 @@ begin
   C := TIdSipContactHeader.Create;
   try
     try
-      C.Value := 'mailto:wintermute@tessier-ashpool.co.lu';
+      C.Value := 'mailto:wintermute@tessier-ashpool.co.luna';
       Self.Core.Contact := C;
       Fail('Only a SIP or SIPs URI may be specified');
     except
@@ -1656,7 +1672,7 @@ begin
   F := TIdSipFromHeader.Create;
   try
     try
-      F.Value := 'mailto:wintermute@tessier-ashpool.co.lu';
+      F.Value := 'mailto:wintermute@tessier-ashpool.co.luna';
       Self.Core.From := F;
       Fail('Only a SIP or SIPs URI may be specified');
     except
@@ -2222,6 +2238,35 @@ begin
   end;
 end;
 }
+procedure TestTIdSipSession.TestReceiveOutOfOrderRequest;
+var
+  Invite:   TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession wasn''t fired');
+  Self.Session.AcceptCall('', '');
+
+  Invite := Self.CreateRemoteReInvite(Self.Session.Dialog);
+  try
+    Invite.CSeq.SequenceNo := Invite.CSeq.SequenceNo - 1;
+    Self.Dispatch.Transport.ResetSentResponseCount;
+    Self.Dispatch.Transport.FireOnRequest(Invite);
+    CheckEquals(1,
+                Self.Dispatch.Transport.SentResponseCount,
+                'No response sent');
+    Response := Self.Dispatch.Transport.LastResponse;
+    CheckEquals(SIPInternalServerError,
+                Response.StatusCode,
+                'Unexpected response');
+    CheckEquals(RSSIPRequestOutOfOrder,
+                Response.StatusText,
+                'Unexpected response, status text');
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestReceiveReInvite;
 var
   ReInvite: TIdSipRequest;

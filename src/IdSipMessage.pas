@@ -150,8 +150,8 @@ type
    *  * New headers can be created that weren't present in the original message.
    *    These messages will, by default, have the empty string as value. For example,
    *    querying the value of Content-Type will create a TIdSipHeader with Value ''.
-   *  * Each header is regarded as using a particular language, and are parsers for
-   *    that language (in the SetValue method).
+   *  * Each header is regarded as using a particular language, and the header
+   *    classes are parsers for that language (in the SetValue method).
    *  * Comma-separated headers are always separated into separate headers.
    *}
   TIdSipParser = class(TIdSimpleParser, IIdSipMessageVisitor)
@@ -162,6 +162,7 @@ type
     procedure CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
     procedure CheckRequiredResponseHeaders(const Msg: TIdSipMessage);
     function  CreateResponseOrRequest(const Token: String): TIdSipMessage;
+    procedure FailParse(const Msg: TIdSipMessage; const Reason: String);
     procedure InitializeMessage(Msg: TIdSipMessage);
     procedure ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
@@ -669,7 +670,8 @@ end;
 
 function TIdSipRequest.FirstLine: String;
 begin
-  Result := Format(RequestLine, [Self.Method, Self.RequestUri.URI, Self.SIPVersion]);
+  Result := Format(RequestLine,
+                   [Self.Method, Self.RequestUri.URI, Self.SIPVersion]);
 end;
 
 //* TIdSipRequest Private methods **********************************************
@@ -764,7 +766,8 @@ end;
 
 function TIdSipResponse.FirstLine: String;
 begin
-  Result := Format(StatusLine, [Self.SIPVersion, Self.StatusCode, Self.StatusText]);
+  Result := Format(StatusLine,
+                   [Self.SIPVersion, Self.StatusCode, Self.StatusText]);
 end;
 
 //* TIdSipResponse Private methods **********************************************
@@ -873,14 +876,16 @@ class function TIdSipParser.IsScheme(const Scheme: String): Boolean;
 var
   I: Integer;
 begin
-  Result := Length(Scheme) > 0;
+  Result := Scheme <> '';
 
   if Result then begin
     Result := Result and Self.IsLetter(Scheme[1]);
 
     I := 2;
     while (I <= Length(Scheme)) and Result do begin
-      Result := Result and (Self.IsAlphaNumeric(Scheme[I]) or (Scheme[I] in ['+', '-', '.']));
+      Result := Result
+            and (Self.IsAlphaNumeric(Scheme[I])
+                 or (Scheme[I] in ['+', '-', '.']));
       Inc(I);
     end;
   end;
@@ -949,11 +954,11 @@ var
   Value: String;
   E:     Integer;
 begin
-  Name := Self.GetHeaderName(Header);
+  Name  := Self.GetHeaderName(Header);
   Value := Self.GetHeaderValue(Header);
   Val(Value, Result, E);
   if (E <> 0) then
-    raise Msg.MalformedException.Create(Format(MalformedToken, [Name, Header]));
+    Self.FailParse(Msg, Format(MalformedToken, [Name, Header]));
 end;
 
 function TIdSipParser.GetHeaderValue(Header: String): String;
@@ -1142,13 +1147,13 @@ end;
 procedure TIdSipParser.CheckContentLengthContentType(const Msg: TIdSipMessage);
 begin
   if (Msg.ContentLength > 0) and (Msg.ContentType = '') then
-    raise Msg.MalformedException.Create(MissingContentType);
+    Self.FailParse(Msg, MissingContentType);
 end;
 
 procedure TIdSipParser.CheckCSeqMethod(const Request: TIdSipRequest);
 begin
   if (Request.CSeq.Method <> Request.Method) then
-    raise Request.MalformedException.Create(CSeqMethodMismatch);
+    Self.FailParse(Request, CSeqMethodMismatch);
 end;
 
 procedure TIdSipParser.CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
@@ -1160,27 +1165,27 @@ begin
   Request := Msg as TIdSipRequest;
   if not Request.HasHeader(MaxForwardsHeader) then
     Request.MaxForwards := Request.DefaultMaxForwards;
-    
+
 //  if not Msg.HasHeader(MaxForwardsHeader) then
-//    raise Msg.MalformedException.Create(MissingMaxForwards);
+//    Self.FailParse(Msg, MissingMaxForwards);
 end;
 
 procedure TIdSipParser.CheckRequiredResponseHeaders(const Msg: TIdSipMessage);
 begin
   if not Msg.HasHeader(CallIDHeaderFull) then
-    raise Msg.MalformedException.Create(MissingCallID);
+    Self.FailParse(Msg, MissingCallID);
 
   if not Msg.HasHeader(CSeqHeader) then
-    raise Msg.MalformedException.Create(MissingCSeq);
+    Self.FailParse(Msg, MissingCSeq);
 
   if not Msg.HasHeader(FromHeaderFull) then
-    raise Msg.MalformedException.Create(MissingFrom);
+    Self.FailParse(Msg, MissingFrom);
 
   if not Msg.HasHeader(ToHeaderFull) then
-    raise Msg.MalformedException.Create(MissingTo);
+    Self.FailParse(Msg, MissingTo);
 
   if not Msg.HasHeader(ViaHeaderFull) then
-    raise Msg.MalformedException.Create(MissingVia);
+    Self.FailParse(Msg, MissingVia);
 end;
 
 function TIdSipParser.CreateResponseOrRequest(const Token: String): TIdSipMessage;
@@ -1189,6 +1194,11 @@ begin
     Result := TIdSipResponse.Create
   else
     Result := TIdSipRequest.Create;
+end;
+
+procedure TIdSipParser.FailParse(const Msg: TIdSipMessage; const Reason: String);
+begin
+  raise Msg.MalformedException.Create(Reason);
 end;
 
 procedure TIdSipParser.InitializeMessage(Msg: TIdSipMessage);
@@ -1213,7 +1223,7 @@ begin
       Self.AddHeader(Msg, Header);
   except
     on E: EBadHeader do
-      raise Msg.MalformedException.Create(Format(MalformedToken, [E.Message, Header]));
+      Self.FailParse(Msg, Format(MalformedToken, [E.Message, Header]));
   end;
 end;
 
@@ -1255,26 +1265,26 @@ begin
     BreakApart(Line, ' ', Tokens);
 
     if (Tokens.Count > 3) then
-      raise Request.MalformedException.Create(RequestUriNoSpaces)
+      Self.FailParse(Request, RequestUriNoSpaces)
     else if (Tokens.Count < 3) then
-      raise Request.MalformedException.Create(Format(MalformedToken, ['Request-Line', Line]));
+      Self.FailParse(Request, Format(MalformedToken, ['Request-Line', Line]));
 
     Request.Method := Tokens[0];
     // we want to check the Method
     if not Self.IsMethod(Request.Method) then
-      raise Request.MalformedException.Create(Format(MalformedToken, ['Method', Request.Method]));
+      Self.FailParse(Request, Format(MalformedToken, ['Method', Request.Method]));
 
     URI := Tokens[1];
 
-    if (URI[1] = '<') and (URI[Length(URI)] = '>') then
-      raise Request.MalformedException.Create(RequestUriNoAngleBrackets);
+    if (URI <> '') and (URI[1] = '<') and (URI[Length(URI)] = '>') then
+      Self.FailParse(Request, RequestUriNoAngleBrackets);
 
     Request.RequestUri.URI := URI;
 
     Request.SIPVersion := Tokens[2];
 
     if not Self.IsSipVersion(Request.SIPVersion) then
-      raise Request.MalformedException.Create(Format(InvalidSipVersion, [Request.SIPVersion]));
+      Self.FailParse(Request, Format(InvalidSipVersion, [Request.SIPVersion]));
   finally
     Tokens.Free;
   end;
@@ -1290,11 +1300,11 @@ begin
 
   Response.SIPVersion := Fetch(Line);
   if not Self.IsSipVersion(Response.SIPVersion) then
-    raise Response.MalformedException.Create(Format(InvalidSipVersion, [Response.SIPVersion]));
+    Self.FailParse(Response, Format(InvalidSipVersion, [Response.SIPVersion]));
 
   StatusCode := Fetch(Line);
   if not Self.IsNumber(StatusCode) then
-    raise Response.MalformedException.Create(Format(InvalidStatusCode, [StatusCode]));
+    Self.FailParse(Response, Format(InvalidStatusCode, [StatusCode]));
 
   Response.StatusCode := StrToIntDef(StatusCode, BadStatusCode);
 

@@ -31,6 +31,7 @@ type
     procedure TestDialogID;
     procedure TestEarlyState;
     procedure TestEmptyRemoteTargetAfterResponse;
+    procedure TestIsOutOfOrder;
     procedure TestIsSecure;
     procedure TestOnEstablishedFired;
     procedure TestRemoteTarget;
@@ -99,11 +100,11 @@ begin
 
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
-  Self.LocalSequenceNo := 13;
-  Self.LocalUri        := TIdSipURI.Create('sip:case@fried.neurons.org');
-  Self.LocalSequenceNo := 42;
-  Self.RemoteTarget    := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
-  Self.RemoteUri       := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
+  Self.LocalSequenceNo  := 13;
+  Self.LocalUri         := TIdSipURI.Create('sip:case@fried.neurons.org');
+  Self.RemoteSequenceNo := 42;
+  Self.RemoteTarget     := TIdSipURI.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri        := TIdSipURI.Create('sip:wintermute@tessier-ashpool.co.luna');
 
   Self.RouteSet := TIdSipHeaders.Create;
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
@@ -119,7 +120,7 @@ begin
                                   false,
                                   Self.RouteSet);
 
-  Self.OnEstablishedFired := false;                                
+  Self.OnEstablishedFired := false;
 end;
 
 procedure TestTIdSipDialog.TearDown;
@@ -268,6 +269,18 @@ begin
   finally
     EmptyUri.Free;
   end;
+end;
+
+procedure TestTIdSipDialog.TestIsOutOfOrder;
+begin
+  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo + 1;
+  Check(not Self.Dlg.IsOutOfOrder(Self.Req), 'SequenceNo > RemoteSequenceNo');
+
+  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo;
+  Check(not Self.Dlg.IsOutOfOrder(Self.Req), 'SequenceNo = RemoteSequenceNo');
+
+  Self.Req.CSeq.SequenceNo := Self.RemoteSequenceNo - 1;
+  Check(Self.Dlg.IsOutOfOrder(Self.Req), 'SequenceNo < RemoteSequenceNo');
 end;
 
 procedure TestTIdSipDialog.TestIsSecure;

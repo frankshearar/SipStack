@@ -156,6 +156,8 @@ const
   RSSIPNotAcceptableGlobal              = RSSIPNotAcceptableClient;
   RSSIPUnknownResponseCode              = 'Unknown Response Code';
 
+  RSSIPRequestOutOfOrder = 'Request out of order';
+
 const
   SIPTrying                           = 100;
   SIPRinging                          = 180;
