@@ -38,11 +38,12 @@ type
     InputText: TMemo;
     TextTimer: TTimer;
     BasePort: TEdit;
-    Register: TButton;
     RegistrarUri: TEdit;
     LowerInput: TPanel;
     Splitter4: TSplitter;
     OutputText: TMemo;
+    Unregister: TButton;
+    Register: TButton;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -52,6 +53,7 @@ type
     procedure BasePortChange(Sender: TObject);
     procedure RegisterClick(Sender: TObject);
     procedure FormResize(Sender: TObject);
+    procedure UnregisterClick(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -220,11 +222,9 @@ begin
                 + 'kill it and restart this');
   end;
 
-  Self.UA.From.Address.Username    := 'rnid01';
-  Self.UA.Contact.Address.Username := 'rnid01';
-  Self.UA.HostName := GStack.LocalAddress;
-//  Self.UA.HasProxy := true;
-//  Self.UA.Proxy.Uri := 'sip:193.116.120.160';
+  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
+  Self.UA.Contact.Value := Self.UA.From.Value;
+  Self.UA.HasProxy := false;
 end;
 
 destructor TrnidSpike.Destroy;
@@ -634,6 +634,18 @@ end;
 procedure TrnidSpike.FormResize(Sender: TObject);
 begin
   Self.UpperInput.Height := (Self.ClientHeight - Self.InputSplitter.Height) div 2;
+end;
+
+procedure TrnidSpike.UnregisterClick(Sender: TObject);
+var
+  Registrar: TIdSipUri;
+begin
+  Registrar := TIdSipUri.Create(Self.RegistrarUri.Text);
+  try
+    Self.UA.UnregisterFrom(Registrar).AddListener(Self);
+  finally
+    Registrar.Free;
+  end;
 end;
 
 end.

@@ -195,24 +195,33 @@ object rnidSpike: TrnidSpike
         Text = 'BasePort'
         OnChange = BasePortChange
       end
+      object Register: TButton
+        Left = 0
+        Top = 24
+        Width = 75
+        Height = 25
+        Caption = 'Register'
+        TabOrder = 5
+        OnClick = RegisterClick
+      end
+      object Unregister: TButton
+        Left = 0
+        Top = 48
+        Width = 75
+        Height = 25
+        Caption = 'Unregister'
+        TabOrder = 4
+        OnClick = UnregisterClick
+      end
     end
-  end
-  object Register: TButton
-    Left = 0
-    Top = 24
-    Width = 75
-    Height = 25
-    Caption = 'Register'
-    TabOrder = 2
-    OnClick = RegisterClick
   end
   object RegistrarUri: TEdit
     Left = 76
     Top = 25
     Width = 290
     Height = 21
-    TabOrder = 3
-    Text = 'sip:wsjames;transport=udp'
+    TabOrder = 2
+    Text = 'sip:193.116.120.160'
   end
   object UiTimer: TTimer
     Enabled = False
