@@ -69,7 +69,8 @@ type
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest);
+                                        ChallengeResponse: TIdSipRequest;
+                                        var TryAgain: Boolean);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -119,7 +120,8 @@ type
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                              ChallengeResponse: TIdSipRequest);
+                                              ChallengeResponse: TIdSipRequest;
+                                              var TryAgain: Boolean);
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
@@ -417,12 +419,14 @@ type
     fChallengeResponse: TIdSipRequest;
     fDispatcher:        TIdSipTransactionDispatcher;
     fChallenge:         TIdSipResponse;
+    fTryAgain:          Boolean;
   public
     procedure Run(const Subject: IInterface); override;
 
     property Challenge:         TIdSipResponse              read fChallenge write fChallenge;
     property ChallengeResponse: TIdSipRequest               read fChallengeResponse write fChallengeResponse;
     property Dispatcher:        TIdSipTransactionDispatcher read fDispatcher write fDispatcher;
+    property TryAgain:          Boolean                     read fTryAgain write fTryAgain;
   end;
 
   TIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
@@ -894,17 +898,19 @@ procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse
 var
   NewAttempt: TIdSipTransaction;
   ReAttempt:  TIdSipRequest;
+  TryAgain:   Boolean;
 begin
   if (Response.StatusCode = SIPUnauthorized)
   or (Response.StatusCode = SIPProxyAuthenticationRequired) then begin
     ReAttempt := TIdSipRequest.Create;
     try
       ReAttempt.Assign(Transaction.InitialRequest);
-      Self.NotifyOfAuthenticationChallenge(Response, ReAttempt);
+      Self.NotifyOfAuthenticationChallenge(Response, ReAttempt, TryAgain);
 
-      // XXX Assume, FOR NOW, that something did actually supply auth info
-      NewAttempt := Self.AddClientTransaction(ReAttempt);
-      NewAttempt.SendRequest;
+      if TryAgain then begin
+        NewAttempt := Self.AddClientTransaction(ReAttempt);
+        NewAttempt.SendRequest;
+      end;
     finally
       ReAttempt.Free;
     end;
@@ -1093,7 +1099,8 @@ begin
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                                                      ChallengeResponse: TIdSipRequest);
+                                                                      ChallengeResponse: TIdSipRequest;
+                                                                      var TryAgain: Boolean);
 var
   Notification: TIdSipTransactionDispatcherAuthenticationChallengeMethod;
 begin
@@ -1108,6 +1115,8 @@ begin
     Notification.ChallengeResponse := ChallengeResponse;
 
     Self.MsgListeners.Notify(Notification);
+
+    TryAgain := Notification.TryAgain;
   finally
     Notification.Free;
   end;
@@ -2144,7 +2153,8 @@ begin
 
   Listener.OnAuthenticationChallenge(Self.Dispatcher,
                                      Self.Challenge,
-                                     Self.ChallengeResponse);
+                                     Self.ChallengeResponse,
+                                     Self.fTryAgain);
 end;
 
 //******************************************************************************
@@ -2155,7 +2165,7 @@ end;
 procedure TIdSipTransactionDispatcherListenerReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnReceiveRequest(Self.Request,
-                                                               Self.Receiver);
+                                                                    Self.Receiver);
 end;
 
 //******************************************************************************
@@ -2166,7 +2176,7 @@ end;
 procedure TIdSipTransactionDispatcherListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionDispatcherListener).OnReceiveResponse(Self.Response,
-                                                                Self.Receiver);
+                                                                     Self.Receiver);
 end;
 
 //******************************************************************************

@@ -163,6 +163,7 @@ type
     SendEvent:           TEvent;
     Session:             TIdSipInboundSession;
     SessionEstablished:  Boolean;
+    TryAgain:            Boolean;
 
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
                                          Header: TIdSipHeader;
@@ -172,7 +173,8 @@ type
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String);
+                                        var Password: String;
+                                        var TryAgain: Boolean);
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
@@ -228,6 +230,7 @@ type
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDoNotDisturb;
+    procedure TestDontReAuthenticate;
     procedure TestHasUnknownAccept;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
@@ -565,7 +568,8 @@ type
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String); overload;
+                                        var Password: String;
+                                        var TryAgain: Boolean); overload;
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -615,7 +619,8 @@ type
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String);
+                                        var Password: String;
+                                        var TryAgain: Boolean);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -831,6 +836,7 @@ type
     procedure TestFirstListenerSetsUsername;
     procedure TestNoListenerSetsPassword;
     procedure TestRun;
+    procedure TestTryAgain;
   end;
 
   TestTIdSipUserAgentDroppedUnmatchedResponseMethod = class(TTestCase)
@@ -1934,6 +1940,7 @@ begin
   Self.OnEndedSessionFired := false;
   Self.OnInboundCallFired  := false;
   Self.Password            := 'mycotoxin';
+  Self.TryAgain            := true;
   Self.SessionEstablished  := false;
 end;
 
@@ -2022,9 +2029,11 @@ end;
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                                         Challenge: TIdSipResponse;
                                                         var Username: String;
-                                                        var Password: String);
+                                                        var Password: String;
+                                                        var TryAgain: Boolean);
 begin
   Password := Self.Password;
+  TryAgain := Self.TryAgain;
   Username := Self.Core.Username;
 end;
 
@@ -2884,6 +2893,18 @@ begin
   CheckEquals(SessionCount,
               Self.Core.SessionCount,
               'New session created despite Do Not Disturb');
+end;
+
+procedure TestTIdSipUserAgent.TestDontReAuthenticate;
+begin
+  Self.TryAgain := false;
+
+  Self.Core.Call(Self.Destination, '', '').Send;
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
+
+  CheckNoRequestSent('Reattempted authentication');
 end;
 
 procedure TestTIdSipUserAgent.TestHasUnknownAccept;
@@ -6450,7 +6471,8 @@ end;
 procedure TestTIdSipInboundSession.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                                              Challenge: TIdSipResponse;
                                                              var Username: String;
-                                                             var Password: String);
+                                                             var Password: String;
+                                                             var TryAgain: Boolean);
 begin
 end;
 
@@ -6930,9 +6952,10 @@ end;
 procedure TestTIdSipOutboundSession.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                                               Challenge: TIdSipResponse;
                                                               var Username: String;
-                                                              var Password: String);
+                                                              var Password: String;
+                                                              var TryAgain: Boolean);
 begin
-end;                                                              
+end;
 
 procedure TestTIdSipOutboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                                               Receiver: TIdSipTransport);
@@ -8360,6 +8383,15 @@ begin
   CheckEquals(Self.L1.Username,
               Self.Method.FirstUsername,
               'We ignore L2''s username');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestTryAgain;
+begin
+  Self.L1.TryAgain := true;
+
+  Self.Method.Run(Self.L1);
+
+  Check(Self.Method.TryAgain, 'TryAgain not set');
 end;
 
 procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestNoListenerSetsPassword;

@@ -82,7 +82,8 @@ type
     procedure MoveTranToConfirmed(Tran: TIdSipServerInviteTransaction);
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest);
+                                        ChallengeResponse: TIdSipRequest;
+                                        var TryAgain: Boolean);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -122,6 +123,7 @@ type
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteYieldsTrying;
+    procedure TestListenerSaysDontTryAgain;
     procedure TestNotifyOnAuthenticationChallengeHasRejectedRequest;
     procedure TestOnClientInviteTransactionTimerA;
     procedure TestOnClientInviteTransactionTimerB;
@@ -436,6 +438,7 @@ type
     procedure TestLastListenerSetsChallengeResponse;
     procedure TestNoListenerSetsPassword;
     procedure TestRun;
+    procedure TestTryAgain;
   end;
 
   TestTIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TTransactionDispatcherListenerMethodTestCase)
@@ -895,7 +898,8 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                                     Challenge: TIdSipResponse;
-                                                                    ChallengeResponse: TIdSipRequest);
+                                                                    ChallengeResponse: TIdSipRequest;
+                                                                    var TryAgain: Boolean);
 var
   ChallengeHeader: TIdSipAuthenticateHeader;
   Response:        TIdSipAuthorizationHeader;
@@ -903,6 +907,8 @@ var
   RI:              TIdRealmInfo;
   Target:          String;
 begin
+  TryAgain := true;
+
   Self.RejectedRequest.Assign(ChallengeResponse);
 
   ChallengeResponse.Assign(Self.LastSentRequest);
@@ -1273,6 +1279,27 @@ begin
   CheckEquals(SIPTrying,
               Self.LastSentResponse.StatusCode,
               'First response');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestListenerSaysDontTryAgain;
+var
+  LazyListener: TIdSipTestTransactionDispatcherListener;
+begin
+  LazyListener := TIdSipTestTransactionDispatcherListener.Create;
+  try
+    LazyListener.TryAgain := false;
+
+    Self.D.AddTransactionDispatcherListener(LazyListener);
+    Self.D.AddClientTransaction(Self.Invite).SendRequest;
+
+    Self.MarkSentRequestCount;
+    Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
+
+    CheckNoRequestSent('Reattempted authentication');
+  finally
+    Self.D.RemoveTransactionDispatcherListener(LazyListener);
+    LazyListener.Free;
+  end;
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestNotifyOnAuthenticationChallengeHasRejectedRequest;
@@ -5113,6 +5140,15 @@ begin
   CheckEquals(Self.L2.ChallengeResponseBranch,
               Self.Method.ChallengeResponse.LastHop.Branch,
               'We ignored L2''s authentication attempt');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestTryAgain;
+begin
+  Self.L1.TryAgain := true;
+
+  Self.Method.Run(Self.L1);
+
+  Check(Self.Method.TryAgain, 'TryAgain not set');
 end;
 
 //******************************************************************************

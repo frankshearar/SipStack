@@ -146,7 +146,8 @@ type
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String);
+                                        var Password: String;
+                                        var TryAgain: Boolean);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -206,7 +207,8 @@ type
     procedure NotifyOfChange;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest); virtual;
+                                        ChallengeResponse: TIdSipRequest;
+                                        var TryAgain: Boolean); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -377,7 +379,8 @@ type
     function  GetFrom: TIdSipFromHeader;
     procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
                                               var Username: String;
-                                              var Password: String);
+                                              var Password: String;
+                                              var TryAgain: Boolean);
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
@@ -415,7 +418,8 @@ type
                                   const HeaderName: String): Boolean;
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest); override;
+                                        ChallengeResponse: TIdSipRequest;
+                                        var TryAgain: Boolean); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; virtual;
@@ -1295,6 +1299,7 @@ type
     fChallenge:     TIdSipResponse;
     fFirstPassword: String;
     fFirstUsername: String;
+    fTryAgain:      Boolean;
     fUserAgent:     TIdSipAbstractUserAgent;
   public
     procedure Run(const Subject: IInterface); override;
@@ -1302,6 +1307,7 @@ type
     property Challenge:     TIdSipResponse          read fChallenge write fChallenge;
     property FirstPassword: String                  read fFirstPassword write fFirstPassword;
     property FirstUsername: String                  read fFirstUsername write fFirstUsername;
+    property TryAgain:      Boolean                 read fTryAgain write fTryAgain;
     property UserAgent:     TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
@@ -1557,9 +1563,12 @@ end;
 
 procedure TIdSipAbstractCore.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                        Challenge: TIdSipResponse;
-                                                       ChallengeResponse: TIdSipRequest);
+                                                       ChallengeResponse: TIdSipRequest;
+                                                       var TryAgain: Boolean);
 begin
-  // do nothing
+  // Usually we want to re-issue a challenged request.
+
+  TryAgain := true;
 end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
@@ -2785,7 +2794,8 @@ end;
 
 procedure TIdSipAbstractUserAgent.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                             Challenge: TIdSipResponse;
-                                                            ChallengeResponse: TIdSipRequest);
+                                                            ChallengeResponse: TIdSipRequest;
+                                                            var TryAgain: Boolean);
 var
   AffectedAction:  TIdSipAction;
   AuthHeader:      TIdSipAuthorizationHeader;
@@ -2813,10 +2823,12 @@ begin
   // the BYE, it's left the conversation. If it didn't, the UAC will simply
   // drop your challenge.
 
-  inherited OnAuthenticationChallenge(Dispatcher, Challenge, ChallengeResponse);
+  inherited OnAuthenticationChallenge(Dispatcher, Challenge, ChallengeResponse, TryAgain);
 
-  Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
+  Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password, TryAgain);
   try
+    if not TryAgain then Exit;
+
     ChallengeResponse.CSeq.Increment;
     ChallengeResponse.LastHop.Branch := Self.NextBranch;
 
@@ -2962,18 +2974,21 @@ end;
 
 procedure TIdSipAbstractUserAgent.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
                                                                   var Username: String;
-                                                                  var Password: String);
+                                                                  var Password: String;
+                                                                  var TryAgain: Boolean);
 var
   Notification: TIdSipUserAgentAuthenticationChallengeMethod;
 begin
   Notification := TIdSipUserAgentAuthenticationChallengeMethod.Create;
   try
-    Notification.UserAgent := Self;
     Notification.Challenge := Response;
+    Notification.TryAgain  := TryAgain;
+    Notification.UserAgent := Self;
 
     Self.UserAgentListeners.Notify(Notification);
 
     Password := Notification.FirstPassword;
+    TryAgain := Notification.TryAgain;
     Username := Notification.FirstUsername;
   finally
     Notification.Free;
@@ -6337,7 +6352,8 @@ begin
   Listener.OnAuthenticationChallenge(Self.UserAgent,
                                      Self.Challenge,
                                      Username,
-                                     Password);
+                                     Password,
+                                     Self.fTryAgain);
 
   if (Self.FirstPassword = '') then
     Self.FirstPassword := Password;

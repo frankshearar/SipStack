@@ -381,10 +381,12 @@ type
     fReceiverParam:             TIdSipTransport;
     fRequestParam:              TIdSipRequest;
     fResponseParam:             TIdSipResponse;
+    fTryAgain:                  Boolean;
 
     procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                         Challenge: TIdSipResponse;
-                                        ChallengeResponse: TIdSipRequest);
+                                        ChallengeResponse: TIdSipRequest;
+                                        var TryAgain: Boolean);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -403,6 +405,7 @@ type
     property ReceiverParam:             TIdSipTransport             read fReceiverParam;
     property RequestParam:              TIdSipRequest               read fRequestParam;
     property ResponseParam:             TIdSipResponse              read fResponseParam;
+    property TryAgain:                  Boolean                     read fTryAgain write fTryAgain;
   end;
 
   TIdSipTestUserAgentListener = class(TIdSipMockListener,
@@ -416,13 +419,15 @@ type
     fResponseParam:           TIdSipResponse;
     fMessageParam:            TIdSipMessage;
     fSessionParam:            TIdSipInboundSession;
+    fTryAgain:                Boolean;
     fUserAgentParam:          TIdSipAbstractUserAgent;
     fUsername:                String;
 
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String);
+                                        var Password: String;
+                                        var TryAgain: Boolean);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                          Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -437,6 +442,7 @@ type
     property ResponseParam:           TIdSipResponse          read fResponseParam;
     property MessageParam:            TIdSipMessage           read fMessageParam;
     property SessionParam:            TIdSipInboundSession    read fSessionParam;
+    property TryAgain:                Boolean                 read fTryAgain write fTryAgain;
     property UserAgentParam:          TIdSipAbstractUserAgent read fUserAgentParam;
     property Username:                String                  read fUsername write fUsername;
   end;
@@ -1128,18 +1134,25 @@ begin
   Self.fReceivedResponse          := false;
   Self.fReceivedUnhandledRequest  := false;
   Self.fReceivedUnhandledResponse := false;
+
+  // Usually you'd want to re-issue a request that the UAS challenged.
+  Self.TryAgain := true;
 end;
 
 //* TIdSipTestTransactionDispatcherListener Private methods ********************
 
 procedure TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
                                                                             Challenge: TIdSipResponse;
-                                                                            ChallengeResponse: TIdSipRequest);
+                                                                            ChallengeResponse: TIdSipRequest;
+                                                                            var TryAgain: Boolean);
 begin
   Self.fAuthenticationChallenge := true;
   Self.fDispatcherParam         := Dispatcher;
   Self.fChallengeParam          := Challenge;
   Self.fChallengeResponseBranch := ChallengeResponse.LastHop.Branch;
+
+  // We set the var parameter, not our instance variable!
+  TryAgain := Self.TryAgain;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge');
@@ -1186,7 +1199,8 @@ end;
 procedure TIdSipTestUserAgentListener.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                                                 Challenge: TIdSipResponse;
                                                                 var Username: String;
-                                                                var Password: String);
+                                                                var Password: String;
+                                                                var TryAgain: Boolean);
 begin
   Self.fUserAgentParam          := UserAgent;
   Self.fAuthenticationChallenge := true;
@@ -1194,6 +1208,7 @@ begin
 
   // We set the var parameter, not our instance variable!
   Password := Self.Password;
+  TryAgain := Self.TryAgain;
   Username := Self.Username;
 
   if Assigned(Self.FailWith) then
