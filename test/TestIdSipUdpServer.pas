@@ -208,7 +208,7 @@ begin
     CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
     CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
 
-    CheckEquals(Format(MalformedToken, [ContentLengthHeaderFull, 'Content-Length: -999']),
+    CheckEquals(Format(MalformedToken, [ContentLengthHeaderFull, '-999']),
                 Response.StatusText,
               'StatusText');
   finally
@@ -224,7 +224,7 @@ begin
   try
     CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
     CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
+    CheckEquals(Format(MalformedToken, [ToHeaderFull, '"Mr. J. User <sip:j.user@company.com>']),
                 Response.StatusText,
                 'StatusText');
   finally
@@ -283,7 +283,7 @@ begin
     CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
     CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
     CheckEquals(Format(MalformedToken,
-                       [ExpiresHeader, 'Expires: 0 0l@company.com']),
+                       [ExpiresHeader, '0 0l@company.com']),
                 Response.StatusText,
                 'StatusText');
   finally
@@ -299,7 +299,7 @@ begin
   try
     CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
     CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
+    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
                 Response.StatusText,
                 'StatusText');
   finally

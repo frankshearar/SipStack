@@ -41,7 +41,6 @@ type
   published
     procedure TestCaseInsensitivityOfContentLengthHeader;
     procedure TestGetHeaderName;
-    procedure TestGetHeaderNumberValue;
     procedure TestGetHeaderValue;
 //    procedure TestHasValidSyntax;
     procedure TestIsIPv6Reference;
@@ -65,11 +64,10 @@ type
     procedure TestParseAndMakeResponseFromString;
     procedure TestParseExtensiveRequest;
     procedure TestParseRequest;
-    procedure TestParseRequestBadCSeq;
     procedure TestParseRequestEmptyString;
     procedure TestParseRequestFoldedHeader;
     procedure TestParseRequestFromAResponseString;
-    procedure TestParseRequestMalformedMaxForwards;
+    procedure TestParseRequestMalformedHeader;
     procedure TestParseRequestMalformedMethod;
     procedure TestParseRequestMalformedRequestLine;
     procedure TestParseRequestMessageBodyLongerThanContentLength;
@@ -242,34 +240,6 @@ begin
   CheckEquals('haha', Self.P.GetHeaderName(' haha'),       ' haha');
   CheckEquals('',     Self.P.GetHeaderName(''),            '''''');
   CheckEquals('',     Self.P.GetHeaderName(#0),            '#0');
-end;
-
-procedure TestTIdSipParser.TestGetHeaderNumberValue;
-begin
-  CheckEquals(12, Self.P.GetHeaderNumberValue(Request, 'one :12'), 'one :12');
-  CheckEquals(13, Self.P.GetHeaderNumberValue(Request, 'one:13'), 'one:13');
-  CheckEquals(14, Self.P.GetHeaderNumberValue(Request, 'one : 14'), 'one : 14');
-
-  try
-    Self.P.GetHeaderNumberValue(Request, '');
-    Fail('Failed to bail getting numeric value of '''' (request)');
-  except
-    on EBadRequest do;
-  end;
-
-  try
-    Self.P.GetHeaderNumberValue(Response, '');
-    Fail('Failed to bail getting numeric value of '''' (response)');
-  except
-    on EBadResponse do;
-  end;
-
-  try
-    Self.P.GetHeaderNumberValue(Response, 'haha: one');
-    Fail('Failed to bail getting numeric value of ''haha: one''');
-  except
-    on EBadResponse do;
-  end;
 end;
 
 procedure TestTIdSipParser.TestGetHeaderValue;
@@ -455,6 +425,7 @@ const
                    + #13#10;
 var
   ExpectedReason: String;
+  Msg:            TIdSipMessage;
   Str:            TStringStream;
 begin
   ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
@@ -464,11 +435,12 @@ begin
     Self.P.OnParserError := Self.CheckParserError;
     Self.P.Source := Str;
 
+    Msg := Self.P.ParseAndMakeMessage;
     try
-      Self.P.ParseAndMakeMessage.Free;
-    except
-      on E: EParserError do
-        CheckEquals(ExpectedReason, E.Message, 'Unexpected exception');
+      Check(Msg.HasInvalidSyntax,
+            'Msg has invalid syntax, but not branded as such');
+    finally
+      Msg.Free;
     end;
     CheckEquals(ExpectedReason,
                 Self.ParseError,
@@ -483,17 +455,19 @@ end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyStream;
 var
+  Msg: TIdSipMessage;
   Str: TStringStream;
 begin
   Str := TStringStream.Create('');
   try
     Self.P.Source := Str;
 
+    Msg := Self.P.ParseAndMakeMessage;
     try
-      Self.P.ParseAndMakeMessage.Free;
-    except
-      on E: EParserError do
-        CheckEquals(EmptyInputStream, E.Message, 'Unexpected exception');
+      Check(Msg.HasInvalidSyntax,
+            'Failed to bail out of empty string');
+    finally
+      Msg.Free;
     end;
   finally
     Str.Free;
@@ -515,6 +489,7 @@ end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageMalformedRequest;
 var
+  Msg: TIdSipMessage;
   Str: TStringStream;
 begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
@@ -522,11 +497,12 @@ begin
   try
     Self.P.Source := Str;
 
+    Msg := Self.P.ParseAndMakeMessage;
     try
-      Self.P.ParseAndMakeMessage;
-      Fail('Failed to bail out on parsing a malformed message');
-    except
-      on E: EBadRequest do;
+      Check(Msg.HasInvalidSyntax,
+            'Failed to bail out on parsing a malformed message');
+    finally
+      Msg.Free;
     end;
   finally
     Str.Free;
@@ -720,31 +696,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipParser.TestParseRequestBadCSeq;
-var
-  Str: TStringStream;
-begin
-  Str := TStringStream.Create(StringReplace(BasicRequest,
-                                            'CSeq: 314159 INVITE',
-                                            'CSeq: 314159 REGISTER',
-                                            []));
-  try
-    Self.P.Source := Str;
-
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(CSeqMethodMismatch,
-                    E.Message,
-                    'Unexpected exception');
-    end;
-  finally
-    Str.Free;
-  end;
-end;
-
 procedure TestTIdSipParser.TestParseRequestEmptyString;
 var
   Str: TStringStream;
@@ -753,12 +704,9 @@ begin
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out on parsing an empty string');
-    except
-      on EBadRequest do;
-    end;
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Failed to bail out on parsing an empty string');
   finally
     Str.Free;
   end;
@@ -799,38 +747,28 @@ begin
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out creating a request from a malformed response');
-    except
-      on EBadRequest do;
-    end;
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Failed to bail out creating a request from a malformed response');
   finally
     Str.Free;
   end;
 end;
 
-procedure TestTIdSipParser.TestParseRequestMalformedMaxForwards;
+procedure TestTIdSipParser.TestParseRequestMalformedHeader;
 var
   Str: TStringStream;
 begin
-  // Section 20.22 states that 0 <= Max-Forwards <= 255
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-                            + 'Max-Forwards: 666'#13#10
-                            + #13#10);
+  Str := TStringStream.Create(StringReplace(BasicRequest,
+                                            'CSeq: 314159 INVITE',
+                                            'CSeq: 314159 REGISTER',
+                                            []));
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out on a Bad Request');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, [MaxForwardsHeader,
-                                            'Max-Forwards: 666']),
-                    E.Message,
-                    'Exception type');
-    end;
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -849,13 +787,9 @@ begin
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out on a Bad Request');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Method', 'Bad"method']), E.Message, 'Exception type');
-    end;
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Failed to bail out on a Bad Request');
   finally
     Str.Free;
   end;
@@ -869,13 +803,10 @@ begin
   Str := TStringStream.Create('INVITE  sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (too many spaces between Method and Request-URI) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(RequestUriNoSpaces, E.Message, 'Too many spaces');
-    end;
+
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Malformed start line (too many spaces between Method and Request-URI) parsed without error');
   finally
     Str.Free;
   end;
@@ -884,15 +815,10 @@ begin
   Str := TStringStream.Create('INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (no spaces between Method and Request-URI) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITEsip:wintermute@tessier-ashpool.co.lunaSIP/2.0']),
-                    E.Message,
-                    'Missing spaces');
-    end;
+
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Malformed start line (no spaces between Method and Request-URI) parsed without error');
   finally
     Str.Free;
   end;
@@ -901,15 +827,10 @@ begin
   Str := TStringStream.Create('sip:wintermute@tessier-ashpool.co.luna SIP/2.0');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (no Method) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Request-Line', 'sip:wintermute@tessier-ashpool.co.luna SIP/2.0']),
-                    E.Message,
-                    'Missing Method');
-    end;
+
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Malformed start line (no Method) parsed without error');
   finally
     Str.Free;
   end;
@@ -918,15 +839,10 @@ begin
   Str := TStringStream.Create('INVITE'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (no Request-URI, no SIP-Version) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITE']),
-                    E.Message,
-                    'Missing Request & SIP Version');
-    end;
+
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Malformed start line (no Request-URI, no SIP-Version) parsed without error');
   finally
     Str.Free;
   end;
@@ -934,13 +850,10 @@ begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (malformed SIP-Version) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(Format(InvalidSipVersion, ['SIP/;2.0']), E.Message, 'Malformed SIP-Version');
-    end;
+
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Malformed start line (malformed SIP-Version) parsed without error');
   finally
     Str.Free;
   end;
@@ -987,15 +900,10 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingCallID,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1018,15 +926,9 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingCSeq,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1049,15 +951,9 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingFrom,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1106,15 +1002,9 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingTo,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1137,15 +1027,9 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Self.Request);
-      Fail('Failed to bail out');
-    except
-      on E: EBadRequest do
-        CheckEquals(MissingVia,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Self.Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1214,15 +1098,9 @@ begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier ashpool.co.lu SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (Request-URI has spaces) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(RequestUriNoSpaces,
-                    E.Message,
-                    '<>');
-    end;
+     Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Malformed start line (Request-URI has spaces) parsed without error');
   finally
     Str.Free;
   end;
@@ -1235,15 +1113,9 @@ begin
   Str := TStringStream.Create('INVITE <sip:wintermute@tessier-ashpool.co.luna> SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
-    except
-      on E: EBadRequest do
-        CheckEquals(RequestUriNoAngleBrackets,
-                    E.Message,
-                    '<>');
-    end;
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
   finally
     Str.Free;
   end;
@@ -1275,16 +1147,9 @@ begin
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out');
-    except
-      on E: EParserError do
-        CheckEquals(MissingContentType,
-                    E.Message,
-                    'Unexpected exception');
-    end;
-
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+          'Failed to bail out');
   finally
     Str.Free;
   end;
@@ -1404,15 +1269,10 @@ begin
   Str := TStringStream.Create('SIP/1.0 Aheh OK'#13#10);
   try
     Self.P.Source := Str;
-    try
-      Self.P.ParseResponse(Response);
-      Fail('Failed to reject a non-numeric Status-Code');
-    except
-      on E: EBadResponse do
-        CheckEquals(Format(InvalidStatusCode, ['Aheh']),
-                    E.Message,
-                    '<>');
-    end;
+    Self.P.ParseResponse(Self.Response);
+
+    Check(Self.Response.HasInvalidSyntax,
+          'Failed to reject a non-numeric Status-Code');
   finally
     Str.Free;
   end;
@@ -1866,15 +1726,9 @@ begin
   try
     Self.P.Source := Str;
 
-    try
-      Self.P.ParseRequest(Request);
-      Fail('Failed to bail out of a bad request');
-    except
-      on E: EBadRequest do
-        CheckEquals(ExpectedExceptionMsg,
-                    E.Message,
-                    'Unexpected exception');
-    end;
+    Self.P.ParseRequest(Request);
+    Check(Self.Request.HasInvalidSyntax,
+                'Failed to bail out of a bad request');
   finally
     Str.Free;
   end;

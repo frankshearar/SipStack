@@ -345,22 +345,6 @@ type
     procedure TestSuccessfulAuthentication;
   end;
 
-  TestTIdSipSessionTimer = class(TTestCase)
-  private
-    Dispatcher: TIdSipMockTransactionDispatcher;
-    Invite:     TIdSipRequest;
-    NullTran:   TIdSipTransaction;
-    Session:    TIdSipMockSession;
-    Timer:      TIdSipSessionTimer;
-    UA:         TIdSipUserAgentCore;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestFireResendsSessionsLastResponse;
-    procedure TestTimerIntervalIncreases;
-  end;
-
   TestTIdSipInboundOptions = class(TestTIdSipAction)
   private
     procedure SimulateRemoteOptions;
@@ -583,7 +567,6 @@ begin
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
   Result.AddTest(TestProxyAuthentication.Suite);
-  Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
   Result.AddTest(TestTIdSipInboundRegistration.Suite);
@@ -4034,60 +4017,6 @@ begin
                  MD5),
               Auth.Response,
               'Response');
-end;
-
-//******************************************************************************
-//* TestTIdSipSessionTimer                                                     *
-//******************************************************************************
-//* TestTIdSipSessionTimer Public methods **************************************
-
-procedure TestTIdSipSessionTimer.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
-  Self.Invite        := TIdSipTestResources.CreateLocalLoopRequest;
-  Self.NullTran      := TIdSipNullTransaction.Create(Self.Dispatcher, Self.Invite);
-  Self.UA            := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := Self.Dispatcher;
-  Self.Session       := TIdSipMockSession.Create(UA,
-                                                 Self.Invite,
-                                                 Self.Dispatcher.Transport.IsSecure);
-  Self.Timer         := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
-end;
-
-procedure TestTIdSipSessionTimer.TearDown;
-begin
-  Self.Timer.Free;
-  Self.Session.Free;
-  Self.UA.Free;
-  Self.Invite.Free;
-  Self.NullTran.Free;
-  Self.Dispatcher.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipSessionTimer Published methods ***********************************
-
-procedure TestTIdSipSessionTimer.TestFireResendsSessionsLastResponse;
-begin
-  Check(not Self.Session.ResponseResent, 'Sanity check');
-  Self.Timer.Fire;
-  Check(Self.Session.ResponseResent, 'Fire didn''t affect the Session');
-end;
-
-procedure TestTIdSipSessionTimer.TestTimerIntervalIncreases;
-begin
-  CheckEquals(DefaultT1,   Self.Timer.Interval, 'Initial interval');
-  Self.Timer.Fire;
-  CheckEquals(2*DefaultT1, Self.Timer.Interval, 'Fire once');
-  Self.Timer.Fire;
-  CheckEquals(4*DefaultT1, Self.Timer.Interval, 'Fire twice');
-  Self.Timer.Fire;
-  CheckEquals(DefaultT2,   Self.Timer.Interval, 'Fire thrice');
-  Self.Timer.Fire;
-  CheckEquals(DefaultT2,   Self.Timer.Interval, 'Fire four times');
 end;
 
 //******************************************************************************

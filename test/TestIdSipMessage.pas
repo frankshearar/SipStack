@@ -38,6 +38,8 @@ type
   TestTIdSipMessage = class(TTestCaseSip)
   private
     Msg: TIdSipMessage;
+  protected
+    procedure AddRequiredHeaders(Msg: TIdSipMessage);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -54,6 +56,11 @@ type
     procedure TestFirstMinExpires;
     procedure TestFirstRequire;
     procedure TestHasExpiry;
+    procedure TestHasInvalidSyntaxMissingCallID;
+    procedure TestHasInvalidSyntaxMissingCseq;
+    procedure TestHasInvalidSyntaxMissingFrom;
+    procedure TestHasInvalidSyntaxMissingTo;
+    procedure TestHasInvalidSyntaxMissingVia;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestQuickestExpiry;
@@ -76,7 +83,7 @@ type
     procedure TestWillEstablishDialog;
   end;
 
-  TestTIdSipRequest = class(TTestCaseSip)
+  TestTIdSipRequest = class(TestTIdSipMessage)
   private
     Request:  TIdSipRequest;
     Response: TIdSipResponse;
@@ -103,6 +110,7 @@ type
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
+    procedure TestHasInvalidSyntaxMissingVia;
     procedure TestIsAck;
     procedure TestIsBye;
     procedure TestIsCancel;
@@ -127,7 +135,7 @@ type
     procedure TestSetRoute;
   end;
 
-  TestTIdSipResponse = class(TTestCaseSip)
+  TestTIdSipResponse = class(TestTIdSipMessage)
   private
     Contact:  TIdSipContactHeader;
     Request:  TIdSipRequest;
@@ -355,6 +363,17 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipMessage Protected methods ****************************************
+
+procedure TestTIdSipMessage.AddRequiredHeaders(Msg: TIdSipMessage);
+begin
+  Msg.AddHeader(CallIDHeaderFull).Value := 'foo';
+  Msg.AddHeader(CSeqHeader).Value := '1 foo';
+  Msg.AddHeader(FromHeaderFull).Value := 'foo';
+  Msg.AddHeader(ToHeaderFull).Value := 'foo';
+  Msg.AddHeader(ViaHeaderFull).Value := 'SIP/2.0 UDP foo';
+end;
+
 //* TestTIdSipMessage Published methods ****************************************
 
 procedure TestTIdSipMessage.TestAddHeader;
@@ -560,6 +579,46 @@ begin
   Self.Msg.AddHeader(ExpiresHeader);
   Check(Self.Msg.HasExpiry,
         'Expires header and Contact with Expires parameter');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingCallID;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(CallIDHeaderFull);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing Call-ID header');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingCseq;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(CSeqHeader);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing CSeq header');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingFrom;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(FromHeaderFull);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing From header');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingTo;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(ToHeaderFull);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing To header');
+end;
+
+procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingVia;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing Via header');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;
@@ -1291,6 +1350,14 @@ begin
 
   Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
   Check(Self.Request.HasSipsUri, 'sips URI');
+end;
+
+procedure TestTIdSipRequest.TestHasInvalidSyntaxMissingVia;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
+
+  Check(Self.Msg.HasInvalidSyntax, 'Missing Via header');
 end;
 
 procedure TestTIdSipRequest.TestIsAck;

@@ -114,8 +114,8 @@ type
                        Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
     procedure ReturnBadRequest(Connection: TIdTCPConnection;
-                               Reason: String;
-                               Parser: TIdSipParser);
+                               Request: TIdSipRequest;
+                               const Reason: String);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
                                         Reason: String;
                                         Parser: TIdSipParser);
@@ -423,6 +423,7 @@ function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
   Msg:          TIdSipMessage;
   Parser:       TIdSipParser;
+  Reason:       String;
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStream;
 begin
@@ -444,29 +445,33 @@ begin
           try
             if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
               Msg.ContentLength := 0;
+
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
-            if Msg.IsRequest then begin
-              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-              Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom);
+            if Msg.HasInvalidSyntax then begin
+              Reason := Msg.ParseFailReason;
+
+              Self.ReturnBadRequest(AThread.Connection, Msg as TIdSipRequest, Reason);
+              AThread.Connection.DisconnectSocket;
+
+              Self.NotifyListenersOfMalformedMessage(StreamToStr(S), Reason);
             end
-            else
-              Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+            else begin
+              if Msg.IsRequest then begin
+                Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+                Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom);
+              end
+              else
+                Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+            end;
           finally
             Msg.Free;
           end;
         except
-          on E: EBadRequest do begin
-            Self.ReturnBadRequest(AThread.Connection, E.Message, Parser);
-            AThread.Connection.DisconnectSocket;
-          end;
-          on E: EBadResponse do begin
-            // drop it on the floor
-            AThread.Connection.DisconnectSocket;
-          end;
           on E: Exception do begin
             Self.ReturnInternalServerError(AThread.Connection, E.Message, Parser);
             AThread.Connection.DisconnectSocket;
+            Self.NotifyListenersOfException(E, 'TCP Server: ' + E.Message);
           end;
         end;
       finally
@@ -614,29 +619,16 @@ begin
 end;
 
 procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection;
-                                           Reason: String;
-                                           Parser: TIdSipParser);
+                                           Request: TIdSipRequest;
+                                           const Reason: String);
 var
-  OwnVia: TIdSipViaHeader;
-  Res:    TIdSipResponse;
+  Res: TIdSipResponse;
 begin
-  Res := TIdSipResponse.Create;
+  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
   try
-    // We really can't do much more than this. The message was unparseable,
-    // so what else can we do?
-    Res.StatusCode := SIPBadRequest;
     Res.StatusText := Reason;
-    Res.SipVersion := SipVersion;
 
-    OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-    OwnVia.Port       := Connection.Socket.Binding.Port;
-    OwnVia.SentBy     := Connection.Socket.Binding.IP;
-    OwnVia.SipVersion := SIPVersion;
-    OwnVia.Transport  := sttUDP;
-
-    // We need From, To, CSeq, Call-ID headers!
-
-    Self.WriteMessage(Connection, Res);
+    Connection.Write(Res.AsString);
   finally
     Res.Free;
   end;

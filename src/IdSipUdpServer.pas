@@ -23,12 +23,13 @@ type
     procedure DoOnParserError(const RawMessage, Reason: String);
     procedure NotifyListeners(const Request: TIdSipRequest;
                               const ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure NotifyListenersOfException(E: Exception);
+    procedure NotifyListenersOfException(E: Exception;
+                                         const Reason: String);
     procedure NotifyListenersOfMalformedMessage(const Msg: String;
                                                 const Reason: String);
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
-                               const Reason: String;
-                               Parser: TIdSipParser);
+                               Request: TIdSipRequest;
+                               const Reason: String);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
     procedure NotifyListeners(const Response: TIdSipResponse;
@@ -111,27 +112,31 @@ begin
                            [RemainingBytes, Msg.ContentLength]);
           RawMsg := StreamToStr(AData);
           Self.NotifyListenersOfMalformedMessage(RawMsg, Reason);
-          raise EBadRequest.Create(Reason, RawMsg);
+          Self.ReturnBadRequest(ABinding, Msg as TIdSipRequest, Reason);
         end;
 
-        Msg.ReadBody(Parser.Source);
+        if Msg.HasInvalidSyntax then begin
+          Reason := Msg.ParseFailReason;
 
-        if Msg.IsRequest then
-          Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom)
-        else
-          Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+          if Msg.IsRequest then
+            Self.ReturnBadRequest(ABinding, Msg as TIdSipRequest, Reason);
+
+          Self.NotifyListenersOfMalformedMessage(StreamToStr(AData), Reason);
+        end
+        else begin
+          Msg.ReadBody(Parser.Source);
+
+          if Msg.IsRequest then
+            Self.NotifyListeners(Msg as TIdSipRequest, ReceivedFrom)
+          else
+            Self.NotifyListeners(Msg as TIdSipResponse, ReceivedFrom);
+        end;
       finally
         Msg.Free;
       end;
     except
-      on E: EBadRequest do begin
-        Self.ReturnBadRequest(ABinding, E.Message, Parser);
-      end;
-      on E: EBadResponse do begin
-        // drop it on the floor
-      end;
       on E: Exception do begin
-        Self.NotifyListenersOfException(E);
+        Self.NotifyListenersOfException(E, E.Message);
       end;
     end;
   finally
@@ -178,14 +183,15 @@ begin
   end;
 end;
 
-procedure TIdSipUdpServer.NotifyListenersOfException(E: Exception);
+procedure TIdSipUdpServer.NotifyListenersOfException(E: Exception;
+                                                     const Reason: String);
 var
   Notification: TIdSipTcpServerExceptionMethod;
 begin
   Notification := TIdSipTcpServerExceptionMethod.Create;
   try
     Notification.Exception := E;
-    Notification.Reason := 'UDP server: ' + E.Message;
+    Notification.Reason    := Reason;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -200,7 +206,7 @@ var
 begin
   Notification := TIdSipTcpServerMalformedMessageMethod.Create;
   try
-    Notification.Msg := Msg;
+    Notification.Msg    := Msg;
     Notification.Reason := Reason;
 
     Self.Listeners.Notify(Notification);
@@ -210,25 +216,14 @@ begin
 end;
 
 procedure TIdSipUdpServer.ReturnBadRequest(Binding: TIdSocketHandle;
-                                           const Reason: String;
-                                           Parser: TIdSipParser);
+                                           Request: TIdSipRequest;
+                                           const Reason: String);
 var
-  OwnVia: TIdSipViaHeader;
-  Res:    TIdSipResponse;
+  Res: TIdSipResponse;
 begin
-  Res := TIdSipResponse.Create;
+  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
   try
-    // We really can't do much more than this. The message was unparseable,
-    // so what else can we do?
-    Res.StatusCode := SIPBadRequest;
     Res.StatusText := Reason;
-    Res.SipVersion := SipVersion;
-
-    OwnVia := Res.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-    OwnVia.Port       := Binding.Port;
-    OwnVia.SentBy     := Binding.IP;
-    OwnVia.SipVersion := SIPVersion;
-    OwnVia.Transport  := sttUDP;
 
     Self.Send(Binding.PeerIP, Binding.PeerPort, Res.AsString);
   finally

@@ -369,8 +369,8 @@ begin
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
-  Self.Request          := TIdSipRequest.Create;
-  Self.Response         := TIdSipResponse.Create;
+  Self.Request          := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.Response         := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Transport        := TIdSipTransportSubclass.Create;
 end;
 

@@ -1473,6 +1473,9 @@ end;
 procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.From.Assign(Value);
+  
+  if Self.From.HasInvalidSyntax then
+    raise EBadHeader.Create(Self.From.Name);
 end;
 
 //******************************************************************************
@@ -2252,6 +2255,9 @@ begin
        + 'Contact');
 
   Self.Contact.Assign(Value);
+  
+  if Self.Contact.HasInvalidSyntax then
+    raise EBadHeader.Create(Self.Contact.Name);
 end;
 
 procedure TIdSipUserAgentCore.SetDefaultRegistrationExpiryTime(Value: Cardinal);
