@@ -3185,6 +3185,7 @@ begin
   CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderShort),            FromHeaderShort);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(InReplyToHeader),            InReplyToHeader);
   CheckType(TIdSipMaxForwardsHeader,            Self.H.Add(MaxForwardsHeader),          MaxForwardsHeader);
+  CheckType(TIdSipNumericHeader,                Self.H.Add(MinExpiresHeader),          MinExpiresHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(MIMEVersionHeader),          MIMEVersionHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(OrganizationHeader),         OrganizationHeader);
