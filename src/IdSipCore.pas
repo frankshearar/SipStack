@@ -839,6 +839,7 @@ type
     procedure SendBye(Response: TIdSipResponse;
                       UsingSecureTransport: Boolean);
     procedure SendCancel;
+    procedure SetAckBody(Ack: TIdSipRequest);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
@@ -4251,17 +4252,7 @@ var
 begin
   Ack := Self.UA.CreateAck(Dialog);
   try
-    if Self.InitialRequest.HasBody then begin
-      // cf. RFC 3261, section 13.2.2.4
-      Ack.Body        := Self.InitialRequest.Body;
-      Ack.ContentType := Self.InitialRequest.ContentType;
-    end
-    else begin
-      Ack.Body        := Self.Offer;
-      Ack.ContentType := Self.MimeType;
-    end;
-    Ack.ContentDisposition.Value := DispositionSession;
-    Ack.ContentLength := Length(Ack.Body);
+    Self.SetAckBody(Ack);
 
     // cf. RFC 3261 section 22.1
     if Self.InitialRequest.HasAuthorization then
@@ -4491,6 +4482,11 @@ begin
   try
     Ack := Self.UA.CreateAck(Dlg);
     try
+      // We're not actually interested in setting up the session media. However,
+      // the remote end expects to see an ACK with an offer so that's what we
+      // give the remote end.
+      Self.SetAckBody(Ack);
+
       Self.SendRequest(Ack);
     finally
       Ack.Free;
@@ -4536,6 +4532,21 @@ begin
   end;
 
   Self.SendRequest(Self.CancelRequest);
+end;
+
+procedure TIdSipOutboundInvite.SetAckBody(Ack: TIdSipRequest);
+begin
+  if Self.InitialRequest.HasBody then begin
+    // cf. RFC 3261, section 13.2.2.4
+    Ack.Body        := Self.InitialRequest.Body;
+    Ack.ContentType := Self.InitialRequest.ContentType;
+  end
+  else begin
+    Ack.Body        := Self.Offer;
+    Ack.ContentType := Self.MimeType;
+  end;
+  Ack.ContentDisposition.Value := DispositionSession;
+  Ack.ContentLength := Length(Ack.Body);
 end;
 
 //******************************************************************************
