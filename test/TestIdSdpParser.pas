@@ -14,10 +14,14 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestIsInfo;
+    procedure TestIsPhone;
+    procedure TestIsPhoneNumber;
     procedure TestIsText;
-    procedure TestIsUri;
+    procedure TestParseEmail;
+    procedure TestParseEmailBracketedName;
+    procedure TestParseEmailRfc822;
     procedure TestParseEmptyStream;
+    procedure TestParseInvalidHeaderOrder;
     procedure TestParseMalformedVersion;
     procedure TestParseSessionEmptyString;
     procedure TestParseSessionIllegalCharacters;
@@ -27,8 +31,17 @@ type
     procedure TestParseMissingOrigin;
     procedure TestParseMissingSession;
     procedure TestParseMissingVersion;
+    procedure TestParsePhoneNumber;
+    procedure TestParsePhoneNumberWithAngleBracketsButNoName;
+    procedure TestParsePhoneNumberWithStuffOutsideComment;
+    procedure TestParsePhoneNumberWithUnsafeChars;
     procedure TestParseUri;
   end;
+
+const
+  MinimumPayload = 'v=0'#13#10
+                 + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                 + 's=Minimum Session Info';
 
 implementation
 
@@ -64,11 +77,39 @@ end;
 
 //* TestTIdSdpParser Published methods *****************************************
 
-procedure TestTIdSdpParser.TestIsInfo;
+procedure TestTIdSdpParser.TestIsPhone;
 begin
-  Check(not TIdSdpParser.IsInfo(''),         '''''');
-  Check(not TIdSdpParser.IsInfo('v=0'),      'v=0');
-  Check(    TIdSdpParser.IsInfo('i=Heehee'), 'i=Heehee');
+  Check(not TIdSdpParser.IsPhone(''),                   '''''');
+  Check(not TIdSdpParser.IsPhone('+-1'),                '+-1');
+  Check(not TIdSdpParser.IsPhone('+1'),                 '+1');
+  Check(    TIdSdpParser.IsPhone('+1 '),                '+1 ');
+  Check(    TIdSdpParser.IsPhone('+1-'),                '+1-');
+  Check(    TIdSdpParser.IsPhone('+1-2-3'),             '+1-2-3');
+  Check(    TIdSdpParser.IsPhone('+1-2 3 '),            '+1-2 3 SP');
+  Check(    TIdSdpParser.IsPhone('+44-870  154 0 154'), '+44-870  154 0 154');
+end;
+
+procedure TestTIdSdpParser.TestIsPhoneNumber;
+begin
+  Check(not TIdSdpParser.IsPhoneNumber(''),                   '''''');
+  Check(not TIdSdpParser.IsPhoneNumber('+-1'),                '+-1');
+  Check(not TIdSdpParser.IsPhoneNumber('+1'),                 '+1');
+  Check(    TIdSdpParser.IsPhoneNumber('+1 '),                '+1 SP');
+  Check(    TIdSdpParser.IsPhoneNumber('+1-'),                '+1-');
+  Check(    TIdSdpParser.IsPhoneNumber('+1-2-3'),             '+1-2-3');
+  Check(    TIdSdpParser.IsPhoneNumber('+1-2 3 '),            '+1-2 3 SP');
+  Check(    TIdSdpParser.IsPhoneNumber('+44-870  154 0 154'), '+44-870  154 0 154');
+
+  Check(TIdSdpParser.IsPhoneNumber('"Quoted name" <+44 870 154 0 154>'),
+        '"Quoted name" <+44 870 154 0 154>');
+  Check(TIdSdpParser.IsPhoneNumber('aheh "Quoted name" <+44 870 154 0 154>'),
+        '"aheh Quoted name" <+44 870 154 0 154>');
+  Check(TIdSdpParser.IsPhoneNumber('+44 870 154 0 154'),
+        '+44 870 154 0 154');
+  Check(TIdSdpParser.IsPhoneNumber('+44 870 154 0 154 (Quoted name)'),
+        '+44 870 154 0 154 (Quoted name)');
+  Check(not TIdSdpParser.IsPhoneNumber('+44 870 154 0 154 (Quoted name) fink'),
+        '+44 870 154 0 154 (Quoted name) fink');
 end;
 
 procedure TestTIdSdpParser.TestIsText;
@@ -86,11 +127,62 @@ begin
       Check(TIdSdpParser.IsText(C), 'Checking Ord(C) = ' + IntToStr(Ord(C)));
 end;
 
-procedure TestTIdSdpParser.TestIsUri;
+procedure TestTIdSdpParser.TestParseEmail;
+var
+  S: TStringStream;
 begin
-  Check(not TIdSdpParser.IsUri(''),         '''''');
-  Check(not TIdSdpParser.IsUri('v=0'),      'v=0');
-  Check(    TIdSdpParser.IsUri('u=Heehee'), 'u=Heehee');
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'e=nihilistic@mystics.net');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals('nihilistic@mystics.net', Self.Payload.EmailAddress.Text, 'EmailAddress');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseEmailBracketedName;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'e=nihilistic@mystics.net (Apostolic alcoholics)');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    // note that "Apostolic alcoholics" is a COMMENT, not a display name.
+    CheckEquals('nihilistic@mystics.net', Self.Payload.EmailAddress.Text, 'EmailAddress.Text');
+    CheckEquals('',                       Self.Payload.EmailAddress.Name, 'EmailAddress.Name');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseEmailRfc822;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'e="Apostolic alcoholics" <nihilistic@mystics.net>');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+
+    CheckEquals('Apostolic alcoholics <nihilistic@mystics.net>',
+                Self.Payload.EmailAddress.Text,
+                'EmailAddress.Text');
+
+    CheckEquals('Apostolic alcoholics',
+                Self.Payload.EmailAddress.Name,
+                'EmailAddress.Name');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseEmptyStream;
@@ -107,6 +199,32 @@ begin
     except
       on E: EParser do
         CheckEquals(EmptyInputStream, E.Message, 'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseInvalidHeaderOrder;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('v=0'#13#10
+                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                          + 's=Minimum Session Info'#13#10
+                          + 'u=http://127.0.0.1/'#13#10
+                          + 'i=My u & i headers are swopped round');
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out when headers were in the wrong order');
+    except
+      on E: EParser do
+        CheckEquals(BadHeaderOrder,
+                    E.Message,
+                    'Unexpected exception');
     end;
   finally
     S.Free;
@@ -188,9 +306,7 @@ procedure TestTIdSdpParser.TestParseInfo;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create('v=0'#13#10
-                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's=Minimum Session Info'#13#10
+  S := TStringStream.Create(MinimumPayload + #13#10
                           + 'i=An optional header');
   try
     Self.P.Source := S;
@@ -231,9 +347,7 @@ procedure TestTIdSdpParser.TestParseMinimumPayload;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create('v=0'#13#10
-                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's=Minimum Session Info');
+  S := TStringStream.Create(MinimumPayload);
   try
     Self.P.Source := S;
 
@@ -310,23 +424,103 @@ begin
   end;
 end;
 
+procedure TestTIdSdpParser.TestParsePhoneNumber;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'p=Ziggy Stardust <+99 666 0942-3>');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals('Ziggy Stardust <+99 666 0942-3>',
+                Self.Payload.PhoneNumber,
+                'PhoneNumber');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParsePhoneNumberWithAngleBracketsButNoName;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'p=<+99 666 0942-3>');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals('<+99 666 0942-3>',
+                Self.Payload.PhoneNumber,
+                'PhoneNumber');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParsePhoneNumberWithStuffOutsideComment;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'p=+99 666 0942-3 (Ziggy Stardust) oh no! it''s garbage!');
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out with garbage outside the comment');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken,
+                           [RSSDPPhoneName,
+                            '+99 666 0942-3 (Ziggy Stardust) oh no! it''s garbage!']),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParsePhoneNumberWithUnsafeChars;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'p=+99 666 0942-3'#0);
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out with unsafe characters');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken,
+                           [RSSDPPhoneName,
+                            '+99 666 0942-3'#0]),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpParser.TestParseUri;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create('v=0'#13#10
-                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
-                          + 's=Minimum Session Info'#13#10
+  S := TStringStream.Create(MinimumPayload + #13#10
                           + 'u=http://127.0.0.1/');
   try
     Self.P.Source := S;
 
     Self.P.Parse(Self.Payload);
-    CheckEquals(0,                                                   Self.Payload.Version,        'Version');
-    CheckEquals('Minimum Session Info',                              Self.Payload.SessionName,    'SessionName');
-    CheckEquals('mhandley 2890844526 2890842807 IN IP4 126.16.64.4', Self.Payload.Origin,         'Origin');
-    CheckEquals('',                                                  Self.Payload.Info,           'Info');
-    CheckEquals('http://127.0.0.1/',                                 Self.Payload.URI.GetFullURI, 'URI');
+    CheckEquals('http://127.0.0.1/', Self.Payload.URI.GetFullURI, 'URI');
   finally
     S.Free;
   end;

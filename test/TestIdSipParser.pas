@@ -203,6 +203,7 @@ type
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
+    procedure TestParseReallyLongViaHeader;
     procedure TestParseRequest;
     procedure TestParseRequestEmptyString;
     procedure TestParseRequestFoldedHeader;
@@ -1847,6 +1848,47 @@ begin
     Msg := P.ParseAndMakeMessage;
     try
       Self.CheckBasicResponse(Msg);
+    finally
+      Msg.Free;
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseReallyLongViaHeader;
+const
+  IterCount = 49;
+var
+  Msg: TIdSipMessage;
+  Str: TStringStream;
+  S:   String;
+  I, J: Integer;
+begin
+  S := 'Via: ';
+  for I := 0 to IterCount do
+    for J := 0 to IterCount do
+      S := S + 'SIP/2.0/UDP 127.0.' + IntToStr(I) + '.' + IntToStr(J) + ',';
+  Delete(S, Length(S), 1);
+
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+               + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+               + 'Max-Forwards: 70'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+               + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+               + 'CSeq: 314159 INVITE'#13#10
+               + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+               + 'Content-Length: 29'#13#10
+               + S + #13#10
+               + #13#10
+               + 'I am a message. Hear me roar!');
+  try
+    P.Source := Str;
+
+    Msg := P.ParseAndMakeMessage;
+    try
+      Self.CheckEquals((IterCount+1)*(IterCount+1) + 1, Msg.Path.Length, 'Length');
     finally
       Msg.Free;
     end;

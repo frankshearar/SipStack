@@ -601,12 +601,12 @@ begin
 
   S := Value;
 
-  if (Pos(';', S) = 0) then begin
+  if (IndyPos(';', S) = 0) then begin
     fValue := S;
   end
   else begin
     fValue := Trim(Fetch(S, ';'));
-    if (Pos(';', S) = 0) then begin
+    if (IndyPos(';', S) = 0) then begin
       ParamValue := S;
       ParamName := Trim(Fetch(ParamValue, '='));
 
@@ -738,16 +738,16 @@ var
   URI: String;
 begin
   Result := Self.DisplayName;
-  if (Pos('"', Result) > 0) or (Pos('\', Result) > 0) then
+  if (IndyPos('"', Result) > 0) or (IndyPos('\', Result) > 0) then
     Result := Self.EncodeQuotedStr(Result);
 
   Result := Self.QuoteStringIfNecessary(Result);
 
-//  if (Pos(' ', Result) > 0) then
+//  if (IndyPos(' ', Result) > 0) then
 //    Result := '"' + Result + '"';
 
   URI := Self.Address.GetFullURI;
-  if (Pos(';', URI) > 0) or (Pos(',', URI) > 0) or (Pos('?', URI) > 0) or (Result <> '') then
+  if (IndyPos(';', URI) > 0) or (IndyPos(',', URI) > 0) or (IndyPos('?', URI) > 0) or (Result <> '') then
     URI := '<' + URI + '>';
 
   if (Result = '') then
@@ -768,12 +768,12 @@ begin
 
   S := Trim(Value);
 
-  if (Pos('<', S) > 0) then begin
+  if (IndyPos('<', S) > 0) then begin
     if (S[1] = '"') then begin
       Name := Trim(Fetch(S, '<'));
       Delete(Name, 1, 1);
 
-      if (Pos('"', Name) = 0) then
+      if (IndyPos('"', Name) = 0) then
         raise EBadHeader.Create(Self.Name);
 
       Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
@@ -794,7 +794,7 @@ begin
   else begin
     // any semicolons in a URI not in angle brackets indicate that the
     // HEADER has the parameters, not the URI
-    PreserveSemicolon := Pos(';', S) > 0;
+    PreserveSemicolon := IndyPos(';', S) > 0;
     Self.Address.URI := Trim(Fetch(S, ';'));
   end;
 
@@ -809,20 +809,17 @@ end;
 
 function TIdSipAddressHeader.NeedsQuotes(Name: String): Boolean;
 var
-  DontQuote: Boolean;
-  Token:     String;
+  Token: String;
 begin
   if (Name = '') then
     Result := false
   else begin
-    DontQuote := true;
+    Result := false;
 
     while (Name <> '') do begin
       Token := Fetch(Name, ' ');
-      DontQuote := DontQuote and TIdSipParser.IsToken(Token);
+      Result := Result or not TIdSipParser.IsToken(Token);
     end;
-
-    Result := not DontQuote;
   end;
 end;
 
@@ -1627,7 +1624,7 @@ end;
 
 function TIdSipParser.GetHeaderValue(Header: String): String;
 begin
-  if (Pos(':', Header) = 0) then
+  if (IndyPos(':', Header) = 0) then
     Result := ''
   else begin
     Result := Header;

@@ -16,8 +16,8 @@ uses
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
-  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas' {,
-  TestIdURI in 'test\TestIdURI.pas'},
+  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
+  TestIdURI in 'test\TestIdURI.pas',
   IdSIPClient in 'src\IdSIPClient.pas',
   TestIdSipClient in 'test\TestIdSipClient.pas';
 
