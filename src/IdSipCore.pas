@@ -701,16 +701,24 @@ constructor TIdSipAbstractUserAgent.Create;
 begin
   inherited Create;
 
-  Self.fAllowedMethodList := TStringList.Create;
-  Self.fAllowedSchemeList := TStringList.Create;
+  Self.fAllowedContentTypeList := TStringList.Create;
+  Self.fAllowedLanguageList    := TStringList.Create;
+  Self.fAllowedMethodList      := TStringList.Create;
+  Self.fAllowedSchemeList      := TStringList.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
+  Self.AddAllowedMethod(MethodBye);  
+  Self.AddAllowedMethod(MethodCancel);
+  Self.AddAllowedMethod(MethodInvite);
+  Self.AddAllowedScheme(SipScheme);
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
 begin
   Self.AllowedSchemeList.Free;
   Self.AllowedMethodList.Free;
+  Self.AllowedLanguageList.Free;
+  Self.AllowedContentTypeList.Free;
 
   inherited Destroy;
 end;
@@ -1114,8 +1122,6 @@ end;
 
 destructor TIdSipUserAgentCore.Destroy;
 begin
-  Self.AllowedLanguageList.Free;
-  Self.AllowedContentTypeList.Free;
   Self.Contact.Free;
   Self.From.Free;
   Self.UserAgentListeners.Free;
@@ -1428,6 +1434,10 @@ begin
   // immediately. Hence the unusual clause below.
   if Response.IsOK and Transaction.IsNull then begin
     Session := Self.FindSession(Response);
+
+    if not Assigned(Session) then
+      Session := Self.ForkCall(Response);
+
     if Assigned(Session) then
       Session.OnReceiveResponse(Response, Transaction, Receiver);
   end

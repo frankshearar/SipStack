@@ -119,6 +119,7 @@ type
     procedure TestDispatchToCorrectSession;
     procedure TestDispatchAckToSession;
     procedure TestFork;
+    procedure TestForkWithProvisionalResponse;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
     procedure TestIsMethodAllowed;
@@ -341,6 +342,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
   Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
   Result.AddTest(TestTIdSipOutboundSession.Suite);
@@ -1389,7 +1391,24 @@ begin
   CheckEquals(2 + OrigAckCount,
               Self.Dispatcher.Transport.AckCount,
               'UAS MUST ACK every 2xx response to an INVITE - cf RFC 3261, '
-            + 'section 13.2.2.4');            
+            + 'section 13.2.2.4');
+end;
+
+procedure TestTIdSipUserAgentCore.TestForkWithProvisionalResponse;
+var
+  OrigAckCount: Cardinal;
+begin
+  OrigAckCount := Self.Dispatcher.Transport.ACKCount;
+  Self.Core.Call(Self.Destination, '', '');
+  Self.SimulateRemoteRinging(Self.Dispatcher.Transport.LastRequest);
+  Self.SimulateRemoteRinging(Self.Dispatcher.Transport.LastRequest);
+
+  CheckEquals(1,
+              Self.Core.SessionCount,
+              'A provisional response doesn''t make a fork');
+  CheckEquals(OrigAckCount,
+              Self.Dispatcher.Transport.AckCount,
+              'UAS mustn''t ACK provisional responses');
 end;
 
 procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
