@@ -3673,12 +3673,17 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
+var
+  SessionCount: Integer;
 begin
+  SessionCount := Self.Core.SessionCount;
+
   Self.SimulateRemoteCancel;
 
   Check(Self.OnEndedSessionFired,
         'No notification of ended session');
-  Check(Self.Session.IsTerminated,
+
+  Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
 end;
 
@@ -3975,10 +3980,13 @@ procedure TestTIdSipInboundSession.TestTerminate;
 var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
+  SessionCount: Integer;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Self.Session.AcceptCall('', '');
+
+  SessionCount := Self.Core.SessionCount;
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
@@ -3988,15 +3996,18 @@ begin
   Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.IsBye, 'Unexpected last request');
 
-  Check(Self.Session.IsTerminated, 'Session not marked as terminated');
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
 end;
 
 procedure TestTIdSipInboundSession.TestTerminateUnestablishedSession;
 var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
+  SessionCount:  Integer;
 begin
   ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  SessionCount  := Self.Core.SessionCount;
 
   Self.Session.Terminate;
 
@@ -4009,7 +4020,8 @@ begin
               Response.StatusCode,
               'Unexpected last response');
 
-  Check(Self.Session.IsTerminated, 'Session not marked as terminated');
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not marked as terminated');
 end;
 
 //******************************************************************************
@@ -4415,6 +4427,7 @@ var
   Invite:            TIdSipRequest;
   RequestCount:      Cardinal;
   RequestTerminated: TIdSipResponse;
+  SessionCount:      Integer;
 begin
   //  ---         INVITE         --->
   // <---       180 Ringing      ---
@@ -4438,6 +4451,7 @@ begin
 
       RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
+      SessionCount := Self.Core.SessionCount;
       Self.Session.Cancel;
 
       Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
@@ -4459,7 +4473,7 @@ begin
                   Self.Dispatcher.Transport.LastRequest.Method,
                   'The request sent wasn''t a ACK');
 
-      Check(Self.Session.IsTerminated,
+      Check(Self.Core.SessionCount < SessionCount,
             'Session not terminated');
     finally
       RequestTerminated.Free;
@@ -4475,6 +4489,7 @@ var
   Invite:            TIdSipRequest;
   RequestCount:      Cardinal;
   RequestTerminated: TIdSipResponse;
+  SessionCount:      Integer;
 begin
   //  ---         INVITE         --->
   //  ---         CANCEL         --->
@@ -4491,6 +4506,7 @@ begin
     try
       RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
+      SessionCount := Self.Core.SessionCount;
       Self.Session.Cancel;
 
       CheckEquals(RequestCount,
@@ -4521,7 +4537,7 @@ begin
                   Self.Dispatcher.Transport.LastRequest.Method,
                   'The request sent wasn''t a ACK');
 
-      Check(Self.Session.IsTerminated,
+      Check(Self.Core.SessionCount < SessionCount,
             'Session not terminated');
     finally
       RequestTerminated.Free;
@@ -4689,6 +4705,7 @@ var
   Request:           TIdSipRequest;
   RequestCount:      Cardinal;
   RequestTerminated: TIdSipResponse;
+  SessionCount:      Integer;
 begin
   // When you Terminate a Session, the Session should attempt to CANCEL its
   // initial INVITE (if it hasn't yet received a final response).
@@ -4707,6 +4724,7 @@ begin
     try
       RequestTerminated.ToHeader.Tag := Self.Session.Dialog.ID.RemoteTag;
 
+      SessionCount := Self.Core.SessionCount;
       Self.Session.Terminate;
 
       CheckEquals(RequestCount + 1,
@@ -4720,7 +4738,7 @@ begin
 
       Self.Dispatcher.Transport.FireOnResponse(RequestTerminated);
 
-      Check(Self.Session.IsTerminated,
+      Check(Self.Core.SessionCount < SessionCount,
             'Session not marked as terminated');
     finally
       RequestTerminated.Free;
@@ -4733,10 +4751,12 @@ end;
 procedure TestTIdSipOutboundSession.TestTerminateEstablishedSession;
 var
   RequestCount: Cardinal;
+  SessionCount: Integer;
 begin
   Self.SimulateRemoteOK;
 
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SessionCount := Self.Core.SessionCount;
   Self.Session.Terminate;
 
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
@@ -4745,7 +4765,7 @@ begin
               Self.Dispatcher.Transport.LastRequest.Method,
               'Session didn''t terminate with a BYE');
 
-  Check(Self.Session.IsTerminated,
+  Check(Self.Core.SessionCount < SessionCount,
         'Session not marked as terminated');
 end;
 

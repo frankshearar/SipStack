@@ -1989,7 +1989,7 @@ begin
 
   // Action generates the response - 8.2.6
 
-//  Self.CleanOutTerminatedActions;
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.ActOnResponse(Response: TIdSipResponse;
@@ -2010,7 +2010,7 @@ begin
   else
     Self.NotifyOfDroppedResponse(Response, Receiver);
 
-//  Self.CleanOutTerminatedActions;
+  Self.CleanOutTerminatedActions;
 end;
 
 procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
