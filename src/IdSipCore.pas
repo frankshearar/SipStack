@@ -290,19 +290,17 @@ type
   // * clean up established Sessions
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
-    ActionLock:               TCriticalSection;
-    Actions:                  TObjectList;
-    fBindingDB:               TIdSipAbstractBindingDatabase;
-    fContact:                 TIdSipContactHeader;
-    fDoNotDisturb:            Boolean;
-    fDoNotDisturbMessage:     String;
-    fHasProxy:                Boolean;
-    fMinimumExpiryTime:       Cardinal; // in seconds
-    fProxy:                   TIdSipUri;
-    KnownRegistrars:          TObjectList;
-    RegistrationListenerLock: TCriticalSection;
-    RegistrationListeners:    TList;
-    UserAgentListeners:       TIdSipNotificationList;
+    ActionLock:            TCriticalSection;
+    Actions:               TObjectList;
+    fBindingDB:            TIdSipAbstractBindingDatabase;
+    fContact:              TIdSipContactHeader;
+    fDoNotDisturb:         Boolean;
+    fDoNotDisturbMessage:  String;
+    fHasProxy:             Boolean;
+    fMinimumExpiryTime:    Cardinal; // in seconds
+    fProxy:                TIdSipUri;
+    KnownRegistrars:       TObjectList;
+    UserAgentListeners:    TIdSipNotificationList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
@@ -1507,11 +1505,9 @@ begin
 
   Self.KnownRegistrars := TObjectList.Create(true);
 
-  Self.ActionLock               := TCriticalSection.Create;
-  Self.Actions                  := TObjectList.Create;
-  Self.RegistrationListenerLock := TCriticalSection.Create;
-  Self.RegistrationListeners    := TList.Create;
-  Self.UserAgentListeners       := TIdSipNotificationList.Create;
+  Self.ActionLock         := TCriticalSection.Create;
+  Self.Actions            := TObjectList.Create;
+  Self.UserAgentListeners := TIdSipNotificationList.Create;
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
@@ -1536,8 +1532,6 @@ begin
   Self.Contact.Free;
   Self.From.Free;
   Self.UserAgentListeners.Free;
-  Self.RegistrationListeners.Free;
-  Self.RegistrationListenerLock.Free;
   Self.Actions.Free;
   Self.ActionLock.Free;  
   Self.KnownRegistrars.Free;
@@ -2741,7 +2735,7 @@ end;
 
 procedure TIdSipEstablishedSessionMethod.Run(const Subject: IInterface);
 begin
-  IIdSipSessionListener(Subject).OnEstablishedSession(Self.Session);
+  (Subject as IIdSipSessionListener).OnEstablishedSession(Self.Session);
 end;
 
 //******************************************************************************
