@@ -3040,17 +3040,33 @@ procedure TestTIdSipUserAgent.TestTerminateAllCalls;
 var
   InboundSession: TIdSipInboundSession;
 begin
+  // We have:
+  // * an established inbound call;
+  // * an unestablished inbound call;
+  // * an unestablished outbound call;
+  // * an established outbound call.
+  // When we terminate everything, we expect only the unestablished outbound
+  // call to remain, because it can only terminate according to RFC 3261 section 9.1
+
   Self.SimulateInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, first INVITE');
   InboundSession := Self.Session;
   InboundSession.AcceptCall('', '');
 
+  Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
+  Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
+  Self.SimulateInvite;
+
   Self.Core.Call(Self.Destination, '', '').Send;
   Self.SimulateTrying(Self.LastSentRequest);
 
-  CheckEquals(2,
+  Self.Core.Call(Self.Destination, '', '').Send;
+  Self.SimulateOk(Self.LastSentRequest);
+
+  CheckEquals(4,
               Self.Core.SessionCount,
               'Session count');
+
   Self.Core.TerminateAllCalls;
 
   // This looks completely wrong, I know. However, we've sent a CANCEL to
