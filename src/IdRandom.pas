@@ -80,7 +80,7 @@ function TIdRandomNumber.NextCardinal(Max: Cardinal): Cardinal;
 var
   NumBits: Byte;
 begin
-  NumBits := Self.NextHighestPowerOf2(Max);
+  NumBits := Self.NumBitsNeeded(Max);
   repeat
     Result := Self.NextRandomBits(NumBits);
   until Result <= Max;

@@ -13,6 +13,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestNextCardinal;
+    procedure TestNextCardinalLimited;
     procedure TestNextHighestPowerOf2;
     procedure TestNumBitsNeeded;
   end;
@@ -49,6 +51,23 @@ end;
 
 //* TestTIdRandomNumber Published methods **************************************
 
+procedure TestTIdRandomNumber.TestNextCardinal;
+begin
+  Check(Self.Random.NextCardinal <= High(Cardinal),
+        'NextCardinal(High(Cardinal))');
+end;
+
+procedure TestTIdRandomNumber.TestNextCardinalLimited;
+begin
+  // This test doesn't cover all the properties of NextCardinal - for instance,
+  // we've no way of ensuring, in this test, that NextCardinal's result < N.
+  // This test just makes sure nothing blows up.
+  Check(Self.Random.NextCardinal(10) <= 10,
+        'NextCardinal(10)');
+  Check(Self.Random.NextCardinal(High(Cardinal)) <= High(Cardinal),
+        'NextCardinal(High(Cardinal))');
+end;
+
 procedure TestTIdRandomNumber.TestNextHighestPowerOf2;
 begin
   CheckEquals(1, Self.Random.NextHighestPowerOf2(0), '0');
@@ -70,6 +89,12 @@ begin
   CheckEquals(IntToHex($80000000, 8),
               IntToHex(Self.Random.NextHighestPowerOf2($7F000000), 8),
               '$7F000000');
+
+  try
+    Self.Random.NextHighestPowerOf2(High(Cardinal))
+  except
+    on EIntOverflow do;
+  end;
 end;
 
 procedure TestTIdRandomNumber.TestNumBitsNeeded;
