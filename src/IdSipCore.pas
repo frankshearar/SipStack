@@ -783,6 +783,7 @@ type
     procedure NotifyOfModifiedSession(Answer: TIdSipResponse);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest);
     procedure RejectPrematureInvite(Invite: TIdSipRequest);
+    procedure RejectReInvite(Invite: TIdSipRequest);
     procedure RejectRequest(Request: TIdSipRequest);
   protected
     FullyEstablished: Boolean;
@@ -4657,9 +4658,15 @@ begin
       end;
      // if we've not sent a final response, reject with 500 + Retry-After
 
-      Modify := Self.UA.AddInboundInvite(Invite);
-      Modify.AddListener(Self);
-      Self.NotifyOfModifySession(Modify);
+      if not Assigned(Self.ModifyAttempt) then begin
+        Modify := Self.UA.AddInboundInvite(Invite);
+        Self.ModifyAttempt := Modify;
+        Modify := Self.UA.AddInboundInvite(Invite);
+        Modify.AddListener(Self);
+        Self.NotifyOfModifySession(Modify);
+      end
+      else
+        Self.RejectReInvite(Invite);
     end;
   finally
     Self.DialogLock.Release;
@@ -4730,6 +4737,18 @@ begin
     Self.SendResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+procedure TIdSipSession.RejectReInvite(Invite: TIdSipRequest);
+var
+  RequestPending: TIdSipResponse;
+begin
+  RequestPending := Self.UA.CreateResponse(Invite, SIPRequestPending);
+  try
+    Self.SendResponse(RequestPending);
+  finally
+    RequestPending.Free;
   end;
 end;
 

@@ -400,8 +400,9 @@ type
     procedure TestMatchModify;
     procedure TestMatchResponseToModify;
     procedure TestMatchResponseToInitialRequest;
-    procedure TestModifyBeforeFullyEstablished;
     procedure TestModify;
+    procedure TestModifyBeforeFullyEstablished;
+//    procedure TestModifyGlare;
     procedure TestModifyRejectedWithTimeout;
     procedure TestOnlyOneInboundModifyAtaTime;
   end;
@@ -2982,6 +2983,8 @@ procedure TestTIdSipSession.SetUp;
 begin
   inherited SetUp;
 
+  Self.Dispatcher.Transport.WriteLog := true;
+
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
   Self.SimpleSdp      := Self.CreateSimpleSdp;
 
@@ -3243,24 +3246,20 @@ begin
               Self.Dispatcher.Transport.SentRequestCount,
               'INVITE sent before session established');
 end;
-
-procedure TestTIdSipSession.TestModify;
+{
+procedure TestTIdSipSession.TestModifyGlare;
 var
-  RequestCount: Cardinal;
-  Session:      TIdSipSession;
+  Session: TIdSipSession;
 begin
+  // Google for "open issue 139";
+  // cf. http://www.ietf.org/proceedings/01dec/slides/sip-4/sld017.htm
+
   Session := Self.CreateAction as TIdSipSession;
-  Self.EstablishSession(Session);
-
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
   Session.Modify('', '');
-  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-        'No INVITE sent');
-
-  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
-  Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
+  Self.SimulateRemoteReInvite(Session);
+  Fail('finish this');
 end;
-
+}
 procedure TestTIdSipSession.TestModifyRejectedWithTimeout;
 var
   RequestCount: Cardinal;
@@ -3280,37 +3279,75 @@ begin
               'Unexpected request sent');
 end;
 
-procedure TestTIdSipSession.TestOnlyOneInboundModifyAtaTime;
+procedure TestTIdSipSession.TestModify;
 var
-  ResponseCount: Cardinal;
-  Session: TIdSipSession;
+  RequestCount: Cardinal;
+  Session:      TIdSipSession;
 begin
-  //<established session>
-  //  <---  INVITE ---
-  //   ---  200 OK ---
-  //   ---   ACK   --->
-
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
-  Session.AddSessionListener(Self);
 
-  Self.SimulateRemoteReInvite(Session);
-  Check(Self.OnModifySessionFired, 'OnModifySession didn''t fire');
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Session.Modify('', '');
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'No INVITE sent');
 
-  Self.OnModifySessionFired := false;
-  Self.SimulateRemoteReInvite(Session);
-  Check(not Self.OnModifySessionFired,
-        'OnModifySession fired for a 2nd modify');
+  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+  Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
+end;
 
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-  Self.InboundModify.Accept('', '');
+procedure TestTIdSipSession.TestOnlyOneInboundModifyAtaTime;
+var
+  FirstInvite:   TIdSipRequest;
+  ResponseCount: Cardinal;
+  Session:       TIdSipSession;
+begin
+  //          <established session>
+  //  <---           INVITE 1           ---
+  //  <---           INVITE 2           ---
+  //   ---  491 Request Pending (for 2) --->
+  //  <---         ACK (for 2)          ---
+  //   ---        200 OK (for 1)        --->
+  //  <---        ACK (for 1)           ---
 
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'No response sent');
-  CheckEquals(SIPOK,
-              Self.Dispatcher.Transport.LastResponse.StatusCode,
-              'Unexpected response');
-  Self.SimulateAck;
+  FirstInvite := TIdSipRequest.Create;
+  try
+    Session := Self.CreateAction as TIdSipSession;
+    Self.EstablishSession(Session);
+    Session.AddSessionListener(Self);
+
+    Self.SimulateRemoteReInvite(Session);
+    FirstInvite.Assign(Self.InboundModify.InitialRequest);
+    Check(Self.OnModifySessionFired, 'OnModifySession didn''t fire');
+
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+    Self.OnModifySessionFired := false;
+    Self.SimulateRemoteReInvite(Session);
+    Check(not Self.OnModifySessionFired,
+          'OnModifySession fired for a 2nd modify');
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No 491 response sent');
+    CheckEquals(SIPRequestPending,
+                Self.Dispatcher.Transport.LastResponse.StatusCode,
+                'Unexpected response to 2nd INVITE');
+    Check(Self.Invite.Match(Self.Dispatcher.Transport.LastResponse),
+          'Response doesn''t match 2nd INVITE');
+    Self.SimulateAck;
+
+    ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+    Self.InboundModify.Accept('', '');
+
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No 200 response sent');
+    CheckEquals(SIPOK,
+                Self.Dispatcher.Transport.LastResponse.StatusCode,
+                'Unexpected response to 1st INVITE');
+    Check(FirstInvite.Match(Self.Dispatcher.Transport.LastResponse),
+          'Response doesn''t match 1st INVITE');
+    Self.SimulateAck;
+  finally
+    FirstInvite.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -5005,6 +5042,7 @@ end;
 procedure TestTIdSipInboundSession.EstablishSession(Session: TIdSipSession);
 begin
   (Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.SimulateAck;
 end;
 
 //* TestTIdSipInboundSession Private methods ***********************************
