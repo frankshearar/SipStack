@@ -4824,7 +4824,7 @@ procedure TestTIdSipInboundInvite.TestMethod;
 begin
   CheckEquals(MethodInvite,
               TIdSipInboundInvite.Method,
-              'Inbound INVITE; Method');
+              'Inbound INVITE Method');
 end;
 
 procedure TestTIdSipInboundInvite.TestRedirectCall;
@@ -5389,7 +5389,7 @@ procedure TestTIdSipOutboundInvite.TestMethod;
 begin
   CheckEquals(MethodInvite,
               TIdSipOutboundInvite.Method,
-              'Outbound INVITE; Method');
+              'Outbound INVITE Method');
 end;
 
 procedure TestTIdSipOutboundInvite.TestProxyAuthentication;
