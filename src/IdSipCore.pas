@@ -39,17 +39,6 @@ unit IdSipCore;
 {
 CODE FROM THE TRANSACTION LAYER TO ASSIMILATE
 
-var
-  MsgLen:       Cardinal;
-  RewrittenVia: Boolean;
-
-  MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize)
-              and (Msg.LastHop.Transport = UdpTransport);
-
-  if RewrittenVia then
-    Msg.LastHop.Transport := TcpTransport;
-
 procedure TestTIdSipTransactionDispatcher.TestSendVeryBigMessageWithTcpFailure;
 var
   TcpResponseCount: Cardinal;
@@ -71,27 +60,6 @@ begin
         'No response sent down UDP');
   CheckEquals(TcpResponseCount, Self.MockTcpTransport.SentResponseCount,
               'TCP response was sent');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestSendVeryBigRequest;
-var
-  TcpRequestCount: Cardinal;
-  UdpRequestCount: Cardinal;
-begin
-  TcpRequestCount := Self.MockTcpTransport.SentRequestCount;
-  UdpRequestCount := Self.MockUdpTransport.SentRequestCount;
-
-  Self.TranRequest.LastHop.Transport := UdpTransport;
-  while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
-    Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
-                                                         + 'and with strange aeons even death may die.';
-
-  Self.D.SendToTransport(Self.TranRequest);
-
-  CheckEquals(UdpRequestCount, Self.MockUdpTransport.SentRequestCount,
-              'UDP response was sent');
-  Check(TcpRequestCount < Self.MockTcpTransport.SentRequestCount,
-        'No response sent down TCP');
 end;
 }
 interface
