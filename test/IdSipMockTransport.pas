@@ -23,7 +23,7 @@ type
   // TIdUdpTransport can be secure, and no instance of TIdTlsTransport can be
   // insecure. It's very useful, in tests, to change mock transports to simulate
   // other transports: in some tests you want a UDP mock transport, and other
-  // times you want a TLS transport. 
+  // times you want a TLS transport.
   TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
@@ -56,6 +56,8 @@ type
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
   public
     class function IsSecure: Boolean; override;
+    class function MockedClass: TIdSipTransportClass; virtual;
+    class function SrvPrefix: String; override;
 
     constructor Create; override;
     destructor  Destroy; override;
@@ -87,40 +89,35 @@ type
 
   TIdSipMockSctpTransport = class(TIdSipMockTransport)
   public
-    class function IsSecure: Boolean; override;
-    class function SrvPrefix: String; override;
+    class function MockedClass: TIdSipTransportClass; override;
 
     function GetTransportType: String; override;
   end;
 
   TIdSipMockTcpTransport = class(TIdSipMockTransport)
   public
-    class function IsSecure: Boolean; override;
-    class function SrvPrefix: String; override;
+    class function MockedClass: TIdSipTransportClass; override;
 
     function GetTransportType: String; override;
   end;
 
   TIdSipMockTlsTransport = class(TIdSipMockTransport)
   public
-    class function IsSecure: Boolean; override;
-    class function SrvPrefix: String; override;
+    class function MockedClass: TIdSipTransportClass; override;
 
     function GetTransportType: String; override;
   end;
 
   TIdSipMockTlsOverSctpTransport = class(TIdSipMockTransport)
   public
-    class function IsSecure: Boolean; override;
-    class function SrvPrefix: String; override;
+    class function MockedClass: TIdSipTransportClass; override;
 
     function GetTransportType: String; override;
   end;
 
   TIdSipMockUdpTransport = class(TIdSipMockTransport)
   public
-    class function IsSecure: Boolean; override;
-    class function SrvPrefix: String; override;
+    class function MockedClass: TIdSipTransportClass; override;
 
     function GetTransportType: String; override;
   end;
@@ -143,9 +140,19 @@ var
 //******************************************************************************
 //* TIdSipMockTransport Public methods *****************************************
 
+class function TIdSipMockTransport.MockedClass: TIdSipTransportClass;
+begin
+  raise Exception.Create(Self.ClassName + ' must override TIdSipMockTransport.MockedClass');
+end;
+
 class function TIdSipMockTransport.IsSecure: Boolean;
 begin
-  Result := Self.TransportFor(GTransportType).IsSecure;
+  Result := Self.MockedClass.IsSecure;
+end;
+
+class function TIdSipMockTransport.SrvPrefix: String;
+begin
+  Result := Self.MockedClass.SrvPrefix;
 end;
 
 constructor TIdSipMockTransport.Create;
@@ -424,14 +431,9 @@ end;
 //******************************************************************************
 //* TIdSipMockSctpTransport Public methods *************************************
 
-class function TIdSipMockSctpTransport.IsSecure: Boolean;
+class function TIdSipMockSctpTransport.MockedClass: TIdSipTransportClass;
 begin
-  Result := false;
-end;
-
-class function TIdSipMockSctpTransport.SrvPrefix: String;
-begin
-  Result := TIdSipSCTPTransport.SrvPrefix;
+  Result := TIdSipSctpTransport;
 end;
 
 function TIdSipMockSctpTransport.GetTransportType: String;
@@ -444,14 +446,9 @@ end;
 //******************************************************************************
 //* TIdSipMockTcpTransport Public methods **************************************
 
-class function TIdSipMockTcpTransport.IsSecure: Boolean;
+class function TIdSipMockTcpTransport.MockedClass: TIdSipTransportClass;
 begin
-  Result := false;
-end;
-
-class function TIdSipMockTcpTransport.SrvPrefix: String;
-begin
-  Result := TIdSipTcpTransport.SrvPrefix;
+  Result := TIdSipTcpTransport;
 end;
 
 function TIdSipMockTcpTransport.GetTransportType: String;
@@ -464,14 +461,9 @@ end;
 //******************************************************************************
 //* TIdSipMockTlsTransport Public methods **************************************
 
-class function TIdSipMockTlsTransport.IsSecure: Boolean;
+class function TIdSipMockTlsTransport.MockedClass: TIdSipTransportClass;
 begin
-  Result := true;
-end;
-
-class function TIdSipMockTlsTransport.SrvPrefix: String;
-begin
-  Result := TIdSipTlsTransport.SrvPrefix;
+  Result := TIdSipTlsTransport;
 end;
 
 function TIdSipMockTlsTransport.GetTransportType: String;
@@ -484,14 +476,9 @@ end;
 //******************************************************************************
 //* TIdSipMockTlsOverSctpTransport Public methods ******************************
 
-class function TIdSipMockTlsOverSctpTransport.IsSecure: Boolean;
+class function TIdSipMockTlsOverSctpTransport.MockedClass: TIdSipTransportClass;
 begin
-  Result := true;
-end;
-
-class function TIdSipMockTlsOverSctpTransport.SrvPrefix: String;
-begin
-  Result := TIdSipTlsOverSctpTransport.SrvPrefix;
+  Result := TIdSipTlsOverSctpTransport;
 end;
 
 function TIdSipMockTlsOverSctpTransport.GetTransportType: String;
@@ -504,14 +491,9 @@ end;
 //******************************************************************************
 //* TIdSipMockUdpTransport Public methods **************************************
 
-class function TIdSipMockUdpTransport.IsSecure: Boolean;
+class function TIdSipMockUdpTransport.MockedClass: TIdSipTransportClass;
 begin
-  Result := false;
-end;
-
-class function TIdSipMockUdpTransport.SrvPrefix: String;
-begin
-  Result := TIdSipUdpTransport.SrvPrefix;
+  Result := TIdSipUdpTransport;
 end;
 
 function TIdSipMockUdpTransport.GetTransportType: String;
