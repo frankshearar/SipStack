@@ -158,7 +158,7 @@ end;
 procedure TIdRTPServer.SetProfile(Value: TIdRTPProfile);
 begin
   Self.Session.Profile := Value;
-  Self.Peer.Profile := Self.Session.Profile;
+  Self.Peer.Profile    := Self.Session.Profile;
 end;
 
 end.
