@@ -414,8 +414,7 @@ type
     procedure OnTransactionComplete(Event: TObject);
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
-    function  RegisterWith(Registrar: TIdSipUri;
-                           Listeners: TIdNotificationList): TIdSipOutboundRegistration;
+    function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveModule(ModuleType: TIdSipMessageModuleClass);
     procedure ReturnResponse(Request: TIdSipRequest;
@@ -2007,11 +2006,9 @@ begin
   Result.QueryOptions(Server);
 end;
 
-function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri;
-                                          Listeners: TIdNotificationList): TIdSipOutboundRegistration;
+function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
 begin
   Result := Self.AddOutboundRegistration;
-  Result.AddListeners(Listeners);
 
   Result.RegisterWith(Registrar, Self.Contact);
 end;
@@ -4317,7 +4314,7 @@ begin
   Result := false;
 
   if Response.HasHeader(ContactHeaderFull) then begin
-    Self.UA.RegisterWith(Response.FirstContact.Address, Self.Listeners);
+    Self.UA.RegisterWith(Response.FirstContact.Address);
 
     Result := true;
   end;
