@@ -78,7 +78,7 @@ object rnidSpike: TrnidSpike
       Width = 121
       Height = 21
       TabOrder = 0
-      Text = 'sip:franks@ltfasil'
+      Text = 'sip:franks@ltfasil;transport=udp'
     end
     object Invite: TButton
       Left = 0

@@ -36,6 +36,7 @@ type
     Lock:         TCriticalSection;
     Media:        TIdSdpPayloadProcessor;
     TransportTCP: TIdSipTransport;
+    TransportTLS: TIdSipTransport;
     TransportUDP: TIdSipTransport;
     UA:           TIdSipUserAgentCore;
 
@@ -101,6 +102,12 @@ begin
   Binding.Port := IdPORT_SIP;
   Self.TransportTCP.HostName := Self.TransportUDP.HostName;
 
+  Self.TransportTLS := TIdSipTLSTransport.Create(IdPORT_SIPS);
+  Binding := Self.TransportTLS.Bindings.Add;
+  Binding.IP := Self.TransportUDP.HostName;
+  Binding.Port := IdPORT_SIPS;
+  Self.TransportTLS.HostName := Self.TransportUDP.HostName;
+
   Self.Media := TIdSdpPayloadProcessor.Create;
   Self.Media.Host := Self.TransportUDP.HostName;
   Self.Media.AddDataListener(Self);
@@ -109,9 +116,12 @@ begin
   Self.TransportUDP.AddTransportSendingListener(Self);
   Self.TransportTCP.AddTransportListener(Self);
   Self.TransportTCP.AddTransportSendingListener(Self);
+  Self.TransportTLS.AddTransportListener(Self);
+  Self.TransportTLS.AddTransportSendingListener(Self);
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.TransportUDP);
   Self.Dispatch.AddTransport(Self.TransportTCP);
+  Self.Dispatch.AddTransport(Self.TransportTLS);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
@@ -139,6 +149,7 @@ begin
   try
     Self.TransportUDP.Start;
     Self.TransportTCP.Start;
+    Self.TransportTLS.Start;
   except
     on EIdCouldNotBindSocket do
       ShowMessage('Something''s hogged the SIP port (5060) - '
@@ -154,6 +165,7 @@ begin
   Self.Dispatch.Free;
   Self.Media.Free;
   Self.TransportUDP.Free;
+  Self.TransportTLS.Free;
   Self.TransportTCP.Free;
   Self.Lock.Free;
   Self.DataStore.Free;
@@ -180,6 +192,7 @@ end;
 
 procedure TrnidSpike.OnEndedSession(const Session: TIdSipSession);
 begin
+  Self.Media.StopListening;
 end;
 
 procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
@@ -256,13 +269,28 @@ end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
 var
-  Target: TIdSipToHeader;
+  Address: String;
+  SDP:     String;
+  Target:  TIdSipToHeader;
 begin
+  Address := Self.TransportUDP.Bindings[0].IP;
+
   Target := TIdSipToHeader.Create;
   try
     Target.Value := Self.TargetUri.Text;
 
-    Self.UA.Call(Target);
+    SDP := 'v=0'#13#10
+         + 'o=franks 123456 123456 IN IP4 ' + Address + #13#10
+         + 's=-'#13#10
+         + 'c=IN IP4 ' + Address + #13#10
+         + 't=0 0'#13#10
+         + 'm=audio 8000 RTP/AVP 0'#13#10;
+
+    Self.Media.Process(SDP);
+
+    Self.UA.Call(Target,
+                 SDP,
+                 SdpMimeType);
   finally
     Target.Free;
   end;
@@ -271,6 +299,7 @@ end;
 procedure TrnidSpike.ByeClick(Sender: TObject);
 begin
   Self.UA.TerminateAllSessions;
+  Self.Media.StopListening;
 end;
 
 end.
