@@ -178,7 +178,6 @@ begin
   Self.AudioPlayer.OnStop := Self.OnPlaybackStopped;
   Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
   Self.AudioPlayer.Assign(Self.DataStore);
-//  Self.AudioPlayer.Play(AnyAudioDevice);
 
   Self.StopEvent := TSimpleEvent.Create;
 
@@ -222,8 +221,8 @@ begin
                 + 'kill it and restart this');
   end;
 
-  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
-  Self.UA.Contact.Value := Self.UA.From.Value;
+//  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
+//  Self.UA.Contact.Value := Self.UA.From.Value;
   Self.UA.HasProxy := false;
 end;
 
@@ -245,7 +244,6 @@ begin
 
   Self.DataStore.Free;
   Self.StopEvent.Free;
-
 
   Self.HistListener.Free;
   Self.HistogramPanel.Free;
@@ -347,7 +345,9 @@ begin
   finally
     Self.Lock.Release;
   end;
+  Self.AudioPlayer.Stop;
   Self.StopReadingData;
+  Session.PayloadProcessor.RemoveDataListener(Self);
   Session.PayloadProcessor.RemoveRTPListener(Self.HistListener);
   Session.PayloadProcessor.RemoveDataListener(Self.DTMFPanel);
   Self.DTMFPanel.Processor := nil;
@@ -382,10 +382,12 @@ begin
 
   Session.AddSessionListener(Self);
   Session.AcceptCall(Self.LocalSDP(Address), SdpMimeType);
+  Self.AudioPlayer.Play(AnyAudioDevice);
 
   Session.PayloadProcessor.AddRTPListener(Self.HistListener);
   Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
   Self.DTMFPanel.Processor := Session.PayloadProcessor;
+  Session.PayloadProcessor.AddDataListener(Self);
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
