@@ -2548,15 +2548,25 @@ end;
 procedure TIdSipRegistration.Unregister(Registrar: TIdSipUri);
 var
   RemovalBindings: TIdSipContacts;
+  Request:         TIdSipRequest;
 begin
   RemovalBindings := TIdSipContacts.Create;
   try
-    RemovalBindings.Add(ContactHeaderFull);
-    RemovalBindings.First;
-    RemovalBindings.CurrentContact.IsWildCard := true;
-    RemovalBindings.CurrentContact.Expires := 0;
+    Self.Bindings.Clear;
+    Self.Bindings.Add(ContactHeaderFull);
+    Self.Bindings.First;
+    Self.Bindings.CurrentContact.IsWildCard := true;
+//    Self.Bindings.CurrentContact.Expires := 0;
 
-    Self.Register(Registrar, RemovalBindings);
+    Request := Self.CreateRegister(Registrar, Bindings);
+    try
+      Request.FirstExpires.NumericValue := 0;
+      Self.CurrentRequest.Assign(Request);
+
+      Self.Send(Request);
+    finally
+      Request.Free;
+    end;
   finally
     RemovalBindings.Free;
   end;

@@ -2989,8 +2989,8 @@ begin
              'Contact count');
   Check(Request.FirstContact.IsWildCard,
         'First Contact');
-  CheckEquals(0, Request.FirstContact.Expires,
-             'First Contact expires');
+  CheckEquals(0, Request.QuickestExpiry,
+             'Request expiry');
 end;
 
 initialization
