@@ -3,14 +3,15 @@ unit SpikeRegistrar;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipMessage,
+  Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipMessage,
   IdSipRegistration, IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs,
   SysUtils;
 
 type
   TrnidSpikeRegistrar = class(TForm,
-                             IIdSipTransportListener,
-                             IIdSipTransportSendingListener)
+                              IIdObserver,
+                              IIdSipTransportListener,
+                              IIdSipTransportSendingListener)
     Log: TMemo;
     Panel1: TPanel;
     Port: TEdit;
@@ -26,6 +27,7 @@ type
     UA:         TIdSipUserAgentCore;
 
     procedure LogMessage(Msg: TIdSipMessage);
+    procedure OnChanged(Observed: TObject);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -134,6 +136,10 @@ procedure TrnidSpikeRegistrar.LogMessage(Msg: TIdSipMessage);
 begin
   Self.Log.Lines.Add(Msg.AsString);
   Self.Log.Lines.Add('----');
+end;
+
+procedure TrnidSpikeRegistrar.OnChanged(Observed: TObject);
+begin
 end;
 
 procedure TrnidSpikeRegistrar.OnException(E: Exception;

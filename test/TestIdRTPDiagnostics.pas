@@ -20,7 +20,7 @@ type
   end;
 
   TestTIdRTPPayloadHistogram = class(TThreadingTestCase,
-                                     IIdSipObserver)
+                                     IIdObserver)
   private
     Hist:     TIdRTPPayloadHistogram;
     Profile:  TIdRTPProfile;

@@ -18,7 +18,7 @@ type
   end;
 
   TIdObserverListener = class(TIdInterfacedObject,
-                              IIdSipObserver)
+                              IIdObserver)
   private
     fChanged: Boolean;
     fData:    TObject;

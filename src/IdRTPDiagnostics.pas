@@ -38,7 +38,7 @@ type
   end;
 
   TIdHistogramPanel = class(TPanel,
-                            IIdSipObserver)
+                            IIdObserver)
   private
     CurrentScale: Double;
     Data:         TIdHistogram;

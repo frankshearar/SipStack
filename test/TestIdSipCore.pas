@@ -59,7 +59,7 @@ type
   end;
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
-                                  IIdSipObserver,
+                                  IIdObserver,
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private

@@ -11,7 +11,7 @@ uses
 type
   TrnidSpike = class(TForm,
                      IIdRTPDataListener,
-                     IIdSipObserver,
+                     IIdObserver,
                      IIdSipOptionsListener,
                      IIdSipRegistrationListener,
                      IIdSipSessionListener,

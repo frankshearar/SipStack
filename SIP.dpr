@@ -88,6 +88,7 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
+//  Forms.Application.CreateForm(TrnidSpikeRegistrar, rnidSpikeRegistrar);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

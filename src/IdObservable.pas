@@ -10,7 +10,7 @@ type
   // fashion) they tell me, and I update my own state accordingly.
   // Unfortunately I never know the type of Observed and have to typecast
   // the Observed, but c'est la vie.
-  IIdSipObserver = interface
+  IIdObserver = interface
     ['{665CFE94-8EFD-4710-A5CC-ED01BCF7961E}']
     procedure OnChanged(Observed: TObject);
   end;
@@ -23,11 +23,11 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddObserver(const Listener: IIdSipObserver);
+    procedure AddObserver(const Listener: IIdObserver);
     procedure NotifyListenersOfChange; overload;
     procedure NotifyListenersOfChange(Data: TObject); overload;
     function  ObserverCount: Integer;
-    procedure RemoveObserver(const Listener: IIdSipObserver);
+    procedure RemoveObserver(const Listener: IIdObserver);
   end;
 
 implementation
@@ -53,7 +53,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdObservable.AddObserver(const Listener: IIdSipObserver);
+procedure TIdObservable.AddObserver(const Listener: IIdObserver);
 begin
   Self.ObserverLock.Acquire;
   try
@@ -84,7 +84,7 @@ begin
         Copy.Add(Self.Observers[I]);
 
       for I := 0 to Copy.Count - 1 do
-        IIdSipObserver(Copy[I]).OnChanged(Data);
+        IIdObserver(Copy[I]).OnChanged(Data);
     finally
       Copy.Free;
     end;
@@ -104,7 +104,7 @@ begin
   end;
 end;
 
-procedure TIdObservable.RemoveObserver(const Listener: IIdSipObserver);
+procedure TIdObservable.RemoveObserver(const Listener: IIdObserver);
 begin
   Self.ObserverLock.Acquire;
   try

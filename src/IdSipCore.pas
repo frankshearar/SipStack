@@ -168,14 +168,14 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddObserver(const Listener: IIdSipObserver);
+    procedure AddObserver(const Listener: IIdObserver);
     function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; virtual;
     function  NextCallID: String;
     function  NextTag: String;
-    procedure RemoveObserver(const Listener: IIdSipObserver);
+    procedure RemoveObserver(const Listener: IIdObserver);
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse);
 
@@ -737,7 +737,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipAbstractCore.AddObserver(const Listener: IIdSipObserver);
+procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
 begin
   Self.Observed.AddObserver(Listener);
 end;
@@ -761,7 +761,7 @@ begin
   Result := GRandomNumber.NextSipUserAgentTag;
 end;
 
-procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdSipObserver);
+procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdObserver);
 begin
   Self.Observed.RemoveObserver(Listener);
 end;
