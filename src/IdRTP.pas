@@ -853,7 +853,7 @@ type
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdSocketHandle);
     procedure RemoveListener(const Listener: IIdRTPListener);
-    procedure SendPacket(Host: String;
+    procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
   end;
@@ -874,7 +874,7 @@ type
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdSocketHandle);
     procedure RemoveListener(const Listener: IIdRTPListener);
-    procedure SendPacket(Host: String;
+    procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket); virtual;
 
@@ -1832,7 +1832,9 @@ procedure TIdRTPProfile.AddEncoding(Name: String;
 var
   Enc: TIdRTPPayload;
 begin
-  Enc := TIdRTPPayload.Create(TIdRTPPayload.EncodingName(Name, ClockRate, Params));
+  Enc := TIdRTPPayload.CreatePayload(TIdRTPPayload.EncodingName(Name,
+                                                                ClockRate,
+                                                                Params));
   try
     Self.AddEncoding(Enc, PayloadType);
   finally
@@ -4491,7 +4493,7 @@ begin
   end;
 end;
 
-procedure TIdBaseRTPAbstractPeer.SendPacket(Host: String;
+procedure TIdBaseRTPAbstractPeer.SendPacket(const Host: String;
                                             Port: Cardinal;
                                             Packet: TIdRTPBasePacket);
 begin

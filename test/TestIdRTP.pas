@@ -125,6 +125,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddEncoding;
+    procedure TestAddEncodingByName;
     procedure TestAssign;
     procedure TestClear;
     procedure TestCount;
@@ -1860,6 +1861,9 @@ procedure TestTIdRTPProfile.TestAddEncoding;
 begin
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
   CheckEquals(1, Self.Profile.Count, 'New MIME type not added');
+  CheckEquals(Self.T140Encoding.ClassName,
+              Self.Profile.EncodingFor(Self.ArbPT).ClassName,
+              'Incorrect class type used for new MIME type');
 
   Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT - 1);
   CheckEquals(1,
@@ -1873,6 +1877,17 @@ begin
 
   Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT - 1);
   CheckEquals(2, Self.Profile.Count, 'New, different, MIME type not added');
+end;
+
+procedure TestTIdRTPProfile.TestAddEncodingByName;
+begin
+  Self.Profile.AddEncoding(Self.T140Encoding.Name,
+                           Self.T140Encoding.ClockRate,
+                           '',
+                           Self.ArbPT);
+  CheckEquals(Self.T140Encoding.ClassName,
+              Self.Profile.EncodingFor(Self.ArbPT).ClassName,
+              'Incorrect class type used for new MIME type');
 end;
 
 procedure TestTIdRTPProfile.TestAssign;
