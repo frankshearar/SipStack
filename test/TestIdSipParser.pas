@@ -36,6 +36,15 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAsString;
+    procedure TestDecodeQuotedStr;
+    procedure TestEncodeQuotedStr;
+    procedure TestValue;
+    procedure TestValueWithEncodings;
+    procedure TestValueWithMalformedQuotedName;
+    procedure TestValueWithNormalName;
+    procedure TestValueWithQuotedName;
+    procedure TestValueWithParam;
   end;
 
   TestTIdSipViaHeader = class(TTestCase)
@@ -66,6 +75,7 @@ type
     procedure TestIsCallID;
     procedure TestIsContact;
     procedure TestIsContentLength;
+    procedure TestIsFrom;
     procedure TestIsMaxForwards;
     procedure TestIsTo;
     procedure TestIsVia;
@@ -82,6 +92,16 @@ type
   published
     procedure TestAddAndLastHop;
     procedure TestFirstHop;
+  end;
+
+  TestTIdSipMessage = class(TTestCase)
+  private
+    Msg: TIdSipMessage;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestMaxForwardsConsistency;
   end;
 
   TestTIdSipRequest = class(TExtendedTestCase)
@@ -113,6 +133,7 @@ type
     Request:  TIdSipRequest;
     Response: TIdSipResponse;
 
+    procedure CheckBasicMessage(const Msg: TIdSipMessage);
     procedure CheckBasicRequest(const Msg: TIdSipMessage);
     procedure CheckBasicResponse(const Msg: TIdSipMessage);
   public
@@ -192,6 +213,7 @@ begin
   Result := TTestSuite.Create('SipParser tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
+  Result.AddTest(TestTIdSipAddressHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipPath.Suite);
@@ -362,6 +384,178 @@ end;
 
 //* TestTIdSipAddressHeader Published methods **********************************
 
+procedure TestTIdSipAddressHeader.TestAsString;
+begin
+  A.Name := ToHeaderFull;
+
+  A.Value := 'sips:countzero@jacks-bar.com';
+  CheckEquals(ToHeaderFull + ': sips:countzero@jacks-bar.com',
+              A.AsString,
+              '1: AsString');
+
+  A.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+  CheckEquals(ToHeaderFull + ': Wintermute <sip:wintermute@tessier-ashpool.co.lu>',
+              A.AsString,
+              '2: AsString');
+
+  A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>';
+  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sips:countzero@jacks-bar.com>',
+              A.AsString,
+              '3: AsString');
+
+  A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>;paranoid';
+  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sips:countzero@jacks-bar.com>;paranoid',
+              A.AsString,
+              '4: AsString');
+end;
+
+procedure TestTIdSipAddressHeader.TestDecodeQuotedStr;
+begin
+  CheckEquals('',       A.DecodeQuotedStr(''),         '''''');
+  CheckEquals('abcd',   A.DecodeQuotedStr('abcd'),     'abcd');
+  CheckEquals('"',      A.DecodeQuotedStr('\"'),       '\"');
+  CheckEquals('\',      A.DecodeQuotedStr('\\'),       '\\');
+  CheckEquals(' ',      A.DecodeQuotedStr('\ '),       '''\ ''');
+  CheckEquals('abcd',   A.DecodeQuotedStr('\a\b\c\d'), '\a\b\c\d');
+  CheckEquals(#0,       A.DecodeQuotedStr('\'#0),      '\#0');
+  CheckEquals('hello\', A.DecodeQuotedStr('hello\\'),  'hello\\');
+
+  try
+    A.DecodeQuotedStr('\');
+    Fail('Failed to bail out on a malformed string, ''\''');
+  except
+    on E: EBadHeader do
+      CheckEquals(Format(MalformedToken, [A.Name, BadSyntax]),
+                  E.Message,
+                  'Unexpected exception, ''\''');
+  end;
+
+  try
+    A.DecodeQuotedStr('hello\');
+    Fail('Failed to bail out on a malformed string, ''hello\''');
+  except
+    on E: EBadHeader do
+      CheckEquals(Format(MalformedToken, [A.Name, BadSyntax]),
+                  E.Message,
+                  'Unexpected exception, ''\''');
+  end;
+end;
+
+procedure TestTIdSipAddressHeader.TestEncodeQuotedStr;
+begin
+  CheckEquals('I am a ''normal'' string',
+              A.EncodeQuotedStr('I am a ''normal'' string'),
+              '''I am a ''''normal'''' string''');
+  CheckEquals('',
+              A.EncodeQuotedStr(''),
+              '''''');
+  CheckEquals('\\',
+              A.EncodeQuotedStr('\'),
+              '\');
+  CheckEquals('\"',
+              A.EncodeQuotedStr('"'),
+              '"');
+  CheckEquals('\\\"',
+              A.EncodeQuotedStr('\"'),
+              '\"');
+  CheckEquals('\"I am a ''normal'' string\"',
+              A.EncodeQuotedStr('"I am a ''normal'' string"'),
+              '''"I am a ''normal'' string"''');
+end;
+
+procedure TestTIdSipAddressHeader.TestValue;
+begin
+  A.Value := 'sip:wintermute@tessier-ashpool.co.lu';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', A.Address.GetFullURI, 'Address');
+  CheckEquals('',                                     A.DisplayName,        'DisplayName');
+  CheckEquals('',                                     A.ParamsAsString,     'Params');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', A.Value,              'Value');
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithEncodings;
+begin
+  A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>';
+  CheckEquals('sips:countzero@jacks-bar.com',                  A.Address.GetFullURI, '1: Address');
+  CheckEquals('Count Zero"',                                   A.DisplayName,        '1: DisplayName');
+  CheckEquals('',                                              A.ParamsAsString,     '1: Params');
+  CheckEquals('"Count Zero\"" <sips:countzero@jacks-bar.com>', A.Value,              '1: Value');
+
+  A.Value := '"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>';
+  CheckEquals('sips:countzero@jacks-bar.com', A.Address.GetFullURI, '2: Address');
+  CheckEquals('Count\" Zero""',               A.DisplayName,        '2: DisplayName');
+  CheckEquals('',                             A.ParamsAsString,     '2: Params');
+  CheckEquals('"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>',
+              A.Value,
+              '2: Value');
+
+  A.Value := '"\C\o\u\n\t\\\"\ \Z\e\r\o\"\"" <sips:countzero@jacks-bar.com>';
+  CheckEquals('sips:countzero@jacks-bar.com', A.Address.GetFullURI,  '3: Address');
+  CheckEquals('Count\" Zero""',               A.DisplayName,         '3: Name');
+  CheckEquals('',                             A.ParamsAsString,      '3: Params');
+  CheckEquals('"\C\o\u\n\t\\\"\ \Z\e\r\o\"\"" <sips:countzero@jacks-bar.com>',
+              A.Value,
+              '3: Value');
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithMalformedQuotedName;
+begin
+  try
+    // missing close quote
+    A.Value := '"Count Zero <sips:countzero@jacks-bar.com>';
+    Fail('Failed to bail out because of unmatched quotes');
+  except
+    on E: EBadHeader do
+      CheckEquals(Format(MalformedToken, [A.Name, UnmatchedQuotes]),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+
+  try
+    // missing close quote
+    A.Value := '"Count Zero \" <sips:countzero@jacks-bar.com>';
+    Fail('Failed to bail out because of unmatched quotes');
+  except
+    on E: EBadHeader do
+      CheckEquals(Format(MalformedToken, [A.Name, UnmatchedQuotes]),
+                  E.Message,
+                  'Unexpected exception');
+  end;
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithNormalName;
+begin
+  A.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', A.Address.GetFullURI, 'Address');
+  CheckEquals('Wintermute',                           A.DisplayName,        'DisplayName');
+  CheckEquals('',                                     A.ParamsAsString,     'Params');
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithQuotedName;
+begin
+  A.Value := '"Wintermute" <sip:wintermute@tessier-ashpool.co.lu>';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', A.Address.GetFullURI, 'Address');
+  CheckEquals('Wintermute',                           A.DisplayName,        'Name');
+  CheckEquals('',                                     A.ParamsAsString,     'Params');
+
+  A.Value := '"Count Zero" <sips:countzero@jacks-bar.com>';
+
+  CheckEquals('sips:countzero@jacks-bar.com', A.Address.GetFullURI, 'Address');
+  CheckEquals('Count Zero',                   A.DisplayName,        'Name');
+  CheckEquals('',                             A.ParamsAsString,     'Params');
+end;
+
+procedure TestTIdSipAddressHeader.TestValueWithParam;
+begin
+  A.Value := 'sip:wintermute@tessier-ashpool.co.lu;hidden';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', A.Address.GetFullURI, 'Address');
+  CheckEquals('',                                     A.DisplayName,        'Name');
+  CheckEquals(';hidden',                              A.ParamsAsString,     'Params');
+end;
+
 //******************************************************************************
 //* TestTIdSipViaHeader                                                        *
 //******************************************************************************
@@ -494,8 +688,11 @@ end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
-  CheckEquals(TIdSipHeader.ClassName,    H.Add('Content-Length').ClassName, 'Content-Length');
-  CheckEquals(TIdSipViaHeader.ClassName, H.Add('Via').ClassName,            'Via');
+  CheckEquals(TIdSipAddressHeader.ClassName, H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
+  CheckEquals(TIdSipHeader.ClassName,        H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
+  CheckEquals(TIdSipAddressHeader.ClassName, H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
+  CheckEquals(TIdSipAddressHeader.ClassName, H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
+  CheckEquals(TIdSipViaHeader.ClassName,     H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;
 
 procedure TestTIdSipHeaders.TestAsString;
@@ -596,12 +793,23 @@ end;
 procedure TestTIdSipHeaders.TestIsContentLength;
 begin
   Check(    TIdSipHeaders.IsContentLength('Content-Length'),         'Content-Length');
-  Check(    TIdSipHeaders.IsContentLength(ContentLengthHeaderFull),  'ContentLengthFull constant');
+  Check(    TIdSipHeaders.IsContentLength(ContentLengthHeaderFull),  'ContentLengthHeaderFull constant');
   Check(    TIdSipHeaders.IsContentLength('l'),                      'l');
-  Check(    TIdSipHeaders.IsContentLength(ContentLengthHeaderShort), 'ContentLengthShort constant');
+  Check(    TIdSipHeaders.IsContentLength(ContentLengthHeaderShort), 'ContentLengthHeaderShort constant');
   Check(not TIdSipHeaders.IsContentLength(''),                       '''''');
   Check(not TIdSipHeaders.IsContentLength('Via'),                    'Via');
   Check(    TIdSipHeaders.IsContentLength('content-LeNgTh'),         'content-LeNgTh');
+end;
+
+procedure TestTIdSipHeaders.TestIsFrom;
+begin
+  Check(    TIdSipHeaders.IsFrom('From'),          'From');
+  Check(    TIdSipHeaders.IsFrom(FromHeaderFull),  'FromHeaderFull constant');
+  Check(    TIdSipHeaders.IsFrom('f'),             'f');
+  Check(    TIdSipHeaders.IsFrom(FromHeaderShort), 'FromShort constant');
+  Check(not TIdSipHeaders.IsFrom(''),              '''''');
+  Check(not TIdSipHeaders.IsFrom('Via'),           'Via');
+  Check(    TIdSipHeaders.IsFrom('fRoM'),          'fRoM');
 end;
 
 procedure TestTIdSipHeaders.TestIsMaxForwards;
@@ -724,6 +932,34 @@ begin
   Check      (sttTLS =       Self.Path.FirstHop.Transport,  'Transport');
 
   Check(Self.Path.FirstHop <> Self.Path.LastHop, 'Sanity check on two-node Path');
+end;
+
+//******************************************************************************
+//* TestTIdSipMessage                                                          *
+//******************************************************************************
+//* TestTIdSipMessage Public methods *******************************************
+
+// We know very well that TIdSipMessage has abstract methods. We don't care.
+{$WARNINGS OFF}
+procedure TestTIdSipMessage.SetUp;
+begin
+  inherited SetUp;
+
+  Msg := TIdSipMessage.Create;
+end;
+{$WARNINGS ON}
+
+procedure TestTIdSipMessage.TearDown;
+begin
+  Msg.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipMessage Published methods ****************************************
+
+procedure TestTIdSipMessage.TestMaxForwardsConsistency;
+begin
 end;
 
 //******************************************************************************
@@ -1102,6 +1338,26 @@ begin
     CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.Request,     'Request');
     CheckEquals(6,                                     Request.MaxForwards, 'MaxForwards');
     CheckEquals('0ha0isndaksdj@10.1.1.1',              Request.CallID,      'CallID');
+
+    CheckEquals('',
+                Request.ToHeader.DisplayName,
+                'ToHeader.DisplayName');
+    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com',
+                Request.ToHeader.Address.GetFullURI,
+                'ToHeader.Address.GetFullURI');
+    CheckEquals(';tag=1918181833n',
+                Request.ToHeader.ParamsAsString,
+                'ToHeader.ParamsAsString');
+
+    CheckEquals('J Rosenberg \"',
+                Request.From.DisplayName,
+                'From.DisplayName');
+    CheckEquals('sip:jdrosen@lucent.com',
+                Request.From.Address.GetFullURI,
+                'From.Address.GetFullURI');
+    CheckEquals(';tag=98asjd8',
+                Request.From.ParamsAsString,
+                'From.ParamsAsString');
 
     CheckEquals(3, Request.Path.Length, 'Path.Length');
 
@@ -1838,60 +2094,58 @@ end;
 
 //* TestTIdSipParser Private methods *******************************************
 
+procedure TestTIdSipParser.CheckBasicMessage(const Msg: TIdSipMessage);
+begin
+  CheckEquals('SIP/2.0',                              Msg.SIPVersion,                   'SipVersion');
+  CheckEquals(29,                                     Msg.ContentLength,                'ContentLength');
+  CheckEquals(70,                                     Msg.MaxForwards,                  'MaxForwards');
+  CheckEquals('a84b4c76e66710@gw1.leo_ix.org',        Msg.CallID,                       'CallID');
+  CheckEquals('Wintermute',                           Msg.ToHeader.DisplayName,         'ToHeader.DisplayName');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Msg.ToHeader.Address.GetFullURI,  'ToHeader.Address.GetFullURI');
+  CheckEquals('',                                     Msg.ToHeader.ParamsAsString,      'Msg.ToHeader.ParamsAsString');
+  CheckEquals('Case',                                 Msg.From.DisplayName,             'From.DisplayName');
+  CheckEquals('sip:case@fried.neurons.org',           Msg.From.Address.GetFullURI,      'From.Address.GetFullURI');
+  CheckEquals(';tag=1928301774',                      Msg.From.ParamsAsString,          'Msg.From.ParamsAsString');
+
+  CheckEquals(TIdSipAddressHeader.ClassName,
+              Msg.Headers[ContactHeaderFull].ClassName,
+              'Contact header type');
+
+  CheckEquals(1,                  Msg.Path.Length,                   'Path.Length');
+  Check      (Msg.Path.FirstHop = Msg.Path.LastHop,                  'Sanity check on Path');
+  CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion,       'LastHop.SipVersion');
+  Check      (sttTCP =            Msg.Path.LastHop.Transport,        'LastHop.Transport');
+  CheckEquals('gw1.leo_ix.org',   Msg.Path.LastHop.Host,             'LastHop.Host');
+  CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,             'LastHop.Port');
+  CheckEquals('z9hG4bK776asdhds', Msg.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
+
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',  Msg.Headers['to'].AsString,      'To');
+  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774', Msg.Headers['from'].AsString,    'From');
+  CheckEquals('CSeq: 314159 INVITE',                                    Msg.Headers['cseq'].AsString,    'CSeq');
+  CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',        Msg.Headers['contact'].AsString, 'Contact');
+  CheckEquals(8, Msg.Headers.Count, 'Header count');
+
+  CheckEquals('', Msg.Body, 'message-body');
+end;
+
 procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage);
 begin
   CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
 
   CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,  'Method');
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).Request, 'Request');
-  CheckEquals('SIP/2.0',                              Msg.SIPVersion,             'SipVersion');
-  CheckEquals(29,                                     Msg.ContentLength,          'ContentLength');
-  CheckEquals(70,                                     Msg.MaxForwards,            'MaxForwards');
-  CheckEquals('a84b4c76e66710@gw1.leo_ix.org',        Msg.CallID,                 'CallID');
 
-  CheckEquals(1,                  Msg.Path.Length,                   'Path.Length');
-  Check      (Msg.Path.FirstHop = Msg.Path.LastHop,                  'Sanity check on Path');
-  CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion,       'LastHop.SipVersion');
-  Check      (sttTCP =            Msg.Path.LastHop.Transport,        'LastHop.Transport');
-  CheckEquals('gw1.leo_ix.org',   Msg.Path.LastHop.Host,             'LastHop.Host');
-  CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,             'LastHop.Port');
-  CheckEquals('z9hG4bK776asdhds', Msg.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
-
-  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.Headers['to'].AsString,      'To');
-  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.Headers['from'].AsString,    'From');
-  CheckEquals('CSeq: 314159 INVITE',                                     Msg.Headers['cseq'].AsString,    'CSeq');
-  CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.Headers['contact'].AsString, 'Contact');
-  CheckEquals(8, Msg.Headers.Count, 'Header count');
-
-  CheckEquals('', Msg.Body, 'message-body');
+  Self.CheckBasicMessage(Msg);
 end;
 
 procedure TestTIdSipParser.CheckBasicResponse(const Msg: TIdSipMessage);
 begin
   CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
 
-  CheckEquals('SIP/2.0',                       Msg.SIPVersion,                 'SipVersion');
-  CheckEquals(486,                             TIdSipResponse(Msg).StatusCode, 'StatusCode');
-  CheckEquals('Busy Here',                     TIdSipResponse(Msg).StatusText, 'StatusText');
-  CheckEquals(29,                              Msg.ContentLength,              'ContentLength');
-  CheckEquals(70,                              Msg.MaxForwards,                'MaxForwards');
-  CheckEquals('a84b4c76e66710@gw1.leo_ix.org', Msg.CallID,                     'CallID');
+  CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
+  CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
 
-  CheckEquals(1,                  Msg.Path.Length,                   'Path.Length');
-  Check      (Msg.Path.FirstHop = Msg.Path.LastHop,                  'Sanity check on Path');
-  CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion,       'LastHop.SipVersion');
-  Check      (sttTCP =            Msg.Path.LastHop.Transport,        'LastHop.Transport');
-  CheckEquals('gw1.leo_ix.org',   Msg.Path.LastHop.Host,             'LastHop.Host');
-  CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,             'LastHop.Port');
-  CheckEquals('z9hG4bK776asdhds', Msg.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
-
-  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.Headers['to'].AsString,      'To');
-  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.Headers['from'].AsString,    'From');
-  CheckEquals('CSeq: 314159 INVITE',                                     Msg.Headers['cseq'].AsString,    'CSeq');
-  CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.Headers['contact'].AsString, 'Contact');
-  CheckEquals(8, Msg.Headers.Count, 'Header count');
-
-  CheckEquals('', Msg.Body, 'message-body');
+  Self.CheckBasicMessage(Msg);
 end;
 
 initialization

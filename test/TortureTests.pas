@@ -7,6 +7,19 @@ const
   // http://www.ietf.org/internet-drafts/draft-ietf-sipping-torture-tests-00.txt
   // TortureTextN is defined in section 2.N of the above.
 
+  //   This message is a correctly formatted SIP message. It contains:
+  //
+  //   line folding all over
+  //   escaped characters within quotes
+  //   LWS between colons, semicolons, headers, and other fields
+  //   both comma separated and separate listing of headers
+  //   mix or short and long form for the same header
+  //   unknown header field
+  //   unusual header ordering
+  //   unknown parameters of a known header
+  //
+  //   Proxies should forward message and clients should respond as to a
+  //   normal INVITE message.
   TortureTest1 = 'INVITE sip:vivekg@chair.dnrc.bell-labs.com SIP/2.0'#13#10
                + 'TO :'#13#10
                + ' sip:vivekg@chair.dnrc.bell-labs.com ;   tag    = 1918181833n'#13#10
