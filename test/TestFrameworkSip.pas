@@ -216,16 +216,18 @@ type
   TIdSipTestSessionListener = class(TIdSipMockListener,
                                     IIdSipSessionListener)
   private
-    fAnswerParam:        TIdSipResponse;
-    fEndedSession:       Boolean;
-    fEstablishedSession: Boolean;
-    fModifiedSession:    Boolean;
-    fModifySession:      Boolean;
-    fNewSession:         Boolean;
-    fModifyParam:        TIdSipInboundInvite;
-    fReasonParam:        String;
-    fRedirect:           Boolean;
-    fSessionParam:       TIdSipSession;
+    fAnswerParam:              TIdSipResponse;
+    fEndedSession:             Boolean;
+    fEstablishedSession:       Boolean;
+    fMimeType:                 String;
+    fModifiedSession:          Boolean;
+    fModifySession:            Boolean;
+    fNewSession:               Boolean;
+    fModifyParam:              TIdSipInboundInvite;
+    fReasonParam:              String;
+    fRedirect:                 Boolean;
+    fRemoteSessionDescription: String;
+    fSessionParam:             TIdSipSession;
   public
     constructor Create; override;
 
@@ -233,22 +235,26 @@ type
                          Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String); virtual;
-    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession;
+                                   const RemoteSessionDescription: String;
+                                   const MimeType: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
     procedure OnModifySession(Modify: TIdSipInboundInvite);
     procedure OnNewSession(Session: TIdSipSession);
 
-    property AnswerParam:        TIdSipResponse      read fAnswerParam;
-    property EndedSession:       Boolean             read fEndedSession;
-    property EstablishedSession: Boolean             read fEstablishedSession;
-    property ModifiedSession:    Boolean             read fModifiedSession;
-    property ModifySession:      Boolean             read fModifySession;
-    property NewSession:         Boolean             read fNewSession;
-    property ModifyParam:        TIdSipInboundInvite read fModifyParam;
-    property Redirect:           Boolean             read fRedirect;
-    property ReasonParam:        String              read fReasonParam;
-    property SessionParam:       TIdSipSession       read fSessionParam;
+    property AnswerParam:              TIdSipResponse      read fAnswerParam;
+    property EndedSession:             Boolean             read fEndedSession;
+    property EstablishedSession:       Boolean             read fEstablishedSession;
+    property MimeType:                 String              read fMimeType;
+    property ModifiedSession:          Boolean             read fModifiedSession;
+    property ModifySession:            Boolean             read fModifySession;
+    property NewSession:               Boolean             read fNewSession;
+    property ModifyParam:              TIdSipInboundInvite read fModifyParam;
+    property Redirect:                 Boolean             read fRedirect;
+    property RemoteSessionDescription: String              read fRemoteSessionDescription;
+    property ReasonParam:              String              read fReasonParam;
+    property SessionParam:             TIdSipSession       read fSessionParam;
   end;
 
   TIdSipTestSessionListenerEndedCounter = class(TIdSipTestSessionListener)
@@ -886,11 +892,13 @@ constructor TIdSipTestSessionListener.Create;
 begin
   inherited Create;
 
-  Self.fEndedSession       := false;
-  Self.fEstablishedSession := false;
-  Self.fModifiedSession    := false;
-  Self.fNewSession         := false;
-  Self.fRedirect           := false;
+  Self.fEndedSession             := false;
+  Self.fEstablishedSession       := false;
+  Self.fMimeType                 := '';
+  Self.fModifiedSession          := false;
+  Self.fNewSession               := false;
+  Self.fRedirect                 := false;
+  Self.fRemoteSessionDescription := '';
 end;
 
 procedure TIdSipTestSessionListener.OnRedirect(Action: TIdSipAction;
@@ -913,10 +921,14 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnEndedSession');
 end;
 
-procedure TIdSipTestSessionListener.OnEstablishedSession(Session: TIdSipSession);
+procedure TIdSipTestSessionListener.OnEstablishedSession(Session: TIdSipSession;
+                                                         const RemoteSessionDescription: String;
+                                                         const MimeType: String);
 begin
-  Self.fEstablishedSession := true;
-  Self.fSessionParam       := Session;
+  Self.fEstablishedSession       := true;
+  Self.fSessionParam             := Session;
+  Self.fRemoteSessionDescription := RemoteSessionDescription;
+  Self.fMimeType                 := MimeType;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnEstablishedSession');

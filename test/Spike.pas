@@ -76,8 +76,9 @@ type
     Label6: TLabel;
     MasqAsNat: TCheckBox;
     Answer: TButton;
+    Edit1: TEdit;
+    Label7: TLabel;
     procedure ByeClick(Sender: TObject);
-    procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
     procedure UiTimerTimer(Sender: TObject);
     procedure TextTimerTimer(Sender: TObject);
@@ -128,7 +129,9 @@ type
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
-    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession;
+                                   const RemoteSessionDescription: String;
+                                   const MimeType: String);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnException(E: Exception;
@@ -167,6 +170,7 @@ type
     procedure StartTransports;
     procedure StopReadingData;
     procedure StopTransports;
+    procedure UpdateCounters;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -258,8 +262,8 @@ begin
   end;
   Self.UA.Contact.Value := Self.ContactUri.Text;
   Self.UA.From.Value    := Self.ContactUri.Text;
-  Self.UA.HasProxy := Self.UseAsProxy.Checked;
-  Self.UA.Proxy.Uri := Self.TargetUri.Text + ';lr';
+  Self.UA.HasProxy      := Self.UseAsProxy.Checked;
+  Self.UA.Proxy.Uri     := Self.TargetUri.Text + ';lr';
 
   Self.fPayloadProcessor := TIdSDPMultimediaSession.Create(Self.RTPProfile);
 end;
@@ -383,7 +387,9 @@ begin
   Self.LogMessage(Message, true);
 end;
 
-procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
+procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession;
+                                          const RemoteSessionDescription: String;
+                                          const MimeType: String);
 begin
 //  Self.PayloadProcessor.SetRemoteDescription('');
 end;
@@ -592,6 +598,17 @@ begin
     (Self.Transports[I] as TIdSipTransport).Stop;
 end;
 
+procedure TrnidSpike.UpdateCounters;
+begin
+  Self.CounterLock.Acquire;
+  try
+    RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
+    UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
+  finally
+    Self.CounterLock.Release;
+  end;
+end;
+
 //* TrnidSpike Published methods ***********************************************
 
 procedure TrnidSpike.ByeClick(Sender: TObject);
@@ -635,20 +652,9 @@ begin
   end;
 end;
 
-procedure TrnidSpike.FormKeyPress(Sender: TObject; var Key: Char);
-begin
-  //
-end;
-
 procedure TrnidSpike.UiTimerTimer(Sender: TObject);
 begin
-  Self.CounterLock.Acquire;
-  try
-    RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
-    UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
-  finally
-    Self.CounterLock.Release;
-  end;
+  Self.UpdateCounters;
 end;
 
 procedure TrnidSpike.TextTimerTimer(Sender: TObject);

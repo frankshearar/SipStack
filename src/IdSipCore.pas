@@ -115,8 +115,8 @@ type
   //   timed out, a transport error occurec, etc). OnSessionEnded lets us clean
   //   up. The Session referenced becomes invalid after this point. In other
   //   words, you'd better say goodbye to the Session in your implementation of
-  //   this method. Accessing your reference to the Session will probably fail
-  //   with an access violation.
+  //   this method. Accessing your reference to the Session after this method
+  //   has finished will probably fail with an access violation.
   // * OnEstablishedSession tells us when a session has been fully established.
   // * OnModifySession fires when we receive an in-dialog INVITE - an INVITE
   //   that offers a modified session description.
@@ -126,7 +126,9 @@ type
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
-    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession;
+                                   const RemoteSessionDescription: String;
+                                   const MimeType: String);
     procedure OnModifySession(Modify: TIdSipInboundInvite);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -814,7 +816,7 @@ type
   // OnSuccess event.
   //
   // I consider myself to have succeeded (in other words I call OnSuccess on
-  // my listeners) when I receive a 2xx response.
+  // my listeners) when I receive a 2xx response and have sent an ACK.
   TIdSipOutboundInvite = class(TIdSipInvite)
   private
     Cancelling:                     Boolean;
@@ -1091,7 +1093,8 @@ type
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
     procedure NotifyOfEndedSession(const Reason: String);
-    procedure NotifyOfEstablishedSession;
+    procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
+                                         const MimeType: String);
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfModifySession(Modify: TIdSipInboundInvite);
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -1353,8 +1356,14 @@ type
   end;
 
   TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
+  private
+    fMimeType:                 String;
+    fRemoteSessionDescription: String;
   public
     procedure Run(const Subject: IInterface); override;
+
+    property MimeType:                 String read fMimeType write fMimeType;
+    property RemoteSessionDescription: String read fRemoteSessionDescription write fRemoteSessionDescription;
   end;
 
   TIdSipModifiedSessionMethod = class(TIdSipSessionMethod)
@@ -4249,7 +4258,6 @@ begin
     Ack.ContentDisposition.Value := DispositionSession;
     Ack.ContentLength := Length(Ack.Body);
 
-
     // cf. RFC 3261 section 22.1
     if Self.InitialRequest.HasAuthorization then
       Ack.FirstAuthorization.Value := Self.InitialRequest.FirstAuthorization.FullValue;
@@ -5649,13 +5657,16 @@ begin
   end;
 end;
 
-procedure TIdSipSession.NotifyOfEstablishedSession;
+procedure TIdSipSession.NotifyOfEstablishedSession(const RemoteSessionDescription: String;
+                                                   const MimeType: String);
 var
   Notification: TIdSipEstablishedSessionMethod;
 begin
   Notification := TIdSipEstablishedSessionMethod.Create;
   try
-    Notification.Session := Self;
+    Notification.Session                  := Self;
+    Notification.RemoteSessionDescription := RemoteSessionDescription;
+    Notification.MimeType                 := MimeType;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -6026,7 +6037,8 @@ begin
 
       Self.InitialInvite.Ring;
 
-      Self.NotifyOfEstablishedSession;
+      Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
+                                      Self.InitialInvite.InitialRequest.ContentType);
     end;
   finally
     Self.DialogLock.Release;
@@ -6345,7 +6357,8 @@ begin
     Self.RemoveFinishedRedirectedInvite(InviteAgent);
     Self.TerminateAllRedirects;
 
-    Self.NotifyOfEstablishedSession;
+    Self.NotifyOfEstablishedSession(Response.Body,
+                                    Response.ContentType);
   end
   else
     Self.NotifyOfModifiedSession(Response);
@@ -6610,7 +6623,9 @@ end;
 
 procedure TIdSipEstablishedSessionMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipSessionListener).OnEstablishedSession(Self.Session);
+  (Subject as IIdSipSessionListener).OnEstablishedSession(Self.Session,
+                                                          Self.RemoteSessionDescription,
+                                                          Self.MimeType);
 end;
 
 //******************************************************************************
