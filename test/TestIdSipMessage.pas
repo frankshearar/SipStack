@@ -144,7 +144,7 @@ type
     procedure TestIsOptions;
     procedure TestIsRegister;
     procedure TestIsRequest;
-    procedure TestMatchSipsakOptions;
+    procedure TestMatchRFC2543Options;
     procedure TestNewRequestHasContentLength;
     procedure TestParse;
     procedure TestParseCompoundHeader;
@@ -1901,13 +1901,10 @@ begin
   Check(Self.Request.IsRequest, 'IsRequest');
 end;
 
-procedure TestTIdSipRequest.TestMatchSipsakOptions;
+procedure TestTIdSipRequest.TestMatchRFC2543Options;
 var
   Options:  TIdSipRequest;
 begin
-  // Even though this message claims to conform to SIP/2.0, this SIP stack
-  // treats it as an RFC 2543 message because its Via branch doesn't begin with
-  // the SIP/2.0 magic cookie "z9hG4bk".
   Options := TIdSipRequest.Create;
   try
     Options.Method := MethodOptions;
