@@ -64,7 +64,7 @@ type
   end;
 
   TIdSipTestOptionsListener = class(TIdInterfacedObject,
-                                         IIdSipOptionsListener)
+                                    IIdSipOptionsListener)
   private
   private
     fAuthenticationChallenge: Boolean;
