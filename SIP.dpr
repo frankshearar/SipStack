@@ -48,6 +48,7 @@ uses
   IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   IdTimerQueue in 'src\IdTimerQueue.pas',
+  IdUnicode in 'src\IdUnicode.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
@@ -83,7 +84,8 @@ uses
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
-  TestIdTimerQueue in 'test\TestIdTimerQueue.pas';
+  TestIdTimerQueue in 'test\TestIdTimerQueue.pas',
+  TestIdUnicode in 'test\TestIdUnicode.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
