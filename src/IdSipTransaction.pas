@@ -1913,6 +1913,7 @@ begin
     Self.ChangeToCalling;
 
     Self.ScheduleTimerA;
+    Self.ScheduleTimerB;
 
     Self.TrySendRequest(Self.InitialRequest);
   end;
@@ -1946,7 +1947,6 @@ begin
   // to itsTerminated.
 
   Self.SetState(itsCompleted);
-  Self.ScheduleTimerB;
   Self.ScheduleTimerD;
 
   Self.TrySendACK(R);
