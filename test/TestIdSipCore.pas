@@ -598,7 +598,7 @@ type
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
     procedure ReceiveAckWithBody(const SessionDesc,
-                                       ContentType: String);
+                                 ContentType: String);
   protected
     procedure CheckResendWaitTime(Milliseconds: Cardinal;
                                   const Msg: String); override;
@@ -6950,7 +6950,7 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.ReceiveAckWithBody(const SessionDesc,
-                                                            ContentType: String);
+                                                      ContentType: String);
 var
   Ack: TIdSipRequest;
 begin
