@@ -1434,7 +1434,7 @@ begin
   Self.A.Username := 'Wintermute';
   Self.A.UnknownResponses['paranoid'] := '\very';
 
-  CheckEquals('foo nonce="aefbb",nonceount="0000f00f",algorithm="sha1-512",'
+  CheckEquals('foo nonce="aefbb",nc="0000f00f",algorithm="sha1-512",'
             + 'realm="tessier-ashpool.co.luna",username="Wintermute",'
             + 'paranoid="\\very"',
               Self.A.Value,
