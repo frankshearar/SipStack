@@ -228,14 +228,13 @@ begin
   inherited SendRequest(R);
 
   Self.Log(R.AsString, dirOut);
-  Self.fRequests.AddCopy(R);
 
   if R.IsAck then begin
     Self.LastACK.Assign(R);
     Inc(Self.fACKCount)
   end
   else begin
-    Self.LastRequest.Assign(R);
+    Self.fRequests.AddCopy(R);
     Inc(Self.fSentRequestCount);
   end;
 
