@@ -32,15 +32,19 @@ Todo:
 * The User Agent knows about what kinds of actions it supports. We
   need to pull this knowledge out into separate OutboundModules, much
   like the existing inbound MessageModules.
+* The offer/answer model needs work, as the user of the stack still
+  has to do too much.
 
 Known bugs:
 * TCP clients don't send/receive data in a separate thread. This
   makes the main/VCL thread hang while you send messages.
-* Very occasionally the TCP transport tests fail with an access
-  violation inside TIdTCPConnection.ReadFromStack, in the 0041nnnn
-  address range. I currently develop the stack on Indy 9.0.14. I don't
-  know if this is a bug in Indy's code or if I'm doing something
-  subtly wrong in my code.
+* Occasionally the TCP transport tests fail with an access violation
+  inside TIdTCPConnection.ReadFromStack, in the 0041nnnn address
+  range. I currently develop the stack on Indy 9.0.14. I don't know if
+  this is a bug in Indy's code or if I'm doing something subtly wrong
+  in my code.
 * TLS tests fail because of something to do with the certificates.
+* The authentication tests fail against the SIP Foundry Test Framework
+  (http://www.sipfoundry.org/sftf/ cases 3xx).
 
 Frank Shearar, 2004/12/24
