@@ -269,7 +269,7 @@ object rnidSpike: TrnidSpike
         Width = 289
         Height = 21
         TabOrder = 9
-        Text = 'sip:franks@wsfrank'
+        Text = 'sip:franks@80.168.137.82'
         OnChange = ContactUriChange
       end
       object HostName: TEdit
@@ -278,7 +278,7 @@ object rnidSpike: TrnidSpike
         Width = 121
         Height = 21
         TabOrder = 10
-        Text = 'wsfrank'
+        Text = '80.168.137.82'
         OnChange = HostNameChange
       end
       object MasqAsNat: TCheckBox
@@ -293,14 +293,14 @@ object rnidSpike: TrnidSpike
       end
     end
   end
-  object RegistrarUri: TEdit
+  object Password: TEdit
     Left = 76
     Top = 25
     Width = 290
     Height = 21
     TabOrder = 2
-    Text = 'sip:roke.angband.za.org'
-    OnChange = RegistrarUriChange
+    Text = 'password'
+    OnChange = PasswordChange
   end
   object UiTimer: TTimer
     Enabled = False
