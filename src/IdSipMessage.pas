@@ -462,6 +462,7 @@ type
   public
     procedure Assign(Src: TPersistent); override;
     function  MalformedException: ExceptClass; override;
+    function  IsFinal: Boolean;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -2465,6 +2466,11 @@ end;
 function TIdSipResponse.MalformedException: ExceptClass;
 begin
   Result := EBadResponse;
+end;
+
+function TIdSipResponse.IsFinal: Boolean;
+begin
+  Result := Self.StatusCode div 100 > 1;
 end;
 
 //* TIdSipResponse Protected methods *******************************************

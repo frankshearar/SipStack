@@ -338,6 +338,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestIsFinal;
     procedure TestReadBody;
   end;
 
@@ -3473,6 +3474,27 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestIsFinal;
+begin
+  Self.Response.StatusCode := SIPTrying;
+  Check(not Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPOK;
+  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPMultipleChoices;
+  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPBadRequest;
+  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPInternalServerError;
+  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
+
+  Self.Response.StatusCode := SIPBusyEverywhere;
+  Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
 end;
 
 procedure TestTIdSipResponse.TestReadBody;

@@ -11,9 +11,24 @@ uses
   // by default, only checking that those certain messages are not resent when
   // using reliable transports in tests like TestReliableTransportFoo
 type
+  TestTIdSipTransactionDispatcher = class(TTestCase)
+  private
+    D: TIdSipTransactionDispatcher;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCountTransport;
+  end;
+
+  TestTIdSipTransaction = class(TTestCase)
+  published
+    procedure TestGetTransactionType;
+  end;
 
   TestTIdSipClientInviteTransaction = class(TTestCase)
   private
+    FailMsg:               String;
     InitialRequest:        TIdSipRequest;
     MockTransport:         TIdSipMockTransport;
     Response:              TIdSipResponse;
@@ -21,12 +36,15 @@ type
     TransactionProceeding: Boolean;
     TransactionCompleted:  Boolean;
     TransactionFailed:     Boolean;
+    TransactionTerminated: Boolean;
 
     procedure CheckACK(Sender: TObject; const R: TIdSipResponse);
     procedure Completed(Sender: TObject; const R: TIdSipResponse);
     procedure MoveToCompletedState;
     procedure MoveToProceedingState;
+    procedure OnFail(Sender: TObject; const Reason: String);
     procedure Proceeding(Sender: TObject; const R: TIdSipResponse);
+    procedure Terminated(Sender: TObject);
     procedure TransactionFail(Sender: TObject; const Reason: String);
   public
     procedure SetUp; override;
@@ -38,7 +56,7 @@ type
     procedure TestInviteWithHostUnreachable;
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
-    procedure TestTimeout;
+    procedure TestNonInviteMethodInInitialRequest;
     procedure TestReceive1xxInCallingState;
     procedure TestReceive1xxInProceedingState;
     procedure TestReceive1xxNoResendingOfRequest;
@@ -48,6 +66,8 @@ type
     procedure TestReceive3xxInCompletedState;
     procedure TestReceive3xxInProceedingState;
     procedure TestReliableTransportNoInviteRetransmissions;
+    procedure TestTimerDFired;
+    procedure TestTimeout;
   end;
 
   TestTIdSipServerInviteTransaction = class(TTestCase)
@@ -56,7 +76,9 @@ type
     CheckReceive2xxFromTUInProceedingStateFired:                  Boolean;
     CheckReceiveNonTryingProvisionalFromTUInProceedingStateFired: Boolean;
     CheckSending100Fired:                                         Boolean;
+    FailMsg:                                                      String;
     InitialRequest:                                               TIdSipRequest;
+    InitialRequestSentToTU:                                       Boolean;
     MockTransport:                                                TIdSipMockTransport;
     Request:                                                      TIdSipRequest;
     Response:                                                     TIdSipResponse;
@@ -65,6 +87,7 @@ type
     TransactionCompleted:                                         Boolean;
     TransactionConfirmed:                                         Boolean;
     TransactionFailed:                                            Boolean;
+    TransactionTerminated:                                        Boolean;
 
     procedure CheckReceiveInvite(Sender: TObject; const R: TIdSipResponse);
     procedure CheckReceive2xxFromTUInProceedingState(Sender: TObject; const R: TIdSipResponse);
@@ -72,12 +95,16 @@ type
     procedure CheckSending100(Sender: TObject; const R: TIdSipResponse);
     procedure MoveToCompletedState;
     procedure MoveToConfirmedState;
+    procedure OnFail(Sender: TObject; const Reason: String);
+    procedure OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
     procedure ReceiveInvite;
+    procedure Terminated(Sender: TObject);
     procedure TransactionFail(Sender: TObject; const Reason: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
     procedure TestCompletedStateNetworkProblem;
     procedure TestProceedingStateNetworkProblem;
@@ -91,7 +118,82 @@ type
     procedure TestResponseRetransmissionInCompletedState;
     procedure TestTimerGStops;
     procedure TestTimeout;
+    procedure TestTimerIFired;
     procedure TestSending100;
+  end;
+
+  TestTIdSipClientNonInviteTransaction = class(TTestCase)
+  private
+    FailMsg:               String;
+    InitialRequest:        TIdSipRequest;
+    MockTransport:         TIdSipMockTransport;
+    Response:              TIdSipResponse;
+    Tran:                  TIdSipClientNonInviteTransaction;
+    TransactionCompleted:  Boolean;
+    TransactionFailed:     Boolean;
+    TransactionProceeding: Boolean;
+    TransactionTerminated: Boolean;
+
+    procedure Completed(Sender: TObject; const R: TIdSipResponse);
+    procedure MoveToProceedingState;
+    procedure MoveToCompletedState;
+    procedure OnFail(Sender: TObject; const Reason: String);
+    procedure Proceeding(Sender: TObject; const R: TIdSipResponse);
+    procedure Terminated(Sender: TObject);
+    procedure TransactionFail(Sender: TObject; const Reason: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestInitialRequestSent;
+    procedure TestInitialState;
+    procedure TestMultipleRequestSendingInProceedingState;
+    procedure TestMultipleRequestSendingInTryingState;
+    procedure TestReceive1xxInProceedingState;
+    procedure TestReceive1xxInTryingState;
+    procedure TestReceiveFinalResponseInProceedingState;
+    procedure TestReceiveFinalResponseInTryingState;
+    procedure TestTimeout;
+    procedure TestTimerKFired;
+    procedure TestTryingStateTransportError;
+  end;
+
+  TestTIdSipServerNonInviteTransaction = class(TTestCase)
+  private
+    FailMsg:               String;
+    InitialRequest:        TIdSipRequest;
+    MockTransport:         TIdSipMockTransport;
+    Request:               TIdSipRequest;
+    Response:              TIdSipResponse;
+    Tran:                  TIdSipServerNonInviteTransaction;
+    TransactionCompleted:  Boolean;
+    TransactionFailed:     Boolean;
+    TransactionProceeding: Boolean;
+    TransactionTerminated: Boolean;
+    TransactionTrying:     Boolean;
+
+    procedure MoveToCompletedState;
+    procedure MoveToProceedingState;
+    procedure OnFail(Sender: TObject; const Reason: String);
+    procedure Terminated(Sender: TObject);
+    procedure TransactionFail(Sender: TObject; const Reason: String);
+    procedure Trying(Sender: TObject; const R: TIdSipRequest);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestInitialRequestSentToTU;
+    procedure TestInitialState;
+    procedure TestReceiveFinalResponseFromTUInProceedingState;
+    procedure TestReceiveFinalResponseFromTUInTryingState;
+    procedure TestReceiveProvisionalResponseFromTUInProceedingState;
+    procedure TestReceiveProvisionalResponseFromTUInTryingState;
+    procedure TestReReceiveInitialRequestInCompletedState;
+    procedure TestReReceiveInitialRequestInProceedingState;
+    procedure TestResponseFromTUInCompletedState;
+    procedure TestTimerJFired;
+    procedure TestTransportErrorInCompletedState;
+    procedure TestTransportErrorInProceedingState;
   end;
 
 implementation
@@ -102,13 +204,111 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
+  Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
+  Result.AddTest(TestTIdSipTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
 end;
 
-function InviteStateToStr(const S: TIdSipInviteTransactionState): String;
+function InviteStateToStr(const S: TIdSipTransactionState): String;
 begin
-  Result := GetEnumName(TypeInfo(TIdSipInviteTransactionState), Integer(S));
+  Result := GetEnumName(TypeInfo(TIdSipTransactionState), Integer(S));
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionDispatcher                                            *
+//******************************************************************************
+//* TestTIdSipTransactionDispatcher Public methods *****************************
+
+procedure TestTIdSipTransactionDispatcher.SetUp;
+begin
+  inherited SetUp;
+
+  Self.D := TIdSipTransactionDispatcher.Create;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TearDown;
+begin
+  Self.D.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionDispatcher Published methods **************************
+
+procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
+var
+  T1, T2: TIdSipMockTransport;
+begin
+  CheckEquals(0, Self.D.TransportCount, 'Initial value of TransportCount');
+
+  T1 := TIdSipMockTransport.Create;
+  try
+    Self.D.AddTransport(T1);
+    CheckEquals(1, Self.D.TransportCount, 'After one AddTransport');
+
+    T2 := TIdSipMockTransport.Create;
+    try
+      Self.D.AddTransport(T1);
+      CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
+    finally
+      T2.Free;
+    end;
+  finally
+    T1.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransaction                                                      *
+//******************************************************************************
+//* TestTIdSipTransaction Published methods ************************************
+
+procedure TestTIdSipTransaction.TestGetTransactionType;
+var
+  R: TIdSipRequest;
+begin
+  R := TIdSipRequest.Create;
+  try
+    R.Method := MethodInvite;
+    CheckEquals(TIdSipClientInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client INVITE');
+
+    R.Method := MethodAck;
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client ACK');
+
+    R.Method := MethodBye;
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client BYE');
+
+    R.Method := MethodCancel;
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client CANCEL');
+
+    R.Method := MethodOptions;
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client OPTIONS');
+
+    R.Method := MethodRegister;
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client REGISTER');
+
+    R.Method := 'NewFangledMethod';
+    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                TIdSipTransaction.GetTransactionType(R).ClassName,
+                'Client NewFangledMethod');
+  finally
+    R.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -143,9 +343,11 @@ begin
 
   Self.Tran := TIdSipClientInviteTransaction.Create;
 
+  Self.FailMsg               := '';
   Self.TransactionProceeding := false;
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;
+  Self.TransactionTerminated := false;
 
   Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
 end;
@@ -205,19 +407,45 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToCompletedState;
 begin
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState precondition');
+
   Response.StatusCode := SIPMultipleChoices;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsCompleted),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState postcondition');
 end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToProceedingState;
 begin
+  CheckEquals(InviteStateToStr(itsCalling),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState precondition');
+
   Self.Response.StatusCode := SIPTrying;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState postcondition');
+end;
+
+procedure TestTIdSipClientInviteTransaction.OnFail(Sender: TObject; const Reason: String);
+begin
+  Self.FailMsg := Reason;
 end;
 
 procedure TestTIdSipClientInviteTransaction.Proceeding(Sender: TObject; const R: TIdSipResponse);
 begin
   Self.TransactionProceeding := true;
+end;
+
+procedure TestTIdSipClientInviteTransaction.Terminated(Sender: TObject);
+begin
+  Self.TransactionTerminated := true;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TransactionFail(Sender: TObject; const Reason: String);
@@ -232,9 +460,8 @@ begin
   Self.Response.Headers.Add(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
   Self.Response.Headers.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
 
-  Self.Tran.OnCompleted := Self.CheckACK;
-
   Self.MoveToProceedingState;
+  Self.Tran.OnReceiveResponse := Self.CheckACK;
   Self.MoveToCompletedState;
 
   CheckEquals(InviteStateToStr(itsCompleted),
@@ -250,7 +477,7 @@ begin
 
   Response.StatusCode := SIPMultipleChoices;
   Self.MockTransport.FailWith := EIdConnectTimeout;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsTerminated),
               InviteStateToStr(Self.Tran.State),
@@ -294,20 +521,20 @@ begin
   CheckEquals(0, Self.MockTransport.SentRequestCount, 'Timer A wasn''t stopped');
 end;
 
-procedure TestTIdSipClientInviteTransaction.TestTimeout;
+procedure TestTIdSipClientInviteTransaction.TestNonInviteMethodInInitialRequest;
 begin
-  Self.Tran.OnFail := Self.TransactionFail;
-  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest, 500);
-  Sleep(750);
-  CheckEquals(InviteStateToStr(itsTerminated),
-              InviteStateToStr(Self.Tran.State),
-              'Timeout');
-  Check(Self.TransactionFailed, 'Event didn''t fire');
+  Self.InitialRequest.Method := MethodAck;
+
+  try
+    Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+    Fail('Failed to bail out on non-INVITE method');
+  except
+  end;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;
 begin
-  Self.Tran.OnProceeding := Self.Proceeding;
+  Self.Tran.OnReceiveResponse := Self.Proceeding;
 
   Self.MoveToProceedingState;
 
@@ -321,9 +548,9 @@ procedure TestTIdSipClientInviteTransaction.TestReceive1xxInProceedingState;
 begin
   Self.MoveToProceedingState;
 
-  Self.Tran.OnProceeding := Self.Proceeding;
+  Self.Tran.OnReceiveResponse := Self.Proceeding;
   Self.Response.StatusCode := SIPRinging;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsProceeding),
               InviteStateToStr(Self.Tran.State),
@@ -347,7 +574,7 @@ end;
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCallingState;
 begin
   Self.Response.StatusCode := SIPOK;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsTerminated),
               InviteStateToStr(Self.Tran.State),
@@ -359,7 +586,7 @@ begin
   Self.MoveToProceedingState;
 
   Self.Response.StatusCode := SIPOK;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsTerminated),
               InviteStateToStr(Self.Tran.State),
@@ -368,10 +595,10 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive3xxInCallingState;
 begin
-  Self.Tran.OnCompleted := Self.Completed;
+  Self.Tran.OnReceiveResponse := Self.Completed;
 
   Self.Response.StatusCode := SIPMultipleChoices;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsCompleted),
               InviteStateToStr(Self.Tran.State),
@@ -382,11 +609,12 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive3xxInCompletedState;
 begin
-  Self.Tran.OnCompleted := Self.Completed;
   Self.MoveToProceedingState;
+  Self.Tran.OnReceiveResponse := Self.Completed;
   Self.MoveToCompletedState;
 
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Response.StatusCode := SIPMultipleChoices;
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsCompleted),
               InviteStateToStr(Self.Tran.State),
@@ -397,11 +625,11 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive3xxInProceedingState;
 begin
-  Self.Tran.OnCompleted := Self.Completed;
   Self.MoveToProceedingState;
+  Self.Tran.OnReceiveResponse := Self.Completed;
 
   Response.StatusCode := SIPMultipleChoices;
-  Self.MockTransport.FireOnResponse(Self.Response);
+  Self.Tran.HandleMessage(Self.Response);
 
   CheckEquals(InviteStateToStr(itsCompleted),
               InviteStateToStr(Self.Tran.State),
@@ -420,6 +648,40 @@ begin
   // messages being sent.
   Sleep(2000);
   CheckEquals(1, Self.MockTransport.SentRequestCount, 'Reliable transports should not resend INVITE');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestTimerDFired;
+begin
+  Self.Tran.OnFail       := Self.OnFail;
+  Self.Tran.OnTerminated := Self.Terminated;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest, 250);
+
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+  Sleep(500);
+
+  Check(Self.TransactionTerminated, 'TimerD didn''t fire');
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Terminated');
+
+  CheckEquals('', Self.FailMsg, 'Unexpected fail');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestTimeout;
+begin
+  Self.Tran.OnFail := Self.TransactionFail;
+  
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest, 500);
+  Sleep(750);
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Timeout');
+
+  Check(Self.TransactionFailed, 'Event didn''t fire');
 end;
 
 //******************************************************************************
@@ -460,10 +722,13 @@ begin
   Self.CheckReceive2xxFromTUInProceedingStateFired                  := false;
   Self.CheckReceiveNonTryingProvisionalFromTUInProceedingStateFired := false;
   Self.CheckSending100Fired                                         := false;
+  Self.FailMsg                                                      := '';
+  Self.InitialRequestSentToTU                                       := false;
   Self.TransactionProceeding                                        := false;
   Self.TransactionCompleted                                         := false;
   Self.TransactionConfirmed                                         := false;
   Self.TransactionFailed                                            := false;
+  Self.TransactionTerminated                                        := false;
 
   Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
 end;
@@ -527,20 +792,38 @@ procedure TestTIdSipServerInviteTransaction.MoveToCompletedState;
 begin
   CheckEquals(InviteStateToStr(itsProceeding),
               InviteStateToStr(Tran.State),
-              'MoveToCompletedState');
+              'MoveToCompletedState precondition');
 
   Self.Response.StatusCode := SIPMultipleChoices;
   Self.Tran.SendResponse(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsCompleted),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState postcondition');
 end;
 
 procedure TestTIdSipServerInviteTransaction.MoveToConfirmedState;
 begin
   CheckEquals(InviteStateToStr(itsCompleted),
               InviteStateToStr(Tran.State),
-              'MoveToCompletedState');
+              'MoveToCompletedState precondition');
 
   Self.Request.Method := MethodAck;
-  Self.MockTransport.SendRequest(Self.Request);
+  Self.Tran.HandleMessage(Self.Request);
+
+  CheckEquals(InviteStateToStr(itsConfirmed),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState postcondition');
+end;
+
+procedure TestTIdSipServerInviteTransaction.OnFail(Sender: TObject; const Reason: String);
+begin
+  Self.FailMsg := Reason;
+end;
+
+procedure TestTIdSipServerInviteTransaction.OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
+begin
+  Self.InitialRequestSentToTU := true;
 end;
 
 procedure TestTIdSipServerInviteTransaction.ReceiveInvite;
@@ -549,9 +832,14 @@ begin
   Self.Tran.SendResponse(Self.Response);
 
   Self.MockTransport.OnResponse := Self.CheckReceiveInvite;
-  Self.MockTransport.FireOnRequest(Self.InitialRequest);
+  Self.Tran.HandleMessage(Self.InitialRequest);
 
   Check(Self.CheckReceiveInviteFired, 'Event didn''t fire');
+end;
+
+procedure TestTIdSipServerInviteTransaction.Terminated(Sender: TObject);
+begin
+  Self.TransactionTerminated := true;
 end;
 
 procedure TestTIdSipServerInviteTransaction.TransactionFail(Sender: TObject; const Reason: String);
@@ -560,6 +848,13 @@ begin
 end;
 
 //* TestTIdSipServerInviteTransaction Published methods ************************
+
+procedure TestTIdSipServerInviteTransaction.TestInitialRequestSentToTU;
+begin
+  Self.Tran.OnReceiveRequest := Self.OnInitialRequestSentToTU;
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+  Check(InitialRequestSentToTU, 'Initial request not sent to TU');
+end;
 
 procedure TestTIdSipServerInviteTransaction.TestInitialState;
 begin
@@ -582,7 +877,7 @@ begin
               InviteStateToStr(Self.Tran.State),
               IntToStr(Self.Response.StatusCode) + ' from TU');
 
-  Check(Self.TransactionFailed, 'Event didn''t fire');  
+  Check(Self.TransactionFailed, 'Event didn''t fire');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestProceedingStateNetworkProblem;
@@ -619,7 +914,7 @@ begin
   Self.MoveToCompletedState;
 
   Self.Request.Method := MethodAck;
-  Self.MockTransport.SendRequest(Self.Request);
+  Self.Tran.HandleMessage(Self.Request);
 
   CheckEquals(InviteStateToStr(itsConfirmed),
               InviteStateToStr(Self.Tran.State),
@@ -719,6 +1014,26 @@ begin
   Check(Self.TransactionFailed, 'Event didn''t fire');
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestTimerIFired;
+begin
+  Self.Tran.OnFail       := Self.OnFail;
+  Self.Tran.OnTerminated := Self.Terminated;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+  Self.MoveToCompletedState;
+  Self.MoveToConfirmedState;
+  Sleep(6000);
+
+  Check(Self.TransactionTerminated, 'TimerI didn''t fire');
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Terminated');
+
+  CheckEquals('', Self.FailMsg, 'Unexpected fail');  
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestSending100;
 begin
   Self.InitialRequest.Headers.Add(TimestampHeader).Value := '100';
@@ -726,6 +1041,545 @@ begin
   Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
 
   Check(Self.CheckSending100Fired, 'Event didn''t fire');
+end;
+
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransaction                                       *
+//******************************************************************************
+//* TestTIdSipClientNonInviteTransaction Public methods ************************
+
+procedure TestTIdSipClientNonInviteTransaction.SetUp;
+begin
+  inherited SetUp;
+
+  // this is just BasicRequest from TestIdSipParser
+  Self.InitialRequest := TIdSipRequest.Create;
+  Self.InitialRequest.Method                           := MethodOptions;
+  Self.InitialRequest.MaxForwards                      := 70;
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.From.DisplayName                 := 'Case';
+  Self.InitialRequest.From.Address.URI                 := 'sip:case@fried.neurons.org';
+  Self.InitialRequest.From.Tag                         := '1928301774';
+  Self.InitialRequest.CallID                           := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.InitialRequest.CSeq.Method                      := 'INVITE';
+  Self.InitialRequest.CSeq.SequenceNo                  := 314159;
+  Self.InitialRequest.Headers[ContactHeaderFull].Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.InitialRequest.ContentType                      := 'text/plain';
+  Self.InitialRequest.ContentLength                    := 0;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.MockTransport := TIdSipMockTransport.Create;
+
+  Self.Tran := TIdSipClientNonInviteTransaction.Create;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+  Self.FailMsg               := '';
+  Self.TransactionCompleted  := false;
+  Self.TransactionFailed     := false;
+  Self.TransactionProceeding := false;
+  Self.TransactionTerminated := false;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TearDown;
+begin
+  Self.Tran.Free;
+  Self.MockTransport.Free;
+  Self.Response.Free;
+  Self.InitialRequest.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipClientNonInviteTransaction Private methods ***********************
+
+procedure TestTIdSipClientNonInviteTransaction.Completed(Sender: TObject; const R: TIdSipResponse);
+begin
+  Self.TransactionCompleted := true;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.MoveToProceedingState;
+begin
+  CheckEquals(InviteStateToStr(itsTrying),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState precondition');
+
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState postcondition');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.MoveToCompletedState;
+begin
+  Check(Self.Tran.State in [itsTrying, itsProceeding],
+        'Unexpected state '
+      + InviteStateToStr(Self.Tran.State)
+      + ' in MoveToCompletedState precondition');
+
+  Self.Response.StatusCode := SIPOK;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsCompleted),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState postcondition');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.OnFail(Sender: TObject; const Reason: String);
+begin
+  Self.FailMsg := Reason;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.Proceeding(Sender: TObject; const R: TIdSipResponse);
+begin
+  Self.TransactionProceeding := true;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.Terminated(Sender: TObject);
+begin
+  Self.TransactionTerminated := true;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TransactionFail(Sender: TObject; const Reason: String);
+begin
+  Self.TransactionFailed := true;
+end;
+
+//* TestTIdSipClientNonInviteTransaction Published methods *********************
+
+procedure TestTIdSipClientNonInviteTransaction.TestInitialRequestSent;
+begin
+  CheckEquals(1,
+              Self.MockTransport.SentRequestCount,
+              'Too many or too few requests sent');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestInitialState;
+begin
+  CheckEquals(InviteStateToStr(itsTrying),
+              InviteStateToStr(Self.Tran.State),
+              'Incorrect initial state');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestMultipleRequestSendingInProceedingState;
+begin
+  Self.MoveToProceedingState;
+  Self.MockTransport.ResetSentRequestCount;
+  // TimerE is supposed to now have an interval of 4s
+  Sleep(5000);
+  CheckEquals(1, Self.MockTransport.SentRequestCount, 'Insufficient or too many requests sent');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestMultipleRequestSendingInTryingState;
+begin
+  // The immediate send, plus 500ms wait, plus 1000ms wait should result in 3
+  // messages being sent.
+  Sleep(2000);
+  CheckEquals(3, Self.MockTransport.SentRequestCount, 'Insufficient or too many requests sent');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestReceive1xxInProceedingState;
+begin
+  Self.MoveToProceedingState;
+  Self.Tran.OnReceiveResponse := Self.Proceeding;
+
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
+
+  Check(Self.TransactionProceeding, 'Event didn''t fire');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestReceive1xxInTryingState;
+begin
+  Self.Tran.OnReceiveResponse := Self.Proceeding;
+  Self.MoveToProceedingState;
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
+
+  Check(Self.TransactionProceeding, 'Event didn''t fire');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestReceiveFinalResponseInProceedingState;
+var
+  I: Integer;
+begin
+  for I := 2 to 6 do begin
+    Self.TransactionCompleted := false;
+    Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+    Self.MoveToProceedingState;
+
+    Self.Tran.OnReceiveResponse := Self.Completed;
+    Self.Response.StatusCode := 100*I;
+    Self.Tran.HandleMessage(Self.Response);
+
+    CheckEquals(InviteStateToStr(itsCompleted),
+                InviteStateToStr(Self.Tran.State),
+                'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
+
+    Check(Self.TransactionCompleted, 'Event didn''t fire: ' + IntToStr(Self.Response.StatusCode));
+  end;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestReceiveFinalResponseInTryingState;
+var
+  I: Integer;
+begin
+  for I := 2 to 6 do begin
+    Self.TransactionCompleted := false;
+    Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+    Self.Tran.OnReceiveResponse := Self.Completed;
+    Self.Response.StatusCode := 100*I;
+    Self.Tran.HandleMessage(Self.Response);
+
+    CheckEquals(InviteStateToStr(itsCompleted),
+                InviteStateToStr(Self.Tran.State),
+                'Received a ' + IntToStr(Self.Response.StatusCode) + ' in Trying state');
+
+    Check(Self.TransactionCompleted, 'Event didn''t fire: ' + IntToStr(Self.Response.StatusCode));
+  end;
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestTimeout;
+begin
+  Self.Tran.OnFail := Self.TransactionFail;
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest, 500);
+  Sleep(750);
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Timeout');
+  Check(Self.TransactionFailed, 'Event didn''t fire');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestTimerKFired;
+begin
+  Self.Tran.OnFail       := Self.OnFail;
+  Self.Tran.OnTerminated := Self.Terminated;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+  Sleep(6000);
+
+  Check(Self.TransactionTerminated, 'TimerK didn''t fire');
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Terminated');
+
+  CheckEquals('', Self.FailMsg, 'Unexpected fail');
+end;
+
+procedure TestTIdSipClientNonInviteTransaction.TestTryingStateTransportError;
+begin
+  Self.Tran.OnFail := Self.TransactionFail;
+  Self.MockTransport.FailWith := EIdConnectTimeout;
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+  Check(Self.TransactionFailed, 'Event didn''t fire');
+end;
+
+//******************************************************************************
+//* TestTIdSipServerNonInviteTransaction                                       *
+//******************************************************************************
+//* TestTIdSipServerNonInviteTransaction Public methods ************************
+
+procedure TestTIdSipServerNonInviteTransaction.SetUp;
+begin
+  inherited SetUp;
+
+  // this is just BasicRequest from TestIdSipParser
+  Self.InitialRequest := TIdSipRequest.Create;
+  Self.InitialRequest.Method                           := MethodOptions;
+  Self.InitialRequest.MaxForwards                      := 70;
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.Headers.Add(ViaHeaderFull).Value := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.InitialRequest.From.DisplayName                 := 'Case';
+  Self.InitialRequest.From.Address.URI                 := 'sip:case@fried.neurons.org';
+  Self.InitialRequest.From.Tag                         := '1928301774';
+  Self.InitialRequest.CallID                           := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.InitialRequest.CSeq.Method                      := 'INVITE';
+  Self.InitialRequest.CSeq.SequenceNo                  := 314159;
+  Self.InitialRequest.Headers[ContactHeaderFull].Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.InitialRequest.ContentType                      := 'text/plain';
+  Self.InitialRequest.ContentLength                    := 29;
+  Self.InitialRequest.Body                             := 'I am a message. Hear me roar!';
+
+  Self.Request := TIdSipRequest.Create;
+  Self.Request.Assign(Self.InitialRequest);
+  Self.Response := TIdSipResponse.Create;
+
+  Self.MockTransport := TIdSipMockTransport.Create;
+
+  Self.Tran := TIdSipServerNonInviteTransaction.Create;
+
+  Self.FailMsg               := '';
+  Self.TransactionProceeding := false;
+  Self.TransactionCompleted  := false;
+  Self.TransactionFailed     := false;
+  Self.TransactionTerminated := false;
+  Self.TransactionTrying     := false;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TearDown;
+begin
+  Self.Tran.Free;
+  Self.MockTransport.Free;
+  Self.Response.Free;
+  Self.Request.Free;
+  Self.InitialRequest.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipServerNonInviteTransaction Private methods ***********************
+
+procedure TestTIdSipServerNonInviteTransaction.MoveToCompletedState;
+begin
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState precondition');
+
+  Response.StatusCode := SIPMultipleChoices;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsCompleted),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToCompletedState postcondition');
+
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.MoveToProceedingState;
+begin
+  CheckEquals(InviteStateToStr(itsTrying),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState precondition');
+
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'MoveToProceedingState postcondition');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.OnFail(Sender: TObject; const Reason: String);
+begin
+  Self.FailMsg := Reason;
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.Terminated(Sender: TObject);
+begin
+  Self.TransactionTerminated := true;
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TransactionFail(Sender: TObject; const Reason: String);
+begin
+  Self.TransactionFailed := true;
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.Trying(Sender: TObject; const R: TIdSipRequest);
+begin
+  Self.TransactionTrying := true;
+end;
+
+//* TestTIdSipServerNonInviteTransaction Published methods *********************
+
+procedure TestTIdSipServerNonInviteTransaction.TestInitialRequestSentToTU;
+begin
+  Self.Tran.OnReceiveRequest := Self.Trying;
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+
+  Check(Self.TransactionTrying, 'TU not informed of initial request');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestInitialState;
+begin
+  CheckEquals(InviteStateToStr(itsTrying),
+              InviteStateToStr(Self.Tran.State),
+              'Incorrect initial state');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReceiveFinalResponseFromTUInProceedingState;
+var
+  I: Integer;
+begin
+  for I := 2 to 6 do begin
+    Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+    Self.MoveToProceedingState;
+    Self.Response.StatusCode := I*100;
+
+    Self.MockTransport.ResetSentResponseCount;
+    Self.Tran.HandleMessage(Self.Response);
+
+    CheckEquals(InviteStateToStr(itsCompleted),
+                InviteStateToStr(Self.Tran.State),
+                'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
+
+    CheckEquals(1,
+                Self.MockTransport.SentResponseCount,
+                'Transport wasn''t given a '
+              + IntToStr(Self.Response.StatusCode)
+              + ' Response to send');
+  end;
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReceiveFinalResponseFromTUInTryingState;
+var
+  I: Integer;
+begin
+  for I := 2 to 6 do begin
+    Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest);
+    Self.MockTransport.ResetSentResponseCount;
+    Self.Response.StatusCode := I*100;
+    Self.Tran.HandleMessage(Self.Response);
+
+    CheckEquals(InviteStateToStr(itsCompleted),
+                InviteStateToStr(Self.Tran.State),
+                'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
+
+    CheckEquals(1,
+                Self.MockTransport.SentResponseCount,
+                'Transport wasn''t given a '
+              + IntToStr(Self.Response.StatusCode)
+              + ' Response to send');
+  end;
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReceiveProvisionalResponseFromTUInProceedingState;
+begin
+  Self.MoveToProceedingState;
+
+  Self.MockTransport.ResetSentResponseCount;
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
+
+  CheckEquals(1,
+              Self.MockTransport.SentResponseCount,
+              'Transport wasn''t given a '
+            + IntToStr(Self.Response.StatusCode)
+            + ' Response to send');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReceiveProvisionalResponseFromTUInTryingState;
+begin
+  Self.MockTransport.ResetSentResponseCount;
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsProceeding),
+              InviteStateToStr(Self.Tran.State),
+              'TU gave us a ' + IntToStr(Self.Response.StatusCode) + ' Response');
+
+  CheckEquals(1,
+              Self.MockTransport.SentResponseCount,
+              'Transport wasn''t given a '
+            + IntToStr(Self.Response.StatusCode)
+            + ' Response to send');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReReceiveInitialRequestInCompletedState;
+begin
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+  Self.MockTransport.ResetSentResponseCount;
+
+  Self.Tran.HandleMessage(Self.InitialRequest);
+
+  CheckEquals(1,
+              Self.MockTransport.SentResponseCount,
+              'Response not sent to re-received initial request');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestReReceiveInitialRequestInProceedingState;
+begin
+  Self.MoveToProceedingState;
+  Self.MockTransport.ResetSentResponseCount;
+
+  Self.Tran.HandleMessage(Self.InitialRequest);
+
+  CheckEquals(1,
+              Self.MockTransport.SentResponseCount,
+              'Response not sent to re-received initial request');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestResponseFromTUInCompletedState;
+begin
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+
+  Self.MockTransport.ResetSentResponseCount;
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(0, Self.MockTransport.SentResponseCount, 'Response from TU wasn''t dropped on the floor');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestTimerJFired;
+begin
+  Self.Tran.OnFail       := Self.OnFail;
+  Self.Tran.OnTerminated := Self.Terminated;
+
+  Self.Tran.Initialise(Self.MockTransport, Self.InitialRequest, 100);
+
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+  Sleep(200);
+
+  Check(Self.TransactionTerminated, 'TimerJ didn''t fire');
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Terminated');
+
+  CheckEquals('', Self.FailMsg, 'Unexpected fail');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestTransportErrorInCompletedState;
+begin
+  Self.Tran.OnFail := Self.TransactionFail;
+  Self.MoveToProceedingState;
+  Self.MoveToCompletedState;
+
+  Self.MockTransport.FailWith := EIdConnectTimeout;
+  Self.Tran.HandleMessage(Self.InitialRequest);
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Error trying to send a response');
+  Check(Self.TransactionFailed, 'TU not informed of transport error');
+end;
+
+procedure TestTIdSipServerNonInviteTransaction.TestTransportErrorInProceedingState;
+begin
+  Self.Tran.OnFail := Self.TransactionFail;
+  Self.MoveToProceedingState;
+
+  Self.MockTransport.FailWith := EIdConnectTimeout;
+  Self.Response.StatusCode := SIPTrying;
+  Self.Tran.HandleMessage(Self.Response);
+
+  CheckEquals(InviteStateToStr(itsTerminated),
+              InviteStateToStr(Self.Tran.State),
+              'Error trying to send a response');
+  Check(Self.TransactionFailed, 'TU not informed of transport error');
 end;
 
 initialization

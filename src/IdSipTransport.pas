@@ -12,7 +12,7 @@ type
 
   TIdSipAbstractTransport = class(TObject)
   private
-    fOnRequest: TIdSipRequestEvent;
+    fOnRequest:  TIdSipRequestEvent;
     fOnResponse: TIdSipResponseEvent;
   protected
     procedure DoOnRequest(const R: TIdSipRequest);

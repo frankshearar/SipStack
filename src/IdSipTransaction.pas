@@ -3,7 +3,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  QExtCtrls, IdSipMessage, IdSipParser, IdSipTimer, IdSipTransport, SysUtils;
+  Contnrs, IdSipMessage, IdSipTimer, IdSipTransport;
 
 const
   InitialT1     = 500;   // ms
@@ -12,74 +12,106 @@ const
   T2            = 4000;  // ms
   T4            = 5000;  // ms
 
+const
+  SessionTimeoutMsg = 'Timed out';
+
 type
   TIdSipFailEvent = procedure(Sender: TObject; const Reason: String) of object;
-  // Warning: these are both client and server states - itsCalling is client
-  // only, itsConfirmed is server only.
-  TIdSipInviteTransactionState = (itsCalling, itsProceeding, itsCompleted, itsConfirmed, itsTerminated);
+  // This covers all states - INVITE, non-INVITE, client, server.
+  TIdSipTransactionState = (itsCalling, itsCompleted, itsConfirmed,
+                            itsProceeding, itsTerminated, itsTrying);
+
+  TIdSipTransaction = class;
+  TIdSipTransactionClass = class of TIdSipTransaction;
+
+  TIdSipTransactionDispatcher = class(TObject)
+  private
+    Transports: TObjectList;
+  public
+    constructor Create;
+    destructor Destroy; override;
+
+    procedure AddTransport(const Transport: TIdSipAbstractTransport);
+    function  TransportCount: Integer;
+  end;
 
   TIdSipTransaction = class(TObject)
   private
-    fOnProceeding:  TIdSipResponseEvent;
-    fOnCompleted:   TIdSipResponseEvent;
-    fOnFail:        TIdSipFailEvent;
-    fOnTerminated:  TIdSipNotifyEvent;
-    fState:         TIdSipInviteTransactionState;
+    fOnFail:            TIdSipFailEvent;
+    fOnReceiveRequest:  TIdSipRequestEvent;
+    fOnReceiveResponse: TIdSipResponseEvent;
+    fOnTerminated:      TIdSipNotifyEvent;
+    fState:             TIdSipTransactionState;
   protected
     fTransport:     TIdSipAbstractTransport;
     InitialRequest: TIdSipRequest;
 
     procedure ChangeToCompleted(const R: TIdSipResponse); virtual;
-    procedure ChangeToProceeding(const R: TIdSipResponse); virtual;
     procedure ChangeToTerminated; virtual;
-    procedure DoOnCompleted(const R: TIdSipResponse);
-    procedure DoOnProceeding(const R: TIdSipResponse);
-    procedure DoOnFail(const Reason: String);
+    procedure DoOnFail(const Reason: String); virtual;
+    procedure DoOnReceiveRequest(const R: TIdSipRequest);
+    procedure DoOnReceiveResponse(const R: TIdSipResponse);
     procedure DoOnTerminated;
+    procedure HandleRequest(const R: TIdSipRequest); virtual;
+    procedure HandleResponse(const R: TIdSipResponse); virtual;
+    procedure SetState(const Value: TIdSipTransactionState);
+    procedure TryResendInitialRequest;
+    procedure TrySendRequest(const R: TIdSipRequest);
+    procedure TrySendResponse(const R: TIdSipResponse); virtual;
 
     property Transport: TIdSipAbstractTransport read fTransport;
   public
-    property OnCompleted:  TIdSipResponseEvent          read fOnCompleted write fOnCompleted;
-    property OnFail:       TIdSipFailEvent              read fOnFail write fOnFail;
-    property OnProceeding: TIdSipResponseEvent          read fOnProceeding write fOnProceeding;
-    property OnTerminated: TIdSipNotifyEvent            read fOnTerminated write fOnTerminated;
-    property State:        TIdSipInviteTransactionState read fState write fState;
+    class function GetTransactionType(const Request: TIdSipRequest): TIdSipTransactionClass;
+
+    constructor Create; virtual;
+
+    procedure HandleMessage(const Msg: TIdSipMessage);
+    procedure Initialise(const Transport:      TIdSipAbstractTransport;
+                         const InitialRequest: TIdSipRequest;
+                         const Timeout:        Cardinal = InitialT1_64); virtual;
+
+    property OnFail:            TIdSipFailEvent              read fOnFail write fOnFail;
+    property OnReceiveRequest:  TIdSipRequestEvent           read fOnReceiveRequest write fOnReceiveRequest;
+    property OnReceiveResponse: TIdSipResponseEvent          read fOnReceiveResponse write fOnReceiveResponse;
+    property OnTerminated:      TIdSipNotifyEvent            read fOnTerminated write fOnTerminated;
+    property State:             TIdSipTransactionState read fState;
   end;
 
-  TIdSipClientInviteTransaction = class(TIdSipTransaction)
-  private
-    fTimeout:       Cardinal;
-    TimerA:         TIdSipTimer;
-    TimerB:         TIdSipTimer;
-    TimerD:         TIdSipTimer;
+  TIdSipInviteTransaction = class(TIdSipTransaction)
+  end;
 
-    procedure GenerateACK(const R: TIdSipResponse; Req: TIdSipRequest);
+  TIdSipClientInviteTransaction = class(TIdSipInviteTransaction)
+  private
+    fTimeout: Cardinal;
+    TimerA:   TIdSipTimer;
+    TimerB:   TIdSipTimer;
+    TimerD:   TIdSipTimer;
+
+    procedure ChangeToCalling;
+    procedure ChangeToProceeding(const R: TIdSipResponse);
+    procedure GenerateACK(const R:   TIdSipResponse;
+                                Req: TIdSipRequest);
     procedure OnTimerA(Sender: TObject);
     procedure OnTimerB(Sender: TObject);
     procedure OnTimerD(Sender: TObject);
-    procedure TryResendInvite;
-    procedure OnResponse(Sender: TObject; const R: TIdSipResponse);
     procedure TrySendACK(const R: TIdSipResponse);
-    procedure TrySendRequest(const R: TIdSipRequest);
   protected
     procedure ChangeToCompleted(const R: TIdSipResponse); override;
-    procedure ChangeToProceeding(const R: TIdSipResponse); override;
     procedure ChangeToTerminated; override;
+    procedure HandleResponse(const R: TIdSipResponse); override;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure Initialise(const Transport:      TIdSipAbstractTransport;
                          const InitialRequest: TIdSipRequest;
-                         const Timeout:        Cardinal = InitialT1_64);
+                         const Timeout:        Cardinal = InitialT1_64); override;
 
     property Timeout: Cardinal read fTimeout write fTimeout;
   end;
 
-  TIdSipServerInviteTransaction = class(TIdSipTransaction)
+  TIdSipServerInviteTransaction = class(TIdSipInviteTransaction)
   private
-    fOnConfirmed:               TIdSipRequestEvent;
-    fTransport:                 TIdSipAbstractTransport;
     LastProceedingResponseSent: Cardinal;
     TimerG:                     TIdSipTimer;
     TimerGHasFired:             Boolean;
@@ -87,87 +119,235 @@ type
     TimerI:                     TIdSipTimer;
 
     procedure ChangeToConfirmed(const R: TIdSipRequest);
-    procedure DoOnConfirmed(const R: TIdSipRequest);
-    procedure Generate100(const R: TIdSipRequest;
+    procedure ChangeToProceeding; overload;
+    procedure ChangeToProceeding(const R: TIdSipRequest); overload;
+    procedure Generate100(const R:   TIdSipRequest;
                                 Res: TIdSipResponse);
-    procedure GenerateResponse(const R: TIdSipRequest;
-                                     Res: TIdSipResponse;
+    procedure GenerateResponse(const R:          TIdSipRequest;
+                                     Res:        TIdSipResponse;
                                const StatusCode: Cardinal);
-    procedure OnRequest(Sender: TObject; const R: TIdSipRequest);
     procedure OnTimerG(Sender: TObject);
     procedure OnTimerH(Sender: TObject);
     procedure OnTimerI(Sender: TObject);
     procedure TrySend100Response(const R: TIdSipRequest);
     procedure TrySendLastResponse(const R: TIdSipRequest);
-    procedure TrySendResponse(const R: TIdSipResponse);
-
-    property Transport: TIdSipAbstractTransport read fTransport;
   protected
     procedure ChangeToCompleted(const R: TIdSipResponse); override;
-    procedure ChangeToProceeding(const R: TIdSipResponse); override;
     procedure ChangeToTerminated; override;
+    procedure HandleRequest(const R: TIdSipRequest); override;
+    procedure TrySendResponse(const R: TIdSipResponse); override;
   public
-    constructor Create;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure Initialise(const Transport:      TIdSipAbstractTransport;
                          const InitialRequest: TIdSipRequest;
-                         const Timeout:        Cardinal = InitialT1_64);
+                         const Timeout:        Cardinal = InitialT1_64); override;
     procedure SendResponse(const R: TIdSipResponse);
+  end;
 
-    property OnConfirmed: TIdSipRequestEvent read fOnConfirmed write fOnConfirmed;
+  TIdSipNonInviteTransaction = class(TIdSipTransaction)
+  protected
+    procedure ChangeToProceeding(const R: TIdSipResponse); virtual;
+  end;
+
+  TIdSipClientNonInviteTransaction = class(TIdSipNonInviteTransaction)
+  private
+    TimerE: TIdSipTimer;
+    TimerF: TIdSipTimer;
+    TimerK: TIdSipTimer;
+
+    procedure OnTimerE(Sender: TObject);
+    procedure OnTimerF(Sender: TObject);
+    procedure OnTimerK(Sender: TObject);
+  protected
+    procedure ChangeToCompleted(const R: TIdSipResponse); override;
+    procedure ChangeToProceeding(const R: TIdSipResponse); override;
+    procedure ChangeToTrying;
+    procedure HandleResponse(const R: TIdSipResponse); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Initialise(const Transport:      TIdSipAbstractTransport;
+                         const InitialRequest: TIdSipRequest;
+                         const Timeout:        Cardinal = InitialT1_64); override;
+  end;
+
+  TIdSipServerNonInviteTransaction = class(TIdSipNonInviteTransaction)
+  private
+    LastProceedingResponseSent: Cardinal;
+    TimerJ:                     TIdSipTimer;
+
+    procedure ChangeToTrying(const R: TIdSipRequest);
+    procedure GenerateResponse(const R:          TIdSipRequest;
+                                     Res:        TIdSipResponse;
+                               const StatusCode: Cardinal);
+    procedure OnTimerJ(Sender: TObject);
+    procedure TrySendLastResponse(const R: TIdSipRequest);
+  protected
+    procedure ChangeToCompleted(const R: TIdSipResponse); override;
+    procedure ChangeToProceeding(const R: TIdSipResponse); override;
+    procedure HandleRequest(const R: TIdSipRequest); override;
+    procedure HandleResponse(const R: TIdSipResponse); override;
+    procedure TrySendResponse(const R: TIdSipResponse); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Initialise(const Transport:      TIdSipAbstractTransport;
+                         const InitialRequest: TIdSipRequest;
+                         const Timeout:        Cardinal = InitialT1_64); override;
   end;
 
 implementation
 
 uses
-  IdException, Math;
+  IdException, IdSipParser, Math, SysUtils;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcher                                                *
+//******************************************************************************
+//* TIdSipTransactionDispatcher Public methods *********************************
+
+constructor TIdSipTransactionDispatcher.Create;
+begin
+  inherited Create;
+
+  Self.Transports := TObjectList.Create(false);
+end;
+
+destructor TIdSipTransactionDispatcher.Destroy;
+begin
+  Self.Transports.Clear;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipTransactionDispatcher.AddTransport(const Transport: TIdSipAbstractTransport);
+begin
+  Self.Transports.Add(Transport);
+end;
+
+function TIdSipTransactionDispatcher.TransportCount: Integer;
+begin
+  Result := Self.Transports.Count;
+end;
 
 //******************************************************************************
 //* TIdSipTransaction                                                          *
 //******************************************************************************
-//* TIdSipTransaction Protected methods ****************************************
+//* TIdSipTransaction Public methods *******************************************
 
-procedure TIdSipTransaction.DoOnCompleted(const R: TIdSipResponse);
+class function TIdSipTransaction.GetTransactionType(const Request: TIdSipRequest): TIdSipTransactionClass;
 begin
-  if Assigned(Self.OnCompleted) then
-    Self.OnCompleted(Self, R);
+  if (Request.Method = MethodInvite) then
+    Result := TIdSipClientInviteTransaction
+  else
+    Result := TIdSipClientNonInviteTransaction;
 end;
 
-procedure TIdSipTransaction.DoOnProceeding(const R: TIdSipResponse);
+constructor TIdSipTransaction.Create;
 begin
-  if Assigned(Self.OnProceeding) then
-    Self.OnProceeding(Self, R);
+  inherited Create;
+end;
+
+procedure TIdSipTransaction.HandleMessage(const Msg: TIdSipMessage);
+begin
+  if (Msg is TIdSipRequest) then
+    Self.HandleRequest(Msg as TIdSipRequest)
+  else if (Msg is TIdSipResponse) then
+    Self.HandleResponse(Msg as TIdSipResponse)
+  else
+    raise Exception.Create('Unexpected TIdSipMessage descendant in ' +
+                           'TIdSipTransaction.HandleMessage()');
+end;
+
+procedure TIdSipTransaction.Initialise(const Transport:      TIdSipAbstractTransport;
+                                       const InitialRequest: TIdSipRequest;
+                                       const Timeout:        Cardinal = InitialT1_64);
+begin
+  Self.fTransport     := Transport;
+  Self.InitialRequest := InitialRequest;
+end;
+
+//* TIdSipTransaction Protected methods ****************************************
+
+procedure TIdSipTransaction.ChangeToCompleted(const R: TIdSipResponse);
+begin
+  Self.SetState(itsCompleted);
+  Self.DoOnReceiveResponse(R);
+end;
+
+procedure TIdSipTransaction.ChangeToTerminated;
+begin
+  Self.SetState(itsTerminated);
+  Self.DoOnTerminated;
 end;
 
 procedure TIdSipTransaction.DoOnFail(const Reason: String);
 begin
   if Assigned(Self.OnFail) then
     Self.OnFail(Self, Reason);
+
+  Self.ChangeToTerminated;    
 end;
 
-procedure TIdSipTransaction.ChangeToCompleted(const R: TIdSipResponse);
+procedure TIdSipTransaction.DoOnReceiveRequest(const R: TIdSipRequest);
 begin
-  Self.State := itsCompleted;
-  Self.DoOnCompleted(R);
+  if Assigned(Self.OnReceiveRequest) then
+    Self.OnReceiveRequest(Self, R);
 end;
 
-procedure TIdSipTransaction.ChangeToProceeding(const R: TIdSipResponse);
+procedure TIdSipTransaction.DoOnReceiveResponse(const R: TIdSipResponse);
 begin
-  Self.State := itsProceeding;
-  Self.DoOnProceeding(R);
-end;
-
-procedure TIdSipTransaction.ChangeToTerminated;
-begin
-  Self.State := itsTerminated;
-  Self.DoOnTerminated;
+  if Assigned(Self.OnReceiveResponse) then
+    Self.OnReceiveResponse(Self, R);
 end;
 
 procedure TIdSipTransaction.DoOnTerminated;
 begin
   if Assigned(Self.OnTerminated) then
     Self.OnTerminated(Self);
+end;
+
+procedure TIdSipTransaction.HandleRequest(const R: TIdSipRequest);
+begin
+end;
+
+procedure TIdSipTransaction.HandleResponse(const R: TIdSipResponse);
+begin
+end;
+
+procedure TIdSipTransaction.SetState(const Value: TIdSipTransactionState);
+begin
+  fState := Value;
+end;
+
+procedure TIdSipTransaction.TryResendInitialRequest;
+begin
+  if not Self.Transport.WillUseReliableTranport(Self.InitialRequest) then
+    Self.TrySendRequest(Self.InitialRequest);
+end;
+
+procedure TIdSipTransaction.TrySendRequest(const R: TIdSipRequest);
+begin
+  try
+    Self.Transport.SendRequest(R);
+  except
+    on E: EIdException do
+      Self.DoOnFail(E.Message);
+  end;
+end;
+
+procedure TIdSipTransaction.TrySendResponse(const R: TIdSipResponse);
+begin
+  try
+    Self.Transport.SendResponse(R);
+  except
+    on E: EIdException do
+      Self.DoOnFail(E.Message);
+  end;
 end;
 
 //******************************************************************************
@@ -187,7 +367,6 @@ begin
   Self.TimerB.OnTimer  := Self.OnTimerB;
 
   Self.TimerD          := TIdSipTimer.Create(true);
-  Self.TimerD.Interval := TimerDTimeout;
   Self.TimerD.OnTimer  := Self.OnTimerD;
 end;
 
@@ -207,13 +386,12 @@ procedure TIdSipClientInviteTransaction.Initialise(const Transport:      TIdSipA
                                                    const InitialRequest: TIdSipRequest;
                                                    const Timeout:        Cardinal = InitialT1_64);
 begin
-  Self.State          := itsCalling;
-  Self.InitialRequest := InitialRequest;
-  fTransport          := Transport;
+  inherited Initialise(Transport, InitialRequest, Timeout);
+
+  Self.ChangeToCalling;
 
   Self.TimerB.Interval := Timeout;
-
-  Self.Transport.OnResponse := Self.OnResponse;
+  Self.TimerD.Interval := Timeout;
 
   Self.TrySendRequest(Self.InitialRequest);
 
@@ -231,18 +409,12 @@ begin
   // TrySendACK because a transport failure changes Self.State
   // to itsTerminated.
 
+  Self.TimerB.Stop;
   Self.TimerD.Start;
 
-  Self.State := itsCompleted;
+  Self.SetState(itsCompleted);
   Self.TrySendACK(R);
-  Self.DoOnCompleted(R);
-end;
-
-procedure TIdSipClientInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
-begin
-  inherited ChangeToProceeding(R);
-
-  Self.TimerA.Stop;
+  Self.DoOnReceiveResponse(R);
 end;
 
 procedure TIdSipClientInviteTransaction.ChangeToTerminated;
@@ -250,12 +422,60 @@ begin
   inherited ChangeToTerminated;
 
   Self.TimerA.Stop;
-  Self.TimerB.Stop;
+end;
+
+procedure TIdSipClientInviteTransaction.HandleResponse(const R: TIdSipResponse);
+begin
+  case Self.State of
+    itsCalling: begin
+      case R.StatusCode div 100 of
+        1: Self.ChangeToProceeding(R);
+        2: Self.ChangeToTerminated;
+      else
+        Self.ChangeToCompleted(R);
+      end;
+    end;
+
+    itsProceeding: begin
+      case R.StatusCode div 100 of
+        1: Self.ChangeToProceeding(R);
+        2: Self.ChangeToTerminated;
+      else
+        Self.ChangeToCompleted(R);
+      end;
+    end;
+
+    itsCompleted: begin
+      case R.StatusCode div 100 of
+        3..6: Self.ChangeToCompleted(R);
+      else
+        raise Exception.Create('unhandled response in ' + Self.ClassName + '.HandleResponse, itsCompleted');
+      end;
+    end;
+  else
+    // should we just dump the response on the floor?
+    // We shouldn't ever get 1xx response codes here, but you just never know.
+    raise Exception.Create('unhandled Self.State in ' + Self.ClassName + '.HandleResponse');
+  end;
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
 
-procedure TIdSipClientInviteTransaction.GenerateACK(const R: TIdSipResponse;
+procedure TIdSipClientInviteTransaction.ChangeToCalling;
+begin
+  Self.SetState(itsCalling);
+end;
+
+procedure TIdSipClientInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
+begin
+  Self.SetState(itsProceeding);
+  Self.DoOnReceiveResponse(R);
+
+  Self.TimerA.Stop;
+  Self.TimerB.Stop;
+end;
+
+procedure TIdSipClientInviteTransaction.GenerateACK(const R:   TIdSipResponse;
                                                           Req: TIdSipRequest);
 var
   I:      Integer;
@@ -285,59 +505,19 @@ end;
 procedure TIdSipClientInviteTransaction.OnTimerA(Sender: TObject);
 begin
   Self.TimerA.Interval := Self.TimerA.Interval*2;
-  Self.TryResendInvite;
+  Self.TryResendInitialRequest;
 end;
 
 procedure TIdSipClientInviteTransaction.OnTimerB(Sender: TObject);
 begin
-  Self.State := itsTerminated;
-  Self.DoOnFail('Timed out');
+  Self.DoOnFail(SessionTimeoutMsg);
+  Self.ChangeToTerminated;
+  Self.TimerB.Stop;
 end;
 
 procedure TIdSipClientInviteTransaction.OnTimerD(Sender: TObject);
 begin
-  Self.State := itsTerminated;
-end;
-
-procedure TIdSipClientInviteTransaction.TryResendInvite;
-begin
-  if not Self.Transport.WillUseReliableTranport(Self.InitialRequest) then
-    Self.TrySendRequest(Self.InitialRequest);
-end;
-
-procedure TIdSipClientInviteTransaction.OnResponse(Sender: TObject; const R: TIdSipResponse);
-begin
-  case Self.State of
-    itsCalling: begin
-      case R.StatusCode div 100 of
-        1: Self.ChangeToProceeding(R);
-        2: Self.ChangeToTerminated;
-      else
-        Self.ChangeToCompleted(R);
-      end;
-    end;
-
-    itsProceeding: begin
-      case R.StatusCode div 100 of
-        1: Self.DoOnProceeding(R);
-        2: Self.ChangeToTerminated;
-      else
-        Self.ChangeToCompleted(R);
-      end;
-    end;
-
-    itsCompleted: begin
-      case R.StatusCode div 100 of
-        3..6: Self.ChangeToCompleted(R);
-      else
-        raise Exception.Create('unhandled response in ' + Self.ClassName + '.OnResponse, itsCompleted');
-      end;
-    end;
-  else
-    // should we just dump the response on the floor?
-    // We shouldn't ever get 1xx response codes here, but you just never know.
-    raise Exception.Create('unhandled Self.State in ' + Self.ClassName + '.OnResponse');
-  end;
+  Self.ChangeToTerminated;
 end;
 
 procedure TIdSipClientInviteTransaction.TrySendACK(const R: TIdSipResponse);
@@ -350,18 +530,6 @@ begin
     Self.TrySendRequest(Ack);
   finally
     Ack.Free;
-  end;
-end;
-
-procedure TIdSipClientInviteTransaction.TrySendRequest(const R: TIdSipRequest);
-begin
-  try
-    Self.Transport.SendRequest(R);
-  except
-    on E: EIdException do begin
-      Self.DoOnFail(E.Message);
-      Self.State := itsTerminated;
-    end;
   end;
 end;
 
@@ -403,15 +571,16 @@ procedure TIdSipServerInviteTransaction.Initialise(const Transport:      TIdSipA
                                                    const InitialRequest: TIdSipRequest;
                                                    const Timeout:        Cardinal = InitialT1_64);
 begin
-  Self.State          := itsProceeding;
-  Self.InitialRequest := InitialRequest;
-  fTransport          := Transport;
+  inherited Initialise(Transport, InitialRequest, Timeout);
+
+//  Self.ChangeToProceeding(Self.InitialRequest);
+  Self.SetState(itsProceeding);
+  Self.DoOnReceiveRequest(Self.InitialRequest);
 
   Self.TimerH.Interval := Timeout;
-
+  
+  Self.LastProceedingResponseSent := SIPTrying;
   Self.TrySend100Response(Self.InitialRequest);
-
-  Self.Transport.OnRequest := Self.OnRequest;
 end;
 
 procedure TIdSipServerInviteTransaction.SendResponse(const R: TIdSipResponse);
@@ -419,7 +588,7 @@ begin
   Self.TrySendResponse(R);
   if (Self.State = itsProceeding) then begin
     case R.StatusCode of
-      101..199: Self.ChangeToProceeding(R);
+      101..199: Self.ChangeToProceeding;
       SIPOK:    Self.ChangeToTerminated;
       300..699: Self.ChangeToCompleted(R);
     else
@@ -438,41 +607,63 @@ begin
   Self.TimerH.Start;
 end;
 
-procedure TIdSipServerInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
-begin
-  inherited ChangeToProceeding(R);
-end;
-
 procedure TIdSipServerInviteTransaction.ChangeToTerminated;
 begin
   inherited ChangeToTerminated;
+
+  Self.TimerH.Stop;
+  Self.TimerI.Stop;
+end;
+
+procedure TIdSipServerInviteTransaction.HandleRequest(const R: TIdSipRequest);
+begin
+  case Self.State of
+    itsProceeding: Self.TrySendLastResponse(R);
+    itsCompleted: begin
+      if (R.Method = MethodInvite) then
+        Self.TrySendLastResponse(R)
+      else if (R.Method = MethodAck) then
+        Self.ChangeToConfirmed(R)
+      else
+        raise Exception.Create('Unhandled method in ' + Self.ClassName + '.HandleRequest');
+//    itsConfirmed:; // should we just drop these on the floor?
+    end;
+  else
+    raise Exception.Create('Unhandled Self.State in ' + Self.ClassName + '.HandleRequest');
+  end;
 end;
 
 //* TIdSipServerInviteTransaction Private methods ******************************
 
 procedure TIdSipServerInviteTransaction.ChangeToConfirmed(const R: TIdSipRequest);
 begin
-  Self.State := itsConfirmed;
-  Self.DoOnConfirmed(R);
+  Self.SetState(itsConfirmed);
+  Self.DoOnReceiveRequest(R);
 
   Self.TimerG.Stop;
+  Self.TimerH.Stop;
   Self.TimerI.Start;
 end;
 
-procedure TIdSipServerInviteTransaction.DoOnConfirmed(const R: TIdSipRequest);
+procedure TIdSipServerInviteTransaction.ChangeToProceeding;
 begin
-  if Assigned(Self.OnConfirmed) then
-    Self.OnConfirmed(Self, R);
+  Self.SetState(itsProceeding);
 end;
 
-procedure TIdSipServerInviteTransaction.Generate100(const R: TIdSipRequest;
+procedure TIdSipServerInviteTransaction.ChangeToProceeding(const R: TIdSipRequest);
+begin
+  Self.ChangeToProceeding;
+  Self.DoOnReceiveRequest(R)
+end;
+
+procedure TIdSipServerInviteTransaction.Generate100(const R:   TIdSipRequest;
                                                           Res: TIdSipResponse);
 begin
   Self.GenerateResponse(R, Res, SIPTrying);
 end;
 
-procedure TIdSipServerInviteTransaction.GenerateResponse(const R: TIdSipRequest;
-                                                               Res: TIdSipResponse;
+procedure TIdSipServerInviteTransaction.GenerateResponse(const R:          TIdSipRequest;
+                                                               Res:        TIdSipResponse;
                                                          const StatusCode: Cardinal);
 var
   I:                Integer;
@@ -497,24 +688,6 @@ begin
   Res.Path.Add(Self.InitialRequest.Path.FirstHop);
 end;
 
-procedure TIdSipServerInviteTransaction.OnRequest(Sender: TObject; const R: TIdSipRequest);
-begin
-  case Self.State of
-    itsProceeding: Self.TrySendLastResponse(R);
-    itsCompleted: begin
-      if (R.Method = MethodInvite) then
-        Self.TrySendLastResponse(R)
-      else if (R.Method = MethodAck) then
-        Self.ChangeToConfirmed(R)
-      else
-        raise Exception.Create('Unhandled method in ' + Self.ClassName + '.OnRequest');
-//    itsConfirmed:; // should we just drop these on the floor?
-    end;
-  else
-    raise Exception.Create('Unhandled Self.State in ' + Self.ClassName + '.OnRequest');
-  end;
-end;
-
 procedure TIdSipServerInviteTransaction.OnTimerG(Sender: TObject);
 begin
   if Self.TimerGHasFired then begin
@@ -535,8 +708,8 @@ end;
 
 procedure TIdSipServerInviteTransaction.OnTimerH(Sender: TObject);
 begin
-  Self.State := itsTerminated;
-  Self.DoOnFail('Timed out');
+  Self.DoOnFail(SessionTimeoutMsg);
+  Self.ChangeToTerminated;
 end;
 
 procedure TIdSipServerInviteTransaction.OnTimerI(Sender: TObject);
@@ -574,13 +747,270 @@ end;
 procedure TIdSipServerInviteTransaction.TrySendResponse(const R: TIdSipResponse);
 begin
   Self.LastProceedingResponseSent := R.StatusCode;
-  try
-    Self.Transport.SendResponse(R);
-  except
-    on E: EIdException do begin
-      Self.DoOnFail(E.Message);
-      Self.State := itsTerminated;
+
+  inherited TrySendResponse(R);
+end;
+
+//******************************************************************************
+//* TIdSipNonInviteTransaction                                                 *
+//******************************************************************************
+//* TIdSipNonInviteTransaction Protected methods *******************************
+
+procedure TIdSipNonInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
+begin
+  Self.SetState(itsProceeding);
+  Self.DoOnReceiveResponse(R);
+end;
+
+//******************************************************************************
+//* TIdSipClientNonInviteTransaction                                           *
+//******************************************************************************
+//* TIdSipClientNonInviteTransaction Public methods ****************************
+
+constructor TIdSipClientNonInviteTransaction.Create;
+begin
+  inherited Create;
+
+  Self.TimerE          := TIdSipTimer.Create(true);
+  Self.TimerE.Interval := InitialT1;
+  Self.TimerE.OnTimer  := Self.OnTimerE;
+
+  Self.TimerF          := TIdSipTimer.Create(true);
+  Self.TimerF.OnTimer  := Self.OnTimerF;
+
+  Self.TimerK          := TIdSipTimer.Create(true);
+  Self.TimerK.Interval := T4;
+  Self.TimerK.OnTimer  := Self.OnTimerK;
+end;
+
+destructor TIdSipClientNonInviteTransaction.Destroy;
+begin
+  Self.TimerK.TerminateAndWaitFor;
+  Self.TimerK.Free;
+  Self.TimerF.TerminateAndWaitFor;
+  Self.TimerF.Free;
+  Self.TimerE.TerminateAndWaitFor;
+  Self.TimerE.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipClientNonInviteTransaction.Initialise(const Transport:      TIdSipAbstractTransport;
+                                                      const InitialRequest: TIdSipRequest;
+                                                      const Timeout:        Cardinal = InitialT1_64);
+begin
+  inherited Initialise(Transport, InitialRequest, Timeout);
+
+  Self.ChangeToTrying;
+
+  Self.TimerF.Interval := Timeout;
+
+  Self.TrySendRequest(Self.InitialRequest);
+  Self.TimerE.Start;
+  Self.TimerF.Start;
+end;
+
+//* TIdSipClientNonInviteTransaction Protected methods *************************
+
+procedure TIdSipClientNonInviteTransaction.ChangeToCompleted(const R: TIdSipResponse);
+begin
+  inherited ChangeToCompleted(R);
+
+  Self.TimerE.Stop;
+  Self.TimerF.Stop;
+  Self.TimerK.Start;
+end;
+
+procedure TIdSipClientNonInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
+begin
+  inherited ChangeToProceeding(R);
+
+  Self.TimerE.Interval := T2;
+end;
+
+procedure TIdSipClientNonInviteTransaction.ChangeToTrying;
+begin
+  Self.SetState(itsTrying);
+end;
+
+procedure TIdSipClientNonInviteTransaction.HandleResponse(const R: TIdSipResponse);
+begin
+  case Self.State of
+    itsTrying: begin
+      if R.IsFinal then
+        Self.ChangeToCompleted(R)
+      else
+        Self.ChangeToProceeding(R);
     end;
+    itsProceeding: begin
+      if R.IsFinal then
+        Self.ChangeToCompleted(R)
+      else
+        Self.ChangeToProceeding(R);
+    end;
+  else
+    raise Exception.Create('unhandled Self.State in ' + Self.ClassName + '.HandleResponse');
+  end;
+end;
+
+//* TIdSipClientNonInviteTransaction Private methods ***************************
+
+procedure TIdSipClientNonInviteTransaction.OnTimerE(Sender: TObject);
+begin
+  if (Self.State = itsTrying) then begin
+    Self.TimerE.Interval := 2*Self.TimerE.Interval;
+
+    if (Self.TimerE.Interval > T2) then
+      Self.TimerE.Interval := T2;
+  end;
+
+  Self.TryResendInitialRequest;
+end;
+
+procedure TIdSipClientNonInviteTransaction.OnTimerF(Sender: TObject);
+begin
+  Self.DoOnFail(SessionTimeoutMsg);
+end;
+
+procedure TIdSipClientNonInviteTransaction.OnTimerK(Sender: TObject);
+begin
+  Self.ChangeToTerminated;
+end;
+
+//******************************************************************************
+//* TIdSipServerNonInviteTransaction                                           *
+//******************************************************************************
+//* TIdSipServerNonInviteTransaction Public methods ****************************
+
+constructor TIdSipServerNonInviteTransaction.Create;
+begin
+  inherited Create;
+
+  Self.TimerJ          := TIdSipTimer.Create(true);
+  Self.TimerJ.OnTimer  := Self.OnTimerJ;
+end;
+
+destructor TIdSipServerNonInviteTransaction.Destroy;
+begin
+  Self.TimerJ.TerminateAndWaitFor;
+  Self.TimerJ.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipServerNonInviteTransaction.Initialise(const Transport:      TIdSipAbstractTransport;
+                                                      const InitialRequest: TIdSipRequest;
+                                                      const Timeout:        Cardinal = InitialT1_64);
+begin
+  inherited Initialise(Transport, InitialRequest, Timeout);
+
+  Self.TimerJ.Interval := Timeout;
+
+  Self.LastProceedingResponseSent := SIPTrying;  
+
+  Self.ChangeToTrying(Self.InitialRequest);
+end;
+
+//* TIdSipServerNonInviteTransaction Protected methods *************************
+
+procedure TIdSipServerNonInviteTransaction.ChangeToCompleted(const R: TIdSipResponse);
+begin
+  inherited ChangeToCompleted(R);
+
+  Self.TrySendResponse(R);
+  Self.TimerJ.Start;
+end;
+
+procedure TIdSipServerNonInviteTransaction.ChangeToProceeding(const R: TIdSipResponse);
+begin
+  inherited ChangeToProceeding(R);
+
+  Self.TrySendResponse(R);
+end;
+
+procedure TIdSipServerNonInviteTransaction.HandleRequest(const R: TIdSipRequest);
+begin
+  case Self.State of
+    itsCompleted, itsProceeding: begin
+      Self.TrySendLastResponse(R);
+    end;
+  else
+    raise Exception.Create('unhandled Self.State in ' + Self.ClassName + '.HandleRequest');
+  end;
+end;
+
+procedure TIdSipServerNonInviteTransaction.HandleResponse(const R: TIdSipResponse);
+begin
+  case Self.State of
+    itsTrying, itsProceeding: begin
+      if R.IsFinal then
+        Self.ChangeToCompleted(R)
+      else
+        Self.ChangeToProceeding(R);
+    end;
+    itsCompleted:; //drop the requests on the floor
+  else
+    raise Exception.Create('unhandled Self.State in ' + Self.ClassName + '.HandleResponse');
+  end;
+end;
+
+procedure TIdSipServerNonInviteTransaction.TrySendResponse(const R: TIdSipResponse);
+begin
+  Self.LastProceedingResponseSent := R.StatusCode;
+
+  inherited TrySendResponse(R);
+end;
+
+//* TIdSipServerNonInviteTransaction Private methods ***************************
+
+procedure TIdSipServerNonInviteTransaction.ChangeToTrying(const R: TIdSipRequest);
+begin
+  Self.SetState(itsTrying);
+
+  Self.DoOnReceiveRequest(R);
+end;
+
+procedure TIdSipServerNonInviteTransaction.GenerateResponse(const R:          TIdSipRequest;
+                                                                  Res:        TIdSipResponse;
+                                                            const StatusCode: Cardinal);
+var
+  I:                Integer;
+  TimestampHeaders: TIdSipHeadersFilter;
+begin
+  Res.StatusCode := StatusCode;
+  Res.SIPVersion := SIPVersion;
+
+  Res.From     := R.From;
+  Res.ToHeader := R.ToHeader;
+  Res.CallID   := R.CallID;
+  Res.CSeq     := R.CSeq;
+
+  TimestampHeaders := TIdSipHeadersFilter.Create(R.Headers, TimestampHeader);
+  try
+    for I := 0 to TimestampHeaders.Count - 1 do
+      Res.Headers.Add(TimestampHeaders.Items[I]);
+  finally
+    TimestampHeaders.Free;
+  end;
+
+  Res.Path.Add(Self.InitialRequest.Path.FirstHop);
+end;
+
+procedure TIdSipServerNonInviteTransaction.OnTimerJ(Sender: TObject);
+begin
+  Self.ChangeToTerminated;
+end;
+
+procedure TIdSipServerNonInviteTransaction.TrySendLastResponse(const R: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Self.GenerateResponse(R, Response, Self.LastProceedingResponseSent);
+    Self.TrySendResponse(Response);
+  finally
+    Response.Free;
   end;
 end;
 
