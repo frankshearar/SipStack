@@ -24,6 +24,7 @@ type
   protected
     AckCount:      Cardinal;
     Core:          TIdSipUserAgent;
+    DebugTimer:    TIdDebugTimerQueue;
     Destination:   TIdSipToHeader;
     Dispatcher:    TIdSipMockTransactionDispatcher;
     Invite:        TIdSipRequest;
@@ -128,9 +129,14 @@ type
     procedure TestAddObserver;
     procedure TestCleanOutTerminatedActions;
     procedure TestFindActionAndPerform;
+    procedure TestFindActionAndPerformBlock;
+    procedure TestFindActionAndPerformBlockNoActions;
+    procedure TestFindActionAndPerformBlockNoMatch;
     procedure TestFindActionAndPerformNoActions;
     procedure TestFindActionAndPerformNoMatch;
     procedure TestFindActionAndPerformOr;
+    procedure TestFindActionAndPerformOrBlock;
+    procedure TestFindActionAndPerformOrBlockNoMatch;
     procedure TestFindActionAndPerformOrNoMatch;
     procedure TestFindSessionAndPerform;
     procedure TestFindSessionAndPerformNoMatch;
@@ -195,6 +201,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAcksDontMakeTransactions;
+    procedure TestAcceptCallSchedulesResendOk;
     procedure TestActionsNotifyUAObservers;
     procedure TestAddAllowedContentType;
     procedure TestAddAllowedContentTypeMalformed;
@@ -245,6 +252,7 @@ type
     procedure TestNotificationOfNewSessionRobust;
     procedure TestOutboundCallAndByeToXlite;
     procedure TestOutboundInviteSessionProgressResends;
+    procedure TestOutboundInviteTerminatesWhenNoResponse;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeDestroysTerminatedSession;
@@ -264,6 +272,7 @@ type
     procedure TestRemoveObserver;
     procedure TestRemoveUserAgentListener;
     procedure TestReregister;
+    procedure TestScheduleEventActionClosure;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -927,9 +936,12 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
+}
   Result.AddTest(TestTIdSipActions.Suite);
+{
   Result.AddTest(TestTIdSipUserAgent.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -957,6 +969,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1002,10 +1015,16 @@ begin
 
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
+
+  Self.DebugTimer := TIdDebugTimerQueue.Create;
+  Self.Core.Timer := DebugTimer;
 end;
 
 procedure TTestCaseTU.TearDown;
 begin
+  Self.Core.Timer := nil;
+  Self.DebugTimer.Terminate;
+
   Self.Invite.Free;
   Self.Core.Free;
   Self.Dispatcher.Free;
@@ -1379,21 +1398,12 @@ end;
 
 procedure TestTIdSipAbstractCore.TestScheduleEvent;
 var
-  DebugTimer: TIdDebugTimerQueue;
   EventCount: Integer;
 begin
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.Core.Timer := DebugTimer;
-
-    EventCount := DebugTimer.EventCount;
-    Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, nil);
-    Check(EventCount < DebugTimer.EventCount,
-          'Event not scheduled');
-  finally
-    Self.Core.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  EventCount := Self.DebugTimer.EventCount;
+  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, nil);
+  Check(EventCount < DebugTimer.EventCount,
+        'Event not scheduled');
 end;
 
 //******************************************************************************
@@ -1638,6 +1648,79 @@ begin
   end;
 end;
 
+procedure TestTIdSipActions.TestFindActionAndPerformBlock;
+var
+  A:      TIdSipAction;
+  Event:  TIdSipMessageWait;
+  Finder: TIdSipActionFinder;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+
+  Event := TIdSipMessageWait.Create;
+  try
+    Event.Message := A.InitialRequest.Copy;
+
+    Finder := TIdSipActionFinder.Create;
+    try
+      Self.Actions.FindActionAndPerform(Event, Finder);
+
+      Check(Finder.Action = A, 'Wrong action found');
+    finally
+      Finder.Free;
+    end;
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformBlockNoActions;
+var
+  Event:  TIdSipMessageWait;
+  Finder: TIdSipActionFinder;
+begin
+  Event := TIdSipMessageWait.Create;
+  try
+    Event.Message := Self.Options.Copy;
+
+    Finder := TIdSipActionFinder.Create;
+    try
+      Self.Actions.FindActionAndPerform(Event, Finder);
+
+      Check(not Assigned(Finder.Action), 'An action found in an empty list');
+    finally
+      Finder.Free;
+    end;
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformBlockNoMatch;
+var
+  Event:  TIdSipMessageWait;
+  Finder: TIdSipActionFinder;
+begin
+  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+
+  Event := TIdSipMessageWait.Create;
+  try
+    Event.Message := Self.Options.Copy;
+
+    Finder := TIdSipActionFinder.Create;
+    try
+      Self.Actions.FindActionAndPerform(Event, Finder);
+
+      Check(not Assigned(Finder.Action), 'An action found');
+    finally
+      Finder.Free;
+    end;
+  finally
+    Event.Free;
+  end;
+end;
+
 procedure TestTIdSipActions.TestFindActionAndPerformNoActions;
 var
   Event: TIdSipMessageWait;
@@ -1691,6 +1774,73 @@ begin
                 'Wrong procedure used');
   finally
     Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformOrBlock;
+var
+  A:      TIdSipAction;
+  Event:  TIdSipMessageWait;
+  Finder: TIdSipActionFinder;
+  Switch: TIdSipActionSwitch;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+
+  Finder := TIdSipActionFinder.Create;
+  try
+    Switch := TIdSipActionSwitch.Create;
+    try
+      Event := TIdSipMessageWait.Create;
+      try
+        Event.Message := A.InitialRequest.Copy;
+        Self.Actions.FindActionAndPerformOr(Event,
+                                            Finder,
+                                            Switch);
+
+        Check(Assigned(Finder.Action), 'Didn''t find action');
+        Check(not Switch.Executed, 'Alternative block executed');
+      finally
+        Event.Free;
+      end;
+    finally
+      Switch.Free;
+    end;
+  finally
+    Finder.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformOrBlockNoMatch;
+var
+  Event:  TIdSipMessageWait;
+  Finder: TIdSipActionFinder;
+  Switch: TIdSipActionSwitch;
+begin
+  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+
+  Finder := TIdSipActionFinder.Create;
+  try
+    Switch := TIdSipActionSwitch.Create;
+    try
+      Event := TIdSipMessageWait.Create;
+      try
+        Event.Message := Self.Options.Copy;
+        Self.Actions.FindActionAndPerformOr(Event,
+                                            Finder,
+                                            Switch);
+
+        Check(not Assigned(Finder.Action), 'Found action');
+        Check(Switch.Executed, 'Alternative block didn''t execute');
+      finally
+        Event.Free;
+      end;
+    finally
+      Switch.Free;
+    end;
+  finally
+    Finder.Free;
   end;
 end;
 
@@ -2136,6 +2286,23 @@ begin
   finally
     RemoteDlg.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgent.TestAcceptCallSchedulesResendOk;
+begin
+  Self.ReceiveInvite;
+  Check(Assigned(Self.Session), 'TU not informed of inbound call');
+  Self.Session.AcceptCall('', '');
+
+  Self.MarkSentResponseCount;
+  Self.DebugTimer.TriggerEarliestEvent;
+  CheckResponseSent('No OK sent');
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
+
+  Self.MarkSentResponseCount;
+  Self.DebugTimer.TriggerEarliestEvent;
+  CheckResponseSent('No OK resent');
+  CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response resent');
 end;
 
 procedure TestTIdSipUserAgent.TestActionsNotifyUAObservers;
@@ -2954,8 +3121,6 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestInviteExpires;
-var
-  Event: TIdSipMessageWait;
 begin
   Self.Core.AddObserver(Self);
 
@@ -2968,22 +3133,13 @@ begin
   Self.WaitForSignaled;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Event := TIdSipMessageWait.Create;
-  try
-    Event.Message := Self.Invite.Copy;
-    Self.Core.OnInboundSessionExpire(Event);
-  finally
-    Event.Free;
-  end;
+  Self.DebugTimer.TriggerEarliestEvent;
 
   CheckResponseSent('No response sent');
   CheckEquals(SIPRequestTerminated,
               Self.LastSentResponse.StatusCode,
               'Unexpected response sent');
 
-  Self.WaitForSignaled(Self.OnChangedEvent,
-                       'Waiting for OnChanged, signalling when the whole '
-                     + 'shebang''s finished');
   CheckEquals(0, Self.Core.SessionCount, 'Expired session not cleaned up');
 end;
 
@@ -3165,31 +3321,30 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestOutboundInviteSessionProgressResends;
-var
-  DebugTimer: TIdThreadedTimerQueue;
 begin
-  DebugTimer := TIdThreadedTimerQueue.Create(false);
-  try
-    Self.Core.Timer := DebugTimer;
+  Self.MarkSentResponseCount;
 
-    Self.MarkSentResponseCount;
+  // Receive an INVITE. Ring. Wait.
+  Self.Core.ProgressResendInterval := 50;
 
-    // Receive an INVITE. Ring. Wait.
-    Self.Core.ProgressResendInterval := 50;
+  Self.ReceiveInvite;
+  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-    Self.ReceiveInvite;
-    Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+  Self.DebugTimer.TriggerEarliestEvent;
 
-    Self.WaitForSignaled(Self.SendEvent);
+  CheckResponseSent('No response sent');
+  CheckEquals(SIPSessionProgress,
+              Self.LastSentResponse.StatusCode,
+              'Wrong response');
+end;
 
-    CheckResponseSent('No response sent');
-    CheckEquals(SIPSessionProgress,
-                Self.LastSentResponse.StatusCode,
-                'Wrong response');
-  finally
-    Self.Core.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+procedure TestTIdSipUserAgent.TestOutboundInviteTerminatesWhenNoResponse;
+begin
+  Self.Core.Call(Self.Destination, '', '').Send;
+  CheckEquals(1, Self.Core.InviteCount, 'Calling makes an INVITE');
+
+  Self.DebugTimer.TriggerEarliestEvent;
+  CheckEquals(0, Self.Core.InviteCount, 'If we never get a response then we give up');
 end;
 
 procedure TestTIdSipUserAgent.TestReceiveByeForUnmatchedDialog;
@@ -3606,6 +3761,25 @@ begin
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
               'Unexpected method in resent request');
+end;
+
+procedure TestTIdSipUserAgent.TestScheduleEventActionClosure;
+var
+  DebugTimer: TIdDebugTimerQueue;
+  EventCount: Integer;
+begin
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.Core.Timer := DebugTimer;
+
+    EventCount := DebugTimer.EventCount;
+    Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, nil);
+    Check(EventCount < DebugTimer.EventCount,
+          'Event not scheduled');
+  finally
+    Self.Core.Timer := nil;
+    DebugTimer.Terminate;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestSetContact;

@@ -441,6 +441,26 @@ type
     property Username:                String                  read fUsername write fUsername;
   end;
 
+  TIdSipActionFinder = class(TIdSipActionClosure)
+  private
+    fAction: TIdSipAction;
+  public
+    procedure Execute(Action: TIdSipAction); override;
+
+    property Action: TIdSipAction read fAction;
+  end;
+
+  TIdSipActionSwitch = class(TIdSipActionClosure)
+  private
+    fExecuted: Boolean;
+  public
+    constructor Create; 
+
+    procedure Execute(Action: TIdSipAction); override;
+
+    property Executed: Boolean read fExecuted;
+  end;
+
   // constants used in tests
 const
   CertPasswd     = 'test';
@@ -1216,6 +1236,33 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
+end;
+
+//******************************************************************************
+//* TIdSipActionFinder                                                         *
+//******************************************************************************
+//* TIdSipActionFinder Public methods ******************************************
+
+procedure TIdSipActionFinder.Execute(Action: TIdSipAction);
+begin
+  Self.fAction := Action;
+end;
+
+//******************************************************************************
+//* TIdSipActionSwitch                                                         *
+//******************************************************************************
+//* TIdSipActionSwitch Public methods ******************************************
+
+constructor TIdSipActionSwitch.Create;
+begin
+  inherited Create;
+
+  Self.fExecuted := false;
+end;
+
+procedure TIdSipActionSwitch.Execute(Action: TIdSipAction);
+begin
+  Self.fExecuted := true;
 end;
 
 end.
