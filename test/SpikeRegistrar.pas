@@ -4,8 +4,8 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipMessage,
-  IdSipRegistration, IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs,
-  SysUtils;
+  IdSipMockBindingDatabase, IdSipRegistration, IdSipTransaction,
+  IdSipTransport, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpikeRegistrar = class(TForm,
@@ -20,7 +20,7 @@ type
     Label1: TLabel;
     procedure PortChange(Sender: TObject);
   private
-    DB:         TIdSipAbstractBindingDatabase;
+    DB:         TIdSipMockBindingDatabase;
     Dispatcher: TIdSipTransactionDispatcher;
     Lock:       TCriticalSection;
     Transport:  TIdSipTransport;
@@ -53,7 +53,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipMockBindingDatabase, IdStack, IdSipConsts, IdSocketHandle;
+  IdStack, IdSipConsts, IdSocketHandle;
 
 const
   LocalHostName = '127.0.0.1';
@@ -139,7 +139,22 @@ begin
 end;
 
 procedure TrnidSpikeRegistrar.OnChanged(Observed: TObject);
+var
+  I: Integer;
 begin
+  Self.Lock.Acquire;
+  try
+    Self.Contacts.Lines.BeginUpdate;
+    try
+      Self.Contacts.Lines.Clear;
+      for I := 0 to Self.DB.BindingCount - 1 do
+        Self.Contacts.Lines.Add(Self.DB.Bindings[I].AddressOfRecord + ': ' + Self.DB.Bindings[I].Uri)
+    finally
+      Self.Contacts.Lines.EndUpdate;
+    end;
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TrnidSpikeRegistrar.OnException(E: Exception;
