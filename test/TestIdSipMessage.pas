@@ -1027,7 +1027,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestCreateDialogID;
+procedure TestTIdSipResponse.TestCreateDialogID;
 var
   ID: TIdSipDialogID;
 begin

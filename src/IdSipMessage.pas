@@ -55,7 +55,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     procedure ClearHeaders;
-    function  CreateDialogID: TIdSipDialogID;
+    function  CreateDialogID: TIdSipDialogID; virtual; abstract;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HeaderAt(const Index: Cardinal): TIdSipHeader;
@@ -96,6 +96,7 @@ type
 
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
+    function  CreateDialogID: TIdSipDialogID; override;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -121,6 +122,7 @@ type
   public
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
+    function  CreateDialogID: TIdSipDialogID; override;
     function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsProvisional: Boolean;
@@ -377,11 +379,6 @@ begin
   Self.Headers.Clear;
 end;
 
-function TIdSipMessage.CreateDialogID: TIdSipDialogID;
-begin
-  Result := nil;
-end;
-
 function TIdSipMessage.FirstContact: TIdSipContactHeader;
 begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
@@ -539,6 +536,11 @@ begin
   Self.RequestUri := R.RequestUri;
 end;
 
+function TIdSipRequest.CreateDialogID: TIdSipDialogID;
+begin
+  Result := TIdSipDialogID.Create(Self.CallID, Self.From.Tag, Self.ToHeader.Tag);
+end;
+
 function TIdSipRequest.HasSipsUri: Boolean;
 var
   S: String;
@@ -672,6 +674,11 @@ begin
 
   Self.StatusCode := R.StatusCode;
   Self.StatusText := R.StatusText;
+end;
+
+function TIdSipResponse.CreateDialogID: TIdSipDialogID;
+begin
+  Result := TIdSipDialogID.Create(Self.CallID, Self.ToHeader.Tag, Self.From.Tag);
 end;
 
 function TIdSipResponse.IsEqualTo(const Msg: TIdSipMessage): Boolean;
