@@ -7071,7 +7071,7 @@ begin
       Self.Session.SendData(Data);
 
       // Note that the session determines the initial sequence number and
-      // timestamp by selecting random numbers. We can't really check for                           in
+      // timestamp by selecting random numbers. We can't really check for         
       // that sort've thing. The tests below should fail with a probability
       // ~2^-32, if my maths is correct. In other words, while it's perfectly
       // legal to have a zero initial sequence number and/or timestamp, it's
