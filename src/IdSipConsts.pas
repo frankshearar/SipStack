@@ -96,7 +96,8 @@ const
   WWWAuthenticateHeader      = 'WWW-Authenticate';
 
 const
-  SIPVersion = SipName + '/2.0';  
+  SIPVersion  = SipName + '/2.0';
+  SIPVersion1 = SipName + '/1.0';
 
 // for IdAssignedNumbers
 const
