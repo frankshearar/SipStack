@@ -286,6 +286,11 @@ type
   TIdSipSessionProc = procedure(Session: TIdSipSession;
                                 Invite: TIdSipRequest) of object;
 
+  // I maintain a list of Actions. You may query me for various statistics, as
+  // well as do things to particular actions.
+  // The FindFooAndPerform methods require some explanation. The Event
+  // parameter Data property must point to a copy of a TIdSipRequest.
+  // FindFooAndPerform will destroy the Request.
   TIdSipActions = class(TObject)
   private
     ActionLock: TCriticalSection;
@@ -304,11 +309,13 @@ type
     function  AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
                                 ActionType: TIdSipActionClass): TIdSipAction;
     procedure CleanOutTerminatedActions;
+    function  Count: Integer;
+    function  CountOf(const MethodName: String): Integer;
     function  FindAction(Msg: TIdSipMessage): TIdSipAction;
-    procedure FindActionAndPerform(Event: TObject;
+    procedure FindActionAndPerform(Event: TIdNotifyEventWait;
                                    Proc: TIdSipActionProc);
     function  FindSession(Msg: TIdSipMessage): TIdSipSession;
-    procedure FindSessionAndPerform(Event: TObject;
+    procedure FindSessionAndPerform(Event: TIdNotifyEventWait;
                                     Proc: TIdSipSessionProc);
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
@@ -1909,6 +1916,34 @@ begin
     Self.Observed.NotifyListenersOfChange;
 end;
 
+function TIdSipActions.Count: Integer;
+begin
+  // Return the number of actions, both terminated and ongoing. 
+  Self.ActionLock.Acquire;
+  try
+    Result := Self.Actions.Count;
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+function TIdSipActions.CountOf(const MethodName: String): Integer;
+var
+  I: Integer;
+begin
+  // Return the number of ongoing actions of type MethodName.
+  Self.ActionLock.Acquire;
+  try
+    Result := 0;
+
+    for I := 0 to Self.Actions.Count - 1 do
+      if (Self.ActionAt(I).Method = MethodName)
+        and not Self.ActionAt(I).IsTerminated then Inc(Result);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
 function TIdSipActions.FindAction(Msg: TIdSipMessage): TIdSipAction;
 var
   Action: TIdSipAction;
@@ -1931,13 +1966,13 @@ begin
   end;
 end;
 
-procedure TIdSipActions.FindActionAndPerform(Event: TObject;
+procedure TIdSipActions.FindActionAndPerform(Event: TIdNotifyEventWait;
                                              Proc: TIdSipActionProc);
 var
   Action:  TIdSipAction;
   Request: TIdSipRequest;
 begin
-  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  Request := Event.Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -1977,7 +2012,7 @@ begin
   end;
 end;
 
-procedure TIdSipActions.FindSessionAndPerform(Event: TObject;
+procedure TIdSipActions.FindSessionAndPerform(Event: TIdNotifyEventWait;
                                               Proc: TIdSipSessionProc);
 var
   Invite:  TIdSipRequest;
@@ -1985,7 +2020,7 @@ var
 begin
   Self.ActionLock.Acquire;
   try
-    Invite := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+    Invite := Event.Data as TIdSipRequest;
     try
       Session := Self.FindSession(Invite);
 
@@ -2002,54 +2037,18 @@ begin
 end;
 
 function TIdSipActions.InviteCount: Integer;
-var
-  I: Integer;
 begin
-  // Return the number of ongoing INVITEs
-  Self.ActionLock.Acquire;
-  try
-    Result := 0;
-
-    for I := 0 to Self.Actions.Count - 1 do
-      if Self.ActionAt(I).IsInvite
-        and not Self.ActionAt(I).IsTerminated then Inc(Result);
-  finally
-    Self.ActionLock.Release;
-  end;
+  Result := Self.CountOf(MethodInvite);
 end;
 
 function TIdSipActions.OptionsCount: Integer;
-var
-  I: Integer;
 begin
-  // Return the number of ongoing OPTIONS queries
-  Self.ActionLock.Acquire;
-  try
-    Result := 0;
-
-    for I := 0 to Self.Actions.Count - 1 do
-      if Self.ActionAt(I).IsOptions
-        and not Self.ActionAt(I).IsTerminated then Inc(Result);
-  finally
-    Self.ActionLock.Release;
-  end;
+  Result := Self.CountOf(MethodOptions);
 end;
 
 function TIdSipActions.RegistrationCount: Integer;
-var
-  I: Integer;
 begin
-  // Return the number of ongoing registration attempts
-  Self.ActionLock.Acquire;
-  try
-    Result := 0;
-
-    for I := 0 to Self.Actions.Count - 1 do
-      if Self.ActionAt(I).IsRegistration
-        and not Self.ActionAt(I).IsTerminated then Inc(Result);
-  finally
-    Self.ActionLock.Release;
-  end;
+  Result := Self.CountOf(MethodRegister);
 end;
 
 procedure TIdSipActions.RemoveObserver(const Listener: IIdObserver);
@@ -2522,7 +2521,8 @@ end;
 
 procedure TIdSipAbstractUserAgent.OnInboundSessionExpire(Event: TObject);
 begin
-  Self.Actions.FindActionAndPerform(Event, Self.InboundSessionExpire);
+  Self.Actions.FindActionAndPerform(Event as TIdNotifyEventWait,
+                                    Self.InboundSessionExpire);
 end;
 
 procedure TIdSipAbstractUserAgent.OnReregister(Event: TObject);
@@ -2539,22 +2539,26 @@ end;
 
 procedure TIdSipAbstractUserAgent.OnResendOk(Event: TObject);
 begin
-  Self.Actions.FindActionAndPerform(Event, Self.ResendOk);
+  Self.Actions.FindActionAndPerform(Event as TIdNotifyEventWait,
+                                    Self.ResendOk);
 end;
 
 procedure TIdSipAbstractUserAgent.OnResendReInvite(Event: TObject);
 begin
-  Self.Actions.FindSessionAndPerform(Event, Self.ResendReInvite);
+  Self.Actions.FindSessionAndPerform(Event as TIdNotifyEventWait,
+                                     Self.ResendReInvite);
 end;
 
 procedure TIdSipAbstractUserAgent.OnSessionProgress(Event: TObject);
 begin
-  Self.Actions.FindActionAndPerform(Event, Self.SessionProgress);
+  Self.Actions.FindActionAndPerform(Event as TIdNotifyEventWait,
+                                    Self.SessionProgress);
 end;
 
 procedure TIdSipAbstractUserAgent.OnTransactionComplete(Event: TObject);
 begin
-  Self.Actions.FindActionAndPerform(Event, Self.TransactionComplete);
+  Self.Actions.FindActionAndPerform(Event as TIdNotifyEventWait,
+                                    Self.TransactionComplete);
 end;
 
 function TIdSipAbstractUserAgent.OptionsCount: Integer;

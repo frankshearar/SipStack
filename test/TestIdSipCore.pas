@@ -98,16 +98,42 @@ type
     procedure TestNextSequenceNoFor;
   end;
 
+  TIdSipNullAction = class(TIdSipAction)
+  protected
+    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+  public
+    class function Method: String; override;
+  end;
+
   TestTIdSipActions = class(TTestCaseTU)
   private
-    Actions: TIdSipActions;
+    Actions:      TIdSipActions;
+    FoundAction:  TIdSipAction;
+    FoundSession: TIdSipSession;
+    Options:      TIdSipRequest;
+
+    procedure RecordAction(Action: TIdSipAction);
+    procedure RecordSession(Session: TIdSipSession;
+                            Invite: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestActionCount;
     procedure TestAddActionNotifiesObservers;
     procedure TestAddObserver;
+    procedure TestCleanOutTerminatedActions;
+    procedure TestFindActionAndPerform;
+    procedure TestFindActionAndPerformNoActions;
+    procedure TestFindActionAndPerformNoMatch;
+    procedure TestFindSessionAndPerform;
+    procedure TestFindSessionAndPerformNoMatch;
+    procedure TestFindSessionAndPerformNoSessions;
+    procedure TestInviteCount;
+    procedure TestOptionsCount;
+    procedure TestRegistrationCount;
     procedure TestRemoveObserver;
+    procedure TestTerminateAllActions;
   end;
 
   TestTIdSipUserAgent = class(TTestCaseTU,
@@ -1461,6 +1487,23 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipNullAction                                                           *
+//******************************************************************************
+//* TIdSipNullAction Public methods ********************************************
+
+class function TIdSipNullAction.Method: String;
+begin
+  Result := '';
+end;
+
+//* TIdSipNullAction Protected methods *****************************************
+
+function TIdSipNullAction.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+begin
+  Result := nil;
+end;
+
+//******************************************************************************
 //* TestTIdSipActions                                                          *
 //******************************************************************************
 //* TestTIdSipActions Public methods *******************************************
@@ -1470,16 +1513,43 @@ begin
   inherited SetUp;
 
   Self.Actions := TIdSipActions.Create;
+  Self.Options := TIdSipRequest.Create;
+  Self.Options.Assign(Self.Invite);
+  Self.Options.Method := MethodOptions;
 end;
 
 procedure TestTIdSipActions.TearDown;
 begin
+  Self.Options.Free;
   Self.Actions.Free;
 
   inherited Destroy;
 end;
 
+//* TestTIdSipActions Private methods ******************************************
+
+procedure TestTIdSipActions.RecordAction(Action: TIdSipAction);
+begin
+  Self.FoundAction := Action;
+end;
+
+procedure TestTIdSipActions.RecordSession(Session: TIdSipSession;
+                                          Invite: TIdSipRequest);
+begin
+  Self.FoundSession := Session;
+end;
+
 //* TestTIdSipActions Published methods ****************************************
+
+procedure TestTIdSipActions.TestActionCount;
+var
+  I: Integer;
+begin
+  for I := 1 to 5 do begin
+    Self.Actions.Add(TIdSipNullAction.Create(Self.Core));
+    CheckEquals(I, Self.Actions.Count, 'Action not added');
+  end;
+end;
 
 procedure TestTIdSipActions.TestAddActionNotifiesObservers;
 var
@@ -1523,6 +1593,189 @@ begin
   end;
 end;
 
+procedure TestTIdSipActions.TestCleanOutTerminatedActions;
+var
+  A:           TIdSipAction;
+  ActionCount: Integer;
+  O:           TIdObserverListener;
+begin
+  A := TIdSipNullAction.Create(Self.Core);
+  Self.Actions.Add(A);
+
+  ActionCount := Self.Actions.Count;
+  A.Terminate;
+
+  O := TIdObserverListener.Create;
+  try
+    Self.Actions.AddObserver(O);
+
+    Self.Actions.CleanOutTerminatedActions;
+
+    Check(Self.Actions.Count < ActionCount,
+          'Terminated action not destroyed');
+    Check(O.Changed, 'Observers not notified of change');
+  finally
+    Self.Actions.RemoveObserver(O);
+    O.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerform;
+var
+  A:     TIdSipAction;
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := A.InitialRequest.Copy;
+    Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
+
+    Check(Self.FoundAction = A, 'Wrong action found');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformNoActions;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Options.Copy;
+    Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
+
+    Check(not Assigned(Self.FoundAction), 'An action found in an empty list');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindActionAndPerformNoMatch;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Options.Copy;
+    Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
+
+    Check(not Assigned(Self.FoundAction), 'An action found');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindSessionAndPerform;
+var
+  S:     TIdSipAction;
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  S := Self.Actions.Add(TIdSipInboundSession.Create(Self.Core, Self.Invite, false));
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := S.InitialRequest.Copy;
+    Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
+
+    Check(Self.FoundSession = S, 'Wrong session found');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindSessionAndPerformNoMatch;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Invite.Copy;
+    Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
+
+    Check(not Assigned(Self.FoundAction), 'A session found');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestFindSessionAndPerformNoSessions;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Invite.Copy;
+    Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
+
+    Check(not Assigned(Self.FoundSession), 'Session found in an empty list');
+  finally
+    Event.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestInviteCount;
+begin
+  CheckEquals(0, Self.Actions.InviteCount, 'No messages received');
+
+  Self.Actions.AddInboundInvite(Self.Core, Self.Invite);
+  CheckEquals(1, Self.Actions.InviteCount, 'One INVITE');
+
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  CheckEquals(1, Self.Actions.InviteCount, 'One INVITE, one OPTIONS');
+
+  Self.Actions.Add(TIdSipOutboundInvite.Create(Self.Core));
+  CheckEquals(2, Self.Actions.InviteCount, 'Two INVITEs, one OPTIONS');
+end;
+
+procedure TestTIdSipActions.TestOptionsCount;
+begin
+  CheckEquals(0, Self.Actions.OptionsCount, 'No messages received');
+
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  CheckEquals(1, Self.Actions.OptionsCount, 'One OPTIONS');
+
+  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+  CheckEquals(1, Self.Actions.OptionsCount, 'One OPTIONS, one INVITE');
+
+  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
+  CheckEquals(2, Self.Actions.OptionsCount, 'Two OPTIONS, one INVITEs');
+end;
+
+procedure TestTIdSipActions.TestRegistrationCount;
+var
+  Registration: TIdSipRequest;
+begin
+  Registration := TIdSipRequest.Create;
+  try
+    Registration.Assign(Self.Invite);
+    Registration.Method := MethodRegister;
+
+    CheckEquals(0, Self.Actions.RegistrationCount, 'No messages received');
+
+    Self.Actions.Add(TIdSipInboundRegistration.Create(Self.Core, Registration));
+    CheckEquals(1, Self.Actions.RegistrationCount, 'One REGISTER');
+
+    Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+    CheckEquals(1, Self.Actions.RegistrationCount, 'One REGISTER, one INVITE');
+
+    Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core));
+    CheckEquals(2, Self.Actions.RegistrationCount, 'Two REGISTERs, one INVITEs');
+  finally
+    Registration.Free;
+  end;
+end;
+
 procedure TestTIdSipActions.TestRemoveObserver;
 var
   L1, L2: TIdObserverListener;
@@ -1547,6 +1800,21 @@ begin
     Self.Actions.RemoveObserver(L1);
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipActions.TestTerminateAllActions;
+begin
+  // We don't add INVITEs here because INVITEs need additional events to
+  // properly terminate: an INVITE needs to wait for a final response, etc.
+  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
+  Self.Actions.Add(TIdSipOutboundRegistrationQuery.Create(Self.Core));
+  Self.Actions.Add(TIdSipOutboundRegister.Create(Self.Core));
+
+  Self.Actions.TerminateAllActions;
+  Self.Actions.CleanOutTerminatedActions;
+  CheckEquals(0,
+              Self.Actions.Count,
+              'Actions container didn''t terminate all actions');
 end;
 
 //******************************************************************************
