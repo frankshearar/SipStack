@@ -1435,15 +1435,21 @@ type
     property Modify: TIdSipInboundInvite read fModify write fModify;
   end;
 
+  TIdSipUserAgentMethod = class(TIdNotification)
+  private
+    fUserAgent: TIdSipAbstractUserAgent;
+  public
+    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
+  end;
+
   // Ask the listeners for a username/password pair. First listener to set
   // either Password or Username wins.
-  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdNotification)
+  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdSipUserAgentMethod)
   private
     fChallenge:     TIdSipResponse;
     fFirstPassword: String;
     fFirstUsername: String;
     fTryAgain:      Boolean;
-    fUserAgent:     TIdSipAbstractUserAgent;
   public
     procedure Run(const Subject: IInterface); override;
 
@@ -1451,31 +1457,26 @@ type
     property FirstPassword: String                  read fFirstPassword write fFirstPassword;
     property FirstUsername: String                  read fFirstUsername write fFirstUsername;
     property TryAgain:      Boolean                 read fTryAgain write fTryAgain;
-    property UserAgent:     TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
-  TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdNotification)
+  TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdSipUserAgentMethod)
   private
     fReceiver: TIdSipTransport;
     fMessage:  TIdSipMessage;
-    fUserAgent: TIdSipAbstractUserAgent;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Receiver:  TIdSipTransport read fReceiver write fReceiver;
-    property Message:   TIdSipMessage  read fMessage write fMessage;
-    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Message:  TIdSipMessage  read fMessage write fMessage;
   end;
 
-  TIdSipUserAgentInboundCallMethod = class(TIdNotification)
+  TIdSipUserAgentInboundCallMethod = class(TIdSipUserAgentMethod)
   private
-    fSession:   TIdSipInboundSession;
-    fUserAgent: TIdSipAbstractUserAgent;
+    fSession: TIdSipInboundSession;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Session:   TIdSipInboundSession read fSession write fSession;
-    property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
+    property Session: TIdSipInboundSession read fSession write fSession;
   end;
 
   EIdSipBadSyntax = class(EIdException);
