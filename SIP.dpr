@@ -8,6 +8,7 @@ uses
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
+  TortureTests in 'test\TortureTests.pas',
   XmlCgi in '..\IctWebsiteCgi\src\XmlCgi.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
