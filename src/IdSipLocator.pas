@@ -46,6 +46,9 @@ type
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
 
+  // Given a SIP or SIPS URI, I return (using FindServersFor) a set of tuples of
+  // the form (transport, IP address, port) that you can use to send a SIP
+  // message.
   TIdSipAbstractLocator = class(TObject)
   protected
     procedure AddUriLocation(AddressOfRecord: TIdSipUri;
@@ -168,10 +171,6 @@ begin
 end;
 
 function TIdSipAbstractLocator.CreateLocationFromUri(AddressOfRecord: TIdSipUri): TIdSipLocation;
-var
-  Address:   String;
-  Port:      Cardinal;
-  Transport: String;
 begin
   Result := TIdSipLocation.Create;
 
