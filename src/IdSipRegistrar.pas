@@ -15,16 +15,16 @@ type
   // of my methods.
   TIdSipAbstractBindingDatabase = class(TObject)
   public
-    procedure AddBinding(const AddressOfRecord: String;
-                         Binding: TIdSipContactHeader); virtual; abstract;
-    procedure AddBindings(const AddressOfRecord: String;
-                          Bindings: TIdSipHeaderList); virtual; abstract;
+    function  AddBinding(const AddressOfRecord: String;
+                         Binding: TIdSipContactHeader): Boolean; virtual; abstract;
+    function  AddBindings(const AddressOfRecord: String;
+                          Bindings: TIdSipHeaderList): Boolean; virtual; abstract;
     function  IsValid(AddressOfRecord: TIdSipUri): Boolean; virtual; abstract;
     procedure BindingsFor(const AddressOfRecord: String;
                           Bindings: TIdSipHeaders); virtual; abstract;
-    procedure RemoveAllBindings(const AddressOfRecord: String); virtual; abstract;
-    procedure RemoveBinding(const AddressOfRecord: String;
-                            Binding: TIdSipContactHeader); virtual; abstract;
+    function  RemoveAllBindings(const AddressOfRecord: String): Boolean; virtual; abstract;
+    function  RemoveBinding(const AddressOfRecord: String;
+                            Binding: TIdSipContactHeader): Boolean; virtual; abstract;
   end;
 
   // I'm a User Agent Server that only accepts REGISTER requests. I provide a
@@ -40,8 +40,6 @@ type
 
     procedure Accept(Request: TIdSipRequest;
                      Transaction: TIdSipTransaction);
-    function  ProcessContact(AddressOfRecord: TIdSipUri;
-                             Contact: TIdSipContactHeader): Boolean;
     function  ProcessContacts(Request: TIdSipRequest;
                               Contacts: TIdSipHeaderList): Boolean;
     procedure RejectExpireTooBrief(Request: TIdSipRequest;
@@ -103,8 +101,9 @@ begin
 //         described in Section 16.
   Result := inherited ReceiveRequest(Request, Transaction, Receiver);
 
-  if Result and Request.IsRegister then begin
-//
+  if not Result then Exit;
+  
+  if Request.IsRegister then begin
 //      3. A registrar SHOULD authenticate the UAC.  Mechanisms for the
 //         authentication of SIP user agents are described in Section 22.
 //         Registration behavior in no way overrides the generic
@@ -134,9 +133,13 @@ begin
       try
         // Self.BindingDatabase provides this step's atomicity, as required by
         // RFC 3261, section 10.3
-        if not Self.ProcessContacts(Request, Contacts) then begin
+        if Request.HasExpiry and (Request.MinimumExpiry < Self.MinimumExpiryTime) then begin
           Self.RejectExpireTooBrief(Request, Transaction);
           Exit;
+        end;
+
+        if not Self.ProcessContacts(Request, Contacts) then begin
+          // Adding the contacts failed. What to do?
         end;
       finally
         Contacts.Free;
@@ -180,38 +183,33 @@ begin
   end;
 end;
 
-function TIdSipRegistrar.ProcessContact(AddressOfRecord: TIdSipUri;
-                                        Contact: TIdSipContactHeader): Boolean;
-begin
-  Result := not (Contact.HasParam(ExpiresParam)
-                and (Contact.Expires < Self.MinimumExpiryTime));
-
-  if Result then
-    Self.BindingDB.AddBinding(AddressOfRecord.CanonicaliseAsAddressOfRecord,
-                              Contact);
-end;
-
 function TIdSipRegistrar.ProcessContacts(Request: TIdSipRequest;
                                          Contacts: TIdSipHeaderList): Boolean;
 begin
-  if Request.HasHeader(ExpiresHeader) then
-    Result := ((Request.FirstHeader(ExpiresHeader) as TIdSipNumericHeader).NumericValue >= Self.MinimumExpiryTime)
+  if Request.HasExpiry then
+    Result := (Request.MinimumExpiry < Self.MinimumExpiryTime)
   else
     Result := true;
 
-  Contacts.First;
-  while Contacts.HasNext and Result do begin
-    Result := Result
-           and Self.ProcessContact(Request.RequestUri,
-                                   Contacts.CurrentHeader as TIdSipContactHeader);
-    Contacts.Next;
-  end;
+//  Result := not Request.HasExpiry or (Request.MinimumExpiry < Self.MinimumExpiryTime);
+
+  if Result then
+    Result := Self.BindingDB.AddBindings(Request.RequestUri.CanonicaliseAsAddressOfRecord,
+                                         Contacts);
 end;
 
 procedure TIdSipRegistrar.RejectExpireTooBrief(Request: TIdSipRequest;
                                                Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
 begin
-  Self.ReturnResponse(Request, SIPIntervalTooBrief, Transaction);
+  Response := Self.CreateResponse(Request, SIPIntervalTooBrief);
+  try
+    Response.AddHeader(MinExpiresHeader).Value := IntToStr(Self.MinimumExpiryTime);
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TIdSipRegistrar.RejectNonRegister(Request: TIdSipRequest;

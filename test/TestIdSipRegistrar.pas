@@ -23,7 +23,6 @@ type
     procedure TearDown; override;
   published
     procedure TestInvalidAddressOfRecord;
-{
     procedure TestOKResponseContainsAllBindings;
     procedure TestReceiveInvite;
     procedure TestReceiveRegister;
@@ -31,13 +30,13 @@ type
     procedure TestReceiveExpireParamTooShort;
     procedure TestRegisterAddsBindings;
     procedure TestRegisterAddsMultipleBindings;
-}
   end;
 
   TIdSipMockBindingDatabase = class(TIdSipAbstractBindingDatabase)
   private
-    BindingStore: TStrings;
-    fFailIsValid: Boolean;
+    BindingStore:    TStrings;
+    fFailAddBinding: Boolean;
+    fFailIsValid:    Boolean;
 
     procedure DeleteBinding(Index: Integer);
     function  GetBindings(Index: Integer): TIdSipContactHeader;
@@ -45,18 +44,19 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    procedure AddBinding(const AddressOfRecord: String;
-                         Binding: TIdSipContactHeader); override;
-    procedure AddBindings(const AddressOfRecord: String;
-                          Bindings: TIdSipHeaderList); override;
+    function  AddBinding(const AddressOfRecord: String;
+                         Binding: TIdSipContactHeader): Boolean; override;
+    function  AddBindings(const AddressOfRecord: String;
+                          Bindings: TIdSipHeaderList): Boolean; override;
     function  BindingCount: Integer;
     procedure BindingsFor(const AddressOfRecord: String;
                           Bindings: TIdSipHeaders); override;
     function  IsValid(AddressOfRecord: TIdSipUri): Boolean; override;
-    procedure RemoveAllBindings(const AddressOfRecord: String); override;
-    procedure RemoveBinding(const AddressOfRecord: String;
-                            Binding: TIdSipContactHeader); override;
+    function  RemoveAllBindings(const AddressOfRecord: String): Boolean; override;
+    function  RemoveBinding(const AddressOfRecord: String;
+                            Binding: TIdSipContactHeader): Boolean; override;
     property Bindings[Index: Integer]: TIdSipContactHeader read GetBindings;
+    property FailAddBinding:           Boolean             read fFailAddBinding write fFailAddBinding;
     property FailIsValid:              Boolean             read fFailIsValid write fFailIsValid;
   end;
 
@@ -76,6 +76,7 @@ type
     procedure TestBindingsFor;
     procedure TestBindingsForClearsList;
     procedure TestIsValid;
+    procedure TestFailAddBinding;
     procedure TestRemoveAllBindings;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingWhenNotPresent;
@@ -154,7 +155,7 @@ begin
               Self.Dispatch.Transport.LastResponse.StatusCode,
               'Response code');
 end;
-{
+
 procedure TestTIdSipRegistrar.TestOKResponseContainsAllBindings;
 var
   Bindings: TIdSipHeaders;
@@ -206,15 +207,23 @@ begin
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveExpireTooShort;
+var
+  Response: TIdSipResponse;
 begin
   Self.Request.AddHeader(ExpiresHeader).Value := IntToStr(Self.Registrar.MinimumExpiryTime - 1);
   Self.SimulateRemoteRequest;
   CheckEquals(1,
               Self.Dispatch.Transport.SentResponseCount,
               'No response sent');
+  Response := Self.Dispatch.Transport.LastResponse;
   CheckEquals(SIPIntervalTooBrief,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
+              Response.StatusCode,
               'Expires header value too low');
+  Check(Response.HasHeader(MinExpiresHeader),
+        MinExpiresHeader + ' missing');
+  CheckEquals(Self.Registrar.MinimumExpiryTime,
+              (Response.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader).NumericValue,
+              MinExpiresHeader + ' value');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveExpireParamTooShort;
@@ -285,7 +294,7 @@ begin
     Bindings.Free;
   end;
 end;
-}
+
 //******************************************************************************
 //* TIdSipMockBindingDatabase                                                  *
 //******************************************************************************
@@ -296,6 +305,9 @@ begin
   inherited Create;
 
   Self.BindingStore := TStringList.Create;
+
+  Self.FailAddBinding := false;
+  Self.FailIsValid    := false;
 end;
 
 destructor TIdSipMockBindingDatabase.Destroy;
@@ -310,15 +322,15 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockBindingDatabase.AddBinding(const AddressOfRecord: String;
-                                               Binding: TIdSipContactHeader);
+function TIdSipMockBindingDatabase.AddBinding(const AddressOfRecord: String;
+                                               Binding: TIdSipContactHeader): Boolean;
 var
   Index:      Integer;
   NewContact: TIdSipContactHeader;
 begin
   NewContact := TIdSipContactHeader.Create;
   try
-    NewContact.Value := Binding.FullValue;
+    NewContact.Assign(Binding);
     Self.BindingStore.AddObject(AddressOfRecord, NewContact);
   except
     Index := Self.BindingStore.IndexOfObject(NewContact);
@@ -329,16 +341,18 @@ begin
 
     raise;
   end;
+  Result := not Self.FailAddBinding;
 end;
 
-procedure TIdSipMockBindingDatabase.AddBindings(const AddressOfRecord: String;
-                                                Bindings: TIdSipHeaderList);
+function TIdSipMockBindingDatabase.AddBindings(const AddressOfRecord: String;
+                                                Bindings: TIdSipHeaderList): Boolean;
 begin
+  Result := true;
   Bindings.First;
-  while Bindings.HasNext do begin
+  while Bindings.HasNext and Result do begin
     if Bindings.CurrentHeader.IsContact then
-      Self.AddBinding(AddressOfRecord,
-                      Bindings.CurrentHeader as TIdSipContactHeader);
+      Result := Result and Self.AddBinding(AddressOfRecord,
+                                           Bindings.CurrentHeader as TIdSipContactHeader);
     Bindings.Next;
   end;
 end;
@@ -365,7 +379,7 @@ begin
   Result := not Self.FailIsValid;
 end;
 
-procedure TIdSipMockBindingDatabase.RemoveAllBindings(const AddressOfRecord: String);
+function TIdSipMockBindingDatabase.RemoveAllBindings(const AddressOfRecord: String): Boolean;
 var
   I: Integer;
 begin
@@ -377,13 +391,15 @@ begin
     else
       Inc(I);
   end;
+  Result := true;
 end;
 
-procedure TIdSipMockBindingDatabase.RemoveBinding(const AddressOfRecord: String;
-                                                  Binding: TIdSipContactHeader);
+function TIdSipMockBindingDatabase.RemoveBinding(const AddressOfRecord: String;
+                                                  Binding: TIdSipContactHeader): Boolean;
 var
   I: Integer;
 begin
+  Result := true;
   I := 0;
   while (I < Self.BindingCount)
     and not IsEqual(Self.BindingStore[I], AddressOfRecord)
@@ -392,6 +408,7 @@ begin
 
   if (I < Self.BindingCount) then
     Self.DeleteBinding(I);
+  Result := true;    
 end;
 
 //* TIdSipMockBindingDatabase Private methods **********************************
@@ -523,6 +540,35 @@ begin
   end;
 end;
 
+procedure TestTIdSipMockBindingDatabase.TestFailAddBinding;
+var
+  Bindings: TIdSipHeaders;
+begin
+  Check(Self.DB.AddBinding(Self.WintermutesAOR,
+                           Self.Wintermute),
+        'AddBinding failed');
+  Self.DB.FailAddBinding := true;
+  Check(not Self.DB.AddBinding(Self.WintermutesAOR,
+                               Self.Wintermute),
+        'AddBinding succeeded');
+
+  Bindings := TIdSipHeaders.Create;
+  try
+    Bindings.Add(ContactHeaderFull).Assign(Self.Wintermute);
+
+    Self.DB.FailAddBinding := false;
+    Check(Self.DB.AddBindings(Self.WintermutesAOR,
+                              Bindings),
+          'AddBindings failed');
+    Self.DB.FailAddBinding := true;
+    Check(not Self.DB.AddBindings(Self.WintermutesAOR,
+                                  Bindings),
+          'AddBindings succeeded');
+  finally
+    Bindings.Free;
+  end;
+end;
+
 procedure TestTIdSipMockBindingDatabase.TestRemoveAllBindings;
 begin
   Self.DB.AddBinding(Self.WintermutesAOR, Self.Wintermute);
@@ -544,7 +590,7 @@ var
 begin
   ToBeDeleted := TIdSipContactHeader.Create;
   try
-    ToBeDeleted.Value := Self.Wintermute.FullValue;
+    ToBeDeleted.Assign(Self.Wintermute);
 
     Self.DB.AddBinding(Self.CasesAOR, Self.CaseContact);
     Self.DB.AddBinding(Self.WintermutesAOR, ToBeDeleted);
