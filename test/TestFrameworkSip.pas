@@ -300,10 +300,6 @@ type
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                        Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
   public
     constructor Create; override;
 
@@ -904,28 +900,6 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveResponse');
-end;
-
-procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                                                       Receiver: TIdSipTransport);
-begin
-  Self.fReceivedUnhandledRequest := true;
-  Self.fReceiverParam            := Receiver;
-  Self.fRequestParam             := Request;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest');
-end;
-
-procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                                                        Receiver: TIdSipTransport);
-begin
-  Self.fReceivedUnhandledResponse := true;
-  Self.fReceiverParam             := Receiver;
-  Self.fResponseParam             := Response;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse');
 end;
 
 //******************************************************************************

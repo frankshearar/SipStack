@@ -282,8 +282,6 @@ end;
 //* TrnidSpike Private methods *************************************************
 
 function TrnidSpike.AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
-var
-  Binding: TIdSocketHandle;
 begin
   Result := TransportType.Create;
   Self.Transports.Add(Result);

@@ -135,7 +135,7 @@ type
     procedure TestForkWithProvisionalResponse;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
-//    procedure TestInviteExpires;
+    procedure TestInviteExpires;
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
@@ -1881,7 +1881,7 @@ begin
   Check(Self.Core.HasUnknownContentType(Self.Invite),
         'Nothing else is supported');
 end;
-{
+
 procedure TestTIdSipUserAgentCore.TestInviteExpires;
 var
   ResponseCount: Cardinal;
@@ -1907,7 +1907,7 @@ begin
               Self.Dispatcher.Transport.LastResponse.StatusCode,
               'Unexpected response sent');
 end;
-}
+
 procedure TestTIdSipUserAgentCore.TestIsMethodAllowed;
 begin
   Check(not Self.Core.IsMethodAllowed(MethodRegister),
@@ -2345,7 +2345,7 @@ begin
 
   Self.SimulateRemoteInvite;
 
-  CheckEquals(ResponseCount + 1,
+  CheckEquals(ResponseCount + 2, // Trying + reject
               Self.Dispatcher.Transport.SentResponseCount,
               'No response sent');
 
@@ -3033,7 +3033,7 @@ begin
   Self.Invite.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
   Self.Dispatcher.Transport.ResetSentResponseCount;
   Self.SimulateRemoteInvite;
-  CheckEquals(1,
+  CheckEquals(2, // Trying + reject
               Self.Dispatcher.Transport.SentResponseCount,
               'No response sent');
   Response := Self.Dispatcher.Transport.LastResponse;

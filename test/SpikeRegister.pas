@@ -85,7 +85,6 @@ const
 
 constructor TrnidSpikeRegister.Create(AOwner: TComponent);
 var
-  Binding: TIdSocketHandle;
   Contact: TIdSipContactHeader;
   From:    TIdSipFromHeader;
 begin

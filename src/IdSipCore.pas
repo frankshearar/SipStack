@@ -153,10 +153,6 @@ type
     UserAgentListeners:     TIdNotificationList;
 
     function  DefaultHostName: String;
-    procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                        Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
     procedure RejectBadAuthorization(Request: TIdSipRequest);
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
   protected
@@ -994,14 +990,22 @@ end;
 
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
                                               Receiver: TIdSipTransport);
+var
+  Reaction: TIdSipUserAgentReaction;
 begin
-  // By default, do nothing. We don't know yet how Proxies behave.
+  Reaction := Self.WillAcceptRequest(Request);
+  if (Reaction = uarAccept) then
+    Self.ActOnRequest(Request, Receiver)
+  else
+    Self.RejectRequest(Reaction, Request);
 end;
 
 procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
                                                Receiver: TIdSipTransport);
 begin
-  // By default, do nothing. We don't know yet how Proxies behave.
+  // We silently discard unacceptable responses.
+  if (Self.WillAcceptResponse(Response) = uarAccept) then
+    Self.ActOnResponse(Response, Receiver);
 end;
 
 procedure TIdSipAbstractCore.PrepareResponse(Response: TIdSipResponse;
@@ -1083,26 +1087,6 @@ end;
 function TIdSipAbstractCore.DefaultHostName: String;
 begin
   Result := 'localhost';
-end;
-
-procedure TIdSipAbstractCore.OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                                       Receiver: TIdSipTransport);
-var
-  Reaction: TIdSipUserAgentReaction;
-begin
-  Reaction := Self.WillAcceptRequest(Request);
-  if (Reaction = uarAccept) then
-    Self.ActOnRequest(Request, Receiver)
-  else
-    Self.RejectRequest(Reaction, Request);
-end;
-
-procedure TIdSipAbstractCore.OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                                        Receiver: TIdSipTransport);
-begin
-  // We silently discard unacceptable responses.
-  if (Self.WillAcceptResponse(Response) = uarAccept) then
-    Self.ActOnResponse(Response, Receiver);
 end;
 
 procedure TIdSipAbstractCore.RejectBadAuthorization(Request: TIdSipRequest);
@@ -1875,7 +1859,8 @@ begin
   Action := Self.FindAction(Request);
 
   if Assigned(Action) then
-    Action.ReceiveRequest(Request);
+    Action.ReceiveRequest(Request)
+  else inherited OnReceiveRequest(Request, Receiver);
 end;
 
 procedure TIdSipUserAgentCore.OnReceiveResponse(Response: TIdSipResponse;
@@ -1891,7 +1876,7 @@ begin
   if Assigned(Action) then
     Action.ReceiveResponse(Response, UsingSecureTransport)
   else
-    Self.NotifyOfDroppedResponse(Response, Receiver);
+    inherited OnReceiveResponse(Response, Receiver);
 end;
 
 procedure TIdSipUserAgentCore.RejectRequest(Reaction: TIdSipUserAgentReaction;

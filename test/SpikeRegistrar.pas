@@ -74,7 +74,6 @@ const
 
 constructor TrnidSpikeRegistrar.Create(AOwner: TComponent);
 var
-  Binding: TIdSocketHandle;
   Contact: TIdSipContactHeader;
   From:    TIdSipFromHeader;
 begin

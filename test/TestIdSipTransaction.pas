@@ -19,7 +19,8 @@ uses
 type
   TestTIdSipTransactionDispatcher = class(TTestCase,
                                           IIdSipSessionListener,
-                                          IIdSipTransactionListener)
+                                          IIdSipTransactionListener,
+                                          IIdSipUserAgentListener)
   private
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
@@ -38,11 +39,14 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String);
+    procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
+    procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -69,6 +73,7 @@ type
     procedure TestDispatcherDoesntGetTransactionResponses;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
+    procedure TestInviteYieldsTrying;
     procedure TestLoopDetected;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
@@ -421,28 +426,6 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUnhandledMessageListenerUnhandledRequestMethod = class(TUnhandledMessageListenerMethodTestCase)
-  private
-    Method:  TIdSipUnhandledMessageListenerUnhandledRequestMethod;
-    Request: TIdSipRequest;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipUnhandledMessageListenerUnhandledResponseMethod = class(TUnhandledMessageListenerMethodTestCase)
-  private
-    Method:   TIdSipUnhandledMessageListenerUnhandledResponseMethod;
-    Response: TIdSipResponse;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
   TTransactionListenerMethodTestCase = class(TTestCase)
   protected
     Dispatcher:  TIdSipMockTransactionDispatcher;
@@ -513,8 +496,6 @@ begin
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimer.Suite);
   Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveResponseMethod.Suite);
-  Result.AddTest(TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.Suite);
-  Result.AddTest(TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
@@ -536,6 +517,7 @@ begin
   inherited SetUp;
 
   Self.Core := TIdSipMockCore.Create;
+  Self.Core.AddUserAgentListener(Self);
 
   Self.D := TIdSipTransactionDispatcher.Create;
 
@@ -611,29 +593,44 @@ procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Action: TIdS
 begin
 end;
 
+procedure TestTIdSipTransactionDispatcher.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
+                                                                     Receiver: TIdSipTransport);
+begin
+end;
+
 procedure TestTIdSipTransactionDispatcher.OnEndedSession(Session: TIdSipSession;
                                                          const Reason: String);
 begin
+  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnEstablishedSession(Session: TIdSipSession);
 begin
+  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                                  const Reason: String);
 begin
+  // Do nothing
+end;
+
+procedure TestTIdSipTransactionDispatcher.OnInboundCall(Session: TIdSipInboundSession);
+begin
+//  Session.AcceptCall('', '');
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnModifiedSession(Session: TIdSipSession;
                                                             Invite: TIdSipRequest);
 begin
+  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
                                                            Transaction: TIdSipTransaction;
                                                            Receiver: TIdSipTransport);
 begin
+  // Do nothing
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
@@ -714,7 +711,7 @@ begin
         Self.MockTransport.FireOnRequest(Ack);
         // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
         // responsible for handling ACKs to a 2xx response!
-        Check(Listener.ReceivedUnhandledRequest,
+        Check(Listener.ReceivedRequest,
               'ACK not handed up to TU');
       finally
         Listener.Free;
@@ -905,6 +902,20 @@ begin
   Self.MockTransport.FireOnResponse(Self.ReceivedResponse);
   Check(Self.Core.ReceiveResponseCalled,
         'Unmatched Response not handed to Core');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestInviteYieldsTrying;
+var
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.MockTransport.SentResponseCount;
+  Self.MockTransport.FireOnRequest(Self.ReceivedRequest);
+  Check(ResponseCount < Self.MockTransport.SentResponseCount,
+        'No response sent');
+
+  CheckEquals(SIPTrying,
+              Self.MockTransport.LastResponse.StatusCode,
+              'First response');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
@@ -4235,96 +4246,6 @@ begin
     Self.Method.Run(Listener);
 
     Check(Listener.ReceivedResponse,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          Self.ClassName + ': Response param');
-  finally
-    Listener.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod                   *
-//******************************************************************************
-//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod Public methods ****
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Request := TIdSipRequest.Create;
-
-  Self.Method := TIdSipUnhandledMessageListenerUnhandledRequestMethod.Create;
-  Self.Method.Receiver := Self.Receiver;
-  Self.Method.Request  := Self.Request;
-end;
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.TearDown;
-begin
-  Self.Method.Free;
-  Self.Request.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod Published methods **
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.TestRun;
-var
-  Listener: TIdSipTestUnhandledMessageListener;
-begin
-  Listener := TIdSipTestUnhandledMessageListener.Create;
-  try
-    Self.Method.Run(Listener);
-
-    Check(Listener.ReceivedUnhandledRequest,
-          Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Receiver = Listener.ReceiverParam,
-          Self.ClassName + ': Receiver param');
-    Check(Self.Method.Request = Listener.RequestParam,
-          Self.ClassName + ': Request param');
-  finally
-    Listener.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod                  *
-//******************************************************************************
-//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod Public methods ***
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Response := TIdSipResponse.Create;
-
-  Self.Method := TIdSipUnhandledMessageListenerUnhandledResponseMethod.Create;
-  Self.Method.Receiver := Self.Receiver;
-  Self.Method.Response  := Self.Response;
-end;
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.TearDown;
-begin
-  Self.Method.Free;
-  Self.Response.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod Published methods *
-
-procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.TestRun;
-var
-  Listener: TIdSipTestUnhandledMessageListener;
-begin
-  Listener := TIdSipTestUnhandledMessageListener.Create;
-  try
-    Self.Method.Run(Listener);
-
-    Check(Listener.ReceivedUnhandledResponse,
           Self.ClassName + ': Listener not notified');
     Check(Self.Method.Receiver = Listener.ReceiverParam,
           Self.ClassName + ': Receiver param');

@@ -59,10 +59,6 @@ type
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
-                                        Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
-                                         Receiver: TIdSipTransport);
   end;
 
   // I represent the single connection point between the transport layer and the
@@ -101,10 +97,6 @@ type
                                        Receiver: TIdSipTransport);
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
                                         Receiver: TIdSipTransport);
-    procedure NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
-                                                Receiver: TIdSipTransport);
-    procedure NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
-                                                 Receiver: TIdSipTransport);
 
     // IIdSipTransactionListener
     procedure OnFail(Transaction: TIdSipTransaction;
@@ -526,24 +518,6 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
-  TIdSipUnhandledMessageListenerUnhandledRequestMethod = class(TIdSipTransactionDispatcherMethod)
-  private
-    fRequest: TIdSipRequest;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Request: TIdSipRequest read fRequest write fRequest;
-  end;
-
-  TIdSipUnhandledMessageListenerUnhandledResponseMethod = class(TIdSipTransactionDispatcherMethod)
-  private
-    fResponse: TIdSipResponse;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Response: TIdSipResponse read fResponse write fResponse;
-  end;
-
   TIdSipTransactionMethod = class(TIdMethod)
   private
     fTransaction: TIdSipTransaction;
@@ -889,38 +863,6 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
-                                                                        Receiver: TIdSipTransport);
-var
-  Notification: TIdSipUnhandledMessageListenerUnhandledRequestMethod;
-begin
-  Notification := TIdSipUnhandledMessageListenerUnhandledRequestMethod.Create;
-  try
-    Notification.Receiver := Receiver;
-    Notification.Request  := Request;
-
-    Self.MsgListeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
-procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
-                                                                         Receiver: TIdSipTransport);
-var
-  Notification: TIdSipUnhandledMessageListenerUnhandledResponseMethod;
-begin
-  Notification := TIdSipUnhandledMessageListenerUnhandledResponseMethod.Create;
-  try
-    Notification.Receiver := Receiver;
-    Notification.Response := Response;
-
-    Self.MsgListeners.Notify(Notification);
-  finally
-    Notification.Free;
-  end;
-end;
-
 procedure TIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                              const Reason: String);
 begin
@@ -978,15 +920,16 @@ begin
   if Assigned(Tran) then
     Tran.ReceiveRequest(Request, Receiver)
   else begin
+    // An ACK does not belong inside a transaction when a UAS sends a 2xx in
+    // response to an INVITE
     if Request.IsAck then begin
-      Self.NotifyListenersOfUnhandledRequest(Request, Receiver);
+      Self.NotifyListenersOfRequest(Request, Receiver);
     end
     else if Request.IsCancel then
       Self.RejectUnmatchedCancel(Request, Receiver)
     else begin
-      Self.AddServerTransaction(Request, Receiver);
-
-      Self.NotifyListenersOfUnhandledRequest(Request, Receiver);
+      Tran := Self.AddServerTransaction(Request, Receiver);
+      Tran.ReceiveRequest(Request, Receiver);
     end;
   end;
 end;
@@ -1001,7 +944,7 @@ begin
   if Assigned(Tran) then
     Tran.ReceiveResponse(Response, Receiver)
   else begin
-    Self.NotifyListenersOfUnhandledResponse(Response, Receiver);
+    Self.NotifyListenersOfResponse(Response, Receiver);
   end;
 end;
 
@@ -2568,30 +2511,6 @@ procedure TIdSipUnhandledMessageListenerReceiveResponseMethod.Run(const Subject:
 begin
   (Subject as IIdSipUnhandledMessageListener).OnReceiveResponse(Self.Response,
                                                                 Self.Receiver);
-end;
-
-//******************************************************************************
-//* TIdSipUnhandledMessageListenerUnhandledRequestMethod                       *
-//******************************************************************************
-//* TIdSipUnhandledMessageListenerUnhandledRequestMethod Public methods ********
-
-procedure TIdSipUnhandledMessageListenerUnhandledRequestMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledRequest(Self.Request,
-                                                                        Self.Receiver);
-
-end;
-
-//******************************************************************************
-//* TIdSipUnhandledMessageListenerUnhandledResponseMethod                      *
-//******************************************************************************
-//* TIdSipUnhandledMessageListenerUnhandledResponseMethod Public methods *******
-
-procedure TIdSipUnhandledMessageListenerUnhandledResponseMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledResponse(Self.Response,
-                                                                         Self.Receiver);
-
 end;
 
 //******************************************************************************
