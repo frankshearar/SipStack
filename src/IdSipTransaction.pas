@@ -552,6 +552,14 @@ function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boole
 var
   I: Integer;
 begin
+  // In Smalltalk:
+  // | tran |
+  // self transactionLock critical:
+  //     [^ (self transactions
+  //         detect: [ :each | each loopDetected: request ]
+  //         ifNone: [nil]]) notNil.
+  // ^ tran notNil
+
   // cf. RFC 3261 section 8.2.2.2
   Result := false;
 
