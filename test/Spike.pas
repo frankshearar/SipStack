@@ -3,8 +3,8 @@ unit Spike;
 interface
 
 uses
-  Classes, Controls, Forms, IdSipParser, IdSipTcpServer, IdSipUdpServer,
-  IdTCPServer, StdCtrls, ExtCtrls;
+  Classes, Controls, Forms, IdSipMessage, IdSipParser, IdSipTcpServer,
+  IdSipUdpServer, IdTCPServer, StdCtrls, ExtCtrls;
 
 type
   TrnidSpike = class(TForm)

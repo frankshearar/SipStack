@@ -3,7 +3,7 @@ unit IdSIPClient;
 interface
 
 uses
-  IdURI, IdSipParser;
+  IdURI, IdSipMessage, IdSipParser;
 
 type
   TIdSipTransport = class(TObject)

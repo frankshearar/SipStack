@@ -3,7 +3,7 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipParser, IdSocketHandle, IdUDPServer, IdSipTcpServer;
+  Classes, IdSipMessage, IdSipParser, IdSocketHandle, IdUDPServer, IdSipTcpServer;
 
 type
   TPeerInfo = record

@@ -3,7 +3,8 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipParser, IdSipUdpServer, IdUDPClient, SysUtils, TestFrameworkEx;
+  Classes, IdSipMessage, IdSipParser, IdSipUdpServer, IdUDPClient, SysUtils,
+  TestFrameworkEx;
 
 type
   TestTIdSipUdpServer = class(TThreadingTestCase)

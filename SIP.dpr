@@ -19,8 +19,11 @@ uses
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-//  TestIdURI in 'test\TestIdURI.pas',
-  TestIdSipClient in 'test\TestIdSipClient.pas';
+  TestIdSipClient in 'test\TestIdSipClient.pas',
+  IdSipTransaction in 'src\IdSipTransaction.pas',
+  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
+  IdSipMessage in 'src\IdSipMessage.pas',
+  TestIdSipMessage in 'test\TestIdSipMessage.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}

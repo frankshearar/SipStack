@@ -3,8 +3,8 @@ unit TestIdSipTcpServer;
 interface
 
 uses
-  IdSipParser, IdSipTcpServer, IdTCPClient, IdTCPServer, SyncObjs, SysUtils,
-  TestFrameworkEx;
+  IdSipMessage, IdSipParser, IdSipTcpServer, IdTCPClient, IdTCPServer, SyncObjs,
+  SysUtils, TestFrameworkEx;
 
 type
   TestTIdSipTcpServer = class(TThreadingTestCase)
