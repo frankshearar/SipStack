@@ -2013,11 +2013,11 @@ end;
 
 function TIdSipHeaders.Add(const HeaderName: String): TIdSipHeader;
 begin
-  Result := Self.ConstructHeader(HeaderName);
+  Self.List.Add(Self.ConstructHeader(HeaderName));
+
+  Result := Self.List[Self.List.Count - 1] as TIdSipHeader;
 
   Result.Name := HeaderName;
-
-  Self.List.Add(Result);
 end;
 
 procedure TIdSipHeaders.Add(const Header: TIdSipHeader);
