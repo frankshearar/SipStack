@@ -548,15 +548,16 @@ type
     procedure TestSetRemoteDescription;
     procedure TestStartListeningSingleStream;
     procedure TestStartListeningMultipleStreams;
-    procedure TestStartListeningRegistersRtpMaps;
+    procedure TestStartListeningRegistersLocalRtpMaps;
+    procedure TestStartListeningRegistersRemoteRtpMaps;
     procedure TestStopListening;
   end;
 
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
-                 + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                 + 'o=local 2890844526 2890842807 IN IP4 127.0.0.1'#13#10
                  + 's=Minimum Session Info';
-  DefaultConnection = 'c=IN IP4 224.2.17.12/127'#13#10;
+  DefaultConnection = 'c=IN IP4 127.0.0.1'#13#10;
 
   MinimumPayload = MinimumPayloadSansConnection + #13#10
                  + DefaultConnection;
@@ -6578,7 +6579,7 @@ begin
                      + GStack.LocalAddress + ':' + IntToStr(HighPort));
 end;
 
-procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersRtpMaps;
+procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersLocalRtpMaps;
 const
   EncodingName   = T140Encoding + '/1000';
   PayloadType    = 96;
@@ -6602,6 +6603,47 @@ begin
         'Sanity check: profile already knows about ' + TEEncodingName + '!');
 
   Self.MS.StartListening(SDP);
+
+  Check(Self.Profile.HasPayloadType(PayloadType),
+        EncodingName + ' not registered');
+  Check(Self.Profile.HasPayloadType(TEPayloadType),
+        TEEncodingName + ' not registered');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningRegistersRemoteRtpMaps;
+const
+  EncodingName   = T140Encoding + '/1000';
+  PayloadType    = 96;
+  TEEncodingName = TelephoneEventEncoding;
+  TEPayloadType  = 97;
+var
+  LocalSDP: String;
+  SDP:      String;
+begin
+  SDP :=  'v=0'#13#10
+        + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+        + 's=-'#13#10
+        + 'c=IN IP4 127.0.0.1'#13#10
+        + 'm=text 8000 RTP/AVP ' + IntToStr(PayloadType) + #13#10
+        + 'a=rtpmap:' + IntToStr(PayloadType) + ' ' + EncodingName + #13#10
+        + 'm=audio 8002 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
+        + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
+
+  // We need two streams to match the number of streams in SDP
+  LocalSDP := 'v=0'#13#10
+            + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+            + 's=-'#13#10
+            + 'c=IN IP4 127.0.0.1'#13#10
+            + 'm=audio 9000 RTP/AVP 0'#13#10
+            + 'm=audio 9002 RTP/AVP 0'#13#10;
+
+  Check(not Self.Profile.HasPayloadType(PayloadType),
+        'Sanity check: profile already knows about ' + EncodingName + '!');
+  Check(not Self.Profile.HasPayloadType(TEPayloadType),
+        'Sanity check: profile already knows about ' + TEEncodingName + '!');
+
+  Self.MS.StartListening(LocalSDP);
+  Self.MS.SetRemoteDescription(SDP);
 
   Check(Self.Profile.HasPayloadType(PayloadType),
         EncodingName + ' not registered');

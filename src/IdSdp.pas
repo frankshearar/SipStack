@@ -4010,8 +4010,10 @@ begin
   try
     SDP := TIdSdpPayload.CreateFrom(RemoteSessionDesc);
     try
-      for I := 0 to SDP.MediaDescriptionCount - 1 do
+      for I := 0 to SDP.MediaDescriptionCount - 1 do begin
         Self.Streams[I].RemoteDescription := SDP.MediaDescriptionAt(I);
+        Self.RegisterEncodingMaps(SDP.MediaDescriptionAt(I).RTPMapAttributes);
+      end;
     finally
       SDP.Free;
     end;
