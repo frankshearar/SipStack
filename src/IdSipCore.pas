@@ -2169,7 +2169,6 @@ begin
       FoundBlock.Execute(Action)
     else
       NotFoundBlock.Execute(nil);
-
   finally
     Self.UnlockActions;
   end;
@@ -2347,21 +2346,23 @@ end;
 
 procedure TIdSipUserAgentActOnRequest.Execute(Action: TIdSipAction);
 begin
-  // Processing the request - 8.2.5
+  // Processing the request - cf. RFC 3261, section 8.2.5
+  // Action generates the response - cf. RFC 3261, section 8.2.6
+
+  if Assigned(Action) then
+    Action.ReceiveRequest(Request);
+
   if not Assigned(Action) then
     Action := Self.UserAgent.AddInboundAction(Self.Request, Self.Receiver);
 
-  if Assigned(Action) then
-    Action.ReceiveRequest(Request)
-  else begin
+  if not Assigned(Action) then begin
     if Request.IsAck then
       Self.UserAgent.NotifyOfDroppedMessage(Self.Request, Self.Receiver)
-    else
+    else begin
       Self.UserAgent.ReturnResponse(Self.Request,
                                     SIPCallLegOrTransactionDoesNotExist);
+    end;
   end;
-
-  // Action generates the response - 8.2.6
 end;
 
 //******************************************************************************
@@ -2972,8 +2973,9 @@ begin
   if Assigned(Module) then begin
     Result := Module.Accept(Request, Receiver.IsSecure);
 
-    if Assigned(Result) then
+    if Assigned(Result) then begin
       Self.Actions.Add(Result);
+    end;
   end
   else
     Result := nil;
@@ -4103,6 +4105,8 @@ begin
   Self.LastResponse      := TIdSipResponse.Create;
   Self.ReceivedAck       := false;
   Self.ResendInterval    := Self.InitialResendInterval;
+
+  Self.ReceiveRequest(Invite);
 end;
 
 destructor TIdSipInboundInvite.Destroy;
@@ -4889,6 +4893,7 @@ begin
   inherited Create(UA);
 
   Self.InitialRequest.Assign(Options);
+  Self.ReceiveRequest(Options);
 end;
 
 function TIdSipInboundOptions.IsInbound: Boolean;
@@ -5051,6 +5056,7 @@ begin
 
   Self.InitialRequest.Assign(Reg);
   Self.RegisterModule := Self.UA.ModuleFor(MethodRegister) as TIdSipRegisterModule;
+  Self.ReceiveRequest(Reg);
 end;
 
 function TIdSipInboundRegistration.IsInbound: Boolean;
@@ -5743,6 +5749,9 @@ begin
   else begin
     DialogID := Self.CreateDialogIDFrom(Msg);
     try
+//      if Msg.IsRequest and (Msg as TIdSipRequest).IsBye then
+//        Writeln('BYE matching: local=' + Self.Dialog.ID.AsString + ' remote=' + DialogID.AsString);
+
       Result := Self.DialogMatches(DialogID);
     finally
       DialogID.Free;
@@ -6182,6 +6191,8 @@ begin
   Self.InitialRequest.Assign(Invite);
 
   Self.UsingSecureTransport := UsingSecureTransport;
+
+  Self.ReceiveRequest(Invite);
 end;
 
 function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;
@@ -6308,6 +6319,9 @@ end;
 
 procedure TIdSipInboundSession.ReceiveInitialInvite(Invite: TIdSipRequest);
 begin
+  Self.RemoteSessionDescription := Invite.Body;
+  Self.RemoteMimeType           := Invite.ContentType;
+
   Self.Ring;
 end;
 

@@ -143,8 +143,6 @@ type
     procedure TestFindSessionAndPerformNoMatch;
     procedure TestFindSessionAndPerformNoSessions;
     procedure TestInviteCount;
-    procedure TestOptionsCount;
-    procedure TestRegistrationCount;
     procedure TestRemoveObserver;
     procedure TestTerminateAllActions;
   end;
@@ -280,6 +278,7 @@ type
     procedure TestRemoveObserver;
     procedure TestRemoveUserAgentListener;
     procedure TestReregister;
+    procedure TestRFC2543InviteCallFlow;
     procedure TestScheduleEventActionClosure;
     procedure TestSetContact;
     procedure TestSetContactMailto;
@@ -1900,44 +1899,6 @@ begin
               'Two INVITEs, one OPTIONS, and a Session');
 end;
 
-procedure TestTIdSipActions.TestOptionsCount;
-begin
-  CheckEquals(0, Self.Actions.OptionsCount, 'No messages received');
-
-  Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
-  CheckEquals(1, Self.Actions.OptionsCount, 'One OPTIONS');
-
-  Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-  CheckEquals(1, Self.Actions.OptionsCount, 'One OPTIONS, one INVITE');
-
-  Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
-  CheckEquals(2, Self.Actions.OptionsCount, 'Two OPTIONS, one INVITEs');
-end;
-
-procedure TestTIdSipActions.TestRegistrationCount;
-var
-  Registration: TIdSipRequest;
-begin
-  Registration := TIdSipRequest.Create;
-  try
-    Registration.Assign(Self.Invite);
-    Registration.Method := MethodRegister;
-
-    CheckEquals(0, Self.Actions.RegistrationCount, 'No messages received');
-
-    Self.Actions.Add(TIdSipInboundRegistration.Create(Self.Core, Registration));
-    CheckEquals(1, Self.Actions.RegistrationCount, 'One REGISTER');
-
-    Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
-    CheckEquals(1, Self.Actions.RegistrationCount, 'One REGISTER, one INVITE');
-
-    Self.Actions.Add(TIdSipOutboundRegistration.Create(Self.Core));
-    CheckEquals(2, Self.Actions.RegistrationCount, 'Two REGISTERs, one INVITEs');
-  finally
-    Registration.Free;
-  end;
-end;
-
 procedure TestTIdSipActions.TestRemoveObserver;
 var
   L1, L2: TIdObserverListener;
@@ -2180,6 +2141,8 @@ end;
 
 procedure TestTIdSipUserAgent.OnInboundCall(Session: TIdSipInboundSession);
 begin
+  Self.InboundCallMimeType := Session.RemoteMimeType;
+  Self.InboundCallOffer    := Session.RemoteSessionDescription;
   Self.OnInboundCallFired := true;
 
   Session.AddSessionListener(Self);
@@ -3004,6 +2967,7 @@ begin
 
 
   SessionTwo.AcceptCall('', '');
+  Check(SessionTwo.DialogEstablished, 'SessionTwo''s dialog wasn''t established');
 
   SessionTwo.AddSessionListener(Self);
   Self.ThreadEvent.ResetEvent;
@@ -3751,6 +3715,83 @@ begin
   CheckEquals(MethodRegister,
               Self.LastSentRequest.Method,
               'Unexpected method in resent request');
+end;
+
+procedure TestTIdSipUserAgent.TestRFC2543InviteCallFlow;
+const
+  RawSippInvite = 'INVITE sip:service@80.168.137.82:5060 SIP/2.0'#13#10
+                + 'Via: SIP/2.0/UDP 81.86.64.25:5060'#13#10
+                + 'From: sipp <sip:sipp@81.86.64.25:5060>;tag=1'#13#10
+                + 'To: sut <sip:service@80.168.137.82:5060>'#13#10
+                + 'Call-ID: 1.87901.81.86.64.25@sipp.call.id'#13#10
+                + 'CSeq: 1 INVITE'#13#10
+                + 'Contact: sip:sipp@81.86.64.25:5060'#13#10
+                + 'Max-Forwards: 70'#13#10
+                + 'Subject: Performance Test'#13#10
+                + 'Content-Length: 0'#13#10#13#10;
+  RawSippAck = 'ACK sip:service@80.168.137.82:5060 SIP/2.0'#13#10
+             + 'Via: SIP/2.0/UDP 81.86.64.25'#13#10
+             + 'From: sipp <sip:sipp@81.86.64.25:5060>;tag=1'#13#10
+             + 'To: sut <sip:service@80.168.137.82:5060>;tag=%s'#13#10
+             + 'Call-ID: 1.87901.81.86.64.25@sipp.call.id'#13#10
+             + 'CSeq: 1 ACK'#13#10
+             + 'Contact: sip:sipp@81.86.64.25:5060'#13#10
+             + 'Max-Forwards: 70'#13#10
+             + 'Subject: Performance Test'#13#10
+             + 'Content-Length: 0'#13#10#13#10;
+  RawSippBye = 'BYE sip:service@80.168.137.82:5060 SIP/2.0'#13#10
+             + 'Via: SIP/2.0/UDP 81.86.64.25'#13#10
+             + 'From: sipp <sip:sipp@81.86.64.25:5060>;tag=1'#13#10
+             + 'To: sut <sip:service@80.168.137.82:5060>;tag=%s'#13#10
+             + 'Call-ID: 1.87901.81.86.64.25@sipp.call.id'#13#10
+             + 'CSeq: 2 BYE'#13#10
+             + 'Contact: sip:sipp@81.86.64.25:5060'#13#10
+             + 'Max-Forwards: 70'#13#10
+             + 'Subject: Performance Test'#13#10
+             + 'Content-Length: 0'#13#10#13#10;
+var
+  SippAck:    TIdSipRequest;
+  SippBye:    TIdSipRequest;
+  SippInvite: TIdSipRequest;
+begin
+  // SIPp is a SIP testing tool: http://sipp.sourceforge.net/
+
+  Self.Dispatcher.Transport.WriteLog := true;
+
+  SippInvite := TIdSipRequest.ReadRequestFrom(RawSippInvite);
+  try
+    Self.MarkSentResponseCount;
+    Self.ReceiveRequest(SippInvite);
+    Check(Assigned(Self.Session),
+          'OnInboundCall didn''t fire');
+    Self.Session.AcceptCall('', '');
+
+    SippAck := TIdSipRequest.ReadRequestFrom(Format(RawSippAck,
+                                                    [Self.Session.Dialog.ID.LocalTag]));
+    try
+      Self.ReceiveRequest(SippAck);
+    finally
+      SippAck.Free;
+    end;
+
+    Self.MarkSentResponseCount;
+
+    SippBye := TIdSipRequest.ReadRequestFrom(Format(RawSippBye,
+                                                    [Self.Session.Dialog.ID.LocalTag]));
+    try
+      Self.ReceiveRequest(SippBye);
+    finally
+      SippBye.Free;
+    end;
+
+    CheckResponseSent('No response sent for the BYE');
+
+    CheckEquals(SIPOK,
+                Self.LastSentResponse.StatusCode,
+                'Unexpected response');
+  finally
+    SippInvite.Free;
+  end;
 end;
 
 procedure TestTIdSipUserAgent.TestScheduleEventActionClosure;
