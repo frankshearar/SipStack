@@ -2214,7 +2214,8 @@ begin
   for I := 101 to 699 do begin
     Self.Response.StatusCode := I;
     Check(not Self.Response.IsTrying,
-          'StatusCode ' + IntToStr(I) + ' ' + Self.Response.StatusText);
+          'StatusCode ' + IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
   end;
 
   Self.Response.StatusCode := SIPTrying;
