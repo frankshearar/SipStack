@@ -108,8 +108,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestName;
     procedure TestGetSetHandling;
+    procedure TestIsSession;
+    procedure TestName;
   end;
 
   TestTIdSipCSeqHeader = class(TTestCase)
@@ -1413,14 +1414,6 @@ end;
 
 //* TestTIdSipContentDispositionHeader Published methods ***********************
 
-procedure TestTIdSipContentDispositionHeader.TestName;
-begin
-  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name');
-
-  Self.C.Name := 'foo';
-  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name after set');
-end;
-
 procedure TestTIdSipContentDispositionHeader.TestGetSetHandling;
 begin
   Self.C.Handling := HandlingRequired;
@@ -1428,6 +1421,29 @@ begin
 
   Self.C.Handling := HandlingOptional;
   CheckEquals(HandlingOptional, Self.C.Handling, HandlingOptional);
+end;
+
+procedure TestTIdSipContentDispositionHeader.TestIsSession;
+begin
+  Self.C.Handling := '';
+  Check(not Self.C.IsSession, 'Empty string');
+
+  Self.C.Handling := DispositionRender;
+  Check(not Self.C.IsSession, DispositionRender);
+
+  Self.C.Handling := DispositionSession;
+  Check(Self.C.IsSession, DispositionSession);
+
+  Self.C.Handling := UpperCase(DispositionSession);
+  Check(Self.C.IsSession, UpperCase(DispositionSession));
+end;
+
+procedure TestTIdSipContentDispositionHeader.TestName;
+begin
+  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name');
+
+  Self.C.Name := 'foo';
+  CheckEquals(ContentDispositionHeader, Self.C.Name, 'Name after set');
 end;
 
 //******************************************************************************

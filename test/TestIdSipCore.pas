@@ -140,6 +140,7 @@ type
     SentRequestTerminated:  Boolean;
     SimpleSdp:              TIdSdpPayload;
 
+    procedure CheckServerActiveOn(Port: Cardinal);
     function  CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
@@ -163,7 +164,9 @@ type
   published
     procedure Test2xxRetransmission;
     procedure TestAcceptCall;
-    procedure TestAcceptCallReturnsSdp;
+    procedure TestAcceptCallWithUnfulfillableOffer;
+    procedure TestAcceptCallRespectsContentType;
+    procedure TestAcceptCallStartsListeningMedia;
     procedure TestAddSessionListener;
     procedure TestCall;
     procedure TestCallTwice;
@@ -795,7 +798,7 @@ begin
     Check(Invite.HasHeader(ContentDispositionHeader),
           'Missing Content-Disposition');
     CheckEquals(DispositionSession,
-                Invite.Disposition.Value,
+                Invite.ContentDisposition.Value,
                 'Content-Disposition value');      
   finally
     Invite.Free;
@@ -1845,6 +1848,25 @@ end;
 
 //* TestTIdSipSession Private methods ******************************************
 
+procedure TestTIdSipSession.CheckServerActiveOn(Port: Cardinal);
+var
+  Server: TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Server.DefaultPort := Port;
+
+    try
+      Server.Active := true;
+      Fail('No server started on ' + IntToStr(Port));
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
 function TestTIdSipSession.CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := Self.Core.CreateRequest(LocalDialog);
@@ -2052,7 +2074,45 @@ begin
 //  CheckEquals('', Response.Body,               'Body should be empty');
 end;
 
-procedure TestTIdSipSession.TestAcceptCallReturnsSdp;
+procedure TestTIdSipSession.TestAcceptCallWithUnfulfillableOffer;
+var
+  ActualOffer: TIdSdpPayload;
+  Offer:       String;
+  Udp:         TIdUDPServer;
+begin
+  // Given an SDP payload describing the desired local port,
+  // the session will try open that port but, if that port's
+  // already in use, will open the lowest free port higher
+  // than the desired local port.
+
+  Udp := TIdUDPServer.Create(nil);
+  try
+    Udp.DefaultPort := Self.SimpleSdp.MediaDescriptionAt(0).Port;
+    Udp.Active := true;
+
+    Self.SimulateRemoteInvite;
+    Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+    Offer := Self.Session.AcceptCall(Self.SimpleSdp.AsString,
+                                     SdpMimeType);
+    Check(Offer <> Self.SimpleSdp.AsString,
+          'Actual offer identical to suggested offer');
+
+    Check(Offer <> '', 'AcceptCall returned the empty string');
+    ActualOffer := TIdSdpPayload.CreateFrom(Offer);
+    try
+      Check(ActualOffer.MediaDescriptionCount > 0,
+            'No media descriptions');
+
+      Self.CheckServerActiveOn(ActualOffer.MediaDescriptionAt(0).Port);
+    finally
+      ActualOffer.Free;
+    end;
+  finally
+    Udp.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestAcceptCallRespectsContentType;
 var
   Response:      TIdSipResponse;
   ResponseCount: Cardinal;
@@ -2069,34 +2129,33 @@ begin
         'no responses sent');
 
   Response := Self.Dispatch.Transport.LastResponse;
-  CheckEquals(Self.SimpleSdp.AsString,
-              Response.Body,
-              'Response body');
-  CheckEquals(Length(Self.SimpleSdp.AsString),
-              Response.ContentLength,
-              'Content-Length');
   Check(Response.HasHeader(ContentTypeHeaderFull),
         'No Content-Type header');
   CheckEquals(SdpMimeType,
               Response.FirstHeader(ContentTypeHeaderFull).Value,
               'Content-Type');
+end;
 
-  S := TStringStream.Create(Response.Body);
+procedure TestTIdSipSession.TestAcceptCallStartsListeningMedia;
+var
+  Udp: TIdUDPServer;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  Self.Session.AcceptCall(Self.SimpleSdp.AsString,
+                          SdpMimeType);
+
+  Udp := TIdUDPServer.Create(nil);
   try
-    SDP := TIdSdpPayload.CreateFrom(S);
+    Udp.DefaultPort := Self.SimpleSdp.MediaDescriptionAt(0).Port;
     try
-      CheckEquals(Self.Core.Username,
-                  SDP.Origin.Username,
-                  'Origin Username');
-      Check(SDP.MediaDescriptionCount > 0,
-            'No media descriptions');
-      Check(Self.SimpleSdp.MediaDescriptionAt(0).Port <> 0,
-            'Media description port');
-    finally
-      SDP.Free;
+      Udp.Active := true;
+      Fail('No listening ports');
+    except
+      on EIdCouldNotBindSocket do;
     end;
   finally
-    S.Free;
+    Udp.Free;
   end;
 end;
 

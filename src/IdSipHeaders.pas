@@ -268,6 +268,7 @@ type
   protected
     function GetName: String; override;
   public
+    function IsSession: Boolean;
     property Handling: String read GetHandling write SetHandling;
   end;
 
@@ -1971,6 +1972,12 @@ end;
 //******************************************************************************
 //* TIdSipContentDispositionHeader                                             *
 //******************************************************************************
+
+function TIdSipContentDispositionHeader.IsSession: Boolean;
+begin
+  Result := IsEqual(Self.Handling, DispositionSession);
+end;
+
 //* TIdSipContentDispositionHeader Protected methods ***************************
 
 function TIdSipContentDispositionHeader.GetName: String;

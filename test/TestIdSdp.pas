@@ -252,7 +252,8 @@ type
     procedure TestAttributeCount;
     procedure TestConnectionAt;
     procedure TestConnectionCount;
-    procedure TestCreateFrom;
+    procedure TestCreateFromStream;
+    procedure TestCreateFromStreamString;
     procedure TestGetRtpMapAttributes;
     procedure TestInitializeOnEmptySdpPayload;
     procedure TestInitializeOnSingleMediaSdp;
@@ -430,6 +431,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsListening;
     procedure TestMediaDescriptionWithMultiplePorts;
     procedure TestMultipleMediaDescriptions;
     procedure TestSessionCount;
@@ -2046,7 +2048,7 @@ begin
   end;
 end;
 
-procedure TestTIdSdpPayload.TestCreateFrom;
+procedure TestTIdSdpPayload.TestCreateFromStream;
 var
   Dest:    TStringStream;
   Payload: TIdSdpPayload;
@@ -2069,6 +2071,26 @@ begin
     end;
   finally
     Src.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestCreateFromStreamString;
+var
+  Dest:    TStringStream;
+  Payload: TIdSdpPayload;
+begin
+  Payload := TIdSdpPayload.CreateFrom(MinimumPayload);
+  try
+    Dest := TStringStream.Create('');
+    try
+      Payload.PrintOn(Dest);
+
+      CheckEquals(MinimumPayload, Dest.DataString, 'ReadFrom');
+    finally
+      Dest.Free;
+    end;
+  finally
+    Payload.Free;
   end;
 end;
 
@@ -4606,7 +4628,24 @@ end;
 
 //* TestTIdSdpPayloadProcessor Published methods *******************************
 
+procedure TestTIdSdpPayloadProcessor.TestIsListening;
+begin
+  Check(not Self.Proc.IsListening, 'Initial');
+
+  Self.Proc.StartListening('v=0'#13#10
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 8000 RTP/AVP 0'#13#10);
+  Check(Self.Proc.IsListening, 'After StartListening');
+
+  Self.Proc.StopListening;
+  Check(not Self.Proc.IsListening, 'After StopListening');
+end;
+
 procedure TestTIdSdpPayloadProcessor.TestMediaDescriptionWithMultiplePorts;
+var
+  Description: TIdSdpPayload;
 begin
   Self.Proc.StartListening('v=0'#13#10
                          + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
@@ -4617,15 +4656,22 @@ begin
   Self.CheckServerActiveOn(8000);
   Self.CheckServerActiveOn(8002);
 
-  CheckEquals(1,
-              Self.Proc.Description.MediaDescriptionCount,
-              'Number of media descriptions');
-  CheckEquals(8000,
-              Self.Proc.Description.MediaDescriptionAt(0).Port,
-              'First media description port');
+  Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
+  try
+    CheckEquals(1,
+                Description.MediaDescriptionCount,
+                'Number of media descriptions');
+    CheckEquals(8000,
+                Description.MediaDescriptionAt(0).Port,
+                'First media description port');
+  finally
+    Description.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestMultipleMediaDescriptions;
+var
+  Description: TIdSdpPayload;
 begin
   Self.Proc.StartListening('v=0'#13#10
                          + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
@@ -4638,18 +4684,25 @@ begin
   Self.CheckServerActiveOn(8000);
   Self.CheckServerActiveOn(8002);
 
-  CheckEquals(2,
-              Self.Proc.Description.MediaDescriptionCount,
-              'Number of media descriptions');
-  CheckEquals(8000,
-              Self.Proc.Description.MediaDescriptionAt(0).Port,
-              'First media description port');
-  CheckEquals(8002,
-              Self.Proc.Description.MediaDescriptionAt(1).Port,
-              'Second media description port');
+  Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
+  try
+    CheckEquals(2,
+                Description.MediaDescriptionCount,
+                'Number of media descriptions');
+    CheckEquals(8000,
+                Description.MediaDescriptionAt(0).Port,
+                'First media description port');
+    CheckEquals(8002,
+                Description.MediaDescriptionAt(1).Port,
+                'Second media description port');
+  finally
+    Description.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestSessionCount;
+var
+  Description: TIdSdpPayload;
 begin
   Self.Proc.StartListening('v=0'#13#10
                          + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
@@ -4661,21 +4714,29 @@ begin
                          + 'a=rtpmap:100 t140/1000'#13#10);
 
   CheckEquals(3, Self.Proc.SessionCount, 'SessionCount');
-  CheckEquals(3,
-              Self.Proc.Description.MediaDescriptionCount,
-              'Number of media descriptions');
-  CheckEquals(7000,
-              Self.Proc.Description.MediaDescriptionAt(0).Port,
-              'First media description port');
-  CheckEquals(8000,
-              Self.Proc.Description.MediaDescriptionAt(1).Port,
-              'Second media description port');
-  CheckEquals(8002,
-              Self.Proc.Description.MediaDescriptionAt(2).Port,
-              'Third media description port');
+
+  Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
+  try
+    CheckEquals(3,
+                Description.MediaDescriptionCount,
+                'Number of media descriptions');
+    CheckEquals(7000,
+                Description.MediaDescriptionAt(0).Port,
+                'First media description port');
+    CheckEquals(8000,
+                Description.MediaDescriptionAt(1).Port,
+                'Second media description port');
+    CheckEquals(8002,
+                Description.MediaDescriptionAt(2).Port,
+                'Third media description port');
+  finally
+    Description.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestSingleMediaDescription;
+var
+  Description: TIdSdpPayload;
 begin
   Self.Proc.StartListening('v=0'#13#10
                          + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
@@ -4686,12 +4747,17 @@ begin
   Self.CheckServerActiveOn(8000); // RTP
   Self.CheckServerActiveOn(8001); // RTCP
 
-  CheckEquals(1,
-              Self.Proc.Description.MediaDescriptionCount,
-              'Number of media descriptions');
-  CheckEquals(8000,
-              Self.Proc.Description.MediaDescriptionAt(0).Port,
-              'Media description port');
+  Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
+  try
+    CheckEquals(1,
+                Description.MediaDescriptionCount,
+                'Number of media descriptions');
+    CheckEquals(8000,
+                Description.MediaDescriptionAt(0).Port,
+                'Media description port');
+  finally
+    Description.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestStopListening;
@@ -4708,6 +4774,8 @@ begin
 
   for I := 8000 to 8003 do
     Self.CheckServerNotActiveOn(I);
+
+  CheckEquals(0, Self.Proc.SessionCount, 'RTP servers not destroyed');
 end;
 
 initialization

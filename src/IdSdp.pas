@@ -3,8 +3,9 @@ unit IdSdp;
 interface
 
 uses
-  Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdRTP,
-  IdRTPServer, IdSimpleParser, IdSocketHandle, IdUDPServer, SyncObjs;
+  Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress,
+  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdSocketHandle,
+  IdUDPServer, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -337,7 +338,8 @@ type
     property Connections:       TIdSdpConnections       read GetConnections;
     property MediaDescriptions: TIdSdpMediaDescriptions read GetMediaDescriptions;
   public
-    class function CreateFrom(Src: TStream): TIdSdpPayload;
+    class function CreateFrom(Src: TStream): TIdSdpPayload; overload;
+    class function CreateFrom(Src: String): TIdSdpPayload; overload;
 
     destructor Destroy; override;
 
@@ -453,17 +455,19 @@ type
     property Peer:              IIdAbstractRTPPeer     read GetPeer;
   end;
 
-  TIdSdpPayloadProcessor = class(TObject)
+  TIdSdpPayloadProcessor = class(TIdInterfacedObject,
+                                 IIdRTPListener)
   private
-    DataListeners:    TList;
-    DataListenerLock: TCriticalSection;
-    fDescription:     TIdSdpPayload;
-    fBasePort:        Integer;
-    fHost:            String;
-    fUsername:        String;
-    fProfile:         TIdRTPProfile;
-    RTPServerLock:    TCriticalSection;
-    RTPServers:       TObjectList;
+    DataListenerLock:          TCriticalSection;
+    DataListeners:             TList;
+    fBasePort:                 Integer;
+    fHost:                     String;
+    fUsername:                 String;
+    fProfile:                  TIdRTPProfile;
+    fRemoteSessionDescription: String;
+    RTPServerLock:             TCriticalSection;
+    RTPServers:                TObjectList;
+    Filters:                   TObjectList;
 
     procedure ActivateServerOnNextFreePort(Server: TIdRTPServer;
                                            StartFrom: Cardinal);
@@ -472,13 +476,13 @@ type
     function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TIdRTPPayload;
                                  Binding: TIdSocketHandle);
-    procedure OnReceiveRTCP(Sender: TObject;
-                            APacket: TIdRTCPPacket;
-                            ABinding: TIdSocketHandle);
-    procedure OnReceiveRTP(Sender: TObject;
-                           APacket: TIdRTPPacket;
-                           ABinding: TIdSocketHandle);
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
+    function  PeerAt(Index: Integer): TIdFilteredRTPPeer;
     function  ServerAt(const Index: Integer): TIdRTPServer;
+    procedure SetRemoteSessionDescription(const Value: String);
     procedure SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
     procedure SetUpSingleStream(MediaDesc: TIdSdpMediaDescription);
   public
@@ -486,18 +490,19 @@ type
     destructor  Destroy; override;
 
     procedure AddDataListener(const Listener: IIdRTPDataListener);
-    function  MediaType: String;
+    function  IsListening: Boolean;
     function  LocalSessionDescription: String;
+    function  MediaType: String;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     function  SessionCount: Integer;
-    procedure StartListening(const RemoteSessionDescription: String);
+    procedure StartListening(const LocalSessionDescription: String);
     procedure StopListening;
 
-    property BasePort:    Integer       read fBasePort write fBasePort;
-    property Description: TIdSdpPayload read fDescription;
-    property Host:        String        read fHost write fHost;
-    property Profile:     TIdRTPProfile read fProfile;
-    property Username:    String        read fUsername write fUsername;
+    property BasePort:                 Integer       read fBasePort write fBasePort;
+    property Host:                     String        read fHost write fHost;
+    property Profile:                  TIdRTPProfile read fProfile;
+    property RemoteSessionDescription: String        read fRemoteSessionDescription write SetRemoteSessionDescription;
+    property Username:                 String        read fUsername write fUsername;
   end;
 
 const
@@ -1387,6 +1392,18 @@ begin
     FreeAndNil(Result);
 
     raise;
+  end;
+end;
+
+class function TIdSdpPayload.CreateFrom(Src: String): TIdSdpPayload;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Src);
+  try
+    Result := Self.CreateFrom(S);
+  finally
+    S.Free;
   end;
 end;
 
@@ -2639,18 +2656,18 @@ begin
   Self.DataListenerLock := TCriticalSection.Create;
 
   Self.RTPServers    := TObjectList.Create(true);
+  Self.Filters       := TObjectList.Create(true);
   Self.RTPServerLock := TCriticalSection.Create;
 
-  Self.fDescription := TIdSdpPayload.Create;
-  Self.fProfile := TIdAudioVisualProfile.Create;
+  Self.fProfile     := TIdAudioVisualProfile.Create;
 end;
 
 destructor TIdSdpPayloadProcessor.Destroy;
 begin
   Self.Profile.Free;
-  Self.Description.Free;
 
   Self.RTPServerLock.Free;
+  Self.Filters.Free;
   Self.RTPServers.Free;
 
   Self.DataListenerLock.Free;
@@ -2669,9 +2686,17 @@ begin
   end;
 end;
 
-function TIdSdpPayloadProcessor.MediaType: String;
+function TIdSdpPayloadProcessor.IsListening: Boolean;
 begin
-  Result := SdpMimeType;
+  Self.RTPServerLock.Acquire;
+  try
+    Result := Self.RTPServers.Count > 0;
+
+    if Result then
+      Result := Result and Self.ServerAt(0).Active
+  finally
+    Self.RTPServerLock.Release;
+  end;
 end;
 
 function TIdSdpPayloadProcessor.LocalSessionDescription: String;
@@ -2700,6 +2725,11 @@ begin
   end;
 end;
 
+function TIdSdpPayloadProcessor.MediaType: String;
+begin
+  Result := SdpMimeType;
+end;
+
 procedure TIdSdpPayloadProcessor.RemoveDataListener(const Listener: IIdRTPDataListener);
 begin
   Self.DataListenerLock.Acquire;
@@ -2720,19 +2750,26 @@ begin
   end;
 end;
 
-procedure TIdSdpPayloadProcessor.StartListening(const RemoteSessionDescription: String);
+procedure TIdSdpPayloadProcessor.StartListening(const LocalSessionDescription: String);
 var
-  S: TStringStream;
+  Description: TIdSdpPayload;
+  S:           TStringStream;
 begin
   Self.StopListening;
 
-  S := TStringStream.Create(RemoteSessionDescription);
-  try
-    Self.Description.ReadFrom(S);
-    Self.Description.InitializeProfile(Self.Profile);
-    Self.SetUpMediaStreams(Self.Description);
-  finally
-    S.Free;
+  if (LocalSessionDescription <> '') then begin
+    S := TStringStream.Create(LocalSessionDescription);
+    try
+      Description := TIdSdpPayload.CreateFrom(S);
+      try
+        Description.InitializeProfile(Self.Profile);
+        Self.SetUpMediaStreams(Description);
+      finally
+        Description.Free;
+      end;
+    finally
+      S.Free;
+    end;
   end;
 end;
 
@@ -2742,9 +2779,7 @@ var
 begin
   Self.RTPServerLock.Acquire;
   try
-    for I := 0 to Self.RTPServers.Count - 1 do begin
-      Self.ServerAt(I).Active := false;
-    end;
+    Self.RTPServers.Clear;
   finally
     Self.RTPServerLock.Release;
   end;
@@ -2814,23 +2849,31 @@ begin
   end;
 end;
 
-procedure TIdSdpPayloadProcessor.OnReceiveRTCP(Sender: TObject;
-                                               APacket: TIdRTCPPacket;
-                                               ABinding: TIdSocketHandle);
+procedure TIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
+                                        Binding: TIdSocketHandle);
 begin
 end;
 
-procedure TIdSdpPayloadProcessor.OnReceiveRTP(Sender: TObject;
-                                              APacket: TIdRTPPacket;
-                                              ABinding: TIdSocketHandle);
+procedure TIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
+                                       Binding: TIdSocketHandle);
 begin
-  Self.NotifyOfNewRTPData(APacket.Payload,
-                          ABinding);
+  Self.NotifyOfNewRTPData(Packet.Payload,
+                          Binding);
+end;
+
+function TIdSdpPayloadProcessor.PeerAt(Index: Integer): TIdFilteredRTPPeer;
+begin
+  Result := Self.Filters[Index] as TIdFilteredRTPPeer;
 end;
 
 function TIdSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
 begin
   Result := Self.RTPServers[Index] as TIdRTPServer;
+end;
+
+procedure TIdSdpPayloadProcessor.SetRemoteSessionDescription(const Value: String);
+begin
+  Self.fRemoteSessionDescription := Value;
 end;
 
 procedure TIdSdpPayloadProcessor.SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
@@ -2845,27 +2888,41 @@ procedure TIdSdpPayloadProcessor.SetUpSingleStream(MediaDesc: TIdSdpMediaDescrip
 var
   I:         Cardinal;
   NewServer: TIdRTPServer;
+  NewPeer:   TIdFilteredRTPPeer;
 begin
+  // Realise that the MediaDesc contains a Port value. We TRY to allocate that
+  // port, but if that port's already bound we just bind to the lowest free
+  // port number greater than MediaDesc.Port.
+
   Self.RTPServerLock.Acquire;
   try
     NewServer := TIdRTPServer.Create(nil);
     try
       NewServer.Profile := Self.Profile;
       Self.RTPServers.Add(NewServer);
+      NewPeer := TIdFilteredRTPPeer.Create(NewServer, nil, nil);
+      try
+        NewServer.AddListener(NewPeer);
+        NewPeer.AddListener(Self);
 
-      NewServer.OnRTCPRead := Self.OnReceiveRTCP;
-      NewServer.OnRTPRead  := Self.OnReceiveRTP;
-
-      Self.ActivateServerOnNextFreePort(NewServer,
-                                        Self.BasePort);
-
-      // NewServer.Bindings.Count - 2 >= 0 since
-      // ActivateServerOnNextFreePort adds 2 bindings.
-      for I := 2 to MediaDesc.PortCount do
         Self.ActivateServerOnNextFreePort(NewServer,
-                                          NewServer.Bindings[NewServer.Bindings.Count - 2].Port);
+                                          MediaDesc.Port);
 
-      NewServer.DefaultPort := NewServer.Bindings[0].Port;                                          
+        // NewServer.Bindings.Count - 2 >= 0 since
+        // ActivateServerOnNextFreePort adds 2 bindings.
+        for I := 2 to MediaDesc.PortCount do
+          Self.ActivateServerOnNextFreePort(NewServer,
+                                            NewServer.Bindings[NewServer.Bindings.Count - 2].Port);
+
+        NewServer.DefaultPort := NewServer.Bindings[0].Port;
+      except
+      if (Self.Filters.IndexOf(NewPeer) <> -1) then
+        Self.Filters.Remove(NewPeer)
+      else
+        FreeAndNil(NewPeer);
+
+      raise;
+      end;
     except
       if (Self.RTPServers.IndexOf(NewServer) <> -1) then
         Self.RTPServers.Remove(NewServer)

@@ -596,6 +596,7 @@ end;
 procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;
                                  Binding: TIdSocketHandle);
 begin
+  // TODO: Could this indicate the need for a Visitor pattern?
   if Data is TIdRTPTelephoneEventPayload then
     Self.Flash(Data as TIdRTPTelephoneEventPayload);
 end;

@@ -26,17 +26,17 @@ type
     fSIPVersion: String;
 
     function  GetCallID: String;
+    function  GetContentDisposition: TIdSipContentDispositionHeader;
     function  GetContentLength: Cardinal;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
-    function  GetDisposition: TIdSipContentDispositionHeader;
     function  GetFrom: TIdSipFromHeader;
     function  GetTo: TIdSipToHeader;
     procedure SetCallID(const Value: String);
+    procedure SetContentDisposition(const Value: TIdSipContentDispositionHeader);
     procedure SetContentLength(const Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(const Value: TIdSipCSeqHeader);
-    procedure SetDisposition(const Value: TIdSipContentDispositionHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
     procedure SetPath(const Value: TIdSipViaPath);
     procedure SetTo(const Value: TIdSipToHeader);
@@ -65,17 +65,17 @@ type
     procedure RemoveHeader(const Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
 
-    property Body:          String                         read fBody write fBody;
-    property CallID:        String                         read GetCallID write SetCallID;
-    property ContentLength: Cardinal                       read GetContentLength write SetContentLength;
-    property ContentType:   String                         read GetContentType write SetContentType;
-    property CSeq:          TIdSipCSeqHeader               read GetCSeq write SetCSeq;
-    property Disposition:   TIdSipContentDispositionHeader read GetDisposition write SetDisposition;
-    property From:          TIdSipFromHeader               read GetFrom write SetFrom;
-    property Headers:       TIdSipHeaders                  read fHeaders;
-    property Path:          TIdSipViaPath                  read fPath write SetPath;
-    property SIPVersion:    String                         read fSIPVersion write fSIPVersion;
-    property ToHeader:      TIdSipToHeader                 read GetTo write SetTo;
+    property Body:               String                         read fBody write fBody;
+    property CallID:             String                         read GetCallID write SetCallID;
+    property ContentDisposition: TIdSipContentDispositionHeader read GetContentDisposition write SetContentDisposition;
+    property ContentLength:      Cardinal                       read GetContentLength write SetContentLength;
+    property ContentType:        String                         read GetContentType write SetContentType;
+    property CSeq:               TIdSipCSeqHeader               read GetCSeq write SetCSeq;
+    property From:               TIdSipFromHeader               read GetFrom write SetFrom;
+    property Headers:            TIdSipHeaders                  read fHeaders;
+    property Path:               TIdSipViaPath                  read fPath write SetPath;
+    property SIPVersion:         String                         read fSIPVersion write fSIPVersion;
+    property ToHeader:           TIdSipToHeader                 read GetTo write SetTo;
   end;
 
   TIdSipMessageClass = class of TIdSipMessage;
@@ -445,6 +445,11 @@ begin
   Result := Self.FirstHeader(CallIDHeaderFull).Value;
 end;
 
+function TIdSipMessage.GetContentDisposition: TIdSipContentDispositionHeader;
+begin
+  Result := Self.FirstHeader(ContentDispositionHeader) as TIdSipContentDispositionHeader;
+end;
+
 function TIdSipMessage.GetContentLength: Cardinal;
 begin
   Result := StrToInt(Self.FirstHeader(ContentLengthHeaderFull).Value);
@@ -458,11 +463,6 @@ end;
 function TIdSipMessage.GetCSeq: TIdSipCSeqHeader;
 begin
   Result := Self.FirstHeader(CSeqHeader) as TIdSipCSeqHeader;
-end;
-
-function TIdSipMessage.GetDisposition: TIdSipContentDispositionHeader;
-begin
-  Result := Self.FirstHeader(ContentDispositionHeader) as TIdSipContentDispositionHeader;
 end;
 
 function TIdSipMessage.GetFrom: TIdSipFromHeader;
@@ -480,6 +480,11 @@ begin
   Self.FirstHeader(CallIDHeaderFull).Value := Value;
 end;
 
+procedure TIdSipMessage.SetContentDisposition(const Value: TIdSipContentDispositionHeader);
+begin
+  Self.ContentDisposition.Assign(Value);
+end;
+
 procedure TIdSipMessage.SetContentLength(const Value: Cardinal);
 begin
   Self.FirstHeader(ContentLengthHeaderFull).Value := IntToStr(Value);
@@ -493,11 +498,6 @@ end;
 procedure TIdSipMessage.SetCSeq(const Value: TIdSipCSeqHeader);
 begin
   Self.CSeq.Assign(Value);
-end;
-
-procedure TIdSipMessage.SetDisposition(const Value: TIdSipContentDispositionHeader);
-begin
-  Self.Disposition.Assign(Value);
 end;
 
 procedure TIdSipMessage.SetFrom(const Value: TIdSipFromHeader);

@@ -22,8 +22,9 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject, IdSipHeaders,
-  IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
+  Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
+  IdSipHeaders, IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport,
+  SyncObjs;
 
 type
   TIdSipSession = class;
@@ -144,8 +145,8 @@ type
                                           const Transaction: TIdSipTransaction);
     procedure ResetLastBranch;
     procedure SendByeToAppropriateSession(const Bye: TIdSipRequest;
-                         const Transaction: TIdSipTransaction;
-                         const Receiver: TIdSipTransport);
+                                          const Transaction: TIdSipTransaction;
+                                          const Receiver: TIdSipTransport);
     procedure SetContact(const Value: TIdSipContactHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
 
@@ -251,6 +252,7 @@ type
     fInvite:             TIdSipRequest;
     fIsEstablished:      Boolean;
     fIsTerminated:       Boolean;
+    fPayloadProcessor:   TIdSdpPayloadProcessor;
     fReceivedAck:        Boolean;
     InitialTran:         TIdSipTransaction;
     InitialTransport:    TIdSipTransport;
@@ -302,7 +304,7 @@ type
                        const Receiver: TIdSipTransport); overload;
     destructor  Destroy; override;
 
-    procedure AcceptCall(const Offer, ContentType: String);
+    function  AcceptCall(const Offer, ContentType: String): String;
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
     procedure Call(const Dest: TIdSipToHeader;
@@ -319,10 +321,11 @@ type
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure ResendLastResponse; virtual;
 
-    property Dialog:       TIdSipDialog  read fDialog;
-    property Invite:       TIdSipRequest read fInvite;
-    property IsTerminated: Boolean       read fIsTerminated;
-    property ReceivedAck:  Boolean       read fReceivedAck;
+    property Dialog:           TIdSipDialog           read fDialog;
+    property Invite:           TIdSipRequest          read fInvite;
+    property IsTerminated:     Boolean                read fIsTerminated;
+    property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
+    property ReceivedAck:      Boolean                read fReceivedAck;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -333,7 +336,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSdp, IdSimpleParser, IdSipConsts, IdSipDialogID,
+  IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID,
   IdRandom, IdStack, SysUtils, IdUDPServer;
 
 //******************************************************************************
@@ -539,8 +542,8 @@ begin
     Result.ContentLength := Length(Body);
 
     if (Result.ContentLength > 0) then begin
-      Result.Disposition.Value := DispositionSession;
-      Result.ContentType       := MimeType;
+      Result.ContentDisposition.Value := DispositionSession;
+      Result.ContentType              := MimeType;
     end;
   except
     FreeAndNil(Result);
@@ -1239,7 +1242,9 @@ begin
   Session := Self.FindSession(Bye);
 
   if Assigned(Session) then
-    Session.OnReceiveRequest(Bye, Transaction, Receiver)
+    Session.OnReceiveRequest(Bye,
+                             Transaction,
+                             Receiver)
   else
     Self.RejectRequest(Bye,
                        SIPCallLegOrTransactionDoesNotExist,
@@ -1370,19 +1375,32 @@ begin
   Self.OkTimer.Free;
 
   Self.Invite.Free;
+  Self.PayloadProcessor.Free;
+  
   Self.LastResponse.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipSession.AcceptCall(const Offer, ContentType: String);
+function TIdSipSession.AcceptCall(const Offer, ContentType: String): String;
 var
   Response: TIdSipResponse;
 begin
+  // Offer contains a description of what data we expect to receive. Sometimes
+  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
+  // port 8000's already bound. We thus try to honour the offer as closely as
+  // possible, and return the _actual_ offer sent.
+
+  Result := '';
+
   if Self.IsInboundCall then begin
+    // The type of payload processor depends on the ContentType passed in!
+    Self.PayloadProcessor.StartListening(Offer);
+
     Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
     try
-      Response.Body := Offer;
+      Result        := Self.PayloadProcessor.LocalSessionDescription;
+      Response.Body := Result;
 
       Response.ContentLength := Length(Response.Body);
       Response.ContentType   := ContentType;
@@ -1480,7 +1498,7 @@ begin
   end
   else if Request.IsAck then begin
     Self.fReceivedAck := true;
-    
+
     if Assigned(Self.OkTimer) then
       Self.OkTimer.Stop;
   end
@@ -1489,6 +1507,9 @@ begin
       Self.RejectOutOfOrderRequest(Request, Transaction);
       Exit;
     end;
+
+//    if Request.Disposition.IsSession then
+//      Self.PayloadProcessor.RemoteSessionDescription := Request.Body;
 
     Self.AddOpenTransaction(Transaction);
     Self.NotifyOfModifiedSession(Request);
@@ -1545,6 +1566,9 @@ begin
   Self.fReceivedAck   := false;
 
   Self.fCore := UA;
+  Self.fPayloadProcessor := TIdSdpPayloadProcessor.Create;
+  Self.PayloadProcessor.Host     := Self.Core.HostName;
+  Self.PayloadProcessor.Username := Self.Core.Username;
 
   Self.fInvite       := TIdSipRequest.Create;
   Self.IsEstablished := false;

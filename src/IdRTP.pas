@@ -36,10 +36,12 @@ type
   // I offer a Flyweight Null Payload.
   TIdRTPPayload = class(TPersistent)
   private
-    fClockRate:  Cardinal;
-    fParameters: String;
-    fStartTime:  TDateTime;
+    fClockRate:    Cardinal;
+    fParameters:   String;
+    fSamplingRate: Cardinal;
+    fStartTime:    TDateTime;
   protected
+    function  DefaultSamplingRate: Cardinal; virtual;
     function  GetName: String; virtual;
     function  GetStartTime: TDateTime; virtual;
     procedure SetStartTime(const Value: TDateTime); virtual;
@@ -64,10 +66,11 @@ type
     procedure ReadFrom(Src: TStream); virtual;
     procedure PrintOn(Dest: TStream); virtual;
 
-    property ClockRate:  Cardinal  read fClockRate write fClockRate;
-    property Name:       String    read GetName;
-    property Parameters: String    read fParameters write fParameters;
-    property StartTime:  TDateTime read GetStartTime write SetStartTime;
+    property ClockRate:    Cardinal  read fClockRate write fClockRate;
+    property Name:         String    read GetName;
+    property Parameters:   String    read fParameters write fParameters;
+    property SamplingRate: Cardinal  read fSamplingRate write fSamplingRate;
+    property StartTime:    TDateTime read GetStartTime write SetStartTime;
   end;
 
   // I represent the Null payload - a Null Object representing the absence of a
@@ -153,7 +156,10 @@ type
     property Volume:      TIdTelephoneEventVolume read fVolume write fVolume;
   end;
 
-  TIdRTPPCMMuLawPayload = class(TIdRTPRawPayload);
+  TIdRTPPCMMuLawPayload = class(TIdRTPRawPayload)
+  protected
+    function DefaultSamplingRate: Cardinal; override;
+  end;
 
   TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPPayload;
 
@@ -1098,7 +1104,7 @@ const
 
   CelBClockRate      = 90000;
   CNClockRate        = 8000;
-  G722RTPClockRate   = 8000; // http://www.openh323.org/pipermail/openh323/2001-December/050691.html
+  G722ClockRate      = 8000; // http://www.openh323.org/pipermail/openh323/2001-December/050691.html
   G723ClockRate      = 8000;
   G726_16ClockRate   = 8000;
   G726_24ClockRate   = 8000;
@@ -1123,7 +1129,9 @@ const
   PCMMuLawClockRate  = 8000;
   QCELPClockRate     = 8000;
 
-  G722SamplingRate = 16000;
+  G722SamplingRate     = 16000;
+  PCMMuLawSamplingRate = PCMMuLawClockRate;
+  PCMALawSamplingRate  = PCMALawClockRate;
 
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
@@ -1504,6 +1512,7 @@ constructor TIdRTPPayload.Create(EncodingName: String);
 begin
   inherited Create;
 
+  Self.SamplingRate := Self.DefaultSamplingRate;
   Self.StartTime := Now;
 end;
 
@@ -1578,6 +1587,11 @@ begin
 end;
 
 //* TIdRTPPayload Protected methods ********************************************
+
+function TIdRTPPayload.DefaultSamplingRate: Cardinal;
+begin
+  Result := 0;
+end;
 
 function TIdRTPPayload.GetName: String;
 begin
@@ -1767,6 +1781,16 @@ end;
 function TIdRTPTelephoneEventPayload.GetName: String;
 begin
   Result := TelephoneEventEncoding;
+end;
+
+//******************************************************************************
+//* TIdRTPPCMMuLawPayload                                                      *
+//******************************************************************************
+//* TIdRTPPCMMuLawPayload Protected methods ************************************
+
+function TIdRTPPCMMuLawPayload.DefaultSamplingRate: Cardinal;
+begin
+  Result := PCMMuLawSamplingRate;
 end;
 
 //******************************************************************************
