@@ -3266,7 +3266,10 @@ end;
 
 function TIdSipInboundOptions.DetermineAppropriateResponse: Cardinal;
 begin
-  Result := SIPOK;
+  if Self.UA.DoNotDisturb then
+    Result := SIPTemporarilyUnavailable
+  else
+    Result := SIPOK;
 end;
 
 //******************************************************************************
