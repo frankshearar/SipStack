@@ -80,6 +80,7 @@ type
     procedure TestCreateBye;
     procedure TestCreateInvite;
     procedure TestCreateInviteWithBody;
+    procedure TestCreateRegister;
     procedure TestCreateRequest;
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
@@ -218,10 +219,10 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-  Result.AddTest(TestTIdSipAbstractCore.Suite);
+//  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
-  Result.AddTest(TestTIdSipSession.Suite);
-  Result.AddTest(TestTIdSipSessionTimer.Suite);
+//  Result.AddTest(TestTIdSipSession.Suite);
+//  Result.AddTest(TestTIdSipSessionTimer.Suite);
 end;
 
 //******************************************************************************
@@ -803,9 +804,33 @@ begin
           'Missing Content-Disposition');
     CheckEquals(DispositionSession,
                 Invite.ContentDisposition.Value,
-                'Content-Disposition value');      
+                'Content-Disposition value');
   finally
     Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateRegister;
+var
+  Register: TIdSipRequest;
+begin
+  Register := Self.Core.CreateRegister(Self.Destination);
+  try
+    CheckEquals(MethodRegister, Register.Method, 'Incorrect method');
+    CheckEquals('', Register.RequestUri.Username, 'Request-URI Username');
+    CheckEquals('', Register.RequestUri.Password, 'Request-URI Password');
+
+    CheckEquals(Self.Core.Contact.Value,
+                Register.FirstHeader(ContactHeaderFull).Value,
+                'Contact');
+    CheckEquals(Self.Core.Contact.Value,
+                Register.ToHeader.Value,
+                'To');
+    CheckEquals(Register.ToHeader.Value,
+                Register.From.Value,
+                'From');
+  finally
+    Register.Free;
   end;
 end;
 

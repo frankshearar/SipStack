@@ -175,6 +175,7 @@ type
     function  CreateInvite(Dest: TIdSipToHeader;
                            const Body: String;
                            const MimeType: String): TIdSipRequest;
+    function  CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
     function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; overload; override;
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
@@ -559,6 +560,23 @@ begin
   end;
 end;
 
+function TIdSipUserAgentCore.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
+begin
+  Result := Self.CreateRequest(Registrar);
+  try
+    Result.Method := MethodRegister;
+    Result.RequestUri.Username := '';
+    Result.RequestUri.Password := '';
+
+    Result.ToHeader.Value := Self.Contact.Value;
+    Result.From.Value     := Self.Contact.Value;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSipUserAgentCore.CreateRequest(Dest: TIdSipToHeader): TIdSipRequest;
 var
   Transport: String;
@@ -577,6 +595,7 @@ begin
     Result.MaxForwards := Result.DefaultMaxForwards;
     Result.ToHeader    := Dest;
 
+    // The transport must be discovered using RFC 3263
     // TODO: Lies. Pure hack to get X-Lite talking
     if (Pos(TransportParam, Dest.AsString) > 0) then
       Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
