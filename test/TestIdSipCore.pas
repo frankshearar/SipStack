@@ -41,7 +41,7 @@ type
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
     procedure SimulateRemoteBye(LocalDialog: TIdSipDialog);
-    procedure SimulateCancel;
+    procedure SimulateRemoteCancel;
     procedure SimulateRemoteInvite;
 
     procedure SimulateRemoteAccept(Invite: TIdSipRequest);
@@ -317,6 +317,7 @@ type
     procedure TestAcceptCall;
     procedure TestAcceptCallRespectsContentType;
     procedure TestAddSessionListener;
+    procedure TestCancelNotifiesSession;
     procedure TestForwardCall;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
@@ -775,7 +776,7 @@ begin
   end;
 end;
 
-procedure TTestCaseTU.SimulateCancel;
+procedure TTestCaseTU.SimulateRemoteCancel;
 var
   Cancel: TIdSipRequest;
 begin
@@ -1371,7 +1372,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   SessCount := Self.Core.SessionCount;
-  Self.SimulateCancel;
+  Self.SimulateRemoteCancel;
 
   Check(Self.OnEndedSessionFired,
         'UA not notified of remote CANCEL');
@@ -3680,6 +3681,21 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
+var
+  SessionCount: Integer;
+begin
+  SessionCount := Self.Core.SessionCount;
+
+  Self.SimulateRemoteCancel;
+
+  Check(Self.OnEndedSessionFired,
+        'No notification of ended session');
+
+  Check(Self.Core.SessionCount < SessionCount,
+        'Session not torn down because of CANCEL');
 end;
 
 procedure TestTIdSipInboundSession.TestForwardCall;
