@@ -32,9 +32,14 @@ type
     fTransportType:     TIdSipTransportType;
     fWriteLog:          Boolean;
 
+    procedure DispatchRequest(R: TidSipRequest);
+    procedure DispatchResponse(R: TidSipResponse);
+    function  FindTransport(const Host: String;
+                                  Port: Cardinal): TIdSipMockTransport;
     procedure Log(Msg: String;
                   Direction: TIdMessageDirection);
     procedure SetWriteLog(const Value: Boolean);
+    function  TransportAt(Index: Integer): TIdSipMockTransport;
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
     function  GetAddress: String; override;
@@ -77,10 +82,11 @@ const
 implementation
 
 uses
-  Classes, IdRTP;
+  Classes, Contnrs, IdRTP;
 
 var
-  GLog: TFileStream;
+  GAllTransports: TObjectList;
+  GLog:           TFileStream;
 
 //******************************************************************************
 //* TIdSipMockTransport                                                        *
@@ -96,10 +102,14 @@ begin
   Self.fLastACK     := TIdSipRequest.Create;
   Self.fLastRequest := TIdSipRequest.Create;
   Self.fResponses   := TIdSipResponseList.Create;
+
+  GAllTransports.Add(Self);
 end;
 
 destructor TIdSipMockTransport.Destroy;
 begin
+  GAllTransports.Remove(Self);
+
   Self.fResponses.Free;
   Self.LastRequest.Free;
   Self.LastACK.Free;
@@ -223,6 +233,8 @@ begin
     Inc(Self.fACKCount)
   else
     Inc(Self.fSentRequestCount);
+
+  Self.DispatchRequest(R);
 end;
 
 procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
@@ -241,6 +253,8 @@ begin
   // We call inherited at the end because we want to update our state first,
   // so listeners get a true idea of, for instance, SentResponseCount.
   inherited SendResponse(R);
+
+  Self.DispatchResponse(R);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(Via: TIdSipViaHeader): Boolean;
@@ -249,6 +263,47 @@ begin
 end;
 
 //* TIdSipMockTransport Private methods ****************************************
+
+procedure TIdSipMockTransport.DispatchRequest(R: TidSipRequest);
+var
+  T: TIdSipMockTransport;
+begin
+  T := Self.FindTransport(R.RequestUri.Host, R.RequestUri.Port);
+
+  if Assigned(T) then
+    T.FireOnRequest(R);
+end;
+
+procedure TIdSipMockTransport.DispatchResponse(R: TidSipResponse);
+var
+  T: TIdSipMockTransport;
+begin
+  T := Self.FindTransport(R.LastHop.SentBy, R.LastHop.Port);
+
+  if Assigned(T) then
+    T.FireOnResponse(R);
+end;
+
+function TIdSipMockTransport.FindTransport(const Host: String;
+                                                 Port: Cardinal): TIdSipMockTransport;
+  function NameMatches(Transport: TIdSipMockTransport; const Host: String): Boolean;
+  begin
+    Result := IsEqual(Transport.HostName, Host)
+           or IsEqual(Transport.Address, Host);
+  end;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  I := 0;
+  while (I < GAllTransports.Count) and not Assigned(Result) do
+    if NameMatches(Self.TransportAt(I), Host)
+       and (Self.TransportAt(I).Port = Port) then
+      Result := Self.TransportAt(I)
+    else
+      Inc(I);
+end;
 
 procedure TIdSipMockTransport.Log(Msg: String;
                                   Direction: TIdMessageDirection);
@@ -275,10 +330,17 @@ begin
     GLog := TFileStream.Create(DebugLogName,
                                fmCreate or fmShareDenyWrite);
 
-  Self.fWriteLog := Value;                             
+  Self.fWriteLog := Value;
+end;
+
+function TIdSipMockTransport.TransportAt(Index: Integer): TIdSipMockTransport;
+begin
+  Result := GAllTransports[Index] as TIdSipMockTransport;
 end;
 
 initialization
+  GAllTransports := TObjectList.Create(false);
 finalization
   GLog.Free;
+  GAllTransports.Free;
 end.
