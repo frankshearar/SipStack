@@ -59,6 +59,7 @@ type
     TransportListeners:        TIdNotificationList;
     TransportSendingListeners: TIdNotificationList;
 
+    class function TransportAt(Index: Integer): TIdSipTransportClass;
     class function TransportRegistry: TStrings;
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
@@ -94,12 +95,14 @@ type
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
+    class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure: Boolean; virtual;
     class function  SrvPrefix: String; virtual;
     class function  SrvQuery(const Domain: String): String;
-    class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure RegisterTransport(const Name: String;
                                       const TransportType: TIdSipTransportClass);
+    class procedure SecureTransports(Result: TStrings);
+    class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure UnregisterTransport(const Name: String);
 
     constructor Create; virtual;
@@ -333,6 +336,16 @@ var
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
+class procedure TIdSipTransport.InsecureTransports(Result: TStrings);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.TransportRegistry.Count - 1 do begin
+    if not Self.TransportAt(I).IsSecure then
+      Result.Add(Self.TransportRegistry[I]);
+  end;
+end;
+
 class function TIdSipTransport.IsSecure: Boolean;
 begin
   Result := false;
@@ -348,6 +361,23 @@ begin
   Result := Self.SrvPrefix + '.' + Domain;
 end;
 
+class procedure TIdSipTransport.RegisterTransport(const Name: String;
+                                                  const TransportType: TIdSipTransportClass);
+begin
+  if (Self.TransportRegistry.IndexOf(Name) = -1) then
+    Self.TransportRegistry.AddObject(Name, TObject(TransportType));
+end;
+
+class procedure TIdSipTransport.SecureTransports(Result: TStrings);
+var
+  I: Integer;
+begin
+  for I := 0 to Self.TransportRegistry.Count - 1 do begin
+    if Self.TransportAt(I).IsSecure then
+      Result.Add(Self.TransportRegistry[I]);
+  end;
+end;
+
 class function TIdSipTransport.TransportFor(const Transport: String): TIdSipTransportClass;
 var
   Index: Integer;
@@ -355,16 +385,9 @@ begin
   Index := Self.TransportRegistry.IndexOf(Transport);
 
   if (Index <> -1) then
-    Result := TIdSipTransportClass(Self.TransportRegistry.Objects[Index])
+    Result := Self.TransportAt(Index)
   else
     raise EUnknownTransport.Create('TIdSipTransport.TransportFor: ' + Transport);
-end;
-
-class procedure TIdSipTransport.RegisterTransport(const Name: String;
-                                                  const TransportType: TIdSipTransportClass);
-begin
-  if (Self.TransportRegistry.IndexOf(Name) = -1) then
-    Self.TransportRegistry.AddObject(Name, TObject(TransportType));
 end;
 
 class procedure TIdSipTransport.UnregisterTransport(const Name: String);
@@ -687,6 +710,11 @@ begin
 end;
 
 //* TIdSipTransport Private methods ********************************************
+
+class function TIdSipTransport.TransportAt(Index: Integer): TIdSipTransportClass;
+begin
+  Result := TIdSipTransportClass(Self.TransportRegistry.Objects[Index]);
+end;
 
 class function TIdSipTransport.TransportRegistry: TStrings;
 begin
@@ -1219,10 +1247,6 @@ end;
 
 initialization
   GTransportTypes := TStringList.Create;
-
-  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipTCPTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTLSTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUDPTransport);
 finalization
   GTransportTypes.Free;
 end.
