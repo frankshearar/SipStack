@@ -851,7 +851,6 @@ type
     procedure AddNewRedirect(OriginalInvite: TIdSipRequest;
                              Contact: TIdSipContactHeader);
     function  NoMoreRedirectedInvites: Boolean;
-    function  RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
     procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
@@ -4923,12 +4922,6 @@ begin
   finally
     Self.RedirectedInviteLock.Release;
   end;
-end;
-
-function TIdSipOutboundSession.RedirectedInviteAt(Index: Integer): TIdSipOutboundInvite;
-begin
-  // Precondition: You've acquired RedirectLock
-  Result := Self.RedirectedInvites[Index] as TIdSipOutboundInvite;
 end;
 
 procedure TIdSipOutboundSession.RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
