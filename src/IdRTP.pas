@@ -12,8 +12,8 @@ unit IdRTP;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdSocketHandle, IdTimerQueue, 
-  IdUDPServer, SyncObjs, SysUtils, Types;
+  Classes, Contnrs, IdInterfacedObject, IdSipNotification, IdSocketHandle,
+  IdTimerQueue, SyncObjs, SysUtils, Types;
 
 type
   TIdCardinalArray        = array of Cardinal;
@@ -880,8 +880,7 @@ type
                                  IIdAbstractRTPPeer)
   private
     fProfile:     TIdRTPProfile;
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    Listeners:    TIdSipNotificationList;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -927,8 +926,7 @@ type
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
     fSessionBandwidth:          Cardinal;
-    ListenerLock:               TCriticalSection;
-    Listeners:                  TList;
+    Listeners:                  TIdSipNotificationList;
     MemberLock:                 TCriticalSection;
     Members:                    TIdRTPMemberTable;
     NextTransmissionTime:       TDateTime;
@@ -1043,6 +1041,40 @@ type
     procedure Add(Pkt: TIdRTPPacket);
     function  Last: TIdRTPPacket;
     procedure RemoveLast;
+  end;
+
+  TIdRTPMethod = class(TIdSipMethod)
+  private
+    fBinding: TIdSocketHandle;
+  public
+    property Binding: TIdSocketHandle read fBinding write fBinding;
+  end;
+
+  TIdRTPListenerReceiveRTCPMethod = class(TIdRTPMethod)
+  private
+    fPacket: TIdRTCPPacket;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Packet: TIdRTCPPacket read fPacket write fPacket;
+  end;
+
+  TIdRTPListenerReceiveRTPMethod = class(TIdRTPMethod)
+  private
+    fPacket: TIdRTPPacket;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Packet: TIdRTPPacket read fPacket write fPacket;
+  end;
+
+  TIdRTPDataListenerNewDataMethod = class(TIdRTPMethod)
+  private
+    fData: TIdRTPPayload;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Data: TIdRTPPayload read fData write fData;
   end;
 
   EBadEncodingName = class(Exception);
@@ -4465,72 +4497,66 @@ constructor TIdBaseRTPAbstractPeer.Create;
 begin
   inherited Create;
 
-  Self.ListenerLock := TCriticalSection.Create;
-  Self.Listeners    := TList.Create;
+  Self.Listeners := TIdSipNotificationList.Create;
 end;
 
 destructor TIdBaseRTPAbstractPeer.Destroy;
 begin
   Self.Listeners.Free;
-  Self.ListenerLock.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdBaseRTPAbstractPeer.AddListener(const Listener: IIdRTPListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                                        Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
   // In Smalltalk:
   // self listenerLock critical:
   //     [self listeners do:
   //         [ :each | each receiveRTCP: packet on: binding ]]
-  Self.ListenerLock.Acquire;
+
+  Notification := TIdRTPListenerReceiveRTCPMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdRTPListener(Self.Listeners[I]).OnRTCP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                                       Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPListenerReceiveRTPMethod;
 begin
   // In Smalltalk:
   // self listenerLock critical:
   //     [self listeners do:
   //         [ :each | each receiveRTP: packet on: binding ]]
-  Self.ListenerLock.Acquire;
+
+  Notification := TIdRTPListenerReceiveRTPMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdRTPListener(Self.Listeners[I]).OnRTP(Packet, Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdBaseRTPAbstractPeer.RemoveListener(const Listener: IIdRTPListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 procedure TIdBaseRTPAbstractPeer.SendPacket(const Host: String;
@@ -4548,8 +4574,7 @@ constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer);
 begin
   inherited Create;
 
-  Self.ListenerLock := TCriticalSection.Create;
-  Self.Listeners    := TList.Create;
+  Self.Listeners := TIdSipNotificationList.Create;
 
   Self.Agent          := Agent;
   Self.fNoControlSent := true;
@@ -4583,7 +4608,6 @@ begin
   Self.Agent := nil;
 
   Self.Listeners.Free;
-  Self.ListenerLock.Free;
 
   inherited Destroy;
 end;
@@ -4595,12 +4619,7 @@ end;
 
 procedure TIdRTPSession.AddListener(const Listener: IIdRTPDataListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 function TIdRTPSession.AddMember(SSRC: Cardinal): TIdRTPMember;
@@ -4864,12 +4883,7 @@ end;
 
 procedure TIdRTPSession.RemoveListener(const Listener: IIdRTPDataListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 procedure TIdRTPSession.RemoveMember(SSRC: Cardinal);
@@ -5181,14 +5195,16 @@ end;
 procedure TIdRTPSession.NotifyListenersOfData(Data: TIdRTPPayload;
                                               Binding: TIdSocketHandle);
 var
-  I: Integer;                                              
+  Notification: TIdRTPDataListenerNewDataMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdRTPDataListenerNewDataMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdRTPDataListener(Self.Listeners[I]).OnNewData(Data, Binding);
+    Notification.Binding := Binding;
+    Notification.Data    := Data;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
@@ -5351,6 +5367,36 @@ end;
 function TIdRTPPacketBuffer.PacketAt(Index: Integer): TIdRTPPacket;
 begin
   Result := Self.List[Index] as TIdRTPPacket;
+end;
+
+//******************************************************************************
+//* TIdRTPListenerReceiveRTCPMethod                                            *
+//******************************************************************************
+//* TIdRTPListenerReceiveRTCPMethod Public methods *****************************
+
+procedure TIdRTPListenerReceiveRTCPMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPListener).OnRTCP(Self.Packet, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPListenerReceiveRTPMethod                                             *
+//******************************************************************************
+//* TIdRTPListenerReceiveRTPMethod Public methods ******************************
+
+procedure TIdRTPListenerReceiveRTPMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPListener).OnRTP(Self.Packet, Self.Binding);
+end;
+
+//******************************************************************************
+//* TIdRTPDataListenerNewDataMethod                                            *
+//******************************************************************************
+//* TIdRTPDataListenerNewDataMethod Public methods *****************************
+
+procedure TIdRTPDataListenerNewDataMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPDataListener).OnNewData(Self.Data, Self.Binding);
 end;
 
 end.
