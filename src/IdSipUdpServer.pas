@@ -12,18 +12,18 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdSipTcpClient, IdSipTcpServer,
-  IdSocketHandle, IdUDPServer, SyncObjs;
+  Classes, IdSipConsts, IdSipMessage, IdSipNotification, IdSipTcpClient,
+  IdSipTcpServer, IdSocketHandle, IdUDPServer, SysUtils;
 
 type
   TIdSipUdpServer = class(TIdUDPServer)
   private
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    Listeners: TIdSipNotificationList;
 
     procedure DoOnParserError(const RawMessage, Reason: String);
     procedure NotifyListeners(const Request: TIdSipRequest;
                               const ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure NotifyListenersOfException(E: Exception);
     procedure NotifyListenersOfMalformedMessage(const Msg: String;
                                                 const Reason: String);
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
@@ -44,7 +44,7 @@ type
 implementation
 
 uses
-  IdUDPBase, SysUtils;
+  IdUDPBase;
 
 //*******************************************************************************
 //* TIdSipUdpServer                                                             *
@@ -56,42 +56,25 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort   := IdPORT_SIP;
-  Self.ListenerLock  := TCriticalSection.Create;
-  Self.Listeners     := TList.Create;
+  Self.Listeners     := TIdSipNotificationList.Create;
   Self.ThreadedEvent := true;
 end;
 
 destructor TIdSipUdpServer.Destroy;
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Free;
-  finally
-    Self.ListenerLock.Release;
-  end;
-  Self.ListenerLock.Free;
+  Self.Listeners.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipUdpServer.AddMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Add(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdSipUdpServer.RemoveMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.ListenerLock.Acquire;
-  try
-    Self.Listeners.Remove(Pointer(Listener));
-  finally
-    Self.ListenerLock.Release;
-  end;
+  Self.Listeners.RemoveListener(Listener);
 end;
 
 //* TIdSipUdpServer Protected methods ******************************************
@@ -147,6 +130,9 @@ begin
       on E: EBadResponse do begin
         // drop it on the floor
       end;
+      on E: Exception do begin
+        Self.NotifyListenersOfException(E);
+      end;
     end;
   finally
     Parser.Free;
@@ -156,15 +142,16 @@ end;
 procedure TIdSipUdpServer.NotifyListeners(const Response: TIdSipResponse;
                                           const ReceivedFrom: TIdSipConnectionBindings);
 var
-  I: Integer;
+  Notification: TIdSipTcpServerReceiveResponseMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdSipTcpServerReceiveResponseMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response,
-                                                                 ReceivedFrom);
+    Notification.ReceivedFrom := ReceivedFrom;
+    Notification.Response     := Response;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
@@ -178,29 +165,47 @@ end;
 procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest;
                                           const ReceivedFrom: TIdSipConnectionBindings);
 var
-  I: Integer;
+  Notification: TIdSipTcpServerReceiveRequestMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdSipTcpServerReceiveRequestMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request,
-                                                                ReceivedFrom);
+    Notification.ReceivedFrom := ReceivedFrom;
+    Notification.Request     := Request;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
+  end;
+end;
+
+procedure TIdSipUdpServer.NotifyListenersOfException(E: Exception);
+var
+  Notification: TIdSipTcpServerExceptionMethod;
+begin
+  Notification := TIdSipTcpServerExceptionMethod.Create;
+  try
+    Notification.Exception := E;
+    Notification.Reason := 'UDP server: ' + E.Message;
+
+    Self.Listeners.Notify(Notification);
+  finally
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipUdpServer.NotifyListenersOfMalformedMessage(const Msg: String;
                                                             const Reason: String);
 var
-  I: Integer;
+  Notification: TIdSipTcpServerMalformedMessageMethod;
 begin
-  Self.ListenerLock.Acquire;
+  Notification := TIdSipTcpServerMalformedMessageMethod.Create;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnMalformedMessage(Msg, Reason);
+    Notification.Msg := Msg;
+    Notification.Reason := Reason;
+
+    Self.Listeners.Notify(Notification);
   finally
-    Self.ListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
