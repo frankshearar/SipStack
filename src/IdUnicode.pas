@@ -6,10 +6,16 @@ uses
   Types;
 
 const
+  Utf8ZeroWidthNonBreakingSpace = #$EF#$BB#$BF;
+  ZeroWidthNonBreakingSpace     = $FEFF;
+  ZeroWidthNonBreakingSpaceChar = WideChar(ZeroWidthNonBreakingSpace);
+
+const
   UnicodeHighSurrogateStart = $D800;
   UnicodeHighSurrogateEnd   = $DBFF;
   UnicodeLowSurrogateStart  = $DC00;
-  UnicodeLowSurrogateEnd    = $DFFF;  
+  UnicodeLowSurrogateEnd    = $DFFF;
+  UTF8BOM                   = Utf8ZeroWidthNonBreakingSpace;
 
 // Unicode functions
 function CodePointToUTF8(CodePoint: DWord): String;
@@ -20,6 +26,8 @@ function LowSurrogate(CodePoint: DWord): Word;
 function SurrogateToCodePoint(HighSurrogate, LowSurrogate: Word): DWord;
 function UTF16LEToUTF8(const W: WideString): String;
 function UTF8ToUTF16LE(const S: String): WideString;
+
+function RPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
 
 implementation
 
@@ -216,6 +224,31 @@ begin
     else
       Result := Result + WideChar(CodePoint and $FFFF);
     Inc(I);
+  end;
+end;
+
+function RPosW(const Needle, Haystack: WideString; Start: Integer = -1): Integer;
+var
+  I:        Integer;
+  StartPos: Integer;
+  TokenLen: Integer;
+begin
+  Result := 0;
+  TokenLen := Length(Needle);
+  // Get starting position
+  if Start < 0 then
+    Start := Length(Haystack);
+
+  StartPos := Length(Haystack) - TokenLen + 1;
+  if (Start < StartPos) then
+    StartPos := Start;
+
+  // Search for the string
+  for I := StartPos downto 1 do begin
+    if (Copy(Haystack, I, TokenLen) = Needle) then begin
+      Result := I;
+      Break;
+    end;
   end;
 end;
 
