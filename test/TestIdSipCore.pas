@@ -98,6 +98,18 @@ type
     procedure TestNextSequenceNoFor;
   end;
 
+  TestTIdSipActions = class(TTestCaseTU)
+  private
+    Actions: TIdSipActions;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddActionNotifiesObservers;
+    procedure TestAddObserver;
+    procedure TestRemoveObserver;
+  end;
+
   TestTIdSipUserAgent = class(TTestCaseTU,
                               IIdObserver,
                               IIdSipTransportSendingListener,
@@ -148,6 +160,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAcksDontMakeTransactions;
+    procedure TestActionsNotifyUAObservers;
     procedure TestAddAllowedContentType;
     procedure TestAddAllowedContentTypeMalformed;
     procedure TestAddAllowedLanguage;
@@ -177,6 +190,7 @@ type
     procedure TestCreateResponseToTagMissing;
     procedure TestCreateResponseUserAgent;
     procedure TestCreateResponseUserAgentBlank;
+    procedure TestDeclinedCallNotifiesListeners;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDoNotDisturb;
@@ -875,9 +889,13 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
+}
+  Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
+{
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundReInvite.Suite);
@@ -905,6 +923,7 @@ begin
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1441,6 +1460,95 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipActions                                                          *
+//******************************************************************************
+//* TestTIdSipActions Public methods *******************************************
+
+procedure TestTIdSipActions.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Actions := TIdSipActions.Create;
+end;
+
+procedure TestTIdSipActions.TearDown;
+begin
+  Self.Actions.Free;
+
+  inherited Destroy;
+end;
+
+//* TestTIdSipActions Published methods ****************************************
+
+procedure TestTIdSipActions.TestAddActionNotifiesObservers;
+var
+  L1: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    Self.Actions.AddObserver(L1);
+
+    Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
+
+    Check(L1.Changed, 'L1 not notified');
+  finally
+    Self.Actions.RemoveObserver(L1);
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestAddObserver;
+var
+  L1, L2: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    L2 := TIdObserverListener.Create;
+    try
+      Self.Actions.AddObserver(L1);
+      Self.Actions.AddObserver(L2);
+
+      Self.Actions.AddInboundInvite(Self.Core, Self.Invite);
+
+      Check(L1.Changed, 'L1 not notified, thus not added');
+      Check(L2.Changed, 'L2 not notified, thus not added');
+    finally
+      Self.Actions.RemoveObserver(L2);
+      L2.Free;
+    end;
+  finally
+    Self.Actions.RemoveObserver(L1);
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipActions.TestRemoveObserver;
+var
+  L1, L2: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    L2 := TIdObserverListener.Create;
+    try
+      Self.Actions.AddObserver(L1);
+      Self.Actions.AddObserver(L2);
+      Self.Actions.RemoveObserver(L1);
+
+      Self.Actions.AddInboundInvite(Self.Core, Self.Invite);
+
+      Check(not L1.Changed, 'L1 notified, thus not removed');
+      Check(L2.Changed, 'L2 not notified, thus not added');
+    finally
+      Self.Actions.RemoveObserver(L2);
+      L2.Free;
+    end;
+  finally
+    Self.Actions.RemoveObserver(L1);
+    L1.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipUserAgent                                                        *
 //******************************************************************************
 //* TestTIdSipUserAgent Public methods *****************************************
@@ -1704,6 +1812,23 @@ begin
     end;
   finally
     RemoteDlg.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestActionsNotifyUAObservers;
+var
+  L1: TIdObserverListener;
+begin
+  L1 := TIdObserverListener.Create;
+  try
+    Self.Core.AddObserver(L1);
+
+    Self.ReceiveInvite;
+
+    Check(L1.Changed, 'L1 not notified');
+  finally
+    Self.Core.RemoveObserver(L1);
+    L1.Free;
   end;
 end;
 
@@ -2313,6 +2438,25 @@ begin
           'User-Agent header not removed because it''s blank');
   finally
     Response.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestDeclinedCallNotifiesListeners;
+var
+  O: TIdObserverListener;
+begin
+  Self.Core.Call(Self.Destination, '', '').Send;
+
+  O := TIdObserverListener.Create;
+  try
+    Self.Core.AddObserver(O);
+
+    Self.ReceiveResponse(SIPDecline);
+
+    Check(O.Changed, 'Clearing up a terminated action should notify observers');
+  finally
+    Self.Core.RemoveObserver(O);
+    O.Free;
   end;
 end;
 

@@ -290,15 +290,17 @@ type
   private
     ActionLock: TCriticalSection;
     Actions:    TObjectList;
+    Observed:   TIdObservable;
 
     function  ActionAt(Index: Integer): TIdSipAction;
   public
     constructor Create;
     destructor  Destroy; override;
 
-    procedure Add(Action: TIdSipAction);
+    function  Add(Action: TIdSipAction): TIdSipAction;
     function  AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
                                Request: TIdSipRequest): TIdSipInboundInvite;
+    procedure AddObserver(const Listener: IIdObserver);
     function  AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
                                 ActionType: TIdSipActionClass): TIdSipAction;
     procedure CleanOutTerminatedActions;
@@ -311,6 +313,7 @@ type
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
     function  RegistrationCount: Integer;
+    procedure RemoveObserver(const Listener: IIdObserver);
     function  SessionCount: Integer;
     procedure TerminateAllActions;
   end;
@@ -336,7 +339,8 @@ type
   // I provide the canonical place to reject messages that have correct syntax
   // but that we don't or can't accept. This includes unsupported SIP versions,
   // unrecognised methods, etc.
-  TIdSipAbstractUserAgent = class(TIdSipAbstractCore)
+  TIdSipAbstractUserAgent = class(TIdSipAbstractCore,
+                                  IIdObserver)
   private
     fActions:                TIdSipActions;
     fAllowedContentTypeList: TStrings;
@@ -359,6 +363,7 @@ type
     function  GetFrom: TIdSipFromHeader;
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport);
+    procedure OnChanged(Observed: TObject);
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
     procedure RejectRequestUnknownAccept(Request: TIdSipRequest);
@@ -1808,10 +1813,14 @@ begin
 
   Self.ActionLock := TCriticalSection.Create;
   Self.Actions    := TObjectList.Create;
+
+  Self.Observed := TIdObservable.Create;
 end;
 
 destructor TIdSipActions.Destroy;
 begin
+  Self.Observed.Free;
+
   Self.ActionLock.Acquire;
   try
     Self.Actions.Free;
@@ -1823,14 +1832,28 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipActions.Add(Action: TIdSipAction);
+function TIdSipActions.Add(Action: TIdSipAction): TIdSipAction;
 begin
+  Result := Action;
+
   Self.ActionLock.Acquire;
   try
-    Self.Actions.Add(Action);
+    try
+      Self.Actions.Add(Action);
+    except
+      if (Self.Actions.IndexOf(Action) <> ItemNotFoundIndex) then
+        Self.Actions.Remove(Action)
+      else
+        Action.Free;
+
+        Result := nil;
+      raise;
+    end;
   finally
     Self.ActionLock.Release;
   end;
+
+  Self.Observed.NotifyListenersOfChange;
 end;
 
 function TIdSipActions.AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
@@ -1838,22 +1861,15 @@ function TIdSipActions.AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
 begin
   Self.ActionLock.Acquire;
   try
-    Result := TIdSipInboundInvite.Create(UserAgent, Request);
-    try
-      Self.Actions.Add(Result);
-    except
-      if (Self.Actions.IndexOf(Result) <> ItemNotFoundIndex) then
-        Self.Actions.Remove(Result)
-      else
-        Result.Free;
-
-      Result := nil;
-
-      raise;
-    end;
+    Result := Self.Add(TIdSipInboundInvite.Create(UserAgent, Request)) as TIdSipInboundInvite;
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipActions.AddObserver(const Listener: IIdObserver);
+begin
+  Self.Observed.AddObserver(Listener);
 end;
 
 function TIdSipActions.AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
@@ -1861,19 +1877,7 @@ function TIdSipActions.AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
 begin
   Self.ActionLock.Acquire;
   try
-    Result := ActionType.Create(UserAgent);
-    try
-      Self.Actions.Add(Result);
-    except
-      if (Self.Actions.IndexOf(Result) <> ItemNotFoundIndex) then
-        Self.Actions.Remove(Result)
-      else
-        Result.Free;
-
-      Result := nil;
-
-      raise;
-    end;
+    Result := Self.Add(ActionType.Create(UserAgent));
   finally
     Self.ActionLock.Release;
   end;
@@ -1881,19 +1885,28 @@ end;
 
 procedure TIdSipActions.CleanOutTerminatedActions;
 var
-  I: Integer;
+  Changed:      Boolean;
+  I:            Integer;
+  InitialCount: Integer;
 begin
   Self.ActionLock.Acquire;
   try
+    InitialCount := Self.Actions.Count;
+
     I := 0;
     while (I < Self.Actions.Count) do
       if Self.ActionAt(I).IsTerminated then
         Self.Actions.Delete(I)
       else
         Inc(I);
+
+    Changed := InitialCount <> Self.Actions.Count;
   finally
     Self.ActionLock.Release;
   end;
+
+  if Changed then
+    Self.Observed.NotifyListenersOfChange;
 end;
 
 function TIdSipActions.FindAction(Msg: TIdSipMessage): TIdSipAction;
@@ -2039,6 +2052,11 @@ begin
   end;
 end;
 
+procedure TIdSipActions.RemoveObserver(const Listener: IIdObserver);
+begin
+  Self.Observed.RemoveObserver(Listener);
+end;
+
 function TIdSipActions.SessionCount: Integer;
 var
   I: Integer;
@@ -2101,6 +2119,8 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fKeyring                := TIdKeyRing.Create;
   Self.KnownRegistrars         := TIdSipRegistrations.Create;
+
+  Self.Actions.AddObserver(Self);
 
   Self.AddAllowedContentType(SdpMimeType);
 
@@ -2165,8 +2185,6 @@ end;
 function TIdSipAbstractUserAgent.AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
 begin
   Result := Self.Actions.AddInboundInvite(Self, Request);
-
-  Self.NotifyOfChange;
 end;
 
 function TIdSipAbstractUserAgent.AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
@@ -2186,8 +2204,6 @@ end;
 function TIdSipAbstractUserAgent.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
 begin
   Result := Self.Actions.AddOutboundAction(Self, ActionType);
-
-  Self.NotifyOfChange;
 end;
 
 function TIdSipAbstractUserAgent.AddOutboundOptions: TIdSipOutboundOptions;
@@ -2880,6 +2896,11 @@ begin
   end;
 end;
 
+procedure TIdSipAbstractUserAgent.OnChanged(Observed: TObject);
+begin
+  Self.NotifyOfChange;
+end;
+
 procedure TIdSipAbstractUserAgent.RejectRequestBadExtension(Request: TIdSipRequest);
 var
   Response: TIdSipResponse;
@@ -3253,7 +3274,6 @@ begin
                                            UsingSecureTransport);
 
     Self.UserAgent.NotifyOfInboundCall(Session);
-    Self.UserAgent.NotifyOfChange;
 
     if Request.HasHeader(ExpiresHeader) then
       Self.UserAgent.ScheduleEvent(Self.UserAgent.OnInboundSessionExpire,
