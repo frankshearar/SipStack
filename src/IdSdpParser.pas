@@ -181,6 +181,7 @@ type
     function GetItems(Index: Integer): TIdSdpMediaDescription;
   public
     procedure Add(Desc: TIdSdpMediaDescription);
+    function  AllDescriptionsHaveConnections: Boolean;
 
     property Items[Index: Integer]: TIdSdpMediaDescription read GetItems; default;
   end;
@@ -240,6 +241,7 @@ type
   public
     destructor Destroy; override;
 
+    function AllDescriptionsHaveConnections: Boolean;
     function HasConnection: Boolean;
 
     property Attributes:        TIdSdpAttributes        read GetAttributes;
@@ -313,6 +315,7 @@ const
   BadHeaderOrder        = 'Headers in the wrong order: found %s after %s';
   ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';
   ConvertStrErrorMsg    = 'Couldn''t convert ''%s'' to type %s';
+  MissingConnection     = 'Missing connection-field';
   MissingOrigin         = 'Missing origin-field';
   MissingSessionName    = 'Missing session-name-field';
   MissingVersion        = 'Missing proto-version';
@@ -671,6 +674,17 @@ begin
   Self.List.Add(Desc);
 end;
 
+function TIdSdpMediaDescriptions.AllDescriptionsHaveConnections: Boolean;
+var
+  I: Integer;
+begin
+  Result := true;
+
+  if Result then
+    for I := 0 to Self.Count - 1 do
+      Result := Result and Self[I].HasConnection;
+end;
+
 //* TIdSdpMediaDescriptions Private methods ************************************
 
 function TIdSdpMediaDescriptions.GetItems(Index: Integer): TIdSdpMediaDescription;
@@ -747,6 +761,11 @@ begin
   fURI.Free;
 
   inherited Destroy;
+end;
+
+function TIdSdpPayload.AllDescriptionsHaveConnections: Boolean;
+begin
+  Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
 end;
 
 function TIdSdpPayload.HasConnection: Boolean;
@@ -1085,9 +1104,14 @@ end;
 procedure TIdSdpParser.Parse(const Payload: TIdSdpPayload);
 begin
   Self.ParseSessionHeaders(Payload);
-  
+
   while not Self.Eof do
     Self.ParseMediaDescription(Payload);
+
+  if not Payload.HasConnection
+     and not ((Payload.MediaDescriptions.Count > 0)
+              and Payload.AllDescriptionsHaveConnections) then
+    raise EParser.Create(MissingConnection);
 end;
 
 //* TIdSdpParser Private methods ***********************************************
@@ -1404,6 +1428,7 @@ begin
   end;
 
   Self.LastSessionHeader := RSSDPMediaDescriptionName;
+  LastMediaHeader := RSSDPMediaDescriptionName;
 end;
 
 procedure TIdSdpParser.ParseMediaOptionalHeaders(const MediaDescription: TIdSdpMediaDescription);
@@ -1411,7 +1436,7 @@ var
   NextHeader: String;
 begin
   NextHeader := Self.PeekLine;
-  while not Self.Eof and (NextHeader <> '') do begin
+  while not Self.Eof and (NextHeader <> '') and (NextHeader[1] <> RSSDPMediaDescriptionName) do begin
     case NextHeader[1] of
       RSSDPConnectionName: Self.ParseConnection(MediaDescription.Connection);
       RSSDPBandwidthName:  Self.ParseBandwidth(MediaDescription.Bandwidths);

@@ -62,6 +62,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAllDescriptionsHaveConnections;
     procedure TestClear;
     procedure TestContains;
   end;
@@ -110,7 +111,7 @@ type
     procedure CheckMalformedAttribute(const Value: String);
     procedure CheckMalformedConnection(const Value: String);
     procedure CheckMalformedOrigin(const OriginValue: String);
-    procedure CheckMalformedPhoneNumber(const PhoneNumberValue: String);
+    procedure CheckMalformedPhoneNumber(const Value: String);
     procedure CheckMalformedKey(const KeyValue: String);
     procedure CheckMalformedMediaDescription(const Value: String);
     procedure CheckMalformedOptionalSessionHeader(const Name, Value: String);
@@ -171,6 +172,8 @@ type
     procedure TestParseMediaDescriptionMissingFormatList;
     procedure TestParseMediaDescriptionMissingInformation;
     procedure TestParseMediaDescriptionMissingPort;
+    procedure TestParseMediaDescriptionsMissingSessionConnection;
+    procedure TestParseMediaDescriptions;
     procedure TestParseMediaDescriptionUnknownMediaType;
     procedure TestParseMediaDescriptionUnknownTransport;
     procedure TestParseMediaDescriptionWithAttributes;
@@ -182,6 +185,7 @@ type
     procedure TestParseMinimumPayload;
     procedure TestParseMissingOrigin;
     procedure TestParseMissingSession;
+    procedure TestParseMissingSessionConnection;
     procedure TestParseMissingVersion;
     procedure TestParseOriginMalformed;
     procedure TestParseOriginMalformedUserName;
@@ -194,6 +198,7 @@ type
     procedure TestParsePhoneNumberWithStuffOutsideComment;
     procedure TestParsePhoneNumberWithUnsafeChars;
     procedure TestParseSessionIllegalCharacters;
+    procedure TestParseSomeMediaDescriptionsLackConnectionAndNoSessionConnection;
     procedure TestParseTimeMultipleHeaders;
     procedure TestParseTimeSingleBounded;
     procedure TestParseTimeSingleUnbounded;
@@ -211,9 +216,13 @@ type
   end;
 
 const
-  MinimumPayload = 'v=0'#13#10
+  MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
                  + 's=Minimum Session Info';
+  DefaultConnection = 'c=IN IP4 224.2.17.12/127';
+
+  MinimumPayload = MinimumPayloadSansConnection + #13#10
+                 + DefaultConnection;
 
 implementation
 
@@ -227,6 +236,7 @@ begin
   Result.AddTest(TestTIdSdpMediaDescription.Suite);
   Result.AddTest(TestTIdSdpAttributes.Suite);
   Result.AddTest(TestTIdSdpBandwidths.Suite);
+  Result.AddTest(TestTIdSdpMediaDescriptions.Suite);
   Result.AddTest(TestTIdSdpRepeats.Suite);
   Result.AddTest(TestTIdSdpTimes.Suite);
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
@@ -629,6 +639,19 @@ begin
   CheckEquals(2, Self.R.Count, 'Count after 2nd Add()');
 end;
 
+procedure TestTIdSdpMediaDescriptions.TestAllDescriptionsHaveConnections;
+begin
+  Check(Self.R.AllDescriptionsHaveConnections, 'Trivial case - empty list');
+  Self.R.Add(TIdSdpMediaDescription.Create);
+  Check(not Self.R.AllDescriptionsHaveConnections, 'One item with no connection');
+  Self.R[0].Connection.AddressType := Id_IPv4;
+  Check(Self.R.AllDescriptionsHaveConnections, 'One item now has a connection');
+  Self.R.Add(TIdSdpMediaDescription.Create);
+  Check(not Self.R.AllDescriptionsHaveConnections, 'A second item, with no connection');
+  Self.R[1].Connection.NetType := 'IN';
+  Check(Self.R.AllDescriptionsHaveConnections, 'Both items now have connections');
+end;
+
 procedure TestTIdSdpMediaDescriptions.TestClear;
 begin
   Self.R.Add(TIdSdpMediaDescription.Create);
@@ -828,8 +851,25 @@ begin
 end;
 
 procedure TestTIdSdpParser.CheckMalformedConnection(const Value: String);
+var
+  S: TStringStream;
 begin
-  Self.CheckMalformedOptionalSessionHeader(RSSDPConnectionName, Value);
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'c=' + Value);
+  try
+    try
+      Self.P.Source := S;
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken, [RSSDPConnectionName, Value]),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.CheckMalformedOrigin(const OriginValue: String);
@@ -855,9 +895,26 @@ begin
   end;
 end;
 
-procedure TestTIdSdpParser.CheckMalformedPhoneNumber(const PhoneNumberValue: String);
+procedure TestTIdSdpParser.CheckMalformedPhoneNumber(const Value: String);
+var
+  S: TStringStream;
 begin
-  Self.CheckMalformedOptionalSessionHeader(RSSDPPhoneName, PhoneNumberValue);
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'p=' + Value);
+  try
+    try
+      Self.P.Source := S;
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken, [RSSDPPhoneName, Value]),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.CheckMalformedKey(const KeyValue: String);
@@ -1288,7 +1345,7 @@ procedure TestTIdSdpParser.TestParseConnectionInSessionAndMediaDescription;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
                           + 'c=IN IP4 224.2.17.12/127'#13#10
                           + 'm=video 49170/2 RTP/AVP 31'#13#10
                           + 'i=More information than you can shake a stick at'#13#10
@@ -1364,7 +1421,7 @@ procedure TestTIdSdpParser.TestParseConnectionUnicastAddress;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
                           + 'c=IN IP4 127.2.17.12');
   try
     Self.P.Source := S;
@@ -1383,8 +1440,9 @@ procedure TestTIdSdpParser.TestParseEmail;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'e=nihilistic@mystics.net');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'e=nihilistic@mystics.net'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -1399,8 +1457,9 @@ procedure TestTIdSdpParser.TestParseEmailBracketedName;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'e=nihilistic@mystics.net (Apostolic alcoholics)');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'e=nihilistic@mystics.net (Apostolic alcoholics)'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -1418,8 +1477,9 @@ procedure TestTIdSdpParser.TestParseEmailRfc822;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'e="Apostolic alcoholics" <nihilistic@mystics.net>');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'e="Apostolic alcoholics" <nihilistic@mystics.net>'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -1553,8 +1613,9 @@ procedure TestTIdSdpParser.TestParseInfo;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'i=An optional header');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'i=An optional header'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -1700,6 +1761,76 @@ end;
 procedure TestTIdSdpParser.TestParseMediaDescriptionMissingPort;
 begin
   Self.CheckMalformedMediaDescription('data RTP/AVP 1');
+end;
+
+procedure TestTIdSdpParser.TestParseMediaDescriptionsMissingSessionConnection;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'm=video 49170/2 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10
+                          + 'b=RR:666'#13#10
+                          + 'a=recvonly'#13#10
+                          + 'a=T38FaxTranscodingJBIG'#13#10
+                          + 'a=type:broadcast');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    Check(not Self.Payload.HasConnection, 'Session connection');
+    CheckEquals(1, Self.Payload.MediaDescriptions.Count, 'MediaDescriptions.Count');
+    Check(Self.Payload.MediaDescriptions[0].HasConnection, 'MediaDescriptions[0] connection');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseMediaDescriptions;
+var
+  I: Integer;
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'm=video 49170/1 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10
+                          + 'm=video 49171/2 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10
+                          + 'm=video 49172/3 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10
+                          + 'm=video 49173/4 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.12/127'#13#10);
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    Check(not Self.Payload.HasConnection, 'Session connection');
+    CheckEquals(4, Self.Payload.MediaDescriptions.Count, 'MediaDescriptions.Count');
+
+    for I := 0 to 3 do begin
+      Check(Self.Payload.MediaDescriptions[I].HasConnection, 'MediaDescriptions[' + IntToStr(I) + '] connection');
+
+      Check(mtVideo = Self.Payload.MediaDescriptions[I].MediaType, 'MediaDescriptions[' + IntToStr(I) + '].MediaType');
+
+
+
+    CheckEquals(49170 + I, Self.Payload.MediaDescriptions[I].Port,        'MediaDescriptions[' + IntToStr(I) + '].Port');
+    CheckEquals(1 + I,     Self.Payload.MediaDescriptions[I].PortCount,   'MediaDescriptions[' + IntToStr(I) + '].PortCount');
+    CheckEquals('RTP/AVP', Self.Payload.MediaDescriptions[I].Transport,   'MediaDescriptions[' + IntToStr(I) + '].Transport');
+    CheckEquals('More information than you can shake a stick at',
+                Self.Payload.MediaDescriptions[I].Info,
+                'MediaDescriptions[' + IntToStr(I) + '].Info');
+    CheckEquals(1,         Self.Payload.MediaDescriptions[I].FormatCount, 'MediaDescriptions[' + IntToStr(I) + '].FormatCount');
+    CheckEquals('31',      Self.Payload.MediaDescriptions[I].Formats[0],  'MediaDescriptions[' + IntToStr(I) + '].Formats[0]');
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownMediaType;
@@ -1877,10 +2008,15 @@ begin
     Check      (Id_IPV4 =      Self.Payload.Origin.AddressType,    'Origin.AddressType');
     CheckEquals('126.16.64.4', Self.Payload.Origin.Address,        'Origin.Address');
 
+    CheckEquals('IN',          Self.Payload.Connection.NetType,     'Connection.NetType');
+    Check      (Id_IPv4      = Self.Payload.Connection.AddressType, 'Connection.AddressType');
+    CheckEquals('224.2.17.12', Self.Payload.Connection.Address,     'Connection.Address');
+    CheckEquals(127,           Self.Payload.Connection.TTL,         'Connection.TTL');
+
     CheckEquals('', Self.Payload.Info, 'Info');
     CheckEquals(0, Self.Payload.Times.Count, 'Times.Count');
 
-    Check(not Self.Payload.HasConnection, 'Connection');
+    Check(Self.Payload.HasConnection, 'Connection');
   finally
     S.Free;
   end;
@@ -1923,6 +2059,28 @@ begin
     except
       on E: EParser do
         CheckEquals(MissingSessionName, E.Message, 'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseMissingSessionConnection;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayloadSansConnection);
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out');
+    except
+      on E: EParser do
+        CheckEquals(MissingConnection,
+                    E.Message,
+                    'Unexpected exception');
     end;
   finally
     S.Free;
@@ -1978,8 +2136,9 @@ procedure TestTIdSdpParser.TestParsePhoneNumber;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'p=Ziggy Stardust <+99 666 0942-3>');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'p=Ziggy Stardust <+99 666 0942-3>'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -1996,9 +2155,10 @@ procedure TestTIdSdpParser.TestParsePhoneNumberMultipleHeaders;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
                           + 'p=Ziggy Stardust <+99 666 0942-3>'#13#10
-                          + 'p=Ziggy Stardust <+99 666 0942-3>');
+                          + 'p=Ziggy Stardust <+99 666 0942-3>'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -2020,8 +2180,9 @@ procedure TestTIdSdpParser.TestParsePhoneNumberWithAngleBracketsButNoName;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'p=<+99 666 0942-3>');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'p=<+99 666 0942-3>'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -2043,8 +2204,9 @@ procedure TestTIdSdpParser.TestParsePhoneNumberWithUnsafeChars;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'p=+99 666 0942-3'#0);
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'p=+99 666 0942-3'#0#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
@@ -2078,6 +2240,33 @@ begin
     except
       on E: EParser do
         CheckEquals(Format(MalformedToken, [RSSDPSessionName, 's='#0]),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseSomeMediaDescriptionsLackConnectionAndNoSessionConnection;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'm=video 49170/2 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'c=IN IP4 224.2.17.11/127'#13#10
+                          + 'm=audio 5060/2 RTP/AVP 31'#13#10
+                          + 'i=Oh no, we have no media-level connection!'#13#10);
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out');
+    except
+      on E: EParser do
+        CheckEquals(MissingConnection,
                     E.Message,
                     'Unexpected exception');
     end;
@@ -2290,8 +2479,9 @@ procedure TestTIdSdpParser.TestParseUri;
 var
   S: TStringStream;
 begin
-  S := TStringStream.Create(MinimumPayload + #13#10
-                          + 'u=http://127.0.0.1/');
+  S := TStringStream.Create(MinimumPayloadSansConnection + #13#10
+                          + 'u=http://127.0.0.1/'#13#10
+                          + DefaultConnection);
   try
     Self.P.Source := S;
 
