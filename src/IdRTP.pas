@@ -1050,31 +1050,80 @@ procedure WriteNTPTimestamp(Dest: TStream; Value: TIdNTPTimestamp);
 procedure WriteString(Dest: TStream; Value: String);
 procedure WriteWord(Dest: TStream; Value: Word);
 
+// From RFC 1521
+const
+  ApplicationMediaType = 'application';
+  AudioMediaType       = 'audio';
+  ImageMediaType       = 'image';
+  MessageMediaType     = 'message';
+  MultipartMediaType   = 'multipart';
+  TextMediaType        = 'text';
+  VideoMediaType       = 'video';
+
 // From RFC 3550 and 3551
 const
   RFC3550Version     = 2;
   AudioVisualProfile = 'RTP/AVP';
 
-  CelBEncoding     = 'CelB';
-  CNEncoding       = 'CN';
-  DVI4Encoding     = 'DVI4';
-  G722Encoding     = 'G722';
-  G723Encoding     = 'G723';
-  G728Encoding     = 'G728';
-  G729Encoding     = 'G729';
-  GSMEncoding      = 'GSM';
-  H261Encoding     = 'H261';
-  H263Encoding     = 'H263';
-  JPEGEncoding     = 'JPEG';
-  L16Encoding      = 'L16';
-  LPCEncoding      = 'LPC';
-  MP2TEncoding     = 'MP2T';
-  MPAEncoding      = 'MPA';
-  MPVEncoding      = 'MPV';
-  NVEncoding       = 'nv';
-  PCMMuLawEncoding = 'PCMU';
-  PCMALawEncoding  = 'PCMA';
-  QCELPEncoding    = 'QCELP';
+  CelBEncoding      = 'CelB';
+  CNEncoding        = 'CN';
+  DVI4Encoding      = 'DVI4';
+  H263_1998Encoding = 'H263-1998';
+  G722Encoding      = 'G722';
+  G723Encoding      = 'G723';
+  G726_16Encoding   = 'G726-16';
+  G726_24Encoding   = 'G726-24';
+  G726_32Encoding   = 'G726-32';
+  G726_40Encoding   = 'G726-40';
+  G728Encoding      = 'G728';
+  G729Encoding      = 'G729';
+  G729DEncoding     = 'G729D';
+  G729EEncoding     = 'G729E';
+  GSMEncoding       = 'GSM';
+  GSM_EFREncoding   = 'GSM-EFR';
+  H261Encoding      = 'H261';
+  H263Encoding      = 'H263';
+  JPEGEncoding      = 'JPEG';
+  L8Encoding        = 'L8';
+  L16Encoding       = 'L16';
+  LPCEncoding       = 'LPC';
+  MP2TEncoding      = 'MP2T';
+  MPAEncoding       = 'MPA';
+  MPVEncoding       = 'MPV';
+  NVEncoding        = 'nv';
+  PCMMuLawEncoding  = 'PCMU';
+  PCMALawEncoding   = 'PCMA';
+  QCELPEncoding     = 'QCELP';
+  VDVIEncoding      = 'VDVI';
+
+  CelBClockRate      = 90000;
+  CNClockRate        = 8000;
+  G722RTPClockRate   = 8000; // http://www.openh323.org/pipermail/openh323/2001-December/050691.html
+  G723ClockRate      = 8000;
+  G726_16ClockRate   = 8000;
+  G726_24ClockRate   = 8000;
+  G726_32ClockRate   = 8000;
+  G726_40ClockRate   = 8000;
+  G728ClockRate      = 8000;
+  G729ClockRate      = 8000;
+  G729DClockRate     = 8000;
+  G729EClockRate     = 8000;
+  GSMClockRate       = 8000;
+  GSM_EFRClockRate   = 8000;
+  H261ClockRate      = 90000;
+  H263_1998ClockRate = 90000;
+  JPEGClockRate      = 90000;
+  L16ClockRate       = 44100;
+  LPCClockRate       = 8000;
+  MPAClockRate       = 90000;
+  MPV2TClockRate     = 90000;
+  MPVClockRate       = 90000;
+  NVClockRate        = 90000;
+  PCMALawClockRate   = 8000;
+  PCMMuLawClockRate  = 8000;
+  QCELPClockRate     = 8000;
+
+  G722SamplingRate = 16000;
 
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
@@ -1095,14 +1144,14 @@ const
 // From RFC 2793
 const
   InterleavedT140ClockRate    = 8000;
-  RedundancyEncoding          = 'RED';
-  RedundancyEncodingParameter = 'RED';
+  RedundancyEncoding          = 'RED'; // same as in RFC 2198
+  RedundancyEncodingParameter = RedundancyEncoding;
   T140ClockRate               = 1000;
   T140Encoding                = 'T140';
   T140LostChar                = #$ff#$fd;
-  InterleavedT140MimeType     = 'audio/' + T140Encoding;
-  RedundantT140MimeType       = 'text/' + RedundancyEncoding;
-  T140MimeType                = 'text/' + T140Encoding;
+  InterleavedT140MimeType     = AudioMediaType + '/' + T140Encoding;
+  RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncoding;
+  T140MimeType                = TextMediaType + '/' + T140Encoding;
 
 // From RFC 2833
 const
@@ -1124,7 +1173,7 @@ const
   DTMFD                  = 15;
   DTMFFlash              = 16;
   TelephoneEventEncoding = 'telephone-event';
-  TelephoneEventMimeType = 'audio/' + TelephoneEventEncoding;
+  TelephoneEventMimeType = AudioMediaType + '/' + TelephoneEventEncoding;
 
 const
   NullEncodingName     = 'null';
