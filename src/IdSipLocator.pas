@@ -66,6 +66,7 @@ type
 
     function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; overload; virtual; abstract;
     function FindServersFor(const AddressOfRecord: String): TIdSipLocations; overload;
+    function FindServersFor(Response: TIdSipResponse): TIdSipLocations; overload;
   end;
 
   // I take an address-of-record SIP/SIPS URI and return a URL at which
@@ -78,7 +79,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  IdSimpleParser, SysUtils;
 
 //******************************************************************************
 //* TIdSipLocation                                                             *
@@ -184,6 +185,37 @@ begin
     Result := Self.FindServersFor(Uri);
   finally
     Uri.Free;
+  end;
+end;
+
+function TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse): TIdSipLocations;
+begin
+  // cf RFC 3262, section 6:
+  // Sending (unicast) responses:
+  // 1.  Try send it down the existing connection (if TCP) or to the source
+  //     IP/port (if UDP).
+  // 2.  Look at the sent-by of the top Via.
+  // 2.1 Numeric IP? Attempt the transport/IP/port in the top Via
+  // 2.2 Name and port? Query for A/AAAA records; iterate over the
+  //     list. Use the transport and port from the top Via.
+  // 2.3 Name and no port? Query SRV for that name using "_sips" if TLS or
+  //     "_sip" otherwise. Iterate over the list using the transport in the
+  //     sent-by and the IP/ports from the SRV query.
+
+  Result := TIdSipLocations.Create;
+
+  if Response.LastHop.HasReceived then
+    Result.AddLocation(Response.LastHop.Transport,
+                       Response.LastHop.Received,
+                       Response.LastHop.Port);
+
+  if TIdIPAddressParser.IsIPv4Address(Response.LastHop.SentBy)
+  or TIdIPAddressParser.IsIPv6Address(Response.LastHop.SentBy) then
+    Result.AddLocation(Response.LastHop.Transport,
+                       Response.LastHop.SentBy,
+                       Response.LastHop.Port)
+  else begin
+//   raise Exception.Create('We''ve not got a DNS A/AAA lookup thing yet');
   end;
 end;
 

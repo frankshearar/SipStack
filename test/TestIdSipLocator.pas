@@ -53,6 +53,10 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestFindServersForResponseWithReceivedParam;
+    procedure TestFindServersForResponseWithReceivedParamAndNumericSentBy;
+    procedure TestFindServersForResponseWithReceivedParamAndIPv6NumericSentBy;
+    procedure TestFindServersForResponseWithNumericSentBy;
     procedure TestNumericAddressNonStandardPort;
     procedure TestNumericAddressUsesUdp;
     procedure TestNumericAddressSipsUriUsesTls;
@@ -239,6 +243,122 @@ begin
 end;
 
 //* TestTIdSipLocator Published methods ****************************************
+
+procedure TestTIdSipLocator.TestFindServersForResponseWithReceivedParam;
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP gw1.leo-ix.net;received=' + Self.IP;
+
+    Locations := Self.Loc.FindServersFor(Response);
+    try
+      CheckEquals(Response.LastHop.Transport,
+                  Locations[0].Transport,
+                  'First location transport');
+      CheckEquals(Response.LastHop.Received,
+                  Locations[0].Address,
+                  'First location address');
+      CheckEquals(Response.LastHop.Port,
+                  Locations[0].Port,
+                  'First location port');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipLocator.TestFindServersForResponseWithReceivedParamAndNumericSentBy;
+const
+  SentByIP = '6.6.6.6';
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + SentByIP + ';received=' + Self.IP;
+
+    Locations := Self.Loc.FindServersFor(Response);
+    try
+      CheckEquals(Response.LastHop.Transport,
+                  Locations[1].Transport,
+                  'First location transport');
+      CheckEquals(SentByIP,
+                  Locations[1].Address,
+                  'First location address');
+      CheckEquals(Response.LastHop.Port,
+                  Locations[1].Port,
+                  'First location port');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipLocator.TestFindServersForResponseWithReceivedParamAndIpv6NumericSentBy;
+const
+  SentByIP = '[2002:dead:beef:1::1]';
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + SentByIP + ';received=' + Self.IP;
+
+    Locations := Self.Loc.FindServersFor(Response);
+    try
+      CheckEquals(Response.LastHop.Transport,
+                  Locations[1].Transport,
+                  'First location transport');
+      CheckEquals(SentByIP,
+                  Locations[1].Address,
+                  'First location address');
+      CheckEquals(Response.LastHop.Port,
+                  Locations[1].Port,
+                  'First location port');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipLocator.TestFindServersForResponseWithNumericSentBy;
+var
+  Locations: TIdSipLocations;
+  Response:  TIdSipResponse;
+begin
+  Response := TIdSipResponse.Create;
+  try
+    Response.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/UDP ' + Self.IP;
+
+    Locations := Self.Loc.FindServersFor(Response);
+    try
+      CheckEquals(Response.LastHop.Transport,
+                  Locations[0].Transport,
+                  'First location transport');
+      CheckEquals(Self.IP,
+                  Locations[0].Address,
+                  'First location address');
+      CheckEquals(Response.LastHop.Port,
+                  Locations[0].Port,
+                  'First location port');
+    finally
+      Locations.Free;
+    end;
+  finally
+    Response.Free;
+  end;
+end;
 
 procedure TestTIdSipLocator.TestNumericAddressNonStandardPort;
 var

@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
-  IdSipAuthentication, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
-  SysUtils;
+  IdSipAuthentication, IdSipLocator, IdSipMessage, IdSipTransport, IdTimerQueue,
+  SyncObjs, SysUtils;
 
 type
   // This covers all states - INVITE, non-INVITE, client, server.
@@ -81,6 +81,7 @@ type
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
+    fLocator:        TIdSipAbstractLocator;
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
@@ -120,7 +121,7 @@ type
     procedure TryAgainWithAuthentication(Transaction: TIdSipTransaction;
                                          Challenge: TIdSipResponse);
   protected
-    function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
+    function  FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
                                        Receiver: TIdSipTransport);
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
@@ -171,17 +172,21 @@ type
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
                             Request: TIdSipMessage);
-    procedure SendToTransport(Msg: TIdSipMessage); virtual;
-    procedure SendRequest(Request: TIdSipRequest); virtual;
+    procedure SendToTransport(Request: TIdSipRequest;
+                              Dest: TIdSipLocation); overload; virtual;
+    procedure SendToTransport(Response: TIdSipResponse); overload; virtual;
+    procedure SendRequest(Request: TIdSipRequest;
+                          Dest: TIdSipLocation); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property T1Interval: Cardinal      read fT1Interval write fT1Interval;
-    property T2Interval: Cardinal      read fT2Interval write fT2Interval;
-    property T4Interval: Cardinal      read fT4Interval write fT4Interval;
-    property Timer:      TIdTimerQueue read fTimer write fTimer;
+    property Locator:    TIdSipAbstractLocator read fLocator    write fLocator;
+    property T1Interval: Cardinal              read fT1Interval write fT1Interval;
+    property T2Interval: Cardinal              read fT2Interval write fT2Interval;
+    property T4Interval: Cardinal              read fT4Interval write fT4Interval;
+    property Timer:      TIdTimerQueue         read fTimer write fTimer;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -199,11 +204,12 @@ type
   // Bar, and Bar is the last line of Foo.
   TIdSipTransaction = class(TIdInterfacedObject)
   private
-    fInitialRequest: TIdSipRequest;
-    fState:          TIdSipTransactionState;
-    fDispatcher:     TIdSipTransactionDispatcher;
-    fLastResponse:   TIdSipResponse;
-    TranListeners:   TIdNotificationList;
+    fInitialRequest:     TIdSipRequest;
+    fState:              TIdSipTransactionState;
+    fDispatcher:         TIdSipTransactionDispatcher;
+    fLastResponse:       TIdSipResponse; // Used by server transactions
+    fInitialDestination: TIdSipLocation; // Used by client transactions
+    TranListeners:       TIdNotificationList;
   protected
     FirstTime: Boolean;
 
@@ -218,8 +224,7 @@ type
     procedure ChangeToTerminated(Quiet: Boolean); overload;
     procedure ChangeToTerminated(R: TIdSipResponse;
                                  T: TIdSipTransport); overload; virtual;
-    procedure DoOnTimeout(Transport: TIdSipTransport;
-                          Request: TIdSipRequest;
+    procedure DoOnTimeout(Request: TIdSipRequest;
                           const Reason: String);
     procedure DoOnTransportError(Transport: TIdSipTransport;
                                  Request: TIdSipRequest;
@@ -235,7 +240,8 @@ type
     procedure NotifyOfTermination;
     procedure SetState(Value: TIdSipTransactionState); virtual;
     procedure TryResendInitialRequest;
-    procedure TrySendRequest(R: TIdSipRequest);
+    procedure TrySendRequest(R: TIdSipRequest;
+                             Dest: TIdSipLocation);
     procedure TrySendResponse(R: TIdSipResponse); virtual;
   public
     class function CreateClientTransactionType(Dispatcher: TIdSipTransactionDispatcher;
@@ -261,14 +267,15 @@ type
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); virtual;
     procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
-    procedure SendRequest; virtual;
+    procedure SendRequest(Dest: TIdSipLocation); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
     procedure Terminate(Quiet: Boolean);
 
-    property Dispatcher:     TIdSipTransactionDispatcher read fDispatcher;
-    property InitialRequest: TIdSipRequest               read fInitialRequest;
-    property LastResponse:   TIdSipResponse              read fLastResponse;
-    property State:          TIdSipTransactionState      read fState;
+    property Dispatcher:         TIdSipTransactionDispatcher read fDispatcher;
+    property InitialRequest:     TIdSipRequest               read fInitialRequest;
+    property InitialDestination: TIdSipLocation              read fInitialDestination;
+    property LastResponse:       TIdSipResponse              read fLastResponse;
+    property State:              TIdSipTransactionState      read fState;
   end;
 
   TIdSipServerTransaction = class(TIdSipTransaction)
@@ -359,7 +366,7 @@ type
     function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); override;
-    procedure SendRequest; override;
+    procedure SendRequest(Dest: TIdSipLocation); override;
     function  TimerBInterval: Cardinal;
     function  TimerDInterval: Cardinal;
   end;
@@ -386,7 +393,7 @@ type
     function  IsNull: Boolean; override;
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); override;
-    procedure SendRequest; override;
+    procedure SendRequest(Dest: TIdSipLocation); override;
     function  TimerFInterval: Cardinal;
     function  TimerKInterval: Cardinal;
   end;
@@ -622,7 +629,12 @@ end;
 
 procedure TIdSipTransactionDispatcher.ClearTransports;
 begin
-  Self.Transports.Clear;
+  Self.TransportLock.Acquire;
+  try
+    Self.Transports.Clear;
+  finally
+    Self.TransportLock.Release;
+  end;
 end;
 
 function TIdSipTransactionDispatcher.LoopDetected(Request: TIdSipRequest): Boolean;
@@ -739,35 +751,68 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.SendToTransport(Msg: TIdSipMessage);
+procedure TIdSipTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
+                                                      Dest: TIdSipLocation);
 var
   T: TIdSipTransport;
 begin
-  T := Self.FindAppropriateTransport(Msg);
+  T := Self.FindAppropriateTransport(Dest);
 
   if Assigned(T) then
-    T.Send(Msg)
+    T.Send(Request)
   else
     raise Exception.Create('What do we do when the dispatcher can''t find a Transport?');
 end;
 
-procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest);
+procedure TIdSipTransactionDispatcher.SendToTransport(Response: TIdSipResponse);
+var
+  Current:   Integer;
+  Sent:      Boolean;
+  Targets:   TIdSipLocations;
+  Transport: TIdSipTransport;
+begin
+  Targets := Self.Locator.FindServersFor(Response);
+  try
+    Current := 0;
+    Sent    := false;
+
+    while not Sent and (Current < Targets.Count) do begin
+      Transport := Self.FindAppropriateTransport(Targets[Current]);
+
+      if Assigned(Transport) then begin
+        try
+          Transport.Send(Response);
+          Sent := true;
+        except
+          on EIdSipTransport do;
+        end;
+      end;
+
+      Inc(Current);
+    end;
+  finally
+    Targets.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.SendRequest(Request: TIdSipRequest;
+                                                  Dest: TIdSipLocation);
 var
   Tran: TIdSipTransaction;
 begin
   if Request.IsAck then begin
     // Since ACKs to 200s live outside of transactions, we must send the
     // ACK directly to the transport layer.
-    Self.SendToTransport(Request);
+    Self.SendToTransport(Request, Dest);
   end
   else begin
     Tran := Self.FindTransaction(Request, true);
 
     if Assigned(Tran) then
-      Tran.SendRequest
+      Tran.SendRequest(Dest)
     else begin
       Tran := Self.AddClientTransaction(Request);
-      Tran.SendRequest;
+      Tran.SendRequest(Dest);
     end;
 
     if Tran.IsTerminated then
@@ -779,10 +824,6 @@ procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
   Tran: TIdSipTransaction;
 begin
-  // We have a problem here. If we have an RFC 2543 non-INVITE transaction on
-  // the go, we CANNOT match Response to it. What the HELL do we do??
-  // TODO
-  // cf RFC 3261, section 17.2.3, last paragraph
   Tran := Self.FindTransaction(Response, false);
 
   if Assigned(Tran) then begin
@@ -790,8 +831,14 @@ begin
     if Tran.IsTerminated then
       Self.RemoveTransaction(Tran);
   end
-  else
+  else begin
+    // We send responses to non-existent transactions when, for instance, we
+    // resend OK responses to an INVITE: the first one terminates the
+    // transaction, but the Transaction-User layer resend the OKs until we
+    // receive an ACK (cf. RFC 3261, section 13.3.1.4).
+
     Self.SendToTransport(Response);
+  end;
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
@@ -814,13 +861,11 @@ begin
   Assert(R.Path.Length > 0, AtLeastOneVia);
 
   Result := R.LastHop.Transport <> UdpTransport;
-
-//  Result := Self.FindAppropriateTransport(R).IsReliable;
 end;
 
 //* TIdSipTransactionDispatcher Protected methods ******************************
 
-function TIdSipTransactionDispatcher.FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
+function TIdSipTransactionDispatcher.FindAppropriateTransport(Dest: TIdSipLocation): TIdSipTransport;
 var
   I: Integer;
 begin
@@ -831,7 +876,7 @@ begin
     I := 0;
 
     while (I < Self.Transports.Count)
-      and (Self.TransportAt(I).GetTransportType <> Msg.LastHop.Transport) do
+      and (Self.TransportAt(I).GetTransportType <> Dest.Transport) do
       Inc(I);
 
     // What should we do if there are no appropriate transports to use?
@@ -841,7 +886,7 @@ begin
       Result := Self.TransportAt(I)
     else
       raise EUnknownTransport.Create(Format(CantFindTransport,
-                                            [Msg.LastHop.Transport]));
+                                            [Dest.Transport]));
   finally
     Self.TransportLock.Release;
   end;
@@ -1147,7 +1192,7 @@ begin
   ReAttempt := TIdSipRequest.Create;
   try
     ReAttempt.Assign(Transaction.InitialRequest);
-    
+
     ReAttempt.CSeq.Increment;
     ReAttempt.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
 
@@ -1158,7 +1203,7 @@ begin
              MustGenerateNewBranch);
 
       NewAttempt := Self.AddClientTransaction(ReAttempt);
-      NewAttempt.SendRequest;
+      NewAttempt.SendRequest(Transaction.InitialDestination);
     end;
   finally
     ReAttempt.Free;
@@ -1209,6 +1254,7 @@ begin
   Self.TranListeners.Free;
   Self.LastResponse.Free;
   Self.InitialRequest.Free;
+  Self.InitialDestination.Free;
 
   inherited Destroy;
 end;
@@ -1270,9 +1316,9 @@ begin
   Self.TranListeners.RemoveListener(Listener);
 end;
 
-procedure TIdSipTransaction.SendRequest;
+procedure TIdSipTransaction.SendRequest(Dest: TIdSipLocation);
 begin
-  // By default we do nothing
+  Self.fInitialDestination := Dest.Copy;
 end;
 
 procedure TIdSipTransaction.SendResponse(R: TIdSipResponse);
@@ -1334,19 +1380,27 @@ begin
   Self.ChangeToTerminated(false);
 end;
 
-procedure TIdSipTransaction.DoOnTimeout(Transport: TIdSipTransport;
-                                        Request: TIdSipRequest;
+procedure TIdSipTransaction.DoOnTimeout(Request: TIdSipRequest;
                                         const Reason: String);
 var
   Timeout: TIdSipResponse;
+  Lies:    TIdSipLocation;
 begin
   Self.NotifyOfFailure(Reason);
 
   // Local timeouts look the same as receiving a Request Timeout from the
   // network.
+
+  // This transport should refer to the transport that received
+  // Self.InitialRequest for server transactions!
   Timeout := TIdSipResponse.InResponseTo(Request, SIPRequestTimeout);
   try
-    Self.NotifyOfResponse(Timeout, Transport);
+    Lies := TIdSipLocation.Create(Self.InitialRequest.LastHop);
+    try
+      Self.NotifyOfResponse(Timeout, Self.Dispatcher.FindAppropriateTransport(Lies));
+    finally
+      Lies.Free;
+    end;
   finally
     Timeout.Free;
   end;
@@ -1441,13 +1495,14 @@ end;
 procedure TIdSipTransaction.TryResendInitialRequest;
 begin
   if not Self.Dispatcher.WillUseReliableTranport(Self.InitialRequest) then
-    Self.TrySendRequest(Self.InitialRequest);
+    Self.TrySendRequest(Self.InitialRequest, Self.InitialDestination);
 end;
 
-procedure TIdSipTransaction.TrySendRequest(R: TIdSipRequest);
+procedure TIdSipTransaction.TrySendRequest(R: TIdSipRequest;
+                                           Dest: TIdSipLocation);
 begin
   try
-    Self.Dispatcher.SendToTransport(R);
+    Self.Dispatcher.SendToTransport(R, Dest);
   except
     on E: EIdSipTransport do begin
       Self.DoOnTransportError(E.Transport,
@@ -1527,8 +1582,7 @@ end;
 
 procedure TIdSipServerInviteTransaction.FireTimerH;
 begin
-  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
-                   Self.InitialRequest,
+  Self.DoOnTimeout(Self.InitialRequest,
                    SessionTimeoutMsg);
 end;
 
@@ -1826,8 +1880,7 @@ procedure TIdSipClientInviteTransaction.FireTimerB;
 begin
   if (Self.State <> itsCalling) then Exit;
 
-  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
-                   Self.InitialRequest,
+  Self.DoOnTimeout(Self.InitialRequest,
                    SessionTimeoutMsg);
 end;
 
@@ -1877,9 +1930,9 @@ begin
   end;
 end;
 
-procedure TIdSipClientInviteTransaction.SendRequest;
+procedure TIdSipClientInviteTransaction.SendRequest(Dest: TIdSipLocation);
 begin
-  inherited SendRequest;
+  inherited SendRequest(Dest);
 
   if Self.FirstTime then begin
     Self.FirstTime := false;
@@ -1889,7 +1942,7 @@ begin
     Self.ScheduleTimerA;
     Self.ScheduleTimerB;
 
-    Self.TrySendRequest(Self.InitialRequest);
+    Self.TrySendRequest(Self.InitialRequest, Dest);
   end;
 end;
 
@@ -1964,7 +2017,7 @@ begin
   if not R.IsOK then begin
     Ack := Self.InitialRequest.AckFor(R);
     try
-      Self.TrySendRequest(Ack);
+      Self.TrySendRequest(Ack, Self.InitialDestination);
     finally
       Ack.Free;
     end;
@@ -1999,8 +2052,7 @@ procedure TIdSipClientNonInviteTransaction.FireTimerF;
 begin
   if not (Self.State in [itsTrying, itsProceeding]) then Exit;
 
-  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
-                   Self.InitialRequest,
+  Self.DoOnTimeout(Self.InitialRequest,
                    SessionTimeoutMsg);
 end;
 
@@ -2032,14 +2084,14 @@ begin
   end;
 end;
 
-procedure TIdSipClientNonInviteTransaction.SendRequest;
+procedure TIdSipClientNonInviteTransaction.SendRequest(Dest: TIdSipLocation);
 begin
-  inherited SendRequest;
+  inherited SendRequest(Dest);
 
   if Self.FirstTime then begin
     Self.FirstTime := false;
     Self.ChangeToTrying;
-    Self.TrySendRequest(Self.InitialRequest);
+    Self.TrySendRequest(Self.InitialRequest, Dest);
   end;
 end;
 

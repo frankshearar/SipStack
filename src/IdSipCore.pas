@@ -278,7 +278,8 @@ type
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
                             Msg: TIdSipMessage); overload;
-    procedure SendRequest(Request: TIdSipRequest);
+    procedure SendRequest(Request: TIdSipRequest;
+                          Dest: TIdSipLocation);
     procedure SendResponse(Response: TIdSipResponse);
 
     property Authenticator:         TIdSipAbstractAuthenticator read fAuthenticator write fAuthenticator;
@@ -1628,11 +1629,12 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest);
+procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest;
+                                         Dest: TIdSipLocation);
 begin
   Self.MaybeChangeTransport(Request);
 
-  Self.Dispatcher.SendRequest(Request);
+  Self.Dispatcher.SendRequest(Request, Dest);
 end;
 
 procedure TIdSipAbstractCore.SendResponse(Response: TIdSipResponse);
@@ -4023,7 +4025,7 @@ begin
       ActualRequest.LastHop.Transport := Targets[CurrentTarget].Transport;
 
       try
-        Self.UA.SendRequest(ActualRequest);
+        Self.UA.SendRequest(ActualRequest, Targets[CurrentTarget]);
         Result := true;
 
         // Synchronise our state to what actually went down to the network.

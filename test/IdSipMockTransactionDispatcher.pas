@@ -12,7 +12,8 @@ unit IdSipMockTransactionDispatcher;
 interface
 
 uses
-  IdSipDialog, IdSipMessage, IdSipMockTransport, IdSipTransaction;
+  IdSipDialog, IdSipLocator, IdSipMessage, IdSipMockTransport,
+  IdSipTransaction;
 
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
@@ -22,7 +23,9 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure SendToTransport(Msg: TIdSipMessage); override;
+    procedure SendToTransport(Request: TIdSipRequest;
+                              Dest: TIdSipLocation); override;
+    procedure SendToTransport(Response: TIdSipResponse); override;
 
     property Transport: TIdSipMockTransport read fTransport;
   end;
@@ -56,9 +59,15 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransactionDispatcher.SendToTransport(Msg: TIdSipMessage);
+procedure TIdSipMockTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
+                                                          Dest: TIdSipLocation);
 begin
-  Self.Transport.Send(Msg);
+  Self.Transport.Send(Request);
+end;
+
+procedure TIdSipMockTransactionDispatcher.SendToTransport(Response: TIdSipResponse);
+begin
+  Self.Transport.Send(Response);
 end;
 
 end.
