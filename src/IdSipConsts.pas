@@ -49,6 +49,7 @@ const
   DispositionRender          = 'render';
   DispositionSession         = 'session';
   DomainParam                = 'domain';
+  DurationParam              = 'duration';
   ErrorInfoHeader            = 'Error-Info';
   ExpiresHeader              = 'Expires';
   ExpiresParam               = 'expires';
