@@ -4645,7 +4645,8 @@ end;
 //*******************************************************************************
 //* TIdSipResponse Public methods ***********************************************
 
-class function TIdSipResponse.InResponseTo(Request: TIdSipRequest; StatusCode: Cardinal): TIdSipResponse;
+class function TIdSipResponse.InResponseTo(Request: TIdSipRequest;
+                                           StatusCode: Cardinal): TIdSipResponse;
 var
   TimestampHeaders: TIdSipHeadersFilter;
 begin
