@@ -106,7 +106,7 @@ procedure TIdSipMockTransport.FireOnResponse(R: TIdSipResponse);
 begin
   Self.NotifyTransportListeners(R);
 
-  Self.fResponses.Add(R);
+  Self.fResponses.AddCopy(R);
 end;
 
 function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
@@ -213,7 +213,7 @@ procedure TIdSipMockTransport.SendResponse(R: TIdSipResponse);
 begin
   inherited SendResponse(R);
 
-  Self.fResponses.Add(R);
+  Self.fResponses.AddCopy(R);
 
   if Assigned(Self.FailWith) then
     raise EIdSipTransport.Create(Self,

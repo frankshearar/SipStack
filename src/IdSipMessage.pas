@@ -1056,7 +1056,7 @@ type
     constructor Create;
     destructor  Destroy; override;
 
-    procedure Add(Response: TIdSipResponse);
+    procedure AddCopy(Response: TIdSipResponse);
     function  Count: Integer;
     procedure Delete(Index: Integer);
     function  First: TIdSipResponse;
@@ -6195,7 +6195,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipResponseList.Add(Response: TIdSipResponse);
+procedure TIdSipResponseList.AddCopy(Response: TIdSipResponse);
 var
   Copy: TIdSipResponse;
 begin

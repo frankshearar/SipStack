@@ -2996,13 +2996,13 @@ begin
 
   Response := TIdSipResponse.Create;
   try
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
     CheckEquals(1, Self.List.Count, 'One response');
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
     CheckEquals(2, Self.List.Count, 'Two responses');
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
     CheckEquals(3, Self.List.Count, 'Three responses');
   finally
     Response.Free;
@@ -3016,10 +3016,10 @@ begin
   Response := TIdSipResponse.Create;
   try
     Response.StatusCode := SIPTrying;
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     Response.StatusCode := SIPOK;
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     Self.List.Delete(0);
 
@@ -3045,14 +3045,14 @@ begin
     Check(nil = Self.List.First,
           'Empty list');
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(SIPOK,
                 Self.List.First.StatusCode,
                 'Non-empty list');
 
     Response.StatusCode := SIPTrying;
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(SIPOK,
                 Self.List.First.StatusCode,
@@ -3070,7 +3070,7 @@ begin
 
   Response := TIdSipResponse.Create;
   try
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
     Check(not Self.List.IsEmpty, 'Non-empty list');
   finally
     Response.Free;
@@ -3091,7 +3091,7 @@ begin
     Check(nil = Self.List.First,
           'Empty list');
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(Response.StatusCode,
                 Self.List.First.StatusCode,
@@ -3099,7 +3099,7 @@ begin
 
     Response.StatusCode := SIPTrying;
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(Response.StatusCode,
                 Self.List.Last.StatusCode,
@@ -3120,7 +3120,7 @@ begin
   try
     Response.StatusCode := OriginalStatusCode;
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     Response.StatusCode := SIPNotFound;
 
@@ -3143,20 +3143,20 @@ begin
     Check(nil = Self.List.SecondLast,
           'Empty list');
 
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     Check(nil = Self.List.SecondLast,
           'Non-empty list');
 
     Response.StatusCode := SIPOK;
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(SIPTrying,
                 Self.List.SecondLast.StatusCode,
                 'List with two responses');
 
     Response.StatusCode := SIPMultipleChoices;
-    Self.List.Add(Response);
+    Self.List.AddCopy(Response);
 
     CheckEquals(SIPOK,
                 Self.List.SecondLast.StatusCode,
