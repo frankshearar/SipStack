@@ -1083,43 +1083,80 @@ end;
 procedure TestTIdSipTransaction.TestGetClientTransactionType;
 var
   R: TIdSipRequest;
+  T: TIdSipTransaction;
 begin
   R := TIdSipRequest.Create;
   try
     R.Method := MethodInvite;
-    CheckEquals(TIdSipClientInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client INVITE');
+
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client INVITE');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodAck;
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client ACK');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client ACK');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodBye;
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client BYE');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client BYE');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodCancel;
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client CANCEL');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client CANCEL');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodOptions;
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client OPTIONS');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client OPTIONS');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodRegister;
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client REGISTER');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client REGISTER');
+    finally
+      T.Free;
+    end;
 
     R.Method := 'NewFangledMethod';
-    CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetClientTransactionType(R).ClassName,
-                'Client NewFangledMethod');
+    T := TIdSipTransaction.CreateClientTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipClientNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Client NewFangledMethod');
+    finally
+      T.Free;
+    end;
   finally
     R.Free;
   end;
@@ -1128,43 +1165,79 @@ end;
 procedure TestTIdSipTransaction.TestGetServerTransactionType;
 var
   R: TIdSipRequest;
+  T: TIdSipTransaction;
 begin
   R := TIdSipRequest.Create;
   try
     R.Method := MethodInvite;
-    CheckEquals(TIdSipServerInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server INVITE');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server INVITE');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodAck;
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server ACK');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server ACK');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodBye;
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server BYE');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server BYE');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodCancel;
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server CANCEL');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server CANCEL');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodOptions;
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server OPTIONS');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server OPTIONS');
+    finally
+      T.Free;
+    end;
 
     R.Method := MethodRegister;
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server REGISTER');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server REGISTER');
+    finally
+      T.Free;
+    end;
 
     R.Method := 'NewFangledMethod';
-    CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
-                TIdSipTransaction.GetServerTransactionType(R).ClassName,
-                'Server NewFangledMethod');
+    T := TIdSipTransaction.CreateServerTransactionType(Self.Dispatch, R);
+    try
+      CheckEquals(TIdSipServerNonInviteTransaction.ClassName,
+                  T.ClassName,
+                  'Server NewFangledMethod');
+    finally
+      T.Free;
+    end;
   finally
     R.Free;
   end;

@@ -4675,7 +4675,7 @@ begin
     Result.StatusCode := StatusCode;
 
     // cf RFC 3261 section 8.2.6.1
-    if (Result.StatusCode = SIPTrying) then begin
+    if Result.IsTrying then begin
       TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
                                                      TimestampHeader);
       try

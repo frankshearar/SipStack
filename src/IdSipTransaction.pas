@@ -190,8 +190,10 @@ type
 
     property Dispatcher: TIdSipTransactionDispatcher read fDispatcher;
   public
-    class function GetClientTransactionType(Request: TIdSipRequest): TIdSipTransactionClass;
-    class function GetServerTransactionType(Request: TIdSipRequest): TIdSipTransactionClass;
+    class function CreateClientTransactionType(Dispatcher: TIdSipTransactionDispatcher;
+                                               Request: TIdSipRequest): TIdSipTransaction;
+    class function CreateServerTransactionType(Dispatcher: TIdSipTransactionDispatcher;
+                                               Request: TIdSipRequest): TIdSipTransaction;
 
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); virtual;
@@ -535,11 +537,13 @@ begin
   Self.TransactionLock.Acquire;
   try
     try
-      Result := TIdSipTransaction.GetClientTransactionType(InitialRequest).Create(Self, InitialRequest);
+      Result := TIdSipTransaction.CreateClientTransactionType(Self, InitialRequest);
       Self.Transactions.Add(Result);
     except
-      Self.Transactions.Remove(Result);
-      Result := nil;
+      if (Self.Transactions.IndexOf(Result) <> -1) then
+        Self.Transactions.Remove(Result)
+      else
+        Result.Free;
 
       raise;
     end;
@@ -556,10 +560,13 @@ begin
   Self.TransactionLock.Acquire;
   try
     try
-      Result := TIdSipTransaction.GetServerTransactionType(InitialRequest).Create(Self, InitialRequest);
+      Result := TIdSipTransaction.CreateServerTransactionType(Self, InitialRequest);
       Self.Transactions.Add(Result);
     except
-      Self.Transactions.Remove(Result);
+      if (Self.Transactions.IndexOf(Result) <> -1) then
+        Self.Transactions.Remove(Result)
+      else
+        Result.Free;
 
       raise;
     end;
@@ -578,12 +585,10 @@ var
   I: Integer;
 begin
   // In Smalltalk:
-  // | tran |
   // self transactionLock critical:
   //     [^ (self transactions
   //         detect: [ :each | each loopDetected: request ]
   //         ifNone: [nil]]) notNil.
-  // ^ tran notNil
 
   // cf. RFC 3261 section 8.2.2.2
   Result := false;
@@ -861,20 +866,22 @@ end;
 //******************************************************************************
 //* TIdSipTransaction Public methods *******************************************
 
-class function TIdSipTransaction.GetClientTransactionType(Request: TIdSipRequest): TIdSipTransactionClass;
+class function TIdSipTransaction.CreateClientTransactionType(Dispatcher: TIdSipTransactionDispatcher;
+                                                             Request: TIdSipRequest): TIdSipTransaction;
 begin
   if Request.IsInvite then
-    Result := TIdSipClientInviteTransaction
+    Result := TIdSipClientInviteTransaction.Create(Dispatcher, Request)
   else
-    Result := TIdSipClientNonInviteTransaction;
+    Result := TIdSipClientNonInviteTransaction.Create(Dispatcher, Request)
 end;
 
-class function TIdSipTransaction.GetServerTransactionType(Request: TIdSipRequest): TIdSipTransactionClass;
+class function TIdSipTransaction.CreateServerTransactionType(Dispatcher: TIdSipTransactionDispatcher;
+                                                             Request: TIdSipRequest): TIdSipTransaction;
 begin
   if Request.IsInvite then
-    Result := TIdSipServerInviteTransaction
+    Result := TIdSipServerInviteTransaction.Create(Dispatcher, Request)
   else
-    Result := TIdSipServerNonInviteTransaction;
+    Result := TIdSipServerNonInviteTransaction.Create(Dispatcher, Request)
 end;
 
 constructor TIdSipTransaction.Create(Dispatcher: TIdSipTransactionDispatcher;
