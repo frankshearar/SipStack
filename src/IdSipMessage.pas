@@ -268,7 +268,7 @@ type
     function  GetCNonce: String;
     function  GetDigestUri: String;
     function  GetNonceCount: Cardinal;
-    function  GetResponse: String;
+    function  GetResponse: String; // The digest with which we authenticate
     function  GetUsername: String;
     procedure SetCNonce(const Value: String);
     procedure SetDigestUri(const Value: String);

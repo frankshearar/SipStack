@@ -79,6 +79,7 @@ type
   private
     fAuthenticationChallenge: Boolean;
     fFailure:                 Boolean;
+    fPassword:                String;
     fSuccess:                 Boolean;
   public
     constructor Create;
@@ -93,8 +94,9 @@ type
                         CurrentBindings: TIdSipContacts);
 
     property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
-    property Failure:                 Boolean read fSuccess;
+    property Failure:                 Boolean read fFailure;
     property Success:                 Boolean read fSuccess;
+    property Password:                String  read fPassword write fPassword;
   end;
 
   TIdSipTestSessionListener = class(TIdInterfacedObject,
@@ -424,6 +426,7 @@ procedure TIdSipTestRegistrationListener.OnAuthenticationChallenge(Action: TIdSi
                                                                    var Password: String);
 begin
   Self.fAuthenticationChallenge := true;
+  Password := Self.Password;
 end;
 
 procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipRegistration;
