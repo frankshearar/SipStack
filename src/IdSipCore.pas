@@ -173,6 +173,9 @@ type
     fDialog: TIdSipDialog;
     fInvite: TIdSipRequest;
 
+    procedure CreateInternal(const UA: TIdSipUserAgentCore;
+                             const Invite: TIdSipRequest;
+                             const InitialTransaction: TIdSipTransaction);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -817,17 +820,12 @@ end;
 
 constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
                                  const Invite: TIdSipRequest);
-var
-  Tran: TIdSipTransaction;
 begin
   inherited Create;
 
-  Self.fCore := UA;
-  Self.fInvite := TIdSipRequest.Create;
-  Self.Invite.Assign(Invite);
-
-  Tran := Self.Core.Dispatcher.AddClientTransaction(Invite, nil);
-  Tran.AddTransactionListener(Self);
+  Self.CreateInternal(UA,
+                      Invite,
+                      UA.Dispatcher.AddClientTransaction(Invite, nil));
 end;
 
 constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
@@ -836,11 +834,9 @@ constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
 begin
   inherited Create;
 
-  Self.fCore := UA;
-  Self.fInvite := TIdSipRequest.Create;
-  Self.Invite.Assign(Invite);
-
-  InitialTransaction.AddTransactionListener(Self);
+  Self.CreateInternal(UA,
+                      Invite,
+                      InitialTransaction);
 end;
 
 destructor TIdSipSession.Destroy;
@@ -913,6 +909,17 @@ begin
 end;
 
 //* TIdSipSession Private methods **********************************************
+
+procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore;
+                                       const Invite: TIdSipRequest;
+                                       const InitialTransaction: TIdSipTransaction);
+begin
+  Self.fCore := UA;
+  Self.fInvite := TIdSipRequest.Create;
+  Self.Invite.Assign(Invite);
+
+  InitialTransaction.AddTransactionListener(Self);
+end;
 
 procedure TIdSipSession.OnFail(const Transaction: TIdSipTransaction;
                                const Reason: String);

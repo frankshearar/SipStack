@@ -80,6 +80,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestServerInitiatedSession;
   end;
 
 implementation
@@ -1143,6 +1144,25 @@ begin
     Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
   finally
     Response.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestServerInitiatedSession;
+var
+  Invite:       TIdSipRequest;
+  RequestCount: Cardinal;
+  Session:      TIdSipSession;
+begin
+  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+
+  Invite := Self.Core.CreateInvite(Self.Dest);
+  try
+    Session := TIdSipSession.Create(Self.Core, Invite);
+
+    Check(RequestCount < Self.Dispatch.Transport.SentRequestCount,
+          'no INVITE sent');
+  finally
+    Invite.Free;
   end;
 end;
 
