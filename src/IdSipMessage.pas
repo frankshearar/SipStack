@@ -58,7 +58,6 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function DecodeQuotedStr(const S: String): String;
     function EncodeQuotedStr(const S: String): String;
 
     property Address:     TIdURI read fAddress write SetAddress;
@@ -142,25 +141,55 @@ type
 
   TIdSipRouteHeader = class(TIdSipHeader)
   private
-    fAddress:     String;
+    fAddress:     TIdURI;
     fDisplayName: String;
 
-    procedure SetAddress(const Value: String);
+    procedure SetAddress(const Value: TIdURI);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
-    function DecodeQuotedStr(const S: String): String;
+    constructor Create; override;
+    destructor  Destroy; override;
+
     function EncodeQuotedStr(const S: String): String;
 
-    property Address:     String read fAddress write SetAddress;
+    property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
   protected
     function  GetName: String; override;
+  end;
+
+  TIdSipTimestamp = class(TObject)
+  private
+    fFractionalPart: Cardinal;
+    fIntegerPart:    Cardinal;
+  public
+    property FractionalPart: Cardinal read fFractionalPart write fFractionalPart;
+    property IntegerPart:    Cardinal read fIntegerPart write fIntegerPart;
+  end;
+
+  TIdSipTimestampHeader = class(TIdSipHeader)
+  private
+    fDelay:     TIdSipTimestamp;
+    fTimestamp: TIdSipTimestamp;
+  protected
+    function  GetName: String; override;
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    function NormalizeLWS(const S: String): String;
+    function ReadNumber(var Src: String): Cardinal;
+
+    property Delay:     TIdSipTimestamp read fDelay;
+    property Timestamp: TIdSipTimestamp read fTimestamp;
   end;
 
   TIdSipViaHeader = class(TIdSipHeader)
@@ -358,10 +387,15 @@ type
     property StatusText: String  read fStatusText write fStatusText;
   end;
 
+function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+function NeedsQuotes(Name: String): Boolean;
+function QuoteStringIfNecessary(const Name: String): String;
+function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
+
 implementation
 
 uses
-  IdSipParser;
+  IdSimpleParser, IdSipParser;
 
 var
   GIdSipHeadersMap: TObjectList;
@@ -370,6 +404,44 @@ var
 //* Unit procedures & functions                                                *
 //******************************************************************************
 //* Unit private procedures & functions ****************************************
+
+function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+var
+  I: Integer;
+  FoundSlash: Boolean;
+begin
+  Result := true;
+
+  // in summary:
+  // '\' is illegal, '%s\' is illegal.
+
+  Dest := S;
+
+  if (Dest <> '') then begin
+    if (Dest = '\') then
+      Result := false;
+
+    if (Length(Dest) >= 2) and (Dest[Length(Dest)] = '\') and (Dest[Length(Dest) - 1] <> '\') then
+      Result := Result and false;
+
+    // We use "<" and not "<=" because if a \ is the last character we have
+    // a malformed string. Too, this allows use to Dest[I + 1]
+    I := 1;
+    while I < Length(Dest) do begin
+      FoundSlash := Dest[I] = '\';
+      if (FoundSlash) then begin
+        Delete(Dest, I, 1);
+
+        // protect '\\'
+        if (FoundSlash) then begin
+          Inc(I);
+        end;
+      end
+      else
+        Inc(I);
+    end;
+  end;
+end;
 
 function NeedsQuotes(Name: String): Boolean;
 var
@@ -392,6 +464,40 @@ begin
   Result := Name;
   if NeedsQuotes(Name) then
     Result := '"' + Result + '"'
+end;
+
+function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
+var
+  Name: String;
+begin
+  DisplayName       := '';
+  AddrSpec          := '';
+
+  NameAddr := Trim(NameAddr);
+
+  Result := IndyPos('<', NameAddr) > 0;
+
+  if Result then begin
+    if (NameAddr[1] = '"') then begin
+      Name := Trim(Fetch(NameAddr, '<'));
+      Delete(Name, 1, 1);
+
+      Result := Result and (IndyPos('"', Name) <> 0);
+
+      Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
+
+      // There was an encoded ", which MUST NOT match the opening "
+      Result := Result and not ((Name <> '') and (Name[Length(Name)] = '\'));
+
+      Result := Result and DecodeQuotedStr(Name, DisplayName);
+    end else begin
+      DisplayName := Trim(Fetch(NameAddr, '<'));
+
+      Result := Result and not NeedsQuotes(DisplayName);
+    end;
+
+    AddrSpec := Trim(Fetch(NameAddr, '>'));
+  end;
 end;
 
 //******************************************************************************
@@ -596,42 +702,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipAddressHeader.DecodeQuotedStr(const S: String): String;
-var
-  I: Integer;
-  FoundSlash: Boolean;
-begin
-  // in summary:
-  // '\' is illegal, '%s\' is illegal.
-
-  Result := S;
-
-  if (Result <> '') then begin
-    if (Result = '\') then
-      Self.FailParse;
-
-    if (Length(Result) >= 2) and (Result[Length(Result)] = '\') and (Result[Length(Result) - 1] <> '\') then
-      Self.FailParse;
-
-    // We use "<" and not "<=" because if a \ is the last character we have
-    // a malformed string. Too, this allows use to Result[I + 1]
-    I := 1;
-    while I < Length(Result) do begin
-      FoundSlash := Result[I] = '\';
-      if (FoundSlash) then begin
-        Delete(Result, I, 1);
-
-        // protect '\\'
-        if (FoundSlash) then begin
-          Inc(I);
-        end;
-      end
-      else
-        Inc(I);
-    end;
-  end;
-end;
-
 function TIdSipAddressHeader.EncodeQuotedStr(const S: String): String;
 begin
   Result := S;
@@ -666,38 +736,22 @@ end;
 
 procedure TIdSipAddressHeader.SetValue(const Value: String);
 var
-  Name: String;
-  S:    String;
+  AddrSpec:          String;
+  DisplayName:       String;
   PreserveSemicolon: Boolean;
+  S:                 String;
 begin
   PreserveSemicolon := false;
   Self.DisplayName := '';
   Self.Address.URI := '';
 
   S := Trim(Value);
-
-  if (IndyPos('<', S) > 0) then begin
-    if (S[1] = '"') then begin
-      Name := Trim(Fetch(S, '<'));
-      Delete(Name, 1, 1);
-
-      if (IndyPos('"', Name) = 0) then
-        Self.FailParse;
-
-      Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
-
-      // There was an encoded ", which MUST NOT match the opening "
-      if (Name <> '') and (Name[Length(Name)] = '\') then
-        Self.FailParse;
-
-        Self.DisplayName := Self.DecodeQuotedStr(Name);
-    end else begin
-      Self.DisplayName := Trim(Fetch(S, '<'));
-      if NeedsQuotes(Self.DisplayName) then
-        Self.FailParse;
-    end;
-
-    Self.Address.URI := Trim(Fetch(S, '>'));
+  if (IndyPos('<', Value) > 0) then begin
+    if not ParseNameAddr(Value, DisplayName, AddrSpec) then
+      Self.FailParse;
+      
+    Self.Address.URI := AddrSpec;
+    Fetch(S, '>');
   end
   else begin
     // any semicolons in a URI not in angle brackets indicate that the
@@ -708,7 +762,9 @@ begin
 
   if PreserveSemicolon then
     S := ';' + S;
-    
+
+  Self.DisplayName := DisplayName;
+
   inherited SetValue(S);
 end;
 
@@ -954,40 +1010,18 @@ end;
 //******************************************************************************
 //* TIdSipRouteHeader Public methods *******************************************
 
-function TIdSipRouteHeader.DecodeQuotedStr(const S: String): String;
-var
-  I: Integer;
-  FoundSlash: Boolean;
+constructor TIdSipRouteHeader.Create;
 begin
-  // in summary:
-  // '\' is illegal, '%s\' is illegal.
+  inherited Create;
 
-  Result := S;
+  fAddress := TIdURI.Create('');
+end;
 
-  if (Result <> '') then begin
-    if (Result = '\') then
-      Self.FailParse;
+destructor TIdSipRouteHeader.Destroy;
+begin
+  fAddress.Free;
 
-    if (Length(Result) >= 2) and (Result[Length(Result)] = '\') and (Result[Length(Result) - 1] <> '\') then
-      Self.FailParse;
-
-    // We use "<" and not "<=" because if a \ is the last character we have
-    // a malformed string. Too, this allows use to Result[I + 1]
-    I := 1;
-    while I < Length(Result) do begin
-      FoundSlash := Result[I] = '\';
-      if (FoundSlash) then begin
-        Delete(Result, I, 1);
-
-        // protect '\\'
-        if (FoundSlash) then begin
-          Inc(I);
-        end;
-      end
-      else
-        Inc(I);
-    end;
-  end;
+  inherited Destroy;
 end;
 
 function TIdSipRouteHeader.EncodeQuotedStr(const S: String): String;
@@ -1014,7 +1048,7 @@ begin
 
   Result := QuoteStringIfNecessary(Result);
 
-  URI := Self.Address;
+  URI := Self.Address.URI;
   URI := '<' + URI + '>';
 
   if (Result = '') then
@@ -1025,53 +1059,31 @@ end;
 
 procedure TIdSipRouteHeader.SetValue(const Value: String);
 var
-  Name: String;
-  S:    String;
-  PreserveSemicolon: Boolean;
+  AddrSpec:     String;
+  DisplayName:  String;
+  HeaderParams: String;
 begin
-  PreserveSemicolon := false;
-  Self.DisplayName := '';
-  Self.Address     := '';
-
-  S := Trim(Value);
-
-  if (IndyPos('<', S) > 0) then begin
-    if (S[1] = '"') then begin
-      Name := Trim(Fetch(S, '<'));
-      Delete(Name, 1, 1);
-
-      if (IndyPos('"', Name) = 0) then
-        Self.FailParse;
-
-      Name := Copy(Name, 1, RPos('"', Name, -1) - 1);
-
-      // There was an encoded ", which MUST NOT match the opening "
-      if (Name <> '') and (Name[Length(Name)] = '\') then
-        Self.FailParse;
-
-        Self.DisplayName := Self.DecodeQuotedStr(Name);
-    end else begin
-      Self.DisplayName := Trim(Fetch(S, '<'));
-      if NeedsQuotes(Self.DisplayName) then
-        Self.FailParse;
-    end;
-
-    Self.Address := Trim(Fetch(S, '>'));
-  end
-  else
+  if not ParseNameAddr(Value, DisplayName, AddrSpec) then
     Self.FailParse;
 
-  if PreserveSemicolon then
-    S := ';' + S;
+  if (IndyPos(':', AddrSpec) = 0) then
+    Self.FailParse;
 
-  inherited SetValue(S);
+  Self.Address.URI := AddrSpec;
+  Self.DisplayName := DisplayName;
+
+  // cull the processed name-addr (and its parameters!)
+  HeaderParams := Value;
+  Fetch(HeaderParams, '>');
+
+  inherited SetValue(HeaderParams);
 end;
 
 //* TIdSipRouteHeader Private methods ******************************************
 
-procedure TIdSipRouteHeader.SetAddress(const Value: String);
+procedure TIdSipRouteHeader.SetAddress(const Value: TIdURI);
 begin
-  fAddress := Value;
+  fAddress.URI := Value.URI;
 end;
 
 //******************************************************************************
@@ -1082,6 +1094,117 @@ end;
 function TIdSipRecordRouteHeader.GetName: String;
 begin
   Result := RecordRouteHeader;
+end;
+
+//******************************************************************************
+//* TIdSipTimestampHeader                                                      *
+//******************************************************************************
+//* TIdSipTimestampHeader Public methods ***************************************
+
+constructor TIdSipTimestampHeader.Create;
+begin
+  inherited Create;
+
+  fDelay     := TIdSipTimestamp.Create;
+  fTimestamp := TIdSipTimestamp.Create;
+end;
+
+destructor TIdSipTimestampHeader.Destroy;
+begin
+  Self.Timestamp.Free;
+  Self.Delay.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipTimestampHeader.NormalizeLWS(const S: String): String;
+var
+  I: Integer;
+begin
+  Result := S;
+
+  I := 1;
+  while (I <= Length(Result)) do begin
+    if (Result[I] in LWSChars) then begin
+      Result[I] := ' ';
+      Inc(I);
+
+      while (Result[I] in LWSChars) do
+        Delete(Result, I, 1);
+    end;
+    Inc(I);
+  end;
+end;
+
+function TIdSipTimestampHeader.ReadNumber(var Src: String): Cardinal;
+var
+  I: Integer;
+  Number: String;
+begin
+  if (Src = '') then Self.FailParse;
+
+  I := 1;
+  while (Src[I] in Digits) do Inc(I);
+
+
+  Number := Copy(Src, 1, I - 1);
+  if not TIdSipParser.IsNumber(Number) then Self.FailParse;
+
+  Result := StrToInt(Number);
+  Delete(Src, 1, I - 1);
+end;
+
+//* TIdSipTimestampHeader Protected methods ************************************
+
+function TIdSipTimestampHeader.GetName: String;
+begin
+  Result := TimestampHeader;
+end;
+
+function TIdSipTimestampHeader.GetValue: String;
+begin
+  Result := IntToStr(Self.Timestamp.IntegerPart);
+
+  if (Self.Timestamp.FractionalPart <> 0) then
+    Result := Result + IntToStr(Self.Timestamp.FractionalPart);
+end;
+
+procedure TIdSipTimestampHeader.SetValue(const Value: String);
+var
+  S: String;
+begin
+  Self.Delay.FractionalPart     := 0;
+  Self.Delay.IntegerPart        := 0;
+  Self.Timestamp.FractionalPart := 0;
+  Self.Timestamp.IntegerPart    := 0;
+
+  S := Self.NormalizeLWS(Value);
+
+  Self.Timestamp.IntegerPart := Self.ReadNumber(S);
+  if (S <> '') then begin
+    if (S[1] <> '.') then Self.FailParse;
+    Delete(S, 1, 1);
+
+    if (S <> '') then
+      Self.Timestamp.FractionalPart := Self.ReadNumber(S);
+  end;
+
+  if (S <> '') then begin
+    if (S[1] <> ' ') then Self.FailParse;
+    Delete(S, 1, 1);
+
+    if (S[1] = '.') then
+      Self.Delay.IntegerPart := 0
+    else
+      Self.Delay.IntegerPart := Self.ReadNumber(S);
+  end;
+
+  if (S <> '') then begin
+    if (S[1] <> '.') then Self.FailParse;
+    Delete(S, 1, 1);
+
+    Self.Delay.FractionalPart := Self.ReadNumber(S);
+  end;
 end;
 
 //******************************************************************************
@@ -1455,6 +1578,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,       TIdSipMaxForwardsHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,       TIdSipRecordRouteHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,             TIdSipRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,         TIdSipTimestampHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,            TIdSipFromToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,           TIdSipFromToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,           TIdSipViaHeader));

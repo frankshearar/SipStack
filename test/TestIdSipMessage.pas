@@ -6,6 +6,13 @@ uses
   IdSipMessage, TestFramework, TestFrameworkEx;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestDecodeQuotedStr;
+    procedure TestNeedsQuotes;
+    procedure TestQuoteStringIfNecessary;
+  end;
+
   TestTIdSipHeader = class(TTestCase)
   private
     H: TIdSipHeader;
@@ -31,7 +38,6 @@ type
     procedure TearDown; override;
   published
     procedure TestAsString;
-    procedure TestDecodeQuotedStr;
     procedure TestEncodeQuotedStr;
     procedure TestValue;
     procedure TestValueEmptyDisplayName;
@@ -144,6 +150,7 @@ type
   published
     procedure TestName;
     procedure TestValue;
+    procedure TestValueWithParamsAndHeaderParams;
   end;
 
   TestTIdSipRecordRouteHeader = class(TTestCase)
@@ -155,6 +162,23 @@ type
   published
     procedure TestName;
     procedure TestValue;
+    procedure TestValueWithParamsAndHeaderParams;
+  end;
+
+
+  TestTIdSipTimestampHeader = class(TTestCase)
+  private
+    T: TIdSipTimestampHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestName;
+    procedure TestNormalizeLWS;
+    procedure TestReadNumber;
+    procedure TestValue;
+    procedure TestValueMalformed;
+    procedure TestValueWithDelay;
   end;
 
   TestTIdSipViaHeader = class(TTestCase)
@@ -265,6 +289,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
@@ -276,12 +301,73 @@ begin
   Result.AddTest(TestTIdSipRouteHeader.Suite);
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
+  Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestDecodeQuotedStr;
+var
+  Q: String;
+begin
+  Check(DecodeQuotedStr('', Q),     'parsing: ''''');
+  CheckEquals('',       Q,          'result: ''''');
+  Check(DecodeQuotedStr('abcd', Q), 'parsing: abcd');
+  CheckEquals('abcd',   Q,          'result: abcd');
+  Check(DecodeQuotedStr('\"', Q),   'parsing: ');
+  CheckEquals('"',      Q,          'result: \"');
+  Check(DecodeQuotedStr('\\', Q),   'parsing: ');
+  CheckEquals('\',      Q,          'result: \\');
+
+  Check(DecodeQuotedStr('\ ', Q),       'parsing: \ SP');
+  CheckEquals(' ',      Q,              'result: \ SP');
+  Check(DecodeQuotedStr('\a\b\c\d', Q), 'parsing: \a\b\c\d');
+  CheckEquals('abcd',   Q,              'result: \a\b\c\d');
+  Check(DecodeQuotedStr('\'#0, Q),      'parsing: \#0');
+  CheckEquals(#0,       Q,              'result: \#0');
+  Check(DecodeQuotedStr('hello\\', Q),  'parsing: hello\\');
+  CheckEquals('hello\', Q,              'result: hello\\');
+
+  Check(not DecodeQuotedStr('\', Q),      '\');
+  Check(not DecodeQuotedStr('hello\', Q), 'hello\');
+end;
+
+procedure TestFunctions.TestNeedsQuotes;
+begin
+  Check(    NeedsQuotes(' '),          'SP');
+  Check(    NeedsQuotes('"'),          '"');
+  Check(    NeedsQuotes('\'),          '\');
+  Check(    NeedsQuotes('"hello\"'),   '"hello\"');
+  Check(not NeedsQuotes(''),           '''''');
+  Check(not NeedsQuotes('hail eris!'), 'hail eris!');
+end;
+
+procedure TestFunctions.TestQuoteStringIfNecessary;
+var
+  C: Char;
+begin
+  CheckEquals('',     QuoteStringIfNecessary(''),     '''''');
+  CheckEquals('" "',  QuoteStringIfNecessary(' '),    'SP');
+  CheckEquals('abcd', QuoteStringIfNecessary('abcd'), 'abcd');
+
+  for C := '!' to Chr($7E) do
+    if (C in LegalTokenChars) then
+      CheckEquals('ab' + C + 'cd',
+                  QuoteStringIfNecessary('ab' + C + 'cd'),
+                  'ab' + C + 'cd')
+    else
+      CheckEquals('"ab' + C + 'cd"',
+                  QuoteStringIfNecessary('ab' + C + 'cd'),
+                  'ab' + C + 'cd');
 end;
 
 //******************************************************************************
@@ -459,32 +545,6 @@ begin
   CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
-end;
-
-procedure TestTIdSipAddressHeader.TestDecodeQuotedStr;
-begin
-  CheckEquals('',       Self.A.DecodeQuotedStr(''),         '''''');
-  CheckEquals('abcd',   Self.A.DecodeQuotedStr('abcd'),     'abcd');
-  CheckEquals('"',      Self.A.DecodeQuotedStr('\"'),       '\"');
-  CheckEquals('\',      Self.A.DecodeQuotedStr('\\'),       '\\');
-  CheckEquals(' ',      Self.A.DecodeQuotedStr('\ '),       '''\ ''');
-  CheckEquals('abcd',   Self.A.DecodeQuotedStr('\a\b\c\d'), '\a\b\c\d');
-  CheckEquals(#0,       Self.A.DecodeQuotedStr('\'#0),      '\#0');
-  CheckEquals('hello\', Self.A.DecodeQuotedStr('hello\\'),  'hello\\');
-
-  try
-    Self.A.DecodeQuotedStr('\');
-    Fail('Failed to bail out on a malformed string, ''\''');
-  except
-    on EBadHeader do;
-  end;
-
-  try
-    Self.A.DecodeQuotedStr('hello\');
-    Fail('Failed to bail out on a malformed string, ''hello\''');
-  except
-    on EBadHeader do;
-  end;
 end;
 
 procedure TestTIdSipAddressHeader.TestEncodeQuotedStr;
@@ -1239,11 +1299,11 @@ end;
 procedure TestTIdSipRouteHeader.TestValue;
 begin
   Self.R.Value := '<sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
   CheckEquals('',              Self.R.DisplayName, 'DisplayName');
 
   Self.R.Value := 'localhost <sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
   CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
 
   try
@@ -1259,6 +1319,24 @@ begin
   except
     on EBadHeader do;
   end;
+
+  try
+    Self.R.Value := '<127.0.0.1>';
+    Fail('Failed to bail on no scheme');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipRouteHeader.TestValueWithParamsAndHeaderParams;
+begin
+  Self.R.Value := 'Count Zero <sips:countzero@jacks-bar.com;paranoid>;very';
+
+  CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
+  CheckEquals('sips:countzero@jacks-bar.com;paranoid',
+              Self.R.Address.GetFullURI,
+              'Address');
+  CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
 end;
 
 //******************************************************************************
@@ -1293,11 +1371,11 @@ end;
 procedure TestTIdSipRecordRouteHeader.TestValue;
 begin
   Self.R.Value := '<sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
   CheckEquals('',              Self.R.DisplayName, 'DisplayName');
 
   Self.R.Value := 'localhost <sip:127.0.0.1>';
-  CheckEquals('sip:127.0.0.1', Self.R.Address,     'Address');
+  CheckEquals('sip:127.0.0.1', Self.R.Address.URI, 'Address');
   CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
 
   try
@@ -1314,6 +1392,185 @@ begin
     on EBadHeader do;
   end;
 end;
+
+procedure TestTIdSipRecordRouteHeader.TestValueWithParamsAndHeaderParams;
+begin
+  Self.R.Value := 'Count Zero <sips:countzero@jacks-bar.com;paranoid>;very';
+
+  CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
+  CheckEquals('sips:countzero@jacks-bar.com;paranoid',
+              Self.R.Address.GetFullURI,
+              'Address');
+  CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
+end;
+
+//******************************************************************************
+//* TestTIdSipTimestampHeader                                                  *
+//******************************************************************************
+//* TestTIdSipTimestampHeader Public methods ***********************************
+
+procedure TestTIdSipTimestampHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.T := TIdSipTimestampHeader.Create;
+end;
+
+procedure TestTIdSipTimestampHeader.TearDown;
+begin
+  Self.T.Free;
+
+  inherited TearDown;
+end;
+
+procedure TestTIdSipTimestampHeader.TestName;
+begin
+  CheckEquals(TimestampHeader, Self.T.Name, 'Name');
+
+  Self.T.Name := 'foo';
+  CheckEquals(TimestampHeader, Self.T.Name, 'Name after set');
+end;
+
+procedure TestTIdSipTimestampHeader.TestNormalizeLWS;
+begin
+  CheckEquals('',       Self.T.NormalizeLWS(''),             '''''');
+  CheckEquals('hello',  Self.T.NormalizeLWS('hello'),        'hello');
+  CheckEquals('a b',    Self.T.NormalizeLWS('a b'),          'a b');
+  CheckEquals('a b c',  Self.T.NormalizeLWS('a b  c'),       'a b  c');
+  CheckEquals('a b',    Self.T.NormalizeLWS('a'#9'b'),       'a TAB b');
+  CheckEquals('a b',    Self.T.NormalizeLWS('a'#13#10'  b'), 'a CRLF SP SP b');
+end;
+
+procedure TestTIdSipTimestampHeader.TestReadNumber;
+var
+  Src: String;
+begin
+  Src := '1';
+  CheckEquals(1, Self.T.ReadNumber(Src), '1');
+  CheckEquals('', Src, 'Src after ''1''');
+
+  Src := '123 ';
+  CheckEquals(123, Self.T.ReadNumber(Src), '123 SP');
+  CheckEquals(' ', Src, 'Src after ''123 ''');
+
+  Src := '456.';
+  CheckEquals(456, Self.T.ReadNumber(Src), '456.');
+  CheckEquals('.', Src, 'Src after ''456.''');
+
+  try
+    Src := '';
+    Self.T.ReadNumber(Src);
+    Fail('Failed to bail out on empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Src := 'a';
+    Self.T.ReadNumber(Src);
+    Fail('Failed to bail out on non-number');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Src := 'a 1';
+    Self.T.ReadNumber(Src);
+    Fail('Failed to bail out on non-number, SP, number');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Src := '-66';
+    Self.T.ReadNumber(Src);
+    Fail('Failed to bail out on negative number (hence non-number)');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipTimestampHeader.TestValue;
+begin
+  Self.T.Value := '1';
+  CheckEquals(1, Self.T.Timestamp.IntegerPart,    '1: Timestamp.IntegerPart');
+  CheckEquals(0, Self.T.Timestamp.FractionalPart, '1: Timestamp.FractionalPart');
+  CheckEquals(0, Self.T.Delay.IntegerPart,        '1: Delay.IntegerPart');
+  CheckEquals(0, Self.T.Delay.FractionalPart,     '1: Delay.FractionalPart');
+
+  Self.T.Value := '99.';
+  CheckEquals(99, Self.T.Timestamp.IntegerPart,    '2: Timestamp.IntegerPart');
+  CheckEquals(0,  Self.T.Timestamp.FractionalPart, '2: Timestamp.FractionalPart');
+  CheckEquals(0,  Self.T.Delay.IntegerPart,        '2: Delay.IntegerPart');
+  CheckEquals(0,  Self.T.Delay.FractionalPart,     '2: Delay.FractionalPart');
+
+  Self.T.Value := '2.2';
+  CheckEquals(2, Self.T.Timestamp.IntegerPart,    '3: Timestamp.IntegerPart');
+  CheckEquals(2, Self.T.Timestamp.FractionalPart, '3: Timestamp.FractionalPart');
+  CheckEquals(0, Self.T.Delay.IntegerPart,        '3: Delay.IntegerPart');
+  CheckEquals(0, Self.T.Delay.FractionalPart,     '3: Delay.FractionalPart');
+end;
+
+procedure TestTIdSipTimestampHeader.TestValueMalformed;
+begin
+  try
+    Self.T.Value := 'a';
+    Fail('Failed to bail out on non-integer');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.T.Value := '1..1';
+    Fail('Failed to bail out on too many periods');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.T.Value := '.1';
+    Fail('Failed to bail out on no digits before period');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.T.Value := '1 a';
+    Fail('Failed to bail out on malformed delay');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.T.Value := '1 1.1;tag';
+    Fail('Failed to bail out on params');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipTimestampHeader.TestValueWithDelay;
+begin
+  Self.T.Value := '5.1 3';
+  CheckEquals(5, Self.T.Timestamp.IntegerPart,    '1: Timestamp.IntegerPart');
+  CheckEquals(1, Self.T.Timestamp.FractionalPart, '1: Timestamp.FractionalPart');
+  CheckEquals(3, Self.T.Delay.IntegerPart,        '1: Delay.IntegerPart');
+  CheckEquals(0, Self.T.Delay.FractionalPart,     '1: Delay.FractionalPart');
+
+  Self.T.Value := '1.2 3.4';
+  CheckEquals(1, Self.T.Timestamp.IntegerPart,    '2: Timestamp.IntegerPart');
+  CheckEquals(2, Self.T.Timestamp.FractionalPart, '2: Timestamp.FractionalPart');
+  CheckEquals(3, Self.T.Delay.IntegerPart,        '2: Delay.IntegerPart');
+  CheckEquals(4, Self.T.Delay.FractionalPart,     '2: Delay.FractionalPart');
+
+  Self.T.Value := '6.5 .4';
+  CheckEquals(6, Self.T.Timestamp.IntegerPart,    '3: Timestamp.IntegerPart');
+  CheckEquals(5, Self.T.Timestamp.FractionalPart, '3: Timestamp.FractionalPart');
+  CheckEquals(0, Self.T.Delay.IntegerPart,        '3: Delay.IntegerPart');
+  CheckEquals(4, Self.T.Delay.FractionalPart,     '3: Delay.FractionalPart');
+end;
+
+//* TestTIdSipTimestampHeader Published methods ********************************
 
 //******************************************************************************
 //* TestTIdSipViaHeader                                                        *
@@ -1663,6 +1920,7 @@ begin
   CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
   CheckEquals(TIdSipRecordRouteHeader.ClassName, Self.H.Add(RecordRouteHeader).ClassName,       RecordRouteHeader);
   CheckEquals(TIdSipRouteHeader.ClassName,       Self.H.Add(RouteHeader).ClassName,             RouteHeader);
+  CheckEquals(TIdSipTimestampHeader.ClassName,   Self.H.Add(TimestampHeader).ClassName,         TimestampHeader);
   CheckEquals(TIdSipFromToHeader.ClassName,      Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
   CheckEquals(TIdSipViaHeader.ClassName,         Self.H.Add(ViaHeaderFull).ClassName,           ViaHeaderFull);
 end;

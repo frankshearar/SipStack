@@ -66,10 +66,13 @@ type
   EBadResponse = class(EParser);
 
 const
-  LegalWordChars            = Alphabet + Digits
-                            + ['-', '.', '!', '%', '*', '_', '+', '`', '''',
-                               '~', '(', ')', '<', '>', ':', '\', '"', '/', '[',
-                               ']', '?', '{', '}'];
+  LegalTokenChars = Alphabet + Digits
+                  + ['-', '.', '!', '%', '*', '_',
+                     '+', '`', '''', '~'];
+  LegalWordChars = LegalTokenChars
+                 + ['(', ')', '<', '>', ':', '\', '"', '/', '[',
+                    ']', '?', '{', '}'];
+  LWSChars = [' ', #9, #10, #13];                  
 
 const
   BadStatusCode             = -1;
@@ -436,9 +439,7 @@ begin
 
   if Result then
     for I := 1 to Length(Token) do begin
-      Result := Result and (Token[I] in ['a'..'z', 'A'..'Z', '0'..'9',
-                                         '-', '.', '!', '%', '*', '_',
-                                       '+', '`', '''', '~']);
+      Result := Result and (Token[I] in LegalTokenChars);
       if not Result then Break;
     end;
 end;
