@@ -498,8 +498,13 @@ begin
 end;
 
 procedure TIdSipTCPTransport.SetPort(const Value: Cardinal);
+var
+  I: Integer;
 begin
   Self.Transport.DefaultPort := Value;
+
+  for I := 0 to Self.Bindings.Count - 1 do
+    Self.Bindings[I].Port := Value;
 end;
 
 //* TIdSipTCPTransport Private methods *****************************************
@@ -755,8 +760,13 @@ begin
 end;
 
 procedure TIdSipUDPTransport.SetPort(const Value: Cardinal);
+var
+  I: Integer;
 begin
   Self.Transport.DefaultPort := Value;
+
+  for I := 0 to Self.Bindings.Count - 1 do
+    Self.Bindings[I].Port := Value;
 end;
 
 //* TIdSipUDPTransport Private methods *****************************************
