@@ -17,37 +17,35 @@ uses
 // The classes below all encapsulate DNS lookups, or the SIP processing of these
 // lookups according to RFC 3263.
 //
-// As a refresher, here's what a sample zonefile looks like:
+// As a refresher, here's what a sample zonefile looks like, for the Low Earth
+// Orbit Internet Exchange domain:
 //
-// $TTL 3600
-// @       IN      SOA     ns1.foo.bar.  dnsadmin.foo.bar. (
-//                        1998082085
-//                        1800            ; refresh, seconds
-//                        900             ; retry, seconds
-//                        604800          ; expire, seconds
-//                        86400 )         ; minimum, seconds
-//                A       1.1.1.1
-//                NS      ns1.foo.bar.
-//                NS      ns.quaax.quaax.
-//                MX      100 mx1.foo.bar.
-//                MX      200 mx2.foo.bar.
+// $TTL    3600
 //
-// ;;               Priority Weight Port   Target
-//  _sips._tls  SRV 0        0      5060   baz.foo.bar.
-//  _sip._tcp   SRV 0        0      5060   baz.foo.bar.
-//  _sip._udp   SRV 0        0      5060   baz.foo.bar.
+// @       IN      SOA     leo-ix.net. root.leo-ix.net.  (
+//                                 21000302        ; Serial
+//                                 3600    ; Refresh
+//                                 900     ; Retry
+//                                 3600000 ; Expire
+//                                 3600 )  ; Minimum
+// @      IN NS   ns1.leo-ix.net.
 //
-// ;;        order pref flags service      regexp  replacement
-//  IN NAPTR 50    50   "s"   "SIPS+D2T"   ""      _sips._tcp.baz.foo.bar.
-//  IN NAPTR 90    50   "s"   "SIP+D2T"    ""      _sip._tcp.baz.foo.bar.
-//  IN NAPTR 100   50   "s"   "SIP+D2U"    ""      _sip._udp.baz.foo.bar.
+// ;;                   order pref flags service      regexp  replacement
+// leo-ix.net. IN NAPTR 0     0    "s"   "SIPS+D2T"   ""      _sips._tcp.leo-ix.net
+// leo-ix.net. IN NAPTR 0     0    "s"   "SIP+D2T"    ""      _sip._tcp.leo-ix.net
+// leo-ix.net. IN NAPTR 0     0    "s"   "SIP+D2U"    ""      _sip._udp.leo-ix.net
 //
-// localhost       A       127.0.0.1
-// warez           A       127.0.0.1
-// baz             A       1.1.1.2
-// sip             A       1.1.1.2
-// baz             AAAA    2002:0101:0102:1::1
-// sip             AAAA    2002:0101:0102:1::1
+// ;;                           priority weight port name
+//  _sips._tcp.leo-ix.net.  SRV 1        2      5061 paranoid
+//  _sips._tcp.leo-ix.net.  SRV 1        1      5061 paranoid-bak
+//  _sip._tcp.leo-ix.net.   SRV 2        0      5060 sip-proxy
+//  _sip._udp.leo-ix.net.   SRV 3        0      5060 sip-proxy
+// 
+//
+// ns1             A       127.0.0.1
+// paranoid        A       127.0.0.1
+// paranoid-bak    AAAA    ::11
+// sip-proxy       A       127.0.0.2
 
 type
   TIdSipLocation = class(TObject)
