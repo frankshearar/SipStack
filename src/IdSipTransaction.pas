@@ -501,7 +501,7 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipTransactionDispatcherMethod = class(TIdSipMethod)
+  TIdSipTransactionDispatcherMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
   public
@@ -544,7 +544,7 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
-  TIdSipTransactionMethod = class(TIdSipMethod)
+  TIdSipTransactionMethod = class(TIdMethod)
   private
     fTransaction: TIdSipTransaction;
   public

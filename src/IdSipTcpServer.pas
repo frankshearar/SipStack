@@ -144,7 +144,7 @@ type
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
 
-  TIdSipTcpServerExceptionMethod = class(TIdSipMethod)
+  TIdSipTcpServerExceptionMethod = class(TIdMethod)
   private
     fException: Exception;
     fReason:    String;
@@ -155,7 +155,7 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
-  TIdSipTcpServerMalformedMessageMethod = class(TIdSipMethod)
+  TIdSipTcpServerMalformedMessageMethod = class(TIdMethod)
   private
     fMsg:    String;
     fReason: String;
@@ -166,7 +166,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipTcpServerReceiveRequestMethod = class(TIdSipMethod)
+  TIdSipTcpServerReceiveRequestMethod = class(TIdMethod)
   private
     fReceivedFrom: TIdSipConnectionBindings;
     fRequest:      TIdSipRequest;
@@ -177,7 +177,7 @@ type
     property Request:      TIdSipRequest            read fRequest write fRequest;
   end;
 
-  TIdSipTcpServerReceiveResponseMethod = class(TIdSipMethod)
+  TIdSipTcpServerReceiveResponseMethod = class(TIdMethod)
   private
     fReceivedFrom: TIdSipConnectionBindings;
     fResponse:     TIdSipResponse;

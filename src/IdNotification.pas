@@ -19,14 +19,14 @@ type
   // My subclasses have properties representing the parameters of the method
   // call, and the Run method the actually executes the method by typecasting
   // its Subject parameter.
-  TIdSipMethod = class(TObject)
+  TIdMethod = class(TObject)
   public
     procedure Run(const Subject: IInterface); virtual;
   end;
 
   // I provide a storage space for listeners, and you use Notify to make me
   // iterate over my contained listeners, passing each item to the
-  // TIdSipMethod.
+  // TIdMethod.
   TIdNotificationList = class(TObject)
   private
     List: TList;
@@ -39,18 +39,18 @@ type
 
     procedure AddListener(L: IInterface);
     function  Count: Integer;
-    procedure Notify(Method: TIdSipMethod);
+    procedure Notify(Method: TIdMethod);
     procedure RemoveListener(L: IInterface);
   end;
 
 implementation
 
 //******************************************************************************
-//* TIdSipMethod                                                               *
+//* TIdMethod                                                                  *
 //******************************************************************************
-//* TIdSipMethod Public methods ************************************************
+//* TIdMethod Public methods ***************************************************
 
-procedure TIdSipMethod.Run(const Subject: IInterface);
+procedure TIdMethod.Run(const Subject: IInterface);
 begin
   // By default do nothing
 end;
@@ -101,7 +101,7 @@ begin
   end;
 end;
 
-procedure TIdNotificationList.Notify(Method: TIdSipMethod);
+procedure TIdNotificationList.Notify(Method: TIdMethod);
 var
   Copy: TList;
   I:    Integer;

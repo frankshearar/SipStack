@@ -625,7 +625,7 @@ type
     property Username:                 String        read fUsername write fUsername;
   end;
 
-  TIdRTPFilteredListenerFilteredRTPMethod = class(TIdSipMethod)
+  TIdRTPFilteredListenerFilteredRTPMethod = class(TIdMethod)
   private
     fBinding: TIdSocketHandle;
     fPacket:  TIdRTPPacket;

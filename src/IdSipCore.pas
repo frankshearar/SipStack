@@ -393,7 +393,7 @@ type
     property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
-  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdSipMethod)
+  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
   private
     fReceiver: TIdSipTransport;
     fResponse: TIdSipResponse;
@@ -404,7 +404,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
-  TIdSipUserAgentInboundCallMethod = class(TIdSipMethod)
+  TIdSipUserAgentInboundCallMethod = class(TIdMethod)
   private
     fSession: TIdSipInboundSession;
   public
@@ -473,7 +473,7 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
-  TIdSipActionAuthenticationChallengeMethod = class(TIdSipMethod)
+  TIdSipActionAuthenticationChallengeMethod = class(TIdMethod)
   private
     fAction:        TIdSipAction;
     fFirstPassword: String;
@@ -515,7 +515,7 @@ type
     function Interval: Cardinal;
   end;
 
-  TIdSipSessionMethod = class(TIdSipMethod)
+  TIdSipSessionMethod = class(TIdMethod)
   private
     fSession: TIdSipSession;
   public
@@ -691,7 +691,7 @@ type
     procedure RemoveListener(const Listener: IIdSipOptionsListener);
   end;
 
-  TIdSipOptionsSuccessMethod = class(TIdSipMethod)
+  TIdSipOptionsSuccessMethod = class(TIdMethod)
   private
     fOptions:  TIdSipOutboundOptions;
     fResponse: TIdSipResponse;
@@ -766,7 +766,7 @@ type
     procedure Unregister(Registrar: TIdSipUri);
   end;
 
-  TIdSipRegistrationMethod = class(TIdSipMethod)
+  TIdSipRegistrationMethod = class(TIdMethod)
   private
     fCurrentBindings: TIdSipContacts;
     fRegistration:    TIdSipOutboundRegistration;
@@ -800,7 +800,7 @@ procedure ApplyTo(List: TList;
                   Proc: TIdSipProcedure); overload;
 procedure ApplyTo(List: TList;
                   Lock: TCriticalSection;
-                  Method: TIdSipMethod); overload;
+                  Method: TIdMethod); overload;
 procedure CopyList(Source: TList;
                    Lock: TCriticalSection;
                    Copy: TList);
@@ -846,7 +846,7 @@ end;
 
 procedure ApplyTo(List: TList;
                   Lock: TCriticalSection;
-                  Method: TIdSipMethod);
+                  Method: TIdMethod);
 var
   Copy: TList;
   I: Integer;

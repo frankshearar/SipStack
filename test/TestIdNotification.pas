@@ -23,7 +23,7 @@ type
     property BarCalled: Boolean read fBarCalled;
   end;
 
-  TIdCallBar = class(TIdSipMethod)
+  TIdCallBar = class(TIdMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;

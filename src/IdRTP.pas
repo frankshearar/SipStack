@@ -1043,7 +1043,7 @@ type
     procedure RemoveLast;
   end;
 
-  TIdRTPMethod = class(TIdSipMethod)
+  TIdRTPMethod = class(TIdMethod)
   private
     fBinding: TIdSocketHandle;
   public
