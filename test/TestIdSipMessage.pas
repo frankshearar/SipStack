@@ -29,8 +29,10 @@ type
   TIdSipTrivialMessage = class(TIdSipMessage)
   protected
     function  FirstLine: String; override;
-    function  MatchRequest(Request: TIdSipRequest;
-                           UseCSeqMethod: Boolean = true): Boolean; override;
+    function  MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
+    function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
     function  Equals(Msg: TIdSipMessage): Boolean; override;
@@ -225,6 +227,7 @@ type
     procedure TestIsProvisional;
     procedure TestIsRedirect;
     procedure TestIsRequest;
+    procedure TestMatchToRFC2543ServerTransaction;
     procedure TestIsTrying;
     procedure TestParse;
     procedure TestParseEmptyString;
@@ -420,8 +423,14 @@ begin
   Result := '';
 end;
 
-function TIdSipTrivialMessage.MatchRequest(Request: TIdSipRequest;
-                                           UseCSeqMethod: Boolean = true): Boolean;
+function TIdSipTrivialMessage.MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                                  UseCSeqMethod: Boolean): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipTrivialMessage.MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                                  UseCSeqMethod: Boolean): Boolean;
 begin
   Result := false;
 end;
@@ -3099,6 +3108,10 @@ begin
   try
     Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
     try
+      CheckEquals(Self.Request.RequestUri.Uri,
+                  Response.RequestRequestUri.Uri,
+                  'Response''s copy of Request''s Request-URI');
+
       FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
       try
         CheckEquals(1, FromFilter.Count, 'Number of From headers');
@@ -3320,6 +3333,42 @@ end;
 procedure TestTIdSipResponse.TestIsRequest;
 begin
   Check(not Self.Response.IsRequest, 'IsRequest');
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543ServerTransaction;
+var
+  InviteOne:     TIdSipRequest;
+  InviteTwo:     TIdSipRequest;
+  ResponseToOne: TIdSipResponse;
+begin
+  // Take especial note of RFC 3261, section 17.2.3, the inspiration for this
+  // test.
+
+  InviteOne := TIdSipTestResources.CreateBasicRequest;
+  try
+    InviteTwo := TIdSipRequest.Create;
+    try
+      InviteOne.LastHop.RemoveBranch;
+
+      InviteTwo.Assign(InviteOne);
+      InviteTwo.CallID   := '1' + InviteOne.CallID;
+      InviteTwo.From.Tag := InviteOne.From.Tag + '1';
+
+      ResponseToOne := TIdSipResponse.InResponseTo(InviteOne, SIPOK);
+      try
+        Check(InviteOne.Match(ResponseToOne),
+              'Response doesn''t match InviteOne');
+        Check(not InviteTwo.Match(ResponseToOne),
+              'Response matches InviteTwo');
+      finally
+        ResponseToOne.Free;
+      end;
+    finally
+      InviteTwo.Free;
+    end;
+  finally
+    InviteOne.Free;
+  end;
 end;
 
 procedure TestTIdSipResponse.TestIsTrying;

@@ -672,6 +672,7 @@ type
     function  IsDefaultPortForTransport(Port: Cardinal;
                                         const Transport: String): Boolean;
     function  IsRFC3261Branch: Boolean;
+    procedure RemoveBranch;
 
     property Branch:     String              read GetBranch write SetBranch;
     property SentBy:     String              read fSentBy write fSentBy;
@@ -963,7 +964,11 @@ type
     function  HasMalformedHeaders: Boolean;
     function  HasMalformedFirstLine: Boolean; virtual;
     function  MatchRequest(InitialRequest: TIdSipRequest;
-                           UseCSeqMethod: Boolean): Boolean; virtual; abstract;
+                           UseCSeqMethod: Boolean): Boolean;
+    function  MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                     UseCSeqMethod: Boolean): Boolean; virtual; abstract;
+    function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                     UseCSeqMethod: Boolean): Boolean; virtual; abstract;
     function  MissingRequiredHeaders: Boolean; virtual;
     procedure ParseCompoundHeader(const Header: String;
                                   Parms: String);
@@ -1048,18 +1053,16 @@ type
     function  FindAuthorizationHeader(const Realm: String;
                                       const HeaderType: String): TIdSipHeader;
     function  GetMaxForwards: Byte;
-    function  MatchSipRFC2543Request(InitialRequest: TIdSipRequest;
-                                     UseCSeqMethod: Boolean): Boolean;
-    function  MatchSipRFC3261Request(InitialRequest: TIdSipRequest;
-                                     UseCSeqMethod: Boolean): Boolean;
     procedure SetMaxForwards(Value: Byte);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
-    function  MatchRequest(InitialRequest: TIdSipRequest;
-                           UseCSeqMethod: Boolean): Boolean; override;
+    function  MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
+    function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
     function  MissingRequiredHeaders: Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
@@ -1105,17 +1108,29 @@ type
     property Route:       TIdSipRoutePath read fRoute write SetRoute;
   end;
 
+  // My RequestRequestUri property deserves some explanation: According to
+  // RFC 3261 section 17.2.3, because RFC 2543 requests use their Request-URIs
+  // to match transactions, you have to pass around the actual Transaction
+  // object when you want to send a response. However, by storing the request's
+  // Request-URI in RequestRequestUri, you can match responses against requests.
+  // keeping knowledge of Transactions where they belong - in the Transaction
+  // layer. Both TIdSipResponse.InResponseTo methods set RequestRequestUri for
+  // you.
   TIdSipResponse = class(TIdSipMessage)
   private
-    fStatusCode: Integer;
-    fStatusText: String;
+    fRequestRequestUri: TIdSipUri;
+    fStatusCode:        Integer;
+    fStatusText:        String;
 
+    procedure SetRequestRequestUri(Value: TIdSipUri);
     procedure SetStatusCode(Value: Integer);
   protected
     function  FirstLine: String; override;
     function  HasMalformedFirstLine: Boolean; override;
-    function  MatchRequest(InitialRequest: TIdSipRequest;
-                           UseCSeqMethod: Boolean): Boolean; override;
+    function  MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
+    function  MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                  UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
     class function InResponseTo(Request: TIdSipRequest;
@@ -1123,6 +1138,9 @@ type
     class function InResponseTo(Request: TIdSipRequest;
                                 StatusCode: Cardinal;
                                 Contact: TIdSipContactHeader): TIdSipResponse; overload;
+
+    constructor Create; override;
+    destructor  Destroy; override;
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
@@ -1148,8 +1166,9 @@ type
     function  MalformedException: EBadMessageClass; override;
     function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
-    property StatusCode: Integer read fStatusCode write SetStatusCode;
-    property StatusText: String  read fStatusText write fStatusText;
+    property RequestRequestUri: TIdSipUri read fRequestRequestUri write SetRequestRequestUri;
+    property StatusCode:        Integer   read fStatusCode write SetStatusCode;
+    property StatusText:        String    read fStatusText write fStatusText;
   end;
 
   TIdSipRequestList = class(TObject)
@@ -4451,6 +4470,14 @@ begin
   Result := Copy(Self.Branch, 1, Length(BranchMagicCookie)) = BranchMagicCookie;
 end;
 
+procedure TIdSipViaHeader.RemoveBranch;
+begin
+  // Really, this method just serves a debugging purpose, allowing us to turn
+  // good, healthy RFC 3261 Via headers into twisted, perverted RFC 2543 Via
+  // headers.
+  Self.RemoveParameter(BranchParam);
+end;
+
 //* TIdSipViaHeader Protected methods ******************************************
 
 function TIdSipViaHeader.GetName: String;
@@ -5951,6 +5978,16 @@ begin
   Result := false;
 end;
 
+function TIdSipMessage.MatchRequest(InitialRequest: TIdSipRequest;
+                                    UseCSeqMethod: Boolean): Boolean;
+begin
+  // cf. RFC 3261 section 17.2.3
+  if Self.LastHop.IsRFC3261Branch then
+    Result := Self.MatchRFC3261Request(InitialRequest, UseCSeqMethod)
+  else
+    Result := Self.MatchRFC2543Request(InitialRequest, UseCSeqMethod);
+end;
+
 function TIdSipMessage.MissingRequiredHeaders: Boolean;
 begin
   Result := true;
@@ -6616,14 +6653,55 @@ begin
   Result := false;
 end;
 
-function TIdSipRequest.MatchRequest(InitialRequest: TIdSipRequest;
-                                    UseCSeqMethod: Boolean): Boolean;
+function TIdSipRequest.MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                           UseCSeqMethod: Boolean): Boolean;
 begin
-  // cf. RFC 3261 section 17.2.3
-  if Self.LastHop.IsRFC3261Branch then
-    Result := Self.MatchSipRFC3261Request(InitialRequest, UseCSeqMethod)
+  // NOTE BENE:
+  // This DOES NOT consistitute a full match! If Self.IsAck then we also
+  // need to check the To tag against the response the server sent. We
+  // cannot do that here, which means that only a(n INVITE) transaction can
+  // do the full match.
+  if Self.IsInvite then
+    Result := Self.RequestUri.Equals(InitialRequest.RequestUri)
+         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and  Self.LastHop.Equals(InitialRequest.LastHop)
+  else if Self.IsAck then
+    Result := RequestUri.Equals(InitialRequest.RequestUri)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo)
+         and  Self.LastHop.Equals(InitialRequest.LastHop)
   else
-    Result := Self.MatchSipRFC2543Request(InitialRequest, UseCSeqMethod);
+    Result := Self.RequestUri.EqualParameters(InitialRequest.RequestUri)
+         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and  Self.LastHop.Equals(InitialRequest.LastHop);
+
+  if not Self.IsAck then begin
+    if UseCSeqMethod then
+      Result := Result
+            and Self.CSeq.Equals(InitialRequest.CSeq)
+    else
+      Result := Result
+            and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo);
+  end;
+end;
+
+function TIdSipRequest.MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                           UseCSeqMethod: Boolean): Boolean;
+begin
+  Result := (Self.LastHop.Branch = InitialRequest.LastHop.Branch)
+             and (Self.LastHop.SentBy = InitialRequest.LastHop.SentBy);
+
+  if UseCseqMethod then begin
+    if Self.IsACK then
+      Result := Result and InitialRequest.IsInvite
+    else
+      Result := Result and (Self.Method = InitialRequest.Method);
+  end;
 end;
 
 function TIdSipRequest.MissingRequiredHeaders: Boolean;
@@ -6714,57 +6792,6 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
-function TIdSipRequest.MatchSipRFC2543Request(InitialRequest: TIdSipRequest;
-                                              UseCSeqMethod: Boolean): Boolean;
-begin
-  // NOTE BENE:
-  // This DOES NOT consistitute a full match! If Self.IsAck then we also
-  // need to check the To tag against the response the server sent. We
-  // cannot do that here, which means that only a(n INVITE) transaction can
-  // do the full match.                                                                   
-  if Self.IsInvite then
-    Result := Self.RequestUri.Equals(InitialRequest.RequestUri)
-         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
-         and (Self.From.Tag = InitialRequest.From.Tag)
-         and (Self.CallID = InitialRequest.CallID)
-         and  Self.LastHop.Equals(InitialRequest.LastHop)
-  else if Self.IsAck then
-    Result := RequestUri.Equals(InitialRequest.RequestUri)
-         and (Self.From.Tag = InitialRequest.From.Tag)
-         and (Self.CallID = InitialRequest.CallID)
-         and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo)
-         and  Self.LastHop.Equals(InitialRequest.LastHop)
-  else
-    Result := Self.RequestUri.EqualParameters(InitialRequest.RequestUri)
-         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
-         and (Self.From.Tag = InitialRequest.From.Tag)
-         and (Self.CallID = InitialRequest.CallID)
-         and  Self.LastHop.Equals(InitialRequest.LastHop);
-
-  if not Self.IsAck then begin
-    if UseCSeqMethod then
-      Result := Result
-            and Self.CSeq.Equals(InitialRequest.CSeq)
-    else
-      Result := Result
-            and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo);
-  end;
-end;
-
-function TIdSipRequest.MatchSipRFC3261Request(InitialRequest: TIdSipRequest;
-                                              UseCSeqMethod: Boolean): Boolean;
-begin
-  Result := (Self.LastHop.Branch = InitialRequest.LastHop.Branch)
-             and (Self.LastHop.SentBy = InitialRequest.LastHop.SentBy);
-
-  if UseCseqMethod then begin
-    if Self.IsACK then
-      Result := Result and InitialRequest.IsInvite
-    else
-      Result := Result and (Self.Method = InitialRequest.Method);
-  end;
-end;
-
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
@@ -6793,8 +6820,9 @@ var
 begin
   Result := TIdSipResponse.Create;
   try
-    Result.SIPVersion := IdSipMessage.SIPVersion;
-    Result.StatusCode := StatusCode;
+    Result.RequestRequestUri := Request.RequestUri;
+    Result.SIPVersion        := IdSipMessage.SIPVersion;
+    Result.StatusCode        := StatusCode;
 
     // cf RFC 3261 section 8.2.6.1
     if Result.IsTrying then begin
@@ -6866,6 +6894,20 @@ begin
       ReqRecordRoutes.Free;
     end;
   end;
+end;
+
+constructor TIdSipResponse.Create;
+begin
+  inherited Create;
+
+  Self.fRequestRequestUri := TIdSipUri.Create('');
+end;
+
+destructor TIdSipResponse.Destroy;
+begin
+  Self.RequestRequestUri.Free;
+
+  inherited Destroy;
 end;
 
 procedure TIdSipResponse.Accept(Visitor: IIdSipMessageVisitor);
@@ -7041,10 +7083,45 @@ begin
   Result := false;
 end;
 
-function TIdSipResponse.MatchRequest(InitialRequest: TIdSipRequest;
-                                     UseCSeqMethod: Boolean): Boolean;
+function TIdSipResponse.MatchRFC2543Request(InitialRequest: TIdSipRequest;
+                                            UseCSeqMethod: Boolean): Boolean;
 begin
-  // cf. RFC 3261 section 17.1.3
+  // From RFC 3261, section 17.2.3:
+  //   "For all other request methods, a request is matched to a transaction
+  //   if the Request-URI, To tag, From tag, Call-ID, CSeq (including the
+  //   method), and top Via header field match those of the request that
+  //   created the transaction.  Matching is done based on the matching
+  //   rules defined for each of those header fields.  When a non-INVITE
+  //   request matches an existing transaction, it is a retransmission of
+  //   the request that created that transaction.
+  //
+  //   Because the matching rules include the Request-URI, the server cannot
+  //   match a response to a transaction.  When the TU passes a response to
+  //   the server transaction, it must pass it to the specific server
+  //   transaction for which the response is targeted."
+  //
+  // The latter paragraph provides us with the reason why a Response has the
+  // RequestRequestUri property: it allows us to match responses against server
+  // transactions without passing Transaction objects all over the place!
+
+  Result := Self.RequestRequestUri.Equals(InitialRequest.RequestUri)
+        and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
+        and (Self.From.Tag     = InitialRequest.From.Tag)
+        and (Self.CallID       = InitialRequest.CallID)
+        and Self.CSeq.Equals(InitialRequest.CSeq);
+
+  Result := Result
+        and not Self.Path.IsEmpty
+        and not InitialRequest.Path.IsEmpty;
+
+  Result := Result
+        and Self.LastHop.Equals(InitialRequest.LastHop);
+end;
+
+function TIdSipResponse.MatchRFC3261Request(InitialRequest: TIdSipRequest;
+                                            UseCSeqMethod: Boolean): Boolean;
+begin
+  // cf. RFC 3261 section 17.2.3
   Result := not Self.Path.IsEmpty
         and not InitialRequest.Path.IsEmpty;
 
@@ -7081,6 +7158,11 @@ begin
 end;
 
 //* TIdSipResponse Private methods **********************************************
+
+procedure TIdSipResponse.SetRequestRequestUri(Value: TIdSipUri);
+begin
+  Self.fRequestRequestUri.Uri := Value.Uri;
+end;
 
 procedure TIdSipResponse.SetStatusCode(Value: Integer);
 begin

@@ -416,6 +416,7 @@ type
     procedure TestMaddr;
     procedure TestName;
     procedure TestReceived;
+    procedure TestRemoveBranch;
     procedure TestTTL;
     procedure TestValue; override;
     procedure TestValueTorture;
@@ -3794,6 +3795,20 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+procedure TestTIdSipViaHeader.TestRemoveBranch;
+const
+  BaseVia = 'SIP/1.5/UDP 127.0.0.1';
+begin
+  Self.V.Value := BaseVia + ';branch=' + BranchMagicCookie + 'heehee';
+  Self.V.RemoveBranch;
+
+  CheckEquals(BaseVia,
+              Self.V.FullValue,
+              'AsString after RemoveBranch');
+  Check(not Self.V.HasBranch,
+        'HasBranch claims there''s still a branch');            
 end;
 
 procedure TestTIdSipViaHeader.TestTTL;
