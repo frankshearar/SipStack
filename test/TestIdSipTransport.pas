@@ -1050,35 +1050,48 @@ end;
 
 procedure TestTIdSipTransport.TestDiscardMalformedMessage;
 var
+  Listener:          TIdSipTestTransportListener;
   MangledSipVersion: String;
 begin
-  MangledSipVersion := 'SIP/;2.0';
-  Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
-                 + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
-                 + 'Max-Forwards: 70'#13#10
-                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-                 + 'CSeq: 314159 INVITE'#13#10
-                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-                 + 'Content-Type: text/plain'#13#10
-                 + 'Content-Length: 29'#13#10
-                 + #13#10
-                 + 'I am a message. Hear me roar!');
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.HighPortTransport.AddTransportListener(Listener);
+    MangledSipVersion := 'SIP/;2.0';
+    Self.SendMessage('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+                   + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                   + 'CSeq: 314159 INVITE'#13#10
+                   + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                   + 'Content-Type: text/plain'#13#10
+                   + 'Content-Length: 29'#13#10
+                   + #13#10
+                   + 'I am a message. Hear me roar!');
 
-  Self.WaitForSignaled;
-  Check(not Self.ReceivedRequest,
-        Self.HighPortTransport.ClassName
-      + ': Somehow we received a mangled message');
-  Check(Self.RejectedMessage,
-        Self.HighPortTransport.ClassName
-      + ': Notification of message rejection not received');
+    Self.WaitForSignaled;
+    Check(not Self.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Somehow we received a mangled message');
+    Check(Self.RejectedMessage,
+          Self.HighPortTransport.ClassName
+        + ': Notification of message rejection not received');
 
-  // Check that the transport sends the 400 Bad Request.
-  CheckEquals(SIPBadRequest,
-              Self.LastSentResponse.StatusCode,
-              Self.HighPortTransport.ClassName
-            + ': "Bad Request" response');      
+    // Check that the transport sends the 400 Bad Request.
+    CheckEquals(SIPBadRequest,
+                Self.LastSentResponse.StatusCode,
+                Self.HighPortTransport.ClassName
+              + ': "Bad Request" response');
+
+    // Check that the transport didn't send the malformed request up the stack
+    Check(not Listener.ReceivedRequest,
+          Self.HighPortTransport.ClassName
+        + ': Transport passed malformed request up the stack');
+  finally
+    Self.HighPortTransport.RemoveTransportListener(Listener);
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipTransport.TestDiscardUnknownSipVersion;
