@@ -1147,6 +1147,7 @@ begin
   ReAttempt := TIdSipRequest.Create;
   try
     ReAttempt.Assign(Transaction.InitialRequest);
+    
     ReAttempt.CSeq.Increment;
     ReAttempt.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
 
