@@ -324,7 +324,6 @@ type
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
-    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
     function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AddOutboundRegistration: TIdSipOutboundRegistration;
     function  AddOutboundSession: TIdSipOutboundSession;
@@ -365,6 +364,7 @@ type
     destructor  Destroy; override;
 
     procedure AddModule(ModuleType: TIdSipMessageModuleClass);
+    function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
@@ -405,17 +405,21 @@ type
   TIdSipMessageModule = class(TObject)
   private
     UserAgent: TIdSipUserAgentCore;
+  protected
+    function OutboundActionType: TIdSipActionClass; virtual; abstract;
   public
     constructor Create(UA: TIdSipUserAgentCore); virtual;
 
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; virtual;
     function AcceptsMethods: String; virtual;
+    function MakeOutboundAction: TIdSipAction; virtual;
     function WillAccept(Request: TIdSipRequest): Boolean; virtual;
-
   end;
 
   TIdSipInviteModule = class(TIdSipMessageModule)
+  protected
+    function OutboundActionType: TIdSipActionClass; override;
   public
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
@@ -424,6 +428,8 @@ type
   end;
 
   TIdSipOptionsModule = class(TIdSipMessageModule)
+  protected
+    function OutboundActionType: TIdSipActionClass; override;
   public
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
@@ -432,6 +438,8 @@ type
   end;
 
   TIdSipRegisterModule = class(TIdSipMessageModule)
+  protected
+    function OutboundActionType: TIdSipActionClass; override;
   public
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
@@ -1695,6 +1703,31 @@ begin
   end;
 end;
 
+function TIdSipUserAgentCore.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
+begin
+  // Do not call this directly. Modules call this method.
+
+  Self.ActionLock.Acquire;
+  try
+    Result := ActionType.Create(Self);
+    try
+      Self.Actions.Add(Result);
+    except
+      if (Self.Actions.IndexOf(Result) <> -1) then
+        Self.Actions.Remove(Result)
+      else
+        Result.Free;
+
+      Result := nil;
+
+      raise;
+    end;
+  finally
+    Self.ActionLock.Release;
+  end;
+
+  Self.NotifyOfChange;
+end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
                                   const InitialOffer: String;
@@ -2084,30 +2117,6 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
-begin
-  Self.ActionLock.Acquire;
-  try
-    Result := ActionType.Create(Self);
-    try
-      Self.Actions.Add(Result);
-    except
-      if (Self.Actions.IndexOf(Result) <> -1) then
-        Self.Actions.Remove(Result)
-      else
-        Result.Free;
-
-      Result := nil;
-
-      raise;
-    end;
-  finally
-    Self.ActionLock.Release;
-  end;
-
-  Self.NotifyOfChange;
-end;
-
 function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
 begin
   Result := Self.AddOutboundAction(TIdSipOutboundOptions) as TIdSipOutboundOptions;
@@ -2340,6 +2349,11 @@ begin
   Result := '';
 end;
 
+function TIdSipMessageModule.MakeOutboundAction: TIdSipAction;
+begin
+  Result := Self.UserAgent.AddOutboundAction(Self.OutboundActionType);
+end;
+
 function TIdSipMessageModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := false;
@@ -2391,6 +2405,13 @@ begin
   Result := Request.IsInvite;
 end;
 
+//* TIdSipInviteModule Protected methods ***************************************
+
+function TIdSipInviteModule.OutboundActionType: TIdSipActionClass;
+begin
+  Result := TIdSipOutboundSession;
+end;
+
 //******************************************************************************
 //* TIdSipOptionsModule                                                        *
 //******************************************************************************
@@ -2412,6 +2433,13 @@ begin
   Result := Request.IsOptions;
 end;
 
+//* TIdSipOptionsModule Protected methods ***************************************
+
+function TIdSipOptionsModule.OutboundActionType: TIdSipActionClass;
+begin
+  Result := TIdSipOutboundOptions;
+end;
+
 //******************************************************************************
 //* TIdSipRegisterModule                                                       *
 //******************************************************************************
@@ -2431,6 +2459,11 @@ end;
 function TIdSipRegisterModule.WillAccept(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.IsRegister;
+end;
+
+function TIdSipRegisterModule.OutboundActionType: TIdSipActionClass;
+begin
+  Result := TIdSipOutboundRegistration;
 end;
 
 //******************************************************************************
