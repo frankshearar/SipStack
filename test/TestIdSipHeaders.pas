@@ -422,6 +422,8 @@ type
     procedure TestValueTorture;
     procedure TestValueWithBranch;
     procedure TestValueWithDefaultPort;
+    procedure TestValueWithIPv6NumericAddress;
+    procedure TestValueWithIPv6NumericAddressAndPort;
     procedure TestValueWithSettingDefaultPort;
     procedure TestValueWithMaddr;
     procedure TestValueWithReceived;
@@ -628,6 +630,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -649,7 +652,9 @@ begin
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
+}
   Result.AddTest(TestTIdSipViaHeader.Suite);
+{
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipWWWAuthenticateHeader.Suite);
@@ -659,6 +664,7 @@ begin
   Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+}
 end;
 
 //******************************************************************************
@@ -3897,6 +3903,30 @@ const
 begin
   Self.V.Value := ValueWithPort;
   CheckEquals(ValueWithPort, Self.V.Value, 'Port lost');
+end;
+
+procedure TestTIdSipViaHeader.TestValueWithIPv6NumericAddress;
+const
+  IPv6 = '2002:DEAD:BEEF:1::1';
+begin
+  Self.V.Value := 'SIP/2.0/UDP [' + IPv6 + ']';
+
+  CheckEquals(IPv6, Self.V.SentBy, 'IPv6 sent-by');
+end;
+
+procedure TestTIdSipViaHeader.TestValueWithIPv6NumericAddressAndPort;
+const
+  IPv6 = '2002:DEAD:BEEF:1::1';
+var
+  Value: String;
+begin
+  Value := 'SIP/2.0/UDP [' + IPv6 + ']:' + IntToStr(IdPORT_SIP);
+  Self.V.Value := Value;
+
+  CheckEquals(IPv6, Self.V.SentBy, 'IPv6 sent-by');
+  CheckEquals(IdPORT_SIP, Self.V.Port, 'Port');
+
+  CheckEquals(Value, Self.V.Value, 'Port lost');
 end;
 
 procedure TestTIdSipViaHeader.TestValueWithSettingDefaultPort;

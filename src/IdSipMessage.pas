@@ -647,6 +647,7 @@ type
     procedure AssertMaddrWellFormed;
     procedure AssertReceivedWellFormed;
     procedure AssertTTLWellFormed;
+    function  CouldContainIPv6Reference(const Token: String): Boolean;
     function  GetBranch: String;
     function  GetMaddr: String;
     function  GetReceived: String;
@@ -664,6 +665,7 @@ type
     procedure Parse(const Value: String); override;
   public
     procedure Assign(Src: TPersistent); override;
+    function  AsUri: String;
     function  DefaultPortForTransport(const Transport: String): Cardinal;
     function  HasBranch: Boolean;
     function  HasMaddr: Boolean;
@@ -4430,6 +4432,20 @@ begin
     inherited Assign(Src);
 end;
 
+function TIdSipViaHeader.AsUri: String;
+begin
+  // Transport registry!
+  if (Self.Transport = TlsTransport) then
+    Result := SipsScheme
+  else
+    Result := SipScheme;
+
+  Result := Result + ':' + Self.SentBy;
+
+  if Self.PortIsSpecified then
+    Result := Result + ':' + IntToStr(Self.Port);
+end;
+
 function TIdSipViaHeader.DefaultPortForTransport(const Transport: String): Cardinal;
 begin
   if (Transport = TlsTransport) then
@@ -4487,8 +4503,12 @@ end;
 
 function TIdSipViaHeader.GetValue: String;
 begin
-  Result := Self.SipVersion + '/' + Self.Transport
-          + ' ' + Self.SentBy;
+  Result := Self.SipVersion + '/' + Self.Transport + ' ';
+
+  if TIdIPAddressParser.IsIPv6Address(Self.SentBy) then
+    Result := Result + '[' + Self.SentBy + ']'
+  else
+    Result := Result + Self.SentBy;
 
   if Self.PortIsSpecified or not Self.IsDefaultPortForTransport(Self.Port,
                                                                 Self.Transport) then
@@ -4522,7 +4542,20 @@ begin
   Self.Transport := Token;
 
   Token := Trim(Fetch(S, ';'));
-  Self.SentBy := Fetch(Token, ':');
+
+  if Self.CouldContainIPv6Reference(Token) then begin
+    Self.SentBy := Fetch(Token, ']');
+
+    // Get rid of the [ we just ate.
+    Self.SentBy := Copy(Self.SentBy, 2, Length(Self.SentBy));
+
+    // And then eat up to the real host:port delimiter
+    Fetch(Token, ':');
+  end
+  else begin
+    // A numeric IPv4 address or a domain name
+    Self.SentBy := Fetch(Token, ':');
+  end;
 
   if (Token = '') then begin
     Self.Port := Self.DefaultPortForTransport(Self.Transport);
@@ -4575,6 +4608,11 @@ begin
     if not TIdSipParser.IsByte(Self.Parameters.Values[TTLParam]) then
       Self.FailParse(InvalidNumber);
   end;
+end;
+
+function TIdSipViaHeader.CouldContainIPv6Reference(const Token: String): Boolean;
+begin
+  Result := (Token <> '') and (Token[1] = '[');
 end;
 
 function TIdSipViaHeader.GetBranch: String;
