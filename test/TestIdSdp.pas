@@ -12,17 +12,19 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle, SyncObjs, TestFramework,
-  TestFrameworkEx, TestFrameworkRtp;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle, IdUDPServer, SyncObjs,
+  TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
   published
     procedure TestAddressTypeToStr;
+    procedure TestDirectionToStr;
     procedure TestBandwidthTypeToStr;
     procedure TestKeyTypeToStr;
     procedure TestMediaTypeToStr;
     procedure TestStrToAddressType;
+    procedure TestStrToDirection;
     procedure TestStrToBandwidthType;
     procedure TestStrToKeyType;
     procedure TestStrToMediaType;
@@ -178,6 +180,7 @@ type
     procedure TestAddUsingString;
     procedure TestAssign;
     procedure TestClear;
+    procedure TestDirection;
     procedure TestEquals;
     procedure TestHasAttribute;
     procedure TestPrintOn;
@@ -349,6 +352,7 @@ type
     procedure TestIsAddressType;
     procedure TestIsBandwidthType;
     procedure TestIsByteString;
+    procedure TestIsDirection;
     procedure TestIsKeyData;
     procedure TestIsKeyType;
     procedure TestIsMediaType;
@@ -447,34 +451,6 @@ type
     procedure TestParseVersionMultipleHeaders;
   end;
 
-  TestTIdFilteredRTPPeer = class(TTestCase,
-                                 IIdRTPFilteredListener)
-  private
-    Binding:          TIdSocketHandle;
-    NormalPacket:     TIdRTPPacket;
-    LocalDesc:        TIdSdpMediaDescription;
-    ReceivedRTP:      Boolean;
-    Profile:          TIdRTPProfile;
-    RemoteDesc:       TIdSdpMediaDescription;
-    Peer:             TIdFilteredRTPPeer;
-    Server:           TIdMockRTPPeer;
-    T140PT:           TIdRTPPayloadType;
-    UnexpectedPacket: TIdRTPPacket;
-
-    procedure OnFilteredRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
-    procedure Send(RTP: TIdRTPPacket);
-    procedure SendNormalData;
-    procedure SendUnexpectedData;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestFilter;
-    procedure TestNormalOperation;
-    procedure TestSendPacket;
-  end;
-
   TestTIdSdpPayloadProcessor = class(TThreadingTestCase,
                                      IIdRTPDataListener,
                                      IIdRTPListener)
@@ -510,6 +486,67 @@ type
     procedure TestStopListening;
   end;
 
+  TestTIdSDPMediaStream = class(TThreadingTestCase,
+                                IIdRTPDataListener,
+                                IIdRTPListener)
+  private
+    AVP:       TIdRTPProfile;
+    Media:     TIdSDPMediaStream;
+    RTCPEvent: TEvent;
+    RTPEvent:  TEvent;
+    Sender:    TIdSDPMediaStream;
+    SentBye:   Boolean;
+
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
+    procedure SendRTCP;
+    procedure SendRTP;
+    procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
+                                const MediaDesc: String);
+    procedure ValidateSender;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddDataListener;
+    procedure TestAddRTPListener;
+    procedure TestIsReceiver;
+    procedure TestIsSender;
+    procedure TestReceiveDataWhenNotReceiver;
+    procedure TestRTPListenersGetRTCP;
+    procedure TestRTPListenersGetRTP;
+    procedure TestSendData;
+    procedure TestSendDataWhenNotSender;
+    procedure TestStopListeningStopsListening;
+  end;
+
+  TestTIdSDPMultimediaSession = class(TTestCase)
+  private
+    MS:      TIdSDPMultimediaSession;
+    Profile: TIdRTPProfile;
+    Server:  TIdUDPServer;
+
+    procedure CheckPortActive(Address: String;
+                              Port: Cardinal;
+                              Msg: String);
+    procedure CheckPortFree(Address: String;
+                              Port: Cardinal;
+                              Msg: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestMimeType;
+    procedure TestSetRemoteDescription;
+    procedure TestStartListeningSingleStream;
+    procedure TestStartListeningMultipleStreams;
+    procedure TestStopListening;
+  end;
+
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -522,7 +559,7 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdStack, IdUDPServer, SysUtils;
+  IdSimpleParser, IdStack, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -547,8 +584,9 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
-  Result.AddTest(TestTIdFilteredRTPPeer.Suite);
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
+  Result.AddTest(TestTIdSDPMediaStream.Suite);
+  Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 end;
 
 //******************************************************************************
@@ -566,6 +604,20 @@ begin
   // To check that ALL TIdIPVersions can be converted
   for A := Low(TIdIPVersion) to High(TIdIPVersion) do
     AddressTypeToStr(A);
+end;
+
+procedure TestFunctions.TestDirectionToStr;
+var
+  D: TIdSdpDirection;
+begin
+  CheckEquals('inactive', DIrectionToStr(sdInactive), 'sdInactive');
+  CheckEquals('recvonly', DIrectionToStr(sdRecvOnly), 'sdRecvOnly');
+  CheckEquals('sendonly', DIrectionToStr(sdSendOnly), 'sdSendOnly');
+  CheckEquals('sendrecv', DIrectionToStr(sdSendRecv), 'sdSendRecv');
+
+  // To check that ALL TIdSdpDirections can be converted
+  for D := Low(TIdSdpDirection) to High(TIdSdpDirection) do
+    DirectionToStr(D);
 end;
 
 procedure TestFunctions.TestBandwidthTypeToStr;
@@ -667,6 +719,28 @@ begin
       CheckEquals('Couldn''t convert '' '' to type TIdIPVersion',
                   E.Message,
                   'Unexpected exception: '' ''');
+  end;
+end;
+
+procedure TestFunctions.TestStrToDirection;
+begin
+  Check(sdInactive = StrToDirection('inactive'), 'inactive');
+  Check(sdRecvOnly = StrToDirection('recvonly'), 'recvonly');
+  Check(sdSendOnly = StrToDirection('sendonly'), 'sendonly');
+  Check(sdSendRecv = StrToDirection('sendrecv'), 'sendrecv');
+
+  try
+    StrToDirection('');
+    Fail('Failed to bail out on empty string');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    StrToDirection('foo');
+    Fail('Failed to bail out on ''foo''');
+  except
+    on EConvertError do;
   end;
 end;
 
@@ -1842,6 +1916,32 @@ begin
 
   Self.A.Clear;
   CheckEquals(0, Self.A.Count, 'Count after clear');
+end;
+
+procedure TestTIdSdpAttributes.TestDirection;
+var
+  Att: TIdSdpAttribute;
+begin
+  Check(sdSendRecv = Self.A.Direction,
+       'default');
+
+  Att := Self.A.Add;
+
+  Att.Name := 'sendrecv';
+  Check(sdSendRecv = Self.A.Direction,
+       'sendrecv');
+
+  Att.Name := 'recvonly';
+  Check(sdrecvonly = Self.A.Direction,
+       'recvonly');
+
+  Att.Name := 'sendonly';
+  Check(sdsendonly = Self.A.Direction,
+       'sendonly');
+
+  Att.Name := 'inactive';
+  Check(sdinactive = Self.A.Direction,
+       'inactive');
 end;
 
 procedure TestTIdSdpAttributes.TestEquals;
@@ -3724,6 +3824,17 @@ begin
   Check(TIdSdpParser.IsByteString(S), '1 million a''s');
 end;
 
+procedure TestTIdSdpParser.TestIsDirection;
+begin
+  Check(TIdSdpParser.IsDirection('inactive'), 'inactive');
+  Check(TIdSdpParser.IsDirection('recvonly'), 'recvonly');
+  Check(TIdSdpParser.IsDirection('sendonly'), 'sendonly');
+  Check(TIdSdpParser.IsDirection('sendrecv'), 'sendrecv');
+
+  Check(not TIdSdpParser.IsDirection(''),    'Empty string');
+  Check(not TIdSdpParser.IsDirection('foo'), 'foo');
+end;
+
 procedure TestTIdSdpParser.TestIsKeyData;
 begin
   Check(not TIdSdpParser.IsKeyData(''), '''''');
@@ -5545,116 +5656,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdFilteredRTPPeer                                                     *
-//******************************************************************************
-//* TestTIdFilteredRTPPeer Public methods **************************************
-
-procedure TestTIdFilteredRTPPeer.SetUp;
-var
-  Encoding: TIdRTPT140Payload;
-begin
-  inherited SetUp;
-
-  Self.Binding := TIdSocketHandle.Create(nil);
-  Self.Profile := TIdAudioVisualProfile.Create;
-
-  Self.T140PT := Self.Profile.FirstFreePayloadType;
-  Encoding := TIdRTPT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
-  try
-    Self.Profile.AddEncoding(Encoding, Self.T140PT);
-  finally
-    Encoding.Free;
-  end;
-
-  Self.Server := TIdMockRTPPeer.Create;
-  Self.Server.Profile := Self.Profile;
-
-  Self.LocalDesc  := TIdSdpMediaDescription.Create;
-  Self.LocalDesc.AddFormat(IntToStr(Self.T140PT));
-  Self.RemoteDesc := TIdSdpMediaDescription.Create;
-
-  Self.Peer := TIdFilteredRTPPeer.Create(Self.Server,
-                                         Self.LocalDesc,
-                                         Self.RemoteDesc);
-  Self.Peer.AddFilteredListener(Self);
-
-  Self.NormalPacket := TIdRTPPacket.Create(Self.Profile);
-  Self.NormalPacket.PayloadType := Self.T140PT;
-  Self.NormalPacket.Payload := Self.Profile.EncodingFor(Self.NormalPacket.PayloadType).Clone;
-
-  Self.UnexpectedPacket := TIdRTPPacket.Create(Self.Profile);
-  Self.UnexpectedPacket.PayloadType := 0;
-  Self.UnexpectedPacket.Payload := Self.Profile.EncodingFor(Self.UnexpectedPacket.PayloadType).Clone;
-
-  Self.ReceivedRTP := false;
-end;
-
-procedure TestTIdFilteredRTPPeer.TearDown;
-begin
-  Self.UnexpectedPacket.Free;
-  Self.NormalPacket.Free;
-  Self.Peer.Free;
-  Self.RemoteDesc.Free;
-  Self.LocalDesc.Free;
-  Self.Server.Free;
-  Self.Profile.Free;
-  Self.Binding.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdFilteredRTPPeer Private methods *************************************
-
-procedure TestTIdFilteredRTPPeer.OnFilteredRTP(Packet: TIdRTPPacket;
-                                               Binding: TIdSocketHandle);
-begin
-  Self.ReceivedRTP := true;
-end;
-
-procedure TestTIdFilteredRTPPeer.Send(RTP: TIdRTPPacket);
-begin
-  Self.Server.NotifyListenersOfRTP(RTP,
-                                   Self.Binding);
-end;
-
-procedure TestTIdFilteredRTPPeer.SendNormalData;
-begin
-  Self.Send(Self.NormalPacket);
-end;
-
-procedure TestTIdFilteredRTPPeer.SendUnexpectedData;
-begin
-  Self.Send(Self.UnexpectedPacket);
-end;
-
-//* TestTIdFilteredRTPPeer Published methods ***********************************
-
-procedure TestTIdFilteredRTPPeer.TestFilter;
-begin
-  Self.SendUnexpectedData;
-  Check(not Self.ReceivedRTP, 'RTP traffic wasn''t filtered');
-end;
-
-procedure TestTIdFilteredRTPPeer.TestNormalOperation;
-begin
-  Self.SendNormalData;
-  Check(Self.ReceivedRTP, 'RTP traffic was lost');
-end;
-
-procedure TestTIdFilteredRTPPeer.TestSendPacket;
-begin
-  Self.Peer.SendPacket('127.0.0.1', 8000, Self.NormalPacket);
-  CheckEquals(Self.NormalPacket.PayloadType,
-              Self.Server.LastRTP.PayloadType,
-              'Normal packet');
-
-  Self.Peer.SendPacket('127.0.0.1', 8000, Self.UnexpectedPacket);
-  CheckEquals(Self.UnexpectedPacket.PayloadType,
-              Self.Server.LastRTP.PayloadType,
-              'Unexpected packet');
-end;
-
-//******************************************************************************
 //* TestTIdSdpPayloadProcessor                                                 *
 //******************************************************************************
 //* TestTIdSdpPayloadProcessor Public methods **********************************
@@ -6002,6 +6003,550 @@ begin
     Self.CheckServerNotActiveOn(I);
 
   CheckEquals(0, Self.Proc.SessionCount, 'RTP servers not destroyed');
+end;
+
+//******************************************************************************
+//* TestTIdSDPMediaStream                                                      *
+//******************************************************************************
+//* TestTIdSDPMediaStream Public methods ***************************************
+
+procedure TestTIdSDPMediaStream.SetUp;
+var
+  SDP:    TIdSDPPayload;
+  T140PT: TIdRTPPayloadType;
+begin
+  inherited SetUp;
+
+  T140PT := 96;
+
+  Self.AVP := TIdRTPProfile.Create;
+  Self.AVP.AddEncoding(T140Encoding, T140ClockRate, '', T140PT);
+
+  Self.Media     := TIdSDPMediaStream.Create(Self.AVP);
+  Self.RTCPEvent := TSimpleEvent.Create;
+  Self.RTPEvent  := TSimpleEvent.Create;
+  Self.Sender    := TIdSDPMediaStream.Create(Self.AVP);
+
+  SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
+                                + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
+                                + 's=-'#13#10
+                                + 'c=IN IP4 127.0.0.1'#13#10
+                                + 'm=text 8000 RTP/AVP 96'#13#10
+                                + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10
+                                + 'm=text 8002 RTP/AVP 96'#13#10
+                                + 'a=rtpmap:' + IntToStr(T140PT) + ' T140/8000'#13#10);
+  try
+    Self.Media.LocalDescription  := SDP.MediaDescriptionAt(0);
+    Self.Media.RemoteDescription := SDP.MediaDescriptionAt(1);
+
+    Self.Sender.LocalDescription  := SDP.MediaDescriptionAt(1);
+    Self.Sender.RemoteDescription := SDP.MediaDescriptionAt(0);
+  finally
+    SDP.Free;
+  end;
+
+  Self.Media.StartListening;
+  Self.Sender.StartListening;
+
+  Self.ValidateSender;
+
+  Self.SentBye := false;
+end;
+
+procedure TestTIdSDPMediaStream.TearDown;
+begin
+  Self.Sender.Free;
+  Self.RTPEvent.Free;
+  Self.RTCPEvent.Free;
+  Self.Media.Free;
+  Self.AVP.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSDPMediaStream Private methods **************************************
+
+procedure TestTIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
+                                          Binding: TIdSocketHandle);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
+                                       Binding: TIdSocketHandle);
+begin
+  Self.SentBye := Packet.IsBye;
+
+  Self.RTCPEvent.SetEvent;
+end;
+
+procedure TestTIdSDPMediaStream.OnRTP(Packet: TIdRTPPacket;
+                                      Binding: TIdSocketHandle);
+begin
+  Self.RTPEvent.SetEvent;
+end;
+
+procedure TestTIdSDPMediaStream.SendRTCP;
+var
+  Svr:  TIdUDPServer;
+  RTCP: TIdRTCPBye;
+  S:    TStringStream;
+begin
+  Svr := TIdUDPServer.Create(nil);
+  try
+    RTCP := TIdRTCPBye.Create;
+    try
+      RTCP.Reason := 'foo';
+
+      S := TStringStream.Create('');
+      try
+        RTCP.PrintOn(S);
+
+        Svr.Send(Self.Media.LocalDescription.Connections[0].Address,
+                 Self.Media.LocalDescription.Port,
+                 S.DataString);
+      finally
+        S.Free;
+      end;
+    finally
+      RTCP.Free;
+    end;
+  finally
+    Svr.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.SendRTP;
+var
+  Text: TIdRTPT140Payload;
+begin
+  Text := TIdRTPT140Payload.Create(T140MimeType);
+  try
+    Text.Block := '1234';
+    Self.Sender.SendData(Text);
+  finally
+    Text.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.SetLocalMediaDesc(Stream: TIdSDPMediaStream;
+                                                  const MediaDesc: String);
+var
+  SDP: TIdSdpPayload;
+begin
+  SDP := TIdSdpPayload.CreateFrom('v=0'#13#10
+                                + 'o=foo 1 2 IN IP4 127.0.0.1'#13#10
+                                + 's=-'#13#10
+                                + 'c=IN IP4 127.0.0.1'#13#10
+                                + MediaDesc);
+  try
+    Stream.LocalDescription := SDP.MediaDescriptionAt(0);
+  finally
+    SDP.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.ValidateSender;
+begin
+  Self.Media.AddRTPListener(Self);
+  // To authenticate Self.Sender as a real RTP member
+  Self.SendRTP;
+  Self.WaitForSignaled(Self.RTPEvent, 'Waiting to validate sender');
+  Self.Media.RemoveRTPListener(Self);
+  Self.RTPEvent.ResetEvent;
+end;
+
+//* TestTIdSDPMediaStream Published methods ************************************
+
+procedure TestTIdSDPMediaStream.TestAddDataListener;
+var
+  L1: TIdRTPTestRTPDataListener;
+  L2: TIdRTPTestRTPDataListener;
+begin
+  L1 := TIdRTPTestRTPDataListener.Create;
+  try
+    L2 := TIdRTPTestRTPDataListener.Create;
+    try
+      Self.Media.AddDataListener(L1);
+      Self.Media.AddDataListener(L2);
+      Self.Media.AddDataListener(Self);
+
+      Self.ExceptionMessage := 'Waiting for RTP data';
+      Self.SendRTP;
+      Self.WaitForSignaled;
+
+      Check(L1.NewData, 'L1 not notified');
+      Check(L2.NewData, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestAddRTPListener;
+var
+  L1: TIdRTPTestRTPListener;
+  L2: TIdRTPTestRTPListener;
+begin
+  L1 := TIdRTPTestRTPListener.Create;
+  try
+    L2 := TIdRTPTestRTPListener.Create;
+    try
+      Self.Media.AddRTPListener(L1);
+      Self.Media.AddRTPListener(L2);
+      Self.Media.AddRTPListener(Self);
+
+      Self.ExceptionMessage := 'Waiting for RTP';
+      Self.SendRTP;
+      Self.WaitForSignaled(Self.RTPEvent);
+
+      Check(L1.ReceivedRTP, 'L1 not notified');
+      Check(L2.ReceivedRTP, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestIsReceiver;
+begin
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10);
+  Check(Self.Media.IsReceiver,
+        'Not Receiver by default');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=recvonly');
+  Check(Self.Media.IsReceiver,
+        'Not Receiver when recvonly');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=sendrecv');
+  Check(Self.Media.IsReceiver,
+        'Not Receiver when sendrecv');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=sendonly');
+  Check(not Self.Media.IsReceiver,
+        'Receiver when sendonly');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=inactive');
+  Check(not Self.Media.IsReceiver,
+        'Receiver when inactive');
+end;
+
+procedure TestTIdSDPMediaStream.TestIsSender;
+begin
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10);
+  Check(Self.Media.IsSender,
+        'Not Sender by default');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=sendrecv');
+  Check(Self.Media.IsSender,
+        'Not Sender when sendrecv');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=sendonly');
+  Check(Self.Media.IsSender,
+        'Not Sender when sendonly');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=recvonly');
+  Check(not Self.Media.IsSender,
+        'Sender when recvonly');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                    'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'a=inactive');
+  Check(not Self.Media.IsSender,
+        'Sender when inactive');
+end;
+
+procedure TestTIdSDPMediaStream.TestReceiveDataWhenNotReceiver;
+begin
+  Self.Media.AddDataListener(Self);
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'a=inactive');
+
+  Self.SendRTP;
+
+  Self.WaitForTimeout(Self.ThreadEvent, 'Received data when not a receiver');
+end;
+
+procedure TestTIdSDPMediaStream.TestRTPListenersGetRTCP;
+var
+  L1: TIdRTPTestRTPListener;
+  L2: TIdRTPTestRTPListener;
+begin
+  L1 := TIdRTPTestRTPListener.Create;
+  try
+    L2 := TIdRTPTestRTPListener.Create;
+    try
+      Self.Media.AddRTPListener(L1);
+      Self.Media.AddRTPListener(L2);
+      Self.Media.AddRTPListener(Self);
+
+      Self.ExceptionMessage := 'Waiting for RTCP';
+      Self.SendRTCP;
+      Self.WaitForSignaled(Self.RTCPEvent);
+
+      Check(L1.ReceivedRTCP, 'L1 not notified');
+      Check(L2.ReceivedRTCP, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestRTPListenersGetRTP;
+var
+  L1: TIdRTPTestRTPListener;
+  L2: TIdRTPTestRTPListener;
+begin
+  L1 := TIdRTPTestRTPListener.Create;
+  try
+    L2 := TIdRTPTestRTPListener.Create;
+    try
+      Self.Media.AddRTPListener(L1);
+      Self.Media.AddRTPListener(L2);
+      Self.Media.AddRTPListener(Self);
+
+      Self.ExceptionMessage := 'Waiting for RTP';
+      Self.SendRTP;
+      Self.WaitForSignaled(Self.RTPEvent);
+
+      Check(L1.ReceivedRTP, 'L1 not notified');
+      Check(L2.ReceivedRTP, 'L2 not notified');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSDPMediaStream.TestSendData;
+begin
+  Self.Media.AddRTPListener(Self);
+
+  Self.SendRTP;
+
+  Self.WaitForSignaled(Self.RTPEvent);
+end;
+
+procedure TestTIdSDPMediaStream.TestSendDataWhenNotSender;
+begin
+  Self.Media.AddRTPListener(Self);
+  Self.SetLocalMediaDesc(Self.Sender,
+                         'm=text 8002 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'a=inactive');
+  Self.SendRTP;
+
+  Self.WaitForTimeout(Self.RTPEvent,
+                      'Server sent data when not a sender');
+end;
+
+procedure TestTIdSDPMediaStream.TestStopListeningStopsListening;
+begin
+  // Commented out stuff: an idea for how to test that the server
+  // you stop sends an RTCP BYE to its RTP session.
+
+//  Self.Sender.AddRTPListener(Self);
+  Self.Media.AddRTPListener(Self);
+  Self.Media.StopListening;
+  Self.SendRTP;
+
+  Self.WaitForTimeout(Self.RTPEvent,  'Server didn''t stop listening');
+{
+  // How do we test that the server behaved nicely and sent an RTCP BYE?
+  Self.WaitForSignaled(Self.RTCPEvent, 'Server didn''t send any RTCP');
+  Check(Self.SentBye, 'Server didn''t send an RTCP BYE');
+}
+end;
+
+//******************************************************************************
+//* TestTIdSDPMultimediaSession                                                *
+//******************************************************************************
+//* TestTIdSDPMultimediaSession Public methods *********************************
+
+procedure TestTIdSDPMultimediaSession.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Profile := TIdAudioVisualProfile.Create;
+
+  Self.MS := TIdSDPMultimediaSession.Create(Self.Profile);
+
+  // We only instantiate Server so that we know that GStack points to an
+  // instantiated stack.
+  Self.Server := TIdUdpServer.Create(nil);
+end;
+
+procedure TestTIdSDPMultimediaSession.TearDown;
+begin
+  Self.Server.Free;
+  Self.MS.Free;
+  Self.Profile.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSDPMultimediaSession Private methods ********************************
+
+procedure TestTIdSDPMultimediaSession.CheckPortActive(Address: String;
+                                                      Port: Cardinal;
+                                                      Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+    try
+      Server.Active := true;
+      Fail(Msg);
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.CheckPortFree(Address: String;
+                                                    Port: Cardinal;
+                                                    Msg: String);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    Binding.IP   := Address;
+    Binding.Port := Port;
+
+    Server.Active := true;
+  finally
+    Server.Free;
+  end;
+end;
+
+//* TestTIdSDPMultimediaSession Published methods ******************************
+
+procedure TestTIdSDPMultimediaSession.TestMimeType;
+begin
+  CheckEquals(SdpMimeType, Self.MS.MimeType, 'SDP MIME type');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestSetRemoteDescription;
+begin
+  Self.MS.StartListening('v=0'#13#10
+                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                       + 's=-'#13#10
+                       + 'c=IN IP4 127.0.0.1'#13#10
+                       + 'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'm=text 9000 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+
+  Self.MS.SetRemoteDescription('v=0'#13#10
+                       + 'o=local 0 0 IN IP4 127.0.0.2'#13#10
+                       + 's=-'#13#10
+                       + 'c=IN IP4 127.0.0.2'#13#10
+                       + 'm=text 8900 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'm=text 9900 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+
+  CheckEquals(8900,
+              Self.MS.Streams[0].RemoteDescription.Port,
+              'Remote description of first stream not set');
+  CheckEquals(9900,
+              Self.MS.Streams[1].RemoteDescription.Port,
+              'Remote description of second stream not set');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningSingleStream;
+begin
+  Self.MS.StartListening('v=0'#13#10
+                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                       + 's=-'#13#10
+                       + 'c=IN IP4 127.0.0.1'#13#10
+                       + 'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+
+  Self.CheckPortActive('127.0.0.1',
+                       8000,
+                       'Server not listening on port 8000');
+  CheckEquals(1, Self.MS.StreamCount, 'StreamCount');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
+begin
+  Self.MS.StartListening('v=0'#13#10
+                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                       + 's=-'#13#10
+                       + 'm=text 8000 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 127.0.0.1'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'm=text 9000 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+
+  CheckEquals(2, Self.MS.StreamCount, 'StreamCount');
+  Self.CheckPortActive('127.0.0.1',
+                       8000,
+                       'Server not listening on 127.0.0.7:8000');
+  Self.CheckPortActive(GStack.LocalAddress,
+                       9000,
+                       'Server not listening on ' + GStack.LocalAddress + ':9000');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStopListening;
+begin
+  Self.MS.StartListening('v=0'#13#10
+                       + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+                       + 's=-'#13#10
+                       + 'm=text 8000 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 127.0.0.1'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'm=text 9000 RTP/AVP 96'#13#10
+                       + 'c=IN IP4 ' + GStack.LocalAddress + #13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10);
+
+  Self.MS.StopListening;
+
+  Self.CheckPortFree('127.0.0.1',
+                     8000,
+                     'Server still listening on 127.0.0.7:8000');
+  Self.CheckPortFree(GStack.LocalAddress,
+                     9000,
+                     'Server still listening on ' + GStack.LocalAddress + ':9000');
 end;
 
 initialization

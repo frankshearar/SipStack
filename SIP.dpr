@@ -87,8 +87,8 @@ uses
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}
 
-//{$DEFINE SPIKE}
-//{$DEFINE GUI}
+{$DEFINE SPIKE}
+{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

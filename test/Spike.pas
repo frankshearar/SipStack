@@ -91,6 +91,7 @@ type
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     RTPByteCount:   Integer;
+    RTPProfile:     TIdRTPProfile;
     RunningPort:    Cardinal;
     SendBuffer:     String;
     StopEvent:      TEvent;
@@ -98,9 +99,10 @@ type
     UA:             TIdSipUserAgentCore;
     UDPByteCount:   Integer;
 
-    fPayloadProcessor:    TIdSdpPayloadProcessor;
+    fPayloadProcessor:    TIdSDPMultimediaSession;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
+    function  Address: String;
     function  LocalSDP(const Address: String): String;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
@@ -156,7 +158,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
+    property PayloadProcessor: TIdSDPMultimediaSession read fPayloadProcessor;
   end;
 
 var
@@ -182,6 +184,7 @@ begin
   inherited Create(AOwner);
 
   Self.Transports := TObjectList.Create(true);
+  Self.RTPProfile := TIdAudioVisualProfile.Create;
   Self.RunningPort := IdPORT_SIP;
 
   Self.DTMFPanel := TIdDTMFPanel.Create(nil);
@@ -241,14 +244,7 @@ begin
   Self.UA.HasProxy := Self.UseAsProxy.Checked;
   Self.UA.Proxy.Uri := Self.TargetUri.Text + ';lr';
 
-  Self.fPayloadProcessor := TIdSdpPayloadProcessor.Create;
-
-  Self.PayloadProcessor.AddRTPListener(Self.HistListener);
-  Self.PayloadProcessor.AddRTPListener(Self);
-  Self.PayloadProcessor.AddDataListener(Self);
-  Self.PayloadProcessor.AddDataListener(Self.DTMFPanel);
-
-  Self.DTMFPanel.Processor := Self.PayloadProcessor;
+  Self.fPayloadProcessor := TIdSDPMultimediaSession.Create(Self.RTPProfile);
 end;
 
 destructor TrnidSpike.Destroy;
@@ -275,6 +271,7 @@ begin
   Self.HistListener.Free;
   Self.HistogramPanel.Free;
   Self.DTMFPanel.Free;
+  Self.RTPProfile.Free;
 
   Self.Transports.Free;
 
@@ -297,6 +294,11 @@ begin
 
   Result.AddTransportListener(Self);
   Result.AddTransportSendingListener(Self);
+end;
+
+function TrnidSpike.Address: String;
+begin
+  Result := (Self.Transports[0] as TIdSipTransport).Address;
 end;
 
 function TrnidSpike.LocalSDP(const Address: String): String;
@@ -355,7 +357,7 @@ end;
 
 procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
-  Self.PayloadProcessor.RemoteSessionDescription := ''; //Response.Body;
+//  Self.PayloadProcessor.SetRemoteDescription('');
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -398,24 +400,36 @@ begin
 end;
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
+var
+  Answer: String;
+  I:      Integer;
+  SDP:    TIdSdpPayload;
 begin
+  SDP := TIdSdpPayload.CreateFrom(Session.CurrentRequest.Body);
+  try
+    SDP.Origin.Address := Self.Address;
+    for I := 0 to SDP.MediaDescriptionCount - 1 do
+      SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
+
+    Answer := SDP.AsString;
+  finally
+    SDP.Free;
+  end;
+
   Self.ResetCounters;
   Session.AddSessionListener(Self);
-{
+
   Self.AudioPlayer.Play(AnyAudioDevice);
 
   // Offer contains a description of what data we expect to receive. Sometimes
   // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
   // port 8000's already bound. We thus try to honour the offer as closely as
   // possible.
-  Self.PayloadProcessor.RemoteSessionDescription := Session.CurrentRequest.Body;
-
-  Self.PayloadProcessor.StartListening(Self.LocalSDP(Self.HostName.Text));
+  Self.PayloadProcessor.StartListening(Answer);
+  Self.PayloadProcessor.SetRemoteDescription(Session.CurrentRequest.Body);
 //  Session.RejectCallBusy;
-}
-  Session.AcceptCall(Self.PayloadProcessor.LocalSessionDescription,
-                     SdpMimeType);
 
+  Session.AcceptCall(Answer, SdpMimeType);
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -593,9 +607,12 @@ end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
 var
+  SDP:     String;
   Session: TIdSipSession;
   Target:  TIdSipToHeader;
 begin
+  SDP := Self.LocalSDP(Self.HostName.Text);
+
   Target := TIdSipToHeader.Create;
   try
     Target.Address.Uri := Self.TargetUri.Text;
@@ -603,10 +620,10 @@ begin
     Self.ResetCounters;
 
     Self.AudioPlayer.Play(AnyAudioDevice);
-    Self.PayloadProcessor.StartListening(Self.LocalSDP(Self.HostName.Text));
+    Self.PayloadProcessor.StartListening(SDP);
 
     Session := Self.UA.Call(Target,
-                            Self.PayloadProcessor.LocalSessionDescription,
+                            SDP,
                             SdpMimeType);
 
     Session.AddSessionListener(Self);
@@ -756,9 +773,7 @@ begin
   for I := 0 to Self.Transports.Count - 1 do
     (Self.Transports[I] as TIdSipTransport).HostName := Self.HostName.Text;
 
-  Self.UA.HostName               := Self.HostName.Text;
-  Self.PayloadProcessor.Host     := Self.HostName.Text;
-  Self.PayloadProcessor.Username := Self.UA.Username;
+  Self.UA.HostName := Self.HostName.Text;
 
   Self.StartTransports;
 end;

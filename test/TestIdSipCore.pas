@@ -389,6 +389,7 @@ type
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestPendingTransactionCount;
     procedure TestReceive2xxSendsAck;
+    procedure TestReceive3xxSendsNewInvite;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
   end;
@@ -4534,6 +4535,38 @@ begin
   CheckEquals(MethodAck,
               Ack.CSeq.Method,
               'CSeq method');
+end;
+
+procedure TestTIdSipOutboundSession.TestReceive3xxSendsNewInvite;
+const
+  NewAddress = 'sip:foo';
+var
+  NewInvite:      TIdSipRequest;
+  OriginalInvite: TIdSipRequest;
+  RequestCount:   Cardinal;
+begin
+  OriginalInvite := TIdSipRequest.Create;
+  try
+    OriginalInvite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+    Self.SimulateRemoteMovedPermanently(NewAddress);
+
+    Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+          'Session didn''t send a new INVITE');
+
+    NewInvite := Self.Dispatcher.Transport.LastRequest;
+    CheckEquals(OriginalInvite.CallID,
+                NewInvite.CallID,
+                'Call-ID mismatch between original and new INVITEs');
+    CheckEquals(OriginalInvite.From.Tag,
+                NewInvite.From.Tag,
+                'From tag mismatch between original and new INVITEs');
+    Check(not NewInvite.ToHeader.HasTag,
+          'New INVITE mustn''t have a To tag');
+  finally
+    OriginalInvite.Free;
+  end;
 end;
 
 procedure TestTIdSipOutboundSession.TestReceiveFinalResponseSendsAck;

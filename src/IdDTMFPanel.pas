@@ -44,7 +44,7 @@ type
     Buttons:          TIdDTMFButtonArray;
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
-    fProcessor:       TIdSDPPayloadProcessor;
+    fProcessor:       TIdSDPMediaStream;
     Timer:            TIdTimerQueue;
 
     procedure AddRow(Buttons: array of TPanel);
@@ -73,13 +73,13 @@ type
     procedure SendDTMFFlash(Sender: TObject);
     procedure SendDTMFHash(Sender: TObject);
     procedure SendDTMFStar(Sender: TObject);
-    procedure SetProcessor(Value: TIdSDPPayloadProcessor);
+    procedure SetProcessor(Value: TIdSDPMediaStream);
 
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    property Processor: TIdSDPPayloadProcessor read fProcessor write SetProcessor;
+    property Processor: TIdSDPMediaStream read fProcessor write SetProcessor;
   end;
 
 implementation
@@ -383,7 +383,7 @@ begin
   Self.SendDTMF(DTMFStar);
 end;
 
-procedure TIdDTMFPanel.SetProcessor(Value: TIdSDPPayloadProcessor);
+procedure TIdDTMFPanel.SetProcessor(Value: TIdSDPMediaStream);
 begin
   if Assigned(Self.fProcessor) then
     Self.fProcessor.RemoveDataListener(Self);

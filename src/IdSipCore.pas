@@ -19,21 +19,22 @@ unit IdSipCore;
 //   then A must store a COPY of B. Typical objects are: TIdSipURI,
 //   TIdSipDialogID, TIdSipMessage.
 // * Each layer has references to the layers beneath it. We try to make each layer
-//   aware of ONLY the layer immediately below it, but that's not always
-//   possible. We NEVER let a lower layer know about layers above it. Thus, the
-//   transport layer DOES NOT know about transactions, etc.
+//   aware of ONLY the layer immediately below it, but we can't always do that.
+//   We NEVER let a lower layer know about layers above it. Thus, the transport
+//   layer DOES NOT know about transactions, etc.
 // * We propogate messages up the stack using Events or Listeners, and method
 //   calls to propogate messages down the stack. We give preference to the more
 //   flexible Listeners.
 // * We avoid typecasting as much as possible by using polymorphism and, in
 //   certain situations where polymorphism can't cut it, the Visitor pattern.
-// * TObjectLists always manage the lifetime of the objects they contain. Except
-//   in the case of Transports in the Dispatcher.
+// * TObjectLists almost always manage the lifetime of the objects they contain.
+//   The Transports in a TransactionDispatcher illustrate a counterexample.
 // * Threads belong to the process in which they run. It doesn't really make sense
 //   for us to refer to a class that instantiates a thread as the thread's owner,
 //   so
 //   (a) all threads should FreeOnTerminate, and
-//   (b) all classes that instantiate threads should not free the threads.
+//   (b) all classes that instantiate threads should not free the threads, but
+//      just Terminate (and possibly nil any references to the threads).
 
 interface
 
@@ -663,13 +664,24 @@ type
     procedure TimeOut;
   end;
 
+  // Outbound Sessions behave somewhat differently to inbound Sessions, even
+  // disregarding the direction of a call. When you make an outbound call,
+  // you could get a redirection response (a 3xx). By this stage you have a
+  // fully established dialog. When you make a new call to the contact in the
+  // 3xx, you use the same Call-ID and From tag, but you'll establish a WHOLE
+  // NEW dialog. As a result, DialogEstablished can switch from false to true
+  // to false to true etc etc. And the Dialog property can return completely
+  // different objects, possibly landing you in hot water (a la dangling
+  // pointer style) should you keep a reference to the Dialog property.
   TIdSipOutboundSession = class(TIdSipSession)
   private
-    InCall: Boolean;
+    InCall:       Boolean;
+    TargetUriSet: TIdSipContacts;
 
     function  CreateOutboundDialog(Response: TIdSipResponse;
                                    UsingSecureTransport: Boolean): TIdSipDialog;
     procedure Initialize;
+    procedure RedirectCallTo(Dest: TIdSipAddressHeader);
     procedure SendAck(Final: TIdSipResponse);
     procedure SendCancel;
     procedure TerminateAfterSendingCancel;
@@ -686,6 +698,7 @@ type
     constructor Create(UA: TIdSipUserAgentCore); overload; override;
     constructor Create(UA: TIdSipUserAgentCore;
                        Invite: TIdSipRequest); reintroduce; overload;
+    destructor  Destroy; override;
 
     procedure Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
@@ -3848,6 +3861,13 @@ begin
   Self.CurrentRequest.ToHeader.Tag := '';
 end;
 
+destructor TIdSipOutboundSession.Destroy;
+begin
+  Self.TargetUriSet.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdSipOutboundSession.Call(Dest: TIdSipAddressHeader;
                                      const InitialOffer: String;
                                      const MimeType: String);
@@ -3973,9 +3993,15 @@ begin
   Result := false;
 
   if Response.HasHeader(ContactHeaderFull) then begin
-    Self.UA.Call(Response.FirstContact,
-                 Self.CurrentRequest.Body,
-                 Self.CurrentRequest.ContentType);
+    Self.RedirectCallTo(Response.FirstContact);
+
+    Self.DialogLock.Acquire;
+    try
+      if Self.DialogEstablished then
+        fDialog.Free;
+    finally
+      Self.DialogLock.Release;
+    end;
     Result := true;
   end;
 end;
@@ -3985,7 +4011,6 @@ begin
   inherited SendBye;
 
   Self.MarkAsTerminated;
-//  Self.NotifyOfEndedSession(LocalHangUp);
 end;
 
 //* TIdSipOutboundSession Private methods **************************************
@@ -4005,6 +4030,27 @@ end;
 procedure TIdSipOutboundSession.Initialize;
 begin
   Self.InCall := false;
+
+  Self.TargetUriSet := TIdSipContacts.Create;
+end;
+
+procedure TIdSipOutboundSession.RedirectCallTo(Dest: TIdSipAddressHeader);
+var
+  NewInvite: TIdSipRequest;
+begin
+  NewInvite := Self.UA.CreateInvite(Dest,
+                                    Self.CurrentRequest.Body,
+                                    Self.CurrentRequest.ContentType);
+  try
+    NewInvite.CallID   := Self.CurrentRequest.CallID;
+    NewInvite.From.Tag := Self.CurrentRequest.From.Tag;
+
+    Self.CurrentRequest.Assign(NewInvite);
+    
+    Self.SendRequest(NewInvite);
+  finally
+    NewInvite.Free;
+  end;
 end;
 
 procedure TIdSipOutboundSession.SendAck(Final: TIdSipResponse);
