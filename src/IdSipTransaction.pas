@@ -1254,10 +1254,6 @@ begin
   finally
     Notification.Free;
   end;
-
-  // WARNING - I am not sure if this is safe or even sane. We're
-  // asking an object to commit suicide.
-//  Self.Dispatcher.RemoveTransaction(Self);
 end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
