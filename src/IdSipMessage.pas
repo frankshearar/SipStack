@@ -55,12 +55,13 @@ type
     procedure SetAddress(const Value: TIdURI);
   protected
     function  GetValue: String; override;
+    procedure ParseWithoutAngleBrackets;
     procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
-    property Address:     TIdURI read fAddress write SetAddress;
+    property Address: TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
@@ -117,6 +118,8 @@ type
 
   TIdSipContactHeader = class(TIdSipAddressHeader)
   private
+    fIsWild: Boolean;
+
     function  GetExpires: Cardinal;
     function  GetQ: TIdSipQValue;
     procedure SetExpires(const Value: Cardinal);
@@ -126,6 +129,7 @@ type
     procedure SetValue(const Value: String); override;
   public
     property Expires: Cardinal     read GetExpires write SetExpires;
+    property IsWild:  Boolean      read fIsWild write fIsWild;
     property Q:       TIdSipQValue read GetQ write SetQ;
   end;
 
@@ -237,6 +241,21 @@ type
     property Timestamp: TIdSipTimestamp read fTimestamp;
   end;
 
+  TIdSipUriHeader = class(TIdSipHeader)
+  private
+    fAddress: TIdURI;
+
+    procedure SetAddress(const Value: TIdURI);
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Address: TIdURI read fAddress write SetAddress;
+  end;
+
   TIdSipViaHeader = class(TIdSipHeader)
   private
     fHost:       String;
@@ -328,6 +347,7 @@ type
     class function IsRoute(Header: String): Boolean;
     class function IsTo(Header: String): Boolean;
     class function IsVia(Header: String): Boolean;
+    class function IsWarning(Header: String): Boolean;
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -494,8 +514,8 @@ function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boo
 var
   Name: String;
 begin
-  DisplayName       := '';
-  AddrSpec          := '';
+  AddrSpec    := '';
+  DisplayName := '';
 
   NameAddr := Trim(NameAddr);
 
@@ -867,6 +887,10 @@ begin
     Result := Result + ' ' + URI;
 end;
 
+procedure TIdSipAddressHeader.ParseWithoutAngleBrackets;
+begin
+end;
+
 procedure TIdSipAddressHeader.SetValue(const Value: String);
 var
   AddrSpec:          String;
@@ -882,7 +906,7 @@ begin
   if (IndyPos('<', Value) > 0) then begin
     if not ParseNameAddr(Value, DisplayName, AddrSpec) then
       Self.FailParse;
-      
+
     Self.Address.URI := AddrSpec;
     Fetch(S, '>');
   end
@@ -1102,8 +1126,16 @@ begin
 end;
 
 procedure TIdSipContactHeader.SetValue(const Value: String);
+var
+  S: String;
 begin
-  inherited SetValue(Value);
+  S := Value;
+  Self.IsWild := Fetch(S, ';') = '*';
+
+  if not Self.IsWild then
+    inherited SetValue(Value)
+  else
+    Self.ParseParameters(S, Self.Parameters);
 
   if (Self.IndexOfParam(QParam) > -1) and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse;
@@ -1497,6 +1529,66 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipUriHeader                                                            *
+//******************************************************************************
+//* TIdSipUriHeader Public methods *********************************************
+
+constructor TIdSipUriHeader.Create;
+begin
+  inherited Create;
+
+  fAddress := TIdURI.Create('');
+end;
+
+destructor TIdSipUriHeader.Destroy;
+begin
+  fAddress.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipUriHeader.GetValue: String;
+begin
+  Result := Self.Address.GetFullURI;
+
+  if   (IndyPos(';', Result) > 0)
+    or (IndyPos(',', Result) > 0)
+    or (IndyPos('?', Result) > 0)
+    or (Result <> '') then
+    Result := '<' + Result + '>';
+end;
+
+procedure TIdSipUriHeader.SetValue(const Value: String);
+var
+  AddrSpec:    String;
+  DisplayName: String;
+  S:           String;
+begin
+  Self.Address.URI := '';
+
+  S := Trim(Value);
+  if (IndyPos('<', Value) = 0) then
+    Self.FailParse;
+
+  if not ParseNameAddr(Value, DisplayName, AddrSpec) then
+    Self.FailParse;
+  if (DisplayName <> '') then
+    Self.FailParse;
+
+  Self.Address.URI := AddrSpec;
+  Fetch(S, '>');
+
+  inherited SetValue(S);
+end;
+
+//* TIdSipUriHeader Private methods ********************************************
+
+procedure TIdSipUriHeader.SetAddress(const Value: TIdURI);
+begin
+  fAddress.URI := Value.URI;
+end;
+
+//******************************************************************************
 //* TIdSipViaHeader                                                            *
 //******************************************************************************
 //* TIdSipViaHeader Public methods *********************************************
@@ -1816,7 +1908,8 @@ begin
          or Self.IsErrorInfo(Header)
          or Self.IsRecordRoute(Header)
          or Self.IsRoute(Header)
-         or Self.IsVia(Header);
+         or Self.IsVia(Header)
+         or Self.IsWarning(Header);
 end;
 
 class function TIdSipHeaders.IsContact(Header: String): Boolean;
@@ -1867,6 +1960,11 @@ end;
 class function TIdSipHeaders.IsVia(Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ViaHeaderFull);
+end;
+
+class function TIdSipHeaders.IsWarning(Header: String): Boolean;
+begin
+  Result := Self.IsHeader(Header, WarningHeader);
 end;
 
 constructor TIdSipHeaders.Create;
@@ -1952,6 +2050,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,     TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                  TIdSipCSeqHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                  TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,             TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,               TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,              TIdSipFromToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,             TIdSipFromToHeader));
@@ -1969,7 +2068,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,           TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,               TIdSipViaHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,              TIdSipViaHeader));
-//    WarningHeader
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(WarningHeader,               TIdSipWarningHeader));
   end;
 
   Result := GIdSipHeadersMap;

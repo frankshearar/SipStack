@@ -92,6 +92,7 @@ type
     procedure TestGetSetQ;
     procedure TestValueWithExpires;
     procedure TestValueWithQ;
+    procedure TestValueWithStar;
   end;
 
   TestTIdSipCSeqHeader = class(TTestCase)
@@ -194,6 +195,18 @@ type
     procedure TestValueWithDelay;
   end;
 
+  TestTIdSipUriHeader = class(TTestCase)
+  private
+    U: TIdSipUriHeader;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestValue;
+    procedure TestValueWithParams;
+    procedure TestValueWithUriParams;
+  end;
+
   TestTIdSipViaHeader = class(TTestCase)
   private
     V: TIdSipViaHeader;
@@ -270,6 +283,7 @@ type
     procedure TestIsRoute;
     procedure TestIsTo;
     procedure TestIsVia;
+    procedure TestIsWarning;
     procedure TestSetMaxForwards;
     procedure TestValues;
   end;
@@ -350,10 +364,11 @@ begin
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
-  Result.AddTest(TestTIdSipHeaders.Suite);
+  Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
+  Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
@@ -1142,6 +1157,7 @@ begin
   CheckEquals('',                                     Self.C.DisplayName,        'DisplayName');
   CheckEquals('',                                     Self.C.ParamsAsString,     'Params');
   CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Self.C.Value,              'Value');
+  Check(                                              not Self.C.IsWild,         'IsWild');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.lu;q=0';
   CheckEquals(0, C.Q, 'q=0');
@@ -1191,6 +1207,16 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+procedure TestTIdSipContactHeader.TestValueWithStar;
+begin
+  Self.C.Value := '*';
+  Check(Self.C.IsWild, 'IsWild');
+
+  Self.C.Value := '*;q=0.1';
+  Check(Self.C.IsWild, 'IsWild');
+  CheckEquals(100, Self.C.Q, 'QValue');
 end;
 
 //******************************************************************************
@@ -1656,6 +1682,8 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipTimestampHeader Published methods ********************************
+
 procedure TestTIdSipTimestampHeader.TestName;
 begin
   CheckEquals(TimestampHeader, Self.T.Name, 'Name');
@@ -1803,7 +1831,71 @@ begin
   CheckEquals(4, Self.T.Delay.FractionalPart,     '3: Delay.FractionalPart');
 end;
 
-//* TestTIdSipTimestampHeader Published methods ********************************
+//******************************************************************************
+//* TestTIdSipUriHeader                                                        *
+//******************************************************************************
+//* TestTIdSipUriHeader Public methods *****************************************
+
+procedure TestTIdSipUriHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.U := TIdSipUriHeader.Create;
+end;
+
+procedure TestTIdSipUriHeader.TearDown;
+begin
+  Self.U.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUriHeader Published methods **************************************
+
+procedure TestTIdSipUriHeader.TestValue;
+begin
+  Self.U.Value := '<sip:case@jacks-bar.com>';
+  CheckEquals('sip:case@jacks-bar.com',
+              Self.U.Address.GetFullURI,
+              'Address.GetFullURI');
+
+  try
+    Self.U.Value := '';
+    Fail('Empty string');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.U.Value := 'sip:case@jacks-bar.com';
+    Fail('un <>''d URI');
+  except
+    on EBadHeader do;
+  end;
+
+  try
+    Self.U.Value := 'Case <sip:case@jacks-bar.com>';
+    Fail('No display names allowed');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipUriHeader.TestValueWithParams;
+begin
+  Self.U.Value := '<sip:case@jacks-bar.com>;value=name';
+  CheckEquals(1,             Self.U.ParamCount,     'ParamCount');
+  CheckEquals(';value=name', Self.U.ParamsAsString, 'ParamsAsString');
+end;
+
+procedure TestTIdSipUriHeader.TestValueWithUriParams;
+begin
+  Self.U.Value := '<sip:case@jacks-bar.com;value=name>';
+  CheckEquals(0, Self.U.ParamCount, 'ParamCount');
+  CheckEquals('sip:case@jacks-bar.com;value=name',
+              Self.U.Address.GetFullURI,
+              'Address');
+end;
 
 //******************************************************************************
 //* TestTIdSipViaHeader                                                        *
@@ -2368,7 +2460,7 @@ begin
   CheckType(TIdSipHeader,                       Self.H.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
   CheckType(TIdSipCSeqHeader,                   Self.H.Add(CSeqHeader),                 CSeqHeader);
   CheckType(TIdSipDateHeader,                   Self.H.Add(DateHeader),                 DateHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(ErrorInfoHeader),            ErrorInfoHeader); // break into own class
+  CheckType(TIdSipUriHeader,                    Self.H.Add(ErrorInfoHeader),            ErrorInfoHeader);
   CheckType(TIdSipNumericHeader,                Self.H.Add(ExpiresHeader),              ExpiresHeader);
   CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderFull),             FromHeaderFull);
   CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderShort),            FromHeaderShort);
@@ -2398,7 +2490,7 @@ begin
   CheckType(TIdSipHeader,                       Self.H.Add(UserAgentHeader),            UserAgentHeader);
   CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderFull),              ViaHeaderFull);
   CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderShort),             ViaHeaderShort);
-  CheckType(TIdSipHeader,                       Self.H.Add(WarningHeader),              WarningHeader); // break into own class
+  CheckType(TIdSipWarningHeader,                Self.H.Add(WarningHeader),              WarningHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
@@ -2781,7 +2873,7 @@ begin
   Check(not TIdSipHeaders.IsCompoundHeader(UserAgentHeader),            UserAgentHeader);
   Check(    TIdSipHeaders.IsCompoundHeader(ViaHeaderFull),              ViaHeaderFull);
   Check(    TIdSipHeaders.IsCompoundHeader(ViaHeaderShort),             ViaHeaderShort);
-  Check(not TIdSipHeaders.IsCompoundHeader(WarningHeader),              WarningHeader);
+  Check(    TIdSipHeaders.IsCompoundHeader(WarningHeader),              WarningHeader);
   Check(not TIdSipHeaders.IsCompoundHeader(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
@@ -2873,6 +2965,13 @@ begin
   Check(not TIdSipHeaders.IsVia('Content-Length'),       'Content-Length');
   Check(    TIdSipHeaders.IsVia('Via:'),                 'Via:');
   Check(    TIdSipHeaders.IsVia('ViA'),                  'ViA');
+end;
+
+procedure TestTIdSipHeaders.TestIsWarning;
+begin
+  Check(not TIdSipHeaders.IsWarning(''),            '''''');
+  Check(    TIdSipHeaders.IsWarning('warnING'),     'warnING');
+  Check(    TIdSipHeaders.IsWarning(WarningHeader), 'WarningHeader constant');
 end;
 
 procedure TestTIdSipHeaders.TestSetMaxForwards;

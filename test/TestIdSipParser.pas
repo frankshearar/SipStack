@@ -500,6 +500,12 @@ begin
     CheckEquals('Thu, 1 Jan 1970 00:00:00 +0000',
                 (Self.Request.Headers[DateHeader] as TIdSipDateHeader).Time.GetAsRFC822,
                 'Date');
+    CheckEquals(TIdSipUriHeader.ClassName,
+                Self.Request.Headers[ErrorInfoHeader].ClassName,
+                'Error-Info class');
+    CheckEquals('http://www.error.com/info/bloop.wav',
+                (Self.Request.Headers[ErrorInfoHeader] as TIdSipUriHeader).Address.GetFullURI,
+                'Error-Info');
     CheckEquals(TIdSipNumericHeader.ClassName,
                 Self.Request.Headers[ExpiresHeader].ClassName,
                 'Expires class');
@@ -538,7 +544,7 @@ begin
                 'To class');
     CheckEquals('Wintermute',
                 (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).DisplayName,
-                ' DisplayName');
+                'To DisplayName');
     CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
                 (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
                 'To Address');
@@ -560,6 +566,18 @@ begin
     CheckEquals(';branch=z9hG4bK776asdhds',
                 (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).ParamsAsString,
                 'Via Parameters');
+    CheckEquals(TIdSipWarningHeader.ClassName,
+                Self.Request.Headers[WarningHeader].ClassName,
+                'Warning class');
+    CheckEquals(301,
+                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Code,
+                'Warning Code');
+    CheckEquals('draugr',
+                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Agent,
+                'Warning Agent');
+    CheckEquals('Not really interested',
+                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Text,
+                'Warning Text');
     CheckEquals('I am not defined in RFC 3261',
                 Self.Request.Headers['X-Not-A-Header'].Value,
                 'X-Not-A-Header');
