@@ -988,8 +988,15 @@ end;
 procedure TestTIdSipUDPTransport.OnReceiveResponse(const Response: TIdSipResponse;
                                                    const ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Self.RPort := ReceivedFrom.PeerPort;
-  Self.RPortEvent.SetEvent;
+  try
+    Self.RPort := ReceivedFrom.PeerPort;
+    Self.RPortEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
 end;
 
 //* TestTIdSipUDPTransport Published methods ***********************************
@@ -1046,6 +1053,11 @@ begin
   // If we get a request with an rport param (which MUST be empty!) then we
   // should send our responses back to the server at received:rport.
 
+  // What should happen is that:
+  // 1. Server sends a request to Self.HighPortTransport
+  // 2. HighPortTransport (because of Self.ReturnResponse) sends back a 200 OK
+  // 3. Server receives this response and sets Self.RPortEvent
+
   Self.CheckingRequestEvent := Self.ReturnResponse;
 
   Self.Request.LastHop.Params[RPortParam] := '';
@@ -1056,15 +1068,14 @@ begin
     Server.DefaultPort := 5000; // some arbitrary value
     Server.Active      := true;
 
-                       Self.Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
+    Self.Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
     Self.Response.LastHop.Rport    := Server.DefaultPort;
 
     Server.Send(Self.HighPortTransport.Bindings[0].IP,
                 Self.HighPortTransport.Bindings[0].Port,
                 Self.Request.AsString);
 
-    if (wrSignaled <> Self.RPortEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled(Self.RPortEvent);
   finally
     Server.Free;
   end;
@@ -1113,7 +1124,6 @@ begin
     Server.Free;
   end;
 end;
-
 {
 //******************************************************************************
 //* TestTIdSipSCTPTransport                                                    *
