@@ -119,6 +119,7 @@ type
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDispatchAckToSession;
+    procedure TestDoNotDisturb;
     procedure TestFork;
     procedure TestForkWithProvisionalResponse;
     procedure TestHasUnknownContentEncoding;
@@ -212,12 +213,14 @@ type
     procedure TestAcceptCallRespectsContentType;
     procedure TestAcceptCallStartsListeningMedia;
     procedure TestAddSessionListener;
+    procedure TestForwardCall;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderRequest;
     procedure TestReceiveReInvite;
+    procedure TestRejectCallBusy;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
     procedure TestTerminateUnestablishedSession;
@@ -1394,6 +1397,31 @@ begin
   Check(    SessionTwo.ReceivedAck, 'SessionTwo didn''t get the ACK');
 end;
 
+procedure TestTIdSipUserAgentCore.TestDoNotDisturb;
+var
+  ResponseCount: Cardinal;
+  SessionCount:  Cardinal;
+begin
+  Self.Core.DoNotDisturb := true;
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  SessionCount  := Self.Core.SessionCount;
+
+  Self.SimulateRemoteInvite;
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent when UA set to Do Not Disturb');
+
+  CheckEquals(SIPTemporarilyUnavailable,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Wrong response sent');
+  CheckEquals(Self.Core.DoNotDisturbMessage,
+              Self.Dispatcher.Transport.LastResponse.StatusText,
+              'Wrong status text');
+  CheckEquals(SessionCount,
+              Self.Core.SessionCount,
+              'New session created despite Do Not Disturb');
+
+end;
+
 procedure TestTIdSipUserAgentCore.TestFork;
 var
   OrigAckCount: Cardinal;
@@ -2442,6 +2470,44 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundSession.TestForwardCall;
+var
+  Dest:          TIdSipAddressHeader;
+  ResponseCount: Cardinal;
+  SentResponse:  TIdSipResponse;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Dest := TIdSipAddressHeader.Create;
+  try
+    Dest.DisplayName := 'Wintermute';
+    Dest.Address.Uri := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+
+    Self.Session.ForwardCall(Dest);
+    Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+          'No response sent');
+
+    SentResponse := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPMovedTemporarily,
+                SentResponse.StatusCode,
+                'Wrong response sent');
+    Check(SentResponse.HasHeader(ContactHeaderFull),
+          'No Contact header');
+    CheckEquals(Dest.DisplayName,
+                SentResponse.FirstContact.DisplayName,
+                'Contact display name');
+    CheckEquals(Dest.Address.Uri,
+                SentResponse.FirstContact.Address.Uri,
+                'Contact address');
+
+    Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+  finally
+  end;
+end;
+
 procedure TestTIdSipInboundSession.TestIsInboundCall;
 begin
   Self.SimulateRemoteInvite;
@@ -2544,6 +2610,24 @@ begin
   finally
     ReInvite.Free;
   end;
+end;
+
+procedure TestTIdSipInboundSession.TestRejectCallBusy;
+var
+  ResponseCount: Cardinal;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.Session.RejectCallBusy;
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+  CheckEquals(SIPBusyHere,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Wrong response sent');
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');            
 end;
 
 procedure TestTIdSipInboundSession.TestRemoveSessionListener;
@@ -2972,7 +3056,6 @@ var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
 begin
-//  Session := Self.Core.Call(Self.Destination, '', '');
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
   Self.Session.Terminate;

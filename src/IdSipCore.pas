@@ -255,6 +255,8 @@ type
   TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
   private
     fContact:                 TIdSipContactHeader;
+    fDoNotDisturb:            Boolean;
+    fDoNotDisturbMessage:     String;
     fHasProxy:                Boolean;
     fProxy:                   TIdSipUri;
     KnownRegistrars:          TObjectList;
@@ -283,7 +285,7 @@ type
     function  DefaultFrom: String;
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
-    function  FindSession(const Msg: TIdSipMessage): TIdSipSession;
+    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
     function  ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
     function  GetContact: TIdSipContactHeader;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
@@ -305,6 +307,9 @@ type
     procedure RejectBadRequest(Request: TIdSipRequest;
                                const Reason: String;
                                Transaction: TIdSipTransaction);
+    procedure RejectDoNotDisturb(Request: TIdSipRequest;
+                                 const Reason: String;
+                                 Transaction: TIdSipTransaction);
     procedure SendByeToAppropriateSession(Bye: TIdSipRequest;
                                           Transaction: TIdSipTransaction;
                                           Receiver: TIdSipTransport);
@@ -354,9 +359,11 @@ type
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
     function  Username: String;
 
-    property Contact:  TIdSipContactHeader read GetContact write SetContact;
-    property HasProxy: Boolean             read fHasProxy write fHasProxy;
-    property Proxy:    TIdSipUri           read fProxy write SetProxy;
+    property Contact:             TIdSipContactHeader read GetContact write SetContact;
+    property DoNotDisturb:        Boolean             read fDoNotDisturb write fDoNotDisturb;
+    property DoNotDisturbMessage: String              read fDoNotDisturbMessage write fDoNotDisturbMessage;
+    property HasProxy:            Boolean             read fHasProxy write fHasProxy;
+    property Proxy:               TIdSipUri           read fProxy write SetProxy;
   end;
 
   TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
@@ -525,10 +532,12 @@ type
     destructor  Destroy; override;
 
     function  AcceptCall(const Offer, ContentType: String): String;
+    procedure ForwardCall(NewDestination: TIdSipAddressHeader);
     function  IsInboundCall: Boolean; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport); override;
+    procedure RejectCallBusy;
     procedure ResendLastResponse; virtual;
     procedure Terminate; override;
     procedure TimeOut;
@@ -615,7 +624,9 @@ uses
   SysUtils, IdUDPServer;
 
 const
-  InviteTimeout   = 'Inbound call timed out';
+  BusyHere        = 'Incoming call rejected - busy here';
+  CallForwarded   = 'Incoming call forwarded';
+  InviteTimeout   = 'Incoming call timed out';
   RemoteHangUp    = 'Remote end hung up';
 
 //******************************************************************************
@@ -1097,8 +1108,7 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
-  Self.fProxy   := TIdSipUri.Create('');
-  Self.HasProxy := false;
+  Self.fProxy := TIdSipUri.Create('');
 
   Self.KnownRegistrars := TObjectList.Create(true);
 
@@ -1122,9 +1132,12 @@ begin
   Self.AddAllowedMethod(MethodInvite);
   Self.AddAllowedScheme(SipScheme);
 
-  Self.From.Value    := Self.DefaultFrom;
-  Self.HostName      := Self.DefaultHostName;
-  Self.UserAgentName := Self.DefaultUserAgent;
+  Self.DoNotDisturb        := false;
+  Self.DoNotDisturbMessage := RSSIPTemporarilyUnavailable;
+  Self.From.Value          := Self.DefaultFrom;
+  Self.HasProxy            := false;
+  Self.HostName            := Self.DefaultHostName;
+  Self.UserAgentName       := Self.DefaultUserAgent;
 end;
 
 destructor TIdSipUserAgentCore.Destroy;
@@ -1596,7 +1609,7 @@ begin
   Result := 'Indy SIP/2.0 Server v0.1';
 end;
 
-function TIdSipUserAgentCore.FindSession(const Msg: TIdSipMessage): TIdSipSession;
+function TIdSipUserAgentCore.FindSession(Msg: TIdSipMessage): TIdSipSession;
 var
   DialogID: TIdSipDialogID;
   I:        Integer;
@@ -1776,8 +1789,15 @@ var
   Session: TIdSipSession;
 begin
   Assert(Invite.IsInvite,
-         'ProcessInvite needs INVITE messages, '
+         'ProcessInvite accepts only INVITE messages, '
        + 'not ' + Invite.Method + ' messages');
+
+  if Self.DoNotDisturb then begin
+    Self.RejectDoNotDisturb(Invite,
+                            Self.DoNotDisturbMessage,
+                            Transaction);
+    Exit;
+  end;
 
   Session := Self.FindSession(Invite);
 
@@ -1799,6 +1819,22 @@ var
   Response: TIdSipResponse;
 begin
   Response := Self.CreateResponse(Request, SIPBadRequest);
+  try
+    Response.StatusText := Reason;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.RejectDoNotDisturb(Request: TIdSipRequest;
+                                                 const Reason: String;
+                                                 Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPTemporarilyUnavailable);
   try
     Response.StatusText := Reason;
 
@@ -2419,7 +2455,7 @@ end;
 
 function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;
 var
-  Response: TIdSipResponse;
+  OkResponse: TIdSipResponse;
 begin
   // Offer contains a description of what data we expect to receive. Sometimes
   // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
@@ -2429,32 +2465,48 @@ begin
   // The type of payload processor depends on the ContentType passed in!
   Self.PayloadProcessor.StartListening(Offer);
 
-  Response := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
+  OkResponse := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
   try
     Result        := Self.PayloadProcessor.LocalSessionDescription;
-    Response.Body := Result;
+    OkResponse.Body := Result;
 
-    Response.ContentLength := Length(Response.Body);
-    Response.ContentType   := ContentType;
-    Response.ToHeader.Tag  := Self.UA.NextTag;
+    OkResponse.ContentLength := Length(OkResponse.Body);
+    OkResponse.ContentType   := ContentType;
+    OkResponse.ToHeader.Tag  := Self.UA.NextTag;
 
     Self.DialogLock.Acquire;
     try
       if not Self.IsEstablished then begin
-        fDialog := Self.CreateInboundDialog(Response);
+        fDialog := Self.CreateInboundDialog(OkResponse);
         Self.NotifyOfEstablishedSession;
       end;
 
       Self.Dialog.HandleMessage(Self.CurrentRequest);
-      Self.Dialog.HandleMessage(Response);
+      Self.Dialog.HandleMessage(OkResponse);
     finally
       Self.DialogLock.Release;
     end;
-    Self.InitialTran.SendResponse(Response);
+    Self.InitialTran.SendResponse(OkResponse);
     Self.OkTimer.Start;
   finally
-    Response.Free;
+    OkResponse.Free;
   end;
+end;
+
+procedure TIdSipInboundSession.ForwardCall(NewDestination: TIdSipAddressHeader);
+var
+  RedirectResponse: TIdSipResponse;
+begin
+  RedirectResponse := TIdSipResponse.InResponseTo(Self.InitialTran.InitialRequest,
+                                                  SIPMovedTemporarily);
+  try
+    RedirectResponse.AddHeader(ContactHeaderFull).Value := NewDestination.FullValue;
+    Self.InitialTran.SendResponse(RedirectResponse);
+  finally
+    RedirectResponse.Free;
+  end;
+
+  Self.NotifyOfEndedSession(CallForwarded);
 end;
 
 function TIdSipInboundSession.IsInboundCall: Boolean;
@@ -2492,6 +2544,21 @@ begin
     Self.AddOpenTransaction(Transaction);
     Self.NotifyOfModifiedSession(Request);
   end;
+end;
+
+procedure TIdSipInboundSession.RejectCallBusy;
+var
+  BusyHereResponse: TIdSipResponse;
+begin
+  BusyHereResponse := TIdSipResponse.InResponseTo(Self.InitialTran.InitialRequest,
+                                                  SIPBusyHere);
+  try
+    Self.InitialTran.SendResponse(BusyHereResponse);
+  finally
+    BusyHereResponse.Free;
+  end;
+
+  Self.NotifyOfEndedSession(BusyHere);
 end;
 
 procedure TIdSipInboundSession.ResendLastResponse;
