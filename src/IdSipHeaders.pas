@@ -19,7 +19,8 @@ type
   private
     fScheme: String;
   public
-    function  IsSipUri: Boolean; virtual;
+    function AsString: String; virtual;
+    function IsSipUri: Boolean; virtual;
 
     property Scheme: String read fScheme write fScheme;
   end;
@@ -79,6 +80,7 @@ type
     destructor  Destroy; override;
 
     procedure AddParameter(const Name: String; const Value: String = '');
+    function  AsString: String; override;
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(const Uri: TIdSipUri): Boolean;
@@ -766,6 +768,11 @@ end;
 //******************************************************************************
 //* TIdUri Public methods ******************************************************
 
+function TIdUri.AsString: String;
+begin
+  Result := '';
+end;
+
 function TIdUri.IsSipUri: Boolean;
 begin
   Result := (Lowercase(Self.Scheme) = SipScheme)
@@ -894,6 +901,11 @@ end;
 procedure TIdSipUri.AddParameter(const Name: String; const Value: String = '');
 begin
   Self.Parameters.Add(Name + '=' + Self.Decode(Value));
+end;
+
+function TIdSipUri.AsString: String;
+begin
+  Result := Self.Uri;
 end;
 
 function TIdSipUri.DefaultPort: Cardinal;
