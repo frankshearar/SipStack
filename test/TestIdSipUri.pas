@@ -34,6 +34,17 @@ type
     procedure TestSetValueIPv6AddressWithPort;
   end;
 
+  TestTIdUri = class(TTestCase)
+  private
+    Uri: TIdUri;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestIsSipUri;
+    procedure TestIsSipsUri;
+  end;
+
   TestTIdSipUri = class(TTestCase)
   private
     EqualityA: TIdSipUri;
@@ -325,6 +336,51 @@ begin
   CheckEquals('[1::127.0.0.1]:' + IntToStr(Self.HP.Port),
               Self.HP.Value,
               'GetValue');
+end;
+
+//******************************************************************************
+//* TestTIdUri                                                                 *
+//******************************************************************************
+//* TestTIdUri Public methods **************************************************
+
+procedure TestTIdUri.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Uri := TIdUri.Create('');
+end;
+
+procedure TestTIdUri.TearDown;
+begin
+  Self.Uri.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdUri Published methods ***********************************************
+
+procedure TestTIdUri.TestIsSipUri;
+begin
+  Self.Uri.Scheme := 'http';
+  Check(not Self.Uri.IsSipUri, 'http');
+
+  Self.Uri.Scheme := SipScheme;
+  Check(Self.Uri.IsSipUri, SipScheme);
+
+  Self.Uri.Scheme := SipsScheme;
+  Check(Self.Uri.IsSipUri, SipsScheme);
+end;
+
+procedure TestTIdUri.TestIsSipsUri;
+begin
+  Self.Uri.Scheme := 'http';
+  Check(not Self.Uri.IsSipUri, 'http');
+
+  Self.Uri.Scheme := SipScheme;
+  Check(not Self.Uri.IsSipUri, SipScheme);
+
+  Self.Uri.Scheme := SipsScheme;
+  Check(Self.Uri.IsSipUri, SipsScheme);
 end;
 
 //******************************************************************************

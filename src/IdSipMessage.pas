@@ -98,6 +98,7 @@ type
 
     function AsString: String; virtual;
     function IsSipUri: Boolean; virtual;
+    function IsSipsUri: Boolean; 
 
     property Host:   String   read GetHost write SetHost;
     property Port:   Cardinal read GetPort write SetPort;
@@ -2063,7 +2064,12 @@ end;
 function TIdUri.IsSipUri: Boolean;
 begin
   Result := (Lowercase(Self.Scheme) = SipScheme)
-         or (Lowercase(Self.Scheme) = SipsScheme);
+         or Self.IsSipsUri;
+end;
+
+function TIdUri.IsSipsUri: Boolean;
+begin
+  Result := (Lowercase(Self.Scheme) = SipsScheme);
 end;
 
 //* TIdUri Protected methods ***************************************************
