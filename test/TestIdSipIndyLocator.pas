@@ -17,6 +17,7 @@ type
 
     function  ARecords: String;
     function  NaptrRecords: String;
+    function  NoSuchRecord: String;
 
     procedure ProvideAnswer(Sender: TObject;
                             AData: TStream;
@@ -27,8 +28,14 @@ type
     procedure TearDown; override;
   published
     procedure TestResolveNameRecords;
+    procedure TestResolveNameRecordsNetworkFailure;
+    procedure TestResolveNameRecordsOnNonexistentDomain;
     procedure TestResolveNAPTR;
+    procedure TestResolveNAPTRNetworkFailure;
+    procedure TestResolveNAPTROnNonexistentDomain;
     procedure TestResolveSRV;
+    procedure TestResolveSRVNetworkFailure;
+    procedure TestResolveSRVOnNonexistentDomain;
   end;
 
 implementation
@@ -165,6 +172,35 @@ begin
   + #$0C#$00#$01#$00#$01#$00#$00#$0E#$10#$00#$04#$7F#$00#$01#$01;
 end;
 
+function TestTIdSipIndyLocator.NoSuchRecord: String;
+begin
+
+  // Dig would translate this data as
+  // ;; res options: init recurs defnam dnsrch
+  // ;; got answer:
+  // ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: <id>
+  // ;; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 1, ADDITIONAL: 0
+  // ;; QUERY SECTION:
+  // ;;      foo.bar, type = A, class = IN
+  //
+  // ;; AUTHORITY SECTION:
+  // .                       1h37m30s IN SOA  A.ROOT-SERVERS.NET. NSTLD.VERISIGN-GRS.COM. (
+  //                                         2005030701      ; serial
+  //                                         30M             ; refresh
+  //                                         15M             ; retry
+  //                                         1W              ; expiry
+  //                                         1D )            ; minimum
+
+  Result :=
+  { hdr id }#$81#$83#$00#$01#$00#$00#$00#$01#$00#$00#$03#$66#$6F#$6F
+  + #$03#$62#$61#$72#$00#$00#$01#$00#$01#$00#$00#$06#$00#$01#$00#$00
+  + #$2A#$1A#$00#$40#$01#$41#$0C#$52#$4F#$4F#$54#$2D#$53#$45#$52#$56
+  + #$45#$52#$53#$03#$4E#$45#$54#$00#$05#$4E#$53#$54#$4C#$44#$0C#$56
+  + #$45#$52#$49#$53#$49#$47#$4E#$2D#$47#$52#$53#$03#$43#$4F#$4D#$00
+  + #$77#$82#$57#$2D#$00#$00#$07#$08#$00#$00#$03#$84#$00#$09#$3A#$80
+  + #$00#$01#$51#$80;
+end;
+
 procedure TestTIdSipIndyLocator.ProvideAnswer(Sender: TObject;
                                               AData: TStream;
                                               ABinding: TIdSocketHandle);
@@ -252,6 +288,40 @@ begin
   end;
 end;
 
+procedure TestTIdSipIndyLocator.TestResolveNameRecordsNetworkFailure;
+var
+  Records: TIdDomainNameRecords;
+begin
+  // This shows what happens when something on the network goes wrong (like,
+  // say, the name server disappearing).
+  Self.NameServer.Active := false;
+
+  Records := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Records);
+
+    CheckEquals(0, Records.Count, 'Record count');
+  finally
+    Records.Free;
+  end;
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNameRecordsOnNonexistentDomain;
+var
+  Records: TIdDomainNameRecords;
+begin
+  Self.Answer := Self.NoSuchRecord;
+
+  Records := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords('foo.bar', Records);
+
+    CheckEquals(0, Records.Count, 'Record count');
+  finally
+    Records.Free;
+  end;
+end;
+
 procedure TestTIdSipIndyLocator.TestResolveNAPTR;
 var
   Records: TIdNaptrRecords;
@@ -290,6 +360,52 @@ begin
       CheckEquals('',                      Records[2].Regex,      '3rd record Regex');
       CheckEquals('SIP+D2U',               Records[2].Service,    '3rd record Service');
       CheckEquals('_sip._udp.leo-ix.net',  Records[2].Value,      '3rd record Value');
+    finally
+      Records.Free;
+    end;
+  finally
+    Uri.Free;
+  end;
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNAPTRNetworkFailure;
+var
+  Records: TIdNaptrRecords;
+  Uri:     TIdSipUri;
+begin
+  // This shows what happens when something on the network goes wrong (like,
+  // say, the name server disappearing).
+  Self.NameServer.Active := false;
+
+  Uri := TIdSipUri.Create('sip:foo.bar');
+  try
+    Records := TIdNaptrRecords.Create;
+    try
+      Self.Loc.ResolveNAPTR(Uri, Records);
+
+      CheckEquals(0, Records.Count, 'Record count');
+    finally
+      Records.Free;
+    end;
+  finally
+    Uri.Free;
+  end;
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveNAPTROnNonexistentDomain;
+var
+  Records: TIdNaptrRecords;
+  Uri:     TIdSipUri;
+begin
+  Self.Answer := Self.NoSuchRecord;
+
+  Uri := TIdSipUri.Create('sip:foo.bar');
+  try
+    Records := TIdNaptrRecords.Create;
+    try
+      Self.Loc.ResolveNAPTR(Uri, Records);
+
+      CheckEquals(0, Records.Count, 'Record count');
     finally
       Records.Free;
     end;
@@ -356,6 +472,40 @@ begin
     CheckEquals(DnsARecord,
                 Records[1].NameRecords[0].RecordType,
                 '2nd record 1st name record type');
+  finally
+    Records.Free;
+  end;
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveSRVNetworkFailure;
+var
+  Records: TIdSrvRecords;
+begin
+  // This shows what happens when something on the network goes wrong (like,
+  // say, the name server disappearing).
+  Self.NameServer.Active := false;
+
+  Records := TIdSrvRecords.Create;
+  try
+    Self.Loc.ResolveSRV('foo.bar', Records);
+
+    CheckEquals(0, Records.Count, 'Record count');
+  finally
+    Records.Free;
+  end;
+end;
+
+procedure TestTIdSipIndyLocator.TestResolveSRVOnNonexistentDomain;
+var
+  Records: TIdSrvRecords;
+begin
+  Self.Answer := Self.NoSuchRecord;
+
+  Records := TIdSrvRecords.Create;
+  try
+    Self.Loc.ResolveSRV('foo.bar', Records);
+
+    CheckEquals(0, Records.Count, 'Record count');
   finally
     Records.Free;
   end;
