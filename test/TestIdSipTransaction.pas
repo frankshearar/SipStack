@@ -4,8 +4,8 @@ interface
 
 uses
   IdSipCore, IdSipDialog, IdSipMessage, IdSipMockCore,
-  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
-  IdSipTransport, TestFramework, TestFrameworkSip;
+  IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTcpClient,
+  IdSipTransaction, IdSipTransport, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipTransactionDispatcher = class(TTestCase, IIdSipTransactionListener)
@@ -59,8 +59,8 @@ type
 
   TestTIdSipTransaction = class(TTestCase)
   private
-    Dispatch:       TIdSipTransactionDispatcher;
-    Request: TIdSipRequest;
+    Dispatch: TIdSipTransactionDispatcher;
+    Request:  TIdSipRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -74,14 +74,19 @@ type
 
   TIdSipTransactionEvent = procedure(Sender: TIdSipTransaction) of object;
 
+  TTestIdSipRequestEvent = procedure(Sender: TObject;
+                                     const R: TIdSipRequest) of object;
+  TTestIdSipResponseEvent = procedure(Sender: TObject;
+                                      const R: TIdSipResponse) of object;
+
   // Transactions behave slightly differently if a reliable transport is used -
   // certain messages are not resent. To this end, we test unreliable transports
   // by default, only checking that those certain messages are not resent when
   // using reliable transports in tests like TestReliableTransportFoo
   TTestTransaction = class(TTestCaseSip, IIdSipTransactionListener)
   protected
-    CheckReceiveRequest:   TIdSipRequestEvent;
-    CheckReceiveResponse:  TIdSipResponseEvent;
+    CheckReceiveRequest:   TTestIdSipRequestEvent;
+    CheckReceiveResponse:  TTestIdSipResponseEvent;
     CheckTerminated:       TIdSipTransactionEvent;
     Core:                  TIdSipAbstractCore;
     FailMsg:               String;
@@ -94,8 +99,10 @@ type
     TransactionProceeding: Boolean;
     TransactionTerminated: Boolean;
 
-    procedure Completed(Sender: TObject; const R: TIdSipResponse);
-    procedure OnFail(const Transaction: TIdSipTransaction; const Reason: String);
+    procedure Completed(Sender: TObject;
+                        const R: TIdSipResponse);
+    procedure OnFail(const Transaction: TIdSipTransaction;
+                     const Reason: String);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
                                const Transport: TIdSipTransport);
@@ -1029,14 +1036,15 @@ end;
 
 //* TTestTransaction Protected methods *****************************************
 
-procedure TTestTransaction.Completed(Sender: TObject; const R: TIdSipResponse);
+procedure TTestTransaction.Completed(Sender: TObject;
+                                     const R: TIdSipResponse);
 begin
   Self.TransactionCompleted := true;
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TTestTransaction.OnFail(const Transaction: TIdSipTransaction;
-                                                   const Reason: String);
+                                  const Reason: String);
 begin
   Self.FailMsg           := Reason;
   Self.TransactionFailed := true;
@@ -1999,30 +2007,47 @@ var
 begin
   Ack := Self.MockDispatcher.Transport.LastACK;
 
-  CheckEquals(MethodAck,                      Ack.Method,         'Method');
-  CheckEquals(Self.Request.SipVersion, Ack.SipVersion,     'SIP-Version');
-  CheckEquals(Self.Request.RequestUri, Ack.RequestUri,     'Request-URI');
-  CheckEquals(Self.Request.CallID,     Ack.CallID,         'Call-ID');
-  CheckEquals(Self.Request.From.Value, Ack.From.Value,     'From');
-  CheckEquals(R.ToHeader.Value,               Ack.ToHeader.Value, 'To');
+  CheckEquals(MethodAck,               Ack.Method,     'Method');
+  CheckEquals(Self.Request.SipVersion, Ack.SipVersion, 'SIP-Version');
+  CheckEquals(Self.Request.RequestUri, Ack.RequestUri, 'Request-URI');
+  CheckEquals(Self.Request.CallID,     Ack.CallID,     'Call-ID');
+  Check(Self.Request.From.IsEqualTo(Ack.From),
+        'From');
+  Check(R.ToHeader.IsEqualTo(Ack.ToHeader),
+        'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  CheckEquals(Self.Request.LastHop.Value,
-              Ack.LastHop.Value,
-              'Topmost Via');
+  Check(Self.Request.LastHop.IsEqualTo(Ack.LastHop),
+        'Topmost Via');
 
-  CheckEquals(Self.Request.CSeq.SequenceNo, Ack.CSeq.SequenceNo, 'CSeq sequence no');
-  CheckEquals(MethodAck,                           Ack.CSeq.Method,     'CSeq method');
+  Check(Ack.HasHeader(MaxForwardsHeader),
+        'Max-Forwards header is mandatory');      
 
+  CheckEquals(Self.Request.CSeq.SequenceNo,
+              Ack.CSeq.SequenceNo,
+              'CSeq sequence no');
+  CheckEquals(MethodAck,
+              Ack.CSeq.Method,
+              'CSeq method');
 
-  CheckEquals(0,  Ack.ContentLength, 'Content-Length');
-  CheckEquals('', Ack.Body,          'Body of ACK is recommended to be empty');
+  CheckEquals(0,
+              Ack.ContentLength,
+              'Content-Length');
+  CheckEquals('',
+              Ack.Body,
+              'Body of ACK is recommended to be empty');
 
   Routes := TIdSipHeadersFilter.Create(Ack.Headers, RouteHeader);
   try
-    CheckEquals(2,                            Routes.Count,          'Number of Route headers');
-    CheckEquals('wsfrank <sip:192.168.1.43>', Routes.Items[0].Value, '1st Route');
-    CheckEquals('localhost <sip:127.0.0.1>',  Routes.Items[1].Value, '2nd Route');
+    CheckEquals(2,
+                Routes.Count,
+                'Number of Route headers');
+    CheckEquals('wsfrank <sip:192.168.1.43>',
+                Routes.Items[0].Value,
+                '1st Route');
+    CheckEquals('localhost <sip:127.0.0.1>',
+                Routes.Items[1].Value,
+                '2nd Route');
   finally
     Routes.Free;
   end;
@@ -2159,15 +2184,22 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestPrematureDestruction;
 var
-  Tran: TIdSipTransaction;
+  Tran:      TIdSipTransaction;
+  TranCount: Cardinal;
 begin
   // When the INVITE is sent, if there's a network error we go directly to the
   // Terminated state. Terminated transactions are immediately killed by the
   // dispatcher. This means that sending requests should be the last thing done
   // by a method.
   Tran := Self.MockDispatcher.AddClientTransaction(Self.Request);
+  TranCount := Self.MockDispatcher.TransactionCount;
+
   Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
   Tran.SendRequest;
+
+  CheckEquals(TranCount - 1,
+              Self.MockDispatcher.TransactionCount,
+              'Transaction wasn''t terminated and removed');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;
@@ -2246,9 +2278,16 @@ begin
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInCallingState;
+var
+  ACKCount: Cardinal;
 begin
+  ACKCount := Self.MockDispatcher.Transport.ACKCount;
+
   Self.Response.StatusCode := SIPOK;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+
+  Check(ACKCount < Self.MockDispatcher.Transport.ACKCount,
+        'No ACK sent');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
@@ -2269,11 +2308,18 @@ begin
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive2xxInProceedingState;
+var
+  ACKCount: Cardinal;
 begin
   Self.MoveToProceedingState(Self.Tran);
 
+  ACKCount := Self.MockDispatcher.Transport.ACKCount;
+
   Self.Response.StatusCode := SIPOK;
   Self.Tran.ReceiveResponse(Self.Response, Self.MockDispatcher.Transport);
+
+  Check(ACKCount < Self.MockDispatcher.Transport.ACKCount,
+        'No ACK sent');
 
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
