@@ -4233,11 +4233,13 @@ var
 begin
   Ack := Self.UA.CreateAck(Dialog);
   try
+    // cf. RFC 3261, section 13.2.2.4
     Ack.Body := Self.InitialRequest.Body;
     Ack.ContentDisposition.Value := DispositionSession;
     Ack.ContentLength := Length(Ack.Body);
     Ack.ContentType := Self.InitialRequest.ContentType;
 
+    // cf. RFC 3261 section 22.1
     if Self.InitialRequest.HasAuthorization then
       Ack.FirstAuthorization.Value := Self.InitialRequest.FirstAuthorization.FullValue;
     if Self.InitialRequest.HasProxyAuthorization then
