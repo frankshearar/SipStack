@@ -779,6 +779,7 @@ type
     destructor  Destroy; override;
 
     function CurrentContact: TIdSipContactHeader;
+    function HasContact(Address: TIdSipAddressHeader): Boolean;
   end;
 
   TIdSipExpiresHeaders = class(TIdSipHeadersFilter)
@@ -4630,6 +4631,17 @@ begin
   Result := Self.CurrentHeader as TIdSipContactHeader;
 end;
 
+function TIdSipContacts.HasContact(Address: TIdSipAddressHeader): Boolean;
+begin
+  Result := false;
+  Self.First;
+
+  while Self.HasNext and not Result do begin
+    Result := Self.CurrentContact.Address.Equals(Address.Address);
+
+    Self.Next;
+  end;
+end;
 
 //******************************************************************************
 //* TIdSipExpiresHeaders

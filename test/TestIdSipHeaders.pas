@@ -506,6 +506,7 @@ type
   published
     procedure TestCreateOnEmptySet;
     procedure TestCurrentContact;
+    procedure TestHasContact;
   end;
 
   TestTIdSipExpiresHeaders = class(TTestCase)
@@ -4827,6 +4828,25 @@ begin
   Self.Contacts.Next;
   Check(NewContact = Self.Contacts.CurrentContact,
         'Second Contact');
+end;
+
+procedure TestTIdSipContacts.TestHasContact;
+var
+  NewContact: TIdSipContactHeader;
+begin
+  NewContact := TIdSipContactHeader.Create;
+  try
+    NewContact.Value := '"Foo Bar" <sip:foo>';
+    Check(not Self.Contacts.HasContact(NewContact),
+          'Empty list');
+
+    Self.Contacts.Add(ContactHeaderFull).Value := 'sip:foo';
+
+    Check(Self.Contacts.HasContact(NewContact),
+          'Contains header with same address');
+  finally
+    NewContact.Free;
+  end;
 end;
 
 //******************************************************************************
