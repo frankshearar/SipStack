@@ -658,14 +658,14 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
+    procedure TestDialogNotEstablishedOnTryingResponse;
+    procedure TestDoubleRedirect;
     procedure TestGlobalFailureEndsSession;
     procedure TestHangUp;
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
     procedure TestModifyUsesAuthentication;
-    procedure TestDialogNotEstablishedOnTryingResponse;
-    procedure TestDoubleRedirect;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
@@ -676,8 +676,6 @@ type
     procedure TestTerminateUnestablishedSession;
     procedure TestTerminateEstablishedSession;
   end;
-
-  TIdModifyAuthHeaderProc = procedure(Auth: TIdSipAuthenticateHeader) of object;
 
   TActionMethodTestCase = class(TTestCase)
   private
@@ -7344,6 +7342,55 @@ begin
         'Content-Disposition');
 end;
 
+procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
+var
+  SentInvite: TIdSipRequest;
+  Session:    TIdSipSession;
+begin
+  Self.MarkSentRequestCount;
+
+  Session := Self.CreateAction as TIdSipSession;
+  Check(not Session.DialogEstablished, 'Brand new session');
+
+  CheckRequestSent('The INVITE wasn''t sent');
+  SentInvite := Self.LastSentRequest;
+
+  Self.ReceiveTryingWithNoToTag(SentInvite);
+  Check(not Session.DialogEstablished,
+        'Dialog established after receiving a 100 Trying');
+
+  Self.ReceiveRinging(SentInvite);
+  Check(Session.DialogEstablished,
+        'Dialog not established after receiving a 180 Ringing');
+end;
+
+procedure TestTIdSipOutboundSession.TestDoubleRedirect;
+begin
+  //  ---   INVITE (original)   --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+  //  --- INVITE (redirect #1)  --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+  //  --- INVITE (redirect #2)  --->
+  // <--- 302 Moved Temporarily ---
+  //  ---          ACK          --->
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
+  CheckRequestSent('No redirected INVITE #1 sent');
+  CheckEquals('sip:foo@bar.org',
+              Self.LastSentRequest.RequestUri.Uri,
+              'Request-URI of redirect #1');
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveMovedTemporarily('sip:baz@quaax.org');
+  CheckRequestSent('No redirected INVITE #2 sent');
+  CheckEquals('sip:baz@quaax.org',
+              Self.LastSentRequest.RequestUri.Uri,
+              'Request-URI of redirect #2');
+end;
+
 procedure TestTIdSipOutboundSession.TestGlobalFailureEndsSession;
 var
   SessionCount: Integer;
@@ -7435,55 +7482,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
-var
-  SentInvite: TIdSipRequest;
-  Session:    TIdSipSession;
-begin
-  Self.MarkSentRequestCount;
-
-  Session := Self.CreateAction as TIdSipSession;
-  Check(not Session.DialogEstablished, 'Brand new session');
-
-  CheckRequestSent('The INVITE wasn''t sent');
-  SentInvite := Self.LastSentRequest;
-
-  Self.ReceiveTryingWithNoToTag(SentInvite);
-  Check(not Session.DialogEstablished,
-        'Dialog established after receiving a 100 Trying');
-
-  Self.ReceiveRinging(SentInvite);
-  Check(Session.DialogEstablished,
-        'Dialog not established after receiving a 180 Ringing');
-end;
-
-procedure TestTIdSipOutboundSession.TestDoubleRedirect;
-begin
-  //  ---   INVITE (original)   --->
-  // <--- 302 Moved Temporarily ---
-  //  ---          ACK          --->
-  //  --- INVITE (redirect #1)  --->
-  // <--- 302 Moved Temporarily ---
-  //  ---          ACK          --->
-  //  --- INVITE (redirect #2)  --->
-  // <--- 302 Moved Temporarily ---
-  //  ---          ACK          --->
-
-  Self.MarkSentRequestCount;
-  Self.ReceiveMovedTemporarily('sip:foo@bar.org');
-  CheckRequestSent('No redirected INVITE #1 sent');
-  CheckEquals('sip:foo@bar.org',
-              Self.LastSentRequest.RequestUri.Uri,
-              'Request-URI of redirect #1');
-
-  Self.MarkSentRequestCount;
-  Self.ReceiveMovedTemporarily('sip:baz@quaax.org');
-  CheckRequestSent('No redirected INVITE #2 sent');
-  CheckEquals('sip:baz@quaax.org',
-              Self.LastSentRequest.RequestUri.Uri,
-              'Request-URI of redirect #2');
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
