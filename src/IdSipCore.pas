@@ -3044,6 +3044,9 @@ begin
                         ChallengeResponse.RequestUri.AsString,
                         Username);
 
+    // This may look a bit like a time-of-use/time-of-check race condition
+    // ("what if something frees the RealmInfo before you use it?") but it's
+    // not - you can't remove realms from the Keyring, only add them.                    
     RealmInfo := Self.Keyring.Find(ChallengeHeader.Realm,
                                    ChallengeResponse.RequestUri.AsString);
 
