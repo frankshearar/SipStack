@@ -830,13 +830,13 @@ uses
   IdSdp, IdStack, SysUtils, IdUDPServer;
 
 const
-  BusyHere        = 'Incoming call rejected - busy here';
-  CallForwarded   = 'Incoming call forwarded';
-  InviteTimeout   = 'Incoming call timed out';
-  LocalCancel     = 'Local end cancelled call';
-  LocalHangUp     = 'Local end hung up';
-  RemoteCancel    = 'Remote end cancelled call';
-  RemoteHangUp    = 'Remote end hung up';
+  BusyHere      = 'Incoming call rejected - busy here';
+  CallForwarded = 'Incoming call forwarded';
+  InviteTimeout = 'Incoming call timed out';
+  LocalCancel   = 'Local end cancelled call';
+  LocalHangUp   = 'Local end hung up';
+  RemoteCancel  = 'Remote end cancelled call';
+  RemoteHangUp  = 'Remote end hung up';
 
 //******************************************************************************
 //* Unit Private procedures and functions                                      *
