@@ -265,6 +265,7 @@ type
     procedure TestReceiveOK;
     procedure TestReceiveUnauthorized;
     procedure TestSequenceNumberIncrements;
+    procedure TestUnregister;
   end;
 
 const
@@ -2969,6 +2970,27 @@ begin
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
   Check(SeqNo + 1 = Self.Dispatcher.Transport.LastRequest.CSeq.SequenceNo,
         'CSeq sequence number didn''t increment');
+end;
+
+procedure TestTIdSipRegistration.TestUnregister;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Reg.Unregister(Self.Registrar.From.Address);
+  Check(Self.Dispatcher.Transport.SentRequestCount > 0,
+        'No request sent');
+
+  Request := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(Self.Registrar.From.Address.Uri,
+              Request.RequestUri.Uri,
+              'Request-URI');
+  CheckEquals(MethodRegister, Request.Method, 'Method');
+  CheckEquals(1, Request.Contacts.Count,
+             'Contact count');
+  Check(Request.FirstContact.IsWildCard,
+        'First Contact');
+  CheckEquals(0, Request.FirstContact.Expires,
+             'First Contact expires');
 end;
 
 initialization
