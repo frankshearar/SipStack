@@ -51,9 +51,9 @@ type
   end;
 
   TTestIdSipRequestEvent = procedure(Sender: TObject;
-                                     const R: TIdSipRequest) of object;
+                                     R: TIdSipRequest) of object;
   TTestIdSipResponseEvent = procedure(Sender: TObject;
-                                      const R: TIdSipResponse) of object;
+                                      R: TIdSipResponse) of object;
 
   TestTIdSipTransport = class(TThreadingTestCase,
                               IIdSipTransportListener)
@@ -69,27 +69,27 @@ type
     WrongServer:           Boolean;
 
     procedure CheckCanReceiveRequest(Sender: TObject;
-                                     const R: TIdSipRequest);
+                                     R: TIdSipRequest);
     procedure CheckCanReceiveResponse(Sender: TObject;
-                                      const R: TIdSipResponse);
+                                      R: TIdSipResponse);
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
-                                                    const R: TIdSipResponse);
+                                                    R: TIdSipResponse);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
-                                                    const Request: TIdSipRequest);
+                                                    Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject;
-                                           const Request: TIdSipRequest);
+                                           Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
-                                           const Request: TIdSipRequest);
+                                           Request: TIdSipRequest);
     procedure CheckSendRequestTopVia(Sender: TObject;
-                                     const R: TIdSipRequest);
+                                     R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transport: TIdSipTransport);
     procedure ReturnResponse(Sender: TObject;
-                             const R: TIdSipRequest);
-    procedure SendOkResponse(const Transport: TIdSipTransport);
+                             R: TIdSipRequest);
+    procedure SendOkResponse(Transport: TIdSipTransport);
     function  TransportType: TIdSipTransportClass; virtual;
   public
     procedure SetUp; override;
@@ -141,13 +141,13 @@ type
     RPortEvent:     TEvent;
 
     procedure CheckRportParamFilledIn(Sender: TObject;
-                                      const R: TIdSipRequest);
+                                      R: TIdSipRequest);
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
-                                                  const R: TIdSipRequest);
+                                                  R: TIdSipRequest);
     procedure CheckMaddrUser(Sender: TObject;
-                             const R: TIdSipResponse);
+                             R: TIdSipResponse);
     procedure NoteSourcePort(Sender: TObject;
-                             const R: TIdSipRequest);
+                             R: TIdSipRequest);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -461,7 +461,7 @@ end;
 //* TestTIdSipTransport Protected methods **************************************
 
 procedure TestTIdSipTransport.CheckCanReceiveRequest(Sender: TObject;
-                                                     const R: TIdSipRequest);
+                                                     R: TIdSipRequest);
 begin
   try
     Self.ReceivedRequest := true;
@@ -477,7 +477,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckCanReceiveResponse(Sender: TObject;
-                                                      const R: TIdSipResponse);
+                                                      R: TIdSipResponse);
 begin
   try
     Self.ReceivedResponse := true;
@@ -492,19 +492,19 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
-                                                                    const R: TIdSipResponse);
+                                                                    R: TIdSipResponse);
 begin
   Self.ReceivedResponse := true;
 end;
 
 procedure TestTIdSipTransport.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
-                                                                    const Request: TIdSipRequest);
+                                                                    Request: TIdSipRequest);
 begin
   Self.CheckReceivedParamFQDNSentBy(Sender, Request);
 end;
 
 procedure TestTIdSipTransport.CheckReceivedParamFQDNSentBy(Sender: TObject;
-                                                           const Request: TIdSipRequest);
+                                                           Request: TIdSipRequest);
 begin
   try
     Check(Request.LastHop.HasReceived,
@@ -520,7 +520,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckReceivedParamIPv4SentBy(Sender: TObject;
-                                                           const Request: TIdSipRequest);
+                                                           Request: TIdSipRequest);
 begin
   try
     Check(not Request.LastHop.HasReceived,
@@ -536,7 +536,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
-                                                     const R: TIdSipRequest);
+                                                     R: TIdSipRequest);
 begin
   try
     Check(Self.HighPortTransport.GetTransportType = R.LastHop.Transport,
@@ -581,7 +581,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
-                                             const R: TIdSipRequest);
+                                             R: TIdSipRequest);
 begin
   try
     Self.SendOkResponse(Sender as TIdSipTransport);
@@ -593,7 +593,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransport.SendOkResponse(const Transport: TIdSipTransport);
+procedure TestTIdSipTransport.SendOkResponse(Transport: TIdSipTransport);
 begin
   Self.Response.StatusCode := SIPOK;
 
@@ -928,7 +928,7 @@ end;
 //* TestTIdSipUDPTransport Private methods *************************************
 
 procedure TestTIdSipUDPTransport.CheckRportParamFilledIn(Sender: TObject;
-                                                         const R: TIdSipRequest);
+                                                         R: TIdSipRequest);
 begin
   CheckNotEquals('',
                  R.LastHop.Params[RPortParam],
@@ -938,7 +938,7 @@ begin
 end;
 
 procedure TestTIdSipUDPTransport.CheckLeaveNonRportRequestsUntouched(Sender: TObject;
-                                                                     const R: TIdSipRequest);
+                                                                     R: TIdSipRequest);
 begin
   try
     Check(not R.LastHop.HasRport, 'rport param added by transport');
@@ -952,7 +952,7 @@ begin
 end;
 
 procedure TestTIdSipUDPTransport.CheckMaddrUser(Sender: TObject;
-                                                const R: TIdSipResponse);
+                                                R: TIdSipResponse);
 begin
   try
     Check(Sender = Self.MaddrTransport,
@@ -967,7 +967,7 @@ begin
 end;
 
 procedure TestTIdSipUDPTransport.NoteSourcePort(Sender: TObject;
-                                                const R: TIdSipRequest);
+                                                R: TIdSipRequest);
 begin
   try
     Self.RPort := R.LastHop.RPort;
