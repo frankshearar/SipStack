@@ -643,7 +643,8 @@ type
                        const Offer: String;
                        const MimeType: String);
     procedure RemoveListener(const Listener: IIdSipInviteListener);
-    procedure SendAck(Dialog: TIdSipDialog; FinalResponse: TIdSipResponse);
+    procedure SendAck(Dialog: TIdSipDialog;
+                      FinalResponse: TIdSipResponse);
     procedure TransactionCompleted;
     procedure Terminate; override;
   end;
@@ -3399,7 +3400,8 @@ begin
   Self.Listeners.RemoveListener(Listener);
 end;
 
-procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog; FinalResponse: TIdSipResponse);
+procedure TIdSipOutboundInvite.SendAck(Dialog: TIdSipDialog;
+                                       FinalResponse: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
