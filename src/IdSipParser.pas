@@ -3,26 +3,81 @@ unit IdSipParser;
 interface
 
 uses
-  Classes, IdGlobal, SysUtils;
+  Classes, Contnrs, IdGlobal, SysUtils;
+
+const
+  SIPVersion = 'SIP/2.0';
 
 type
+  TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP);
+
+  TIdSipHeader = class(TObject)
+  private
+    fParams: TStrings;
+
+    procedure SetParams(const Value: TStrings);
+  public
+    constructor Create; virtual;
+
+    property Params: TStrings read fParams write SetParams;
+  end;
+
+  // Via header
+  TIdSipViaHeader = class(TIdSipHeader)
+  private
+    fHost:       String;
+    fSipVersion: String;
+    fPort:       Cardinal;
+    fTransport:  TIdSipTransportType;
+  public
+    function IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
+
+    property Host:       String              read fHost write fHost;
+    property Port:       Cardinal            read fPort write fPort;
+    property SipVersion: String              read fSipVersion write fSipVersion;
+    property Transport:  TIdSipTransportType read fTransport write fTransport;
+  end;
+  // routing path - a collection of Via headers
+
+  TIdSipPath = class(TObject)
+  private
+    fViaHeaders: TObjectList;
+
+    property Headers: TObjectList read fViaHeaders;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Hop: TIdSipViaHeader);
+    function  FirstHop: TIdSipViaHeader;
+    function  LastHop: TIdSipViaHeader;
+    function  Length: Integer;
+  end;
+
   TIdSipMessage = class(TObject)
   private
     fBody:          String;
     fContentLength: Cardinal;
+    fPath:          TIdSipPath;
+    fMaxForwards:   Byte;
     fOtherHeaders:  TStrings;
     fSIPVersion:    String;
+
+    procedure SetPath(const Value: TIdSipPath);
   public
     constructor Create;
     destructor  Destroy; override;
 
     function  AsString: String; virtual; abstract;
+    function  MalformedException: ExceptClass; virtual; abstract;
     procedure ReadBody(const S: TStream);
 
-    property Body:          String   read fBody write fBody;
-    property ContentLength: Cardinal read fContentLength write fContentLength;
-    property OtherHeaders:  TStrings read fOtherHeaders;
-    property SIPVersion:    String   read fSIPVersion write fSIPVersion;
+    property Body:          String     read fBody write fBody;
+    property ContentLength: Cardinal   read fContentLength write fContentLength;
+    property MaxForwards:   Byte       read fMaxForwards write fMaxForwards;
+    property OtherHeaders:  TStrings   read fOtherHeaders;
+    property Path:          TIdSipPath read fPath write SetPath;
+    property SIPVersion:    String     read fSIPVersion write fSIPVersion;
   end;
 
   TIdSipRequest = class(TIdSipMessage)
@@ -31,6 +86,7 @@ type
     fRequest:    String;
   public
     function AsString: String; override;
+    function MalformedException: ExceptClass; override;
 
     property Method:  String read fMethod write fMethod;
     property Request: String read fRequest write fRequest;
@@ -44,6 +100,7 @@ type
     procedure SetStatusCode(const Value: Integer);
   public
     function AsString: String; override;
+    function MalformedException: ExceptClass; override;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -54,19 +111,25 @@ type
     fCurrentLine: Cardinal;
     fSource:      TStream;
 
+    procedure AddHeader(const Msg: TIdSipMessage; Header: String);
     procedure IncCurrentLine;
+    procedure InitialiseMessage(Msg: TIdSipMessage);
+    procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
     procedure ParseRequestLine(const Request: TIdSipRequest);
     procedure ParseStatusLine(const Response: TIdSipResponse);
     procedure ResetCurrentLine;
   public
     constructor Create;
+
     function  CurrentLine: Cardinal;
     function  Eof: Boolean;
     function  IsContentLength(Header: String): Boolean;
     function  IsEqual(const S1, S2: String): Boolean;
+    function  IsMaxForwards(Header: String): Boolean;
     function  IsMethod(Method: String): Boolean;
     function  IsNumber(Number: String): Boolean;
+    function  IsVia(Header: String): Boolean;
     function  IsSipVersion(Version: String): Boolean;
     function  MakeBadRequestResponse(const Reason: String): TIdSipResponse;
     function  ParseAndMakeMessage: TIdSipMessage;
@@ -84,6 +147,7 @@ type
 
   EParser = class(Exception);
   EBadRequest = class(EParser);
+  EBadResponse = class(EParser);
 
 const
   BadStatusCode             = -1;
@@ -91,9 +155,7 @@ const
   EmptyInputStream          = 'Empty input stream';
   InvalidSipVersion         = 'Invalid Sip-Version: ''%s''';
   InvalidStatusCode         = 'Invalid Status-Code: ''%s''';
-  MalformedContentLength    = 'Malformed Content-Length: ''%s''';
-  MalformedMethod           = 'Malformed Method: ''%s''';
-  MalformedRequestLine      = 'Malformed Request-Line: ''%s''';
+  MalformedToken            = 'Malformed %s: ''%s''';
   MissingSipVersion         = 'Missing SIP-Version';
   RequestLine               = '%s %s %s' + EOL;
   RequestUriNoAngleBrackets = 'Request-URI may not be enclosed in <>';
@@ -102,16 +164,24 @@ const
   UnexpectedMessageLength   = 'Expected message-body length of %d but was %d';
 
 const
-  ContentLengthFull  = 'Content-Length';
-  ContentLengthShort = 'l';
-  MethodAck          = 'ACK';
-  MethodBye          = 'BYE';
-  MethodCancel       = 'CANCEL';
-  MethodInvite       = 'INVITE';
-  MethodOptions      = 'OPTIONS';
-  MethodRegister     = 'REGISTER';
-  SipName            = 'SIP';
-  SIPVersion         = 'SIP/2.0';
+  ContentLengthHeaderFull  = 'Content-Length';
+  ContentLengthHeaderShort = 'l';
+  DefaultMaxForwards       = 70;
+  MaxForwardsHeader        = 'Max-Forwards';
+  MethodAck                = 'ACK';
+  MethodBye                = 'BYE';
+  MethodCancel             = 'CANCEL';
+  MethodInvite             = 'INVITE';
+  MethodOptions            = 'OPTIONS';
+  MethodRegister           = 'REGISTER';
+  SipName                  = 'SIP';
+  ViaHeaderFull            = 'Via';
+  ViaHeaderShort           = 'v';
+
+// move this to the appropriate unit - IdAssignedNumbers?
+const
+  IdPORT_SIP     = 5060;
+  IdPORT_SIP_TLS = 5061;
 
 // to go in IdResourceStrings
 const
@@ -219,10 +289,124 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
+function TransportToStr(const T: TIdSipTransportType): String;
+function StrToTransport(const S: String): TIdSipTransportType;
+
 implementation
 
 uses
   StrUtils;
+
+//******************************************************************************
+//* Unit public procedures & functions                                         *
+//******************************************************************************
+
+function TransportToStr(const T: TIdSipTransportType): String;
+begin
+  case T of
+    sttSCTP: Result := 'SCTP';
+    sttTCP:  Result := 'TCP';
+    sttTLS:  Result := 'TLS';
+    sttUDP:  Result := 'UDP';
+  else
+    raise EConvertError.Create('Failed to convert unknown transport to type string');
+  end;
+end;
+
+function StrToTransport(const S: String): TIdSipTransportType;
+begin
+       if (Lowercase(S) = 'sctp') then Result := sttSCTP
+  else if (Lowercase(S) = 'tcp')  then Result := sttTCP
+  else if (Lowercase(S) = 'tls')  then Result := sttTLS
+  else if (Lowercase(S) = 'udp')  then Result := sttUDP
+  else raise EConvertError.Create('Failed to convert ''' + S + ''' to type TIdSipTransportType');
+end;
+
+//******************************************************************************
+//* TIdSipViaHeader                                                            *
+//******************************************************************************
+//* TIdSipViaHeader Public methods *********************************************
+
+function TIdSipViaHeader.IsEqualTo(const Hop: TIdSipViaHeader): Boolean;
+begin
+  Result := (Self.Host = Hop.Host)
+        and (Self.Port = Hop.Port)
+        and (Self.SipVersion = Hop.SipVersion)
+        and (Self.Transport = Hop.Transport);
+end;
+
+//******************************************************************************
+//* TIdSipHeader                                                               *
+//******************************************************************************
+//* TIdSipHeader Public methods ************************************************
+
+constructor TIdSipHeader.Create;
+begin
+  inherited Create;
+
+  fParams := TStringList.Create;
+end;
+
+//* TIdSipHeader Protected methods *********************************************
+//* TIdSipHeader Private methods ***********************************************
+
+procedure TIdSipHeader.SetParams(const Value: TStrings);
+begin
+  fParams.Assign(Value);
+end;
+
+//******************************************************************************
+//* TIdSipPath                                                                 *
+//******************************************************************************
+//* TIdSipPath Public methods **************************************************
+
+constructor TIdSipPath.Create;
+begin
+  inherited Create;
+
+  fViaHeaders := TObjectList.Create(true);
+end;
+
+destructor TIdSipPath.Destroy;
+begin
+  fViaHeaders.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipPath.Add(Hop: TIdSipViaHeader);
+var
+  NewHop: TIdSipViaHeader;
+begin
+  NewHop := TIdSipViaHeader.Create;
+  NewHop.Host       := Hop.Host;
+  NewHop.Port       := Hop.Port;
+  NewHop.SipVersion := Hop.SipVersion;
+  NewHop.Transport  := Hop.Transport;
+
+  Self.Headers.Add(NewHop);
+end;
+
+function TIdSipPath.FirstHop: TIdSipViaHeader;
+begin
+  if (Self.Length > 0) then
+    Result := Self.Headers[Self.Headers.Count - 1] as TIdSipViaHeader
+  else
+    Result := nil;
+end;
+
+function TIdSipPath.LastHop: TIdSipViaHeader;
+begin
+  if (Self.Length > 0) then
+    Result := Self.Headers[0] as TIdSipViaHeader
+  else
+    Result := nil;
+end;
+
+function TIdSipPath.Length: Integer;
+begin
+  Result := Self.Headers.Count;
+end;
 
 //******************************************************************************
 //* TIdSipMessage                                                              *
@@ -234,10 +418,15 @@ begin
   inherited Create;
 
   fOtherHeaders := TStringList.Create;
+  fPath := TIdSipPath.Create;
+
+  Self.MaxForwards := DefaultMaxForwards;
+  Self.SIPVersion := IdSipParser.SIPVersion;
 end;
 
 destructor TIdSipMessage.Destroy;
 begin
+  fPath.Free;
   fOtherHeaders.Free;
 
   inherited Destroy;
@@ -247,6 +436,13 @@ procedure TIdSipMessage.ReadBody(const S: TStream);
 begin
   SetLength(fBody, Self.ContentLength);
   S.Read(fBody[1], Self.ContentLength);
+end;
+
+//* TIdSipMessage Private methods **********************************************
+
+procedure TIdSipMessage.SetPath(const Value: TIdSipPath);
+begin
+
 end;
 
 //*******************************************************************************
@@ -263,9 +459,14 @@ begin
   for I := 0 to Self.OtherHeaders.Count - 1 do
     Result := Result + Self.OtherHeaders[I] + EOL;
 
-  Result := Result + ContentLengthFull + ':' + CHAR32 + IntToStr(Self.ContentLength) + EOL;
+  Result := Result + ContentLengthHeaderFull + ':' + CHAR32 + IntToStr(Self.ContentLength) + EOL;
   Result := Result + EOL;
   Result := Result + Self.Body;
+end;
+
+function TIdSipRequest.MalformedException: ExceptClass;
+begin
+  Result := EBadRequest;
 end;
 
 //*******************************************************************************
@@ -282,9 +483,14 @@ begin
   for I := 0 to Self.OtherHeaders.Count - 1 do
     Result := Result + Self.OtherHeaders[I] + EOL;
 
-  Result := Result + ContentLengthFull + ':' + CHAR32 + IntToStr(Self.ContentLength) + EOL;
+  Result := Result + ContentLengthHeaderFull + ':' + CHAR32 + IntToStr(Self.ContentLength) + EOL;
   Result := Result + EOL;
   Result := Result + Self.Body;
+end;
+
+function TIdSipResponse.MalformedException: ExceptClass;
+begin
+  Result := EBadResponse;
 end;
 
 //* TIdSipResponse Private methods **********************************************
@@ -384,13 +590,22 @@ var
 begin
   Name := Fetch(Header, ':');
   Name := Trim(Name);
-  Result := Self.IsEqual(Name, ContentLengthFull)
-         or Self.IsEqual(Name, ContentLengthShort);
+  Result := Self.IsEqual(Name, ContentLengthHeaderFull)
+         or Self.IsEqual(Name, ContentLengthHeaderShort);
 end;
 
 function TIdSipParser.IsEqual(const S1, S2: String): Boolean;
 begin
   Result := Lowercase(S1) = Lowercase(S2);
+end;
+
+function TIdSipParser.IsMaxForwards(Header: String): Boolean;
+var
+  Name: String;
+begin
+  Name := Fetch(Header, ':');
+  Name := Trim(Name);
+  Result := Self.IsEqual(Name, MaxForwardsHeader);
 end;
 
 function TIdSipParser.IsMethod(Method: String): Boolean;
@@ -425,6 +640,16 @@ begin
   if (Result) then
     for I := 1 to Length(Number) do
       Result := Result and (Number[I] in ['0'..'9']);
+end;
+
+function TIdSipParser.IsVia(Header: String): Boolean;
+var
+  Name: String;
+begin
+  Name := Fetch(Header, ':');
+  Name := Trim(Name);
+  Result := Self.IsEqual(Name, ViaHeaderFull)
+         or Self.IsEqual(Name, ViaHeaderShort);
 end;
 
 function TIdSipParser.IsSipVersion(Version: String): Boolean;
@@ -477,6 +702,7 @@ end;
 
 procedure TIdSipParser.ParseRequest(const Request: TIdSipRequest);
 begin
+  Self.InitialiseMessage(Request);
   if not Self.Eof then begin
     Self.ResetCurrentLine;
     Self.ParseRequestLine(Request);
@@ -486,6 +712,7 @@ end;
 
 procedure TIdSipParser.ParseResponse(const Response: TIdSipResponse);
 begin
+  Self.InitialiseMessage(Response);
   if not Self.Eof then begin
     Self.ResetCurrentLine;
     Self.ParseStatusLine(Response);
@@ -552,32 +779,88 @@ end;
 
 //* TIdSipParser Private methods ***********************************************
 
+procedure TIdSipParser.AddHeader(const Msg: TIdSipMessage; Header: String);
+var
+  Err: Integer;
+  N:   Cardinal;
+  S:   String;
+begin
+  if Self.IsContentLength(Header) then begin
+    S := Header;
+    Fetch(S, ':');
+    S := Trim(S);
+
+    Val(S, N, Err);
+    if (Err = 0) then
+      Msg.ContentLength := N
+    else begin
+      raise Msg.MalformedException.Create(Format(MalformedToken, [ContentLengthHeaderFull, Header]))
+    end;
+  end
+  else if Self.IsMaxForwards(Header) then begin
+    S := Header;
+    Fetch(S, ':');
+    S := Trim(S);
+
+    Val(S, N, Err);
+    if (Err = 0) and (N < 256) then
+      Msg.MaxForwards := N
+    else begin
+      raise Msg.MalformedException.Create(Format(MalformedToken, [MaxForwardsHeader, Header]))
+    end;
+  end
+  else
+    Msg.OtherHeaders.Add(Header);
+end;
+
 procedure TIdSipParser.IncCurrentLine;
 begin
   Inc(fCurrentLine);
 end;
 
-procedure TIdSipParser.ParseHeaders(const Msg: TIdSipMessage);
-  procedure AddHeader(const Msg: TIdSipMessage; Header: String);
-  var
-    Err: Integer;
-    N:   Cardinal;
-    S:   String;
-  begin
-    if Self.IsContentLength(Header) then begin
-      S := Header;
-      Fetch(S, ':');
-      S := Trim(S);
+procedure TIdSipParser.InitialiseMessage(Msg: TIdSipMessage);
+begin
+  Msg.ContentLength := 0;
+  Msg.MaxForwards   := 0;
+  Msg.OtherHeaders.Clear;
+  Msg.SIPVersion    := '';
+end;
 
-      Val(S, N, Err);
-      if (Err = 0) then
-        Msg.ContentLength := N
+procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
+var
+  NewHop: TIdSipViaHeader;
+  Token:  String;
+  S:      String;
+begin
+  if Self.IsVia(Header) then
+    NewHop := TIdSipViaHeader.Create;
+    try
+      S := Header;
+      Fetch(S, ':'); // eat the header name
+      Token := Trim(Fetch(S, '/')) + '/';
+      Token := Token + Trim(Fetch(S, '/'));
+      NewHop.SipVersion := Token;
+
+      Token := Trim(Fetch(S, ' '));
+      NewHop.Transport := StrToTransport(Token);
+      Token := Trim(Fetch(S, ';'));
+      NewHop.Host := Fetch(Token, ':');
+      if (Token = '') then
+        NewHop.Port := IdPORT_SIP
       else
-        raise EBadRequest.Create(Format(MalformedContentLength, [Header]));
-    end
-    else
-      Msg.OtherHeaders.Add(Header);
-  end;
+        NewHop.Port := StrToInt(Token);
+    except
+      NewHop.Free;
+      NewHop := nil;
+    end;
+
+    if Assigned(NewHop) then
+      Msg.Path.Add(NewHop)
+  else
+    Self.AddHeader(Msg, Header);
+end;
+
+procedure TIdSipParser.ParseHeaders(const Msg: TIdSipMessage);
 var
   FoldedHeader: String;
   Line:         String;
@@ -591,14 +874,16 @@ begin
         Line := Self.ReadLn;
       end
       else begin
-        AddHeader(Msg, FoldedHeader);
+        Self.ParseHeader(Msg, FoldedHeader);
         FoldedHeader := Line;
         Line := Self.ReadLn;
       end;
     end;
     if (FoldedHeader <> '') then
-      AddHeader(Msg, FoldedHeader);
+      Self.ParseHeader(Msg, FoldedHeader);
   end;
+
+  // check for required headers - To, From, Call-ID, Call-Seq, Max-Forwards, Via
 end;
 
 procedure TIdSipParser.ParseRequestLine(const Request: TIdSipRequest);
@@ -614,24 +899,24 @@ begin
     BreakApart(Line, ' ', Tokens);
 
     if (Tokens.Count > 3) then
-      raise EBadRequest.Create(RequestUriNoSpaces)
+      raise Request.MalformedException.Create(RequestUriNoSpaces)
     else if (Tokens.Count < 3) then
-      raise EBadRequest.Create(Format(MalformedRequestLine, [Line]));
+      raise Request.MalformedException.Create(Format(MalformedToken, ['Request-Line', Line]));
 
     Request.Method := Tokens[0];
     // we want to check the Method
     if not Self.IsMethod(Request.Method) then
-      raise EBadRequest.Create(Format(MalformedMethod, [Request.Method]));
+      raise Request.MalformedException.Create(Format(MalformedToken, ['Method', Request.Method]));
 
     Request.Request := Tokens[1];
 
     if (Request.Request[1] = '<') and (Request.Request[Length(Request.Request)] = '>') then
-      raise EBadRequest.Create(RequestUriNoAngleBrackets);
+      raise Request.MalformedException.Create(RequestUriNoAngleBrackets);
 
     Request.SIPVersion := Tokens[2];
 
     if not Self.IsSipVersion(Request.SIPVersion) then
-      raise EBadRequest.Create(Format(InvalidSipVersion, [Request.SIPVersion]));
+      raise Request.MalformedException.Create(Format(InvalidSipVersion, [Request.SIPVersion]));
   finally
     Tokens.Free;
   end;
@@ -647,11 +932,11 @@ begin
 
   Response.SIPVersion := Fetch(Line);
   if not Self.IsSipVersion(Response.SIPVersion) then
-    raise EBadRequest.Create(Format(InvalidSipVersion, [Response.SIPVersion]));
+    raise Response.MalformedException.Create(Format(InvalidSipVersion, [Response.SIPVersion]));
 
   StatusCode := Fetch(Line);
   if not Self.IsNumber(StatusCode) then
-    raise EBadRequest.Create(Format(InvalidStatusCode, [StatusCode]));
+    raise Response.MalformedException.Create(Format(InvalidStatusCode, [StatusCode]));
 
   Response.StatusCode := StrToIntDef(StatusCode, BadStatusCode);
 

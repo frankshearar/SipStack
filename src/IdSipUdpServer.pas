@@ -88,6 +88,7 @@ begin
     on E: EBadRequest do begin
       Self.SendBadRequestResponse(PeerInfo, E.Message, Parser);
     end;
+    on E: EBadResponse do;
   end;
 end;
 

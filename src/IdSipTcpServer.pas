@@ -5,9 +5,6 @@ interface
 uses
   Classes, IdSipParser, IdTCPConnection, IdTCPServer;
 
-const
-  IdPORT_SIP = 5060;
-
 type
   TIdSipMethodEvent = procedure(AThread: TIdPeerThread;
                                 AMessage: TIdSipMessage) of object;
@@ -78,6 +75,9 @@ begin
           on E: EBadRequest do begin
             Self.ReturnBadRequest(AThread.Connection, E.Message, Parser);
             AThread.Connection.Disconnect;
+          end;
+          on EBadResponse do begin
+            // tear down the connection?
           end;
         end;
       finally

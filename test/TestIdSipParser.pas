@@ -6,6 +6,33 @@ uses
   Classes, IdSipParser, TestFramework, TestFrameworkEx;
 
 type
+  TestFunctions = class(TTestCase)
+  private
+  public
+  published
+    procedure TestStrToTransport;
+    procedure TestTransportToStr;
+  end;
+
+  TestTIdSipViaHeader = class(TTestCase)
+  private
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestIsEqualTo;
+  end;
+
+  TestTIdSipPath = class(TTestCase)
+  private
+    Path: TIdSipPath;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndLastHop;
+  end;
+
   TestTIdSipRequest = class(TExtendedTestCase)
   private
     Request: TIdSipRequest;
@@ -34,16 +61,22 @@ type
     P:             TIdSipParser;
     Request:       TIdSipRequest;
     Response:      TIdSipResponse;
+
+    procedure CheckBasicRequest(const Msg: TIdSipMessage);
+    procedure CheckBasicResponse(const Msg: TIdSipMessage);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestCaseInsensitivityOfContentLengthHeader;
     procedure TestInviteParserTortureTestMessage;
+    procedure TestIsContentLength;
     procedure TestIsEqual;
+    procedure TestIsMaxForwards;
     procedure TestIsMethod;
     procedure TestIsNumber;
     procedure TestIsSipVersion;
+    procedure TestIsVia;
     procedure TestParseAndMakeMessageEmptyString;
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
@@ -51,9 +84,11 @@ type
     procedure TestParseRequest;
     procedure TestParseRequestEmptyString;
     procedure TestParseRequestFoldedHeader;
+    procedure TestParseRequestMalformedMaxForwards;
     procedure TestParseRequestMalformedMethod;
     procedure TestParseRequestMalformedRequestLine;
     procedure TestParseRequestMessageBodyLongerThanContentLength;
+    procedure TestParseRequestMultipleVias;
     procedure TestParseRequestRequestUriHasSpaces;
     procedure TestParseRequestRequestUriInAngleBrackets;
     procedure TestParseRequestWithLeadingCrLfs;
@@ -72,6 +107,30 @@ type
     procedure TestReadlnWithNoCrLf;
   end;
 
+const
+  BasicRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+               + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+               + 'Max-Forwards: 70'#13#10
+               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+               + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+               + 'CSeq: 314159 INVITE'#13#10
+               + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+               + 'Content-Length: 29'#13#10
+               + #13#10
+               + 'I am a message. Hear me roar!';
+  BasicResponse = 'SIP/2.0 486 Busy Here'#13#10
+                + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+                + 'Max-Forwards: 70'#13#10
+                + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+                + 'CSeq: 314159 INVITE'#13#10
+                + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                + 'Content-Length: 29'#13#10
+                + #13#10
+                + 'I am a message. Hear me roar!';
+
 implementation
 
 uses
@@ -80,9 +139,155 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('SipParser tests');
-  Result.AddTest(TestTIdSipParser.Suite);
+  Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdSipViaHeader.Suite);
+  Result.AddTest(TestTIdSipPath.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
+  Result.AddTest(TestTIdSipParser.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestStrToTransport;
+begin
+  Check(sttSCTP = StrToTransport('SCTP'), 'SCTP');
+  Check(sttTCP  = StrToTransport('TCP'),  'TCP');
+  Check(sttTLS  = StrToTransport('TLS'),  'TLS');
+  Check(sttUDP  = StrToTransport('UDP'),  'UDP');
+
+  try
+    StrToTransport('not a transport');
+    Fail('Failed to bail out on an unknown transport type');
+  except
+    on EConvertError do;
+  end;
+end;
+
+procedure TestFunctions.TestTransportToStr;
+var
+  T: TIdSipTransportType;
+begin
+  for T := Low(TIdSipTransportType) to High(TIdSipTransportType) do
+    Check(T = StrToTransport(TransportToStr(T)), 'Ord(T) = ' + IntToStr(Ord(T)));
+end;
+
+//******************************************************************************
+//* TestTIdSipViaHeader                                                        *
+//******************************************************************************
+//* TestTIdSipViaHeader Public methods *****************************************
+
+procedure TestTIdSipViaHeader.SetUp;
+begin
+  inherited SetUp;
+end;
+
+procedure TestTIdSipViaHeader.TearDown;
+begin
+  inherited TearDown;
+end;
+
+//* TestTIdSipViaHeader Published methods **************************************
+
+procedure TestTIdSipViaHeader.TestIsEqualTo;
+var
+  Hop1, Hop2: TIdSipViaHeader;
+begin
+  Hop1 := TIdSipViaHeader.Create;
+  try
+    Hop2 := TIdSipViaHeader.Create;
+    try
+      Hop1.Host       := '127.0.0.1';
+      Hop1.Port       := 5060;
+      Hop1.SipVersion := 'SIP/2.0';
+      Hop1.Transport  := sttSCTP;
+
+      Hop2.Host       := '127.0.0.1';
+      Hop2.Port       := 5060;
+      Hop2.SipVersion := 'SIP/2.0';
+      Hop2.Transport  := sttSCTP;
+
+      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2)');
+      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1)');
+
+      Hop1.Host := '127.0.0.2';
+      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Host');
+      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Host');
+      Hop1.Host := '127.0.0.1';
+      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Host reset');
+      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Host reset');
+
+      Hop1.Port := 111;
+      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Port');
+      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Port');
+      Hop1.Port := 5060;
+      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Port reset');
+      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Port reset');
+
+      Hop1.SipVersion := 'xxx';
+      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); SipVersion');
+      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); SipVersion');
+      Hop1.SipVersion := 'SIP/2.0';
+      Check(Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); SipVersion reset');
+      Check(Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); SipVersion reset');
+
+      Hop1.Transport := sttTCP;
+      Check(not Hop1.IsEqualTo(Hop2), 'Hop1.IsEqualTo(Hop2); Transport');
+      Check(not Hop2.IsEqualTo(Hop1), 'Hop2.IsEqualTo(Hop1); Transport');
+    finally
+      Hop2.Free;
+    end;
+  finally
+    Hop1.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipPath                                                             *
+//******************************************************************************
+//* TestTIdSipPath Public methods **********************************************
+
+procedure TestTIdSipPath.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Path := TIdSipPath.Create;
+end;
+
+procedure TestTIdSipPath.TearDown;
+begin
+  Self.Path.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipPath Published methods *******************************************
+
+procedure TestTIdSipPath.TestAddAndLastHop;
+var
+  Hop: TIdSipViaHeader;
+begin
+  CheckEquals(0, Self.Path.Length, 'Has hops, but is newly created');
+
+  Hop := TIdSipViaHeader.Create;
+  try
+    Hop.Host       := '127.0.0.1';
+    Hop.Port       := 5060;
+    Hop.SipVersion := 'SIP/2.0';
+    Hop.Transport  := sttSCTP;
+
+    Self.Path.Add(Hop);
+    CheckEquals(1, Self.Path.Length, 'Has no hops after Add');
+    CheckEquals('127.0.0.1', Self.Path.LastHop.Host, 'Host');
+    CheckEquals(5060, Self.Path.LastHop.Port, 'Port');
+    CheckEquals('SIP/2.0', Self.Path.LastHop.SipVersion, 'SipVersion');
+    Check(sttSCTP = Self.Path.LastHop.Transport, 'Transport');
+  finally
+    Hop.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -128,6 +333,8 @@ begin
 
   Expected := TStringList.Create;
   try
+    Expected.Text := BasicRequest;
+{
     Expected.Add('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0');
     Expected.Add('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds');
     Expected.Add('Max-Forwards: 70');
@@ -139,7 +346,7 @@ begin
     Expected.Add('Content-Length: 29');
     Expected.Add('');
     Expected.Add('I am a message. Hear me roar!');
-
+}
     Received := TStringList.Create;
     try
       Received.Text := Request.AsString;
@@ -232,6 +439,8 @@ begin
 
   Expected := TStringList.Create;
   try
+    Expected.Text := BasicResponse;
+{
     Expected.Add('SIP/2.0 486 Busy Here');
     Expected.Add('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds');
     Expected.Add('Max-Forwards: 70');
@@ -243,7 +452,7 @@ begin
     Expected.Add('Content-Length: 29');
     Expected.Add('');
     Expected.Add('I am a message. Hear me roar!');
-
+}
     Received := TStringList.Create;
     try
       Received.Text := Response.AsString;
@@ -350,18 +559,30 @@ begin
   try
     P.Source := Str;
     P.ParseRequest(Request);
-    CheckEquals(4, Request.OtherHeaders.Count, 'Header count');
+    CheckEquals(6, Request.MaxForwards, 'Max-Forwards');
     CheckEquals('TO : sip:vivekg@chair.dnrc.bell-labs.com ;   tag    = 1918181833n',
                 Request.OtherHeaders[0],
                 'To header');
     CheckEquals('From   : "J Rosenberg \\\"" <sip:jdrosen@lucent.com>  ;  tag = 98asjd8',
                 Request.OtherHeaders[1],
                 'From header');
-    CheckEquals('Max-Forwards: 6', Request.OtherHeaders[2], 'Max-Forwards header');
-    CheckEquals('Call-ID: 0ha0isndaksdj@10.1.1.1', Request.OtherHeaders[3], 'Call-ID header');
+    CheckEquals('Call-ID: 0ha0isndaksdj@10.1.1.1', Request.OtherHeaders[2], 'Call-ID header');
+    CheckEquals(3, Request.OtherHeaders.Count, 'Header count');
   finally
     Str.Free;
   end;
+end;
+
+procedure TestTIdSipParser.TestIsContentLength;
+begin
+  Check(    P.IsContentLength('Content-Length'),         'Content-Length');
+  Check(    P.IsContentLength(ContentLengthHeaderFull),  'ContentLengthFull constant');
+  Check(    P.IsContentLength('l'),                      'l');
+  Check(    P.IsContentLength(ContentLengthHeaderShort), 'ContentLengthShort constant');
+  Check(not P.IsContentLength(''),                       '''''');
+  Check(not P.IsContentLength('Via'),                    'Via');
+  Check(    P.IsContentLength('Content-Length:'),        'Content-Length:');
+  Check(    P.IsContentLength('content-LeNgTh'),         'content-LeNgTh');
 end;
 
 procedure TestTIdSipParser.TestIsEqual;
@@ -370,6 +591,13 @@ begin
   Check(not P.IsEqual(' ', ''),        ''' '' & ''''');
   Check(    P.IsEqual('abcd', 'AbCd'), '''abcd'', ''AbCd''');
   Check(not P.IsEqual('absd', 'Abcd'), '''absd'', ''Abcd''');
+end;
+
+procedure TestTIdSipParser.TestIsMaxForwards;
+begin
+  Check(not P.IsMaxForwards(''),                '''''');
+  Check(    P.IsMaxForwards('max-FORWARDS'),    'max-FORWARDS');
+  Check(    P.IsMaxForwards(MaxForwardsHeader), 'MaxForwardsHeader constant');
 end;
 
 procedure TestTIdSipParser.TestIsMethod;
@@ -400,6 +628,18 @@ begin
   Check(    P.IsSipVersion('sip/2.0'),  'sip/2.0');
   Check(    P.IsSipVersion(SIPVersion), 'SIPVersion constant');
   Check(not P.IsSipVersion('SIP/X.Y'),  'SIP/X.Y');
+end;
+
+procedure TestTIdSipParser.TestIsVia;
+begin
+  Check(    P.IsVia('Via'),                  'Via');
+  Check(    P.IsVia(ViaHeaderFull),          'ViaFull constant');
+  Check(    P.IsVia('v'),                    'v');
+  Check(    P.IsVia(ViaHeaderShort),         'ViaShort constant');
+  Check(not P.IsVia(''),                     '''''');
+  Check(not P.IsVia('Content-Length'),       'Content-Length');
+  Check(    P.IsVia('Via:'),                 'Via:');
+  Check(    P.IsVia('ViA'),                  'ViA');
 end;
 
 procedure TestTIdSipParser.TestParseAndMakeMessageEmptyString;
@@ -446,40 +686,13 @@ var
   Msg: TIdSipMessage;
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
+  Str := TStringStream.Create(BasicRequest);
   try
     P.Source := Str;
 
     Msg := P.ParseAndMakeMessage;
     try
-      CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
-
-      CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,  'Method');
-      CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).Request, 'Request');
-      CheckEquals('SIP/2.0',                              Msg.SIPVersion,             'SipVersion');
-      CheckEquals(29,                                     Msg.ContentLength,          'ContentLength');
-
-      CheckEquals(7, Msg.OtherHeaders.Count, 'Header count');
-      CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Msg.OtherHeaders[0], 'Via');
-      CheckEquals('Max-Forwards: 70',                                        Msg.OtherHeaders[1], 'Max-Forwards');
-      CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.OtherHeaders[2], 'To');
-      CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.OtherHeaders[3], 'From');
-      CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Msg.OtherHeaders[4], 'Call-ID');
-      CheckEquals('CSeq: 314159 INVITE',                                     Msg.OtherHeaders[5], 'CSeq');
-      CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.OtherHeaders[6], 'Contact');
-
-//      CheckEquals('I am a message. Hear me roar!', Msg.Body, 'message-body');
-      CheckEquals('', Msg.Body, 'message-body');
+      Self.CheckBasicRequest(Msg);
     finally
       Msg.Free;
     end;
@@ -493,40 +706,13 @@ var
   Msg: TIdSipMessage;
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('SIP/2.0 486 Busy Here'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
+  Str := TStringStream.Create(BasicResponse);
   try
     P.Source := Str;
 
     Msg := P.ParseAndMakeMessage;
     try
-      CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
-
-      CheckEquals('SIP/2.0',   Msg.SIPVersion,                 'SipVersion');
-      CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
-      CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
-      CheckEquals(29,          Msg.ContentLength,              'ContentLength');
-
-      CheckEquals(7, Msg.OtherHeaders.Count, 'Header count');
-      CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Msg.OtherHeaders[0], 'Via');
-      CheckEquals('Max-Forwards: 70',                                        Msg.OtherHeaders[1], 'Max-Forwards');
-      CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.OtherHeaders[2], 'To');
-      CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.OtherHeaders[3], 'From');
-      CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Msg.OtherHeaders[4], 'Call-ID');
-      CheckEquals('CSeq: 314159 INVITE',                                     Msg.OtherHeaders[5], 'CSeq');
-      CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.OtherHeaders[6], 'Contact');
-
-//      CheckEquals('I am a message. Hear me roar!', Msg.Body, 'message-body');
-      CheckEquals('', Msg.Body, 'message-body');
+      Self.CheckBasicResponse(Msg);
     finally
       Msg.Free;
     end;
@@ -539,37 +725,12 @@ procedure TestTIdSipParser.TestParseRequest;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
+  Str := TStringStream.Create(BasicRequest);
   try
     P.Source := Str;
 
     P.ParseRequest(Request);
-    CheckEquals('INVITE',                               Request.Method,        'Method');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.Request,       'Request');
-    CheckEquals('SIP/2.0',                              Request.SIPVersion,    'SipVersion');
-    CheckEquals(29,                                     Request.ContentLength, 'ContentLength');
-
-    CheckEquals(7, Request.OtherHeaders.Count, 'Header count');
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Request.OtherHeaders[0], 'Via');
-    CheckEquals('Max-Forwards: 70',                                        Request.OtherHeaders[1], 'Max-Forwards');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Request.OtherHeaders[2], 'To');
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.OtherHeaders[3], 'From');
-    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.OtherHeaders[4], 'Call-ID');
-    CheckEquals('CSeq: 314159 INVITE',                                     Request.OtherHeaders[5], 'CSeq');
-    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.OtherHeaders[6], 'Contact');
-
-//    CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
-    CheckEquals('', Request.Body, 'message-body');
+    Self.CheckBasicRequest(Request);
   finally
     Str.Free;
   end;
@@ -618,6 +779,32 @@ begin
   end;
 end;
 
+procedure TestTIdSipParser.TestParseRequestMalformedMaxForwards;
+var
+  Str: TStringStream;
+begin
+  // Section 20.22 states that 0 <= Max-Forwards <= 255
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+                            + 'Max-Forwards: 666'#13#10
+                            + #13#10);
+  try
+    P.Source := Str;
+
+    try
+      P.ParseRequest(Request);
+      Fail('Failed to bail out on a Bad Request');
+    except
+      on E: EBadRequest do
+        CheckEquals(Format(MalformedToken, [MaxForwardsHeader,
+                                            'Max-Forwards: 666']),
+                    E.Message,
+                    'Exception type');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
 procedure TestTIdSipParser.TestParseRequestMalformedMethod;
 var
   Str: TStringStream;
@@ -635,8 +822,8 @@ begin
       P.ParseRequest(Request);
       Fail('Failed to bail out on a Bad Request');
     except
-      on E: EBadRequest do 
-        CheckEquals(Format(MalformedMethod, ['Bad"method']), E.Message, 'Exception type');
+      on E: EBadRequest do
+        CheckEquals(Format(MalformedToken, ['Method', 'Bad"method']), E.Message, 'Exception type');
     end;
   finally
     Str.Free;
@@ -669,7 +856,7 @@ begin
       Fail('Malformed start line (no spaces between Method and Request-URI) parsed without error');
     except
       on E: EBadRequest do
-        CheckEquals(Format(MalformedRequestLine, ['INVITEsip:wintermute@tessier-ashpool.co.luSIP/2.0']),
+        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITEsip:wintermute@tessier-ashpool.co.luSIP/2.0']),
                     E.Message,
                     'Missing spaces');
     end;
@@ -685,7 +872,7 @@ begin
       Fail('Malformed start line (no Method) parsed without error');
     except
       on E: EBadRequest do
-        CheckEquals(Format(MalformedRequestLine, ['sip:wintermute@tessier-ashpool.co.lu SIP/2.0']),
+        CheckEquals(Format(MalformedToken, ['Request-Line', 'sip:wintermute@tessier-ashpool.co.lu SIP/2.0']),
                     E.Message,
                     'Missing Method');
     end;
@@ -701,7 +888,7 @@ begin
       Fail('Malformed start line (no Request-URI, no SIP-Version) parsed without error');
     except
       on E: EBadRequest do
-        CheckEquals(Format(MalformedRequestLine, ['INVITE']),
+        CheckEquals(Format(MalformedToken, ['Request-Line', 'INVITE']),
                     E.Message,
                     'Missing Request & SIP Version');
     end;
@@ -751,6 +938,41 @@ begin
     Str.Read(LeftOvers, 100);
     S := LeftOvers;
     CheckEquals('I am a message. Hear me roar!', S, 'Remaining (extra) bits in the message');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseRequestMultipleVias;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'Via: SIP/3.0/TLS gw5.cust1.leo_ix.org:5061;branch=z9hG4bK776asdhds'#13#10
+                            + 'Content-Length: 4'#13#10
+                            + #13#10
+                            + 'I am a message. Hear me roar!');
+  try
+    P.Source := Str;
+    P.ParseRequest(Request);
+
+    CheckEquals(2,                       Request.Path.Length,              'Path.Length');
+    Check      (Request.Path.FirstHop <> Request.Path.LastHop,             'Sanity check on Path');
+    CheckEquals('SIP/2.0',               Request.Path.LastHop.SipVersion,  'LastHop.SipVersion');
+    Check      (sttTCP =                 Request.Path.LastHop.Transport,   'LastHop.Transport');
+    CheckEquals('gw1.leo_ix.org',        Request.Path.LastHop.Host,        'LastHop.Host');
+    CheckEquals(IdPORT_SIP,              Request.Path.LastHop.Port,        'LastHop.Port');
+    CheckEquals('SIP/3.0',               Request.Path.FirstHop.SipVersion, 'FirstHop.SipVersion');
+    Check      (sttTLS =                 Request.Path.FirstHop.Transport,  'FirstHop.Transport');
+    CheckEquals('gw5.cust1.leo_ix.org',  Request.Path.FirstHop.Host,       'FirstHop.Host');
+    CheckEquals(IdPORT_SIP_TLS,          Request.Path.FirstHop.Port,       'FirstHop.Port');
   finally
     Str.Free;
   end;
@@ -819,37 +1041,12 @@ procedure TestTIdSipParser.TestParseResponse;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('SIP/2.0 486 Busy Here'#13#10
-                            + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
-                            + 'Max-Forwards: 70'#13#10
-                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-                            + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
-                            + 'CSeq: 314159 INVITE'#13#10
-                            + 'Contact: <sip:wintermute@tessier-ashpool.co.lu>'#13#10
-                            + 'Content-Length: 29'#13#10
-                            + #13#10
-                            + 'I am a message. Hear me roar!');
+  Str := TStringStream.Create(BasicResponse);
   try
     P.Source := Str;
 
     P.ParseResponse(Response);
-    CheckEquals('SIP/2.0',   Response.SIPVersion,    'SipVersion');
-    CheckEquals(486,         Response.StatusCode,    'StatusCode');
-    CheckEquals('Busy Here', Response.StatusText,    'StatusText');
-    CheckEquals(29,          Response.ContentLength, 'ContentLength');
-
-    CheckEquals(7, Response.OtherHeaders.Count, 'Header count');
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Response.OtherHeaders[0], 'Via');
-    CheckEquals('Max-Forwards: 70',                                        Response.OtherHeaders[1], 'Max-Forwards');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Response.OtherHeaders[2], 'To');
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Response.OtherHeaders[3], 'From');
-    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Response.OtherHeaders[4], 'Call-ID');
-    CheckEquals('CSeq: 314159 INVITE',                                     Response.OtherHeaders[5], 'CSeq');
-    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Response.OtherHeaders[6], 'Contact');
-
-    CheckEquals('', Response.Body, 'message-body');
-//    CheckEquals('I am a message. Hear me roar!', Response.Body, 'message-body');
+    Self.CheckBasicResponse(Response);
   finally
     Str.Free;
   end;
@@ -913,7 +1110,7 @@ begin
       P.ParseResponse(Response);
       Fail('Failed to reject a non-numeric Status-Code');
     except
-      on E: EBadRequest do
+      on E: EBadResponse do
         CheckEquals(Format(InvalidStatusCode, ['Aheh']),
                     E.Message,
                     '<>');
@@ -1077,6 +1274,62 @@ begin
   finally
     Str.Free;
   end;
+end;
+
+//* TestTIdSipParser Private methods *******************************************
+
+procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage);
+begin
+  CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
+
+  CheckEquals('INVITE',                               TIdSipRequest(Msg).Method,  'Method');
+  CheckEquals('sip:wintermute@tessier-ashpool.co.lu', TIdSipRequest(Msg).Request, 'Request');
+  CheckEquals('SIP/2.0',                              Msg.SIPVersion,             'SipVersion');
+  CheckEquals(29,                                     Msg.ContentLength,          'ContentLength');
+  CheckEquals(70,                                     Msg.MaxForwards,            'MaxForwards');
+
+  CheckEquals(1,                  Msg.Path.Length,             'Path.Length');
+  Check      (Msg.Path.FirstHop = Msg.Path.LastHop,            'Sanity check on Path');
+  CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion, 'LastHop.SipVersion');
+  Check      (sttTCP =            Msg.Path.LastHop.Transport,  'LastHop.Transport');
+  CheckEquals('gw1.leo_ix.org',   Msg.Path.LastHop.Host,       'LastHop.Host');
+  CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,       'LastHop.Port');
+
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.OtherHeaders[0], 'To');
+  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.OtherHeaders[1], 'From');
+  CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Msg.OtherHeaders[2], 'Call-ID');
+  CheckEquals('CSeq: 314159 INVITE',                                     Msg.OtherHeaders[3], 'CSeq');
+  CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.OtherHeaders[4], 'Contact');
+  CheckEquals(5, Msg.OtherHeaders.Count, 'Header count');
+
+  CheckEquals('', Msg.Body, 'message-body');
+end;
+
+procedure TestTIdSipParser.CheckBasicResponse(const Msg: TIdSipMessage);
+begin
+  CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
+
+  CheckEquals('SIP/2.0',   Msg.SIPVersion,                 'SipVersion');
+  CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
+  CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
+  CheckEquals(29,          Msg.ContentLength,              'ContentLength');
+  CheckEquals(70,          Msg.MaxForwards,                'Max-Forwards');
+
+  CheckEquals(1,                  Msg.Path.Length,             'Path.Length');
+  Check      (Msg.Path.FirstHop = Msg.Path.LastHop,            'Sanity check on Path');
+  CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion, 'LastHop.SipVersion');
+  Check      (sttTCP =            Msg.Path.LastHop.Transport,  'LastHop.Transport');
+  CheckEquals('gw1.leo_ix.org',   Msg.Path.LastHop.Host,       'LastHop.Host');
+  CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,       'LastHop.Port');
+
+  CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Msg.OtherHeaders[0], 'To');
+  CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Msg.OtherHeaders[1], 'From');
+  CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Msg.OtherHeaders[2], 'Call-ID');
+  CheckEquals('CSeq: 314159 INVITE',                                     Msg.OtherHeaders[3], 'CSeq');
+  CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Msg.OtherHeaders[4], 'Contact');
+  CheckEquals(5, Msg.OtherHeaders.Count, 'Header count');
+
+  CheckEquals('', Msg.Body, 'message-body');
 end;
 
 initialization

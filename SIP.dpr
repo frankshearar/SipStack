@@ -11,9 +11,11 @@ uses
   XmlCgi in '..\IctWebsiteCgi\src\XmlCgi.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
-  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas'{,
-  TestIdURI in 'test\TestIdURI.pas'};
-
+  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas' {,
+  TestIdURI in 'test\TestIdURI.pas'},
+  IdSIPClient in 'src\IdSIPClient.pas',
+  TestIdSipClient in 'test\TestIdSipClient.pas',
+  TestIdURI in '\\Ictfilesrv\ICT Group\FrankS\Projects\SIP\test\TestIdURI.pas';
 
 //{$DEFINE SPIKE}
 

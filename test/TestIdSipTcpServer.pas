@@ -9,9 +9,9 @@ uses
 type
   TestTIdSipTcpServer = class(TThreadingTestCase)
   private
-    Client:           TIdTcpClient;
-    MethodCallCount:  Cardinal;
-    Server:           TIdSipTcpServer;
+    Client:          TIdTcpClient;
+    MethodCallCount: Cardinal;
+    Server:          TIdSipTcpServer;
 
     procedure CheckMultipleMessages(AThread: TIdPeerThread;
                                     AMessage: TIdSipMessage);
@@ -26,6 +26,9 @@ type
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
   end;
+
+const
+  DefaultTimeout = 5000;
 
 implementation
 
@@ -96,15 +99,15 @@ begin
     CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.Request,       'Request');
     CheckEquals('SIP/2.0',                              Request.SIPVersion,    'SipVersion');
     CheckEquals(29,                                     Request.ContentLength, 'ContentLength');
+    CheckEquals(70,                                     Request.MaxForwards,   'Max-Forwards');
 
-    CheckEquals(7, Request.OtherHeaders.Count, 'Header count');
     CheckEquals('Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds', Request.OtherHeaders[0], 'Via');
-    CheckEquals('Max-Forwards: 70',                                        Request.OtherHeaders[1], 'Max-Forwards');
-    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Request.OtherHeaders[2], 'To');
-    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.OtherHeaders[3], 'From');
-    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.OtherHeaders[4], 'Call-ID');
-    CheckEquals('CSeq: 314159 INVITE',                                     Request.OtherHeaders[5], 'CSeq');
-    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.OtherHeaders[6], 'Contact');
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>',   Request.OtherHeaders[1], 'To');
+    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',  Request.OtherHeaders[2], 'From');
+    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo_ix.org',                  Request.OtherHeaders[3], 'Call-ID');
+    CheckEquals('CSeq: 314159 INVITE',                                     Request.OtherHeaders[4], 'CSeq');
+    CheckEquals('Contact: <sip:wintermute@tessier-ashpool.co.lu>',         Request.OtherHeaders[5], 'Contact');
+    CheckEquals(6, Request.OtherHeaders.Count, 'Header count');
 
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'message-body');
 
@@ -123,7 +126,7 @@ procedure TestTIdSipTcpServer.TestLeadingEmptyLines;
 begin
   Server.OnMethod := Self.CheckMethodEvent;
 
-  Self.Client.Connect(5000);
+  Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(#13#10#13#10#13#10
                   + 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
                   + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
@@ -137,7 +140,7 @@ begin
                   + #13#10
                   + 'I am a message. Hear me roar!');
 
-  if (Self.ThreadEvent.WaitFor(5000) <> wrSignaled) then
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
@@ -149,7 +152,7 @@ var
   P:        TIdSipParser;
 begin
   // For the weak of eyes - the SIP-Version is malformed. Spot the semicolon.
-  Self.Client.Connect(5000);
+  Self.Client.Connect(DefaultTimeout);
   Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/;2.0'#13#10
                   + #13#10);
 
@@ -179,7 +182,7 @@ begin
     Expected.Free;
   end;
 
-//  if (Self.ThreadEvent.WaitFor(5000) <> wrSignaled) then
+//  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
 //    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
@@ -187,7 +190,7 @@ procedure TestTIdSipTcpServer.TestMethodEvent;
 begin
   Server.OnMethod := Self.CheckMethodEvent;
 
-  Self.Client.Connect(5000);
+  Self.Client.Connect(DefaultTimeout);
   Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
                   + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
                   + 'Max-Forwards: 70'#13#10
@@ -200,7 +203,7 @@ begin
                   + #13#10
                   + 'I am a message. Hear me roar!');
 
-  if (Self.ThreadEvent.WaitFor(5000) <> wrSignaled) then
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
@@ -208,7 +211,7 @@ procedure TestTIdSipTcpServer.TestMultipleMessages;
 begin
   Server.OnMethod := Self.CheckMultipleMessages;
 
-  Self.Client.Connect(5000);
+  Self.Client.Connect(DefaultTimeout);
   Self.Client.Write('INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
                   + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
                   + 'Max-Forwards: 70'#13#10
@@ -232,7 +235,7 @@ begin
                   + #13#10
                   + 'I am a message. Hear me roar!');
 
-  if (Self.ThreadEvent.WaitFor(5000) <> wrSignaled) then
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
