@@ -95,6 +95,8 @@ type
     property Bindings: TIdSocketHandles read GetBindings;
   public
     class function  IsSecure: Boolean; virtual;
+    class function  SrvPrefix: String; virtual;
+    class function  SrvQuery(const Domain: String): String;
     class function  TransportFor(const Transport: String): TIdSipTransportClass;
     class procedure RegisterTransport(const Name: String;
                                       const TransportType: TIdSipTransportClass);
@@ -153,6 +155,8 @@ type
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
   public
+    class function  SrvPrefix: String; override;
+
     constructor Create; override;
     destructor  Destroy; override;
 
@@ -180,6 +184,7 @@ type
     function  ServerType: TIdSipTcpServerClass; override;
   public
     class function IsSecure: Boolean; override;
+    class function SrvPrefix: String; override;
 
     function DefaultPort: Cardinal; override;
     function GetTransportType: String; override;
@@ -194,6 +199,8 @@ type
   // for the SIP stack.
   TIdSipSCTPTransport = class(TIdSipTransport)
   public
+    class function SrvPrefix: String; override;
+
     function GetTransportType: String; override;
   end;
 
@@ -214,6 +221,8 @@ type
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
   public
+    class function SrvPrefix: String; override;
+
     constructor Create; override;
     destructor  Destroy; override;
 
@@ -314,7 +323,7 @@ const
 implementation
 
 uses
-  IdSipConsts, IdTCPServer;
+  IdSipConsts, IdSipLocator, IdTCPServer;
 
 var
   GTransportTypes: TStrings;
@@ -327,6 +336,16 @@ var
 class function TIdSipTransport.IsSecure: Boolean;
 begin
   Result := false;
+end;
+
+class function TIdSipTransport.SrvPrefix: String;
+begin
+  Result := Self.ClassName + ' hasn''t overridden SrvPrefix';
+end;
+
+class function TIdSipTransport.SrvQuery(const Domain: String): String;
+begin
+  Result := Self.SrvPrefix + '.' + Domain;
 end;
 
 class function TIdSipTransport.TransportFor(const Transport: String): TIdSipTransportClass;
@@ -694,6 +713,11 @@ end;
 //******************************************************************************
 //* TIdSipTCPTransport Public methods ******************************************
 
+class function TIdSipTCPTransport.SrvPrefix: String;
+begin
+  Result := SrvTcpPrefix;
+end;
+
 constructor TIdSipTCPTransport.Create;
 begin
   inherited Create;
@@ -878,6 +902,11 @@ begin
   Result := true;
 end;
 
+class function TIdSipTLSTransport.SrvPrefix: String;
+begin
+  Result := SrvTlsPrefix;
+end;
+
 function TIdSipTLSTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
@@ -961,6 +990,11 @@ end;
 //******************************************************************************
 //* TIdSipSCTPTransport Public methods *****************************************
 
+class function TIdSipSCTPTransport.SrvPrefix: String;
+begin
+  Result := SrvSctpPrefix;
+end;
+
 function TIdSipSCTPTransport.GetTransportType: String;
 begin
   Result := SctpTransport;
@@ -970,6 +1004,11 @@ end;
 //* TIdSipUDPTransport                                                         *
 //******************************************************************************
 //* TIdSipUDPTransport Public methods ******************************************
+
+class function TIdSipUDPTransport.SrvPrefix: String;
+begin
+  Result := SrvUdpPrefix;
+end;
 
 constructor TIdSipUDPTransport.Create;
 begin

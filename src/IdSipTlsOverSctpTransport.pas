@@ -12,15 +12,24 @@ type
   TIdSipTlsOverSctpTransport = class(TIdSipSctpTransport)
   public
     class function IsSecure: Boolean; override;
+    class function SrvPrefix: String; override;
 
     function GetTransportType: String; override;
   end;
 
 implementation
 
+uses
+  IdSipLocator;
+
 class function TIdSipTlsOverSctpTransport.IsSecure: Boolean;
 begin
   Result := true;
+end;
+
+class function TIdSipTlsOverSctpTransport.SrvPrefix: String;
+begin
+  Result := SrvTlsOverSctpPrefix;
 end;
 
 function TIdSipTlsOverSctpTransport.GetTransportType: String;

@@ -4681,21 +4681,7 @@ begin
   // Return the query name to use in an SRV (RFC 2782) lookup, as part of the
   // SIP server location algorithms of RFC 3263.
 
-  // TODO: use a transport registry or something!
-
-  Result := '_';
-
-  if Self.UsesSecureTransport then
-    Result := Result + SrvSipsService
-  else
-    Result := Result + SrvSipService;
-
-  if (Self.Transport = TlsTransport) then
-    Result := Result + '._tcp.' + Self.SentBy
-  else if (Self.Transport = TlsOverSctpTransport) then
-    Result := Result + '._sctp.' + Self.SentBy
-  else
-    Result := Result + '._' + Lowercase(Self.Transport) + '.' + Self.SentBy;
+  Result := TIdSipTransport.TransportFor(Self.Transport).SrvQuery(Self.SentBy);
 end;
 
 function TIdSipViaHeader.UsesSecureTransport: Boolean;

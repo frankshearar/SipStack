@@ -227,7 +227,7 @@ type
 implementation
 
 uses
-  IdSipConsts, Math, SysUtils;
+  IdSipConsts, IdSipTransport, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -1086,21 +1086,20 @@ end;
 
 procedure TestTIdSipAbstractLocator.TestSrvTarget;
 begin
-  CheckEquals('_sip._tcp.leo-ix.net',
-              Self.Loc.SrvTarget(false, 'tcp', 'leo-ix.net'),
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  CheckEquals('_sip._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'tcp'),
               'SIP/TCP lookup');
 
-  CheckEquals('_sips._tcp.leo-ix.net',
-              Self.Loc.SrvTarget(true, 'tcp', 'leo-ix.net'),
-              'SIP/TLS lookup');
-
-  CheckEquals('_sip._tcp.leo-ix.net',
-              Self.Loc.SrvTarget(false, 'TCP', 'leo-ix.net'),
+  CheckEquals('_sip._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'TCP'),
               'Transports all lowercase');
 
-  CheckEquals('_sip._.',
-              Self.Loc.SrvTarget(false, '', ''),
-              'Insane lookup: GIGO');
+  Self.Target.Scheme := SipsScheme;
+  CheckEquals('_sips._tcp.' + Self.Domain,
+              Self.Loc.SrvTarget(Self.Target, 'tls'),
+              'SIP/TLS lookup');
 end;
 
 procedure TestTIdSipAbstractLocator.TestTransportParamTakesPrecedence;
@@ -1440,6 +1439,7 @@ begin
   // A/AAAA lookup
   Self.Target.Uri := 'sips:' + Self.Domain;
 
+  Self.Port := IdPORT_SIPS; // default for TLS
   Self.AddNameRecords(Self.Target.Host);
 
   Locations := Self.Loc.FindServersFor(Self.Target);
@@ -1453,9 +1453,35 @@ begin
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNameNoNaptrNoManualTransportSrv;
+var
+  Locations: TIdSipLocations;
 begin
+  Self.Target.Uri := 'sip:' + Self.Domain;
+
+  Self.AddNameRecords(Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTlsPrefix, 0, 0, 0, Self.Domain);
+  Self.Loc.AddSRV(Self.Domain, SrvTcpPrefix, 1, 0, 0, Self.Domain);
+
   // iterate over SRV
-  Fail('not yet implemented');
+  Locations := Self.Loc.FindServersFor(Self.Target);
+  try
+    CheckEquals(4,                    Locations.Count,        'Location count');
+    CheckEquals(TlsTransport,         Locations[0].Transport, '1st record Transport');
+    CheckEquals(Self.ARecord,         Locations[0].IPAddress, '1st record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[0].Port,      '1st record Port');
+    CheckEquals(TlsTransport,         Locations[1].Transport, '2nd record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[1].IPAddress, '2nd record IPAddress');
+    CheckEquals(Self.Loc.SRV[0].Port, Locations[1].Port,      '2nd record Port');
+
+    CheckEquals(TcpTransport,         Locations[2].Transport, '3rd record Transport');
+    CheckEquals(Self.ARecord,         Locations[2].IPAddress, '3rd record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[2].Port,      '3rd record Port');
+    CheckEquals(TcpTransport,         Locations[3].Transport, '4th record Transport');
+    CheckEquals(Self.AAAARecord,      Locations[3].IPAddress, '4th record IPAddress');
+    CheckEquals(Self.Loc.SRV[1].Port, Locations[3].Port,      '4th record Port');
+  finally
+    Locations.Free;
+  end;
 end;
 
 procedure TestTIdSipAbstractLocator.TestFindServersForNameWithPort;
@@ -2422,5 +2448,8 @@ begin
 end;
 
 initialization
+  // Some tests use SCTP.
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSctpTransport);
+
   RegisterTest('SIP Location Services', Suite);
 end.

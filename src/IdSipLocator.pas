@@ -125,10 +125,11 @@ type
     function  PassNaptrFiltering(TargetUri: TIdUri;
                                  NAPTR: TIdNaptrRecord): Boolean;
     function  PassSrvFiltering(SRV: TIdSrvRecord): Boolean;
+    procedure RemoveAlreadyResolvedSrvs(SupportedTransports: TStrings;
+                                        SRV: TIdSrvRecords);
     procedure ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
                                                   SRV: TIdSrvRecords);
     procedure SupportedTransports(TargetUri: TIdUri; Transports: TStrings);
-    function  TransportIsSecure(const Transport: String): Boolean;
   protected
     procedure AddUriLocation(AddressOfRecord: TIdSipUri;
                              List: TIdSipLocations);
@@ -155,9 +156,8 @@ type
                           Result: TIdSrvRecords); overload;
     procedure ResolveSRVs(ServiceAndDomains: TStrings;
                           Result: TIdSrvRecords); overload;
-    function  SrvTarget(UsingSips: Boolean;
-                        const Protocol: String;
-                        const Domain: String): String;
+    function  SrvTarget(Target: TIdUri;
+                        const Protocol: String): String;
     function  TransportFor(AddressOfRecord: TIdSipUri;
                            NAPTR: TIdNaptrRecords;
                            SRV: TIdSrvRecords;
@@ -608,86 +608,89 @@ var
   ARecords:  TIdDomainNameRecords;
   Naptr:     TIdNaptrRecords;
   Srv:       TIdSrvRecords;
-  Target:    String;
+  Target:    TIdUri;
   Transport: String;
 begin
   // See doc/locating_servers.txt for a nice flow chart of this algorithm.
   Result := TIdSipLocations.Create;
 
-  Naptr := TIdNaptrRecords.Create;
+  Target := TIdUri.Create;
   try
-    Srv := TIdSrvRecords.Create;
+    Target.Scheme := AddressOfRecord.Scheme;
+
+    Naptr := TIdNaptrRecords.Create;
     try
-      ARecords := TIdDomainNameRecords.Create;
-
-      Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+      Srv := TIdSrvRecords.Create;
       try
-        if AddressOfRecord.HasMaddr then
-          Target := AddressOfRecord.Maddr
-        else
-          Target := AddressOfRecord.Host;
+        ARecords := TIdDomainNameRecords.Create;
 
-        if TIdIPAddressParser.IsNumericAddress(Target) then begin
-          Result.AddLocation(Transport, Target, AddressOfRecord.Port);
-          Exit;
-        end;
+        Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
+        try
+          if AddressOfRecord.HasMaddr then
+            Target.Host := AddressOfRecord.Maddr
+          else
+            Target.Host := AddressOfRecord.Host;
 
-        if AddressOfRecord.PortIsSpecified then begin
-          // AddressOfRecord's Host is a domain name
-          Self.ResolveNameRecords(Target, ARecords);
+          if TIdIPAddressParser.IsNumericAddress(Target.Host) then begin
+            Result.AddLocation(Transport, Target.Host, AddressOfRecord.Port);
+            Exit;
+          end;
 
-          Result.AddLocationsFromNames(Transport,
-                                       AddressOfRecord.Port,
-                                       ARecords);
+          if AddressOfRecord.PortIsSpecified then begin
+            // AddressOfRecord's Host is a domain name
+            Self.ResolveNameRecords(Target.Host, ARecords);
 
-          Exit;
-        end;
+            Result.AddLocationsFromNames(Transport,
+                                         AddressOfRecord.Port,
+                                         ARecords);
 
-        if not Naptr.IsEmpty then begin
-          Self.ResolveSRVs(Naptr, Srv);
+            Exit;
+          end;
 
-          Self.AddLocationsFromSRVsOrNames(Result,
-                                           Transport,
-                                           Target,
-                                           AddressOfRecord.Port,
-                                           Srv, ARecords);
+          if not Naptr.IsEmpty then begin
+            Self.ResolveSRVs(Naptr, Srv);
 
-          Exit;
-        end;
+            Self.AddLocationsFromSRVsOrNames(Result,
+                                             Transport,
+                                             Target.Host,
+                                             AddressOfRecord.Port,
+                                             Srv, ARecords);
 
-        if AddressOfRecord.TransportIsSpecified then begin
-          Self.ResolveSRV(Self.SrvTarget(Self.TransportIsSecure(Transport),
-                                         Transport,
-                                         Target),
-                          Srv);
+            Exit;
+          end;
 
-          Self.AddLocationsFromSRVsOrNames(Result,
-                                           Transport,
-                                           Target,
-                                           AddressOfRecord.Port,
-                                           Srv, ARecords);
+          if AddressOfRecord.TransportIsSpecified then begin
+            Self.ResolveSRV(Self.SrvTarget(Target,
+                                           Transport),
+                            Srv);
 
-          Exit;
-        end;
+            Self.AddLocationsFromSRVsOrNames(Result,
+                                             Transport,
+                                             Target.Host,
+                                             AddressOfRecord.Port,
+                                             Srv, ARecords);
 
-        // If Srv isn't empty then it means we already have SRV RRs for a NAPTR
-        // record, in which case we might as well try use them.
-        if Srv.IsEmpty then
+            Exit;
+          end;
+
           Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
 
-        Self.AddLocationsFromSRVsOrNames(Result,
-                                         Transport,
-                                         Target,
-                                         AddressOfRecord.Port,
-                                         Srv, ARecords);
+          Self.AddLocationsFromSRVsOrNames(Result,
+                                           Transport,
+                                           Target.Host,
+                                           AddressOfRecord.Port,
+                                           Srv, ARecords);
+        finally
+          ARecords.Free;
+        end;
       finally
-        ARecords.Free;
+        Srv.Free;
       end;
     finally
-      Srv.Free;
+      Naptr.Free;
     end;
   finally
-    Naptr.Free;
+    Target.Free;
   end;
 end;
 
@@ -831,30 +834,10 @@ begin
   Result.Sort;
 end;
 
-function TIdSipAbstractLocator.SrvTarget(UsingSips: Boolean;
-                                         const Protocol: String;
-                                         const Domain: String): String;
-var
-  Service: String;
+function TIdSipAbstractLocator.SrvTarget(Target: TIdUri;
+                                         const Protocol: String): String;
 begin
-  Result := '_';
-
-  if UsingSips then
-    Service := SrvSipsService
-  else
-    Service := SrvSipService;
-
-  // This fails for TLS!
-  Result := '_' + Service + '._';
-
-  if IsEqual(Protocol, TlsTransport) then
-    Result := Result + 'tcp'
-  else if IsEqual(Protocol, TlsOverSctpTransport) then
-    Result := Result + 'sctp'
-  else
-    Result := Result + Lowercase(Protocol);
-
-   Result := Result + '.' + Domain;
+  Result := TIdSipTransport.TransportFor(Protocol).SrvQuery(Target.Host);
 end;
 
 function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
@@ -1039,9 +1022,8 @@ begin
     // and stop as soon as we receive the first non-empty result.
     I := 0;
     while (I < Transports.Count) and SRV.IsEmpty do begin
-      Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSipsUri,
-                                     Transports[I],
-                                     AddressOfRecord.Host),
+      Self.ResolveSRV(Self.SrvTarget(AddressOfRecord,
+                                     Transports[I]),
                       SRV);
       Inc(I);
     end;
@@ -1085,6 +1067,25 @@ begin
   Result := SRV.Target <> SrvNotAvailableTarget;
 end;
 
+procedure TIdSipAbstractLocator.RemoveAlreadyResolvedSrvs(SupportedTransports: TStrings;
+                                                          SRV: TIdSrvRecords);
+var
+  I:     Integer;
+  Index: Integer;
+begin
+  // Sometimes we'll have resolved some SRV records as a result of determining
+  // a destination transport (in TransportFor) but we want to look up the other
+  // SRVs. It would waste time and bandwidth re-resolving the SRV RRs currently
+  // in the SRV parameter, so we remove the already-resolved transports from
+  // the SupportedTrasnports parameter.
+
+  for I := 0 to SRV.Count - 1 do begin
+    Index := SupportedTransports.IndexOf(SRV[I].SipTransport);
+    if (Index <> -1) then
+      SupportedTransports.Delete(Index);
+  end;
+end;
+
 procedure TIdSipAbstractLocator.ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
                                                                     SRV: TIdSrvRecords);
 var
@@ -1095,10 +1096,11 @@ begin
   try
     Self.SupportedTransports(TargetUri, OurTransports);
 
+    Self.RemoveAlreadyResolvedSrvs(OurTransports, SRV);
+
     for I := 0 to OurTransports.Count - 1 do
-      OurTransports[I] := Self.SrvTarget(TargetUri.IsSipsUri,
-                                         OurTransports[I],
-                                         TargetUri.Host);
+      OurTransports[I] := Self.SrvTarget(TargetUri,
+                                         OurTransports[I]);
 
     Self.ResolveSRVs(OurTransports, SRV);
   finally
@@ -1118,11 +1120,6 @@ begin
     Transports.Add(UdpTransport);
     Transports.Add(SctpTransport);
   end;
-end;
-
-function TIdSipAbstractLocator.TransportIsSecure(const Transport: String): Boolean;
-begin
-  Result := TIdSipTransport.TransportFor(Transport).IsSecure;
 end;
 
 //******************************************************************************
