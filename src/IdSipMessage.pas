@@ -305,18 +305,26 @@ type
     property UnknownResponses[const Name: String]: String read GetUnknownResponses write SetUnknownResponses;
   end;
 
-  // I represent the credentials a client offers to a server to authenticate
-  // itself.
-  TIdSipAuthorizationHeader = class(TIdSipHttpAuthHeader)
+  TIdSipAuthNonceHeader = class(TIdSipHttpAuthHeader)
   private
     function  GetCNonce: String;
-    function  GetDigestUri: String;
     function  GetNonceCount: Cardinal;
+    procedure SetCNonce(const Value: String);
+    procedure SetNonceCount(Value: Cardinal);
+  public
+    function NC: String;
+
+    property CNonce:     String   read GetCNonce write SetCNonce;
+    property NonceCount: Cardinal read GetNonceCount write SetNonceCount;
+  end;
+
+  // I represent the credentials a client offers to a server to authenticate
+  // itself.
+  TIdSipAuthorizationHeader = class(TIdSipAuthNonceHeader)
+    function  GetDigestUri: String;
     function  GetResponse: String; // The digest with which we authenticate
     function  GetUsername: String;
-    procedure SetCNonce(const Value: String);
     procedure SetDigestUri(const Value: String);
-    procedure SetNonceCount(Value: Cardinal);
     procedure SetResponse(const Value: String);
     procedure SetUsername(const Value: String);
   protected
@@ -328,12 +336,9 @@ type
   public
     function IsBasic: Boolean;
     function IsDigest: Boolean;
-    function NC: String;
 
-    property CNonce:     String   read GetCNonce write SetCNonce;
     property Response:   String   read GetResponse write SetResponse;
     property DigestUri:  String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
-    property NonceCount: Cardinal read GetNonceCount write SetNonceCount;
     property Username:   String   read GetUsername write SetUsername;
   end;
 
@@ -526,7 +531,7 @@ type
     function CredentialHeaderType: TIdSipAuthorizationHeaderClass; override;
   end;
 
-  TIdSipAuthenticationInfoHeader = class(TIdSipAuthorizationHeader)
+  TIdSipAuthenticationInfoHeader = class(TIdSipAuthNonceHeader)
   private
     function  GetNextNonce: String;
     function  GetResponseDigest: String;
@@ -3119,6 +3124,43 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipAuthNonceHeader                                                      *
+//******************************************************************************
+//* TIdSipAuthNonceHeader Public methods ***************************************
+
+function TIdSipAuthNonceHeader.NC: String;
+begin
+  // The encoded "nc" parameter
+  Result := Self.DigestResponses.Values[NonceCountParam];
+end;
+
+//* TIdSipAuthNonceHeader Private methods **************************************
+
+function TIdSipAuthNonceHeader.GetCNonce: String;
+begin
+  Result := Self.DigestResponseValue(CNonceParam);
+end;
+
+function TIdSipAuthNonceHeader.GetNonceCount: Cardinal;
+begin
+  Result := HexToInt(Self.DigestResponseValue(NonceCountParam));
+end;
+
+procedure TIdSipAuthNonceHeader.SetCNonce(const Value: String);
+begin
+  Self.DigestResponses.Values[CNonceParam] := Value;
+end;
+
+procedure TIdSipAuthNonceHeader.SetNonceCount(Value: Cardinal);
+var
+  H: String;
+begin
+  H := Lowercase(IntToHex(Value, 8));
+
+  Self.DigestResponses.Values[NonceCountParam] := H;
+end;
+
+//******************************************************************************
 //* TIdSipAuthorizationHeader                                                  *
 //******************************************************************************
 //* TIdSipAuthorizationHeader Public methods ***********************************
@@ -3131,12 +3173,6 @@ end;
 function TIdSipAuthorizationHeader.IsDigest: Boolean;
 begin
   Result := IsEqual(Self.AuthorizationScheme, DigestAuthorizationScheme);
-end;
-
-function TIdSipAuthorizationHeader.NC: String;
-begin
-  // The encoded "nc" parameter
-  Result := Self.DigestResponses.Values[NonceCountParam];
 end;
 
 //* TIdSipAuthorizationHeader Protected methods ********************************
@@ -3162,19 +3198,9 @@ end;
 
 //* TIdSipAuthorizationHeader Private methods **********************************
 
-function TIdSipAuthorizationHeader.GetCNonce: String;
-begin
-  Result := Self.DigestResponseValue(CNonceParam);
-end;
-
 function TIdSipAuthorizationHeader.GetDigestUri: String;
 begin
   Result := Self.DigestResponseValue(DigestUriParam);
-end;
-
-function TIdSipAuthorizationHeader.GetNonceCount: Cardinal;
-begin
-  Result := HexToInt(Self.DigestResponseValue(NonceCountParam));
 end;
 
 function TIdSipAuthorizationHeader.GetResponse: String;
@@ -3205,23 +3231,9 @@ begin
     Result := inherited QuoteIfNecessary(ParamName, ParamValue);
 end;
 
-procedure TIdSipAuthorizationHeader.SetCNonce(const Value: String);
-begin
-  Self.DigestResponses.Values[CNonceParam] := Value;
-end;
-
 procedure TIdSipAuthorizationHeader.SetDigestUri(const Value: String);
 begin
   Self.DigestResponses.Values[DigestUriParam] := Value;
-end;
-
-procedure TIdSipAuthorizationHeader.SetNonceCount(Value: Cardinal);
-var
-  H: String;
-begin
-  H := Lowercase(IntToHex(Value, 8));
-
-  Self.DigestResponses.Values[NonceCountParam] := H;
 end;
 
 procedure TIdSipAuthorizationHeader.SetResponse(const Value: String);
