@@ -27,6 +27,7 @@ type
   published
     procedure TestCreateAck;
     procedure TestCreateFromAnotherDialog;
+    procedure TestCreateInboundDialog;
     procedure TestCreateOutboundDialog;
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
@@ -195,6 +196,41 @@ begin
           'RouteSet');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateInboundDialog;
+var
+  Expected: TIdSipHeaders;
+  InDlg: TIdSipDialog;
+begin
+  Self.Req.AddHeaders(Self.RouteSet);
+//  Check(not Self.Req.RecordRoute.IsEmpty,
+//        'Sanity check - request must have Record-Route headers');
+
+  InDlg := TIdSipDialog.CreateInboundDialog(Self.Req, Self.Res, false);
+  try
+    Expected := TIdSipHeaders.Create;
+    try
+      Expected.Add(Self.RouteSet);
+
+      Check(not InDlg.RouteSet.IsEmpty,
+            'Record-Routes not used for a route set');
+
+      Expected.First;
+      InDlg.RouteSet.First;
+      repeat
+        CheckEquals(Expected.CurrentHeader.Value,
+                    InDlg.RouteSet.CurrentHeader.Value,
+                    'Route set differs');
+        Expected.Next;
+        InDlg.RouteSet.Next;
+      until not Expected.HasNext;
+    finally
+      Expected.Free;
+    end;
+  finally
+    InDlg.Free;
   end;
 end;
 

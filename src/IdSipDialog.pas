@@ -163,7 +163,7 @@ begin
                                     Request.From.Address,
                                     Request.FirstContact.Address,
                                     UsingSecureTransport and (Request.HasSipsUri),
-                                    Request.Route);
+                                    Request.RecordRoute);
     finally
       ID.Free;
     end;
