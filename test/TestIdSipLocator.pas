@@ -163,10 +163,12 @@ begin
   Self.Transport := TcpTransport;
 
   Self.Loc := TIdSipLocation.Create(Self.Transport, Self.Address, Self.Port);
+  TIdSipTransport.RegisterTransport(Self.Transport, TIdSipMockTcpTransport);
 end;
 
 procedure TestTIdSipLocation.TearDown;
 begin
+  TIdSipTransport.UnregisterTransport(Self.Transport);
   Self.Loc.Free;
 
   inherited TearDown;
