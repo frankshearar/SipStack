@@ -104,9 +104,9 @@ object rnidSpike: TrnidSpike
     TabOrder = 1
     object Log: TMemo
       Left = 0
-      Top = 128
+      Top = 99
       Width = 535
-      Height = 350
+      Height = 379
       Align = alClient
       ScrollBars = ssVertical
       TabOrder = 0
@@ -115,7 +115,7 @@ object rnidSpike: TrnidSpike
       Left = 0
       Top = 0
       Width = 535
-      Height = 128
+      Height = 99
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
@@ -163,9 +163,9 @@ object rnidSpike: TrnidSpike
       end
       object Label4: TLabel
         Left = 34
-        Top = 75
+        Top = 76
         Width = 40
-        Height = 14
+        Height = 13
         Caption = 'Contact:'
       end
       object Label5: TLabel
@@ -174,6 +174,13 @@ object rnidSpike: TrnidSpike
         Width = 49
         Height = 13
         Caption = 'Base Port:'
+      end
+      object Label6: TLabel
+        Left = 382
+        Top = 53
+        Width = 25
+        Height = 13
+        Caption = 'Host:'
       end
       object TargetUri: TEdit
         Left = 76
@@ -206,8 +213,8 @@ object rnidSpike: TrnidSpike
         Top = 49
         Width = 74
         Height = 21
-        TabOrder = 3
-        Text = 'BasePort'
+        TabOrder = 8
+        Text = '5060'
         OnChange = BasePortChange
       end
       object Register: TButton
@@ -216,7 +223,7 @@ object rnidSpike: TrnidSpike
         Width = 75
         Height = 25
         Caption = 'Register'
-        TabOrder = 5
+        TabOrder = 4
         OnClick = RegisterClick
       end
       object Unregister: TButton
@@ -225,7 +232,7 @@ object rnidSpike: TrnidSpike
         Width = 75
         Height = 25
         Caption = 'Unregister'
-        TabOrder = 4
+        TabOrder = 3
         OnClick = UnregisterClick
       end
       object Options: TButton
@@ -234,7 +241,7 @@ object rnidSpike: TrnidSpike
         Width = 75
         Height = 25
         Caption = 'Options'
-        TabOrder = 6
+        TabOrder = 5
         OnClick = OptionsClick
       end
       object UseAsProxy: TCheckBox
@@ -245,7 +252,7 @@ object rnidSpike: TrnidSpike
         Caption = 'Use as proxy'
         Checked = True
         State = cbChecked
-        TabOrder = 7
+        TabOrder = 6
         OnClick = UseAsProxyClick
       end
       object UseLooseRouting: TCheckBox
@@ -256,7 +263,35 @@ object rnidSpike: TrnidSpike
         Caption = 'Use lr'
         Checked = True
         State = cbChecked
-        TabOrder = 8
+        TabOrder = 7
+      end
+      object ContactUri: TEdit
+        Left = 77
+        Top = 73
+        Width = 289
+        Height = 21
+        TabOrder = 9
+        Text = 'sip:franks@80.168.137.82'
+        OnChange = ContactUriChange
+      end
+      object HostName: TEdit
+        Left = 409
+        Top = 49
+        Width = 121
+        Height = 21
+        TabOrder = 10
+        Text = '80.168.138.82'
+        OnChange = HostNameChange
+      end
+      object MasqAsNat: TCheckBox
+        Left = 410
+        Top = 73
+        Width = 87
+        Height = 17
+        Caption = 'Masq as NAT'
+        Checked = True
+        State = cbChecked
+        TabOrder = 11
       end
     end
   end
@@ -268,15 +303,6 @@ object rnidSpike: TrnidSpike
     TabOrder = 2
     Text = 'sip:roke.angband.za.org'
     OnChange = RegistrarUriChange
-  end
-  object ContactUri: TEdit
-    Left = 76
-    Top = 73
-    Width = 290
-    Height = 21
-    TabOrder = 3
-    Text = 'sip:80.168.138.82'
-    OnChange = ContactUriChange
   end
   object UiTimer: TTimer
     Enabled = False

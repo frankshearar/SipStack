@@ -1,6 +1,14 @@
-unit audioclasses;
+{
+  (c) 2003 Guido Gybels
 
-{Code by Guido Gybels, (c) 2003}
+  The RNID licence covers this unit. Read the licence at:
+      http://www.ictrnid.org.uk/docs/gw/rnid_license.txt
+
+  This unit contains code written by:
+    * Guido Gybels
+
+}
+unit audioclasses;
 
 interface
 

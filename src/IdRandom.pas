@@ -1,3 +1,12 @@
+{
+  (c) 2004 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
+
+  The RNID licence covers this unit. Read the licence at:
+      http://www.ictrnid.org.uk/docs/gw/rnid_license.txt
+
+  This unit contains code written by:
+    * Frank Shearar
+}
 unit IdRandom;
 
 interface
@@ -18,6 +27,9 @@ type
     function NextSipUserAgentTag: String; virtual; abstract;
   end;
 
+  // I do NOT supply you with cryptographically adequate random numbers!
+  // Still, you can make use of me when you write test code and don't care
+  // about the entropy of my  results.
   TIdBasicRandomNumber = class(TIdRandomNumber)
   private
     BranchLock:  TCriticalSection;

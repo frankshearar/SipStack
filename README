@@ -1,0 +1,20 @@
+RNID SIP STACK
+==============
+
+This library of code consists of three main parts:
+* a SIP stack (RFC 3261),
+* an RTP stack (RFC 3550), and
+* SDP (RFC 2327) parsing and utilities.
+
+The code currently implements most of SIP, RTP. The stack can make and receive
+calls from/to X-Lite, linphonec. It also connects correctly with ser, the Sip
+Express Router.
+
+Of the stuff not implemented, the most important missing bits include:
+ * no SRV/NAPTR DNS resolution;
+ * no RFC 3263 discovery mechanisms;
+ * RTP loop detection
+
+Known bugs:
+ * Sometimes certain threads don't die cleanly. This makes the application 
+   quietly hang in the background when you kill the spike prototype.
