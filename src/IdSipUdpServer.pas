@@ -46,7 +46,7 @@ constructor TIdSipUdpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.DefaultPort   := TIdSipTransport.TransportFor(UdpTransport).DefaultPort;
+  Self.DefaultPort   := TIdSipTransportRegistry.DefaultPortFor(UdpTransport);
   Self.Notifier      := TIdSipServerNotifier.Create;
   Self.ThreadedEvent := true;
 end;

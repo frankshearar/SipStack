@@ -252,7 +252,7 @@ begin
 
   Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
   Self.ConnectionTimeout := Self.DefaultTimeout;
-  Self.DefaultPort       := TIdSipTransport.TransportFor(TcpTransport).DefaultPort;
+  Self.DefaultPort       := TIdSipTransportRegistry.DefaultPortFor(TcpTransport);
   Self.Notifier          := TIdSipServerNotifier.Create;
   Self.ReadTimeout   := Self.DefaultTimeout;
 end;

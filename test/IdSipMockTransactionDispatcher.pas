@@ -55,9 +55,9 @@ var
 begin
   inherited Create;
 
-  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
 
   Self.Locator := TIdSipMockLocator.Create;
   Self.Transports := TStringList.Create;
@@ -65,11 +65,11 @@ begin
 
   SupportedTrans := TStringList.Create;
   try
-    TIdSipTransport.SecureTransports(SupportedTrans);
-    TIdSipTransport.InSecureTransports(SupportedTrans);
+    TIdSipTransportRegistry.SecureTransports(SupportedTrans);
+    TIdSipTransportRegistry.InSecureTransports(SupportedTrans);
 
     for I := 0 to SupportedTrans.Count - 1 do begin
-      Tran := TIdSipTransport.TransportFor(SupportedTrans[I]).Create;
+      Tran := TIdSipTransportRegistry.TransportFor(SupportedTrans[I]).Create;
       Self.AddTransport(Tran);
       Self.Transports.AddObject(SupportedTrans[I],
                                 Tran);
@@ -89,9 +89,9 @@ begin
   Self.Transports.Free;
   Self.Locator.Free;
 
-  TIdSipTransport.UnregisterTransport(TcpTransport);
-  TIdSipTransport.UnregisterTransport(TlsTransport);
-  TIdSipTransport.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
 
   inherited Destroy;
 end;

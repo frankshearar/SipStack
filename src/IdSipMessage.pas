@@ -4626,7 +4626,7 @@ end;
 
 function TIdSipViaHeader.AsUri: String;
 begin
-  Result := TIdSipTransport.UriSchemeFor(Self.Transport)
+  Result := TIdSipTransportRegistry.UriSchemeFor(Self.Transport)
           + ':' + Self.HostAndPort.Value;
 end;
 
@@ -4653,7 +4653,7 @@ end;
 function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
                                                    const Transport: String): Boolean;
 begin
-  Result := TIdSipTransport.TransportFor(Transport).DefaultPort = Port;
+  Result := TIdSipTransportRegistry.DefaultPortFor(Transport) = Port;
 end;
 
 function TIdSipViaHeader.IsRFC3261Branch: Boolean;
@@ -4692,12 +4692,12 @@ begin
   // Return the query name to use in an SRV (RFC 2782) lookup, as part of the
   // SIP server location algorithms of RFC 3263.
 
-  Result := TIdSipTransport.TransportFor(Self.Transport).SrvQuery(Self.SentBy);
+  Result := TIdSipTransportRegistry.TransportFor(Self.Transport).SrvQuery(Self.SentBy);
 end;
 
 function TIdSipViaHeader.UsesSecureTransport: Boolean;
 begin
-  Result := TIdSipTransport.TransportFor(Self.Transport).IsSecure;
+  Result := TIdSipTransportRegistry.TransportFor(Self.Transport).IsSecure;
 end;
 
 //* TIdSipViaHeader Protected methods ******************************************
@@ -4870,7 +4870,7 @@ procedure TIdSipViaHeader.SetTransport(const Value: String);
 begin
   Self.fTransport := Value;
 
-  Self.HostAndPort.DefaultPort := TIdSipTransport.DefaultPortFor(Value);
+  Self.HostAndPort.DefaultPort := TIdSipTransportRegistry.DefaultPortFor(Value);
 end;
 
 procedure TIdSipViaHeader.SetTTL(Value: Byte);

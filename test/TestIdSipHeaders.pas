@@ -3550,12 +3550,12 @@ begin
 
   Self.V := TIdSipViaHeader.Create;
 
-  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
 end;
 
 procedure TestTIdSipViaHeader.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TlsOverSctpTransport);
 
   inherited TearDown;
 end;
@@ -3707,12 +3707,12 @@ var
 begin
   AllTransports := TStringList.Create;
   try
-    TIdSipTransport.SecureTransports(AllTransports);
-    TIdSipTransport.InsecureTransports(AllTransports);
+    TIdSipTransportRegistry.SecureTransports(AllTransports);
+    TIdSipTransportRegistry.InsecureTransports(AllTransports);
 
     for I := 0 to AllTransports.Count - 1 do begin
       Transport := AllTransports[I];
-      Port      := TIdSipTransport.TransportFor(Transport).DefaultPort;
+      Port      := TIdSipTransportRegistry.DefaultPortFor(Transport);
 
       Check(Self.V.IsDefaultPortForTransport(Port, Transport),
             'Default port for ' + Transport);
@@ -3891,7 +3891,7 @@ const
   RPort = 6666;
 begin
   Self.V.Value := 'SIP/2.0/UDP gw1.leo-ix.net';
-  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+  CheckEquals(TIdSipTransportRegistry.DefaultPortFor(Self.V.Transport),
               Self.V.RoutingPort,
               'Implicit port');
 
@@ -3936,7 +3936,7 @@ begin
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;tag=heehee';
   CheckEquals('127.0.0.1',   Self.V.SentBy,         '1: SentBy');
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '1: Parameters');
-  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+  CheckEquals(TIdSipTransportRegistry.DefaultPortFor(Self.V.Transport),
               Self.V.Port,
               '1: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '1: SipVersion');
@@ -3948,7 +3948,7 @@ begin
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
   CheckEquals('',              Self.V.ParamsAsString, '2: Parameters');
-  CheckEquals(TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort,
+  CheckEquals(TIdSipTransportRegistry.DefaultPortFor(Self.V.Transport),
               Self.V.Port,
               '2: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '2: SipVersion');
@@ -4045,7 +4045,7 @@ const
 begin
   Self.V.Value := 'SIP/2.0/UDP 127.0.0.1';
 
-  Self.V.Port := TIdSipTransport.TransportFor(Self.V.Transport).DefaultPort;
+  Self.V.Port := TIdSipTransportRegistry.DefaultPortFor(Self.V.Transport);
   CheckEquals(ValueWithPort, Self.V.Value, 'Port lost');
 end;
 

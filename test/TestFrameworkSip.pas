@@ -617,18 +617,18 @@ procedure TTestCaseSip.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
-  TIdSipTransport.RegisterTransport(TcpTransport,  TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport,  TIdSipMockTlsTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport,  TIdSipMockUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TcpTransport,  TIdSipMockTcpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsTransport,  TIdSipMockTlsTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport,  TIdSipMockUdpTransport);
 end;
 
 procedure TTestCaseSip.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(UdpTransport);
-  TIdSipTransport.UnregisterTransport(TlsTransport);
-  TIdSipTransport.UnregisterTransport(TcpTransport);
-  TIdSipTransport.UnregisterTransport(SctpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(SctpTransport);
 
   inherited TearDown;
 end;

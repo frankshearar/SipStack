@@ -506,7 +506,7 @@ end;
 function TIdSipAbstractLocator.SrvTarget(Target: TIdUri;
                                          const Protocol: String): String;
 begin
-  Result := TIdSipTransport.TransportFor(Protocol).SrvQuery(Target.Host);
+  Result := TIdSipTransportRegistry.TransportFor(Protocol).SrvQuery(Target.Host);
 end;
 
 function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
@@ -797,10 +797,10 @@ procedure TIdSipAbstractLocator.SupportedTransports(TargetUri: TIdUri; Transport
 begin
   Transports.Clear;
 
-  TIdSipTransport.SecureTransports(Transports);
+  TIdSipTransportRegistry.SecureTransports(Transports);
 
   if not TargetUri.IsSipsUri then begin
-    TIdSipTransport.InsecureTransports(Transports);
+    TIdSipTransportRegistry.InsecureTransports(Transports);
   end;
 end;
 

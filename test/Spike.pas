@@ -206,15 +206,14 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTcpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
 
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.Transports := TObjectList.Create(true);
   Self.RTPProfile := TIdAudioVisualProfile.Create;
-  TIdSipTransport.TransportFor(UdpTransport).DefaultPort;
 
   Self.DTMFPanel := TIdDTMFPanel.Create(nil);
   Self.DTMFPanel.Align  := alLeft;
@@ -315,9 +314,9 @@ begin
 
   Self.Timer.Terminate;
 
-  TIdSipTransport.UnregisterTransport(TcpTransport);
-  TIdSipTransport.UnregisterTransport(TlsTransport);
-  TIdSipTransport.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
+  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
 
   inherited Destroy;
 end;

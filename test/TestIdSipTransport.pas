@@ -591,26 +591,26 @@ end;
 
 procedure TestTransportRegistry.TestDefaultPortFor;
 begin
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
   try
-    TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+    TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
     try
       CheckEquals(TIdSipUDPTransport.DefaultPort,
-                  TIdSipTransport.DefaultPortFor(UdpTransport),
+                  TIdSipTransportRegistry.DefaultPortFor(UdpTransport),
                   UdpTransport);
 
       CheckEquals(TIdSipTLSTransport.DefaultPort,
-                  TIdSipTransport.DefaultPortFor(TlsTransport),
+                  TIdSipTransportRegistry.DefaultPortFor(TlsTransport),
                   TlsTransport);
 
       CheckEquals(TIdSipTransport.DefaultPort,
-                  TIdSipTransport.DefaultPortFor('unknown transport'),
+                  TIdSipTransportRegistry.DefaultPortFor('unknown transport'),
                   'unknown transport');
     finally
-      TIdSipTransport.UnregisterTransport(TlsTransport);
+      TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
     end;
   finally
-    TIdSipTransport.UnregisterTransport(UdpTransport);
+    TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
   end;
 end;
 
@@ -620,22 +620,22 @@ const
   TransportType: TIdSipTransportClass = TIdSipUDPTransport;
 begin
   try
-    TIdSipTransport.TransportFor(Foo);
+    TIdSipTransportRegistry.TransportFor(Foo);
     Fail('Didn''t blow up on an unknown transport ' + Foo);
   except
     on EUnknownTransport do;
   end;
 
-  TIdSipTransport.RegisterTransport(Foo, TransportType);
+  TIdSipTransportRegistry.RegisterTransport(Foo, TransportType);
   try
-    Check(TransportType = TIdSipTransport.TransportFor(Foo),
+    Check(TransportType = TIdSipTransportRegistry.TransportFor(Foo),
           Foo + ' transport type not registered');
   finally
-    TIdSipTransport.UnregisterTransport(Foo);
+    TIdSipTransportRegistry.UnregisterTransport(Foo);
   end;
 
   try
-    TIdSipTransport.TransportFor(Foo);
+    TIdSipTransportRegistry.TransportFor(Foo);
     Fail('Didn''t unregister transport ' + Foo);
   except
     on EUnknownTransport do;
@@ -646,38 +646,38 @@ procedure TestTransportRegistry.TestTransportFor;
 const
   NewTransport = 'UNKNOWN-TRANSPORT';
 begin
-  TIdSipTransport.RegisterTransport(NewTransport, TIdSipSCTPTransport);
+  TIdSipTransportRegistry.RegisterTransport(NewTransport, TIdSipSCTPTransport);
   try
     CheckEquals(TIdSipSCTPTransport,
-                TIdSipTransport.TransportFor(NewTransport),
+                TIdSipTransportRegistry.TransportFor(NewTransport),
                 NewTransport);
   finally
-    TIdSipTransport.UnregisterTransport(NewTransport);
+    TIdSipTransportRegistry.UnregisterTransport(NewTransport);
   end;
 end;
 
 procedure TestTransportRegistry.TestUriSchemeFor;
 begin
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipUdpTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUdpTransport);
   try
-    TIdSipTransport.RegisterTransport(TlsTransport, TIdSipTlsTransport);
+    TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipTlsTransport);
     try
       CheckEquals(TIdSipUDPTransport.UriScheme,
-                  TIdSipTransport.UriSchemeFor(UdpTransport),
+                  TIdSipTransportRegistry.UriSchemeFor(UdpTransport),
                   UdpTransport);
 
       CheckEquals(TIdSipTLSTransport.UriScheme,
-                  TIdSipTransport.UriSchemeFor(TlsTransport),
+                  TIdSipTransportRegistry.UriSchemeFor(TlsTransport),
                   TlsTransport);
 
       CheckEquals(TIdSipTransport.UriScheme,
-                  TIdSipTransport.UriSchemeFor('unknown transport'),
+                  TIdSipTransportRegistry.UriSchemeFor('unknown transport'),
                   'unknown transport');
     finally
-      TIdSipTransport.UnregisterTransport(TlsTransport);
+      TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
     end;
   finally
-    TIdSipTransport.UnregisterTransport(UdpTransport);
+    TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
   end;
 end;
 
@@ -690,7 +690,8 @@ procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransport.RegisterTransport(Self.TransportType.GetTransportType, Self.TransportType);
+  TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
+                                            Self.TransportType);
 
   if not Assigned(GStack) then
     raise Exception.Create('GStack isn''t instantiated - you need something '
@@ -745,7 +746,7 @@ begin
 
   Self.LastSentResponse.Free;
 
-  TIdSipTransport.UnregisterTransport(Self.TransportType.GetTransportType);
+  TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
 
   inherited TearDown;
 end;

@@ -323,12 +323,12 @@ procedure TLocatorTest.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
+  TIdSipTransportRegistry.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
 end;
 
 procedure TLocatorTest.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TlsOverSctpTransport);
 
   inherited TearDown;
 end;
