@@ -393,7 +393,9 @@ begin
         S.Free;
       end;
     except
-      on EIdReadTimeout do;
+      // Not much else we can do:
+      on EIdReadTimeout do
+        AThread.Connection.DisconnectSocket;
     end;
   end;
 end;
