@@ -16,16 +16,6 @@ uses
   IdSipAuthentication, IdSipMessage, IdSipTransport, IdTimerQueue, SyncObjs,
   SysUtils;
 
-const
-  DefaultT1    = 500;   // milliseconds
-  DefaultT1_64 = 64*DefaultT1;
-  DefaultT2    = 4000;  // milliseconds
-  DefaultT4    = 5000;  // milliseconds
-
-const
-  MaximumUDPMessageSize = 1300;
-  SessionTimeoutMsg     = 'Timed out';
-
 type
   // This covers all states - INVITE, non-INVITE, client, server.
   TIdSipTransactionState = (itsCalling, itsCompleted, itsConfirmed,
@@ -491,6 +481,16 @@ type
   public
     procedure Run(const Subject: IInterface); override;
   end;
+
+const
+  DefaultT1    = 500;   // milliseconds
+  DefaultT1_64 = 64*DefaultT1;
+  DefaultT2    = 4000;  // milliseconds
+  DefaultT4    = 5000;  // milliseconds
+
+const
+  MaximumUDPMessageSize = 1300;
+  SessionTimeoutMsg     = 'Timed out';
 
 implementation
 
