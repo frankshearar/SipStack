@@ -5141,10 +5141,8 @@ end;
 procedure TestTIdSipOutboundInvite.CheckReceiveFailed(StatusCode: Cardinal);
 var
   InviteCount: Integer;
-  Invite: TIdSipOutboundInvite;
 begin
-  Invite := Self.CreateAction as TIdSipOutboundInvite;
-  Invite.AddListener(Self);
+  Self.CreateAction;
 
   InviteCount := Self.Core.InviteCount;
   Self.ReceiveResponse(StatusCode);
@@ -5230,7 +5228,7 @@ var
   OutboundInvite: TIdSipOutboundInvite;
 begin
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
-  OutboundInvite.AddListener(Self);
+
   Self.ReceiveOk(Self.LastSentRequest);
 
   Self.MarkSentRequestCount;
@@ -5256,7 +5254,7 @@ begin
 
   //  ---         INVITE         --->
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
-  OutboundInvite.AddListener(Self);
+
   InviteCount := Self.Core.InviteCount;
   Invite := TIdSipRequest.Create;
   try
@@ -5325,7 +5323,7 @@ begin
 
   //  ---         INVITE         --->
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
-  OutboundInvite.AddListener(Self);
+
   InviteCount := Self.Core.InviteCount;
   Invite := TIdSipRequest.Create;
   try
@@ -5421,11 +5419,8 @@ begin
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
-var
-  Invite: TIdSipOutboundInvite;
 begin
-  Invite := Self.CreateAction as TIdSipOutboundInvite;
-  Invite.AddListener(Self);
+  Self.CreateAction;
 
   Self.ReceiveResponse(SIPMovedPermanently);
 
@@ -5507,7 +5502,7 @@ var
   OutboundInvite: TIdSipOutboundInvite;
 begin
   OutboundInvite := Self.CreateAction as TIdSipOutboundInvite;
-  OutboundInvite.AddListener(Self);
+
   Self.ReceiveOk(Self.LastSentRequest);
 
   Self.MarkSentRequestCount;
