@@ -3,8 +3,8 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdInterfacedObject, IdRTP, IdSdp, IdSipMessage, IdSipCore,
-  IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
+  Classes, IdInterfacedObject, IdObservable, IdRTP, IdSdp, IdSipMessage,
+  IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
   IdSocketHandle, SysUtils, TestFrameworkEx;
 
 type
@@ -423,10 +423,12 @@ end;
 //******************************************************************************
 //* TIdSipTestObserver Public methods ******************************************
 
-  TIdSipTestObserver = class(TIdInterfacedObject,
-                             IIdObserver)
-  private
-    fChanged: Boolean;
+constructor TIdSipTestObserver.Create;
+begin
+  inherited Create;
+
+  Self.fChanged := false;
+end;
 
 //* TIdSipTestObserver Private methods *****************************************
 
@@ -434,12 +436,6 @@ procedure TIdSipTestObserver.OnChanged(Observed: TObject);
 begin
   Self.fChanged := true;
 end;
-
-constructor TIdSipTestObserver.Create;
-begin
-end;
-
-  fChanged: Boolean read fChanged;
 
 //******************************************************************************
 //* TIdSipTestOptionsListener                                                  *
