@@ -288,6 +288,7 @@ type
   public
     class function IsAddressType(const Token: String): Boolean;
     class function IsBandwidthType(const Token: String): Boolean;
+    class function IsByteString(const Token: String): Boolean;
     class function IsDecimalUchar(const Token: String): Boolean;
     class function IsFQDN(const Token: String): Boolean;
     class function IsIPAddress(const IpVersion: TIdIPVersion; const Token: String): Boolean;
@@ -323,6 +324,7 @@ const
                '$', '&', '*', ';', '=', '@', '[', ']', '^', '_', '`', '{', '|',
                '}', '+', '~', '"'];
   EmailSafeChars = SafeChars + [' ', #9];
+  IllegalByteStringChars = [#0, #10, #13];
   SessionHeaderOrder = 'vosiuepcbtka';
   //                            ** * <-- * indicates that this header can occur multiple times
   MediaHeaderOrder   = 'micbka';
@@ -851,6 +853,17 @@ begin
   end;
 end;
 
+class function TIdSdpParser.IsByteString(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do
+      Result := Result and not (Token[I] in IllegalByteStringChars);
+end;
+
 class function TIdSdpParser.IsDecimalUchar(const Token: String): Boolean;
 var
   N: Integer;
@@ -1127,16 +1140,31 @@ end;
 
 procedure TIdSdpParser.ParseAttribute(const Attributes: TIdSdpAttributes);
 var
-  Att:   TIdSdpAttribute;
-  Name:  String;
-  Value: String;
+  Att:           TIdSdpAttribute;
+  OriginalValue: String;
+  Name:          String;
+  Value:         String;
 begin
   Self.AssertHeaderOrder;
   Self.ParseHeader(Name, Value);
+  OriginalValue := Value;
 
   Att := TIdSdpAttribute.Create;
   try
-    Att.Name := Value;
+    if (IndyPos(':', Value) > 0) then begin
+      Att.Name := Fetch(Value, ':');
+      Att.Value := Value;
+    end
+    else begin
+      Att.Name := Value;
+      Att.Value := '';
+    end;
+
+    if not Self.IsAlphaNumeric(Att.Name) then
+      raise EParser.Create(Format(MalformedToken, [RSSDPAttributeName, OriginalValue]));
+
+    if (Att.Value <> '') and not Self.IsByteString(Att.Value) then
+      raise EParser.Create(Format(MalformedToken, [RSSDPAttributeName, OriginalValue]));
 
     Attributes.Add(Att);
   except
@@ -1227,37 +1255,10 @@ begin
     Connection.Address := Value;
   end;
 
-{
-   connection-field =    ["c=" nettype space addrtype space
-                         connection-address CRLF]
-                         ;a connection field must be present
-                         ;in every media description or at the
-                         ;session-level
-
-   nettype =             "IN"
-                         ;list to be extended
-   addrtype =            "IP4" | "IP6"
-                         ;list to be extended
-
-   connection-address =  multicast-address
-                         | addr
-   multicast-address =   3*(decimal-uchar ".") decimal-uchar "/" ttl
-                         [ "/" integer ]
-                         ;multicast addresses may be in the range
-                         ;224.0.0.0 to 239.255.255.255
-   ttl =                 decimal-uchar
-   addr =                FQDN | unicast-address
-   FQDN =                4*(alpha-numeric|"-"|".")
-                         ;fully qualified domain name as specified in RFC1035
-   unicast-address =     IP4-address | IP6-address
-   IP4-address =         b1 "." decimal-uchar "." decimal-uchar "." b4
-   b1 =                  decimal-uchar
-                         ;less than "224"; not "0" or "127"
-   b4 =                  decimal-uchar
-                         ;not "0"
-   IP6-address =         ;to be defined
-}
-  Self.LastSessionHeader := RSSDPConnectionName;
+  if Self.ParsingSessionHeaders then
+    Self.LastSessionHeader := RSSDPConnectionName
+  else
+    Self.LastMediaHeader := RSSDPConnectionName
 end;
 
 procedure TIdSdpParser.ParseEmail(const Payload: TIdSdpPayload);

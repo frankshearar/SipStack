@@ -107,6 +107,7 @@ type
     P:       TIdSdpParser;
     Payload: TIdSdpPayload;
 
+    procedure CheckMalformedAttribute(const Value: String);
     procedure CheckMalformedConnection(const Value: String);
     procedure CheckMalformedOrigin(const OriginValue: String);
     procedure CheckMalformedPhoneNumber(const PhoneNumberValue: String);
@@ -120,6 +121,7 @@ type
   published
     procedure TestIsAddressType;
     procedure TestIsBandwidthType;
+    procedure TestIsByteString;
     procedure TestIsDecimalUchar;
     procedure TestIsFQDN;
     procedure TestIsIpv4Address;
@@ -135,6 +137,9 @@ type
     procedure TestIsTime;
     procedure TestIsTransport;
     procedure TestParseAttribute;
+    procedure TestParseAttributeWithValue;
+    procedure TestParseAttributeMalformedName;
+    procedure TestParseAttributeMalformedValue;
     procedure TestParseBandwidth;
     procedure TestParseBandwidthMultipleHeaders;
     procedure TestParseConnectionInSessionAndMediaDescription;
@@ -168,6 +173,7 @@ type
     procedure TestParseMediaDescriptionMissingPort;
     procedure TestParseMediaDescriptionUnknownMediaType;
     procedure TestParseMediaDescriptionUnknownTransport;
+    procedure TestParseMediaDescriptionWithAttributes;
     procedure TestParseMediaDescriptionWithBandwidth;
     procedure TestParseMediaDescriptionWithConnection;
     procedure TestParseMediaDescriptionWithKey;
@@ -816,6 +822,11 @@ end;
 
 //* TestTIdSdpParser Private methods *******************************************
 
+procedure TestTIdSdpParser.CheckMalformedAttribute(const Value: String);
+begin
+  Self.CheckMalformedOptionalSessionHeader(RSSDPAttributeName, Value);
+end;
+
 procedure TestTIdSdpParser.CheckMalformedConnection(const Value: String);
 begin
   Self.CheckMalformedOptionalSessionHeader(RSSDPConnectionName, Value);
@@ -951,6 +962,34 @@ begin
   Check(    TIdSdpParser.IsBandwidthType(Id_SDP_RS),                  'Id_SDP_RS constant');
   Check(    TIdSdpParser.IsBandwidthType('RR'),                       'RR');
   Check(    TIdSdpParser.IsBandwidthType(Id_SDP_RR),                  'Id_SDP_RR constant');
+end;
+
+procedure TestTIdSdpParser.TestIsByteString;
+var
+  I: Integer;
+  S: String;
+begin
+  Check(not TIdSdpParser.IsByteString(''),  '''''');
+  Check(not TIdSdpParser.IsByteString(#13), #13);
+  Check(not TIdSdpParser.IsByteString(#10), #10);
+  Check(not TIdSdpParser.IsByteString(#0),  #0);
+
+  Check(TIdSdpParser.IsByteString('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'),
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+
+  for I := 1 to 9 do
+    Check(TIdSdpParser.IsByteString(Chr(I)), '#' + IntToHex(I, 2));
+
+  Check(TIdSdpParser.IsByteString(#11), '#11');
+  Check(TIdSdpParser.IsByteString(#12), '#12');
+
+  for I := 14 to 255 do
+    Check(TIdSdpParser.IsByteString(Chr(I)), '#' + IntToHex(I, 2));
+
+  S := '';
+  for I := 1 to 1000000 do
+    S := S + 'a';
+  Check(TIdSdpParser.IsByteString(S), '1 million a''s');
 end;
 
 procedure TestTIdSdpParser.TestIsDecimalUchar;
@@ -1176,6 +1215,34 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TestTIdSdpParser.TestParseAttributeWithValue;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'a=orient:landscape');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals(1,           Self.Payload.Attributes.Count,    'Attributes.Count');
+    CheckEquals('orient',    Self.Payload.Attributes[0].Name,  'Attribute.Name');
+    CheckEquals('landscape', Self.Payload.Attributes[0].Value, 'Attribute.Value');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseAttributeMalformedName;
+begin
+  Self.CheckMalformedAttribute('a=real-dash');
+end;
+
+procedure TestTIdSdpParser.TestParseAttributeMalformedValue;
+begin
+  Self.CheckMalformedAttribute('a=bytestring:it is not#0one at all');
 end;
 
 procedure TestTIdSdpParser.TestParseBandwidth;
@@ -1643,6 +1710,36 @@ end;
 procedure TestTIdSdpParser.TestParseMediaDescriptionUnknownTransport;
 begin
   Self.CheckMalformedMediaDescription('data 6666 RtP/AVP 1');
+end;
+
+procedure TestTIdSdpParser.TestParseMediaDescriptionWithAttributes;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'm=video 49170/2 RTP/AVP 31'#13#10
+                          + 'i=More information than you can shake a stick at'#13#10
+                          + 'b=RR:666'#13#10
+                          + 'a=recvonly'#13#10
+                          + 'a=T38FaxTranscodingJBIG'#13#10
+                          + 'a=type:broadcast');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals(0, Self.Payload.Attributes.Count,                      'Session attributes');
+    CheckEquals(1, Self.Payload.MediaDescriptions.Count,               'MediaDescriptions.Count');
+    CheckEquals(3, Self.Payload.MediaDescriptions[0].Attributes.Count, 'Attributes.Count');
+
+    CheckEquals('recvonly',              Self.Payload.MediaDescriptions[0].Attributes[0].Name,  'Attributes[0].Name');
+    CheckEquals('',                      Self.Payload.MediaDescriptions[0].Attributes[0].Value, 'Attributes[0].Value');
+    CheckEquals('T38FaxTranscodingJBIG', Self.Payload.MediaDescriptions[0].Attributes[1].Name,  'Attributes[1].Name');
+    CheckEquals('',                      Self.Payload.MediaDescriptions[0].Attributes[1].Value, 'Attributes[1].Value');
+    CheckEquals('type',                  Self.Payload.MediaDescriptions[0].Attributes[2].Name,  'Attributes[2].Name');
+    CheckEquals('broadcast',             Self.Payload.MediaDescriptions[0].Attributes[2].Value, 'Attributes[2].Value');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescriptionWithBandwidth;
