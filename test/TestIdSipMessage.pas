@@ -141,7 +141,9 @@ type
     procedure TestEqualsResponse;
     procedure TestEqualsTrivial;
     procedure TestHasAuthorization;
+    procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
+    procedure TestHasProxyAuthorizationFor;
     procedure TestIsInvite;
     procedure TestIsOptions;
     procedure TestIsRegister;
@@ -1840,16 +1842,33 @@ end;
 
 procedure TestTIdSipRequest.TestHasAuthorization;
 begin
-  Check(not Self.Request.HasHeader(ProxyAuthorizationHeader),
+  Check(not Self.Request.HasHeader(AuthorizationHeader),
         'Sanity check');
 
-  Check(not Self.Request.HasProxyAuthorization,
+  Check(not Self.Request.HasAuthorization,
         'New request');
 
 
-  Self.Request.AddHeader(ProxyAuthorizationHeader);
-  Check(Self.Request.HasProxyAuthorization,
-        'Lies! There is too a Proxy-Authorization header!');
+  Self.Request.AddHeader(AuthorizationHeader);
+  Check(Self.Request.HasAuthorization,
+        'Lies! There is too a Authorization header!');
+end;
+
+procedure TestTIdSipRequest.TestHasAuthorizationFor;
+begin
+  Check(not Self.Request.HasHeader(AuthorizationHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasAuthorizationFor('leo-ix.net'),
+        'New request');
+
+  Self.Request.AddHeader(AuthorizationHeader);
+  Check(not Self.Request.HasAuthorizationFor('leo-ix.net'),
+        'Still no leo-ix.net realm though');
+
+  Self.Request.AddHeader(AuthorizationHeader).Value := 'Digest realm="leo-ix.net"';
+  Check(Self.Request.HasAuthorizationFor('leo-ix.net'),
+        'Cannot find existing Authorization');
 end;
 
 procedure TestTIdSipRequest.TestHasProxyAuthorization;
@@ -1864,6 +1883,23 @@ begin
   Self.Request.AddHeader(AuthorizationHeader);
   Check(Self.Request.HasAuthorization,
         'Lies! There is too a Authorization header!');
+end;
+
+procedure TestTIdSipRequest.TestHasProxyAuthorizationFor;
+begin
+  Check(not Self.Request.HasHeader(ProxyAuthorizationHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasProxyAuthorizationFor('leo-ix.net'),
+        'New request');
+
+  Self.Request.AddHeader(ProxyAuthorizationHeader);
+  Check(not Self.Request.HasProxyAuthorizationFor('leo-ix.net'),
+        'Still no leo-ix.net realm though');
+
+  Self.Request.AddHeader(ProxyAuthorizationHeader).Value := 'Digest realm="leo-ix.net"';
+  Check(Self.Request.HasProxyAuthorizationFor('leo-ix.net'),
+        'Cannot find existing Proxy-Authorization');
 end;
 
 procedure TestTIdSipRequest.TestIsInvite;

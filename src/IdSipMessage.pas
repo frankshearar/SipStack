@@ -299,6 +299,8 @@ type
     property UnknownResponses[const Name: String]: String read GetUnknownResponses write SetUnknownResponses;
   end;
 
+  // I represent the credentials a client offers to a server to authenticate
+  // itself.
   TIdSipAuthorizationHeader = class(TIdSipHttpAuthHeader)
   private
     function  GetCNonce: String;
@@ -327,6 +329,7 @@ type
     property Username:   String   read GetUsername write SetUsername;
   end;
 
+  TIdSipAuthorizationHeaderClass = class of TIdSipAuthorizationHeader;
 
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
@@ -490,6 +493,8 @@ type
     procedure Parse(const Value: String); override;
   end;
 
+  // I represent a challenge a server gives a client before accepting a
+  // request.
   TIdSipAuthenticateHeader = class(TIdSipHttpAuthHeader)
   private
     function  GetDomain: String;
@@ -499,7 +504,9 @@ type
   protected
     function KnownResponse(const Name: String): Boolean; override;
   public
+    function  CredentialHeaderType: TIdSipAuthorizationHeaderClass; virtual;
     procedure RemoveStaleResponse;
+
 
     property Domain: String  read GetDomain write SetDomain;
     property Stale:  Boolean read GetStale write SetStale;
@@ -508,6 +515,8 @@ type
   TIdSipProxyAuthenticateHeader = class(TIdSipAuthenticateHeader)
   protected
     function GetName: String; override;
+  public
+    function CredentialHeaderType: TIdSipAuthorizationHeaderClass; override;
   end;
 
   TIdSipAuthenticateInfoHeader = class(TIdSipHttpAuthHeader);
@@ -772,6 +781,17 @@ type
     property Headers[const Name: String]: TIdSipHeader read GetHeaders; default;
   end;
 
+  TIdSipAuthorizations = class(TIdSipHeadersFilter)
+  private
+    BlankHeaders: TIdSipHeaders;
+  public
+    constructor Create(Headers: TIdSipHeaders); overload;
+    constructor Create; overload;
+    destructor  Destroy; override;
+
+    function CurrentAuthorization: TIdSipAuthorizationHeader;
+  end;
+
   TIdSipContacts = class(TIdSipHeadersFilter)
   private
     BlankHeaders: TIdSipHeaders;
@@ -789,6 +809,17 @@ type
     constructor Create(Headers: TIdSipHeaders);
 
     function CurrentExpires: Cardinal;
+  end;
+
+  TIdSipProxyAuthorizations = class(TIdSipHeadersFilter)
+  private
+    BlankHeaders: TIdSipHeaders;
+  public
+    constructor Create(Headers: TIdSipHeaders); overload;
+    constructor Create; overload;
+    destructor  Destroy; override;
+
+    function CurrentProxyAuthorization: TIdSipProxyAuthorizationHeader;
   end;
 
   TIdSipRecordRoutePath = class(TIdSipHeadersFilter)
@@ -987,7 +1018,9 @@ type
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  HasAuthorization: Boolean;
+    function  HasAuthorizationFor(const Realm: String): Boolean;
     function  HasProxyAuthorization: Boolean;
+    function  HasProxyAuthorizationFor(const Realm: String): Boolean;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -3370,6 +3403,11 @@ end;
 //******************************************************************************
 //* TIdSipAuthenticateHeader Public methods ************************************
 
+function TIdSipAuthenticateHeader.CredentialHeaderType: TIdSipAuthorizationHeaderClass;
+begin
+  Result := TIdSipAuthorizationHeader;
+end;
+
 procedure TIdSipAuthenticateHeader.RemoveStaleResponse;
 var
   Index: Integer;
@@ -3414,6 +3452,13 @@ end;
 //******************************************************************************
 //* TIdSipProxyAuthenticateHeader                                              *
 //******************************************************************************
+//* TIdSipProxyAuthenticateHeader Public methods *******************************
+
+function TIdSipProxyAuthenticateHeader.CredentialHeaderType: TIdSipAuthorizationHeaderClass;
+begin
+  Result := TIdSipProxyAuthorizationHeader;
+end;
+
 //* TIdSipProxyAuthenticateHeader Protected methods ****************************
 
 function TIdSipProxyAuthenticateHeader.GetName: String;
@@ -4615,6 +4660,34 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipAuthorizations                                                       *
+//******************************************************************************
+//* TIdSipAuthorizations Public methods ****************************************
+
+constructor TIdSipAuthorizations.Create(Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, AuthorizationHeader);
+end;
+
+constructor TIdSipAuthorizations.Create;
+begin
+  Self.BlankHeaders := TIdSipHeaders.Create;
+  inherited Create(Self.BlankHeaders, AuthorizationHeader);
+end;
+
+destructor TIdSipAuthorizations.Destroy;
+begin
+  Self.BlankHeaders.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipAuthorizations.CurrentAuthorization: TIdSipAuthorizationHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipAuthorizationHeader;
+end;
+
+//******************************************************************************
 //* TIdSipContacts                                                             *
 //******************************************************************************
 //* TIdSipContacts Public methods **********************************************
@@ -4675,6 +4748,34 @@ begin
     Result := 0
   else
     Result := (Header as TIdSipNumericHeader).NumericValue;
+end;
+
+//******************************************************************************
+//* TIdSipProxyAuthorizations                                                  *
+//******************************************************************************
+//* TIdSipProxyAuthorizations Public methods ***********************************
+
+constructor TIdSipProxyAuthorizations.Create(Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, ProxyAuthorizationHeader);
+end;
+
+constructor TIdSipProxyAuthorizations.Create;
+begin
+  Self.BlankHeaders := TIdSipHeaders.Create;
+  inherited Create(Self.BlankHeaders, ProxyAuthorizationHeader);
+end;
+
+destructor TIdSipProxyAuthorizations.Destroy;
+begin
+  Self.BlankHeaders.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipProxyAuthorizations.CurrentProxyAuthorization: TIdSipProxyAuthorizationHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipProxyAuthorizationHeader;
 end;
 
 //******************************************************************************
@@ -5569,9 +5670,47 @@ begin
   Result := Self.HasHeader(AuthorizationHeader);
 end;
 
+function TIdSipRequest.HasAuthorizationFor(const Realm: String): Boolean;
+var
+  AuthHeaders: TIdSipAuthorizations;
+begin
+  AuthHeaders := TIdSipAuthorizations.Create(Self.Headers);
+  try
+    AuthHeaders.First;
+
+    Result := false;
+    while AuthHeaders.HasNext and not Result do
+      if IsEqual(AuthHeaders.CurrentAuthorization.Realm, Realm) then
+        Result := true
+      else
+        AuthHeaders.Next;
+  finally
+    AuthHeaders.Free;
+  end;
+end;
+
 function TIdSipRequest.HasProxyAuthorization: Boolean;
 begin
   Result := Self.HasHeader(ProxyAuthorizationHeader);
+end;
+
+function TIdSipRequest.HasProxyAuthorizationFor(const Realm: String): Boolean;
+var
+  ProxyAuthHeaders: TIdSipProxyAuthorizations;
+begin
+  ProxyAuthHeaders := TIdSipProxyAuthorizations.Create(Self.Headers);
+  try
+    ProxyAuthHeaders.First;
+
+    Result := false;    
+    while ProxyAuthHeaders.HasNext and not Result do
+      if IsEqual(ProxyAuthHeaders.CurrentProxyAuthorization.Realm, Realm) then
+        Result := true
+      else
+        ProxyAuthHeaders.Next;
+  finally
+    ProxyAuthHeaders.Free;
+  end;
 end;
 
 function TIdSipRequest.HasSipsUri: Boolean;
