@@ -3637,11 +3637,12 @@ begin
     AuthHeader      := Self.AddAuthorizationHeader(ReAttempt, Challenge);
     ChallengeHeader := Self.AuthenticateHeader(Challenge);
 
-    AuthHeader.DigestUri := ReAttempt.RequestUri.AsString;
-    AuthHeader.Nonce     := ChallengeHeader.Nonce;
-    AuthHeader.Opaque    := ChallengeHeader.Opaque;
-    AuthHeader.Realm     := ChallengeHeader.Realm;
-    AuthHeader.Username  := Self.Username;
+    AuthHeader.AuthorizationScheme := ChallengeHeader.AuthorizationScheme;
+    AuthHeader.DigestUri           := ReAttempt.RequestUri.AsString;
+    AuthHeader.Nonce               := ChallengeHeader.Nonce;
+    AuthHeader.Opaque              := ChallengeHeader.Opaque;
+    AuthHeader.Realm               := ChallengeHeader.Realm;
+    AuthHeader.Username            := Self.Username;
 
     H := HashFor(ChallengeHeader.Algorithm);
 
