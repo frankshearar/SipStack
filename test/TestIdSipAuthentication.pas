@@ -15,6 +15,11 @@ uses
   IdSipAuthentication, IdSipMessage, TestFramework, TestFrameworkSip;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestHashFor;
+  end;
+
   TestTIdSipAuthenticator = class(TTestCase)
   private
     Auth:   TIdSipAuthenticator;
@@ -35,8 +40,21 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipMessage tests (Messages)');
+  Result := TTestSuite.Create('IdSipAuthenication tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipAuthenticator.Suite);
+end;
+
+//*******************************************************************************
+//* TestFunctions                                                               *
+//*******************************************************************************
+//* TestFunctions Published methods *********************************************
+
+procedure TestFunctions.TestHashFor;
+begin
+  Check(@MD5 = Pointer(HashFor('')),    'Empty string - assume MD5');
+  Check(@MD5 = Pointer(HashFor('md5')), 'md5');
+  Check(@MD5 = Pointer(HashFor('MD5')), 'MD5');
 end;
 
 //*******************************************************************************

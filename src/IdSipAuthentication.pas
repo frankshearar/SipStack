@@ -78,18 +78,31 @@ type
 type
   TIdHashFunction = function(const S: String): String;
 
+function HashFor(const AlgorithmName: String): TIdHashFunction;
 function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
 function MD5(const S: String): String;
 
 implementation
 
 uses
-  Classes;
+  Classes, IdSipConsts;
 
 //*******************************************************************************
 //* Unit functions & procedures                                                 *
 //*******************************************************************************
 //* Unit Public functions & procedures ******************************************
+
+function HashFor(const AlgorithmName: String): TIdHashFunction;
+begin
+       if (AlgorithmName = '') then
+    Result := MD5
+  else if IsEqual(AlgorithmName, MD5Name) then
+    Result := MD5
+  else if IsEqual(AlgorithmName, MD5SessionName) then
+    Result := MD5
+  else
+    Result := nil;
+end;
 
 function KD(const Secret, Data: String; HashFunc: TIdHashFunction): String;
 begin
