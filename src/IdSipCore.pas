@@ -333,7 +333,6 @@ type
     fMinimumExpiryTime:   Cardinal; // in seconds
     fProxy:               TIdSipUri;
     KnownRegistrars:      TObjectList;
-    RunningTimers:        TThreadList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddInboundAction(Request: TIdSipRequest;
@@ -351,13 +350,11 @@ type
     function  GetContact: TIdSipContactHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
-    procedure KillRunningTimers;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
     procedure NotifyOfInboundCall(Session: TIdSipInboundSession);
     procedure NotifyOfDroppedResponse(Response: TIdSipResponse;
                                       Receiver: TIdSipTransport);
-    procedure OnTimerTerminate(Timer: TObject);
     function  RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
     function  ResponseForInvite: Cardinal;
     procedure SetContact(Value: TIdSipContactHeader);
@@ -404,8 +401,8 @@ type
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  InviteCount: Integer;
-    procedure OnInboundSessionExpire(Sender: TObject);
-    procedure OnTransactionComplete(TransactionTimer: TObject);
+    procedure OnInboundSessionExpire(Event: TObject);
+    procedure OnTransactionComplete(Event: TObject);
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -1087,7 +1084,7 @@ destructor TIdSipAbstractCore.Destroy;
 begin
   Self.UserAgentListeners.Free;
   Self.Observed.Free;
-  Self.fTimer.Free;
+  Self.fTimer.Terminate;
 
   inherited Destroy;
 end;
@@ -1765,7 +1762,6 @@ begin
   Self.fAllowedLanguageList    := TStringList.Create;
   Self.fProxy                  := TIdSipUri.Create('');
   Self.KnownRegistrars         := TObjectList.Create(true);
-  Self.RunningTimers           := TThreadList.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
 
@@ -1788,7 +1784,6 @@ begin
   Self.From.Free;
 
 //  Self.KillRunningTimers;
-  Self.RunningTimers.Free;
   Self.KnownRegistrars.Free;
   Self.Proxy.Free;
 
@@ -2016,35 +2011,33 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.OnInboundSessionExpire(Sender: TObject);
+procedure TIdSipUserAgentCore.OnInboundSessionExpire(Event: TObject);
 var
-  ExpiredRequest: TIdSipRequest;
-  Session:        TIdSipAction;
+  ExpiredInvite: TIdSipRequest;
+  Session:        TIdSipInboundSession;
 begin
-  ExpiredRequest := (Sender as TIdSipSingleShotTimer).Data as TIdSipRequest;
+  ExpiredInvite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
-      Session := Self.FindAction(ExpiredRequest);
+      Session := Self.FindAction(ExpiredInvite) as TIdSipInboundSession;
 
       if Assigned(Session) then
-        (Session as TIdSipInboundSession).TimeOut;
+        Session.TimeOut;
     finally
       Self.ActionLock.Release;
     end;
   finally
-    ExpiredRequest.Free;
+    ExpiredInvite.Free;
   end;
 end;
 
-procedure TIdSipUserAgentCore.OnTransactionComplete(TransactionTimer: TObject);
+procedure TIdSipUserAgentCore.OnTransactionComplete(Event: TObject);
 var
   Action: TIdSipOutboundInvite;
   Invite: TIdSipRequest;
-  Timer:  TIdSipSingleShotTimer;
 begin
-  Timer := TransactionTimer as TIdSipSingleShotTimer;
-  Invite := Timer.Data as TIdSipRequest;
+  Invite := TIdNotifyEventWait(Event).Data as TIdSipRequest;
   try
     Self.ActionLock.Acquire;
     try
@@ -2369,20 +2362,6 @@ begin
     Result := -1;
 end;
 
-procedure TIdSipUserAgentCore.KillRunningTimers;
-var
-  I: Integer;
-  L: TList;
-begin
-  L := Self.RunningTimers.LockList;
-  try
-    for I := 0 to L.Count - 1 do
-      TIdBaseThread(L[I]).Terminate;
-  finally
-    Self.RunningTimers.UnlockList;
-  end;
-end;
-
 function TIdSipUserAgentCore.KnowsRegistrar(Registrar: TIdSipUri): Boolean;
 begin
   // Precondition: something's acquired the RegistrationLock
@@ -2427,18 +2406,6 @@ begin
     Self.UserAgentListeners.Notify(Notification);
   finally
     Notification.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.OnTimerTerminate(Timer: TObject);
-var
-  L: TList;
-begin
-  L := Self.RunningTimers.LockList;
-  try
-    L.Remove(Timer);
-  finally
-    Self.RunningTimers.UnlockList;
   end;
 end;
 
