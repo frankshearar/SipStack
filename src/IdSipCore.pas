@@ -699,6 +699,8 @@ begin
 
   Self.fAllowedMethodList := TStringList.Create;
   Self.fAllowedSchemeList := TStringList.Create;
+
+  Self.AddAllowedContentType(SdpMimeType);
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
@@ -1021,7 +1023,7 @@ var
 begin
   Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
   try
-    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
+    Response.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
 
     Transaction.SendResponse(Response);
   finally
