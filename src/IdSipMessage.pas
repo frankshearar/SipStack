@@ -1233,12 +1233,12 @@ function TransportToStr(const T: TIdSipTransportType): String;
 function WithoutFirstAndLastChars(const S: String): String;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
-// Widely known constants
+// Widely known constants. Don't localise them.
 const
   SipName    = 'SIP';
   SIPVersion = SipName + '/2.0';
 
-// Header and parameter names
+// Header and parameter names. Don't localise them.
 const
   AcceptHeader               = 'Accept';
   AcceptEncodingHeader       = 'Accept-Encoding';
@@ -1523,7 +1523,7 @@ const
   RSWarningMisc =
       'Miscellaneous warning';
 
-// Transport types
+// Transport types. Don't localise them.
 const
   NullTransport = 'NULL';
   SctpTransport = 'SCTP';
@@ -1531,7 +1531,7 @@ const
   TlsTransport  = 'TLS';
   UdpTransport  = 'UDP';
 
-// Grammar definitions
+// Grammar definitions. Don't localise them.
 const
   CRLF                  = #$D#$A;
   HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
