@@ -1189,6 +1189,311 @@ type
   EBadResponse = class(EBadMessage);
   ESchemeNotSupported = class(Exception);
 
+function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
+function EncodeQuotedStr(const S: String): String;
+function FirstChar(const S: String): String;
+function HalfQuoted(const S: String): Boolean;
+function IsEqual(const S1, S2: String): Boolean;
+function IsQuoted(const S: String): Boolean;
+function LastChar(const S: String): String;
+function NeedsQuotes(Name: String): Boolean;
+function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
+function ReadDigit(var Src: String): String;
+function QuoteStringIfNecessary(const S: String): String;
+function QValueToStr(const Q: TIdSipQValue): String;
+function ShortMonthToInt(const Month: String): Integer;
+function StreamToStr(Data: TStream): String;
+function StrToQValue(const S: String): TIdSipQValue;
+function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
+function StrToTransport(const S: String): TIdSipTransportType;
+function TransportToStr(const T: TIdSipTransportType): String;
+function WithoutFirstAndLastChars(const S: String): String;
+function WithoutFirstAndLastCharsW(const W: WideString): WideString;
+
+// Header and parameter names
+const
+  AcceptHeader               = 'Accept';
+  AcceptEncodingHeader       = 'Accept-Encoding';
+  AcceptLanguageHeader       = 'Accept-Language';
+  AlertInfoHeader            = 'Alert-Info';
+  AlgorithmParam             = 'algorithm';
+  AllowHeader                = 'Allow';
+  AuthenticationInfoHeader   = 'Authentication-Info';
+  AuthorizationHeader        = 'Authorization';
+  BasicAuthorizationScheme   = 'Basic';
+  BranchParam                = 'branch';
+  CallIDHeaderFull           = 'Call-ID';
+  CallIDHeaderShort          = 'i';
+  CallInfoHeader             = 'Call-Info';
+  CNonceParam                = 'cnonce';
+  ContactHeaderFull          = 'Contact';
+  ContactHeaderShort         = 'm';
+  ContactWildCard            = '*';
+  ContentDispositionHeader   = 'Content-Disposition';
+  ContentEncodingHeaderFull  = 'Content-Encoding';
+  ContentEncodingHeaderShort = 'e';
+  ContentLanguageHeader      = 'Content-Language';
+  ContentLengthHeaderFull    = 'Content-Length';
+  ContentLengthHeaderShort   = 'l';
+  ContentTypeHeaderFull      = 'Content-Type';
+  ContentTypeHeaderShort     = 'c';
+  CSeqHeader                 = 'CSeq';
+  DateHeader                 = 'Date';
+  DigestAuthorizationScheme  = 'Digest';
+  DigestResponseParam        = 'response';
+  DigestUriParam             = 'uri';
+  DispositionAlert           = 'alert';
+  DispositionIcon            = 'icon';
+  DispositionRender          = 'render';
+  DispositionSession         = 'session';
+  DomainParam                = 'domain';
+  DurationParam              = 'duration';
+  ErrorInfoHeader            = 'Error-Info';
+  ExpireNow                  = 0;
+  ExpiresHeader              = 'Expires';
+  ExpiresParam               = 'expires';
+  FromHeaderFull             = 'From';
+  FromHeaderShort            = 'f';
+  HandlingOptional           = 'optional';
+  HandlingParam              = 'handling';
+  HandlingRequired           = 'required';
+  InReplyToHeader            = 'In-Reply-To';
+  LooseRoutableParam         = 'lr';
+  MaddrParam                 = 'maddr';
+  MaxForwardsHeader          = 'Max-Forwards';
+  MD5Name                    = 'MD5';
+  MD5SessionName             = 'MD5-sess';
+  MethodAck                  = 'ACK';
+  MethodBye                  = 'BYE';
+  MethodCancel               = 'CANCEL';
+  MethodInvite               = 'INVITE';
+  MethodOptions              = 'OPTIONS';
+  MethodParam                = 'method';
+  MethodRegister             = 'REGISTER';
+  MIMEVersionHeader          = 'MIME-Version';
+  MinExpiresHeader           = 'Min-Expires';
+  NonceCountParam            = 'nc';
+  NonceParam                 = 'nonce';
+  OpaqueParam                = 'opaque';
+  OrganizationHeader         = 'Organization';
+  PriorityHeader             = 'Priority';
+  ProxyAuthenticateHeader    = 'Proxy-Authenticate';
+  ProxyAuthorizationHeader   = 'Proxy-Authorization';
+  ProxyRequireHeader         = 'Proxy-Require';
+  QopAuth                    = 'auth';
+  QopAuthInt                 = 'auth-int';
+  QopParam                   = 'qop';
+  QParam                     = 'q';
+  RealmParam                 = 'realm';
+  ReceivedParam              = 'received';
+  RecordRouteHeader          = 'Record-Route';
+  ReplyToHeader              = 'Reply-To';
+  RequireHeader              = 'Require';
+  RetryAfterHeader           = 'Retry-After';
+  RouteHeader                = 'Route';
+  RportParam                 = 'rport';
+  ServerHeader               = 'Server';
+  SipScheme                  = 'sip';
+  SipsScheme                 = 'sips';
+  StaleParam                 = 'stale';
+  SubjectHeaderFull          = 'Subject';
+  SubjectHeaderShort         = 's';
+  SupportedHeaderFull        = 'Supported';
+  SupportedHeaderShort       = 'k';
+  TagParam                   = 'tag';
+  TimestampHeader            = 'Timestamp';
+  ToHeaderFull               = 'To';
+  ToHeaderShort              = 't';
+  TransportParam             = 'transport';
+  TransportParamSCTP         = 'sctp';
+  TransportParamTCP          = 'tcp';
+  TransportParamTLS          = 'tls';
+  TransportParamUDP          = 'udp';
+  TTLParam                   = 'ttl';
+  UnsupportedHeader          = 'Unsupported';
+  UserAgentHeader            = 'User-Agent';
+  UsernameParam              = 'username';
+  UserParam                  = 'user';
+  UserParamIp                = 'ip';
+  UserParamPhone             = 'phone';
+  ViaHeaderFull              = 'Via';
+  ViaHeaderShort             = 'v';
+  WarningHeader              = 'Warning';
+  WWWAuthenticateHeader      = 'WWW-Authenticate';
+
+// Standard Status-Text messages for response Status-Codes
+const
+  RSSIPTrying                           = 'Trying';
+  RSSIPRinging                          = 'Ringing';
+  RSSIPCallIsBeingForwarded             = 'Call Is Being Forwarded';
+  RSSIPQueued                           = 'Queued';
+  RSSIPSessionProgress                  = 'Session Progress';
+  RSSIPOK                               = 'OK';
+  RSSIPMultipleChoices                  = 'Multiple Choices';
+  RSSIPMovedPermanently                 = 'Moved Permanently';
+  RSSIPMovedTemporarily                 = 'Moved Temporarily';
+  RSSIPUseProxy                         = 'Use Proxy';
+  RSSIPAlternativeService               = 'Alternative Service';
+  RSSIPBadRequest                       = 'Bad Request';
+  RSSIPUnauthorized                     = 'Unauthorized';
+  RSSIPPaymentRequired                  = 'Payment Required';
+  RSSIPForbidden                        = 'Forbidden';
+  RSSIPNotFound                         = 'Not Found';
+  RSSIPMethodNotAllowed                 = 'Method Not Allowed';
+  RSSIPNotAcceptableClient              = 'Not Acceptable';
+  RSSIPProxyAuthenticationRequired      = 'Proxy Authentication Required';
+  RSSIPRequestTimeout                   = 'Request Timeout';
+  RSSIPGone                             = 'Gone';
+  RSSIPRequestEntityTooLarge            = 'Request Entity Too Large';
+  RSSIPRequestURITooLarge               = 'Request-URI Too Large';
+  RSSIPUnsupportedMediaType             = 'Unsupported Media Type';
+  RSSIPUnsupportedURIScheme             = 'Unsupported URI Scheme';
+  RSSIPBadExtension                     = 'Bad Extension';
+  RSSIPExtensionRequired                = 'Extension Required';
+  RSSIPIntervalTooBrief                 = 'Interval Too Brief';
+  RSSIPTemporarilyUnavailable           = 'Temporarily unavailable';
+  RSSIPCallLegOrTransactionDoesNotExist = 'Call Leg/Transaction Does Not Exist';
+  RSSIPLoopDetected                     = 'Loop Detected';
+  RSSIPTooManyHops                      = 'Too Many Hops';
+  RSSIPAddressIncomplete                = 'Address Incomplete';
+  RSSIPAmbiguous                        = 'Ambiguous';
+  RSSIPBusyHere                         = 'Busy Here';
+  RSSIPRequestTerminated                = 'Request Terminated';
+  RSSIPNotAcceptableHere                = 'Not Acceptable Here';
+  RSSIPRequestPending                   = 'Request Pending';
+  RSSIPUndecipherable                   = 'Undecipherable';
+  RSSIPInternalServerError              = 'Internal Server Error';
+  RSSIPNotImplemented                   = 'Not Implemented';
+  RSSIPBadGateway                       = 'Bad Gateway';
+  RSSIPServiceUnavailable               = 'Service Unavailable';
+  RSSIPServerTimeOut                    = 'Server Time-out';
+  RSSIPSIPVersionNotSupported           = 'SIP Version not supported';
+  RSSIPMessageTooLarge                  = 'Message Too Large';
+  RSSIPBusyEverywhere                   = 'Busy Everywhere';
+  RSSIPDecline                          = 'Decline';
+  RSSIPDoesNotExistAnywhere             = 'Does not exist anywhere';
+  RSSIPNotAcceptableGlobal              = RSSIPNotAcceptableClient;
+  RSSIPUnknownResponseCode              = 'Unknown Response Code';
+
+  RSSIPRequestOutOfOrder = 'Request out of order';
+
+const
+  SIPProvisionalResponseClass   = 1;
+  SIPOKResponseClass            = 2;
+  SIPRedirectionResponseClass   = 3;
+  SIPFailureResponseClass       = 4;
+  SIPServerFailureResponseClass = 5;
+  SIPGlobalFailureResponseClass = 6;
+
+// Well-known response Status-Codes
+const
+  SIPTrying                           = 100;
+  SIPRinging                          = 180;
+  SIPCallIsBeingForwarded             = 181;
+  SIPQueued                           = 182;
+  SIPSessionProgress                  = 183;
+  SIPOK                               = 200;
+  SIPMultipleChoices                  = 300;
+  SIPMovedPermanently                 = 301;
+  SIPMovedTemporarily                 = 302;
+  SIPUseProxy                         = 305;
+  SIPAlternativeService               = 380;
+  SIPBadRequest                       = 400;
+  SIPUnauthorized                     = 401;
+  SIPPaymentRequired                  = 402;
+  SIPForbidden                        = 403;
+  SIPNotFound                         = 404;
+  SIPMethodNotAllowed                 = 405;
+  SIPNotAcceptableClient              = 406;
+  SIPProxyAuthenticationRequired      = 407;
+  SIPRequestTimeout                   = 408;
+  SIPGone                             = 410;
+  SIPRequestEntityTooLarge            = 413;
+  SIPRequestURITooLarge               = 414;
+  SIPUnsupportedMediaType             = 415;
+  SIPUnsupportedURIScheme             = 416;
+  SIPBadExtension                     = 420;
+  SIPExtensionRequired                = 421;
+  SIPIntervalTooBrief                 = 423;
+  SIPTemporarilyUnavailable           = 480;
+  SIPCallLegOrTransactionDoesNotExist = 481;
+  SIPLoopDetected                     = 482;
+  SIPTooManyHops                      = 483;
+  SIPAddressIncomplete                = 484;
+  SIPAmbiguous                        = 485;
+  SIPBusyHere                         = 486;
+  SIPRequestTerminated                = 487;
+  SIPNotAcceptableHere                = 488;
+  SIPRequestPending                   = 491;
+  SIPUndecipherable                   = 493;
+  SIPInternalServerError              = 500;
+  SIPNotImplemented                   = 501;
+  SIPBadGateway                       = 502;
+  SIPServiceUnavailable               = 503;
+  SIPServerTimeOut                    = 504;
+  SIPSIPVersionNotSupported           = 505;
+  SIPMessageTooLarge                  = 513;
+  SIPBusyEverywhere                   = 600;
+  SIPDecline                          = 603;
+  SIPDoesNotExistAnywhere             = 604;
+  SIPNotAcceptableGlobal              = 606;
+
+// Standard warning codes
+const
+  WarningIncompatibleNetworkProtocol              = 300;
+  WarningIncompatibleNetworkAddressFormats        = 301;
+  WarningIncompatibleTransportProtocol            = 302;
+  WarningIncompatibleBandwidthUnits               = 303;
+  WarningMediaTypeNotAvailable                    = 304;
+  WarningIncompatibleMediaFormat                  = 305;
+  WarningAttributeNotUnderstood                   = 306;
+  WarningSessionDescriptionParameterNotUnderstood = 307;
+  WarningMulticastNotAvailable                    = 330;
+  WarniningUnicastNotAvailable                    = 331;
+  WarningInsufficientBandwidth                    = 370;
+  WarningMisc                                     = 399;
+
+// Standard warning strings
+const
+  RSWarningIncompatibleNetworkProtocol =
+      'Incompatible network protocol: One or more network protocols contained '
+    + 'in the session description are not available.';
+  RSWarningIncompatibleNetworkAddressFormats =
+      'Incompatible network address formats: One or more network address '
+    + 'formats contained in the session description are not available.';
+  RSWarningIncompatibleTransportProtocol =
+      'Incompatible transport protocol: One or more transport protocols '
+    + 'described in the session description are not available.';
+  RSWarningIncompatibleBandwidthUnits =
+      'Incompatible bandwidth units: One or more bandwidth measurement units '
+    + 'contained in the session description were not understood.';
+  RSWarningMediaTypeNotAvailable =
+      'Media type not available: One or more media types contained in the '
+    + 'session description are not available.';
+  RSWarningIncompatibleMediaFormat =
+      'Incompatible media format: One or more media formats contained in the '
+    + 'session description are not available.';
+  RSWarningAttributeNotUnderstood =
+      'Attribute not understood: One or more of the media attributes in the '
+    + 'session description are not supported.';
+  RSWarningSessionDescriptionParameterNotUnderstood =
+      'Session description parameter not understood: A parameter other than '
+    + 'those listed above was not understood.';
+  RSWarningMulticastNotAvailable =
+      'Multicast not available: The site where the user is located does not '
+    + 'support multicast.';
+  RSWarniningUnicastNotAvailable =
+      'Unicast not available: The site where the user is located does not '
+    + 'support unicast communication (usually due to the presence of a '
+    + 'firewall).';
+  RSWarningInsufficientBandwidth =
+      'Insufficient bandwidth: The bandwidth specified in the session '
+    + 'description or defined by the media exceeds that known to be '
+    + 'available.';
+  RSWarningMisc =
+      'Miscellaneous warning';
+
+// Grammar definitions
 const
   HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
   HeaderChars           = HeaderUnreservedChars + UnreservedChars;
@@ -1205,6 +1510,8 @@ const
   UserUnreservedChars   = ['&', '=', '+', '$', ',', ';', '?', '/'];
   UserChars             = Alphabet + Digits + UnreservedChars + UserUnreservedChars;
 
+// Error messages
+const
   BadStatusCode               = -1;
   BadContentLength            = 'Content-Length must match body length';
   ConvertErrorMsg             = 'Failed to convert ''%s'' to type %s';
@@ -1253,27 +1560,6 @@ const
   UnmatchedQuotes             = 'Unmatched quotes';
   UnmatchedQuotesForParameter = 'Unmatched quotes around a parameter';
   UnsupportedScheme           = 'Unsupported URI scheme';
-
-function DecodeQuotedStr(const S: String; var Dest: String): Boolean;
-function EncodeQuotedStr(const S: String): String;
-function FirstChar(const S: String): String;
-function HalfQuoted(const S: String): Boolean;
-function IsEqual(const S1, S2: String): Boolean;
-function IsQuoted(const S: String): Boolean;
-function LastChar(const S: String): String;
-function NeedsQuotes(Name: String): Boolean;
-function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
-function ReadDigit(var Src: String): String;
-function QuoteStringIfNecessary(const S: String): String;
-function QValueToStr(const Q: TIdSipQValue): String;
-function ShortMonthToInt(const Month: String): Integer;
-function StreamToStr(Data: TStream): String;
-function StrToQValue(const S: String): TIdSipQValue;
-function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
-function StrToTransport(const S: String): TIdSipTransportType;
-function TransportToStr(const T: TIdSipTransportType): String;
-function WithoutFirstAndLastChars(const S: String): String;
-function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
 implementation
 
