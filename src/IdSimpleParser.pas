@@ -149,7 +149,7 @@ begin
 end;
 
 class function TIdIPAddressParser.IncIPAddress(IPAddress: String;
-                                            N: Cardinal = 1): String;
+                                               N: Cardinal = 1): String;
 var
   IPv6: TIdIPv6AddressRec;
 begin
@@ -165,7 +165,7 @@ begin
 end;
 
 class function TIdIPAddressParser.IncIPv4Address(IPAddress: String;
-                                              N: Cardinal = 1): String;
+                                                 N: Cardinal = 1): String;
 var
   B1, B2, B3, B4: Byte;
   Addy:           Cardinal;
@@ -282,10 +282,27 @@ begin
 end;
 
 class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Address: TIdIPv6AddressRec);
+  const
+    IPv6Delim    = ':';
+    IPv4Delim    = '.';
+    IPv6ZeroAbbr = IPv6Delim + IPv6Delim; // The short-hand way of writing a
+                                          // large sequence of zeroes
+  procedure Swap(var Address: TIdIPv6AddressRec; X, Y: Cardinal);
+  begin
+
+    Address[X] := Address[X] xor Address[Y];
+    Address[Y] := Address[X] xor Address[Y];
+    Address[X] := Address[X] xor Address[Y];
+  end;
+
   procedure Reverse(var Address: TIdIPv6AddressRec);
   var
     Temp: Word;
   begin
+//    Swap(Address, 0, 7);
+//    Swap(Address, 1, 6);
+//    Swap(Address, 2, 5);
+//    Swap(Address, 3, 4);
     Temp := Address[0];
     Address[0] := Address[1];
     Address[1] := Address[2];
@@ -295,8 +312,8 @@ class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Add
     Address[5] := Address[6];
     Address[6] := Address[7];
     Address[7] := Temp;
-
   end;
+
   procedure ParseChunk(Chunk: String;
                        var Address: TIdIPv6AddressRec;
                        var WordCount: Integer;
@@ -311,8 +328,8 @@ class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Add
 
     if (Chunk = '') then Exit;
 
-    while (Chunk <> '') and (IndyPos(':', Chunk) > 0) do begin
-      W := Fetch(Chunk, ':');
+    while (Chunk <> '') and (IndyPos(IPv6Delim, Chunk) > 0) do begin
+      W := Fetch(Chunk, IPv6Delim);
 
       if (Length(W) > 4) or not TIdSimpleParser.IsHexNumber(W) then
         raise EConvertError.Create('');
@@ -322,11 +339,13 @@ class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Add
       Inc(I);
     end;
 
-    if AllowTrailingIPv4 and (IndyPos('.', Chunk) > 0) then begin
+    if AllowTrailingIPv4 and (IndyPos(IPv4Delim, Chunk) > 0) then begin
       if (Chunk <> '') then begin
-        Address[I] := (StrToInt(Fetch(Chunk, '.')) shl 8) or StrToInt(Fetch(Chunk, '.'));
+        Address[I] := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
+                    or StrToInt(Fetch(Chunk, IPv4Delim));
         Inc(I);
-        Address[I] := (StrToInt(Fetch(Chunk, '.')) shl 8) or StrToInt(Chunk);
+        Address[I] := (StrToInt(Fetch(Chunk, IPv4Delim)) shl 8)
+                    or StrToInt(Chunk);
         Inc(WordCount, 2);
       end
     end
@@ -336,13 +355,13 @@ class procedure TIdIPAddressParser.ParseIPv6Address(IPv6Address: String; var Add
     end;
   end;
 var
-  FirstAddy:   TIdIPv6AddressRec;
-  FirstChunk:  String;
-  FirstIndex:  Integer;
-  I:           Integer;
-  SecondAddy:  TIdIPv6AddressRec;
-  SecondChunk: String;
-  SecondIndex: Integer;
+  FirstAddy:       TIdIPv6AddressRec;
+  FirstChunk:      String;
+  FirstChunkSize:  Integer;
+  I, J:            Integer;
+  SecondAddy:      TIdIPv6AddressRec;
+  SecondChunk:     String;
+  SecondChunkSize: Integer;
 begin
     // There are 5 possible kinds of IPv6 addresses:
     // no ::
@@ -358,21 +377,25 @@ begin
 
   FillChar(Address, SizeOf(Address), 0);
   try
+    // We split the address into two chunks - the "pre-::" and the "post-::"
+    // chunks.
     SecondChunk := IPv6Address;
-    FirstChunk := Fetch(SecondChunk, '::');
+    FirstChunk := Fetch(SecondChunk, IPv6ZeroAbbr);
 
-    ParseChunk(FirstChunk, FirstAddy, FirstIndex, IndyPos('.', FirstChunk) > 0);
-    ParseChunk(SecondChunk, SecondAddy, SecondIndex, true);
+    // We parse the chunks - since SecondChunk could well be empty, we
+    // conditionally allow FirstChunk to contain a trailing IPv4 address.
+    // SecondChunk can always contain a trailing IPv4 address.
+    ParseChunk(FirstChunk, FirstAddy, FirstChunkSize, IndyPos(IPv4Delim, FirstChunk) > 0);
+    ParseChunk(SecondChunk, SecondAddy, SecondChunkSize, true);
 
-    for I := 0 to FirstIndex - 1 do
+    // And finally we copy the two chunks into the answer.
+    for I := 0 to FirstChunkSize - 1 do
       Address[I] := FirstAddy[I];
 
-    Reverse(SecondAddy);
-    I := High(Address);
-    while (SecondIndex > 0) do begin
-      Address[I] := SecondAddy[I];
-      Dec(I);
-      Dec(SecondIndex);
+    J := Low(SecondAddy);
+    for I := High(Address) - SecondChunkSize + 1 to High(Address) do begin
+      Address[I] := SecondAddy[J];
+      Inc(J);
     end;
   except
     on EConvertError do

@@ -327,7 +327,7 @@ begin
   Self.Clear(Address);
   TIdIPAddressParser.ParseIPv6Address('::', Address);
   for I := Low(Address) to High(Address) do
-    CheckEquals(0, Address[I], '0:0:0:0:0:0:0:0, Index ' + IntToStr(I));
+    CheckEquals(0, Address[I], '::, Index ' + IntToStr(I));
 
   Self.Clear(Address);
   TIdIPAddressParser.ParseIPv6Address('::1', Address);
@@ -338,12 +338,12 @@ begin
   Self.Clear(Address);
   TIdIPAddressParser.ParseIPv6Address('1::2', Address);
   CheckEquals(IntToHex($0001, 4),
-              IntToHex(Address[0], 4),
+              IntToHex(Address[Low(Address)], 4),
               '1::2, Index 0');
   for I := Low(Address) + 1 to High(Address) - 1 do
     CheckEquals(0, Address[I], '1::2, Index ' + IntToStr(I));
   CheckEquals(IntToHex($0002, 4),
-              IntToHex(Address[7], 4),
+              IntToHex(Address[High(Address)], 4),
               '1::2, Index 7');
 
   Self.Clear(Address);
@@ -372,6 +372,26 @@ begin
   CheckEquals(IntToHex($0001, 4),
               IntToHex(Address[7], 4),
               '2002:5156:4019:1::1, Index 7');
+
+  Self.Clear(Address);
+  TIdIPAddressParser.ParseIPv6Address('2002:5156::4019:2:1', Address);
+  CheckEquals(IntToHex($2002, 4),
+              IntToHex(Address[0], 4),
+              '2002:5156::4019:2:1, Index 0');
+  CheckEquals(IntToHex($5156, 4),
+              IntToHex(Address[1], 4),
+              '2002:5156::4019:2:1, Index 1');
+  for I := 2 to 4 do
+    CheckEquals(IntToHex($0, 4),
+                IntToHex(Address[I], 4),
+                '2002:5156::4019:2:1, Index ' + IntToStr(I));
+  CheckEquals(IntToHex($2, 4),
+              IntToHex(Address[6], 4),
+              '2002:5156::4019:2:1, Index 6');
+  CheckEquals(IntToHex($1, 4),
+              IntToHex(Address[7], 4),
+              '2002:5156::4019:2:1, Index 7');
+
 
   Self.Clear(Address);
   TIdIPAddressParser.ParseIPv6Address('2002:DEAD:BEEF:FEED:BABE:F00D:192.168.0.1', Address);
@@ -429,7 +449,15 @@ begin
 
   try
     TIdIPAddressParser.ParseIPv6Address('', Address);
-    Fail('Failed to bail out on ''''');
+    Fail('Failed to raise exception on ''''');
+  except
+    on EConvertError do;
+  end;
+
+  try
+    TIdIPAddressParser.ParseIPv6Address('1::2::3', Address);
+
+    Fail('Failed to raise exception on ''1::2::3');
   except
     on EConvertError do;
   end;
