@@ -3268,24 +3268,23 @@ end;
 
 procedure TIdSipCSeqHeader.Parse(const Value: String);
 var
+  Error: Integer;
+  N:     Int64;
   S:     String;
   Token: String;
-  N:     Cardinal;
 begin
   S := Trim(Value);
   // Yes, sure, there will be no spaces returned from Fetch(S, ' '). But what
   // about other kinds of whitespace? Best to be sure!
   Token := Trim(Fetch(S, ' '));
 
-  N := 0;
-  try
-    N := StrToInt(Token)
-  except
-    on EConvertError do
-      Self.FailParse(InvalidSequenceNumber);
-    on ERangeError do
-      Self.FailParse(InvalidSequenceNumber);
-    else raise;
+  // We use an Int64 because Val will raise an erroneous range error if Token
+  // contains a number greater than High(Integer) - even if we declare N as a
+  // Cardinal.
+  Val(Token, N, Error);
+
+  if ((Error <> 0) or (N > High(Self.SequenceNo))) then begin
+    Self.FailParse(InvalidSequenceNumber);
   end;
 
   Self.SequenceNo := N;
@@ -3440,16 +3439,19 @@ begin
 end;
 
 procedure TIdSipNumericHeader.Parse(const Value: String);
+var
+  Error: Integer;
+  N:     Int64;
 begin
   if not TIdSipParser.IsNumber(Value) then
     Self.FailParse(InvalidNumber)
   else begin
-    try
-      fNumericValue := StrToInt(Value);
-    except
-      on EConvertError do
-        Self.FailParse(InvalidNumber);
-    end;
+    Val(Value, N, Error);
+
+    if ((Error <> 0) or (N > High(Self.fNumericValue))) then
+      Self.FailParse(InvalidNumber);
+
+    fNumericValue := N;
 
     inherited Parse(Value);
   end;

@@ -194,6 +194,7 @@ type
   published
     procedure TestIncrement;
     procedure TestValue; override;
+    procedure TestVeryLargeLegalValue;
     procedure TestVeryLargeValue;
   end;
 
@@ -259,6 +260,7 @@ type
     procedure TestValueWithNegativeNumber;
     procedure TestValueWithString;
     procedure TestVeryLargeValue;
+    procedure TestVeryLargeLegalValue;
   end;
 
   TestTIdSipAuthenticateHeader = class(THeaderTestCase)
@@ -2289,6 +2291,13 @@ begin
         'Failed to bail out with a non-method, ''42 "INVITE"');
 end;
 
+procedure TestTIdSipCSeqHeader.TestVeryLargeLegalValue;
+begin
+  Self.C.Value := '3735928559 BYE'; // $deadbeef in base-10
+  Check(not Self.C.IsMalformed,
+        'CSeq must support a sequence number N > (2^32)-1');
+end;
+
 procedure TestTIdSipCSeqHeader.TestVeryLargeValue;
 begin
   Self.C.Value := '4294967297 INVITE';
@@ -2632,9 +2641,16 @@ begin
         'Failed to bail out with string value');
 end;
 
+procedure TestTIdSipNumericHeader.TestVeryLargeLegalValue;
+begin
+  Self.N.Value := '3735928559'; // $deadbeef in base-10
+  Check(not Self.N.IsMalformed,
+        'Numeric headers must support a sequence number N > (2^32)-1');
+end;
+
 procedure TestTIdSipNumericHeader.TestVeryLargeValue;
 begin
-  Self.N.Value := '4294967297';
+  Self.N.Value := '9999999999';
   Check(Self.N.IsMalformed,
         'Failed to bail out with a ridiculously large number');
 end;
