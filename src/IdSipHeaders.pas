@@ -60,7 +60,7 @@ type
     destructor  Destroy; override;
 
     procedure AddParameter(const Name: String; const Value: String = '');
-    function  DefaultPort: Integer; virtual;
+    function  DefaultPort: Cardinal; virtual;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
     function  IsLooseRoutable: Boolean;
@@ -88,8 +88,8 @@ type
 
   TIdSipsUri = class(TIdSipUri)
   public
-    function DefaultPort: Integer; override;
-    function  IsSecure: Boolean; override;
+    function DefaultPort: Cardinal; override;
+    function IsSecure: Boolean; override;
   end;
 
   TIdSipHeader = class(TPersistent)
@@ -139,7 +139,6 @@ type
     procedure SetAddress(const Value: TIdSipURI);
   protected
     function  GetValue: String; override;
-    procedure ParseWithoutAngleBrackets;
     procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
@@ -751,7 +750,7 @@ begin
   Self.Parameters.Add(Name + '=' + TIdUri.URLDecode(Value));
 end;
 
-function TIdSipUri.DefaultPort: Integer;
+function TIdSipUri.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
 end;
@@ -876,10 +875,13 @@ begin
       Result := Result + '@';
     end;
 
-    Result := Result + Self.Host
-            + Self.ParamsAsString
-            + Self.HeadersAsString;
-  end;          
+    Result := Result + Self.Host;
+
+    if Self.Port <> Self.DefaultPort then
+      Result := Result + ':' + IntToStr(Self.Port);
+
+    Result := Result + Self.ParamsAsString + Self.HeadersAsString;
+  end;
 end;
 
 function TIdSipUri.GetUserParameter: String;
@@ -957,6 +959,8 @@ end;
 
 procedure TIdSipUri.Parse(Uri: String);
 begin
+  Self.Reset;
+
   if (Uri <> '') then begin
     Self.Scheme := Fetch(Uri, ':');
     if (IndyPos('@', Uri) > 0) then
@@ -1032,7 +1036,7 @@ begin
   Self.Host      := '';
   Self.Parameters.Clear;
   Self.Password  := '';
-  Self.Port      := 0;
+  Self.Port      := Self.DefaultPort;
   Self.Scheme    := '';
   Self.Username  := '';
 end;
@@ -1059,7 +1063,6 @@ end;
 
 procedure TIdSipUri.SetUri(const Value: String);
 begin
-  Self.Reset;
   Self.Parse(Value);
 end;
 
@@ -1073,7 +1076,7 @@ end;
 //******************************************************************************
 //* TIdSipsUri Public methods **************************************************
 
-function TIdSipsUri.DefaultPort: Integer;
+function TIdSipsUri.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
 end;
@@ -1324,9 +1327,6 @@ begin
 
   Result := QuoteStringIfNecessary(Result);
 
-//  if (IndyPos(' ', Result) > 0) then
-//    Result := '"' + Result + '"';
-
   URI := Self.Address.URI;
   if (IndyPos(';', URI) > 0) or (IndyPos(',', URI) > 0) or (IndyPos('?', URI) > 0) or (Result <> '') then
     URI := '<' + URI + '>';
@@ -1335,10 +1335,6 @@ begin
     Result := URI
   else
     Result := Result + ' ' + URI;
-end;
-
-procedure TIdSipAddressHeader.ParseWithoutAngleBrackets;
-begin
 end;
 
 procedure TIdSipAddressHeader.SetValue(const Value: String);
@@ -1779,7 +1775,7 @@ end;
 
 function TIdSipFromToHeader.HasTag: Boolean;
 begin
-  Result := Self.Tag <> '';
+  Result := Self.IndexOfParam(TagParam) <> -1;
 end;
 
 function TIdSipFromToHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
@@ -1815,11 +1811,18 @@ begin
 end;
 
 procedure TIdSipFromToHeader.SetTag(const Value: String);
-begin
-  Self.Params[TagParam] := Value;
 
-  if (Self.IndexOfParam(TagParam) > -1) and not TIdSipParser.IsToken(Self.Params[TagParam]) then
-    Self.FailParse;
+begin
+  if (Value = '') then begin
+    if Self.HasTag then
+      Self.Parameters.Delete(Self.IndexOfParam(TagParam))
+  end
+  else begin
+    Self.Params[TagParam] := Value;
+
+    if Self.HasTag and not TIdSipParser.IsToken(Self.Params[TagParam]) then
+      Self.FailParse;
+  end;
 end;
 
 //******************************************************************************
