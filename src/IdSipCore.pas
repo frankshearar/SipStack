@@ -308,6 +308,7 @@ type
     procedure AddKnownRegistrar(Registrar: TIdSipUri;
                                 const CallID: String;
                                 SequenceNo: Cardinal);
+    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest);
     function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AddOutboundRegistration: TIdSipOutboundRegistration;
     function  AddOutboundSession: TIdSipOutboundSession;
@@ -320,6 +321,7 @@ type
                                    Proc: TIdSipActionProc);
     function  FindSession(Msg: TIdSipMessage): TIdSipSession;
     function  GetContact: TIdSipContactHeader;
+    function  GetFrom: TIdSipFromHeader;
     function  GetDefaultRegistrationExpiryTime: Cardinal;
     procedure InboundSessionExpire(Action: TIdSipAction);
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
@@ -340,6 +342,7 @@ type
     procedure SessionProgress(Action: TIdSipAction);
     procedure SetContact(Value: TIdSipContactHeader);
     procedure SetDefaultRegistrationExpiryTime(Value: Cardinal);
+    procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetProxy(Value: TIdSipUri);
     procedure TransactionComplete(Action: TIdSipAction);
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
@@ -350,11 +353,8 @@ type
                            Receiver: TIdSipTransport); override;
     procedure ActOnResponse(Response: TIdSipResponse;
                             Receiver: TIdSipTransport); override;
-    procedure AddLocalHeaders(OutboundRequest: TIdSipRequest);
-    function  GetFrom: TIdSipFromHeader;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
-    procedure SetFrom(Value: TIdSipFromHeader);
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
@@ -2172,44 +2172,6 @@ begin
   Self.CleanOutTerminatedActions;
 end;
 
-procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
-var
-  Transport: String;
-begin
-  // The transport must be discovered using RFC 3263
-  // TODO: Lies. Pure hack to get X-Lite talking
-
-  if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
-    Transport := OutboundRequest.ToHeader.Address.Transport
-  else
-    Transport := TransportParamTCP;
-
-//  Transport := TransportParamUDP;
-
-  OutboundRequest.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' ' + Self.HostName;
-
-  OutboundRequest.LastHop.Branch := Self.NextBranch;
-
-  if (Self.UserAgentName <> '') then
-    OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-
-  OutboundRequest.AddHeader(Self.Contact);
-
-  if Self.HasProxy then
-    OutboundRequest.Route.AddRoute(Self.Proxy);
-
-  if OutboundRequest.HasSipsUri then
-    OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
-end;
-
-function TIdSipUserAgentCore.GetFrom: TIdSipFromHeader;
-begin
-  if not Assigned(fFrom) then
-    fFrom := TIdSipFromHeader.Create;
-
-  Result := fFrom;
-end;
-
 procedure TIdSipUserAgentCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                             Request: TIdSipRequest);
 begin
@@ -2238,14 +2200,6 @@ begin
   else
     inherited RejectRequest(Reaction, Request);
   end;
-end;
-
-procedure TIdSipUserAgentCore.SetFrom(Value: TIdSipFromHeader);
-begin
-  Self.From.Assign(Value);
-
-  if Self.From.IsMalformed then
-    raise EBadHeader.Create(Self.From.Name);
 end;
 
 function TIdSipUserAgentCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
@@ -2330,6 +2284,36 @@ begin
     NewReg.Registrar.Uri := Registrar.Uri;
     NewReg.SequenceNo    := SequenceNo;
   end;
+end;
+
+procedure TIdSipUserAgentCore.AddLocalHeaders(OutboundRequest: TIdSipRequest);
+var
+  Transport: String;
+begin
+  // The transport must be discovered using RFC 3263
+  // TODO: Lies. Pure hack to get X-Lite talking
+
+  if OutboundRequest.ToHeader.Address.HasParameter(TransportParam) then
+    Transport := OutboundRequest.ToHeader.Address.Transport
+  else
+    Transport := TransportParamTCP;
+
+//  Transport := TransportParamUDP;
+
+  OutboundRequest.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' ' + Self.HostName;
+
+  OutboundRequest.LastHop.Branch := Self.NextBranch;
+
+  if (Self.UserAgentName <> '') then
+    OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
+
+  OutboundRequest.AddHeader(Self.Contact);
+
+  if Self.HasProxy then
+    OutboundRequest.Route.AddRoute(Self.Proxy);
+
+  if OutboundRequest.HasSipsUri then
+    OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
 end;
 
 function TIdSipUserAgentCore.AddOutboundOptions: TIdSipOutboundOptions;
@@ -2444,6 +2428,14 @@ begin
     fContact := TIdSipContactHeader.Create;
 
   Result := fContact;
+end;
+
+function TIdSipUserAgentCore.GetFrom: TIdSipFromHeader;
+begin
+  if not Assigned(fFrom) then
+    fFrom := TIdSipFromHeader.Create;
+
+  Result := fFrom;
 end;
 
 function TIdSipUserAgentCore.GetDefaultRegistrationExpiryTime: Cardinal;
@@ -2649,6 +2641,14 @@ end;
 procedure TIdSipUserAgentCore.SetDefaultRegistrationExpiryTime(Value: Cardinal);
 begin
   Self.BindingDB.DefaultExpiryTime := Value;
+end;
+
+procedure TIdSipUserAgentCore.SetFrom(Value: TIdSipFromHeader);
+begin
+  Self.From.Assign(Value);
+
+  if Self.From.IsMalformed then
+    raise EBadHeader.Create(Self.From.Name);
 end;
 
 procedure TIdSipUserAgentCore.SetProxy(Value: TIdSipUri);
