@@ -29,6 +29,12 @@ type
     procedure WaitForTimeout(Event: TEvent; Msg: String); overload;
   public
     procedure CheckEquals(Expected, Received: TStrings; Msg: String); overload;
+    procedure CheckEqualsW(Expected,
+                           Actual: WideString;
+                           Msg: String);
+    procedure CheckUnicode(Expected: WideString;
+                           Actual: String;
+                           Msg: String);
     procedure SetUp; override;
     procedure TearDown; override;
 
@@ -59,6 +65,40 @@ begin
     CheckEquals(Expected.Count, Received.Count, 'Wrong linecount')
   else
     CheckEquals(Expected.Count, Received.Count, Msg + ': Wrong linecount');
+end;
+
+procedure TThreadingTestCase.CheckEqualsW(Expected,
+                                          Actual: WideString;
+                                          Msg: String);
+begin
+  if (Expected <> Actual) then
+    FailNotEquals(Expected, Actual, Msg, CallerAddr);
+end;
+
+procedure TThreadingTestCase.CheckUnicode(Expected: WideString;
+                                          Actual: String;
+                                          Msg: String);
+var
+  ActualI:   Integer;
+  ExpectedI: Integer;
+  W:         WideChar;
+begin
+  // Check that Actual contains the same data, byte-for-byte, as Expected.
+
+  ActualI   := 1;
+  ExpectedI := 1;
+  while ActualI <= Length(Actual) - 1 do begin
+    W := WideChar((Ord(Actual[ActualI]) shl 8) + Ord(Actual[ActualI + 1]));
+    Check(Expected[ExpectedI] = W,
+          Msg + ': character ' + IntToStr(ExpectedI)
+              + ' ($' + IntToHex(Ord(W), 4) + ') differs');
+    Inc(ActualI, SizeOf(WideChar));
+    Inc(ExpectedI);
+  end;
+
+  CheckEquals(Length(Expected),
+              Length(Actual) div SizeOf(WideChar),
+              Msg + ': differing lengths');
 end;
 
 procedure TThreadingTestCase.SetUp;

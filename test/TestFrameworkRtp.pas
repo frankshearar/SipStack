@@ -19,12 +19,6 @@ type
   TTestRTP = class(TThreadingTestCase)
   public
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-    procedure CheckEqualsW(Expected,
-                           Actual: WideString;
-                           Msg: String);
-    procedure CheckUnicode(Expected: WideString;
-                           Actual: String;
-                           Msg: String);
   end;
 
   TIdMockRTPPeer = class(TIdInterfacedObject,
@@ -155,40 +149,6 @@ begin
     CheckEquals(Integer(Expected.CsrcIDs[I]),
                 Integer(Received.CsrcIDs[I]),
                 IntToStr(I) + 'th CSRC ID');
-end;
-
-procedure TTestRTP.CheckEqualsW(Expected,
-                                Actual: WideString;
-                                Msg: String);
-begin
-  if (Expected <> Actual) then
-    FailNotEquals(Expected, Actual, Msg, CallerAddr);
-end;
-
-procedure TTestRTP.CheckUnicode(Expected: WideString;
-                                Actual: String;
-                                Msg: String);
-var
-  ActualI:   Integer;
-  ExpectedI: Integer;
-  W:         WideChar;
-begin
-  // Check that Actual contains the same data, byte-for-byte, as Expected.
-
-  ActualI   := 1;
-  ExpectedI := 1;
-  while ActualI <= Length(Actual) - 1 do begin
-    W := WideChar((Ord(Actual[ActualI]) shl 8) + Ord(Actual[ActualI + 1]));
-    Check(Expected[ExpectedI] = W,
-          Msg + ': character ' + IntToStr(ExpectedI)
-              + ' ($' + IntToHex(Ord(W), 4) + ') differs');
-    Inc(ActualI, SizeOf(WideChar));
-    Inc(ExpectedI);
-  end;
-
-  CheckEquals(Length(Expected),
-              Length(Actual) div SizeOf(WideChar),
-              Msg + ': differing lengths');
 end;
 
 //******************************************************************************
