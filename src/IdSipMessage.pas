@@ -176,7 +176,7 @@ type
   //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   TIdSipHeader = class(TPersistent)
   private
-    fIsMalformed: Boolean;
+    fIsMalformed:      Boolean;
     fName:             String;
     fParams:           TStrings;
     fParseFailReason:  String;
@@ -216,7 +216,7 @@ type
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
 
-    property IsMalformed:           Boolean read fIsMalformed;
+    property IsMalformed:                Boolean read fIsMalformed;
     property Name:                       String  read GetName write SetName;
     property Value:                      String  read GetValue write SetValue;
     property Params[const Name: String]: String  read GetParam write SetParam;
@@ -825,15 +825,16 @@ type
 
   TIdSipMessage = class(TPersistent)
   private
-    fBody:        String;
+    fBody:             String;
     fContacts:         TIdSipContacts;
     fPath:             TIdSipViaPath;
     fRecordRoute:      TIdSipRecordRoutePath;
-    fIsMalformed: Boolean;
+    fIsMalformed:      Boolean;
     fHeaders:          TIdSipHeaders;
     fParseFailReason:  String;
     fSIPVersion:       String;
 
+    function  ContentLengthEqualsBodyLength: Boolean;
     function  FirstMalformedHeader: TIdSipHeader;
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
@@ -843,6 +844,7 @@ type
     function  GetCSeq: TIdSipCSeqHeader;
     function  GetFrom: TIdSipFromHeader;
     function  GetTo: TIdSipToHeader;
+    function  HasBodyButMissingContentType: Boolean;
     function  Minimum(A, B: Cardinal): Cardinal;
     function  QuickestContactExpiry: Cardinal;
     function  QuickestExpiresHeader: Cardinal;
@@ -4925,7 +4927,8 @@ begin
   Result := Self.fIsMalformed    // something went wrong parsing the first line
     or Self.MissingRequiredHeaders
     or Self.Headers.IsMalformed
-    or (Self.ContentLength <> Length(Self.Body));
+    or not Self.ContentLengthEqualsBodyLength
+    or Self.HasBodyButMissingContentType;
 end;
 
 function TIdSipMessage.HeaderCount: Integer;
@@ -5020,6 +5023,18 @@ end;
 
 //* TIdSipMessage Private methods **********************************************
 
+function TIdSipMessage.ContentLengthEqualsBodyLength: Boolean;
+var
+  CL: Integer;
+begin
+  if Self.HasHeader(ContentLengthHeaderFull) then
+    CL := Self.ContentLength
+  else
+    CL := 0;
+
+  Result := CL = Length(Self.Body);
+end;
+
 function TIdSipMessage.FirstMalformedHeader: TIdSipHeader;
 begin
   Result := nil;
@@ -5070,6 +5085,12 @@ end;
 function TIdSipMessage.GetTo: TIdSipToHeader;
 begin
   Result := Self.FirstHeader(ToHeaderFull) as TIdSipToHeader;
+end;
+
+function TIdSipMessage.HasBodyButMissingContentType: Boolean;
+begin
+  Result := (Length(Self.Body) > 0)
+    and not Self.HasHeader(ContentTypeHeaderFull);
 end;
 
 function TIdSipMessage.Minimum(A, B: Cardinal): Cardinal;
@@ -6128,7 +6149,7 @@ begin
     end;
 
     Self.CheckContentLengthContentType(Response);
-  //  Self.CheckRequiredResponseHeaders(Response);
+    //Self.CheckRequiredResponseHeaders(Response);
   except
     on E: EBadResponse do begin
       Response.MarkAsInvalid(E.Message);
@@ -6187,12 +6208,11 @@ var
 begin
   Self.CheckRequiredResponseHeaders(Msg);
 
+  // We assume that a missing Max-Forwards implies a default value (typically
+  // 70). The problem's too minor to reject.
   Request := Msg as TIdSipRequest;
   if not Request.HasHeader(MaxForwardsHeader) then
     Request.MaxForwards := Request.DefaultMaxForwards;
-
-//  if not Msg.HasHeader(MaxForwardsHeader) then
-//    Self.FailParse(Msg, MissingMaxForwards);
 end;
 
 procedure TIdSipParser.CheckRequiredResponseHeaders(Msg: TIdSipMessage);

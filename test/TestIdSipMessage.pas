@@ -57,6 +57,7 @@ type
     procedure TestFirstRequire;
     procedure TestHasExpiry;
     procedure TestIsMalformedContentLength;
+    procedure TestIsMalformedMissingContentType;
     procedure TestIsMalformedMissingCallID;
     procedure TestIsMalformedMissingCseq;
     procedure TestIsMalformedMissingFrom;
@@ -370,9 +371,9 @@ procedure TestTIdSipMessage.AddRequiredHeaders(Msg: TIdSipMessage);
 begin
   Msg.AddHeader(CallIDHeaderFull).Value := 'foo';
   Msg.AddHeader(CSeqHeader).Value       := '1 foo';
-  Msg.AddHeader(FromHeaderFull).Value   := 'foo';
-  Msg.AddHeader(ToHeaderFull).Value     := 'foo';
-  Msg.AddHeader(ViaHeaderFull).Value    := 'SIP/2.0 UDP foo';
+  Msg.AddHeader(FromHeaderFull).Value   := 'sip:foo';
+  Msg.AddHeader(ToHeaderFull).Value     := 'sip:foo';
+  Msg.AddHeader(ViaHeaderFull).Value    := 'SIP/2.0/UDP foo';
 end;
 
 //* TestTIdSipMessage Published methods ****************************************
@@ -584,16 +585,11 @@ end;
 
 procedure TestTIdSipMessage.TestIsMalformedContentLength;
 begin
-  Self.Msg.AddHeader(CallIDHeaderFull).Value  := 'foo';
-  Self.Msg.AddHeader(CSeqHeader).Value        := '1 INVITE';
-  Self.Msg.AddHeader(FromHeaderFull).Value    := 'sip:foo';
-  Self.Msg.AddHeader(MaxForwardsHeader).Value := '70';
-  Self.Msg.AddHeader(ToHeaderFull).Value      := 'sip:foo';
-  Self.Msg.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP foo';
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.ContentType := 'text/plain';
 
-  Self.Msg.ContentLength := 0;
   Check(not Self.Msg.IsMalformed,
-        'Content-Length = 0; empty body');
+        'Missing Content-Length; empty body');
 
   Self.Msg.Body := 'foo';
   Check(Self.Msg.IsMalformed,
@@ -603,6 +599,19 @@ begin
   Self.Msg.ContentLength := 3;
   Check(not Self.Msg.IsMalformed,
         'Content-Length = 3; body = ''foo''');
+end;
+
+procedure TestTIdSipMessage.TestIsMalformedMissingContentType;
+begin
+  Self.AddRequiredHeaders(Self.Msg);
+  Self.Msg.Body := 'foo';
+  Self.Msg.ContentLength := 3;
+  Check(Self.Msg.IsMalformed,
+        'Length(Body) > 0 but no Content-Type');
+
+  Self.Msg.ContentType := 'text/plain';
+  Check(not Self.Msg.IsMalformed,
+        'Content-Type present');
 end;
 
 procedure TestTIdSipMessage.TestIsMalformedMissingCallID;
