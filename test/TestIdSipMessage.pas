@@ -58,6 +58,7 @@ type
     procedure TestSetContentType;
     procedure TestSetCSeq;
     procedure TestSetFrom;
+    procedure TestSetPath;
     procedure TestSetSipVersion;
     procedure TestSetTo;
   end;
@@ -71,6 +72,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAckFor;
+    procedure TestAckForWithRoute;
     procedure TestAddressOfRecord;
     procedure TestAssign;
     procedure TestAssignBad;
@@ -102,7 +105,7 @@ type
     procedure TestNewRequestHasContentLength;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
-    procedure TestSetPath;
+    procedure TestSetRoute;
   end;
 
   TestTIdSipResponse = class(TTestCaseSip)
@@ -698,6 +701,30 @@ begin
   end;
 end;
 
+procedure TestTIdSipMessage.TestSetPath;
+var
+  H: TIdSipHeaders;
+  P: TIdSipViaPath;
+begin
+  Self.Msg.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+
+  H := TIdSipHeaders.Create;
+  try
+    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw3.leo-ix.org;branch=z9hG4bK776asdhds';
+    P := TIdSipViaPath.Create(H);
+    try
+      Self.Msg.Path := P;
+
+      Check(Self.Msg.Path.IsEqualTo(P), 'Path not correctly set');
+    finally
+      P.Free;
+    end;
+  finally
+    H.Free;
+  end;
+end;
+
 procedure TestTIdSipMessage.TestSetSipVersion;
 begin
   Self.Msg.SIPVersion := 'SIP/2.0';
@@ -755,6 +782,53 @@ begin
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
+
+procedure TestTIdSipRequest.TestAckFor;
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.Request.AckFor(Self.Response);
+  try
+    Check(Ack.IsAck, 'Method');
+    CheckEquals(Self.Request.CallID, Ack.CallID, 'Call-ID');
+    CheckEquals(Self.Request.From.AsString,
+                Ack.From.AsString,
+                'From');
+    CheckEquals(Self.Request.RequestUri.Uri,
+                Ack.RequestUri.Uri,
+                'Request-URI');
+    CheckEquals(Self.Response.ToHeader.AsString,
+                Ack.ToHeader.AsString,
+                'To');
+    CheckEquals(1, Ack.Path.Count, 'Via path hop count');
+    CheckEquals(Self.Response.LastHop.AsString,
+                Ack.LastHop.AsString, 'Via last hop');
+    CheckEquals(Self.Request.Cseq.SequenceNo,
+                Ack.Cseq.SequenceNo,
+                'CSeq sequence no');
+    CheckEquals(MethodAck,
+                Ack.Cseq.Method,
+                'CSeq method');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestAckForWithRoute;
+var
+  Ack: TIdSipRequest;
+begin
+  Self.Request.AddHeader(RouteHeader).Value := '<sip:gw1.tessier-ashpool.co.luna;lr>';
+  Self.Request.AddHeader(RouteHeader).Value := '<sip:gw2.tessier-ashpool.co.luna>';
+
+  Ack := Self.Request.AckFor(Self.Response);
+  try
+    Check(Self.Request.Route.IsEqualTo(Ack.Route),
+          'Route path');
+  finally
+    Ack.Free;
+  end;
+end;
 
 procedure TestTIdSipRequest.TestAddressOfRecord;
 begin
@@ -1300,22 +1374,22 @@ begin
               'Max-Forwards not set');
 end;
 
-procedure TestTIdSipRequest.TestSetPath;
+procedure TestTIdSipRequest.TestSetRoute;
 var
   H: TIdSipHeaders;
-  P: TIdSipViaPath;
+  P: TIdSipRoutePath;
 begin
-  Self.Request.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Request.AddHeader(RouteHeader).Value := '<sip:gw1.leo-ix.org>';
 
   H := TIdSipHeaders.Create;
   try
-    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
-    H.Add(ViaHeaderFull).Value := 'SIP/2.0/TCP gw3.leo-ix.org;branch=z9hG4bK776asdhds';
-    P := TIdSipViaPath.Create(H);
+    H.Add(RouteHeader).Value := '<sip:gw2.leo-ix.org>';
+    H.Add(RouteHeader).Value := '<sip:gw3.leo-ix.org;lr>';
+    P := TIdSipRoutePath.Create(H);
     try
-      Self.Request.Path := P;
+      Self.Request.Route := P;
 
-      Check(Self.Request.Path.IsEqualTo(P), 'Path not correctly set');
+      Check(Self.Request.Route.IsEqualTo(P), 'Path not correctly set');
     finally
       P.Free;
     end;

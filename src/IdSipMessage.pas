@@ -96,16 +96,20 @@ type
   private
     fMethod:     String;
     fRequestUri: TIdSipURI;
+    fRoute:      TIdSipRoutePath;
 
     function  GetMaxForwards: Byte;
     procedure SetMaxForwards(Value: Byte);
     procedure SetRequestUri(Value: TIdSipURI);
+    procedure SetRoute(Value: TIdSipRoutePath);
   protected
     function FirstLine: String; override;
   public
     constructor Create; override;
+    destructor  Destroy; override;
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
+    function  AckFor(Response: TIdSipResponse): TIdSipRequest;
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  DefaultMaxForwards: Cardinal;
@@ -122,9 +126,10 @@ type
     function  Match(Msg: TIdSipMessage): Boolean;
     function  RequiresResponse: Boolean;
 
-    property MaxForwards: Byte      read GetMaxForwards write SetMaxForwards;
-    property Method:      String    read fMethod write fMethod;
-    property RequestUri:  TIdSipURI read fRequestUri write SetRequestUri;
+    property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
+    property Method:      String          read fMethod write fMethod;
+    property RequestUri:  TIdSipURI       read fRequestUri write SetRequestUri;
+    property Route:       TIdSipRoutePath read fRoute write SetRoute;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -723,12 +728,42 @@ begin
   inherited Create;
 
   fRequestUri := TIdSipURI.Create('');
+  fRoute      := TIdSipRoutePath.Create(Self.Headers);
+
   Self.ContentLength := 0;
+end;
+
+destructor TIdSipRequest.Destroy;
+begin
+  Self.Route.Free;
+  
+  inherited Destroy;
 end;
 
 procedure TIdSipRequest.Accept(Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitRequest(Self);
+end;
+
+function TIdSipRequest.AckFor(Response: TIdSipResponse): TIdSipRequest;
+begin
+  Result := TIdSipRequest.Create;
+  try
+    Result.RequestUri := Self.RequestUri;
+    Result.CallID   := Response.CallID;
+    Result.CSeq     := Response.CSeq;
+    Result.From     := Self.From;
+    Result.Method   := MethodAck;
+    Result.ToHeader := Response.ToHeader;
+
+    Result.CSeq.Method := Result.Method;
+    Result.AddHeader(Response.LastHop);
+    Result.AddHeaders(Self.Route);
+  except
+    Result.Free;
+
+    raise;
+  end;
 end;
 
 function TIdSipRequest.AddressOfRecord: String;
@@ -892,6 +927,12 @@ end;
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
 begin
   Self.fRequestUri.URI := Value.URI
+end;
+
+procedure TIdSipRequest.SetRoute(Value: TIdSipRoutePath);
+begin
+  Self.Route.Clear;
+  Self.Route.Add(Value);
 end;
 
 //*******************************************************************************

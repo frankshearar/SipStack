@@ -161,6 +161,14 @@ const
   RSSIPRequestOutOfOrder = 'Request out of order';
 
 const
+  SIPProvisionalResponseClass   = 1;
+  SIPOKResponseClass            = 2;
+  SIPRedirectionResponseClass   = 3;
+  SIPFailureResponseClass       = 4;
+  SIPServerFailureResponseClass = 5;
+  SIPGlobalFailureResponseClass = 6;
+
+const
   SIPTrying                           = 100;
   SIPRinging                          = 180;
   SIPCallIsBeingForwarded             = 181;

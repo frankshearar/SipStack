@@ -618,6 +618,17 @@ type
     function CurrentExpires: Cardinal;
   end;
 
+  TIdSipRoutePath = class(TIdSipHeadersFilter)
+  private
+    BlankHeaders: TIdSipHeaders;
+  public
+    constructor Create(Headers: TIdSipHeaders); overload;
+    constructor Create; overload;
+    destructor  Destroy; override;
+
+    function CurrentRoute: TIdSipRouteHeader;
+  end;
+
   TIdSipViaPath = class(TIdSipHeadersFilter)
   public
     constructor Create(Headers: TIdSipHeaders);
@@ -3478,6 +3489,34 @@ end;
 function TIdSipExpiresHeaders.CurrentExpires: Cardinal;
 begin
   Result := (Self.CurrentHeader as TIdSipNumericHeader).NumericValue;
+end;
+
+//******************************************************************************
+//* TIdSipRoutePath                                                            *
+//******************************************************************************
+//* TIdSipRoutePath Public methods *********************************************
+
+constructor TIdSipRoutePath.Create(Headers: TIdSipHeaders);
+begin
+  inherited Create(Headers, RouteHeader);
+end;
+
+constructor TIdSipRoutePath.Create;
+begin
+  Self.BlankHeaders := TIdSipHeaders.Create;
+  inherited Create(Self.BlankHeaders, RouteHeader);
+end;
+
+destructor TIdSipRoutePath.Destroy;
+begin
+  Self.BlankHeaders.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipRoutePath.CurrentRoute: TIdSipRouteHeader;
+begin
+  Result := Self.CurrentHeader as TIdSipRouteHeader;
 end;
 
 //******************************************************************************

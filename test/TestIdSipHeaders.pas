@@ -406,6 +406,18 @@ type
     procedure TestCurrentContact;
   end;
 
+  TestTIdSipRoutePath = class(TTestCase)
+  private
+    Headers: TIdSipHeaders;
+    Routes:  TIdSipRoutePath;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCreateOnEmptySet;
+    procedure TestCurrentRoute;
+  end;
+
   TestTIdSipViaPath = class(TTestCase)
   private
     Headers: TIdSipHeaders;
@@ -4254,6 +4266,81 @@ begin
   Self.Contacts.Next;
   Check(NewContact = Self.Contacts.CurrentContact,
         'Second Contact');
+end;
+
+//******************************************************************************
+//* TestTIdSipRoutePath                                                           *
+//******************************************************************************
+//* TestTIdSipRoutePath Public methods ********************************************
+
+procedure TestTIdSipRoutePath.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers := TIdSipHeaders.Create;
+  Self.Routes  := TIdSipRoutePath.Create(Self.Headers);
+end;
+
+procedure TestTIdSipRoutePath.TearDown;
+begin
+  Self.Routes.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRoutePath Published methods *****************************************
+
+procedure TestTIdSipRoutePath.TestCreateOnEmptySet;
+var
+  Rts:       TIdSipRoutePath;
+  NewHeader: TIdSipHeader;
+begin
+  Rts := TIdSipRoutePath.Create;
+  try
+    CheckEquals(0, Rts.Count, 'Initial list');
+
+    NewHeader := TIdSipRouteHeader.Create;
+    try
+      Rts.Add(NewHeader);
+      CheckEquals(1, Rts.Count, 'Added a new Route');
+    finally
+      NewHeader.Free;
+    end;
+
+    NewHeader := TIdSipCallIdHeader.Create;
+    try
+      Rts.Add(NewHeader);
+      CheckEquals(1, Rts.Count, 'Added a non-Route');
+    finally
+      NewHeader.Free;
+    end;
+  finally
+    Rts.Free;
+  end;
+end;
+
+procedure TestTIdSipRoutePath.TestCurrentRoute;
+var
+  NewRoute: TIdSipHeader;
+begin
+  Check(nil = Self.Routes.CurrentRoute,
+        'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  Check(nil = Self.Routes.CurrentRoute,
+        'No Routes');
+
+  NewRoute := Self.Headers.Add(RouteHeader);
+  Self.Routes.First;
+  Check(NewRoute = Self.Routes.CurrentRoute,
+        'First Route');
+
+  NewRoute := Self.Headers.Add(RouteHeader);
+  Self.Routes.First;
+  Self.Routes.Next;
+  Check(NewRoute = Self.Routes.CurrentRoute,
+        'Second Route');
 end;
 
 //******************************************************************************

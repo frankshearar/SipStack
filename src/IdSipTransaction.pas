@@ -41,6 +41,8 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
   end;
 
+  // I allow interested parties to listen for requests/responses that do not
+  // match any current transactions.
   IIdSipUnhandledMessageListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
@@ -197,6 +199,7 @@ type
     function  IsInvite: Boolean; virtual; abstract;
     function  IsNull: Boolean; virtual; abstract;
     function  IsServer: Boolean;
+    function  LoopDetected(Request: TIdSipRequest): Boolean;
     procedure ReceiveRequest(R: TIdSipRequest;
                              T: TIdSipTransport); virtual;
     procedure ReceiveResponse(R: TIdSipResponse;
@@ -557,10 +560,7 @@ begin
     I := 0;
     while (I < Self.Transactions.Count) and not Result do begin
       if Self.TransactionAt(I).IsServer then
-        Result := Request.From.IsEqualTo(Self.TransactionAt(I).InitialRequest.From)
-              and (Request.CallID = Self.TransactionAt(I).InitialRequest.CallID)
-              and (Request.CSeq.IsEqualTo(Self.TransactionAt(I).InitialRequest.CSeq))
-              and not Request.Match(Self.TransactionAt(I).InitialRequest);
+        Result := Self.TransactionAt(I).LoopDetected(Request);
       Inc(I);
     end;
   finally
@@ -877,6 +877,14 @@ end;
 function TIdSipTransaction.IsServer: Boolean;
 begin
   Result := not Self.IsClient;
+end;
+
+function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.From.IsEqualTo(Self.InitialRequest.From)
+    and (Request.CallID = Self.InitialRequest.CallID)
+    and (Request.CSeq.IsEqualTo(Self.InitialRequest.CSeq))
+    and not Request.Match(Self.InitialRequest);
 end;
 
 procedure TIdSipTransaction.ReceiveRequest(R: TIdSipRequest;
