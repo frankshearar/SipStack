@@ -17,6 +17,7 @@ uses
 type
   TestFunctions = class(TTestCase)
   published
+    procedure TestEncodeNonLineUnprintableChars;
     procedure TestHexDigitToInt;
     procedure TestHexToInt;
   end;
@@ -78,6 +79,36 @@ end;
 //* TestFunctions                                                              *
 //******************************************************************************
 //* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.TestEncodeNonLineUnprintableChars;
+begin
+  CheckEquals('',
+              EncodeNonLineUnprintableChars(''),
+              'Empty string');
+  CheckEquals('abc',
+              EncodeNonLineUnprintableChars('abc'),
+              '''abc''');
+  CheckEquals('#00',
+              EncodeNonLineUnprintableChars(#0),
+              '#0');
+  CheckEquals('#0',
+              EncodeNonLineUnprintableChars('#0'),
+              '''#0''');
+  CheckEquals('a'#13#10'b',
+              EncodeNonLineUnprintableChars('a'#13#10'b'),
+              '''a''#13#10''b''');
+
+  CheckEquals('a#00'#13#10'b',
+              EncodeNonLineUnprintableChars('a'#00#13#10'b'),
+              '''a''#00#13#10''b''');
+
+  // If you send a DEL character as part of a string, a Window control will
+  // display it as an unprintable character - one of those ugly black blocks.
+  // We check the special case of a DEL here:
+  CheckEquals('abc#7F#7F#7F',
+              EncodeNonLineUnprintableChars('abc'#$7f#$7f#$7f),
+              '''abc''#$7f#$7f#$7f');
+end;
 
 procedure TestFunctions.TestHexDigitToInt;
 var

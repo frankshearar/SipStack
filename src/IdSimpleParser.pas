@@ -84,6 +84,7 @@ const
   MarkChars       = ['-', '_', '.', '!', '~', '*', '''', '(', ')'];
   UnreservedChars = Alphabet + Digits + MarkChars;
 
+function EncodeNonLineUnprintableChars(S: String): String;
 function HexDigitToInt(Digit: Char): Cardinal;
 function HexToInt(const HexValue: String): Cardinal;
 
@@ -95,6 +96,22 @@ uses
 //******************************************************************************
 //* Unit Public Functions and Procedures                                       *
 //******************************************************************************
+
+function EncodeNonLineUnprintableChars(S: String): String;
+var
+  I: Integer;
+begin
+  // Given a multi-line string, return a string that preserves end-of-line
+  // characters while encoding all other control characters as '#nn'.
+
+  Result := '';
+
+  for I := 1 to Length(S) do
+    if (S[I] in [#10, #13, #32..#126]) then
+      Result := Result + S[I]
+    else
+      Result := Result + '#' + IntToHex(Ord(S[I]), 2);
+end;
 
 function HexDigitToInt(Digit: Char): Cardinal;
 begin
