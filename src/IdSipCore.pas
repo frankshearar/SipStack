@@ -159,13 +159,11 @@ type
   // unrecognised methods, etc.
   TIdSipAbstractUserAgent = class(TIdSipAbstractCore)
   private
-    BranchLock:              TCriticalSection;
     fAllowedContentTypeList: TStrings;
     fAllowedLanguageList:    TStrings;
     fAllowedMethodList:      TStrings;
     fAllowedSchemeList:      TStrings;
     fFrom:                   TIdSipFromHeader;
-    fLastBranch:             Cardinal;
     fUserAgentName:          String;
 
     function  GetFrom: TIdSipFromHeader;
@@ -179,7 +177,6 @@ type
                                               Transaction: TIdSipTransaction);
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest;
                                           Transaction: TIdSipTransaction);
-    procedure ResetLastBranch;
     procedure SetFrom(Value: TIdSipFromHeader);
   protected
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -357,7 +354,9 @@ type
     CurrentRequest: TIdSipRequest;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
-    procedure CopyList(Source: TList; Lock: TCriticalSection; Copy: TList);
+    procedure CopyList(Source: TList;
+                       Lock: TCriticalSection;
+                       Copy: TList);
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String); virtual;
@@ -560,8 +559,8 @@ type
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
     procedure FindCurrentBindings(Registrar: TIdSipUri);
-    procedure Register(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
-    procedure Register(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
+    procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
+    procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
     procedure Unregister(Registrar: TIdSipUri);
   end;
@@ -569,13 +568,13 @@ type
   EIdSipBadSyntax = class(EIdException);
 
 const
-  MissingContactHeader = 'Missing Contact Header';  
+  MissingContactHeader = 'Missing Contact Header';
 
 implementation
 
 uses
-  IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID,
-  IdRandom, IdStack, SysUtils, IdUDPServer;
+  IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID, IdRandom, IdStack,
+  SysUtils, IdUDPServer;
 
 const
   RemoteHangUp = 'Remote end hung up';
@@ -592,7 +591,7 @@ end;
 
 function TIdSipAbstractCore.NextCallID: String;
 begin
-  Result := IntToHex(TIdRandomNumber.NextCardinal, 8) + '@' + Self.HostName;
+  Result := GRandomNumber.NextHexString + '@' + Self.HostName;
 end;
 
 //* TIdSipAbstractCore Protected methods ***************************************
@@ -613,7 +612,7 @@ procedure TIdSipAbstractCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                            Request: TIdSipRequest;
                                            Transaction: TIdSipTransaction);
 begin
-  // some generic rejection?
+  // Do nothing - subclasses will return the necessary response.
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
@@ -672,14 +671,10 @@ begin
 
   Self.fAllowedMethodList := TStringList.Create;
   Self.fAllowedSchemeList := TStringList.Create;
-
-  Self.BranchLock := TCriticalSection.Create;
-  Self.ResetLastBranch;
 end;
 
 destructor TIdSipAbstractUserAgent.Destroy;
 begin
-  Self.BranchLock.Free;
   Self.AllowedSchemeList.Free;
   Self.AllowedMethodList.Free;
 
@@ -819,34 +814,17 @@ end;
 
 function TIdSipAbstractUserAgent.NextBranch: String;
 begin
-  Self.BranchLock.Acquire;
-  try
-    // TODO
-    // This is a CRAP way to generate a branch.
-    // cf. RFC 3261 section 8.1.1.7
-    // While this (almost) satisfies the uniqueness constraint (the branch is
-    // unique for the lifetime of the instantiation of the UA), it just
-    // seems sensible to generate an unguessable branch.
-    Result := BranchMagicCookie + IntToStr(Self.fLastBranch);
-
-    Inc(Self.fLastBranch);
-  finally
-    Self.BranchLock.Release;
-  end;
+  Result := GRandomNumber.NextSipUserAgentBranch;
 end;
 
 function TIdSipAbstractUserAgent.NextInitialSequenceNo: Cardinal;
 begin
-  Result := TIdRandomNumber.NextCardinal($7FFFFFFF);
+  Result := GRandomNumber.NextCardinal($7FFFFFFF);
 end;
 
 function TIdSipAbstractUserAgent.NextTag: String;
 begin
-  // TODO
-  // This is a CRAP way to generate a tag.
-  // cf. RFC 3261 section 19.3
-  Result := IntToHex(TIdRandomNumber.NextCardinal, 8)
-          + IntToHex(TIdRandomNumber.NextCardinal, 8);
+  Result := GRandomNumber.NextSipUserAgentTag;
 end;
 
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
@@ -1024,16 +1002,6 @@ begin
   end;
 end;
 
-procedure TIdSipAbstractUserAgent.ResetLastBranch;
-begin
-  Self.BranchLock.Acquire;
-  try
-    Self.fLastBranch := 0;
-  finally
-    Self.BranchLock.Release;
-  end;
-end;
-
 procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.From.Assign(Value);
@@ -1069,7 +1037,7 @@ begin
 
   Self.fProxy   := TIdSipUri.Create('');
   Self.HasProxy := false;
-  
+
   Self.KnownRegistrars := TObjectList.Create(true);
 
   Self.ObserverLock             := TCriticalSection.Create;
@@ -1253,15 +1221,14 @@ function TIdSipUserAgentCore.CurrentRegistrationWith(Registrar: TIdSipUri): TIdS
 begin
   Result := Self.AddRegistration;
 
-  Result.
-  Register(Registrar, Self.Contact);
+  Result.RegisterWith(Registrar, Self.Contact);
 end;
 
 function TIdSipUserAgentCore.RegisterWith(Registrar: TIdSipUri): TIdSipRegistration;
 begin
   Result := Self.AddRegistration;
 
-  Result.Register(Registrar, Self.Contact);
+  Result.RegisterWith(Registrar, Self.Contact);
 end;
 
 function TIdSipUserAgentCore.RegistrationCount: Integer;
@@ -1734,7 +1701,9 @@ procedure TIdSipAction.ActionSucceeded(Response: TIdSipResponse);
 begin
 end;
 
-procedure TIdSipAction.CopyList(Source: TList; Lock: TCriticalSection; Copy: TList);
+procedure TIdSipAction.CopyList(Source: TList;
+                                Lock: TCriticalSection;
+                                Copy: TList);
 var
   I: Integer;
 begin
@@ -1771,7 +1740,7 @@ var
 begin
   // Each of the ReceiveXXXResponse functions returns true if we succeeded
   // in our Action, or we could re-issue the request. They only return
-  // false when the action Succeeded irrecoverably.
+  // false when the action failed irrecoverably.
 
   case Response.StatusCode div 100 of
     SIPProvisionalResponseClass:
@@ -1799,7 +1768,9 @@ begin
                                                      Transaction,
                                                      Receiver);
   else
-    // This should never happen
+    // This should never happen - response status codes lie in the range
+    // 100 <= S < 700, so we just reject these obviously malformed responses
+    // by silently discarding them.
     Succeeded := false;
   end;
 
@@ -2517,13 +2488,13 @@ var
 begin
   BlankBindings := TIdSipContacts.Create;
   try
-    Self.Register(Registrar, BlankBindings);
+    Self.RegisterWith(Registrar, BlankBindings);
   finally
     BlankBindings.Free;
   end;
 end;
 
-procedure TIdSipRegistration.Register(Registrar: TIdSipUri; Bindings: TIdSipContacts);
+procedure TIdSipRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
 var
   Request: TIdSipRequest;
 begin
@@ -2539,7 +2510,7 @@ begin
   end;
 end;
 
-procedure TIdSipRegistration.Register(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
+procedure TIdSipRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
 var
   Binding: TIdSipContacts;
 begin
@@ -2547,7 +2518,7 @@ begin
   try
     Binding.Add(Contact);
 
-    Self.Register(Registrar, Binding);
+    Self.RegisterWith(Registrar, Binding);
   finally
     Binding.Free;
   end;

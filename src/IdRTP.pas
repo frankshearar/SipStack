@@ -4307,7 +4307,7 @@ end;
 function TIdRTPMemberTable.RandomTimeFactor: Double;
 begin
   // We want a factor in the range [0.5, 1.5]
-  Result := TIdRandomNumber.NextDouble + 0.5;
+  Result := GRandomNumber.NextDouble + 0.5;
 end;
 
 //******************************************************************************
@@ -4604,8 +4604,8 @@ end;
 
 procedure TIdRTPSession.Initialize;
 begin
-  Self.SequenceNo    := TIdRandomNumber.NextCardinal(High(Self.SequenceNo));
-  Self.BaseTimestamp := TIdRandomNumber.NextCardinal;
+  Self.SequenceNo    := GRandomNumber.NextCardinal(High(Self.SequenceNo));
+  Self.BaseTimestamp := GRandomNumber.NextCardinal;
   Self.BaseTime      := Now;
 
   Self.Members.RemoveAll;
@@ -4717,13 +4717,13 @@ begin
   Hasher := TIdHashMessageDigest5.Create;
   try
     while not Self.AcceptableSSRC(Result) do begin
-      // TODO: We should add more stuff here. RFC 3550's uses: pid, uid, gid and
-      // hostid (but hostid is deprecated according to FreeBSD's gethostid(3)
-      // manpage).
+      // TODO: We should add more stuff here. RFC 3550's sample implementation
+      // uses: pid, uid, gid and hostid (but hostid is deprecated according to
+      // FreeBSD's gethostid(3) manpage).
       Hash := Hasher.HashValue(DateTimeToStr(Now)
                              + IndyGetHostName
                              + IntToHex(CurrentProcessId, 8)
-                             + IntToHex(TIdRandomNumber.NextCardinal, 8));
+                             + IntToHex(GRandomNumber.NextCardinal, 8));
 
       Result := 0;
       for I := Low(Hash) to High(Hash) do

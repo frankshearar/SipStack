@@ -2854,7 +2854,7 @@ begin
       Self.Reg.AddListener(L1);
       Self.Reg.AddListener(L2);
 
-      Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+      Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
       Self.SimulateRemoteOK;
 
       Check(L1.Success, 'L1 not informed of success');
@@ -2871,7 +2871,7 @@ procedure TestTIdSipRegistration.TestRegister;
 var
   Request: TIdSipRequest;
 begin
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   Check(Self.Dispatcher.Transport.SentRequestCount > 0,
         'No request sent');
 
@@ -2899,7 +2899,7 @@ end;
 
 procedure TestTIdSipRegistration.TestReceiveFail;
 begin
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   Self.SimulateRemoteResponse(SIPInternalServerError);
   Check(Self.ActionFailed, 'Registration succeeded');
 end;
@@ -2912,7 +2912,7 @@ var
 begin
   Self.Contacts.First;
   Self.Contacts.CurrentContact.Expires := OneHour;
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
 
   RequestSendCount := Self.Dispatcher.Transport.SentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
@@ -2949,7 +2949,7 @@ begin
   Self.Contacts.First;
   Self.Contacts.CurrentContact.Expires := OneHour;
   Self.Contacts.Add(ContactHeaderFull).Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna;expires=' + IntToStr(SecondContactExpires);
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
 
   RequestSendCount := Self.Dispatcher.Transport.SentRequestCount;
   Self.SimulateRemoteIntervalTooBrief;
@@ -2985,14 +2985,14 @@ end;
 
 procedure TestTIdSipRegistration.TestReceiveOK;
 begin
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   Self.SimulateRemoteOK;
   Check(Self.Succeeded, 'Registration failed');
 end;
 
 procedure TestTIdSipRegistration.TestReceiveUnauthorized;
 begin
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   Self.SimulateRemoteResponse(SIPUnauthorized);
   Check(Self.Challenged,
         'Authentication challenge');
@@ -3002,9 +3002,9 @@ procedure TestTIdSipRegistration.TestSequenceNumberIncrements;
 var
   SeqNo: Cardinal;
 begin
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   SeqNo := Self.Dispatcher.Transport.LastRequest.CSeq.SequenceNo;
-  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.Reg.RegisterWith(Self.Registrar.From.Address, Self.Contacts);
   Check(SeqNo + 1 = Self.Dispatcher.Transport.LastRequest.CSeq.SequenceNo,
         'CSeq sequence number didn''t increment');
 end;
