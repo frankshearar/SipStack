@@ -70,6 +70,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddressOfRecord;
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
@@ -707,6 +708,18 @@ begin
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
+
+procedure TestTIdSipRequest.TestAddressOfRecord;
+begin
+  CheckEquals(Self.Request.ToHeader.AsAddressOfRecord,
+              Self.Request.AddressOfRecord,
+              'AddressOfRecord');
+
+  Self.Request.RequestUri.Uri := 'sip:proxy.tessier-ashpool.co.luna';
+  CheckEquals(Self.Request.ToHeader.AsAddressOfRecord,
+              Self.Request.AddressOfRecord,
+              'AddressOfRecord');
+end;
 
 procedure TestTIdSipRequest.TestAssign;
 var

@@ -102,6 +102,7 @@ type
     constructor Create; override;
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
+    function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  DefaultMaxForwards: Cardinal;
     function  HasSipsUri: Boolean;
@@ -664,6 +665,11 @@ end;
 procedure TIdSipRequest.Accept(Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitRequest(Self);
+end;
+
+function TIdSipRequest.AddressOfRecord: String;
+begin
+  Result := Self.ToHeader.AsAddressOfRecord;
 end;
 
 procedure TIdSipRequest.Assign(Src: TPersistent);

@@ -2,6 +2,7 @@ unit IdSipCore;
 
 // Some overarching principles followed in this implementation of a SIP/2.0
 // (RFC 3261) stack:
+// * We rely on short-circuited evaluation of Boolean expressions.
 // * We manually manage the lifetime of all objects. We do NOT use reference
 //   counting for objects that implement interfaces.
 // * We use Value Objects when possible.
@@ -10,7 +11,8 @@ unit IdSipCore;
 //   TIdSipDialogID, TIdSipMessage.
 // * Each layer has references to the layers beneath it. We try to make each layer
 //   aware of ONLY the layer immediately below it, but that's not always
-//   possible.
+//   possible. We NEVER let a lower layer know about layers above it. Thus, the
+//   transport layer DOES NOT know about transactions, etc.
 // * We propogate messages up the stack using Events or Listeners, and method
 //   calls to propogate messages down the stack. We give preference to the more
 //   flexible Listeners.
