@@ -3524,14 +3524,12 @@ end;
 
 procedure TIdSipOutboundInvite.SendRequest(Request: TIdSipRequest);
 begin
-  inherited SendRequest(Request);
-
-  // Sending the request might just terminate this action (because of, for
-  // instance, a network failure).
   if not Self.IsTerminated then
     Self.UA.ScheduleEvent(Self.UA.OnTransactionComplete,
                           64*DefaultT1,
                           Request.Copy);
+
+  inherited SendRequest(Request);
 end;
 
 //* TIdSipOutboundInvite Private methods ***************************************
