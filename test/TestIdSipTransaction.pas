@@ -552,16 +552,13 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
-{
   Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
-}
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-{
   Result.AddTest(TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
@@ -569,7 +566,6 @@ begin
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
-}
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
