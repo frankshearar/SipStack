@@ -424,7 +424,7 @@ end;
 
 function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
 begin
-    Result := inherited EventAt(Index);
+  Result := inherited EventAt(Index);
 end;
 
 function TIdDebugTimerQueue.EventCount: Integer;
