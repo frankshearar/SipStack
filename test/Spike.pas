@@ -271,6 +271,7 @@ var
 begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
+  Result.UseRport := true;
 
   if (GStack.LocalAddress <> LocalHostName) then begin
     Binding      := Result.Bindings.Add;

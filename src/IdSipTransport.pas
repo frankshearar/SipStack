@@ -41,6 +41,7 @@ type
   private
     fHostName:                    String;
     fTimeout:                     Cardinal;
+    fUseRport:                    Boolean;
     TransportListenerLock:        TCriticalSection;
     TransportListeners:           TList;
     TransportSendingListenerLock: TCriticalSection;
@@ -96,6 +97,7 @@ type
     property HostName: String           read fHostName write fHostName;
     property Port:     Cardinal         read GetPort write SetPort;
     property Timeout:  Cardinal         read fTimeout write fTimeout;
+    property UseRport: Boolean          read fUseRport write fUseRport;
   end;
 
   TIdSipTCPTransport = class(TIdSipTransport)
@@ -248,7 +250,8 @@ begin
   Self.TransportSendingListenerLock := TCriticalSection.Create;
   Self.TransportSendingListeners    := TList.Create;
 
-  Self.Timeout := Self.DefaultTimeout;
+  Self.Timeout  := Self.DefaultTimeout;
+  Self.UseRport := false;
 end;
 
 destructor TIdSipTransport.Destroy;
@@ -522,6 +525,9 @@ begin
   Msg.LastHop.Transport := Self.GetTransportType;
   Msg.LastHop.SentBy    := Self.HostName;
   Msg.LastHop.Port      := Self.Port;
+
+  if Self.UseRport then
+    Msg.LastHop.Params[RportParam] := '';
 end;
 
 //******************************************************************************

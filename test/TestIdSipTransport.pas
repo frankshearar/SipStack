@@ -91,6 +91,8 @@ type
                                      R: TIdSipRequest);
     procedure CheckSendResponseFromNonStandardPort(Sender: TObject;
                                                    R: TIdSipResponse);
+    procedure CheckUseRport(Sender: TObject;
+                            R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -124,6 +126,7 @@ type
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseWithReceivedParam;
+    procedure TestUseRport;
   end;
 
   TestTIdSipTCPTransport = class(TestTIdSipTransport)
@@ -626,6 +629,22 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.CheckUseRport(Sender: TObject;
+                                            R: TIdSipRequest);
+begin
+  try
+    Check(R.LastHop.HasParam(RportParam),
+          'No rport param');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;          
+end;
+
 function TestTIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
@@ -885,6 +904,17 @@ begin
   finally
     HighPortListener.Free;
   end;
+end;
+
+procedure TestTIdSipTransport.TestUseRport;
+begin
+  Self.ExceptionMessage := 'Waiting for rport request';
+  Self.LowPortTransport.UseRport := true;
+  Self.CheckingRequestEvent := Self.CheckUseRport;
+  Self.LowPortTransport.Send(Self.Request);
+
+  Self.WaitForSignaled;
+
 end;
 
 //******************************************************************************
