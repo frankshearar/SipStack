@@ -1,0 +1,92 @@
+unit TestIdRandom;
+
+interface
+
+uses
+  IdRandom, TestFramework;
+
+type
+  TestTIdRandomNumber = class(TTestCase)
+  private
+    Random: TIdRandomNumber;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestNextHighestPowerOf2;
+    procedure TestNumBitsNeeded;
+  end;
+
+implementation
+
+uses
+  SysUtils;
+
+function Suite: ITestSuite;
+begin
+  Result := TTestSuite.Create('IdRandom unit tests');
+  Result.AddTest(TestTIdRandomNumber.Suite);
+end;
+
+//******************************************************************************
+//* TestTIdRandomNumber                                                        *
+//******************************************************************************
+//* TestTIdRandomNumber Public methods *****************************************
+
+procedure TestTIdRandomNumber.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Random := TIdBasicRandomNumber.Create;
+end;
+
+procedure TestTIdRandomNumber.TearDown;
+begin
+  Self.Random.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRandomNumber Published methods **************************************
+
+procedure TestTIdRandomNumber.TestNextHighestPowerOf2;
+begin
+  CheckEquals(1, Self.Random.NextHighestPowerOf2(0), '0');
+  CheckEquals(1, Self.Random.NextHighestPowerOf2(1), '1');
+  CheckEquals(2, Self.Random.NextHighestPowerOf2(2), '2');
+  CheckEquals(4, Self.Random.NextHighestPowerOf2(3), '3');
+  CheckEquals(4, Self.Random.NextHighestPowerOf2(4), '4');
+
+  CheckEquals(8192,  Self.Random.NextHighestPowerOf2(8191), '8191');
+  CheckEquals(8192,  Self.Random.NextHighestPowerOf2(8192), '8192');
+  CheckEquals(16384, Self.Random.NextHighestPowerOf2(8193), '8193');
+
+  CheckEquals(16384, Self.Random.NextHighestPowerOf2(9000), '9000');
+
+  CheckEquals(IntToHex($80, 8),
+              IntToHex(Self.Random.NextHighestPowerOf2($7F), 8),
+              '$7F');
+
+  CheckEquals(IntToHex($80000000, 8),
+              IntToHex(Self.Random.NextHighestPowerOf2($7F000000), 8),
+              '$7F000000');
+end;
+
+procedure TestTIdRandomNumber.TestNumBitsNeeded;
+begin
+  CheckEquals(1, Self.Random.NumBitsNeeded(0), '0');
+  CheckEquals(1, Self.Random.NumBitsNeeded(1), '1');
+  CheckEquals(2, Self.Random.NumBitsNeeded(2), '2');
+  CheckEquals(2, Self.Random.NumBitsNeeded(3), '3');
+  CheckEquals(3, Self.Random.NumBitsNeeded(4), '4');
+
+  CheckEquals(7, Self.Random.NumBitsNeeded(65),  '65');
+  CheckEquals(7, Self.Random.NumBitsNeeded(127), '127');
+  CheckEquals(8, Self.Random.NumBitsNeeded(128), '128');
+
+  CheckEquals(32, Self.Random.NumBitsNeeded(High(Cardinal)), 'High(Cardinal)');
+end;
+
+initialization
+  RegisterTest('Random numbers', Suite);
+end.
