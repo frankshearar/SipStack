@@ -393,26 +393,6 @@ type
     property MinimumExpiryTime:             Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
-  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
-  private
-    fReceiver: TIdSipTransport;
-    fResponse: TIdSipResponse;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Receiver: TIdSipTransport read fReceiver write fReceiver;
-    property Response: TIdSipResponse  read fResponse write fResponse;
-  end;
-
-  TIdSipUserAgentInboundCallMethod = class(TIdMethod)
-  private
-    fSession: TIdSipInboundSession;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Session: TIdSipInboundSession read fSession write fSession;
-  end;
-
   TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
 
   // I represent an asynchronous message send between SIP entities - INVITEs,
@@ -691,17 +671,6 @@ type
     procedure RemoveListener(const Listener: IIdSipOptionsListener);
   end;
 
-  TIdSipOptionsSuccessMethod = class(TIdMethod)
-  private
-    fOptions:  TIdSipOutboundOptions;
-    fResponse: TIdSipResponse;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Options:  TIdSipOutboundOptions read fOptions write fOptions;
-    property Response: TIdSipResponse        read fResponse write fResponse;
-  end;
-
   TIdSipRegistration = class(TIdSipAction)
   protected
     function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
@@ -775,7 +744,17 @@ type
     property Registration:    TIdSipOutboundRegistration read fRegistration write fRegistration;
   end;
 
-  TIdSipRegistrationFailedMethod = class(TIdSipRegistrationMethod)
+  TIdSipOptionsMethod = class(TIdMethod)
+  private
+    fOptions:  TIdSipOutboundOptions;
+    fResponse: TIdSipResponse;
+  public
+
+    property Options:  TIdSipOutboundOptions read fOptions write fOptions;
+    property Response: TIdSipResponse        read fResponse write fResponse;
+  end;
+
+  TIdSipOptionsListenerFailureMethod = class(TIdSipOptionsMethod)
   private
     fReason: String;
   public
@@ -784,9 +763,43 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipRegistrationSucceededMethod = class(TIdSipRegistrationMethod)
+  TIdSipOptionsListenerSuccessMethod = class(TIdSipOptionsMethod)
   public
     procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipRegistrationListenerFailedMethod = class(TIdSipRegistrationMethod)
+  private
+    fReason: String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdSipRegistrationListenerSucceededMethod = class(TIdSipRegistrationMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
+  TIdSipUserAgentListenerDroppedUnmatchedResponseMethod = class(TIdMethod)
+  private
+    fReceiver: TIdSipTransport;
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Response: TIdSipResponse  read fResponse write fResponse;
+  end;
+
+  TIdSipUserAgentListenerInboundCallMethod = class(TIdMethod)
+  private
+    fSession: TIdSipInboundSession;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Session: TIdSipInboundSession read fSession write fSession;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -798,13 +811,6 @@ const
 procedure ApplyTo(List: TList;
                   Lock: TCriticalSection;
                   Proc: TIdSipProcedure); overload;
-procedure ApplyTo(List: TList;
-                  Lock: TCriticalSection;
-                  Method: TIdMethod); overload;
-procedure CopyList(Source: TList;
-                   Lock: TCriticalSection;
-                   Copy: TList);
-
 implementation
 
 uses
@@ -818,6 +824,26 @@ const
   LocalCancel     = 'Local end cancelled call';
   LocalHangUp     = 'Local end hung up';
   RemoteHangUp    = 'Remote end hung up';
+
+//******************************************************************************
+//* Unit Private procedures and functions                                      *
+//******************************************************************************
+
+procedure CopyList(Source: TList;
+                   Lock: TCriticalSection;
+                   Copy: TList);
+var
+  I: Integer;
+begin
+  Copy.Clear;
+  Lock.Acquire;
+  try
+    for I := 0 to Source.Count - 1 do
+      Copy.Add(Source[I]);
+  finally
+    Lock.Release;
+  end;
+end;
 
 //******************************************************************************
 //* Unit Public procedures and functions                                       *
@@ -841,40 +867,6 @@ begin
       end;
   finally
     Copy.Free;
-  end;
-end;
-
-procedure ApplyTo(List: TList;
-                  Lock: TCriticalSection;
-                  Method: TIdMethod);
-var
-  Copy: TList;
-  I: Integer;
-begin
-  Copy := TList.Create;
-  try
-    CopyList(List, Lock, Copy);
-
-    for I := 0 to Copy.Count - 1 do
-      Method.Run(IInterface(Copy[I]));
-  finally
-    Copy.Free;
-  end;
-end;
-
-procedure CopyList(Source: TList;
-                   Lock: TCriticalSection;
-                   Copy: TList);
-var
-  I: Integer;
-begin
-  Copy.Clear;
-  Lock.Acquire;
-  try
-    for I := 0 to Source.Count - 1 do
-      Copy.Add(Source[I]);
-  finally
-    Lock.Release;
   end;
 end;
 
@@ -2191,9 +2183,9 @@ end;
 
 procedure TIdSipUserAgentCore.NotifyOfInboundCall(Session: TIdSipInboundSession);
 var
-  Notification: TIdSipUserAgentInboundCallMethod;
+  Notification: TIdSipUserAgentListenerInboundCallMethod;
 begin
-  Notification := TIdSipUserAgentInboundCallMethod.Create;
+  Notification := TIdSipUserAgentListenerInboundCallMethod.Create;
   try
     Notification.Session := Session;
 
@@ -2206,9 +2198,9 @@ end;
 procedure TIdSipUserAgentCore.NotifyOfDroppedResponse(Response: TIdSipResponse;
                                                       Receiver: TIdSipTransport);
 var
-  Notification: TIdSipUserAgentDroppedUnmatchedResponseMethod;
+  Notification: TIdSipUserAgentListenerDroppedUnmatchedResponseMethod;
 begin
-  Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
+  Notification := TIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Response := Response;
@@ -2293,27 +2285,6 @@ begin
   // proper payload processor capable of handling multiple content types
   OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
-end;
-
-//******************************************************************************
-//* TIdSipUserAgentDroppedUnmatchedResponseMethod                              *
-//******************************************************************************
-//* TIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***************
-
-procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedResponse(Self.Response,
-                                                                  Self.Receiver);
-end;
-
-//******************************************************************************
-//* TIdSipUserAgentInboundCallMethod                                           *
-//******************************************************************************
-//* TIdSipUserAgentInboundCallMethod Public methods ****************************
-
-procedure TIdSipUserAgentInboundCallMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
 end;
 
 //******************************************************************************
@@ -3560,11 +3531,11 @@ end;
 procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipOptionsSuccessMethod;
+  Notification:    TIdSipOptionsListenerSuccessMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipOptionsSuccessMethod.Create;
+    Notification := TIdSipOptionsListenerSuccessMethod.Create;
     try
       Notification.Options  := Self;
       Notification.Response := Response;
@@ -3578,17 +3549,6 @@ begin
   end;
 
   Self.Terminate;
-end;
-
-//******************************************************************************
-//* TIdSipOptionsSuccessMethod                                                 *
-//******************************************************************************
-//* TIdSipOptionsSuccessMethod Public methods **********************************
-
-procedure TIdSipOptionsSuccessMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipOptionsListener).OnSuccess(Self.Options,
-                                               Self.Response);
 end;
 
 //******************************************************************************
@@ -3895,11 +3855,11 @@ end;
 procedure TIdSipOutboundRegistration.NotifyOfFailure(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationFailedMethod;
+  Notification:    TIdSipRegistrationListenerFailedMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipRegistrationFailedMethod.Create;
+    Notification := TIdSipRegistrationListenerFailedMethod.Create;
     try
       Notification.CurrentBindings := CurrentBindings;
       Notification.Reason          := Response.Description;
@@ -3991,11 +3951,11 @@ end;
 procedure TIdSipOutboundRegistration.NotifyOfSuccess(Response: TIdSipResponse);
 var
   CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipRegistrationSucceededMethod;
+  Notification:    TIdSipRegistrationListenerSucceededMethod;
 begin
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
-    Notification := TIdSipRegistrationSucceededMethod.Create;
+    Notification := TIdSipRegistrationListenerSucceededMethod.Create;
     try
       Notification.CurrentBindings := CurrentBindings;
       Notification.Registration    := Self;
@@ -4072,11 +4032,34 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRegistrationFailedMethod                                             *
+//* TIdSipOptionsListenerFailureMethod                                         *
 //******************************************************************************
-//* TIdSipRegistrationFailedMethod Public methods ******************************
+//* TIdSipOptionsListenerFailureMethod Public methods **************************
 
-procedure TIdSipRegistrationFailedMethod.Run(const Subject: IInterface);
+procedure TIdSipOptionsListenerFailureMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOptionsListener).OnFailure(Self.Options,
+                                               Self.Response,
+                                               Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipOptionsListenerSuccessMethod                                         *
+//******************************************************************************
+//* TIdSipOptionsListenerSuccessMethod Public methods **************************
+
+procedure TIdSipOptionsListenerSuccessMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipOptionsListener).OnSuccess(Self.Options,
+                                               Self.Response);
+end;
+
+//******************************************************************************
+//* TIdSipRegistrationListenerFailedMethod                                     *
+//******************************************************************************
+//* TIdSipRegistrationListenerFailedMethod Public methods **********************
+
+procedure TIdSipRegistrationListenerFailedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnFailure(Self.Registration,
                                                     Self.CurrentBindings,
@@ -4084,14 +4067,35 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipRegistrationSucceededMethod                                          *
+//* TIdSipRegistrationListenerSucceededMethod                                  *
 //******************************************************************************
-//* TIdSipRegistrationSucceededMethod Public methods ***************************
+//* TIdSipRegistrationListenerSucceededMethod Public methods *******************
 
-procedure TIdSipRegistrationSucceededMethod.Run(const Subject: IInterface);
+procedure TIdSipRegistrationListenerSucceededMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipRegistrationListener).OnSuccess(Self.Registration,
                                                     Self.CurrentBindings);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentListenerDroppedUnmatchedResponseMethod                      *
+//******************************************************************************
+//* TIdSipUserAgentListenerDroppedUnmatchedResponseMethod Public methods *******
+
+procedure TIdSipUserAgentListenerDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedResponse(Self.Response,
+                                                                  Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentListenerInboundCallMethod                                   *
+//******************************************************************************
+//* TIdSipUserAgentListenerInboundCallMethod Public methods ********************
+
+procedure TIdSipUserAgentListenerInboundCallMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUserAgentListener).OnInboundCall(Self.Session);
 end;
 
 end.
