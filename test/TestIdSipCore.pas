@@ -210,6 +210,7 @@ type
     procedure TestRejectUnsupportedSipVersion;
     procedure TestRemoveObserver;
     procedure TestRemoveUserAgentListener;
+    procedure TestReregister;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -3024,6 +3025,28 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgent.TestReregister;
+var
+  Event: TIdNotifyEventWait;
+begin
+  Self.Invite.Method := MethodRegister;
+
+  Self.MarkSentRequestCount;
+
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Invite.Copy;
+    Self.Core.OnReregister(Event);
+  finally
+    Event.Free;
+  end;
+
+  Self.CheckRequestSent('No request resend');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected method in resent request');
 end;
 
 procedure TestTIdSipUserAgent.TestSetContact;
