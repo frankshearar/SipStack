@@ -2314,7 +2314,7 @@ begin
 
     Result := Result + Self.Host;
 
-    if Self.Port <> Self.DefaultPort then
+    if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
       Result := Result + ':' + IntToStr(Self.Port);
 
     Result := Result + Self.ParamsAsString + Self.HeadersAsString;
@@ -2460,8 +2460,10 @@ begin
       Self.Port := IdPORT_SIP;
     Self.fPortIsSpecified := false;
   end
-  else
+  else begin
     Self.Port := StrToIntDef(HostAndPort, IdPORT_SIP);
+    Self.fPortIsSpecified := true;
+  end;
 end;
 
 procedure TIdSipUri.ParseParams(ParamList: String);
@@ -2492,6 +2494,8 @@ begin
   Self.Port      := Self.DefaultPort;
   Self.Scheme    := '';
   Self.Username  := '';
+
+  Self.fPortIsSpecified := false;
 end;
 
 procedure TIdSipUri.SetMaddr(const Value: String);

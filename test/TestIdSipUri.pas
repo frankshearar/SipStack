@@ -75,6 +75,7 @@ type
     procedure TestGetSetTransport;
     procedure TestGetSetTTL;
     procedure TestGetSetUserParam;
+    procedure TestGetUriWithDefaultPortSpecified;
     procedure TestHasHeaders;
     procedure TestHasParameter;
     procedure TestHasValidSyntax;
@@ -265,7 +266,7 @@ begin
   Self.Uri.Host     := 'tessier-ashpool.co.luna';
   Self.Uri.Port     := IdPORT_SIP;
 
-  CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna:5060',
               Self.Uri.AsString,
               'AsString');
   CheckEquals(Self.Uri.AsString,
@@ -866,6 +867,16 @@ begin
 
   Self.Uri.UserParameter := UserParamIp;
   CheckEquals(UserParamIp, Self.Uri.ParamValue(UserParam), 'Set User');
+end;
+
+procedure TestTIdSipUri.TestGetUriWithDefaultPortSpecified;
+const
+  U = 'sip:wintermute@tessier-ashpool.co.luna:5060';
+begin
+  Self.Uri.Uri := U;
+  CheckEquals(U,
+              Self.Uri.Uri,
+              'PortIsSpecified got lost');
 end;
 
 procedure TestTIdSipUri.TestHasHeaders;
