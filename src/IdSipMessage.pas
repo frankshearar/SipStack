@@ -176,12 +176,12 @@ type
   //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   TIdSipHeader = class(TPersistent)
   private
-    fIsMalformed:      Boolean;
-    fName:             String;
-    fParams:           TStrings;
-    fParseFailReason:  String;
-    fValue:            String;
-    fUnparsedValue:    String;
+    fIsMalformed:     Boolean;
+    fName:            String;
+    fParams:          TStrings;
+    fParseFailReason: String;
+    fValue:           String;
+    fUnparsedValue:   String;
 
     function  GetParam(const Name: String): String;
     function  GetParameters: TStrings;
@@ -276,8 +276,8 @@ type
     procedure SetUnknownResponses(const Name: String;
                                   const Value: String);
   protected
-    DigestResponses:      TStringList;
-    fUnknownResponses:    TStringList;
+    DigestResponses:   TStringList;
+    fUnknownResponses: TStringList;
 
     procedure CheckDigestResponses(Responses: TStrings); virtual;
     function  DigestResponseValue(const Name: String): String;
@@ -419,6 +419,7 @@ type
     function GetName: String; override;
   public
     function IsSession: Boolean;
+    
     property Handling: String read GetHandling write SetHandling;
   end;
 
@@ -439,7 +440,7 @@ type
 
   TIdSipDateHeader = class(TIdSipHeader)
   private
-    fAbsoluteTime:   TIdDateTimeStamp;
+    fAbsoluteTime: TIdDateTimeStamp;
 
     function  GetAbsoluteTime: TIdDateTimeStamp;
     procedure SetAbsoluteTime(Value: String);
@@ -649,6 +650,7 @@ type
   end;
 
   TIdSipHeaderMap = class(TObject)
+  private
     fHeaderName:  String;
     fHeaderClass: TIdSipHeaderClass;
   public
@@ -831,16 +833,16 @@ type
 
   TIdSipMessage = class(TPersistent)
   private
-    fBody:             String;
-    fContacts:         TIdSipContacts;
-    fPath:             TIdSipViaPath;
-    fRecordRoute:      TIdSipRecordRoutePath;
-    fIsMalformed:      Boolean;
-    fHeaders:          TIdSipHeaders;
-    fParseFailReason:  String;
-    fRawFirstLine:     String;
-    fRawMessage:       String;
-    fSIPVersion:       String;
+    fBody:            String;
+    fContacts:        TIdSipContacts;
+    fPath:            TIdSipViaPath;
+    fRecordRoute:     TIdSipRecordRoutePath;
+    fIsMalformed:     Boolean;
+    fHeaders:         TIdSipHeaders;
+    fParseFailReason: String;
+    fRawFirstLine:    String;
+    fRawMessage:      String;
+    fSIPVersion:      String;
 
     class function CreateAndReadMessageFrom(RawData: TStream;
                                             ClassType: TIdSipMessageClass): TIdSipMessage;
@@ -949,9 +951,9 @@ type
 
   TIdSipRequest = class(TIdSipMessage)
   private
-    fMethod:      String;
-    fRequestUri:  TIdSipURI;
-    fRoute:       TIdSipRoutePath;
+    fMethod:     String;
+    fRequestUri: TIdSipURI;
+    fRoute:      TIdSipRoutePath;
 
     function  CSeqMatchesMethod: Boolean;
     function  GetMaxForwards: Byte;
@@ -999,10 +1001,10 @@ type
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
     function  RequiresResponse: Boolean;
 
-    property MaxForwards: Byte                  read GetMaxForwards write SetMaxForwards;
-    property Method:      String                read fMethod write fMethod;
-    property RequestUri:  TIdSipURI             read fRequestUri write SetRequestUri;
-    property Route:       TIdSipRoutePath       read fRoute write SetRoute;
+    property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
+    property Method:      String          read fMethod write fMethod;
+    property RequestUri:  TIdSipURI       read fRequestUri write SetRequestUri;
+    property Route:       TIdSipRoutePath read fRoute write SetRoute;
   end;
 
   TIdSipResponse = class(TIdSipMessage)
@@ -1100,8 +1102,8 @@ type
     class function IsTransport(const Token: String): Boolean;
     class function IsWord(const Token: String): Boolean;
 
-    function  GetHeaderName(Header: String): String;
-    function  GetHeaderValue(Header: String): String;
+    function GetHeaderName(Header: String): String;
+    function GetHeaderValue(Header: String): String;
   end;
 
   EBadHeader = class(EParserError);
