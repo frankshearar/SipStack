@@ -22,12 +22,9 @@ begin
 end;
 
 class function TIdRandomNumber.NextDouble: Double;
-var
-  Numerator: Cardinal;
 begin
   // Return a random double in the range [0, 1].
-  Numerator := Self.NextCardinal;
-  Result := Self.NextCardinal / High(Numerator);
+  Result := Self.NextCardinal / High(Cardinal);
 end;
 
 class function TIdRandomNumber.NextCardinal(Max: Cardinal): Cardinal;
