@@ -34,7 +34,7 @@ type
                                     Binding: TIdSocketHandle);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdSocketHandle);
-    procedure SetProfile(const Value: TIdRTPProfile);
+    procedure SetProfile(Value: TIdRTPProfile);
   protected
     procedure DoUDPRead(AData: TStream;
                         ABinding: TIdSocketHandle); override;
@@ -44,7 +44,7 @@ type
 
     procedure AddListener(const Listener: IIdRTPListener);
     procedure RemoveListener(const Listener: IIdRTPListener);
-    procedure SendPacket(Host: String;
+    procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
 
@@ -94,7 +94,7 @@ begin
   Self.Peer.RemoveListener(Listener);
 end;
 
-procedure TIdRTPServer.SendPacket(Host: String;
+procedure TIdRTPServer.SendPacket(const Host: String;
                                   Port: Cardinal;
                                   Packet: TIdRTPBasePacket);
 var
@@ -157,7 +157,7 @@ begin
     Self.OnRTPRead(Self, Packet, Binding);
 end;
 
-procedure TIdRTPServer.SetProfile(const Value: TIdRTPProfile);
+procedure TIdRTPServer.SetProfile(Value: TIdRTPProfile);
 begin
   Self.Session.Profile := Value;
   Self.Peer.Profile := Self.Session.Profile;

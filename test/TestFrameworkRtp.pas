@@ -36,7 +36,7 @@ type
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdSocketHandle);
     procedure RemoveListener(const Listener: IIdRTPListener);
-    procedure SendPacket(Host: String;
+    procedure SendPacket(const Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
 
@@ -183,7 +183,7 @@ begin
   end;
 end;
 
-procedure TIdMockRTPPeer.SendPacket(Host: String;
+procedure TIdMockRTPPeer.SendPacket(const Host: String;
                                     Port: Cardinal;
                                     Packet: TIdRTPBasePacket);
 begin
