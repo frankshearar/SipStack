@@ -330,6 +330,7 @@ type
     procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
     procedure HangUpAllCalls;
+    function  UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
     function  Username: String;
 
     property Contact: TIdSipContactHeader read GetContact write SetContact;
@@ -555,12 +556,13 @@ type
     procedure Register(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
     procedure Register(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
+    procedure Unregister(Registrar: TIdSipUri);
   end;
 
   EIdSipBadSyntax = class(EIdException);
 
 const
-  MissingContactHeader = 'Missing Contact Header';
+  MissingContactHeader = 'Missing Contact Header';  
 
 implementation
 
@@ -737,6 +739,7 @@ var
   Transport: String;
 begin
   Result := TIdSipRequest.Create;
+//  Result := Dest.Address.CreateRequest;
   try
     Result.RequestUri := Dest.Address;
 
@@ -1330,6 +1333,13 @@ begin
   finally
     CopyOfSessions.Free;
   end;
+end;
+
+function TIdSipUserAgentCore.UnregisterFrom(Registrar: TIdSipUri): TIdSipRegistration;
+begin
+  Result := Self.AddRegistration;
+
+  Result.Unregister(Registrar);
 end;
 
 function TIdSipUserAgentCore.Username: String;
@@ -2535,6 +2545,23 @@ begin
   end;
 end;
 
+procedure TIdSipRegistration.Unregister(Registrar: TIdSipUri);
+var
+  RemovalBindings: TIdSipContacts;
+begin
+  RemovalBindings := TIdSipContacts.Create;
+  try
+    RemovalBindings.Add(ContactHeaderFull);
+    RemovalBindings.First;
+    RemovalBindings.CurrentContact.IsWildCard := true;
+    RemovalBindings.CurrentContact.Expires := 0;
+
+    Self.Register(Registrar, RemovalBindings);
+  finally
+    RemovalBindings.Free;
+  end;
+end;
+
 //* TIdSipRegistration Protected methods ***************************************
 
 procedure TIdSipRegistration.ActionSucceeded(Response: TIdSipResponse);
@@ -2548,7 +2575,6 @@ var
   CurrentBindings: TIdSipContacts;
   I:               Integer;
 begin
-
   CurrentBindings := TIdSipContacts.Create(Response.Headers);
   try
     Copy := TList.Create;

@@ -200,7 +200,7 @@ var
 begin
   Result := TIdSipRequest.Create;
 
-  Result.MaxForwards := Result.DefaultMaxForwards;
+  Result.MaxForwards      := Result.DefaultMaxForwards;
   Result.ToHeader.Address := Self.RemoteURI;
   Result.ToHeader.Tag     := Self.ID.RemoteTag;
   Result.From.Address     := Self.LocalURI;
