@@ -24,6 +24,7 @@ type
   TIdSipMessage = class(TPersistent)
   private
     fBody:       String;
+    fContacts:   TIdSipContacts;
     fPath:       TIdSipViaPath;
     fHeaders:    TIdSipHeaders;
     fSIPVersion: String;
@@ -39,6 +40,7 @@ type
     function  QuickestContactExpiry: Cardinal;
     function  QuickestExpiresHeader: Cardinal;
     procedure SetCallID(const Value: String);
+    procedure SetContacts(Value: TIdSipContacts);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
     procedure SetContentLength(Value: Cardinal);
     procedure SetContentType(const Value: String);
@@ -79,6 +81,7 @@ type
 
     property Body:               String                         read fBody write fBody;
     property CallID:             String                         read GetCallID write SetCallID;
+    property Contacts:           TIdSipContacts                 read fContacts write SetContacts;
     property ContentDisposition: TIdSipContentDispositionHeader read GetContentDisposition write SetContentDisposition;
     property ContentLength:      Cardinal                       read GetContentLength write SetContentLength;
     property ContentType:        String                         read GetContentType write SetContentType;
@@ -112,6 +115,7 @@ type
     function  AckFor(Response: TIdSipResponse): TIdSipRequest;
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
+    function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  HasSipsUri: Boolean;
@@ -412,14 +416,16 @@ begin
 
   fHeaders := TIdSipHeaders.Create;
   fPath := TIdSipViaPath.Create(Self.Headers);
+  fContacts := TIdSipContacts.Create(Self.Headers);
 
   Self.SIPVersion  := IdSipConsts.SIPVersion;
 end;
 
 destructor TIdSipMessage.Destroy;
 begin
-  fPath.Free;
-  fHeaders.Free;
+  Self.Contacts.Free;
+  Self.Path.Free;
+  Self.Headers.Free;
 
   inherited Destroy;
 end;
@@ -682,6 +688,12 @@ begin
   Self.FirstHeader(CallIDHeaderFull).Value := Value;
 end;
 
+procedure TIdSipMessage.SetContacts(Value: TIdSipContacts);
+begin
+  Self.Contacts.Clear;
+  Self.Contacts.Add(Value);
+end;
+
 procedure TIdSipMessage.SetContentDisposition(Value: TIdSipContentDispositionHeader);
 begin
   Self.ContentDisposition.Assign(Value);
@@ -736,7 +748,8 @@ end;
 destructor TIdSipRequest.Destroy;
 begin
   Self.Route.Free;
-  
+  Self.RequestUri.Free;
+
   inherited Destroy;
 end;
 
@@ -781,6 +794,30 @@ begin
 
   Self.Method     := R.Method;
   Self.RequestUri := R.RequestUri;
+end;
+
+function TIdSipRequest.CreateCancel: TIdSipRequest;
+begin
+  Assert(Self.IsInvite, 'Only INVITE requests may be CANCELled');
+  Result := TIdSipRequest.Create;
+  try
+    Result.Method      := MethodCancel;
+    Result.CSeq.Method := Result.Method;
+
+    Result.RequestUri.Uri  := Self.RequestUri.Uri;
+    Result.CallID          := Self.CallID;
+    Result.ToHeader        := Self.ToHeader;
+    Result.CSeq.SequenceNo := Self.CSeq.SequenceNo;
+    Result.From            := Self.From;
+
+    Result.Path.Add(Self.LastHop);
+
+    Result.Route := Self.Route;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
 end;
 
 function TIdSipRequest.DefaultMaxForwards: Cardinal;

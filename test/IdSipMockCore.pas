@@ -34,11 +34,14 @@ type
 
   TIdSipMockSession = class(TIdSipSession)
   private
+    fIsInboundCall:  Boolean;
     fResponseResent: Boolean;
   public
     constructor Create(UA: TIdSipUserAgentCore); override;
 
+    function  IsInboundCall: Boolean; override;
     procedure ResendLastResponse; override;
+    procedure SetIsInboundCall(Value: Boolean);
 
     property ResponseResent: Boolean read fResponseResent;
   end;
@@ -115,12 +118,25 @@ constructor TIdSipMockSession.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create(UA);
 
+  Self.CreateInternal;
+
   Self.fResponseResent := false;
+  Self.SetIsInboundCall(false);
+end;
+
+function TIdSipMockSession.IsInboundCall: Boolean;
+begin
+  Result := Self.fIsInboundCall;
 end;
 
 procedure TIdSipMockSession.ResendLastResponse;
 begin
   Self.fResponseResent := true;
+end;
+
+procedure TIdSipMockSession.SetIsInboundCall(Value: Boolean);
+begin
+  Self.fIsInboundCall := Value;
 end;
 
 end.

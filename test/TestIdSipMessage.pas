@@ -54,6 +54,7 @@ type
     procedure TestRemoveHeader;
     procedure TestRemoveHeaders;
     procedure TestSetCallID;
+    procedure TestSetContacts;
     procedure TestSetContentLength;
     procedure TestSetContentType;
     procedure TestSetCSeq;
@@ -79,6 +80,11 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
+    procedure TestCreateCancel;
+    procedure TestCreateCancelANonInviteRequest;
+    procedure TestCreateCancelWithProxyRequire;
+    procedure TestCreateCancelWithRequire;
+    procedure TestCreateCancelWithRoute;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
     procedure TestIsAck;
@@ -651,6 +657,30 @@ begin
   CheckEquals('42', Self.Msg.CallID, 'Call-ID not set');
 end;
 
+procedure TestTIdSipMessage.TestSetContacts;
+var
+  H: TIdSipHeaders;
+  C: TIdSipContacts;
+begin
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org';
+
+  H := TIdSipHeaders.Create;
+  try
+    H.Add(ContactHeaderFull).Value := 'sips:wintermute@tessier-ashpool.co.luna';
+    H.Add(ContactHeaderFull).Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
+    C := TIdSipContacts.Create(H);
+    try
+      Self.Msg.Contacts := C;
+
+      Check(Self.Msg.Contacts.IsEqualTo(C), 'Path not correctly set');
+    finally
+      C.Free;
+    end;
+  finally
+    H.Free;
+  end;
+end;
+
 procedure TestTIdSipMessage.TestSetContentLength;
 begin
   Self.Msg.ContentLength := 999;
@@ -925,6 +955,93 @@ end;
 procedure TestTIdSipRequest.TestAsStringNoMaxForwardsSet;
 begin
   Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
+end;
+
+procedure TestTIdSipRequest.TestCreateCancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.Request.CreateCancel;
+  try
+    CheckEquals(MethodCancel, Cancel.Method, 'Unexpected method');
+    CheckEquals(MethodCancel,
+                Cancel.CSeq.Method,
+                'CSeq method');
+    Check(Self.Request.RequestUri.Equals(Cancel.RequestUri),
+          'Request-URI');
+    CheckEquals(Self.Request.CallID,
+                Cancel.CallID,
+                'Call-ID header');
+    Check(Self.Request.ToHeader.IsEqualTo(Cancel.ToHeader),
+          'To header');
+    CheckEquals(Self.Request.CSeq.SequenceNo,
+                Cancel.CSeq.SequenceNo,
+                'CSeq numerical portion');
+    Check(Self.Request.From.IsEqualTo(Cancel.From),
+          'From header');
+    CheckEquals(1,
+                Cancel.Path.Length,
+                'Via headers');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateCancelANonInviteRequest;
+begin
+  Self.Request.Method := MethodOptions;
+  try
+    Self.Request.CreateCancel;
+    Fail('Failed to bail out of creating a CANCEL for a non-INVITE request');
+  except
+    on EAssertionFailed do;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateCancelWithProxyRequire;
+var
+  Cancel: TIdSipRequest;
+begin
+  Self.Request.AddHeader(ProxyRequireHeader).Value := 'foofoo';
+
+  Cancel := Self.Request.CreateCancel;
+  try
+    Check(not Cancel.HasHeader(ProxyRequireHeader),
+          'Proxy-Require headers copied');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateCancelWithRequire;
+var
+  Cancel: TIdSipRequest;
+begin
+  Self.Request.AddHeader(RequireHeader).Value := 'foofoo, barbar';
+
+  Cancel := Self.Request.CreateCancel;
+  try
+    Check(not Cancel.HasHeader(RequireHeader),
+          'Require headers copied');
+  finally
+    Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateCancelWithRoute;
+var
+  Cancel: TIdSipRequest;
+begin
+  Self.Request.AddHeader(RouteHeader).Value := '<sip:127.0.0.1>';
+  Self.Request.AddHeader(RouteHeader).Value := '<sip:127.0.0.2>';
+
+  Cancel := Self.Request.CreateCancel;
+  try
+    Check(Self.Request.Route.IsEqualTo(Cancel.Route),
+          'Route headers not copied');
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TestTIdSipRequest.TestFirstProxyRequire;
