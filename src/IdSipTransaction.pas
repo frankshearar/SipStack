@@ -12,14 +12,14 @@ unit IdSipTransaction;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdSipMessage, IdSipTimer,
+  Contnrs, IdInterfacedObject, IdSipMessage, IdSipNotification, IdSipTimer,
   IdSipTransport, IdThread, IdTimerQueue, SyncObjs, SysUtils;
 
 const
-  DefaultT1    = 500;   // ms
+  DefaultT1    = 500;   // milliseconds
   DefaultT1_64 = 64*DefaultT1;
-  DefaultT2    = 4000;  // ms
-  DefaultT4    = 5000;  // ms
+  DefaultT2    = 4000;  // milliseconds
+  DefaultT4    = 5000;  // milliseconds
 
 const
   MaximumUDPMessageSize = 1300;
@@ -56,9 +56,9 @@ type
   IIdSipUnhandledMessageListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
     procedure OnReceiveRequest(Request: TIdSipRequest;
-                               Receiver: TIdSipTransport);
+                               Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
-                                Receiver: TIdSipTransport);
+                                Transport: TIdSipTransport);
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
                                         Receiver: TIdSipTransport);
     procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
@@ -78,8 +78,7 @@ type
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
-    MsgListenerLock: TCriticalSection;
-    MsgListeners:    TList;
+    MsgListeners:    TIdSipNotificationList;
     Transports:      TObjectList;
     TransportLock:   TCriticalSection;
     Transactions:    TObjectList;
@@ -171,8 +170,7 @@ type
     fState:           TIdSipTransactionState;
     fDispatcher:      TIdSipTransactionDispatcher;
     fLastResponse:    TIdSipResponse;
-    TranListenerLock: TCriticalSection;
-    TranListeners:    TList;
+    TranListeners:    TIdSipNotificationList;
   protected
     FirstTime: Boolean;
 
@@ -197,11 +195,11 @@ type
                                  Response: TIdSipResponse;
                                  const Reason: String); overload;
     procedure NotifyOfFailure(const Reason: String);
-    procedure NotifyOfTermination;
     procedure NotifyOfRequest(R: TIdSipRequest;
                               T: TIdSipTransport);
     procedure NotifyOfResponse(R: TIdSipResponse;
                                Receiver: TIdSipTransport);
+    procedure NotifyOfTermination;
     procedure SetState(Value: TIdSipTransactionState); virtual;
     procedure TryResendInitialRequest;
     procedure TrySendRequest(R: TIdSipRequest);
@@ -503,6 +501,92 @@ type
     function IsNull: Boolean; override;
   end;
 
+  TIdSipTransactionDispatcherMethod = class(TIdSipMethod)
+  private
+    fReceiver: TIdSipTransport;
+  public
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+  end;
+
+  TIdSipTransactionDispatcherReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fRequest: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Request:  TIdSipRequest read fRequest write fRequest;
+  end;
+
+  TIdSipTransactionDispatcherReceiveResponseMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipTransactionDispatcherUnhandledRequestMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fRequest: TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Request: TIdSipRequest read fRequest write fRequest;
+  end;
+
+  TIdSipTransactionDispatcherUnhandledResponseMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipTransactionMethod = class(TIdSipMethod)
+  private
+    fTransaction: TIdSipTransaction;
+  public
+    property Transaction: TIdSipTransaction read fTransaction write fTransaction;
+  end;
+
+  TIdSipTransactionFailMethod = class(TIdSipTransactionMethod)
+  private
+    fReason: String;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Reason: String read fReason write fReason;
+  end;
+
+  TIdSipTransactionReceiveRequestMethod = class(TIdSipTransactionMethod)
+  private
+    fReceiver: TIdSipTransport;
+    fRequest:  TIdSipRequest;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Request:  TIdSipRequest   read fRequest write fRequest;
+  end;
+
+  TIdSipTransactionReceiveResponseMethod = class(TIdSipTransactionMethod)
+  private
+    fReceiver: TIdSipTransport;
+    fResponse: TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Receiver: TIdSipTransport read fReceiver write fReceiver;
+    property Response: TIdSipResponse  read fResponse write fResponse;
+  end;
+
+  TIdSipTransactionTerminatedMethod = class(TIdSipTransactionMethod)
+  public
+    procedure Run(const Subject: IInterface); override;
+  end;
+
 implementation
 
 uses
@@ -517,8 +601,7 @@ constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.MsgListenerLock := TCriticalSection.Create;
-  Self.MsgListeners    := TList.Create;
+  Self.MsgListeners := TIdSipNotificationList.Create;
 
   Self.Transports    := TObjectList.Create(false);
   Self.TransportLock := TCriticalSection.Create;
@@ -538,19 +621,13 @@ begin
   Self.TransportLock.Free;
   Self.Transports.Free;
   Self.MsgListeners.Free;
-  Self.MsgListenerLock.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipTransactionDispatcher.AddUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
-  Self.MsgListenerLock.Acquire;
-  try
-    Self.MsgListeners.Add(Pointer(Listener));
-  finally
-    Self.MsgListenerLock.Release;
-  end;
+  Self.MsgListeners.AddListener(Listener);
 end;
 
 procedure TIdSipTransactionDispatcher.AddTransport(Transport: TIdSipTransport);
@@ -657,12 +734,7 @@ end;
 
 procedure TIdSipTransactionDispatcher.RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
-  Self.MsgListenerLock.Acquire;
-  try
-    Self.MsgListeners.Remove(Pointer(Listener));
-  finally
-    Self.MsgListenerLock.Release;
-  end;
+  Self.MsgListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipTransactionDispatcher.Send(Msg: TIdSipMessage);
@@ -788,60 +860,64 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
                                                                Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionDispatcherReceiveRequestMethod;
 begin
-  Self.MsgListenerLock.Acquire;
+  Notification := TIdSipTransactionDispatcherReceiveRequestMethod.Create;
   try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveRequest(Request,
-                                                                            Receiver);
+    Notification.Receiver := Receiver;
+    Notification.Request  := Request;
+
+    Self.MsgListeners.Notify(Notification);
   finally
-    Self.MsgListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyListenersOfResponse(Response: TIdSipResponse;
                                                                 Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionDispatcherReceiveResponseMethod;
 begin
-  Self.MsgListenerLock.Acquire;
+  Notification := TIdSipTransactionDispatcherReceiveResponseMethod.Create;
   try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveResponse(Response,
-                                                                             Receiver);
+    Notification.Receiver := Receiver;
+    Notification.Response := Response;
+
+    Self.MsgListeners.Notify(Notification);
   finally
-    Self.MsgListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
                                                                         Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionDispatcherUnhandledRequestMethod;
 begin
-  Self.MsgListenerLock.Acquire;
+  Notification := TIdSipTransactionDispatcherUnhandledRequestMethod.Create;
   try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledRequest(Request,
-                                                                                     Receiver);
+    Notification.Receiver := Receiver;
+    Notification.Request  := Request;
+
+    Self.MsgListeners.Notify(Notification);
   finally
-    Self.MsgListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
                                                                          Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionDispatcherUnhandledResponseMethod;
 begin
-  Self.MsgListenerLock.Acquire;
+  Notification := TIdSipTransactionDispatcherUnhandledResponseMethod.Create;
   try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipUnhandledMessageListener(Self.MsgListeners[I]).OnReceiveUnhandledResponse(Response,
-                                                                                      Receiver);
+    Notification.Receiver := Receiver;
+    Notification.Response := Response;
+
+    Self.MsgListeners.Notify(Notification);
   finally
-    Self.MsgListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
@@ -1013,8 +1089,7 @@ begin
   Self.InitialRequest.Assign(InitialRequest);
   Self.fLastResponse := TIdSipResponse.Create;
 
-  Self.TranListenerLock := TCriticalSection.Create;
-  Self.TranListeners    := TList.Create;
+  Self.TranListeners := TIdSipNotificationList.Create;
 
   Self.FirstTime := true;
 end;
@@ -1022,7 +1097,6 @@ end;
 destructor TIdSipTransaction.Destroy;
 begin
   Self.TranListeners.Free;
-  Self.TranListenerLock.Free;
   Self.LastResponse.Free;
   Self.InitialRequest.Free;
 
@@ -1031,12 +1105,7 @@ end;
 
 procedure TIdSipTransaction.AddTransactionListener(const Listener: IIdSipTransactionListener);
 begin
-  Self.TranListenerLock.Acquire;
-  try
-    Self.TranListeners.Add(Pointer(Listener));
-  finally
-    Self.TranListenerLock.Release;
-  end;
+  Self.TranListeners.AddListener(Listener);
 end;
 
 procedure TIdSipTransaction.ExceptionRaised(E: Exception);
@@ -1106,12 +1175,7 @@ end;
 
 procedure TIdSipTransaction.RemoveTransactionListener(const Listener: IIdSipTransactionListener);
 begin
-  Self.TranListenerLock.Acquire;
-  try
-    Self.TranListeners.Remove(Pointer(Listener));
-  finally
-    Self.TranListenerLock.Release;
-  end;
+  Self.TranListeners.RemoveListener(Listener);
 end;
 
 //* TIdSipTransaction Protected methods ****************************************
@@ -1209,60 +1273,69 @@ end;
 
 procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
 var
-  I: Integer;
+  Notification: TIdSipTransactionFailMethod;
 begin
-  Self.TranListenerLock.Acquire;
+  Notification := TIdSipTransactionFailMethod.Create;
   try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnFail(Self, Reason);
-  finally
-    Self.TranListenerLock.Release;
-  end;
-end;
+    Notification.Reason      := Reason;
+    Notification.Transaction := Self;
 
-procedure TIdSipTransaction.NotifyOfTermination;
-var
-  I: Integer;
-begin
-  Self.TranListenerLock.Acquire;
-  try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnTerminated(Self);
+    Self.TranListeners.Notify(Notification);
   finally
-    Self.TranListenerLock.Release;
+    Notification.Free;
   end;
-
-  // WARNING - I am not sure if this is safe or even sane. We're
-  // asking an object to commit suicide.
-  Self.Dispatcher.RemoveTransaction(Self);
 end;
 
 procedure TIdSipTransaction.NotifyOfRequest(R: TIdSipRequest;
                                             T: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionReceiveRequestMethod;
 begin
-  Self.TranListenerLock.Acquire;
+  Notification := TIdSipTransactionReceiveRequestMethod.Create;
   try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnReceiveRequest(R, Self, T);
+    Notification.Receiver    := T;
+    Notification.Request     := R;
+    Notification.Transaction := Self;
+
+    Self.TranListeners.Notify(Notification);
   finally
-    Self.TranListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
 procedure TIdSipTransaction.NotifyOfResponse(R: TIdSipResponse;
                                              Receiver: TIdSipTransport);
 var
-  I: Integer;
+  Notification: TIdSipTransactionReceiveResponseMethod;
 begin
-  Self.TranListenerLock.Acquire;
+  Notification := TIdSipTransactionReceiveResponseMethod.Create;
   try
-    for I := 0 to Self.TranListeners.Count - 1 do
-      IIdSipTransactionListener(Self.TranListeners[I]).OnReceiveResponse(R, Self, Receiver);
+    Notification.Receiver    := Receiver;
+    Notification.Response    := R;
+    Notification.Transaction := Self;
+
+    Self.TranListeners.Notify(Notification);
   finally
-    Self.TranListenerLock.Release;
+    Notification.Free;
   end;
+end;
+
+procedure TIdSipTransaction.NotifyOfTermination;
+var
+  Notification: TIdSipTransactionTerminatedMethod;
+begin
+  Notification := TIdSipTransactionTerminatedMethod.Create;
+  try
+    Notification.Transaction := Self;
+
+    Self.TranListeners.Notify(Notification);
+  finally
+    Notification.Free;
+  end;
+
+  // WARNING - I am not sure if this is safe or even sane. We're
+  // asking an object to commit suicide.
+  Self.Dispatcher.RemoveTransaction(Self);
 end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
@@ -2475,6 +2548,97 @@ end;
 function TIdSipNullTransaction.IsNull: Boolean;
 begin
   Result := true;
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherReceiveRequestMethod                            *
+//******************************************************************************
+//* TIdSipTransactionDispatcherReceiveRequestMethod Public methods *************
+
+procedure TIdSipTransactionDispatcherReceiveRequestMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUnhandledMessageListener).OnReceiveRequest(Self.Request,
+                                                               Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherReceiveResponseMethod                           *
+//******************************************************************************
+//* TIdSipTransactionDispatcherReceiveResponseMethod Public methods ************
+
+procedure TIdSipTransactionDispatcherReceiveResponseMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUnhandledMessageListener).OnReceiveResponse(Self.Response,
+                                                                Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherUnhandledRequestMethod                          *
+//******************************************************************************
+//* TIdSipTransactionDispatcherUnhandledRequestMethod Public methods ***********
+
+procedure TIdSipTransactionDispatcherUnhandledRequestMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledRequest(Self.Request,
+                                                                        Self.Receiver);
+
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherUnhandledResponseMethod                         *
+//******************************************************************************
+//* TIdSipTransactionDispatcherUnhandledResponseMethod Public methods **********
+
+procedure TIdSipTransactionDispatcherUnhandledResponseMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledResponse(Self.Response,
+                                                                         Self.Receiver);
+
+end;
+
+//******************************************************************************
+//* TIdSipTransactionFailMethod                                                *
+//******************************************************************************
+//* TIdSipTransactionFailMethod Public methods *********************************
+
+procedure TIdSipTransactionFailMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionListener).OnFail(Self.Transaction,
+                                                Self.Reason);
+end;
+
+//******************************************************************************
+//* TIdSipTransactionReceiveRequestMethod                                      *
+//******************************************************************************
+//* TIdSipTransactionReceiveRequestMethod Public methods ***********************
+
+procedure TIdSipTransactionReceiveRequestMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionListener).OnReceiveRequest(Self.Request,
+                                                          Self.Transaction,
+                                                          Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipTransactionReceiveResponseMethod                                     *
+//******************************************************************************
+//* TIdSipTransactionReceiveResponseMethod Public methods **********************
+
+procedure TIdSipTransactionReceiveResponseMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionListener).OnReceiveResponse(Self.Response,
+                                                           Self.Transaction,
+                                                           Self.Receiver);
+end;
+
+//******************************************************************************
+//* TIdSipTransactionTerminatedMethod                                          *
+//******************************************************************************
+//* TIdSipTransactionTerminatedMethod Public methods ***************************
+
+procedure TIdSipTransactionTerminatedMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionListener).OnTerminated(Self.Transaction);
 end;
 
 end.
