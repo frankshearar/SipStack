@@ -515,7 +515,6 @@ type
     function  CredentialHeaderType: TIdSipAuthorizationHeaderClass; virtual;
     procedure RemoveStaleResponse;
 
-
     property Domain: String  read GetDomain write SetDomain;
     property Stale:  Boolean read GetStale write SetStale;
   end;
