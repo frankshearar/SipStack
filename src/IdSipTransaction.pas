@@ -1290,6 +1290,7 @@ end;
 procedure TIdSipTransaction.ReceiveNonCancel(R: TIdSipRequest;
                                              T: TIdSipTransport);
 begin
+  // By default do nothing
 end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
