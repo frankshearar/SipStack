@@ -53,7 +53,7 @@ var
 implementation
 
 uses
-  IdRTP, IdSipConsts, Math, SysUtils;
+  IdRTP, IdSipConsts, SysUtils;
 
 //******************************************************************************
 //* TIdRandomNumber                                                            *
