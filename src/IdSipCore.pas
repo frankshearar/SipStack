@@ -3965,6 +3965,7 @@ begin
   if (Self.NonceCount = 0) then
     Inc(Self.NonceCount);
 
+  // cf RFC 3263, section 4.3  
   TargetLocations := Self.UA.Locator.FindServersFor(Request.DestinationUri);
   try
     if TargetLocations.IsEmpty then begin
@@ -3985,6 +3986,7 @@ end;
 
 procedure TIdSipAction.SendResponse(Response: TIdSipResponse);
 begin
+  // RFC 3263, section 5
   try
     Self.UA.SendResponse(Response);
   except
