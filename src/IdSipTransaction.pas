@@ -218,9 +218,9 @@ type
                              T: TIdSipTransport); virtual;
     procedure ReceiveResponse(R: TIdSipResponse;
                               T: TIdSipTransport); virtual;
+    procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
     procedure SendRequest; virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
-    procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
 
     property InitialRequest: TIdSipRequest          read fInitialRequest;
     property LastResponse:   TIdSipResponse         read fLastResponse;
@@ -1085,6 +1085,11 @@ begin
   // By default we do nothing
 end;
 
+procedure TIdSipTransaction.RemoveTransactionListener(const Listener: IIdSipTransactionListener);
+begin
+  Self.TranListeners.RemoveListener(Listener);
+end;
+
 procedure TIdSipTransaction.SendRequest;
 begin
   // By default we do nothing
@@ -1093,11 +1098,6 @@ end;
 procedure TIdSipTransaction.SendResponse(R: TIdSipResponse);
 begin
   Self.LastResponse.Assign(R);
-end;
-
-procedure TIdSipTransaction.RemoveTransactionListener(const Listener: IIdSipTransactionListener);
-begin
-  Self.TranListeners.RemoveListener(Listener);
 end;
 
 //* TIdSipTransaction Protected methods ****************************************
