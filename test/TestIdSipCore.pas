@@ -2696,8 +2696,9 @@ begin
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
   Self.SimpleSdp      := Self.CreateSimpleSdp;
 
-  Self.Invite.ContentType := SdpMimeType;
-  Self.Invite.Body        := Self.SimpleSdp.AsString;
+  Self.Invite.ContentType   := SdpMimeType;
+  Self.Invite.Body          := Self.SimpleSdp.AsString;
+  Self.Invite.ContentLength := Length(Self.SimpleSdp.AsString);
 
   Self.CreateAction;
 end;

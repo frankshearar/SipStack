@@ -595,6 +595,7 @@ procedure TestTIdSipTcpServer.TestListenerReceiveRequest;
 var
   Listener: TIdSipTestMessageListener;
 begin
+  Self.LowPortServer.RemoveMessageListener(Self);
   Self.CheckingRequestEvent := Self.AcknowledgeEvent;
 
   Listener := TIdSipTestMessageListener.Create;

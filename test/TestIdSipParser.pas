@@ -1661,7 +1661,7 @@ procedure TestTIdSipParser.TestTortureTest24;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create(TortureTest24);
+  Str := TStringStream.Create(StringReplace(TortureTest24, '%s', 'company.com', [rfReplaceAll]));
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
