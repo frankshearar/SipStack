@@ -370,6 +370,8 @@ end;
 procedure TIdDTMFPanel.SetProcessor(Value: TIdSDPPayloadProcessor);
 begin
   Self.fProcessor := Value;
+
+  if Assigned(Self.fProcessor) then
   Self.fProcessor.AddDataListener(Self);
 end;
 
