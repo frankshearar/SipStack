@@ -1450,7 +1450,7 @@ end;
 
 procedure TIdSipTransaction.SetState(Value: TIdSipTransactionState);
 begin
-  fState := Value;
+  Self.fState := Value;
 end;
 
 procedure TIdSipTransaction.TryResendInitialRequest;
