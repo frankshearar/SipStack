@@ -1113,6 +1113,12 @@ type
     function  FindAuthorizationHeader(const Realm: String;
                                       const HeaderType: String): TIdSipHeader;
     function  GetMaxForwards: Byte;
+    procedure ParseMethod(Parser: TIdSipParser;
+                          var FirstLine: String);
+    procedure ParseRequestUri(Parser: TIdSipParser;
+                              var FirstLine: String);
+    procedure ParseSipVersion(Parser: TIdSipParser;
+                              var FirstLine: String);
     procedure SetMaxForwards(Value: Byte);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
@@ -6971,7 +6977,6 @@ function TIdSipRequest.MissingRequiredHeaders: Boolean;
 begin
   Result := inherited MissingRequiredHeaders;
 
-
   if not Self.HasHeader(MaxForwardsHeader) then begin
     Result := true;
     Self.MarkAsInvalid(MissingMaxForwards);
@@ -6981,42 +6986,17 @@ end;
 
 procedure TIdSipRequest.ParseStartLine(Parser: TIdSipParser);
 var
-  Line:   String;
-  Tokens: TStrings;
-  URI:    String;
+  Line:  String;
 begin
   // chew up leading blank lines (Section 7.5)
   Line := Parser.ReadFirstNonBlankLine;
 
-  Tokens := TStringList.Create;
-  try
-    BreakApart(Line, ' ', Tokens);
+  Self.ParseMethod(Parser, Line);
+  Self.ParseRequestUri(Parser, Line);
+  Self.ParseSipVersion(Parser, Line);
 
-    if (Tokens.Count > 3) then
-      Self.FailParse(RequestUriNoSpaces)
-    else if (Tokens.Count < 3) then
-      Self.FailParse(Format(MalformedToken, ['Request-Line', Line]));
-
-    Self.Method := Tokens[0];
-    // we want to check the Method
-    if not Parser.IsMethod(Self.Method) then
-      Self.FailParse(Format(MalformedToken, [MethodToken, Self.Method]));
-
-    URI := Tokens[1];
-
-    // cf RFC 3261 section 7.1 
-    if (URI <> '') and (URI[1] = '<') and (URI[Length(URI)] = '>') then
-      Self.FailParse(RequestUriNoAngleBrackets);
-
-    Self.RequestUri.URI := URI;
-
-    Self.SIPVersion := Tokens[2];
-
-    if not Parser.IsSipVersion(Self.SIPVersion) then
-      Self.FailParse(Format(InvalidSipVersion, [Self.SIPVersion]));
-  finally
-    Tokens.Free;
-  end;
+  if (Line <> '') then
+    Self.FailParse(RequestUriNoSpaces);
 end;
 
 //* TIdSipRequest Private methods **********************************************
@@ -7053,6 +7033,49 @@ begin
     Self.MaxForwards := Self.DefaultMaxForwards;
 
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
+end;
+
+procedure TIdSipRequest.ParseMethod(Parser: TIdSipParser;
+                                    var FirstLine: String);
+var
+  Token: String;
+begin
+  Token       := Fetch(FirstLine, ' ');
+  Self.Method := Token;
+  // we want to check the Method
+  if not Parser.IsMethod(Self.Method) then
+    Self.FailParse(Format(MalformedToken, [MethodToken, Self.Method]));
+end;
+
+procedure TIdSipRequest.ParseRequestUri(Parser: TIdSipParser;
+                                        var FirstLine: String);
+var
+  Token: String;
+begin
+  Token := Fetch(FirstLine, ' ');
+
+  // cf RFC 3261 section 7.1
+  if (Token = '') then
+    Self.FailParse(Format(MalformedToken, ['Request-Line', Self.RawFirstLine]))
+  else if (Token[1] = '<') and (Token[Length(Token)] = '>') then
+    Self.FailParse(RequestUriNoAngleBrackets);
+
+  Self.RequestUri.URI := Token;
+end;
+
+procedure TIdSipRequest.ParseSipVersion(Parser: TIdSipParser;
+                                        var FirstLine: String);
+var
+  Token: String;
+begin
+  Token := Fetch(FirstLine, ' ');
+  Self.SIPVersion := Token;
+
+  if (Token = '') then
+    Self.FailParse(Format(MalformedToken, ['Request-Line', Self.RawFirstLine]));
+
+  if not Parser.IsSipVersion(Self.SIPVersion) then
+    Self.FailParse(Format(InvalidSipVersion, [Self.SIPVersion]));
 end;
 
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
