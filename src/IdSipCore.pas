@@ -48,11 +48,11 @@ type
   //   other words, you'd better say goodbye to the Session in this method.
   IIdSipSessionListener = interface
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
-    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
+    procedure OnNewSession(Session: TIdSipSession);
   end;
 
   // TODO: there's redundance with this Hostname, and the Hostnames of the

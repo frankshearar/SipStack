@@ -64,13 +64,13 @@ type
 
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnChanged(Observed: TObject);
-    procedure OnEstablishedSession(const Session: TIdSipSession);
-    procedure OnEndedSession(const Session: TIdSipSession);
-    procedure OnModifiedSession(const Session: TIdSipSession;
-                                const Invite: TIdSipRequest);
+    procedure OnEstablishedSession(Session: TIdSipSession);
+    procedure OnEndedSession(Session: TIdSipSession);
+    procedure OnModifiedSession(Session: TIdSipSession;
+                                Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
-    procedure OnNewSession(const Session: TIdSipSession);
+    procedure OnNewSession(Session: TIdSipSession);
     procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -287,17 +287,17 @@ begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
 end;
 
-procedure TrnidSpike.OnEstablishedSession(const Session: TIdSipSession);
+procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
 end;
 
-procedure TrnidSpike.OnEndedSession(const Session: TIdSipSession);
+procedure TrnidSpike.OnEndedSession(Session: TIdSipSession);
 begin
   Self.StopReadingData;
 end;
 
-procedure TrnidSpike.OnModifiedSession(const Session: TIdSipSession;
-                                       const Invite: TIdSipRequest);
+procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
+                                       Invite: TIdSipRequest);
 begin
 end;
 
@@ -319,7 +319,7 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
+procedure TrnidSpike.OnNewSession(Session: TIdSipSession);
 begin
   if (Session.Invite.ContentLength > 0) then
     Self.StartReadingData(Session.Invite.Body);
