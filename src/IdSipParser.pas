@@ -301,6 +301,7 @@ const
   UnexpectedMessageLength   = 'Expected message-body length of %d but was %d';
   UnmatchedQuotes           = 'Unmatched quotes';
 
+// for IdResourceStrings ?
 const
   CallIDHeaderFull         = 'Call-ID';
   CallIDHeaderShort        = 'i';
@@ -324,18 +325,19 @@ const
   MethodOptions            = 'OPTIONS';
   MethodRegister           = 'REGISTER';
   SipName                  = 'SIP';
-  SubjectHeader            = 'Subject';
+  SubjectHeaderFull        = 'Subject';
+  SubjectHeaderShort       = 's';
   ToHeaderFull             = 'To';
   ToHeaderShort            = 't';
   ViaHeaderFull            = 'Via';
   ViaHeaderShort           = 'v';
 
-// move this to the appropriate unit - IdAssignedNumbers?
+// for IdAssignedNumbers
 const
   IdPORT_SIP     = 5060;
   IdPORT_SIP_TLS = 5061;
 
-// to go in IdResourceStrings
+// for IdResourceStrings
 const
   RSSIPTrying                           = 'Trying';
   RSSIPRinging                          = 'Ringing';
@@ -1571,7 +1573,8 @@ begin
   else if IsEqual(FromHeaderFull,           HeaderName) then Result := FromHeaderFull
   else if IsEqual(FromHeaderShort,          HeaderName) then Result := FromHeaderFull
   else if IsEqual(MaxForwardsHeader,        HeaderName) then Result := MaxForwardsHeader
-  else if IsEqual(SubjectHeader,            HeaderName) then Result := SubjectHeader
+  else if IsEqual(SubjectHeaderFull,        HeaderName) then Result := SubjectHeaderFull
+  else if IsEqual(SubjectHeaderShort,       HeaderName) then Result := SubjectHeaderFull
   else if IsEqual(ToHeaderFull,             HeaderName) then Result := ToHeaderFull
   else if IsEqual(ToHeaderShort,            HeaderName) then Result := ToHeaderFull
   else if IsEqual(ViaHeaderFull,            HeaderName) then Result := ViaHeaderFull

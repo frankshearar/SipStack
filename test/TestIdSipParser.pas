@@ -1649,9 +1649,12 @@ begin
   CheckEquals(MaxForwardsHeader, P.CanonicaliseName('Max-Forwards'),    'Max-Forwards');
   CheckEquals(MaxForwardsHeader, P.CanonicaliseName(MaxForwardsHeader), 'MaxForwardsHeader constant');
 
-  CheckEquals(SubjectHeader, P.CanonicaliseName('subject'),     'subject');
-  CheckEquals(SubjectHeader, P.CanonicaliseName('Subject'),     'Subject');
-  CheckEquals(SubjectHeader, P.CanonicaliseName(SubjectHeader), 'SubjectHeader constant');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName('subject'),          'subject');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName('Subject'),          'Subject');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName('s'),                's');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName('S'),                'S');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName(SubjectHeaderFull),  'SubjectHeaderFull constant');
+  CheckEquals(SubjectHeaderFull, P.CanonicaliseName(SubjectHeaderShort), 'SubjectHeaderShort constant');
 
   CheckEquals(ToHeaderFull, P.CanonicaliseName('to'),          'to');
   CheckEquals(ToHeaderFull, P.CanonicaliseName('To'),          'To');

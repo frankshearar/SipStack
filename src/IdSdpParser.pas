@@ -3,10 +3,36 @@ unit IdSdpParser;
 interface
 
 uses
-  IdEmailAddress, IdSimpleParser, IdURI;
+  Contnrs, IdAssignedNumbers, IdEmailAddress, IdSimpleParser, IdURI;
 
 type
   TIdIPVersion = (Id_IPv4, Id_IPv6);
+  TIdSdpBandwidthType = (btCT, btAS, btRS, btRR);
+
+  TIdSdpBandwidth = class(TObject)
+  private
+    fBandwidth:     Cardinal;
+    fBandwidthType: TIdSdpBandwidthType;
+  public
+    property Bandwidth:     Cardinal            read fBandwidth write fBandwidth;
+    property BandwidthType: TIdSdpBandwidthType read fBandwidthType write fBandwidthType;
+  end;
+
+  TIdSdpBandwidths = class(TObject)
+  private
+    List: TObjectList;
+
+    function GetItems(Index: Integer): TIdSdpBandwidth;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(BW: TIdSdpBandwidth);
+    procedure Clear;
+    function  Count: Integer;
+
+    property Items[Index: Integer]: TIdSdpBandwidth read GetItems; default;
+  end;
 
   TIdSdpConnection = class(TObject)
   private
@@ -19,27 +45,50 @@ type
     property NetType:     String       read fNetType write fNetType;
   end;
 
+  TIdSdpOrigin = class(TObject)
+  private
+    fAddress:        String;
+    fAddressType:    TIdIPVersion;
+    fNetType:        String;
+    fSessionID:      String;
+    fSessionVersion: String;
+    fUsername:       String;
+  public
+    property Address:        String       read fAddress write fAddress;
+    property AddressType:    TIdIPVersion read fAddressType write fAddressType;
+    property NetType:        String       read fNetType write fNetType;
+    property SessionID:      String       read fSessionID write fSessionID;
+    property SessionVersion: String       read fSessionVersion write fSessionVersion;
+    property Username:       String       read fUsername write fUsername;
+  end;
+
   TIdSdpPayload = class(TObject)
   private
+    fBandwidths:   TIdSdpBandwidths;
     fConnection:   TIdSdpConnection;
     fEmailAddress: TIdEmailAddressItem;
     fInfo:         String;
-    fOrigin:       String;
+    fOrigin:       TIdSdpOrigin;
     fPhoneNumber:  String;
     fSessionName:  String;
     fURI:          TIdURI;
     fVersion:      Cardinal;
 
+    function GetBandwidths: TIdSdpBandwidths;
     function GetConnection: TIdSdpConnection;
     function GetEmailAddress: TIdEmailAddressItem;
+    function GetOrigin: TIdSdpOrigin;
     function GetURI: TIdURI;
   public
     destructor Destroy; override;
 
+    function HasConnection: Boolean;
+
+    property Bandwidths:   TIdSdpBandwidths    read GetBandwidths;
     property Connection:   TIdSdpConnection    read GetConnection;
     property EmailAddress: TIdEMailAddressItem read GetEmailAddress;
     property Info:         String              read fInfo write fInfo;
-    property Origin:       String              read fOrigin write fOrigin;
+    property Origin:       TIdSdpOrigin        read GetOrigin;
     property PhoneNumber:  String              read fPhoneNumber write fPhoneNumber;
     property SessionName:  String              read fSessionName write fSessionName;
     property URI:          TIdURI              read GetURI;
@@ -52,6 +101,7 @@ type
     ParsingSessionHeaders: Boolean;
 
     procedure AssertHeaderOrder;
+    procedure ParseBandwidth(const Payload: TIdSdpPayload);
     procedure ParseConnection(const Payload: TIdSdpPayload);
     procedure ParseEmail(const Payload: TIdSdpPayload);
     procedure ParseHeader(var Name, Value: String);
@@ -64,6 +114,10 @@ type
     procedure ParseURI(const Payload: TIdSdpPayload);
     procedure ParseVersion(const Payload: TIdSdpPayload);
   public
+    class function IsAddressType(const Token: String): Boolean;
+    class function IsBandwidthType(const Token: String): Boolean;
+    class function IsNetType(const Token: String): Boolean;
+    class function IsNumber(const Token: String): Boolean;
     class function IsPhone(const Token: String): Boolean;
     class function IsPhoneNumber(const Header: String): Boolean;
     class function IsText(const Token: String): Boolean;
@@ -73,6 +127,8 @@ type
 
 const
   BadHeaderOrder        = 'Headers in the wrong order';
+  ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';
+  ConvertStrErrorMsg    = 'Couldn''t convert ''%s'' to type %s';
   MissingOrigin         = 'Missing origin-field';
   MissingSessionName    = 'Missing session-name-field';
   MissingVersion        = 'Missing proto-version';
@@ -80,8 +136,6 @@ const
   UnknownOptionalHeader = 'Unknown optional header: ''%s''';
 
 const
-  AddressTypeIP4 = 'IP4';
-  AddressTypeIP6 = 'IP6';
   SafeChars = ['a'..'z', 'A'..'Z', '0'..'9', '''', '-', '.', '/', ':', '?', '#',
                '$', '&', '*', ';', '=', '@', '[', ']', '^', '_', '`', '{', '|',
                '}', '+', '~', '"'];
@@ -90,7 +144,23 @@ const
   //                            ** * <-- * indicates that this header can occur multiple times
   MediaHeaderOrder   = 'micbka';
   //                      ** * <-- * indicates that this header can occur multiple times
+
+// for IdAssignedNumbers
 const
+  // IANA assigned bwtype
+  Id_SDP_CT = 'CT';
+  Id_SDP_AS = 'AS';
+  Id_SDP_RS = 'RS';
+  Id_SDP_RR = 'RR';
+  // IANA assigned nettype
+  Id_SDP_IN = 'IN';
+  // IANA assigned addrtype
+  Id_SDP_IP4 = 'IP4';
+  Id_SDP_IP6 = 'IP6';
+
+// for IdResourceStrings
+const
+  RSSDPBandwidthName   = 'b';
   RSSDPConnectionName  = 'c';
   RSSDPEmailName       = 'e';
   RSSDPOriginName      = 'o';
@@ -100,8 +170,10 @@ const
   RSSDPUriName         = 'u';
   RSSDPVersionName     = 'v';
 
-function StrToAddressType(const S: String): TIdIPVersion;
 function AddressTypeToStr(const Version: TIdIPVersion): String;
+function BandwidthTypeToStr(const BwType: TIdSdpBandwidthType): String;
+function StrToAddressType(const S: String): TIdIPVersion;
+function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
 
 implementation
 
@@ -112,22 +184,85 @@ uses
 //* Unit public functions and procedures                                       *
 //******************************************************************************
 
-function StrToAddressType(const S: String): TIdIPVersion;
-begin
-       if (S = AddressTypeIP4) then Result := Id_IPv4
-  else if (S = AddressTypeIP6) then Result := Id_IPv6
-  else
-    raise EConvertError.Create('Couldn''t convert ''' + S + ''' to type TIdIPVersion');
-end;
-
 function AddressTypeToStr(const Version: TIdIPVersion): String;
 begin
   case Version of
-    Id_IPv4: Result := AddressTypeIP4;
-    Id_IPv6: Result := AddressTypeIP6;
+    Id_IPv4: Result := Id_SDP_IP4;
+    Id_IPv6: Result := Id_SDP_IP6;
   else
-    raise EConvertError.Create('Couldn''t convert ' + ' to type String');
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdIPVersion', Ord(Version), 'String']));
   end;
+end;
+
+function BandwidthTypeToStr(const BwType: TIdSdpBandwidthType): String;
+begin
+  case BwType of
+    btCT: Result := Id_SDP_CT;
+    btAS: Result := Id_SDP_AS;
+    btRS: Result := Id_SDP_RS;
+    btRR: Result := Id_SDP_RR;
+  else
+    raise EConvertError.Create(Format(ConvertEnumErrorMsg, ['TIdSdpBandwidthType', Ord(BwType), 'String']));
+  end;
+end;
+
+function StrToAddressType(const S: String): TIdIPVersion;
+begin
+       if (S = Id_SDP_IP4) then Result := Id_IPv4
+  else if (S = Id_SDP_IP6) then Result := Id_IPv6
+  else
+    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdIPVersion']));
+end;
+
+function StrToBandwidthType(const S: String): TIdSdpBandwidthType;
+begin
+       if (S = Id_SDP_CT) then Result := btCT
+  else if (S = Id_SDP_AS) then Result := btAS
+  else if (S = Id_SDP_RS) then Result := btRS
+  else if (S = Id_SDP_RR) then Result := btRR
+  else
+    raise EConvertError.Create(Format(ConvertStrErrorMsg, [S, 'TIdSdpBandwidthType']));
+end;
+
+//******************************************************************************
+//* TIdSdpBandwidths                                                           *
+//******************************************************************************
+//* TIdSdpBandwidths Public methods ********************************************
+
+constructor TIdSdpBandwidths.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdSdpBandwidths.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSdpBandwidths.Add(BW: TIdSdpBandwidth);
+begin
+  Self.List.Add(BW);
+end;
+
+procedure TIdSdpBandwidths.Clear;
+begin
+  Self.List.Clear;
+end;
+
+function TIdSdpBandwidths.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+//* TIdSdpBandwidths Private methods *******************************************
+
+function TIdSdpBandwidths.GetItems(Index: Integer): TIdSdpBandwidth;
+begin
+  Result := Self.List[Index] as TIdSdpBandwidth;
 end;
 
 //******************************************************************************
@@ -137,14 +272,29 @@ end;
 
 destructor TIdSdpPayload.Destroy;
 begin
+  fBandwidths.Free;
   fConnection.Free;
   fEmailAddress.Free;
+  fOrigin.Free;
   fURI.Free;
 
   inherited Destroy;
 end;
 
+function TIdSdpPayload.HasConnection: Boolean;
+begin
+  Result := Assigned(fConnection);
+end;
+
 //* TIdSdpPayload Private methods **********************************************
+
+function TIdSdpPayload.GetBandwidths: TIdSdpBandwidths;
+begin
+  if not Assigned(fBandwidths) then
+    fBandwidths := TIdSdpBandwidths.Create;
+
+  Result := fBandwidths;
+end;
 
 function TIdSdpPayload.GetConnection: TIdSdpConnection;
 begin
@@ -162,6 +312,14 @@ begin
   Result := fEmailAddress;
 end;
 
+function TIdSdpPayload.GetOrigin: TIdSdpOrigin;
+begin
+  if not Assigned(fOrigin) then
+    fOrigin := TIdSdpOrigin.Create;
+
+  Result := fOrigin;
+end;
+
 function TIdSdpPayload.GetURI: TIdURI;
 begin
   if not Assigned(fURI) then
@@ -174,6 +332,35 @@ end;
 //* TIdSdpParser                                                               *
 //******************************************************************************
 //* TIdSdpParser Public methods ************************************************
+
+class function TIdSdpParser.IsAddressType(const Token: String): Boolean;
+begin
+  Result := (Token = Id_SDP_IP4) or (Token = Id_SDP_IP6);
+end;
+
+class function TIdSdpParser.IsBandwidthType(const Token: String): Boolean;
+begin
+  Result := (Token = Id_SDP_CT)
+         or (Token = Id_SDP_AS)
+         or (Token = Id_SDP_RS)
+         or (Token = Id_SDP_RR);
+end;
+
+class function TIdSdpParser.IsNetType(const Token: String): Boolean;
+begin
+  Result := (Token = Id_SDP_IN);
+end;
+
+class function TIdSdpParser.IsNumber(const Token: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := Token <> '';
+
+  if Result then
+    for I := 1 to Length(Token) do
+      Result := Result and (Token[I] in ['0'..'9']);
+end;
 
 class function TIdSdpParser.IsPhone(const Token: String): Boolean;
 var
@@ -226,8 +413,9 @@ begin
   Result := (Token <> '');
 
   if Result then
-    for I := 1 to Length(Token) do
-      Result := Result and (Token[I] in [#1..#9, #$b, #$c, #$e..#$ff]);
+    for I := 1 to Length(Token) do begin
+      Result := Result and not (Token[I] in [#0, #10, #13]);
+    end;
 end;
 
 procedure TIdSdpParser.Parse(const Payload: TIdSdpPayload);
@@ -258,16 +446,59 @@ begin
      raise EParser.Create(BadHeaderOrder);
 end;
 
-procedure TIdSdpParser.ParseConnection(const Payload: TIdSdpPayload);
+procedure TIdSdpParser.ParseBandwidth(const Payload: TIdSdpPayload);
 var
-  Name, Value: String;
+  BW:            TIdSdpBandwidth;
+  Name:          String;
+  OriginalValue: String;
+  Token:         String;
+  Value:         String;
 begin
   Self.AssertHeaderOrder;
   Self.ParseHeader(Name, Value);
 
-  Payload.Connection.NetType     := Fetch(Value, ' ');
-  Payload.Connection.AddressType := StrToAddressType(Fetch(Value, ' '));
-  Payload.Connection.Address     := Value;
+  BW := TIdSdpBandwidth.Create;
+  Payload.Bandwidths.Add(BW);
+
+  Token := Fetch(Value, ':');
+
+  if not Self.IsBandwidthType(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+
+  BW.BandwidthType := StrToBandwidthType(Token);
+
+  if not Self.IsNumber(Value) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+  BW.Bandwidth     := StrToInt(Value);
+
+  Self.LastHeader := RSSDPBandwidthName;
+end;
+
+procedure TIdSdpParser.ParseConnection(const Payload: TIdSdpPayload);
+var
+  Name:          String;
+  OriginalValue: String;
+  Token:         String;
+  Value:         String;
+begin
+  Self.AssertHeaderOrder;
+  Self.ParseHeader(Name, Value);
+  OriginalValue := Value;
+
+  Token := Fetch(Value, ' ');
+  Payload.Connection.NetType := Token;
+  if (Payload.Connection.NetType = '') then
+    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+
+  Token := Fetch(Value, ' ');
+  if not Self.IsAddressType(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+
+  Payload.Connection.AddressType := StrToAddressType(Token);
+
+  Payload.Connection.Address := Value;
+  if  (Payload.Connection.Address = '') then
+    raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
 
 {
    connection-field =    ["c=" nettype space addrtype space
@@ -324,6 +555,12 @@ begin
   Value := Line;
   Name  := Fetch(Value, '=');
 
+  if (Name = '') then
+    raise EParser.Create(Format(MalformedToken, ['Header', Line]));
+
+  if (Value = '') then
+    raise EParser.Create(Format(MalformedToken, [Name, Line]));
+
   if (Name <> Trim(Name)) or (Value <> Trim(Value)) then
     raise EParser.Create(Format(MalformedToken, [Trim(Name), Line]));
 end;
@@ -344,14 +581,46 @@ end;
 
 procedure TIdSdpParser.ParseOrigin(const Payload: TIdSdpPayload);
 var
-  Name, Value: String;
+  Name:          String;
+  OriginalValue: String;
+  Token:         String;
+  Value:         String;
 begin
   Self.ParseHeader(Name, Value);
+  OriginalValue := Value;
 
   if (Name <> RSSDPOriginName) then
     raise EParser.Create(MissingOrigin);
 
-  Payload.Origin := Value;
+  Payload.Origin.Username := Fetch(Value, ' ');
+  if (Payload.Origin.Username = '') then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+
+  Token := Fetch(Value, ' ');
+  if not Self.IsNumber(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+  Payload.Origin.SessionID := Token;
+
+  Token := Fetch(Value, ' ');
+  if not Self.IsNumber(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+  Payload.Origin.SessionVersion := Token;    
+
+  Token := Fetch(Value, ' ');
+  if not Self.IsNetType(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+  Payload.Origin.NetType := Token;
+
+  Token := Fetch(Value, ' ');
+  if not Self.IsAddressType(Token) then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+
+  Payload.Origin.AddressType := StrToAddressType(Token);
+
+  Payload.Origin.Address := Value;
+  if (Payload.Origin.Address = '') then
+    raise EParser.Create(Format(MalformedToken, [RSSDPOriginName, OriginalValue]));
+
   Self.LastHeader := RSSDPOriginName;
 end;
 
@@ -391,6 +660,7 @@ begin
   NextHeader := Self.PeekLine;
   while not Self.Eof and (NextHeader <> '') do begin
     case NextHeader[1] of
+      RSSDPBandwidthName:   Self.ParseBandwidth(Payload);
       RSSDPConnectionName:  Self.ParseConnection(Payload);
       RSSDPEmailName:       Self.ParseEmail(Payload);
       RSSDPInformationName: Self.ParseInfo(Payload);
