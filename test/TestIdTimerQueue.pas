@@ -36,6 +36,19 @@ type
                        MaxWait: Cardinal);
   end;
 
+  TestTIdTimerQueue = class(TTestCase)
+  private
+    Queue:    TIdDebugTimerQueue;
+    WaitTime: Cardinal;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddEvent;
+    procedure TestBefore;
+    procedure TestRemoveEvent;
+  end;
+
   TestTIdThreadedTimerQueue = class(TThreadingTestCase)
   private
     CallbackEventOne: TEvent;
@@ -62,7 +75,6 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestBefore;
     procedure TestNotifyEvent;
     procedure TestNotifyEventWithData;
     procedure TestOneEvent;
@@ -104,12 +116,33 @@ implementation
 uses
   IdGlobal;
 
+type
+  TIdFooEvent = class(TIdWait)
+  private
+    fTriggered: Boolean;
+  public
+    procedure Trigger; override;
+
+    property Triggered: Boolean read fTriggered;
+  end;
+
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTPTimerQueue unit tests');
   Result.AddTest(TestFunctions.Suite);
+  Result.AddTest(TestTIdTimerQueue.Suite);
   Result.AddTest(TestTIdThreadedTimerQueue.Suite);
   Result.AddTest(TestTIdDebugTimerQueue.Suite);
+end;
+
+//******************************************************************************
+//* TIdFooEvent                                                                *
+//******************************************************************************
+//* TIdFooEvent Public methods *************************************************
+
+procedure TIdFooEvent.Trigger;
+begin
+  Self.fTriggered := true;
 end;
 
 //******************************************************************************
@@ -173,6 +206,75 @@ begin
 
   if not Self.Terminated and Assigned(Self.OnEventSet) then
     Self.OnEventSet(Self);
+end;
+
+//******************************************************************************
+//* TestTIdTimerQueue                                                          *
+//******************************************************************************
+//* TestTIdTimerQueue Public methods *******************************************
+
+procedure TestTIdTimerQueue.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Queue := TIdDebugTimerQueue.Create;
+
+  Self.WaitTime := 999;
+end;
+
+procedure TestTIdTimerQueue.TearDown;
+begin
+  Self.Queue.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdTimerQueue Published methods ****************************************
+
+procedure TestTIdTimerQueue.TestAddEvent;
+var
+  Foo: TIdFooEvent;
+begin
+  Foo := TIdFooEvent.Create;
+  Self.Queue.AddEvent(WaitTime, Foo);
+  CheckEquals(1, Self.Queue.EventCount, 'No event added');
+  Check(Self.Queue.ScheduledEvent(Foo), 'No event scheduled');
+  CheckNotEquals(0, Self.Queue.EventAt(0).TimeToWait, 'TimeToWait not calculated');
+end;
+
+procedure TestTIdTimerQueue.TestBefore;
+begin
+  Check(    Self.Queue.Before(10, 20), '10, 20');
+  Check(not Self.Queue.Before(20, 10), '20, 10');
+
+  Check(    Self.Queue.Before(0, 1), '0, 1');
+  Check(not Self.Queue.Before(1, 0), '1, 0');
+  Check(    Self.Queue.Before(High(Cardinal), 0), 'High(Cardinal), 0');
+  Check(not Self.Queue.Before(0, High(Cardinal)), '0, High(Cardinal)');
+
+  Check(Self.Queue.Before(High(Cardinal) - 20, High(Cardinal) - 10),
+        'High(Cardinal) - 20, High(Cardinal) - 10');
+  Check(not Self.Queue.Before(High(Cardinal) - 10, High(Cardinal) - 20),
+        'High(Cardinal) - 10, High(Cardinal) - 20');
+
+  Check(Self.Queue.Before(High(Cardinal) - 10, 0),
+        'High(Cardinal) - 10, 0');
+  Check(not Self.Queue.Before(0, High(Cardinal) - 10),
+        '0, High(Cardinal) - 10');
+  Check(Self.Queue.Before(High(Cardinal) - 10, 10),
+        'High(Cardinal) - 10, 10');
+  Check(not Self.Queue.Before(10, High(Cardinal) - 10),
+        '10, High(Cardinal) - 10');
+end;
+
+procedure TestTIdTimerQueue.TestRemoveEvent;
+var
+  Foo: TIdFooEvent;
+begin
+  Foo := TIdFooEvent.Create;
+  Self.Queue.AddEvent(WaitTime, Foo);
+  Self.Queue.RemoveEvent(Foo);
+  CheckEquals(0, Self.Queue.EventCount, 'No event removed');
 end;
 
 //******************************************************************************
@@ -321,31 +423,6 @@ begin
 end;
 
 //* TestTIdThreadedTimerQueue Published methods ********************************
-
-procedure TestTIdThreadedTimerQueue.TestBefore;
-begin
-  Check(    Self.Queue.Before(10, 20), '10, 20');
-  Check(not Self.Queue.Before(20, 10), '20, 10');
-
-  Check(    Self.Queue.Before(0, 1), '0, 1');
-  Check(not Self.Queue.Before(1, 0), '1, 0');
-  Check(    Self.Queue.Before(High(Cardinal), 0), 'High(Cardinal), 0');
-  Check(not Self.Queue.Before(0, High(Cardinal)), '0, High(Cardinal)');
-
-  Check(Self.Queue.Before(High(Cardinal) - 20, High(Cardinal) - 10),
-        'High(Cardinal) - 20, High(Cardinal) - 10');
-  Check(not Self.Queue.Before(High(Cardinal) - 10, High(Cardinal) - 20),
-        'High(Cardinal) - 10, High(Cardinal) - 20');
-
-  Check(Self.Queue.Before(High(Cardinal) - 10, 0),
-        'High(Cardinal) - 10, 0');
-  Check(not Self.Queue.Before(0, High(Cardinal) - 10),
-        '0, High(Cardinal) - 10');
-  Check(Self.Queue.Before(High(Cardinal) - 10, 10),
-        'High(Cardinal) - 10, 10');
-  Check(not Self.Queue.Before(10, High(Cardinal) - 10),
-        '10, High(Cardinal) - 10');
-end;
 
 procedure TestTIdThreadedTimerQueue.TestNotifyEvent;
 begin

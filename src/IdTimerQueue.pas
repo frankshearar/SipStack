@@ -31,7 +31,7 @@ type
     fTriggerTime:   Cardinal;
   public
     function  Due: Boolean;
-    function  MatchEvent(Event: Pointer): Boolean; virtual; abstract;
+    function  MatchEvent(Event: Pointer): Boolean; virtual;
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
 
@@ -102,16 +102,22 @@ type
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TNotifyEvent;
                        Data: TObject = nil); overload;
+    procedure AddEvent(MillisecsWait: Cardinal;
+                       Event: TIdWait); overload;
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveEvent(Event: TEvent); overload;
     procedure RemoveEvent(Event: TNotifyEvent); overload;
+    procedure RemoveEvent(Event: TIdWait); overload;
     procedure Resume; virtual;
     procedure Terminate; virtual;
   end;
 
   TIdThreadProc = procedure of object;
 
+  // The name comes from Smalltalk - a block is a chunk of code, possibly
+  // together with some variables. A closure, in other words. Well, this is as
+  // close as we get in Delphi.
   TIdBlockRunnerThread = class(TIdBaseThread)
   private
     Block: TIdThreadProc;
@@ -139,7 +145,7 @@ type
     function  EventAt(Index: Integer): TIdWait;
     function  EventCount: Integer;
     procedure LockTimer;
-    function  ScheduledEvent(Event: TEvent): Boolean; overload;
+    function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
     procedure Terminate; override;
     procedure UnlockTimer;
@@ -180,6 +186,11 @@ end;
 function TIdWait.Due: Boolean;
 begin
   Result := GetTickCount >= Self.TriggerTime;
+end;
+
+function TIdWait.MatchEvent(Event: Pointer): Boolean;
+begin
+  Result := Self = Event;
 end;
 
 function TIdWait.TimeToWait: Cardinal;
@@ -282,6 +293,12 @@ begin
   Self.Add(MillisecsWait, EventWait, Data);
 end;
 
+procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
+                                 Event: TIdWait);
+begin
+  Self.Add(MillisecsWait, Event, nil);
+end;
+
 function TIdTimerQueue.Before(TimeA,
                               TimeB: Cardinal): Boolean;
 begin
@@ -298,6 +315,11 @@ end;
 procedure TIdTimerQueue.RemoveEvent(Event: TNotifyEvent);
 begin
   Self.InternalRemove(@Event);
+end;
+
+procedure TIdTimerQueue.RemoveEvent(Event: TIdWait);
+begin
+  Self.InternalRemove(Event);
 end;
 
 procedure TIdTimerQueue.Resume;
@@ -530,7 +552,7 @@ begin
   Self.Lock.Acquire;
 end;
 
-function TIdDebugTimerQueue.ScheduledEvent(Event: TEvent): Boolean;
+function TIdDebugTimerQueue.ScheduledEvent(Event: TObject): Boolean;
 begin
   Result := Self.HasScheduledEvent(Event);
 end;
