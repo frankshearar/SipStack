@@ -378,12 +378,12 @@ end;
 
 procedure TrnidSpike.SendDTMF(const Event: Byte);
 var
-  TE: TIdTelephoneEventPayload;
+  TE: TIdRTPTelephoneEventPayload;
   S:  TMemoryStream;
 begin
   S := TMemoryStream.Create;
   try
-    TE := Self.Media.Profile.EncodingFor(TelephoneEventEncoding + '/8000').Clone as TIdTelephoneEventPayload;
+    TE := Self.Media.Profile.EncodingFor(TelephoneEventEncoding + '/8000').Clone as TIdRTPTelephoneEventPayload;
     try
       TE.Event := Event;
       TE.Duration := 100;

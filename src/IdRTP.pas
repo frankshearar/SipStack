@@ -27,77 +27,7 @@ type
 
   TIdRTPPayload = class;
   TIdRTPPayloadClass = class of TIdRTPPayload;
-{
-  // I am an Encoding. I am described in an SDP payload (RFC 2327),
-  // and instantiated by things that need to describe these sorts
-  // of encodings. I am a Value Object.
-  TIdRTPEncoding = class(TObject)
-  private
-    fClockRate:  Cardinal;
-    fName:       String;
-    fParameters: String;
-  protected
-    function GetName: String; virtual;
-  public
-    class function CreateEncoding(Value: String): TIdRTPEncoding;
-    class function NullEncoding: TIdRTPEncoding;
 
-    constructor Create(Name: String;
-                       ClockRate: Cardinal;
-                       Parameters: String = ''); overload; virtual;
-    constructor Create(Src: TIdRTPEncoding); overload; virtual;
-
-    function AsString: String; virtual;
-    function Clone: TIdRTPEncoding; virtual;
-    function CreatePayload: TIdRTPPayload; virtual;
-    function HasSameEncoding(const OtherEncoding: TIdRTPEncoding): Boolean;
-    function IsNull: Boolean; virtual;
-    function IsReserved: Boolean; virtual;
-    function PayloadType: TIdRTPPayloadClass; virtual;
-
-    property ClockRate:  Cardinal read fClockRate;
-    property Name:       String   read GetName;
-    property Parameters: String   read fParameters;
-  end;
-
-  TIdRTPEncodingClass = class of TIdRTPEncoding;
-
-  TIdT140Encoding = class(TIdRTPEncoding)
-  public
-    function PayloadType: TIdRTPPayloadClass; override;
-  end;
-
-  TIdTelephoneEventEncoding = class(TIdRTPEncoding)
-  public
-    function PayloadType: TIdRTPPayloadClass; override;
-  end;
-
-  // I represent the Null Encoding.
-  TIdRTPNullEncoding = class(TIdRTPEncoding)
-  public
-    constructor Create(Name: String;
-                       ClockRate: Cardinal;
-                       Parameters: String = ''); overload; override;
-    constructor Create(Src: TIdRTPEncoding); overload; override;
-
-    function Clone: TIdRTPEncoding; override;
-    function CreatePayload: TIdRTPPayload; override;
-    function IsNull: Boolean; override;
-  end;
-
-  // I am a Reserved or Unassigned encoding in an RTP profile. In other words, I
-  // do nothing other than say to you "you may not use this payload type".
-  TIdRTPReservedEncoding = class(TIdRTPEncoding)
-  public
-    constructor Create(Name: String;
-                       ClockRate: Cardinal;
-                       Parameters: String = ''); overload; override;
-    constructor Create(Src: TIdRTPEncoding); overload; override;
-
-    function Clone: TIdRTPEncoding; override;
-    function IsReserved: Boolean; override;
-  end;
-}
   // I represent the payload in an RTP packet. I store a reference to an
   // encoding. I strongly suggest that you don't mix-and-match payloads and
   // encodings. An RFC 2833 payload must work with an RFC 2833 encoding, for
@@ -117,8 +47,8 @@ type
     class function CreateFrom(Payload: TIdRTPPayload;
                               Src: TStream): TIdRTPPayload;
     class function CreatePayload(Name: String): TIdRTPPayload;
+    class function CreateNullPayload: TIdRTPPayload;
     class function EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String; overload;
-    class function NullPayload: TIdRTPPayload;
 
     constructor Create(EncodingName: String); overload; virtual;
 
@@ -151,7 +81,9 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdReservedPayload = class(TIdRTPPayload)
+  // I am a Reserved or Unassigned encoding in an RTP profile. In other words, I
+  // do nothing other than say to you "you may not use this payload type".
+  TIdRTPReservedPayload = class(TIdRTPPayload)
   protected
     function  GetName: String; override;
     function  GetStartTime: TDateTime; override;
@@ -165,7 +97,7 @@ type
   // I slurp up the entire contents of a source stream, because there's not
   // much else I can do - I don't know my own length (or at least, I can't
   // derive my expected length from a source stream).
-  TIdRawPayload = class(TIdRTPPayload)
+  TIdRTPRawPayload = class(TIdRTPPayload)
   private
     fData: String;
     fName: String;
@@ -183,7 +115,7 @@ type
   end;
 
   // I am a T.140 payload, as defined in RFC 2793 (and the bis draft)
-  TIdT140Payload = class(TIdRTPPayload)
+  TIdRTPT140Payload = class(TIdRTPPayload)
   private
     fBlock: String;
   protected
@@ -200,7 +132,7 @@ type
   end;
 
   // I represent DTMF signals and such, as defined in RFC 2833
-  TIdTelephoneEventPayload = class(TIdRTPPayload)
+  TIdRTPTelephoneEventPayload = class(TIdRTPPayload)
   private
     fDuration:    Word;
     fEvent:       Byte;
@@ -220,6 +152,8 @@ type
     property ReservedBit: Boolean                 read fReservedBit write fReservedBit;
     property Volume:      TIdTelephoneEventVolume read fVolume write fVolume;
   end;
+
+  TIdRTPPCMMuLawPayload = class(TIdRTPRawPayload);
 
   TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPPayload;
 
@@ -1138,10 +1072,6 @@ implementation
 uses
   DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom;
 
-var
-//  GNullEncoding: TIdRTPEncoding;
-  GNullPayload:  TIdRTPPayload;
-
 const
   JanOne1900           = 2;
   NTPNegativeTimeError = 'DT < 1900/01/01';
@@ -1402,188 +1332,7 @@ begin
   Value := HtoNS(Value);
   Dest.Write(Value, SizeOf(Value));
 end;
-{
-//******************************************************************************
-//* TIdRTPEncoding                                                             *
-//******************************************************************************
-//* TIdRTPEncoding Public methods **********************************************
 
-class function TIdRTPEncoding.CreateEncoding(Value: String): TIdRTPEncoding;
-var
-  Name:       String;
-  ClockRate:  Cardinal;
-  Parameters: String;
-begin
-  Name       := Fetch(Value, '/');
-  ClockRate  := StrToInt(Fetch(Value, '/'));
-  Parameters := Value;
-
-  if (Lowercase(Name) = Lowercase(T140Encoding)) then
-    Result := TIdT140Encoding.Create(Name,
-                                     ClockRate,
-                                     Parameters)
-  else if (Lowercase(Name) = Lowercase(TelephoneEventEncoding)) then
-    Result := TIdTelephoneEventEncoding.Create(Name,
-                                               ClockRate,
-                                               Parameters)
-  else
-    Result := TIdRTPEncoding.Create(Name,
-                                    ClockRate,
-                                    Parameters);
-end;
-
-class function TIdRTPEncoding.NullEncoding: TIdRTPEncoding;
-begin
-  if not Assigned(GNullEncoding) then
-    GNullEncoding := TIdRTPNullEncoding.Create;
-
-  Result := GNullEncoding;
-end;
-
-constructor TIdRTPEncoding.Create(Name: String;
-                                  ClockRate: Cardinal;
-                                  Parameters: String = '');
-begin
-  inherited Create;
-
-  fClockRate  := ClockRate;
-  fName       := Name;
-  fParameters := Parameters;
-end;
-
-constructor TIdRTPEncoding.Create(Src: TIdRTPEncoding);
-begin
-  inherited Create;
-
-  fClockRate  := Src.ClockRate;
-  fName       := Src.Name;
-  fParameters := Src.Parameters;
-end;
-
-function TIdRTPEncoding.AsString: String;
-begin
-  Result := Self.Name + '/' + IntToStr(Self.ClockRate);
-
-  if (Self.Parameters <> '') then
-    Result := Result + '/' + Self.Parameters;
-end;
-
-function TIdRTPEncoding.Clone: TIdRTPEncoding;
-begin
-  Result := TIdRTPEncodingClass(Self.ClassType).Create(Self);
-end;
-
-function TIdRTPEncoding.CreatePayload: TIdRTPPayload;
-begin
-  Result := TIdRTPPayload.CreatePayload(Self.AsString);
-end;
-
-function TIdRTPEncoding.HasSameEncoding(const OtherEncoding: TIdRTPEncoding): Boolean;
-begin
-  Result := Self.AsString = OtherEncoding.AsString;
-end;
-
-function TIdRTPEncoding.IsNull: Boolean;
-begin
-  Result := false;
-end;
-
-function TIdRTPEncoding.IsReserved: Boolean;
-begin
-  Result := false;
-end;
-
-function TIdRTPEncoding.PayloadType: TIdRTPPayloadClass;
-begin
-  Result := TIdRawPayload;
-end;
-
-//* TIdRTPEncoding Private methods *********************************************
-
-function TIdRTPEncoding.GetName: String;
-begin
-  Result := fName;
-end;
-
-//******************************************************************************
-//* TIdT140Encoding                                                            *
-//******************************************************************************
-//* TIdT140Encoding Public methods *********************************************
-
-function TIdT140Encoding.PayloadType: TIdRTPPayloadClass;
-begin
-  Result := TIdT140Payload;
-end;
-
-//******************************************************************************
-//* TIdTelephoneEventEncoding                                                  *
-//******************************************************************************
-//* TIdTelephoneEventEncoding Public methods ***********************************
-
-function TIdTelephoneEventEncoding.PayloadType: TIdRTPPayloadClass;
-begin
-  Result := TIdTelephoneEventPayload;
-end;
-
-//******************************************************************************
-//* TIdRTPNullEncoding                                                         *
-//******************************************************************************
-//* TIdRTPNullEncoding Public methods ******************************************
-
-constructor TIdRTPNullEncoding.Create(Name: String;
-                                      ClockRate: Cardinal;
-                                      Parameters: String = '');
-begin
-  inherited Create(NullEncodingName, 0, '');
-end;
-
-constructor TIdRTPNullEncoding.Create(Src: TIdRTPEncoding);
-begin
-  inherited Create(NullEncodingName, 0, '');
-end;
-
-function TIdRTPNullEncoding.Clone: TIdRTPEncoding;
-begin
-  Result := TIdRTPNullEncoding.Create(Self);
-end;
-
-function TIdRTPNullEncoding.CreatePayload: TIdRTPPayload;
-begin
-  Result := TIdNullPayload.NullPayload;
-end;
-
-function TIdRTPNullEncoding.IsNull: Boolean;
-begin
-  Result := true;
-end;
-
-//******************************************************************************
-//* TIdRTPReservedEncoding                                                     *
-//******************************************************************************
-//* TIdRTPReservedEncoding Public methods **************************************
-
-constructor TIdRTPReservedEncoding.Create(Name: String;
-                                          ClockRate: Cardinal;
-                                          Parameters: String = '');
-begin
-  inherited Create(NullEncodingName, 0, '');
-end;
-
-constructor TIdRTPReservedEncoding.Create(Src: TIdRTPEncoding);
-begin
-  inherited Create(ReservedEncodingName, 0, '');
-end;
-
-function TIdRTPReservedEncoding.Clone: TIdRTPEncoding;
-begin
-  Result := TIdRTPReservedEncoding.Create(Self);
-end;
-
-function TIdRTPReservedEncoding.IsReserved: Boolean;
-begin
-  Result := true;
-end;
-}
 //******************************************************************************
 //* TIdRTPPayload                                                              *
 //******************************************************************************
@@ -1614,15 +1363,20 @@ begin
   ClockRate    := StrToInt(Fetch(Parameters, '/'));
 
   if (Lowercase(EncodingName) = Lowercase(T140Encoding)) then
-    Result := TIdT140Payload.Create
+    Result := TIdRTPT140Payload.Create
   else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncoding)) then
-    Result := TIdTelephoneEventPayload.Create
+    Result := TIdRTPTelephoneEventPayload.Create
   else
-    Result := TIdRawPayload.Create(EncodingName);
+    Result := TIdRTPRawPayload.Create(EncodingName);
 
   Result.ClockRate  := ClockRate;
   Result.Parameters := Parameters;
   Result.StartTime  := Now;
+end;
+
+class function TIdRTPPayload.CreateNullPayload: TIdRTPPayload;
+begin
+  Result := Self.CreatePayload(NullEncodingName + '/0');
 end;
 
 class function TIdRTPPayload.EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String;
@@ -1631,14 +1385,6 @@ begin
 
   if (Parameters <> '') then
     Result := Result + '/' + Parameters;
-end;
-
-class function TIdRTPPayload.NullPayload: TIdRTPPayload;
-begin
-  if not Assigned(GNullPayload) then
-    GNullPayload := TIdRTPPayload.CreatePayload(NullEncodingName + '/0');
-
-  Result := GNullPayload;
 end;
 
 constructor TIdRTPPayload.Create(EncodingName: String);
@@ -1762,120 +1508,120 @@ begin
 end;
 
 //******************************************************************************
-//* TIdReservedPayload                                                         *
+//* TIdRTPReservedPayload                                                      *
 //******************************************************************************
-//* TIdReservedPayload Public methods ******************************************
+//* TIdRTPReservedPayload Public methods ***************************************
 
-function TIdReservedPayload.IsReserved: Boolean;
+function TIdRTPReservedPayload.IsReserved: Boolean;
 begin
   Result := true;
 end;
 
-//* TIdReservedPayload Protected methods ***************************************
+//* TIdRTPReservedPayload Protected methods ************************************
 
-function TIdReservedPayload.GetName: String;
+function TIdRTPReservedPayload.GetName: String;
 begin
   Result := ReservedEncodingName;
 end;
 
-function TIdReservedPayload.GetStartTime: TDateTime;
+function TIdRTPReservedPayload.GetStartTime: TDateTime;
 begin
   Result := Now;
 end;
 
-procedure TIdReservedPayload.SetStartTime(const Value: TDateTime);
+procedure TIdRTPReservedPayload.SetStartTime(const Value: TDateTime);
 begin
 end;
 
 //******************************************************************************
-//* TIdRawPayload                                                              *
+//* TIdRTPRawPayload                                                           *
 //******************************************************************************
-//* TIdRawPayload Public methods ***********************************************
+//* TIdRTPRawPayload Public methods ********************************************
 
-constructor TIdRawPayload.Create(EncodingName: String);
+constructor TIdRTPRawPayload.Create(EncodingName: String);
 begin
   inherited Create(EncodingName);
 
   Self.fName := EncodingName;
 end;
 
-function TIdRawPayload.Length: Cardinal;
+function TIdRTPRawPayload.Length: Cardinal;
 begin
   Result := System.Length(Self.Data);
 end;
 
-procedure TIdRawPayload.ReadFrom(Src: TStream);
+procedure TIdRTPRawPayload.ReadFrom(Src: TStream);
 begin
   Self.Data := ReadRemainderOfStream(Src);
 end;
 
-procedure TIdRawPayload.PrintOn(Dest: TStream);
+procedure TIdRTPRawPayload.PrintOn(Dest: TStream);
 begin
   WriteString(Dest, Self.Data);
 end;
 
-procedure TIdRawPayload.SetName(const Value: String);
+procedure TIdRTPRawPayload.SetName(const Value: String);
 begin
   fName := Value;
 end;
 
-//* TIdRawPayload Protected methods ********************************************
+//* TIdRTPRawPayload Protected methods *****************************************
 
-function TIdRawPayload.GetName: String;
+function TIdRTPRawPayload.GetName: String;
 begin
   Result := fName;
 end;
 
 //******************************************************************************
-//* TIdT140Payload                                                             *
+//* TIdRTPT140Payload                                                          *
 //******************************************************************************
-//* TIdT140Payload Public methods **********************************************
+//* TIdRTPT140Payload Public methods *******************************************
 
-constructor TIdT140Payload.Create(EncodingName: String);
+constructor TIdRTPT140Payload.Create(EncodingName: String);
 begin
   inherited Create(EncodingName);
 
   Self.ClockRate := T140ClockRate;
 end;
 
-function TIdT140Payload.HasKnownLength: Boolean;
+function TIdRTPT140Payload.HasKnownLength: Boolean;
 begin
   Result := false;
 end;
 
-function TIdT140Payload.Length: Cardinal;
+function TIdRTPT140Payload.Length: Cardinal;
 begin
   Result := System.Length(Self.Block);
 end;
 
-procedure TIdT140Payload.ReadFrom(Src: TStream);
+procedure TIdRTPT140Payload.ReadFrom(Src: TStream);
 begin
   Self.Block := ReadRemainderOfStream(Src);
 end;
 
-procedure TIdT140Payload.PrintOn(Dest: TStream);
+procedure TIdRTPT140Payload.PrintOn(Dest: TStream);
 begin
   WriteString(Dest, Self.Block);
 end;
 
-//* TIdT140Payload Protected methods *******************************************
+//* TIdRTPT140Payload Protected methods ****************************************
 
-function TIdT140Payload.GetName: String;
+function TIdRTPT140Payload.GetName: String;
 begin
   Result := T140Encoding;
 end;
 
 //******************************************************************************
-//* TIdTelephoneEventPayload                                                   *
+//* TIdRTPTelephoneEventPayload                                                *
 //******************************************************************************
-//* TIdTelephoneEventPayload Public methods ************************************
+//* TIdRTPTelephoneEventPayload Public methods *********************************
 
-function TIdTelephoneEventPayload.NumberOfSamples: Cardinal;
+function TIdRTPTelephoneEventPayload.NumberOfSamples: Cardinal;
 begin
   Result := Self.Duration;
 end;
 
-procedure TIdTelephoneEventPayload.ReadFrom(Src: TStream);
+procedure TIdRTPTelephoneEventPayload.ReadFrom(Src: TStream);
 var
   B: Byte;
 begin
@@ -1889,7 +1635,7 @@ begin
   Self.Duration := ReadWord(Src);
 end;
 
-procedure TIdTelephoneEventPayload.PrintOn(Dest: TStream);
+procedure TIdRTPTelephoneEventPayload.PrintOn(Dest: TStream);
 var
   B: Byte;
 begin
@@ -1903,9 +1649,9 @@ begin
   WriteWord(Dest, Self.Duration);
 end;
 
-//* TIdTelephoneEventPayload Protected methods *********************************
+//* TIdRTPTelephoneEventPayload Protected methods ******************************
 
-function TIdTelephoneEventPayload.GetName: String;
+function TIdRTPTelephoneEventPayload.GetName: String;
 begin
   Result := TelephoneEventEncoding;
 end;
@@ -1920,7 +1666,7 @@ begin
   inherited Create;
 
   Self.NullEncoding     := TIdNullPayload.Create('');
-  Self.ReservedEncoding := TIdReservedPayload.Create('');
+  Self.ReservedEncoding := TIdRTPReservedPayload.Create('');
   Self.Initialize;
 end;
 
@@ -2423,7 +2169,7 @@ begin
   inherited Create;
 
   fHeaderExtension := TIdRTPHeaderExtension.Create;
-  fPayload         := TIdRTPPayload.NullPayload;
+  fPayload         := TIdRTPPayload.CreateNullPayload;
 
   Self.Profile := Profile;
   Self.Version := Self.DefaultVersion;
@@ -2433,8 +2179,7 @@ destructor TIdRTPPacket.Destroy;
 begin
   fHeaderExtension.Free;
 
-  if (Self.Payload <> TIdNullPayload.NullPayload) then
-    Self.Payload.Free;
+  Self.Payload.Free;
 
   inherited Destroy;
 end;
@@ -2642,8 +2387,7 @@ end;
 
 procedure TIdRTPPacket.ReplacePayload(const Payload: TIdRTPPayload);
 begin
-  if (Self.Payload <> TIdRTPPayload.NullPayload) then
-    fPayload.Free;
+  fPayload.Free;
 
   fPayload := Payload.Clone;
 end;
@@ -5174,8 +4918,4 @@ begin
   Result := Self.List[Index] as TIdRTPPacket;
 end;
 
-initialization
-finalization
-//  GNullEncoding.Free;
-  GNullPayload.Free;
 end.

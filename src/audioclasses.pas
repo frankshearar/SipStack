@@ -385,7 +385,7 @@ end;
 function TAudioData.GetVersion: TAudioDataVersion;
 begin
   Result.Major:=0;
-  Result.Minor:=5;
+  Result.Minor:=6;
 end;
 
 function TAudioData.Lock: Boolean;
@@ -457,7 +457,7 @@ begin
       repeat
         while OutPutBuffers[NextOutPutBuffer].State<>bsAvailable do
         begin
-          Sleep(100);
+          Sleep(0);
         end;
         EnterCriticalSection(AudioPlaybackCriticalSection);
           OutPutBuffers[NextOutPutBuffer].State:=bsBusy;
@@ -521,7 +521,7 @@ begin
             {Wait for every non-free buffer to become available or time out}
             while OutPutBuffers[I].State<>bsAvailable do
             begin
-              sleep(100);
+              sleep(0);
               Inc(Counter);
               if Counter>50
                  then break;

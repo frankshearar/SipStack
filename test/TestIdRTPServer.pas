@@ -109,7 +109,7 @@ begin
     NoEncoding.Free;
   end;
 
-  Self.Encoding := TIdT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
+  Self.Encoding := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   Self.Server.Profile.AddEncoding(Self.Encoding, PT + 1);
   Self.Client.Profile.AddEncoding(Self.Encoding, PT + 1);
 
@@ -300,7 +300,7 @@ begin
   Binding.IP   := '127.0.0.1';
   Binding.Port := Self.Server.DefaultPort + 2;
 
-  T140 := TIdT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
+  T140 := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   try
     Self.Server.Profile.AddEncoding(T140, Self.T140PT);
     Self.Client.Profile.AddEncoding(T140, Self.T140PT);
@@ -338,11 +338,11 @@ procedure TestT140.StoreT140Data(Sender: TObject;
                                  ABinding: TIdSocketHandle);
 begin
   try
-    CheckEquals(TIdT140Payload.ClassName,
+    CheckEquals(TIdRTPT140Payload.ClassName,
                 APacket.Payload.ClassName,
                 'Payload type');
     CheckEquals(Self.Msg,
-                TIdT140Payload(APacket.Payload).Block,
+                TIdRTPT140Payload(APacket.Payload).Block,
                 'Payload');
 
     Self.ThreadEvent.SetEvent;
@@ -358,7 +358,7 @@ end;
 
 procedure TestT140.TestTransmission;
 var
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
   Session: TIdRTPSession;
 begin
   Self.ExceptionMessage := 'Waiting for RTCP to Server';
@@ -376,7 +376,7 @@ begin
   Self.WaitForSignaled(Self.RTCPEvent);
 
   Self.ExceptionMessage := 'Waiting for RFC 2793 data';
-  Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdT140Payload;
+  Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
   try
     Payload.Block := Self.Msg;
     Payload.StartTime := Now;

@@ -76,7 +76,7 @@ begin
 //  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
 //  Self.Client.Active      := true;
 
-  Self.T140   := TIdT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
+  Self.T140   := TIdRTPT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
   Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
   Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
 //  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
@@ -132,7 +132,7 @@ begin
   Self.Lock.Acquire;
   try
     if (APacket.Payload.Name = T140Encoding) then
-      Received.Text := Received.Text + (APacket.Payload as TIdT140Payload).Block;
+      Received.Text := Received.Text + (APacket.Payload as TIdRTPT140Payload).Block;
   finally
     Self.Lock.Release;
   end;
@@ -170,7 +170,7 @@ end;
 
 procedure TIdSpikeT140.Timer1Timer(Sender: TObject);
 var
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
   Host:    String;
   Port:    String;
 begin
@@ -178,7 +178,7 @@ begin
     Port := Self.RemoteHostAndPort.Text;
     Host := Fetch(Port, ':');
 
-    Payload := TIdT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
+    Payload := TIdRTPT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
     try
       Payload.Block := Self.SendBuffer;
       Self.Server.Session.SendDataTo(Payload, Host, StrToInt(Port));

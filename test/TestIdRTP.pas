@@ -38,62 +38,7 @@ type
     procedure TestWriteTimestamp;
     procedure TestWriteWord;
   end;
-{
-  TestTIdRTPEncoding = class(TTestCase)
-  published
-    procedure TestAsString;
-    procedure TestCreate;
-    procedure TestCreateEncoding;
-    procedure TestCreateEncodingT140;
-    procedure TestCreateEncodingTelephoneEvent;
-    procedure TestCreateFromEncoding;
-    procedure TestClone;
-    procedure TestIsNull;
-  end;
 
-  TTestCaseEncoding = class(TTestCase)
-  private
-    Encoding: TIdRTPEncoding;
-
-    function EncodingType: TIdRTPEncodingClass; virtual; abstract;
-    function EncodingName: String; virtual; abstract;
-    function EncodingClockRate: Cardinal; virtual;
-    function EncodingParameters: String; virtual;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestClone;
-    procedure TestCreatePayload;
-  end;
-
-  TestTIdT140Encoding = class(TTestCaseEncoding)
-  private
-    function EncodingType: TIdRTPEncodingClass; override;
-    function EncodingName: String; override;
-    function EncodingClockRate: Cardinal; override;
-  end;
-
-  TestTIdTelephoneEventEncoding = class(TTestCaseEncoding)
-  private
-    function EncodingType: TIdRTPEncodingClass; override;
-    function EncodingName: String; override;
-  end;
-
-  TestTIdRTPNullEncoding = class(TTestCase)
-  private
-    Encoding: TIdRTPNullEncoding;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAsString;
-    procedure TestCreate;
-    procedure TestCreateFromEncoding;
-    procedure TestClone;
-    procedure TestIsNull;
-  end;
-}
   TPayloadTestCase = class(TTestCase)
   protected
     Payload:  TIdRTPPayload;
@@ -118,22 +63,22 @@ type
     procedure TestIsNull; override;
   end;
 
-  TestTIdReservedPayload = class(TPayloadTestCase)
+  TestTIdRTPReservedPayload = class(TPayloadTestCase)
   protected
     function PayloadType: TIdRTPPayloadClass; override;
   published
     procedure TestIsReserved; override;
   end;
 
-  TestTIdRawPayload = class(TPayloadTestCase)
+  TestTIdRTPRawPayload = class(TPayloadTestCase)
   published
     procedure TestEncodingName;
     procedure TestName;
   end;
 
-  TestTIdT140Payload = class(TPayloadTestCase)
+  TestTIdRTPT140Payload = class(TPayloadTestCase)
   private
-    Packet: TIdT140Payload;
+    Packet: TIdRTPT140Payload;
   protected
     function PayloadType: TIdRTPPayloadClass; override;
   public
@@ -146,9 +91,9 @@ type
     procedure TestReadFrom;
   end;
 
-  TestTIdTelephoneEventPayload = class(TPayloadTestCase)
+  TestTIdRTPTelephoneEventPayload = class(TPayloadTestCase)
   private
-    Packet:          TIdTelephoneEventPayload;
+    Packet:          TIdRTPTelephoneEventPayload;
     SampleDurations: array[0..5] of Word;
   protected
     function PayloadType: TIdRTPPayloadClass; override;
@@ -769,10 +714,10 @@ begin
   Result.AddTest(TestTIdT140Encoding.Suite);
   Result.AddTest(TestTIdTelephoneEventEncoding.Suite);
 }
-  Result.AddTest(TestTIdReservedPayload.Suite);
+  Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
-  Result.AddTest(TestTIdTelephoneEventPayload.Suite);
-  Result.AddTest(TestTIdT140Payload.Suite);
+  Result.AddTest(TestTIdRTPTelephoneEventPayload.Suite);
+  Result.AddTest(TestTIdRTPT140Payload.Suite);
   Result.AddTest(TestTIdRTPProfile.Suite);
   Result.AddTest(TestTIdAudioVisualProfile.Suite);
   Result.AddTest(TestTIdRTPHeaderExtension.Suite);
@@ -1374,325 +1319,7 @@ begin
     S.Free;
   end;
 end;
-{
-//******************************************************************************
-//* TestTIdRTPEncoding                                                         *
-//******************************************************************************
-//* TestTIdRTPEncoding Published methods ***************************************
 
-procedure TestTIdRTPEncoding.TestAsString;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.Create('red', 8000);
-  try
-    CheckEquals('red/8000', Enc.AsString, 'AsString without Parameters');
-  finally
-    Enc.Free;
-  end;
-
-  Enc := TIdRTPEncoding.Create('foo', 8000, '2');
-  try
-    CheckEquals('foo/8000/2', Enc.AsString, 'AsString with Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestCreate;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, '1');
-  try
-    CheckEquals(T140ClockRate, Enc.ClockRate,  'ClockRate');
-    CheckEquals(T140Encoding,  Enc.Name,       'Name');
-    CheckEquals('1',           Enc.Parameters, 'Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestCreateEncoding;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.CreateEncoding('1015/8000/1');
-  try
-    CheckEquals(TIdRTPEncoding.ClassName,
-                Enc.ClassName,
-                'Encoding type');
-    CheckEquals('1015', Enc.Name,       'Name');
-    CheckEquals(8000,   Enc.ClockRate,  'Clock rate');
-    CheckEquals('1',    Enc.Parameters, 'Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestCreateEncodingT140;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.CreateEncoding(Format('%s/%d/%s', [T140Encoding, T140ClockRate, '1']));
-  try
-    CheckEquals(TIdT140Encoding.ClassName,
-                Enc.ClassName,
-                'Encoding type');
-    CheckEquals(T140Encoding,  Enc.Name,       'Name');
-    CheckEquals(T140ClockRate, Enc.ClockRate,  'Clock rate');
-    CheckEquals('1',           Enc.Parameters, 'Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestCreateEncodingTelephoneEvent;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.CreateEncoding('telephone-event/8000');
-  try
-    CheckEquals(TIdTelephoneEventEncoding.ClassName,
-                Enc.ClassName,
-                'Encoding type');
-    CheckEquals(TelephoneEventEncoding, Enc.Name,       'Name');
-    CheckEquals(8000,                   Enc.ClockRate,  'Clock rate');
-    CheckEquals('',                     Enc.Parameters, 'Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestCreateFromEncoding;
-var
-  Enc1: TIdRTPEncoding;
-  Enc2: TIdRTPEncoding;
-begin
-  Enc1 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, 'foo');
-  try
-    Enc2 := TIdRTPEncoding.Create(Enc1);
-    try
-      Check(Enc2.HasSameEncoding(Enc1), 'Properties not copied correctly');
-    finally
-      Enc2.Free;
-    end;
-  finally
-    Enc1.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestClone;
-var
-  Enc1: TIdRTPEncoding;
-  Enc2: TIdRTPEncoding;
-begin
-  Enc1 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, 'foo');
-  try
-    Enc2 := Enc1.Clone;
-    try
-      CheckEquals(Enc1.ClassName,
-                  Enc2.ClassName,
-                  'Incorrect type used for cloning');
-    finally
-      Enc2.Free;
-    end;
-  finally
-    Enc1.Free;
-  end;
-end;
-
-procedure TestTIdRTPEncoding.TestIsNull;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, '1');
-  try
-    Check(not Enc.IsNull, 'non-Null Encoding marked as null');
-  finally
-    Enc.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TTestCaseEncoding                                                          *
-//******************************************************************************
-//* TTestCaseEncoding Public methods *******************************************
-
-procedure TTestCaseEncoding.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Encoding := Self.EncodingType.Create(Self.EncodingName,
-                                            Self.EncodingClockRate,
-                                            Self.EncodingParameters);
-end;
-
-procedure TTestCaseEncoding.TearDown;
-begin
-  Self.Encoding.Free;
-
-  inherited TearDown;
-end;
-
-//* TTestCaseEncoding Public methods *******************************************
-
-function TTestCaseEncoding.EncodingClockRate: Cardinal;
-begin
-  Result := 8000;
-end;
-
-function TTestCaseEncoding.EncodingParameters: String;
-begin
-  Result := '';
-end;
-
-//* TTestCaseEncoding Published methods ****************************************
-
-procedure TTestCaseEncoding.TestClone;
-var
-  Enc: TIdRTPEncoding;
-begin
-  Enc := Self.Encoding.Clone;
-  try
-    CheckEquals(Self.EncodingType.ClassName,
-                Enc.ClassName,
-                'Type');
-    CheckEquals(Self.Encoding.Name,
-                Enc.Name,
-                'Name');
-    CheckEquals(Self.Encoding.ClockRate,
-                Enc.ClockRate,
-                'Clock Rate');
-    CheckEquals(Self.Encoding.Parameters,
-                Enc.Parameters,
-                'Parameters');
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TTestCaseEncoding.TestCreatePayload;
-var
-  Payload: TIdRTPPayload;
-begin
-  Payload := Self.Encoding.CreatePayload;
-  try
-    CheckEquals(Self.Encoding.PayloadType.ClassName,
-                Payload.ClassName,
-                'Payload type');
-  finally
-    Payload.Free
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdT140Encoding                                                        *
-//******************************************************************************
-//* TestTIdT140Encoding Private methods ****************************************
-
-function TestTIdT140Encoding.EncodingType: TIdRTPEncodingClass;
-begin
-  Result := TIdT140Encoding;
-end;
-
-function TestTIdT140Encoding.EncodingName: String;
-begin
-  Result := T140Encoding;
-end;
-
-function TestTIdT140Encoding.EncodingClockRate: Cardinal;
-begin
-  Result := T140ClockRate;
-end;
-
-//******************************************************************************
-//* TestTIdTelephoneEventEncoding                                           *
-//******************************************************************************
-//* TestTIdTelephoneEventEncoding Private methods ***************************
-
-function TestTIdTelephoneEventEncoding.EncodingType: TIdRTPEncodingClass;
-begin
-  Result := TIdTelephoneEventEncoding;
-end;
-
-function TestTIdTelephoneEventEncoding.EncodingName: String;
-begin
-  Result := TelephoneEventEncoding;
-end;
-
-//******************************************************************************
-//* TestTIdRTPNullEncoding                                                     *
-//******************************************************************************
-//* TestTIdRTPNullEncoding Public methods **************************************
-
-procedure TestTIdRTPNullEncoding.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Encoding := TIdRTPNullEncoding.Create('t140', 1000, '1');
-end;
-
-procedure TestTIdRTPNullEncoding.TearDown;
-begin
-  Self.Encoding.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdRTPNullEncoding Published methods ***********************************
-
-procedure TestTIdRTPNullEncoding.TestAsString;
-begin
-  CheckEquals(NullEncodingName + '/0',
-              Self.Encoding.AsString,
-              'AsString for Null Encoding');
-end;
-
-procedure TestTIdRTPNullEncoding.TestCreate;
-begin
-  CheckEquals(0,                Self.Encoding.ClockRate,  'ClockRate');
-  CheckEquals(NullEncodingName, Self.Encoding.Name,       'Name');
-  CheckEquals('',               Self.Encoding.Parameters, 'Parameters');
-end;
-
-procedure TestTIdRTPNullEncoding.TestCreateFromEncoding;
-var
-  Enc:  TIdRTPEncoding;
-  Null: TIdRTPNullEncoding;
-begin
-  Enc := TIdRTPEncoding.Create('t140', 1000, '1');
-  try
-    Null := TIdRTPNullEncoding.Create(Enc);
-    try
-      Check(Null.HasSameEncoding(Self.Encoding), 'Properties not copied correctly');
-    finally
-      Null.Free;
-    end;
-  finally
-    Enc.Free;
-  end;
-end;
-
-procedure TestTIdRTPNullEncoding.TestClone;
-var
-  Null: TIdRTPEncoding;
-begin
-  Null := Self.Encoding.Clone;
-  try
-    CheckEquals(TIdRTPNullEncoding.ClassName,
-                Null.ClassName,
-                'Incorrect type used for cloning');
-  finally
-    Null.Free;
-  end;
-end;
-
-procedure TestTIdRTPNullEncoding.TestIsNull;
-begin
-  Check(Self.Encoding.IsNull, 'Null Encoding not marked as null');
-end;
-}
 //******************************************************************************
 //* TPayloadTestCase                                                           *
 //******************************************************************************
@@ -1753,14 +1380,14 @@ end;
 
 procedure TPayloadTestCase.TestCloneCopiesData;
 var
-  Source: TIdRawPayload;
-  Copy:   TIdRawPayload;
+  Source: TIdRTPRawPayload;
+  Copy:   TIdRTPRawPayload;
 begin
-  Source := TIdRawPayload.Create('foo/0');
+  Source := TIdRTPRawPayload.Create('foo/0');
   try
     Source.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
-    Copy := Source.Clone as TIdRawPayload;
+    Copy := Source.Clone as TIdRTPRawPayload;
     try
       CheckEquals(Source.Data,
                   Copy.Data,
@@ -1809,74 +1436,74 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdReservedPayload                                                     *
+//* TestTIdRTPReservedPayload                                                  *
 //******************************************************************************
-//* TestTIdReservedPayload Protected methods ***********************************
+//* TestTIdRTPReservedPayload Protected methods ********************************
 
-function TestTIdReservedPayload.PayloadType: TIdRTPPayloadClass;
+function TestTIdRTPReservedPayload.PayloadType: TIdRTPPayloadClass;
 begin
-  Result := TIdReservedPayload;
+  Result := TIdRTPReservedPayload;
 end;
 
-//* TestTIdReservedPayload Published methods ***********************************
+//* TestTIdRTPReservedPayload Published methods ********************************
 
-procedure TestTIdReservedPayload.TestIsReserved;
+procedure TestTIdRTPReservedPayload.TestIsReserved;
 begin
   Check(Self.Payload.IsReserved, Self.Payload.ClassName + ' IsReserved');
 end;
 
 //******************************************************************************
-//* TestTIdRawPayload                                                          *
+//* TestTIdRTPRawPayload                                                       *
 //******************************************************************************
-//* TestTIdRawPayload Published methods ****************************************
+//* TestTIdRTPRawPayload Published methods *************************************
 
-procedure TestTIdRawPayload.TestEncodingName;
+procedure TestTIdRTPRawPayload.TestEncodingName;
 begin
   CheckEquals('/0', Self.Payload.EncodingName, 'Degenerate');
-  (Self.Payload as TIdRawPayload).SetName('foo');
+  (Self.Payload as TIdRTPRawPayload).SetName('foo');
   Self.Payload.ClockRate := 8000;
   CheckEquals('foo/8000', Self.Payload.EncodingName, 'No parameters');
   Self.Payload.Parameters := '2';
   CheckEquals('foo/8000/2', Self.Payload.EncodingName, 'Parameters');
 end;
 
-procedure TestTIdRawPayload.TestName;
+procedure TestTIdRTPRawPayload.TestName;
 var
   NewName: String;
 begin
   NewName := 'foo';
   CheckEquals('', Self.Payload.Name, 'New payload');
-  (Self.Payload as TIdRawPayload).SetName(NewName);
+  (Self.Payload as TIdRTPRawPayload).SetName(NewName);
   CheckEquals(NewName, Self.Payload.Name, 'After SetName');
 end;
 
 //******************************************************************************
-//* TestTIdT140Payload                                                         *
+//* TestTIdRTPT140Payload                                                      *
 //******************************************************************************
-//* TestTIdT140Payload Public methods ******************************************
+//* TestTIdRTPT140Payload Public methods ***************************************
 
-procedure TestTIdT140Payload.SetUp;
+procedure TestTIdRTPT140Payload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Packet := Self.Payload as TIdT140Payload;
+  Self.Packet := Self.Payload as TIdRTPT140Payload;
 end;
 
-//* TestTIdT140Payload Protected methods ***************************************
+//* TestTIdRTPT140Payload Protected methods ************************************
 
-function TestTIdT140Payload.PayloadType: TIdRTPPayloadClass;
+function TestTIdRTPT140Payload.PayloadType: TIdRTPPayloadClass;
 begin
-  Result := TIdT140Payload;
+  Result := TIdRTPT140Payload;
 end;
 
-//* TestTIdT140Payload Published methods ***************************************
+//* TestTIdRTPT140Payload Published methods ************************************
 
-procedure TestTIdT140Payload.TestInitialClockRate;
+procedure TestTIdRTPT140Payload.TestInitialClockRate;
 begin
   CheckEquals(T140ClockRate, Self.Payload.ClockRate, 'Initial clock rate');
 end;
 
-procedure TestTIdT140Payload.TestLength;
+procedure TestTIdRTPT140Payload.TestLength;
 var
   S: String;
 begin
@@ -1888,14 +1515,14 @@ begin
   CheckEquals(Length(S), Self.Packet.Length, 'Length');
 end;
 
-procedure TestTIdT140Payload.TestName;
+procedure TestTIdRTPT140Payload.TestName;
 begin
   CheckEquals(T140Encoding,
               Self.Payload.Name,
               Self.Payload.ClassName + ' Name');
 end;
 
-procedure TestTIdT140Payload.TestPrintOn;
+procedure TestTIdRTPT140Payload.TestPrintOn;
 var
   Data: String;
   S:    TStringStream;
@@ -1915,7 +1542,7 @@ begin
   end;
 end;
 
-procedure TestTIdT140Payload.TestReadFrom;
+procedure TestTIdRTPT140Payload.TestReadFrom;
 var
   Data: String;
   S:    TStringStream;
@@ -1934,15 +1561,15 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdTelephoneEventPayload                                               *
+//* TestTIdRTPTelephoneEventPayload                                            *
 //******************************************************************************
-//* TestTIdTelephoneEventPayload Public methods ********************************
+//* TestTIdRTPTelephoneEventPayload Public methods *****************************
 
-procedure TestTIdTelephoneEventPayload.SetUp;
+procedure TestTIdRTPTelephoneEventPayload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Packet := Self.Payload as TIdTelephoneEventPayload;
+  Self.Packet := Self.Payload as TIdRTPTelephoneEventPayload;
 
   SampleDurations[0] := $f00d;
   SampleDurations[1] := $beef;
@@ -1952,23 +1579,23 @@ begin
   SampleDurations[5] := $fbad;
 end;
 
-//* TestTIdTelephoneEventPayload Protected methods *****************************
+//* TestTIdRTPTelephoneEventPayload Protected methods **************************
 
-function TestTIdTelephoneEventPayload.PayloadType: TIdRTPPayloadClass;
+function TestTIdRTPTelephoneEventPayload.PayloadType: TIdRTPPayloadClass;
 begin
-  Result := TIdTelephoneEventPayload;
+  Result := TIdRTPTelephoneEventPayload;
 end;
 
-//* TestTIdTelephoneEventPayload Published methods *****************************
+//* TestTIdRTPTelephoneEventPayload Published methods **************************
 
-procedure TestTIdTelephoneEventPayload.TestName;
+procedure TestTIdRTPTelephoneEventPayload.TestName;
 begin
   CheckEquals(TelephoneEventEncoding,
               Self.Payload.Name,
               Self.Payload.ClassName + ' Name');
 end;
 
-procedure TestTIdTelephoneEventPayload.TestNumberOfSamples;
+procedure TestTIdRTPTelephoneEventPayload.TestNumberOfSamples;
 var
   I: Integer;
 begin
@@ -1981,7 +1608,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestPrintOnDuration;
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnDuration;
 var
   I: Integer;
   S: TStringStream;
@@ -2007,7 +1634,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestPrintOnEvent;
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnEvent;
 const
   SampleEvents: array[0..7] of Byte = ($f0, $0d, $be, $ef, $de, $ca, $fb, $ad);
 var
@@ -2030,7 +1657,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestPrintOnIsEnd;
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnIsEnd;
 var
   S: TStringStream;
 begin
@@ -2063,7 +1690,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestPrintOnReservedBit;
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnReservedBit;
 var
   S: TStringStream;
 begin
@@ -2079,7 +1706,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestPrintOnVolume;
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnVolume;
 var
   V: TIdTelephoneEventVolume;
   S: TStringStream;
@@ -2102,7 +1729,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestReadFromDuration;
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromDuration;
 var
   S: TStringStream;
 begin
@@ -2116,7 +1743,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestReadFromEvent;
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromEvent;
 var
   S: TStringStream;
 begin
@@ -2129,7 +1756,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestReadFromIsEnd;
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromIsEnd;
 var
   S: TStringStream;
 begin
@@ -2150,7 +1777,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestReadFromReservedBit;
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromReservedBit;
 var
   S: TStringStream;
 begin
@@ -2171,7 +1798,7 @@ begin
   end;
 end;
 
-procedure TestTIdTelephoneEventPayload.TestReadFromVolume;
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromVolume;
 var
   S: TStringStream;
   V: TIdTelephoneEventVolume;
@@ -2470,9 +2097,9 @@ end;
 
 procedure TestTIdRTPProfile.TestReservedEncodingMustntOverwriteOthers;
 var
-  Res: TIdReservedPayload;
+  Res: TIdRTPReservedPayload;
 begin
-  Res := TIdReservedPayload.Create('');
+  Res := TIdRTPReservedPayload.Create('');
   try
     Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
     Self.Profile.AddEncoding(Res, Self.ArbPT);
@@ -2874,7 +2501,7 @@ end;
 
 procedure TestTIdRTPPacket.SetUp;
 var
-  Encoding: TIdT140Payload;
+  Encoding: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
@@ -2882,7 +2509,7 @@ begin
 
   Self.T140PT := 96;
 
-  Encoding := TIdT140Payload.Create('');
+  Encoding := TIdRTPT140Payload.Create('');
   try
     Self.AVP.AddEncoding(Encoding, Self.T140PT);
   finally
@@ -3539,11 +3166,11 @@ begin
                           + #$00#$00#$00#$0E); // 14 octets
   try
     Self.Packet.ReadFrom(S);
-    CheckEquals(TIdT140Payload.ClassName,
+    CheckEquals(TIdRTPT140Payload.ClassName,
                 Self.Packet.Payload.ClassName,
                 'Payload type');
     CheckEquals('This is black sunshine',
-                (Self.Packet.Payload as TIdT140Payload).Block,
+                (Self.Packet.Payload as TIdRTPT140Payload).Block,
                 'T140block');
   finally
     S.Free;
@@ -3581,11 +3208,11 @@ end;
 procedure TestTIdRTPPacket.TestReadPayloadStream;
 var
   Data:     String;
-  Expected: TIdT140Payload;
+  Expected: TIdRTPT140Payload;
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
     Expected.Block := Data;
 
@@ -3601,7 +3228,7 @@ begin
                   Self.Packet.Payload.ClassName,
                   'Payload type');
       CheckEquals(Expected.Block,
-                  (Self.Packet.Payload as TIdT140Payload).Block,
+                  (Self.Packet.Payload as TIdRTPT140Payload).Block,
                   'Payload data');
     finally
       S.Free;
@@ -3614,10 +3241,10 @@ end;
 procedure TestTIdRTPPacket.TestReadPayloadPayload;
 var
   Data:     String;
-  Expected: TIdT140Payload;
+  Expected: TIdRTPT140Payload;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdT140Payload;
+  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
   try
     Expected.Block := Data;
 
@@ -3627,7 +3254,7 @@ begin
                 Self.Packet.Payload.ClassName,
                 'Payload type');
     CheckEquals(Expected.Block,
-                (Self.Packet.Payload as TIdT140Payload).Block,
+                (Self.Packet.Payload as TIdRTPT140Payload).Block,
                 'Payload data');
   finally
     Expected.Free;
@@ -3637,11 +3264,11 @@ end;
 procedure TestTIdRTPPacket.TestReadPayloadString;
 var
   Data:     String;
-  Expected: TIdT140Payload;
+  Expected: TIdRTPT140Payload;
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
     Expected.Block := Data;
 
@@ -3657,7 +3284,7 @@ begin
                   Self.Packet.Payload.ClassName,
                   'Payload type');
       CheckEquals(Expected.Block,
-                  (Self.Packet.Payload as TIdT140Payload).Block,
+                  (Self.Packet.Payload as TIdRTPT140Payload).Block,
                   'Payload data');
     finally
       S.Free;
@@ -6787,7 +6414,7 @@ end;
 
 procedure TRTPSessionTestCase.SetUp;
 var
-  T140: TIdT140Payload;
+  T140: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
@@ -6799,7 +6426,7 @@ begin
   Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
 
   Self.T140PT := Self.Profile.FirstFreePayloadType;
-  T140 := TIdT140Payload.Create('');
+  T140 := TIdRTPT140Payload.Create('');
   try
     Self.Profile.AddEncoding(T140, Self.T140PT);
   finally
@@ -7404,13 +7031,13 @@ end;
 procedure TestSessionReportRules.TestSentOctetCount;
 var
   DataLen: Cardinal;
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
 begin
   CheckEquals(0,
               Self.Session.SentOctetCount,
               'Initially we have sent no data');
 
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
     DataLen := Payload.Length;
@@ -7432,13 +7059,13 @@ end;
 procedure TestSessionReportRules.TestSentPacketCount;
 var
   I:       Integer;
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
 begin
   CheckEquals(0,
               Self.Session.SentPacketCount,
               'Initially we have sent no data');
 
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     for I := 1 to 5 do begin
       Self.Session.SendData(Payload);
@@ -7453,9 +7080,9 @@ end;
 
 procedure TestSessionReportRules.TestSSRCChangeResetsSentOctetCount;
 var
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
 begin
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
@@ -7472,9 +7099,9 @@ end;
 
 procedure TestSessionReportRules.TestSSRCChangeResetsSentPacketCount;
 var
-  Payload: TIdT140Payload;
+  Payload: TIdRTPT140Payload;
 begin
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Self.Session.SendData(Payload);
   finally
