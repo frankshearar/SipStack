@@ -516,7 +516,7 @@ begin
 
   // This just provides a spot for a bit of documentation:
   // When you call Self.Terminate you will terminate the BlockRunner (since it
-  // references Self.Terminated), thus you don't (mustn't!)
+  // references Self.Terminated), thus you don't (mustn't!) call
   // Self.BlockRunner.Terminate here.
 end;
 
