@@ -526,6 +526,24 @@ type
     function GetName: String; override;
   end;
 
+  TIdSipRetryAfterHeader = class(TIdSipNumericHeader)
+  private
+    fComment:  String;
+
+    procedure EatLeadingWhitespace(var S: String);
+    function  GetDuration: Cardinal;
+    procedure ParseComment(CommentString: String);
+    procedure SetDuration(const Value: Cardinal);
+  protected
+    function  GetName: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    function HasDuration: Boolean;
+
+    property Comment:  String read fComment write fComment;
+    property Duration: Cardinal read GetDuration write SetDuration;
+  end;
+
   TIdSipRouteHeader = class(TIdSipHeader)
   private
     fAddress:     TIdSipURI;
@@ -949,6 +967,7 @@ type
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  FirstMinExpires: TIdSipNumericHeader;
     function  FirstRequire: TIdSipCommaSeparatedHeader;
+    function  FirstRetryAfter: TIdSipNumericHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  IsMalformed: Boolean; virtual;
@@ -1176,6 +1195,7 @@ const
   CSeqMethodMismatch          = 'CSeq header method doesn''t match request method';
   InvalidBranchId             = 'Invalid branch-id';
   InvalidCallID               = 'Invalid Call-ID';
+  InvalidComment              = 'Invalid Comment';
   InvalidDecimal              = 'Invalid decimal value';
   InvalidDelay                = 'Invalid delay value';
   InvalidDigestResponse       = 'Invalid digest-response';
@@ -1213,6 +1233,7 @@ const
   StatusLine                  = '%s %d %s' + EOL;
   UnexpectedDisplayName       = 'Unexpected display-name';
   UnexpectedMessageLength     = 'Expected message-body length of %d but was %d';
+  UnmatchedParentheses        = 'Unmatched parentheses';
   UnmatchedQuotes             = 'Unmatched quotes';
   UnmatchedQuotesForParameter = 'Unmatched quotes around a parameter';
   UnsupportedScheme           = 'Unsupported URI scheme';
@@ -1226,6 +1247,7 @@ function IsQuoted(const S: String): Boolean;
 function LastChar(const S: String): String;
 function NeedsQuotes(Name: String): Boolean;
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
+function ReadDigit(var Src: String): String;
 function QuoteStringIfNecessary(const S: String): String;
 function QValueToStr(const Q: TIdSipQValue): String;
 function ShortMonthToInt(const Month: String): Integer;
@@ -1377,6 +1399,21 @@ begin
   end;
 end;
 
+function ReadDigit(var Src: String): String;
+var
+  I: Integer;
+begin
+  // Read all (if any) leading digit characters from the string, removing them
+  // from the source string in the process.
+
+  I := 1;
+  while (I <= Length(Src)) and (Src[I] in ['0'..'9']) do
+    Inc(I);
+
+  Result := Copy(Src, 1, I - 1);
+  Delete(Src, 1, I - 1);
+end;
+
 function QuoteStringIfNecessary(const S: String): String;
 begin
   Result := S;
@@ -1452,7 +1489,7 @@ begin
   Q         := 0;
   F         := 0;
   Fraction  := S;
-  Malformed := (Fraction = '') or (Pos(' ', S) > 0);
+  Malformed := (Fraction = '') or (IndyPos(' ', S) > 0);
 
   if not Malformed then begin
     Malformed := (IndyPos('.', Fraction) > 0) and (Fraction[Length(Fraction)] = '.');
@@ -2320,7 +2357,7 @@ var
   RealValue:  String;
 begin
   Parameters.Clear;
-  Fetch(Value, ';');
+  Fetch(Value, Delimiter);
 
   while (Value <> '') do begin
     ParamValue := Fetch(Value, Delimiter);
@@ -2331,7 +2368,7 @@ begin
 
     if (ParamValue = '') then
       if (ParamName = '') then
-        Self.FailParse(Format(MalformedToken, ['paremeter', '']))
+        Self.FailParse(Format(MalformedToken, ['parameter', '']))
       else
         Parameters.Add(ParamName)
     else begin
@@ -3375,6 +3412,32 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipNumericHeader                                                        *
+//******************************************************************************
+//* TIdSipNumericHeader Protected methods **************************************
+
+function TIdSipNumericHeader.GetValue: String;
+begin
+  Result := IntToStr(fNumericValue);
+end;
+
+procedure TIdSipNumericHeader.Parse(const Value: String);
+begin
+  if not TIdSipParser.IsNumber(Value) then
+    Self.FailParse(InvalidNumber)
+  else begin
+    try
+      fNumericValue := StrToInt(Value);
+    except
+      on EConvertError do
+        Self.FailParse(InvalidNumber);
+    end;
+
+    inherited Parse(Value);
+  end;
+end;
+
+//******************************************************************************
 //* TIdSipMaxForwardsHeader                                                    *
 //******************************************************************************
 //* TIdSipMaxForwardsHeader Protected methods **********************************
@@ -3476,29 +3539,116 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipNumericHeader                                                        *
+//* TIdSipRetryAfterHeader                                                     *
 //******************************************************************************
-//* TIdSipNumericHeader Protected methods **************************************
+//* TIdSipRetryAfterHeader Public methods **************************************
 
-function TIdSipNumericHeader.GetValue: String;
+function TIdSipRetryAfterHeader.HasDuration: Boolean;
 begin
-  Result := IntToStr(fNumericValue);
+  Result := Self.HasParam(DurationParam);
 end;
 
-procedure TIdSipNumericHeader.Parse(const Value: String);
+//* TIdSipRetryAfterHeader Protected methods ***********************************
+
+function TIdSipRetryAfterHeader.GetName: String;
 begin
-  if not TIdSipParser.IsNumber(Value) then
-    Self.FailParse(InvalidNumber)
-  else begin
-    try
-      fNumericValue := StrToInt(Value);
-    except
-      on EConvertError do
-        Self.FailParse(InvalidNumber);
+  Result := RetryAfterHeader;
+end;
+
+procedure TIdSipRetryAfterHeader.Parse(const Value: String);
+var
+  Token: String;
+  Raw:   String;
+begin
+  // Retry-After  =  "Retry-After" HCOLON delta-seconds
+  //                 [ comment ] *( SEMI retry-param )
+
+  Raw := Value;
+  Token := ReadDigit(Raw);
+
+  try
+    Self.NumericValue := StrToInt(Token);
+  except
+    on EConvertError do
+      Self.FailParse(InvalidNumber);
+  end;
+
+  if (Raw <> '') then begin
+    if (IndyPos('(', Raw) > 0) then begin
+      Self.ParseComment(Raw);
+    end
+    else begin
+      // If there's anything in Raw, it must be only parameters.
+      // If not, then it means there's something between the delta-seconds
+      // and the parameters that doesn't match the definition of a comment/
+      // Ergo, Raw has junk in it and we must fail.
+      Token := Fetch(Raw, ';');
+      if (Token <> '') then
+        Self.FailParse(InvalidComment);
     end;
 
-    inherited Parse(Value);
+    // Parsing the parameters
+    Self.ParseParameters(Value, Self.Parameters);
   end;
+end;
+
+//* TIdSipRetryAfterHeader Private methods *************************************
+
+procedure TIdSipRetryAfterHeader.EatLeadingWhitespace(var S: String);
+var
+  I: Integer;
+begin
+  // Eat leading whitespace
+  I := 1;
+  while (S[I] in [' ', #9]) do
+    Inc(I);
+
+  S := Copy(S, I, Length(S));
+end;
+
+function TIdSipRetryAfterHeader.GetDuration: Cardinal;
+begin
+  if Self.HasDuration then
+    Result := StrToInt(Self.Params[DurationParam])
+  else
+    Result := 0;
+end;
+
+procedure TIdSipRetryAfterHeader.ParseComment(CommentString: String);
+var
+  I:                Integer;
+  ParenthesisCount: Integer;
+begin
+  Self.fComment    := '';
+  ParenthesisCount := 0;
+
+  Self.EatLeadingWhitespace(CommentString);
+
+  CommentString := Copy(CommentString, 1, RPos(')', CommentString));
+  CommentString := WithoutFirstAndLastChars(CommentString);
+
+  I := 1;
+  while (I <= Length(CommentString)) do begin
+    case CommentString[I] of
+      '\': Inc(I);
+      '(': Inc(ParenthesisCount);
+      ')': Dec(ParenthesisCount);
+    end;
+
+    Self.fComment := Self.fComment + CommentString[I];
+
+    Inc(I);
+  end;
+
+  if (ParenthesisCount <> 0) then
+    Self.FailParse(UnmatchedParentheses);
+
+  Self.fComment := TIdSipUri.Decode(Self.fComment);
+end;
+
+procedure TIdSipRetryAfterHeader.SetDuration(const Value: Cardinal);
+begin
+  Self.Params[DurationParam] := IntToStr(Value);
 end;
 
 //******************************************************************************
@@ -3534,7 +3684,7 @@ end;
 
 function TIdSipRouteHeader.IsLooseRoutable: Boolean;
 begin
-  Result := Pos(LooseRoutableParam, Self.Address.URI) > 0;
+  Result := IndyPos(LooseRoutableParam, Self.Address.URI) > 0;
 end;
 
 //* TIdSipRouteHeader Protected methods ****************************************
@@ -3973,7 +4123,7 @@ class function TIdSipWarningHeader.IsHostPort(const Token: String): Boolean;
 var
   Colon: Integer;
 begin
-  Colon := Pos(':', Token);
+  Colon := IndyPos(':', Token);
 
   Result := TIdSipParser.IsToken(Copy(Token, 1, Colon - 1))
         and TIdSipParser.IsNumber(Copy(Token, Colon + 1, Length(Token)));
@@ -5100,6 +5250,11 @@ end;
 function TIdSipMessage.FirstRequire: TIdSipCommaSeparatedHeader;
 begin
   Result := Self.FirstHeader(RequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
+function TIdSipMessage.FirstRetryAfter: TIdSipNumericHeader;
+begin
+  Result := Self.FirstHeader(RetryAfterHeader) as TIdSipNumericHeader;
 end;
 
 function TIdSipMessage.HasExpiry: Boolean;

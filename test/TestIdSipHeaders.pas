@@ -22,6 +22,7 @@ type
     procedure TestNeedsQuotes;
     procedure TestQuoteStringIfNecessary;
     procedure TestQValueToStr;
+    procedure TestReadDigit;
     procedure TestStrToQValue;
     procedure TestStrToQValueDef;
     procedure TestStrToTransport;
@@ -294,6 +295,26 @@ type
     procedure SetUp; override;
   published
     procedure TestName; override;
+  end;
+
+  TestTIdSipRetryAfterHeader = class(THeaderTestCase)
+  private
+    R: TIdSipRetryAfterHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestHasDuration;
+    procedure TestMalformedValue;
+    procedure TestName;
+    procedure TestValue; override;
+    procedure TestValueWithComment;
+    procedure TestValueWithCommentAndDuration;
+    procedure TestValueWithDuration;
+    procedure TestValueWithOddComments;
+    procedure TestValueWithOddWhitespace;
+    procedure TestValueWithUtf8Comment;
   end;
 
   TestTIdSipRouteHeader = class(THeaderTestCase)
@@ -596,6 +617,7 @@ begin
   Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipProxyAuthenticateHeader.Suite);
   Result.AddTest(TestTIdSipProxyAuthorizationHeader.Suite);
+  Result.AddTest(TestTIdSipRetryAfterHeader.Suite);
   Result.AddTest(TestTIdSipRouteHeader.Suite);
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
@@ -686,6 +708,41 @@ begin
   CheckEquals('0.1',   QValueToStr(100),  'QValueToStr(100)');
   CheckEquals('0.666', QValueToStr(666),  'QValueToStr(666)');
   CheckEquals('1',     QValueToStr(1000), 'QValueToStr(1000)');
+end;
+
+procedure TestFunctions.TestReadDigit;
+var
+  S: String;
+begin
+  S := '';
+  CheckEquals('',
+              ReadDigit(S),
+              'Empty string');
+  CheckEquals('',
+              S,
+              'Remainder of empty string');
+
+  S := '12345678901234567890';
+  CheckEquals('12345678901234567890',
+              ReadDigit(S), '12345678901234567890');
+  CheckEquals('',
+              S,
+              '12345678901234567890');
+
+  S := '1234abcd';
+  CheckEquals('1234',
+              ReadDigit(S),
+              '1324abcd');
+  CheckEquals('abcd',
+              S,
+              '1234abcd');
+
+  S := 'abcd';
+  CheckEquals('',
+              ReadDigit(S), 'abcd');
+  CheckEquals('abcd',
+              S,
+              'abcd');
 end;
 
 procedure TestFunctions.TestStrToQValue;
@@ -2738,6 +2795,178 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipRetryAfterHeader                                                 *
+//******************************************************************************
+//* TestTIdSipRetryAfterHeader Public methods **********************************
+
+procedure TestTIdSipRetryAfterHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := Self.Header as TIdSipRetryAfterHeader;
+end;
+
+//* TestTIdSipRetryAfterHeader Protected methods *******************************
+
+function TestTIdSipRetryAfterHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipRetryAfterHeader;
+end;
+
+//* TestTIdSipRetryAfterHeader Published methods *******************************
+
+procedure TestTIdSipRetryAfterHeader.TestHasDuration;
+begin
+  Check(not Self.R.HasDuration,
+        'New header');
+
+  Self.R.Value := '1';
+  Check(not Self.R.HasDuration,
+        'Value = ''1''');
+
+  Self.R.Value := '1 (with comment)';
+  Check(not Self.R.HasDuration,
+        'Value = ''1 (with comment)''');
+
+  Self.R.Value := '1;duration=0';
+  Check(Self.R.HasDuration,
+        'Value = ''1;duration=0''');
+
+  Self.R.Value := '1;duration=10';
+  Check(Self.R.HasDuration,
+        'Value = ''1;duration=10''');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestMalformedValue;
+begin
+  Self.R.Value := 'a';
+  Check(Self.R.IsMalformed,
+        'Header not marked as malformed (''a'')');
+
+  Self.R.Value := '1a';
+  Check(Self.R.IsMalformed,
+        'Header not marked as malformed (''1a'')');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestName;
+begin
+  CheckEquals(RetryAfterHeader, Self.R.Name, 'Name');
+
+  Self.R.Name := 'foo';
+  CheckEquals(RetryAfterHeader, Self.R.Name, 'Name after set');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValue;
+begin
+  Self.R.Value := '1';
+  CheckEquals(1,
+              Self.R.NumericValue,
+              'Value ''1''');
+
+  Self.R.Value := '2';
+  CheckEquals(2,
+              Self.R.NumericValue,
+              'Value ''2''');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithComment;
+begin
+  Self.R.Value := '1 (Comment Here)';
+  CheckEquals(1,
+              Self.R.NumericValue,
+              'Numeric value');
+  CheckEquals('Comment Here',
+              Self.R.Comment,
+              'Comment');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithCommentAndDuration;
+begin
+  Self.R.Value := '300 (In a meeting);duration=600';
+
+  Check(not Self.R.IsMalformed,
+        'Header marked as invalid: ' + Self.R.ParseFailReason);
+  CheckEquals(300,
+              Self.R.NumericValue,
+              'NumericValue');
+  CheckEquals('In a meeting',
+              Self.R.Comment,
+              'Comment');
+  CheckEquals(600,
+              Self.R.Duration,
+              'Duration');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithDuration;
+begin
+  Self.R.Value := '1;duration=1000';
+  CheckEquals(1000, Self.R.Duration, '1000');
+
+  Self.R.Value := '1;duration=666';
+  CheckEquals(666, Self.R.Duration, '666');
+
+  Self.R.Value := '1;duration=0';
+  CheckEquals(0, Self.R.Duration, '0');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithOddComments;
+begin
+  Self.R.Value := '1 (())';
+  CheckEquals('()',
+              Self.R.Comment,
+              '(): ' + Self.R.ParseFailReason);
+
+  Self.R.Value := '1 ("q\\u\(otes\"")';
+  CheckEquals('"q\u(otes""',
+              Self.R.Comment,
+              '"q\\u\(otes\""');
+  Check(not Self.R.IsMalformed,
+        'Header marked as malformed (''"q\\u\(otes\""''): ' + Self.R.ParseFailReason);
+
+  Self.R.Value := '1 (%30%31%32%33)';
+  Check(not Self.R.IsMalformed,
+        'Header marked as malformed (''%30%31%32%33''): ' + Self.R.ParseFailReason);
+  CheckEquals('0123',
+              Self.R.Comment,
+              '%30%31%32%33');
+
+  Self.R.Value := '1(a)';
+  Check(not Self.R.IsMalformed,
+        'Header marked as malformed (''1(a)''): ' + Self.R.ParseFailReason);
+  CheckEquals('a',
+              Self.R.Comment,
+              'a');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithOddWhitespace;
+begin
+  Self.R.Value := '1'#9'   (Hello)';
+
+  Check(not Self.R.IsMalformed,
+        'Retry-After contains a valid string');
+  CheckEquals(1,       Self.R.NumericValue, 'NumericValue');
+  CheckEquals('Hello', Self.R.Comment,      'Comment');
+end;
+
+procedure TestTIdSipRetryAfterHeader.TestValueWithUtf8Comment;
+var
+  ZeroWidthNonBreakingSpace: String;
+begin
+  // FEFF = zero-width, non-breaking space; in UTF-8 we encode this as
+  // EF BB BF
+  ZeroWidthNonBreakingSpace := #$ef#$bb#$bf;
+
+  Self.R.Value := '1 (' + ZeroWidthNonBreakingSpace + ')';
+
+  CheckEquals(1,
+              Self.R.NumericValue,
+              'NumericValue');
+  CheckEquals(ZeroWidthNonBreakingSpace,
+              Self.R.Comment,
+              'Comment');
+end;
+
+//******************************************************************************
 //* TestTIdSipRouteHeader                                                      *
 //******************************************************************************
 //* TestTIdSipRouteHeader Public methods ***************************************
@@ -4193,7 +4422,7 @@ begin
   CheckType(TIdSipRecordRouteHeader,            Self.Headers.Add(RecordRouteHeader),          RecordRouteHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(RequireHeader),              RequireHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(ReplyToHeader),              ReplyToHeader);
-  CheckType(TIdSipHeader,                       Self.Headers.Add(RetryAfterHeader),           RetryAfterHeader);
+  CheckType(TIdSipRetryAfterHeader,             Self.Headers.Add(RetryAfterHeader),           RetryAfterHeader);
   CheckType(TIdSipRouteHeader,                  Self.Headers.Add(RouteHeader),                RouteHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(ServerHeader),               ServerHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(SubjectHeaderFull),          SubjectHeaderFull);
