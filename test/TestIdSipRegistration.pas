@@ -317,9 +317,7 @@ end;
 
 procedure TestTIdSipAbstractBindingDatabase.TestRemoveAllBindingsNotifiesListeners;
 var
-  Bindings:        TIdSipContacts;
-  L1, L2:          TIdSipTestObserver;
-  OriginalRequest: TIdSipRequest;
+  L1, L2: TIdSipTestObserver;
 begin
   Self.DB.AddBindings(Self.Request);
 
