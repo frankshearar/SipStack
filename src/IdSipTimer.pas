@@ -142,8 +142,6 @@ begin
 
   if not Self.Terminated and Assigned(Self.Event) then
     Self.Event(Self);
-
-  Self.Terminate;
 end;
 
 end.
