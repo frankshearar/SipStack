@@ -95,8 +95,10 @@ type
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
 
+  TIdDomainNameRecords = class;
   TIdNaptrRecord = class;
   TIdNaptrRecords = class;
+  TIdSrvRecord = class;
   TIdSrvRecords = class;
 
   // Given a SIP or SIPS URI, I return (using FindServersFor) a set of tuples of
@@ -104,9 +106,15 @@ type
   // message.
   TIdSipAbstractLocator = class(TObject)
   private
+    procedure AddLocationsFrom(Srv: TIdSrvRecords;
+                               Result: TIdSipLocations);
+    procedure AddLocationsFromNames(const Transport: String;
+                                    Port: Cardinal;
+                                    Names: TIdDomainNameRecords;
+                                    Result: TIdSipLocations);
     procedure AddNameRecordsTo(Locations: TIdSipLocations;
                                const Transport: String;
-                               NameRecords: TStrings;
+                               NameRecords: TIdDomainNameRecords;
                                Port: Cardinal);
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                            Recs: TIdNaptrRecords);
@@ -115,12 +123,16 @@ type
                                    SRV: TIdSrvRecords): String;
     function  PassNaptrFiltering(TargetUri: TIdUri;
                                  NAPTR: TIdNaptrRecord): Boolean;
+    function  PassSrvFiltering(SRV: TIdSrvRecord): Boolean;
+    procedure ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
+                                                  SRV: TIdSrvRecords);
+    procedure SupportedTransports(TargetUri: TIdUri; Transports: TStrings);
   protected
     procedure AddUriLocation(AddressOfRecord: TIdSipUri;
                              List: TIdSipLocations);
     function  CreateLocationFromUri(AddressOfRecord: TIdSipUri): TIdSipLocation;
     procedure PerformNameLookup(const DomainName: String;
-                                Result: TStrings); virtual;
+                                Result: TIdDomainNameRecords); virtual;
     procedure PerformNAPTRLookup(TargetUri: TIdUri;
                                  Result: TIdNaptrRecords); virtual;
     procedure PerformSRVLookup(const ServiceAndDomain: String;
@@ -132,18 +144,20 @@ type
     function  FindServersFor(const AddressOfRecord: String): TIdSipLocations; overload;
     function  FindServersFor(Response: TIdSipResponse): TIdSipLocations; overload;
     procedure ResolveNameRecords(const DomainName: String;
-                                 Result: TStrings); virtual;
+                                 Result: TIdDomainNameRecords); virtual;
     procedure ResolveNAPTR(TargetUri: TIdUri;
                            Result: TIdNaptrRecords);
     procedure ResolveSRV(const ServiceAndDomain: String;
                          Result: TIdSrvRecords);
+    procedure ResolveSRVs(ServiceAndDomains: TStrings;
+                          Result: TIdSrvRecords);
     function  SrvTarget(UsingSips: Boolean;
                         const Protocol: String;
                         const Domain: String): String;
     function  TransportFor(AddressOfRecord: TIdSipUri;
                            NAPTR: TIdNaptrRecords;
                            SRV: TIdSrvRecords;
-                           AtypeRecords: TStrings): String;
+                           NameRecords: TIdDomainNameRecords): String;
   end;
 
   // I take an address-of-record SIP/SIPS URI and return a URL at which
@@ -168,11 +182,13 @@ type
     property RecordType: String read fRecordType;
   end;
 
+  // I provide a collection of name records.
   TIdDomainNameRecords = class(TIdBaseList)
   private
     function GetItems(Index: Integer): TIdDomainNameRecord;
   public
     procedure Add(Copy: TIdDomainNameRecord);
+    function  Copy: TIdDomainNameRecords;
     procedure Sort;
 
     property Items[Index: Integer]: TIdDomainNameRecord read GetItems; default;
@@ -232,12 +248,13 @@ type
   // RFC 2782 defines SRV (service) records.
   TIdSrvRecord = class(TObject)
   private
-    fDomain:   String;
-    fPort:     Cardinal;
-    fPriority: Word;
-    fService:  String;
-    fTarget:   String;
-    fWeight:   Word;
+    fDomain:      String;
+    fNameRecords: TIdDomainNameRecords;
+    fPort:        Cardinal;
+    fPriority:    Word;
+    fService:     String;
+    fTarget:      String;
+    fWeight:      Word;
   public
     constructor Create(const Domain: String;
                        const Service: String;
@@ -245,16 +262,19 @@ type
                        Weight: Word;
                        Port: Cardinal;
                        const Target: String);
+    destructor  Destroy; override;
 
-    function Copy: TIdSrvRecord;
-    function SipTransport: String;
+    function  Copy: TIdSrvRecord;
+    function  QueryName: String;
+    function  SipTransport: String;
 
-    property Domain:   String   read fDomain;
-    property Port:     Cardinal read fPort;
-    property Priority: Word     read fPriority;
-    property Service:  String   read fService;
-    property Target:   String   read fTarget;
-    property Weight:   Word     read fWeight;
+    property Domain:      String               read fDomain;
+    property NameRecords: TIdDomainNameRecords read fNameRecords;
+    property Port:        Cardinal             read fPort;
+    property Priority:    Word                 read fPriority;
+    property Service:     String               read fService;
+    property Target:      String               read fTarget;
+    property Weight:      Word                 read fWeight;
   end;
 
   TIdSrvRecords = class(TIdBaseList)
@@ -262,13 +282,13 @@ type
     function GetItems(Index: Integer): TIdSrvRecord;
   public
     procedure Add(Copy: TIdSrvRecord);
+    function  Last: TIdSrvRecord;
     procedure Sort;
 
     property Items[Index: Integer]: TIdSrvRecord read GetItems; default;
   end;
 
 const
-  DnsA6Record   = 'A6';
   DnsARecord    = 'A';
   DnsAAAARecord = 'AAAA';
 
@@ -392,7 +412,7 @@ begin
 
   Result := A.Priority - B.Priority;
 
-  // Lower weight = more often used
+  // Lower weight = less often used
   if (Result = 0) then
     Result := B.Weight - A.Weight;
 end;
@@ -505,7 +525,7 @@ end;
 
 function TIdSipAbstractLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
 var
-  ARecords:  TStrings;
+  ARecords:  TIdDomainNameRecords;
   Naptr:     TIdNaptrRecords;
   Srv:       TIdSrvRecords;
   Target:    String;
@@ -517,7 +537,7 @@ begin
   try
     Srv := TIdSrvRecords.Create;
     try
-      ARecords := TStringList.Create;
+      ARecords := TIdDomainNameRecords.Create;
 
       Transport := Self.TransportFor(AddressOfRecord, Naptr, Srv, ARecords);
       try
@@ -544,7 +564,14 @@ begin
 
         Self.ResolveNAPTR(AddressOfRecord, Naptr);
 
-        Self.ResolveSRV(Naptr[0].Value, Srv);
+        if Naptr.IsEmpty then begin
+          if Srv.IsEmpty then
+            Self.ResolveSRVForAllSupportedTransports(AddressOfRecord, Srv);
+        end
+        else
+          Self.ResolveSRV(Naptr[0].Value, Srv);
+
+        Self.AddLocationsFrom(SRV, Result);
       finally
         ARecords.Free;
       end;
@@ -554,8 +581,6 @@ begin
   finally
     Naptr.Free;
   end;
-  raise Exception.Create('No SRV lookups yet');
-  raise Exception.Create('No A/AAAA/A6 lookups yet');                          
 end;
 
 function TIdSipAbstractLocator.FindServersFor(const AddressOfRecord: String): TIdSipLocations;
@@ -571,6 +596,9 @@ begin
 end;
 
 function TIdSipAbstractLocator.FindServersFor(Response: TIdSipResponse): TIdSipLocations;
+var
+  Names: TIdDomainNameRecords;
+  Port:  Cardinal;
 begin
   // cf RFC 3262, section 6:
   // Sending (unicast) responses:
@@ -586,10 +614,16 @@ begin
 
   Result := TIdSipLocations.Create;
 
-  if Response.LastHop.HasReceived then
+  if Response.LastHop.HasReceived then begin
+    if Response.LastHop.HasRport then
+      Port := Response.LastHop.RPort
+    else
+      Port := Response.LastHop.Port;
+
     Result.AddLocation(Response.LastHop.Transport,
                        Response.LastHop.Received,
-                       Response.LastHop.Port);
+                       Port);
+  end;
 
   if TIdIPAddressParser.IsIPv4Address(Response.LastHop.SentBy)
   or TIdIPAddressParser.IsIPv6Reference(Response.LastHop.SentBy) then
@@ -597,12 +631,22 @@ begin
                        Response.LastHop.SentBy,
                        Response.LastHop.Port)
   else begin
-    raise Exception.Create('We''ve not got a DNS A/AAAA lookup thing yet');
+    Names := TIdDomainNameRecords.Create;
+    try
+      Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
+
+      Self.AddLocationsFromNames(Response.LastHop.Transport,
+                                 Response.LastHop.Port,
+                                 Names,
+                                 Result);
+    finally
+      Names.Free;
+    end;
   end;
 end;
 
 procedure TIdSipAbstractLocator.ResolveNameRecords(const DomainName: String;
-                                                   Result: TStrings);
+                                                   Result: TIdDomainNameRecords);
 begin
   // My subclasses perform a DNS lookup for A/AAAA/A6 records.
 
@@ -627,11 +671,24 @@ begin
   // My subclasses perform a DNS lookup for SRV records. ServiceAndDomain
   // typically looks something like "_sips._tcp.example.com".
 
-  // DNS servers that support SRV RRs SHOULD return all name records (A, AAAA,
-  // etc.) for the SRV targets. If they don't, we'll have to look up the
-  // name records ourselves. 
+  // DNS servers that support SRV RRs SHOULD (according to RFC 2782) return all
+  // name records (A, AAAA, etc.) for the SRV targets. If they don't, then my
+  // subclasses ensure that those SRV records in Result do have all relevant
+  // name records attached, where possible.
 
   Self.PerformSRVLookup(ServiceAndDomain, Result);
+  Self.ClearOutUnwantedSrvRecords(Result);
+  Result.Sort;
+end;
+
+procedure TIdSipAbstractLocator.ResolveSRVs(ServiceAndDomains: TStrings;
+                                            Result: TIdSrvRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to ServiceAndDomains.Count - 1 do
+    Self.PerformSRVLookup(ServiceAndDomains[I], Result);
+
   Self.ClearOutUnwantedSrvRecords(Result);
   Result.Sort;
 end;
@@ -655,7 +712,7 @@ end;
 function TIdSipAbstractLocator.TransportFor(AddressOfRecord: TIdSipUri;
                                             NAPTR: TIdNaptrRecords;
                                             SRV: TIdSrvRecords;
-                                            AtypeRecords: TStrings): String;
+                                            NameRecords: TIdDomainNameRecords): String;
 var
   Target: String;
 begin
@@ -684,20 +741,6 @@ begin
   end
   else
     Result := NaptrServiceToTransport(NAPTR[0].Service)
-{
-   First, a client resolving a SIPS URI MUST discard any services that
-   do not contain "SIPS" as the protocol in the service field.  The
-   converse is not true, however.  A client resolving a SIP URI SHOULD
-   retain records with "SIPS" as the protocol, if the client supports
-   TLS.  Second, a client MUST discard any service fields that identify
-   a resolution service whose value is not "D2X", for values of X that
-   indicate transport protocols supported by the client.  The NAPTR
-   processing as described in RFC 2915 will result in the discovery of
-   the most preferred transport protocol of the server that is supported
-   by the client, as well as an SRV record for the server.  It will also
-   allow the client to discover if TLS is available and its preference
-   for its usage.
-}
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
@@ -740,7 +783,7 @@ begin
 end;
 
 procedure TIdSipAbstractLocator.PerformNameLookup(const DomainName: String;
-                                                  Result: TStrings);
+                                                  Result: TIdDomainNameRecords);
 begin
   raise Exception.Create(Self.ClassName + ' doesn''t know how to PerformNameLookup');
 end;
@@ -759,15 +802,38 @@ end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
 
+procedure TIdSipAbstractLocator.AddLocationsFrom(Srv: TIdSrvRecords;
+                                                 Result: TIdSipLocations);
+var
+  I, J: Integer;
+begin
+  for I := 0 to Srv.Count - 1 do
+    for J := 0 to Srv[I].NameRecords.Count - 1 do
+      Result.AddLocation(Srv[I].SipTransport,
+                         Srv[I].NameRecords[J].IPAddress,
+                         Srv[I].Port);
+end;
+
+procedure TIdSipAbstractLocator.AddLocationsFromNames(const Transport: String;
+                                                      Port: Cardinal;
+                                                      Names: TIdDomainNameRecords;
+                                                      Result: TIdSipLocations);
+var
+  I: Integer;
+begin
+  for I := 0 to Names.Count - 1 do
+    Result.AddLocation(Transport, Names[I].IPAddress, Port);
+end;
+
 procedure TIdSipAbstractLocator.AddNameRecordsTo(Locations: TIdSipLocations;
                                                  const Transport: String;
-                                                 NameRecords: TStrings;
+                                                 NameRecords: TIdDomainNameRecords;
                                                  Port: Cardinal);
 var
   I: Integer;
 begin
   for I := 0 to NameRecords.Count - 1 do begin
-    Locations.AddLocation(Transport, NameRecords[I], Port);
+    Locations.AddLocation(Transport, NameRecords[I].IPAddress, Port);
   end;
 end;
 
@@ -786,42 +852,46 @@ begin
 end;
 
 procedure TIdSipAbstractLocator.ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
+var
+  I: Integer;
 begin
+  I := 0;
+  while (I < Recs.Count) do begin
+    if Self.PassSrvFiltering(Recs[I]) then
+      Inc(I)
+    else
+      Recs.Delete(I);
+  end;
 end;
 
 function TIdSipAbstractLocator.FindTransportFromSrv(AddressOfRecord: TIdUri;
                                                     SRV: TIdSrvRecords): String;
 var
   I:          Integer;
-  Transports: array of String;
+  Transports: TStrings;
 begin
-  // Set up our transport queries, in preference order.
-  if AddressOfRecord.IsSipsUri then begin
-    SetLength(Transports, 1);
-    Transports[0] := TlsTransport;
-  end
-  else begin
-    SetLength(Transports, 3);
-    Transports[0] := TcpTransport;
-    Transports[1] := UdpTransport;
-    Transports[2] := SctpTransport;
+  Transports := TStringList.Create;
+  try
+    Self.SupportedTransports(AddressOfRecord, Transports);
+
+    // We look up SRV records for each of the transports we support,
+    // and stop as soon as we receive the first non-empty result.
+    I := 0;
+    while (I < Transports.Count) and SRV.IsEmpty do begin
+      Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSipsUri,
+                                     Transports[I],
+                                     AddressOfRecord.Host),
+                      SRV);
+      Inc(I);
+    end;
+
+    if Srv.IsEmpty then
+      Result := ''
+    else
+      Result := SRV[0].SipTransport;
+  finally
+    Transports.Free;
   end;
-
-  // We look up SRV records for each of the transports we support.
-  I := Low(Transports);
-
-  while (I < High(Transports)) and SRV.IsEmpty do begin
-    Self.ResolveSRV(Self.SrvTarget(AddressOfRecord.IsSipsUri,
-                                   Transports[I],
-                                   AddressOfRecord.Host),
-                    SRV);
-    Inc(I);
-  end;
-
-  if Srv.IsEmpty then
-    Result := ''
-  else
-    Result := SRV[0].SipTransport;
 end;
 
 function TIdSipAbstractLocator.PassNaptrFiltering(TargetUri: TIdUri;
@@ -840,13 +910,53 @@ begin
 
   if TargetUri.IsSipsUri then
     Result := (ServiceResolution = NaptrSipsService)
-  else 
+  else
     Result := (ServiceResolution = NaptrSipService)
            or (ServiceResolution = NaptrSipsService);
 
   Result := Result
         and (Length(Protocol) > 2)
         and (Copy(Protocol, 1, 2) = 'D2');
+end;
+
+function TIdSipAbstractLocator.PassSrvFiltering(SRV: TIdSrvRecord): Boolean;
+begin
+  Result := SRV.Target <> SrvNotAvailableTarget;
+end;
+
+procedure TIdSipAbstractLocator.ResolveSRVForAllSupportedTransports(TargetUri: TIdUri;
+                                                                    SRV: TIdSrvRecords);
+var
+  I:             Integer;
+  OurTransports: TStrings;
+begin
+  OurTransports := TStringList.Create;
+  try
+    Self.SupportedTransports(TargetUri, OurTransports);
+
+    for I := 0 to OurTransports.Count - 1 do
+      OurTransports[I] := Self.SrvTarget(TargetUri.IsSipsUri,
+                                         OurTransports[I],
+                                         TargetUri.Host);
+
+    Self.ResolveSRVs(OurTransports, SRV);
+  finally
+    OurTransports.Free;
+  end;
+end;
+
+procedure TIdSipAbstractLocator.SupportedTransports(TargetUri: TIdUri; Transports: TStrings);
+begin
+  Transports.Clear;
+
+  if TargetUri.IsSipsUri then begin
+    Transports.Add(TlsTransport);
+  end
+  else begin
+    Transports.Add(TcpTransport);
+    Transports.Add(UdpTransport);
+    Transports.Add(SctpTransport);
+  end;
 end;
 
 //******************************************************************************
@@ -885,6 +995,16 @@ end;
 procedure TIdDomainNameRecords.Add(Copy: TIdDomainNameRecord);
 begin
   Self.List.Add(Copy.Copy);
+end;
+
+function TIdDomainNameRecords.Copy: TIdDomainNameRecords;
+var
+  I: Integer;
+begin
+  Result := TIdDomainNameRecords.Create;
+
+  for I := 0 to Self.Count - 1 do
+    Result.Add(Self[I]);
 end;
 
 procedure TIdDomainNameRecords.Sort;
@@ -990,15 +1110,25 @@ constructor TIdSrvRecord.Create(const Domain: String;
 begin
   inherited Create;
 
-  Self.fDomain   := Domain;
-  Self.fPort     := Port;
-  Self.fPriority := Priority;
-  Self.fService  := Service;
-  Self.fTarget   := Target;
-  Self.fWeight   := Weight;
+  Self.fDomain      := Domain;
+  Self.fNameRecords := TIdDomainNameRecords.Create;
+  Self.fPort        := Port;
+  Self.fPriority    := Priority;
+  Self.fService     := Service;
+  Self.fTarget      := Target;
+  Self.fWeight      := Weight;
+end;
+
+destructor TIdSrvRecord.Destroy;
+begin
+  Self.fNameRecords.Free;
+
+  inherited Destroy;
 end;
 
 function TIdSrvRecord.Copy: TIdSrvRecord;
+var
+  I: Integer;
 begin
   Result := TIdSrvRecord.Create(Self.Domain,
                                 Self.Service,
@@ -1006,6 +1136,14 @@ begin
                                 Self.Weight,
                                 Self.Port,
                                 Self.Target);
+
+  for I := 0 to Self.NameRecords.Count - 1 do
+    Result.NameRecords.Add(Self.NameRecords[I]);
+end;
+
+function TIdSrvRecord.QueryName: String;
+begin
+  Result := Self.Service + '.' + Self.Domain;
 end;
 
 function TIdSrvRecord.SipTransport: String;
@@ -1047,6 +1185,11 @@ end;
 procedure TIdSrvRecords.Add(Copy: TIdSrvRecord);
 begin
   Self.List.Add(Copy.Copy);
+end;
+
+function TIdSrvRecords.Last: TIdSrvRecord;
+begin
+  Result := Self[Self.Count - 1];
 end;
 
 procedure TIdSrvRecords.Sort;
