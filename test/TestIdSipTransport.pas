@@ -925,7 +925,7 @@ begin
   Result := TIdSipUdpTransport;
 end;
 
-//* TestTIdSipUDPTransport Published methods ***********************************
+//* TestTIdSipUDPTransport Private methods *************************************
 
 procedure TestTIdSipUDPTransport.CheckRportParamFilledIn(Sender: TObject;
                                                          const R: TIdSipRequest);
