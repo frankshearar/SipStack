@@ -1155,25 +1155,26 @@ const
 
 // From RFC 2833
 const
-  DTMF0                  = 0;
-  DTMF1                  = 1;
-  DTMF2                  = 2;
-  DTMF3                  = 3;
-  DTMF4                  = 4;
-  DTMF5                  = 5;
-  DTMF6                  = 6;
-  DTMF7                  = 7;
-  DTMF8                  = 8;
-  DTMF9                  = 9;
-  DTMFStar               = 10;
-  DTMFHash               = 11;
-  DTMFA                  = 12;
-  DTMFB                  = 13;
-  DTMFC                  = 14;
-  DTMFD                  = 15;
-  DTMFFlash              = 16;
-  TelephoneEventEncoding = 'telephone-event';
-  TelephoneEventMimeType = AudioMediaType + '/' + TelephoneEventEncoding;
+  DTMF0                   = 0;
+  DTMF1                   = 1;
+  DTMF2                   = 2;
+  DTMF3                   = 3;
+  DTMF4                   = 4;
+  DTMF5                   = 5;
+  DTMF6                   = 6;
+  DTMF7                   = 7;
+  DTMF8                   = 8;
+  DTMF9                   = 9;
+  DTMFStar                = 10;
+  DTMFHash                = 11;
+  DTMFA                   = 12;
+  DTMFB                   = 13;
+  DTMFC                   = 14;
+  DTMFD                   = 15;
+  DTMFFlash               = 16;
+  TelephoneEventEncoding  = 'telephone-event';
+  TelephoneEventMimeType  = AudioMediaType + '/' + TelephoneEventEncoding;
+  TelephoneEventClockRate = 8000;
 
 const
   NullEncodingName     = 'null';
