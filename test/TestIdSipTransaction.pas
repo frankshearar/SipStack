@@ -14,7 +14,7 @@ interface
 uses
   IdSipAuthentication, IdSipCore, IdSipDialog, IdSipMessage, IdSipMockCore,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
-  IdSipTransport, TestFramework, TestFrameworkSip;
+  IdSipTransport, IdTimerQueue, TestFramework, TestFrameworkSip;
 
 type
   TMessageCountingTestCase = class(TTestCaseSip)
@@ -206,6 +206,7 @@ type
     CheckReceiveResponse:  TTestIdSipResponseEvent;
     CheckTerminated:       TIdSipTransactionEvent;
     Core:                  TIdSipAbstractCore;
+    DebugTimer:            TIdDebugTimerQueue;
     FailMsg:               String;
     MockDispatcher:        TIdSipMockTransactionDispatcher;
     Request:               TIdSipRequest;
@@ -520,8 +521,7 @@ type
 implementation
 
 uses
-  Classes, IdException, IdRandom, IdSdp, IdSipConsts, IdTimerQueue, Math,
-  SysUtils, TypInfo;
+  Classes, IdException, IdRandom, IdSdp, IdSipConsts, Math, SysUtils, TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -2476,13 +2476,17 @@ begin
 
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
 
+  Self.DebugTimer := TIdDebugTimerQueue.Create(true);
+
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.MockTransport := Self.MockDispatcher.Transport;
   Self.MockTransport.TransportType := sttUDP;
   Self.MockTransport.HostName      := 'gw1.leo-ix.org';
+  Self.MockDispatcher.Timer        := Self.DebugTimer;
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);
+
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;
   Self.TransactionProceeding := false;
@@ -2495,6 +2499,7 @@ procedure TTestTransaction.TearDown;
 begin
   Self.Tran.Free;
   Self.MockDispatcher.Free;
+  Self.DebugTimer.Terminate;
   Self.Response.Free;
   Self.Request.Free;
   Self.Core.Free;
@@ -2986,44 +2991,31 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGEventScheduled;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   Event:       TNotifyEvent;
   EventCount:  Integer;
   TimerGEvent: TIdWait;
 begin
   Event := Self.MockDispatcher.OnServerInviteTransactionTimerG;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
-    EventCount := DebugTimer.EventCount;
 
-    Self.MoveToCompletedState;
+  EventCount := Self.DebugTimer.EventCount;
 
-    DebugTimer.LockTimer;
-    try
-      // "+1" because entering Completed starts TWO timers - G and H.
-      Check(EventCount < DebugTimer.EventCount + 1, 'No events scheduled');
+  Self.MoveToCompletedState;
 
-      // "-2" because, arbitrarily, the implementation adds TimerG and then
-      // TimerH.
-      TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
-      Check(TimerGEvent.MatchEvent(@Event),
-            'Wrong notify event');
-      CheckEquals(Self.MockDispatcher.T1Interval,
-                  TimerGEvent.DebugWaitTime,
-                  'Bad wait time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  // "+1" because entering Completed starts TWO timers - G and H.
+  Check(EventCount < Self.DebugTimer.EventCount + 1, 'No events scheduled');
+
+  // "-2" because, arbitrarily, the implementation adds TimerG and then
+  // TimerH.
+  TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+  Check(TimerGEvent.MatchEvent(@Event),
+        'Wrong notify event');
+  CheckEquals(Self.MockDispatcher.T1Interval,
+              TimerGEvent.DebugWaitTime,
+              'Bad wait time');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGIntervalIncreases;
 var
-  DebugTimer:       TIdDebugTimerQueue;
   Event:            TNotifyEvent;
   EventCount:       Integer;
   ExpectedInterval: Cardinal;
@@ -3035,127 +3027,85 @@ begin
   // up to Dispatcher.T2Interval, where it remains constant.
 
   Event := Self.MockDispatcher.OnServerInviteTransactionTimerG;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
-    EventCount := DebugTimer.EventCount;
+  EventCount := Self.DebugTimer.EventCount;
 
-    // First TimerG
-    Self.MoveToCompletedState;
+  // First TimerG
+  Self.MoveToCompletedState;
 
-    DebugTimer.LockTimer;
-    try
-      // "+1" because entering Completed starts TWO timers - G and H.
-      Check(EventCount < DebugTimer.EventCount + 1, 'No event scheduled');
+  // "+1" because entering Completed starts TWO timers - G and H.
+  Check(EventCount < Self.DebugTimer.EventCount + 1, 'No event scheduled');
 
-      // "-2" because, arbitrarily, the implementation adds TimerG and then
-      // TimerH.
-      //
-      TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
-      Check(TimerGEvent.MatchEvent(@Event),
-            'Wrong notify event');
-      CheckEquals(Self.MockDispatcher.T1Interval,
-                  TimerGEvent.DebugWaitTime,
-                  'Bad wait time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
+  // "-2" because, arbitrarily, the implementation adds TimerG and then
+  // TimerH.
+  //
+  TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+  Check(TimerGEvent.MatchEvent(@Event),
+        'Wrong notify event');
+  CheckEquals(Self.MockDispatcher.T1Interval,
+              TimerGEvent.DebugWaitTime,
+              'Bad wait time');
 
-    FireCount := 2;
-    ExpectedInterval := 2 * Self.MockDispatcher.T1Interval;
-    while (TimerGEvent.DebugWaitTime < Self.MockDispatcher.T2Interval) do begin
-      EventCount := DebugTimer.EventCount;
+  FireCount := 2;
+  ExpectedInterval := 2 * Self.MockDispatcher.T1Interval;
+  while (TimerGEvent.DebugWaitTime < Self.MockDispatcher.T2Interval) do begin
+    EventCount := Self.DebugTimer.EventCount;
 
-      Self.ServerTran.FireTimerG;
+    Self.ServerTran.FireTimerG;
 
-      DebugTimer.LockTimer;
-      try
-        TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(EventCount < DebugTimer.EventCount,
-              'No event scheduled (' + IntToStr(FireCount) + ')');
-        CheckEquals(ExpectedInterval,
-                    TimerGEvent.DebugWaitTime,
-                    'Bad wait time (' + IntToStr(FireCount) + ')');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
+    TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event scheduled (' + IntToStr(FireCount) + ')');
+    CheckEquals(ExpectedInterval,
+                TimerGEvent.DebugWaitTime,
+                'Bad wait time (' + IntToStr(FireCount) + ')');
 
-      ExpectedInterval := 2 * ExpectedInterval;
-      Inc(FireCount);
-    end;
+    ExpectedInterval := 2 * ExpectedInterval;
+    Inc(FireCount);
+  end;
 
-    ExpectedInterval := Self.MockDispatcher.T2Interval;
-    for I := 1 to 5 do begin
-      EventCount := DebugTimer.EventCount;
+  ExpectedInterval := Self.MockDispatcher.T2Interval;
+  for I := 1 to 5 do begin
+    EventCount := Self.DebugTimer.EventCount;
 
-      Self.ServerTran.FireTimerG;
+    Self.ServerTran.FireTimerG;
 
-      DebugTimer.LockTimer;
-      try
-        TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(EventCount < DebugTimer.EventCount,
-              'No event scheduled (' + IntToStr(FireCount) + ')');
-        CheckEquals(ExpectedInterval,
-                    TimerGEvent.DebugWaitTime,
-                    'Bad wait time (' + IntToStr(FireCount) + ')');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
+    TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event scheduled (' + IntToStr(FireCount) + ')');
+    CheckEquals(ExpectedInterval,
+                TimerGEvent.DebugWaitTime,
+                'Bad wait time (' + IntToStr(FireCount) + ')');
 
-      Inc(FireCount);
-    end;
-
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    Inc(FireCount);
   end;
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGOnlyFiresInCompletedState;
 var
-  DebugTimer: TIdDebugTimerQueue;
   EventCount: Integer;
 begin
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  EventCount := Self.DebugTimer.EventCount;
 
-    EventCount := DebugTimer.EventCount;
+  Self.ServerTran.FireTimerG;
 
-    Self.ServerTran.FireTimerG;
+  CheckEquals(EventCount,
+              Self.DebugTimer.EventCount,
+              'Timer G fired in Proceeding');
 
-    DebugTimer.LockTimer;
-    try
-      CheckEquals(EventCount,
-                  DebugTimer.EventCount,
-                  'Timer G fired in Proceeding');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
+  Self.MoveToCompletedState;
+  Self.MoveToConfirmedState;
 
-    Self.MoveToCompletedState;
-    Self.MoveToConfirmedState;
+  EventCount := Self.DebugTimer.EventCount;
+  Self.ServerTran.FireTimerG;
+  CheckEquals(EventCount,
+              Self.DebugTimer.EventCount,
+              'Timer G fired in Confirmed');
 
-    DebugTimer.LockTimer;
-    try
-      EventCount := DebugTimer.EventCount;
-      Self.ServerTran.FireTimerG;
-      CheckEquals(EventCount,
-                  DebugTimer.EventCount,
-                  'Timer G fired in Confirmed');
-
-      Self.MoveToTerminatedState;
-      Self.ServerTran.FireTimerG;
-      CheckEquals(EventCount,
-                  DebugTimer.EventCount,
-                  'Timer G fired in Confirmed');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  Self.MoveToTerminatedState;
+  Self.ServerTran.FireTimerG;
+  CheckEquals(EventCount,
+              Self.DebugTimer.EventCount,
+              'Timer G fired in Confirmed');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerGStops;
@@ -3172,39 +3122,26 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerHEventScheduled;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   Event:       TNotifyEvent;
   EventCount:  Integer;
   TimerHEvent: TIdWait;
 begin
   Event := Self.MockDispatcher.OnServerInviteTransactionTimerH;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
-    EventCount := DebugTimer.EventCount;
+  EventCount := Self.DebugTimer.EventCount;
 
-    Self.MoveToCompletedState;
+  Self.MoveToCompletedState;
 
-    DebugTimer.LockTimer;
-    try
-      // "+1" because entering Completed starts TWO timers - G and H.
-      Check(EventCount < DebugTimer.EventCount + 1, 'No events scheduled');
+  // "+1" because entering Completed starts TWO timers - G and H.
+  Check(EventCount < Self.DebugTimer.EventCount + 1, 'No events scheduled');
 
-      // "-1" because, arbitrarily, the implementation adds TimerH and then
-      // TimerH.
-      TimerHEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(TimerHEvent.MatchEvent(@Event),
-            'Wrong notify event');
-      CheckEquals(Self.ServerTran.TimerHInterval,
-                  TimerHEvent.DebugWaitTime,
-                  'Bad wait time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  // "-1" because, arbitrarily, the implementation adds TimerH and then
+  // TimerH.
+  TimerHEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  Check(TimerHEvent.MatchEvent(@Event),
+        'Wrong notify event');
+  CheckEquals(Self.ServerTran.TimerHInterval,
+              TimerHEvent.DebugWaitTime,
+              'Bad wait time');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerHFired;
@@ -3235,37 +3172,24 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerIEventScheduled;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   Event:       TNotifyEvent;
   EventCount:  Integer;
   LatestEvent: TIdWait;
 begin
   Event := Self.MockDispatcher.OnServerInviteTransactionTimerI;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
-    EventCount := DebugTimer.EventCount;
+  EventCount := Self.DebugTimer.EventCount;
 
-    Self.MoveToCompletedState;
-    Self.MoveToConfirmedState;
+  Self.MoveToCompletedState;
+  Self.MoveToConfirmedState;
 
-    DebugTimer.LockTimer;
-    try
-      Check(EventCount < DebugTimer.EventCount, 'No event scheduled');
+  Check(EventCount < Self.DebugTimer.EventCount, 'No event scheduled');
 
-      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(LatestEvent.MatchEvent(@Event),
-            'Wrong notify event');
-      CheckEquals(Self.ServerTran.TimerIInterval,
-                  LatestEvent.DebugWaitTime,
-                  'Bad wait time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  LatestEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  Check(LatestEvent.MatchEvent(@Event),
+        'Wrong notify event');
+  CheckEquals(Self.ServerTran.TimerIInterval,
+              LatestEvent.DebugWaitTime,
+              'Bad wait time');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerIFired;
@@ -3661,7 +3585,6 @@ end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestTimerJEventScheduled;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   Event:       TNotifyEvent;
   EventCount:  Integer;
   LatestEvent: TIdWait;
@@ -3670,31 +3593,19 @@ begin
   Tran := Self.Tran as TIdSipServerNonInviteTransaction;
 
   Event := Self.MockDispatcher.OnServerNonInviteTransactionTimerJ;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
-    EventCount := DebugTimer.EventCount;
+  EventCount := Self.DebugTimer.EventCount;
 
-    Self.MoveToProceedingState(Tran);
-    Self.MoveToCompletedState(Tran);
+  Self.MoveToProceedingState(Tran);
+  Self.MoveToCompletedState(Tran);
 
-    DebugTimer.LockTimer;
-    try
-      Check(EventCount < DebugTimer.EventCount, 'No event scheduled');
+  Check(EventCount < Self.DebugTimer.EventCount, 'No event scheduled');
 
-      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(LatestEvent.MatchEvent(@Event),
-            'Wrong notify event');
-      CheckEquals(Tran.TimerJInterval,
-                  LatestEvent.DebugWaitTime,
-                  'Bad wait time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  LatestEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  Check(LatestEvent.MatchEvent(@Event),
+        'Wrong notify event');
+  CheckEquals(Tran.TimerJInterval,
+              LatestEvent.DebugWaitTime,
+              'Bad wait time');
 end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestTimerJFired;
@@ -3881,43 +3792,29 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestFireTimerAInCallingState;
 var
-  DebugTimer: TIdDebugTimerQueue;
   Event:      TNotifyEvent;
   EventCount: Integer;
   LastEvent:  TIdWait;
   Tran:       TIdSipClientInviteTransaction;
 begin
   Event := Self.MockDispatcher.OnClientInviteTransactionTimerA;
-  DebugTimer := TIdDebugTimerQueue.Create;
+  EventCount := Self.DebugTimer.EventCount;
+
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
   try
-    Self.MockDispatcher.Timer := DebugTimer;
+    Tran.SendRequest;
 
-    EventCount := DebugTimer.EventCount;
-
-    Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                        Self.Request) as TIdSipClientInviteTransaction;
-    try
-      Tran.SendRequest;
-
-      DebugTimer.LockTimer;
-      try
-        Check(EventCount < DebugTimer.EventCount,
-              'No event added');
-        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LastEvent.MatchEvent(@Event),
-              'Wrong event scheduled');
-        CheckEquals(Self.MockDispatcher.T1Interval,
-                    LastEvent.DebugWaitTime,
-                    'Wrong time');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
-    finally
-      Tran.Free;
-    end;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event added');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event scheduled');
+    CheckEquals(Self.MockDispatcher.T1Interval,
+                LastEvent.DebugWaitTime,
+                'Wrong time');
   finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    Tran.Free;
   end;
 end;
 
@@ -4311,7 +4208,6 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimerAIncreases;
 var
-  DebugTimer:       TIdDebugTimerQueue;
   ExpectedInterval: Cardinal;
   Event:            TNotifyEvent;
   EventCount:       Integer;
@@ -4319,35 +4215,22 @@ var
   LastEvent:        TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientInviteTransactionTimerA;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
 
+  ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
+  for FireCount := 2 to 8 do begin
+    EventCount := Self.DebugTimer.EventCount;
 
-    ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
-    for FireCount := 2 to 8 do begin
-      EventCount := DebugTimer.EventCount;
+    Self.ClientTran.FireTimerA;
 
-      Self.ClientTran.FireTimerA;
-
-      DebugTimer.LockTimer;
-      try
-        Check(EventCount < DebugTimer.EventCount,
-              'No event added (' + IntToStr(FireCount) + ')');
-        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LastEvent.MatchEvent(@Event),
-              'Wrong event added (' + IntToStr(FireCount) + ')');
-        CheckEquals(ExpectedInterval,
-                    LastEvent.DebugWaitTime,
-                    'Wrong time added (' + IntToStr(FireCount) + ')');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
-      ExpectedInterval := 2 * ExpectedInterval;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event added (' + IntToStr(FireCount) + ')');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event added (' + IntToStr(FireCount) + ')');
+    CheckEquals(ExpectedInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time added (' + IntToStr(FireCount) + ')');
+    ExpectedInterval := 2 * ExpectedInterval;
   end;
 end;
 
@@ -4366,41 +4249,27 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimerBScheduled;
 var
-  DebugTimer:  TIdDebugTimerQueue;
   Event:       TNotifyEvent;
   EventCount:  Integer;
   TimerBEvent: TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientInviteTransactionTimerB;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  EventCount := Self.DebugTimer.EventCount;
 
-    EventCount := DebugTimer.EventCount;
+  Self.MoveToProceedingState(Self.ClientTran);
+  Self.MoveToCompletedState(Self.ClientTran);
 
-    Self.MoveToProceedingState(Self.ClientTran);
-    Self.MoveToCompletedState(Self.ClientTran);
+  // "+1" because the transaction schedules TWO events
+  Check(EventCount < Self.DebugTimer.EventCount + 1,
+        'No event added');
 
-    DebugTimer.LockTimer;
-    try
-      // "+1" because the transaction schedules TWO events
-      Check(EventCount < DebugTimer.EventCount + 1,
-            'No event added');
-
-      // "-2" because the implementation schedules timer B then timer D.
-      TimerBEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
-      Check(TimerBEvent.MatchEvent(@Event),
-            'Wrong event scheduled');
-      CheckEquals(Self.ClientTran.TimerBInterval,
-                  TimerBEvent.DebugWaitTime,
-                  'Wrong time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  // "-2" because the implementation schedules timer B then timer D.
+  TimerBEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+  Check(TimerBEvent.MatchEvent(@Event),
+        'Wrong event scheduled');
+  CheckEquals(Self.ClientTran.TimerBInterval,
+              TimerBEvent.DebugWaitTime,
+              'Wrong time');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimerDFired;
@@ -4423,38 +4292,24 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimerDScheduled;
 var
-  DebugTimer: TIdDebugTimerQueue;
   Event:      TNotifyEvent;
   EventCount: Integer;
   LastEvent:  TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientInviteTransactionTimerD;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  EventCount := Self.DebugTimer.EventCount;
 
-    EventCount := DebugTimer.EventCount;
+  Self.MoveToProceedingState(Tran);
+  Self.MoveToCompletedState(Tran);
 
-    Self.MoveToProceedingState(Tran);
-    Self.MoveToCompletedState(Tran);
-
-    DebugTimer.LockTimer;
-    try
-      Check(EventCount < DebugTimer.EventCount,
-            'No event added');
-      LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(LastEvent.MatchEvent(@Event),
-            'Wrong event scheduled');
-      CheckEquals(Self.ClientTran.TimerDInterval,
-                  LastEvent.DebugWaitTime,
-                  'Wrong time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  Check(EventCount < Self.DebugTimer.EventCount,
+        'No event added');
+  LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  Check(LastEvent.MatchEvent(@Event),
+        'Wrong event scheduled');
+  CheckEquals(Self.ClientTran.TimerDInterval,
+              LastEvent.DebugWaitTime,
+              'Wrong time');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimeout;
@@ -4864,7 +4719,6 @@ end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTimerEIntervalInProceedingRemainsConstant;
 var
-  DebugTimer:       TIdDebugTimerQueue;
   ExpectedInterval: Cardinal;
   Event:            TNotifyEvent;
   EventCount:       Integer;
@@ -4872,41 +4726,27 @@ var
   LastEvent:        TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerE;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  Self.MoveToProceedingState(Self.ClientTran);
 
-    Self.MoveToProceedingState(Self.ClientTran);
+  ExpectedInterval := Self.MockDispatcher.T2Interval;
+  for FireCount := 2 to 8 do begin
+    EventCount := Self.DebugTimer.EventCount;
 
-    ExpectedInterval := Self.MockDispatcher.T2Interval;
-    for FireCount := 2 to 8 do begin
-      EventCount := DebugTimer.EventCount;
+    Self.ClientTran.FireTimerE;
 
-      Self.ClientTran.FireTimerE;
-
-      DebugTimer.LockTimer;
-      try
-        Check(EventCount < DebugTimer.EventCount,
-              'No event added (' + IntToStr(FireCount) + ')');
-        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LastEvent.MatchEvent(@Event),
-              'Wrong event added (' + IntToStr(FireCount) + ')');
-        CheckEquals(ExpectedInterval,
-                    LastEvent.DebugWaitTime,
-                    'Wrong time added (' + IntToStr(FireCount) + ')');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event added (' + IntToStr(FireCount) + ')');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event added (' + IntToStr(FireCount) + ')');
+    CheckEquals(ExpectedInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time added (' + IntToStr(FireCount) + ')');
   end;
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTimerEIntervalInTryingIncreases;
 var
-  DebugTimer:       TIdDebugTimerQueue;
   ExpectedInterval: Cardinal;
   Event:            TNotifyEvent;
   EventCount:       Integer;
@@ -4914,79 +4754,53 @@ var
   LastEvent:        TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerE;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
+  
+  for FireCount := 2 to 8 do begin
+    EventCount := Self.DebugTimer.EventCount;
 
-    ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
-    for FireCount := 2 to 8 do begin
-      EventCount := DebugTimer.EventCount;
+    Self.ClientTran.FireTimerE;
 
-      Self.ClientTran.FireTimerE;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event added (' + IntToStr(FireCount) + ')');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event added (' + IntToStr(FireCount) + ')');
+    CheckEquals(ExpectedInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time added (' + IntToStr(FireCount) + ')');
 
-      DebugTimer.LockTimer;
-      try
-        Check(EventCount < DebugTimer.EventCount,
-              'No event added (' + IntToStr(FireCount) + ')');
-        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LastEvent.MatchEvent(@Event),
-              'Wrong event added (' + IntToStr(FireCount) + ')');
-        CheckEquals(ExpectedInterval,
-                    LastEvent.DebugWaitTime,
-                    'Wrong time added (' + IntToStr(FireCount) + ')');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
-
-      ExpectedInterval := 2 * ExpectedInterval;
-      if (ExpectedInterval > Self.MockDispatcher.T2Interval) then
-        ExpectedInterval := Self.MockDispatcher.T2Interval;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    ExpectedInterval := 2 * ExpectedInterval;
+    if (ExpectedInterval > Self.MockDispatcher.T2Interval) then
+      ExpectedInterval := Self.MockDispatcher.T2Interval;
   end;
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTimerFScheduled;
 var
-  DebugTimer: TIdDebugTimerQueue;
   Event:      TNotifyEvent;
   EventCount: Integer;
   LastEvent:  TIdWait;
   Tran:       TIdSipClientNonInviteTransaction;
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerF;
-  DebugTimer := TIdDebugTimerQueue.Create;
+  EventCount := Self.DebugTimer.EventCount;
+
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientNonInviteTransaction;
   try
-    Self.MockDispatcher.Timer := DebugTimer;
+    Tran.SendRequest;
 
-    EventCount := DebugTimer.EventCount;
-
-    Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                        Self.Request) as TIdSipClientNonInviteTransaction;
-    try
-      Tran.SendRequest;
-
-      DebugTimer.LockTimer;
-      try
-        Check(EventCount < DebugTimer.EventCount,
-              'No event added');
-        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LastEvent.MatchEvent(@Event),
-              'Wrong event scheduled');
-        CheckEquals(Tran.TimerFInterval,
-                    LastEvent.DebugWaitTime,
-                    'Wrong time');
-      finally
-        DebugTimer.UnlockTimer;
-      end;
-    finally
-      Tran.Free;
-    end;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          'No event added');
+    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    Check(LastEvent.MatchEvent(@Event),
+          'Wrong event scheduled');
+    CheckEquals(Tran.TimerFInterval,
+                LastEvent.DebugWaitTime,
+                'Wrong time');
   finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
+    Tran.Free;
   end;
 end;
 
@@ -5009,38 +4823,24 @@ end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTimerKScheduled;
 var
-  DebugTimer: TIdDebugTimerQueue;
   Event:      TNotifyEvent;
   EventCount: Integer;
   LastEvent:  TIdWait;
 begin
   Event := Self.MockDispatcher.OnClientNonInviteTransactionTimerK;
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.MockDispatcher.Timer := DebugTimer;
+  EventCount := Self.DebugTimer.EventCount;
 
-    EventCount := DebugTimer.EventCount;
+  Self.MoveToProceedingState(Self.ClientTran);
+  Self.MoveToCompletedState(Self.ClientTran);
 
-    Self.MoveToProceedingState(Self.ClientTran);
-    Self.MoveToCompletedState(Self.ClientTran);
-
-    DebugTimer.LockTimer;
-    try
-      Check(EventCount < DebugTimer.EventCount,
-            'No event added');
-      LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(LastEvent.MatchEvent(@Event),
-            'Wrong event scheduled');
-      CheckEquals(Self.ClientTran.TimerKInterval,
-                  LastEvent.DebugWaitTime,
-                  'Wrong time');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
-  finally
-    Self.MockDispatcher.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  Check(EventCount < Self.DebugTimer.EventCount,
+        'No event added');
+  LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  Check(LastEvent.MatchEvent(@Event),
+        'Wrong event scheduled');
+  CheckEquals(Self.ClientTran.TimerKInterval,
+              LastEvent.DebugWaitTime,
+              'Wrong time');
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTransportErrorInProceedingState;
