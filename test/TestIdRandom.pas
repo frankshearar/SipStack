@@ -53,8 +53,9 @@ end;
 
 procedure TestTIdRandomNumber.TestNextCardinal;
 begin
-  Check(Self.Random.NextCardinal <= High(Cardinal),
-        'NextCardinal(High(Cardinal))');
+  // This test doesn't cover all the properties of NextCardinal. It just makes
+  // sure nothing blows up.
+  Self.Random.NextCardinal;
 end;
 
 procedure TestTIdRandomNumber.TestNextCardinalLimited;
