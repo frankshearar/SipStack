@@ -49,7 +49,7 @@ const
 implementation
 
 uses
-  Classes, TestFramework, TortureTests;
+  Classes, IdSimpleParser, TestFramework, TortureTests;
 
 function Suite: ITestSuite;
 begin

@@ -298,7 +298,6 @@ const
   BadStatusCode             = -1;
   InvalidSipVersion         = 'Invalid Sip-Version: ''%s''';
   InvalidStatusCode         = 'Invalid Status-Code: ''%s''';
-  MalformedToken            = 'Malformed %s: ''%s''';
   MissingSipVersion         = 'Missing SIP-Version';
   RequestLine               = '%s %s %s' + EOL;
   RequestUriNoAngleBrackets = 'Request-URI may not be enclosed in <>';

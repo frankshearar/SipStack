@@ -44,7 +44,7 @@ const
 implementation
 
 uses
-  SyncObjs, TestFramework, TortureTests;
+  IdSimpleParser, SyncObjs, TestFramework, TortureTests;
 
 function Suite: ITestSuite;
 begin
