@@ -81,6 +81,9 @@ type
 
     procedure AddParameter(const Name: String; const Value: String = '');
     function  AsString: String; override;
+    function  CanonicaliseAsAddressOfRecord: String;
+    procedure ClearHeaders;
+    procedure ClearParameters;
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
     function  Equals(const Uri: TIdSipUri): Boolean;
@@ -112,14 +115,14 @@ type
     property Username:      String        read fUsername write fUsername;
     property UserParameter: String        read GetUserParameter write SetUserParameter;
   end;
-
+{
   TIdSipsUri = class(TIdSipUri)
   public
     function DefaultPort: Cardinal; override;
     function DefaultTransport: String; override;
     function IsSecure: Boolean; override;
   end;
-
+}
   ESchemeNotSupported = class(Exception);
 
   TIdSipHeader = class(TPersistent)
@@ -794,10 +797,10 @@ begin
       Result := TIdSipUri.Create(URI)
     else begin
       Scheme := Lowercase(Fetch(URI, ':', false));
-      if (Scheme = SipScheme) then
+      if (Scheme = SipScheme) or (Scheme = SipsScheme) then
         Result := TIdSipUri.Create(URI)
-      else if (Scheme = SipsScheme) then
-        Result := TIdSipsUri.Create(URI)
+//      else if (Scheme = SipsScheme) then
+//        Result := TIdSipsUri.Create(URI)
       else raise ESchemeNotSupported.Create(URI);
     end;
   except
@@ -908,14 +911,46 @@ begin
   Result := Self.Uri;
 end;
 
+function TIdSipUri.CanonicaliseAsAddressOfRecord: String;
+var
+  ResultUri: TIdSipUri;
+begin
+  ResultUri := TIdSipUri.Create(Self.Uri);
+  try
+    ResultUri.Password := '';
+    ResultUri.Headers.Clear;
+    ResultUri.Parameters.Clear;
+
+    Result := ResultUri.Uri;
+  finally
+    ResultUri.Free;
+  end;
+end;
+
+procedure TIdSipUri.ClearHeaders;
+begin
+  Self.Headers.Clear;
+end;
+
+procedure TIdSipUri.ClearParameters;
+begin
+  Self.Parameters.Clear;
+end;
+
 function TIdSipUri.DefaultPort: Cardinal;
 begin
-  Result := IdPORT_SIP;
+  if Self.IsSecure then
+    Result := IdPORT_SIPS
+  else
+    Result := IdPORT_SIP;
 end;
 
 function TIdSipUri.DefaultTransport: String;
 begin
-  Result := TransportParamUDP;
+  if Self.IsSecure then
+    Result := TransportParamTLS
+  else
+    Result := TransportParamUDP;
 end;
 
 function TIdSipUri.Equals(const Uri: TIdSipUri): Boolean;
@@ -1341,7 +1376,7 @@ begin
     end;
   end;
 end;
-
+{
 //******************************************************************************
 //* TIdSipsUri                                                                 *
 //******************************************************************************
@@ -1361,7 +1396,7 @@ function TIdSipsUri.IsSecure: Boolean;
 begin
   Result := true;
 end;
-
+}
 //******************************************************************************
 //* TIdSipHeader                                                               *
 //******************************************************************************
@@ -2743,17 +2778,39 @@ begin
 end;
 
 function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+var
+  I:            Integer;
+  OurHeaders:   TStringList;
+  TheirHeaders: TStringList;
 begin
   Result := Self.Count = OtherHeaders.Count;
 
-  Self.First;
-  OtherHeaders.First;
-  if Result then begin
-    while Result and Self.HasNext do begin
-      Result := Result and Self.CurrentHeader.IsEqualTo(OtherHeaders.CurrentHeader);
-      Self.Next;
-      OtherHeaders.Next;
+  OurHeaders := TStringList.Create;
+  try
+    TheirHeaders := TStringList.Create;
+    try
+      Self.First;
+      while Self.HasNext do begin
+        OurHeaders.Add(Self.CurrentHeader.AsString);
+        Self.Next;
+      end;
+
+      OtherHeaders.First;
+      while OtherHeaders.HasNext do begin
+        TheirHeaders.Add(OtherHeaders.CurrentHeader.AsString);
+        OtherHeaders.Next;
+      end;
+
+      OurHeaders.Sort;
+      TheirHeaders.Sort;
+
+      for I := 0 to OurHeaders.Count - 1 do
+        Result := (OurHeaders[I] = TheirHeaders[I]);
+    finally
+      TheirHeaders.Free;
     end;
+  finally
+    OurHeaders.Free;
   end;
 end;
 

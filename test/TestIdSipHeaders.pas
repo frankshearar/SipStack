@@ -348,6 +348,7 @@ type
     procedure TestIsEmpty;
     procedure TestIsEqualToFilter;
     procedure TestIsEqualToHeaders;
+    procedure TestIsEqualToOrderIrrelevant;
     procedure TestItems;
     procedure TestIteratorVisitsAllHeaders;
     procedure TestRemove;
@@ -3795,6 +3796,26 @@ begin
 
     Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
     Check(not Self.Filter.IsEqualTo(H), 'Last header differs');
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestIsEqualToOrderIrrelevant;
+var
+  H: TIdSipHeaders;
+begin
+  Self.Filter.RemoveAll;
+
+  H := TIdSipHeaders.Create;
+  try
+    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:1>';
+    Self.Headers.Add(RouteHeader).Value := '<127.0.0.1:2>';
+
+    H.AddInReverseOrder(Self.Filter);
+
+    Check(Self.Filter.IsEqualTo(H),
+          'Identical sets but in reverse order');
   finally
     H.Free;
   end;
