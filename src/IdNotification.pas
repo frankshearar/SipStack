@@ -55,9 +55,9 @@ uses
   SysUtils;
 
 //******************************************************************************
-//* TIdNotification                                                                  *
+//* TIdNotification                                                            *
 //******************************************************************************
-//* TIdNotification Public methods ***************************************************
+//* TIdNotification Public methods *********************************************
 
 procedure TIdNotification.Run(const Subject: IInterface);
 begin
