@@ -2290,6 +2290,7 @@ begin
                 Self.Dispatcher.Transport.LastResponse.StatusCode,
                 'Wrong response');
   finally
+    Self.Core.Timer := nil;
     DebugTimer.Terminate;
   end;
 end;
@@ -3147,14 +3148,15 @@ var
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
-  Check(Session.DialogEstablished, 'No dialog established');
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
 
   Bye := Self.CreateRemoteReInvite(Session.Dialog);
   try
     Bye.Method := MethodBye;
 
     Check(Session.Match(Bye),
-          'BYE must match session');
+          Session.ClassName + ': BYE must match session');
   finally
     Bye.Free;
   end;
@@ -3167,7 +3169,8 @@ begin
   Session := Self.CreateAction as TIdSipSession;
 
   Check(not Session.Match(Session.InitialRequest),
-        'The initial INVITE must only match the (In|Out)boundInvite');
+        Session.ClassName + ': The initial INVITE must only match the '
+      + '(In|Out)boundInvite');
 end;
 
 procedure TestTIdSipSession.TestMatchModify;
@@ -3177,12 +3180,13 @@ var
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
-  Check(Session.DialogEstablished, 'No dialog established');
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
 
   ReInvite := Self.CreateRemoteReInvite(Session.Dialog);
   try
     Check(Session.Match(ReInvite),
-          'In-dialog INVITE must match session');
+          Session.ClassName + ': In-dialog INVITE must match session');
   finally
     ReInvite.Free;
   end;
@@ -3195,14 +3199,16 @@ var
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
-  Check(Session.DialogEstablished, 'No dialog established');
+  Check(Session.DialogEstablished,
+        Session.ClassName + ': No dialog established');
   Session.Modify('', '');
 
   Ok := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
                                     SIPOK);
   try
     Check(not Session.Match(Ok),
-          'Responses to outbound re-INVITEs must only match the OutboundInvites');
+          Session.ClassName + ': Responses to outbound re-INVITEs must only '
+        + 'match the OutboundInvites');
   finally
     Ok.Free;
   end;
@@ -3219,7 +3225,8 @@ begin
   try
     Ok.ToHeader.Tag := Self.Core.NextTag; // Just for completeness' sake
     Check(not Session.Match(Ok),
-          'Responses to the initial INVITE must only match the (In|Out)boundInvite');
+          Session.ClassName + ': Responses to the initial INVITE must only '
+        + 'match the (In|Out)boundInvite');
   finally
     Ok.Free;
   end;
