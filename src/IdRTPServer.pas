@@ -21,19 +21,20 @@ type
   // property to send data/control packets, or leave the session.
   //
   // SendPacket provides a service to the Session. Don't use it directly.
-  TIdRTPServer = class(TIdAbstractRTPPeer)
+  TIdRTPServer = class(TIdUDPServer,
+                       IIdAbstractRTPPeer)
   private
-    FCanonicalName: String;
-    FControlPort:   Cardinal;
-    FSession:       TIdRTPSession;
-    FOnRTCPRead:    TIdRTCPReadEvent;
-    FOnRTPRead:     TIdRTPReadEvent;
-    FProfile:       TIdRTPProfile;
+    fControlPort: Cardinal;
+    fOnRTCPRead:  TIdRTCPReadEvent;
+    fOnRTPRead:   TIdRTPReadEvent;
+    fProfile:     TIdRTPProfile;
+    fSession:     TIdRTPSession;
 
     procedure DoOnRTCPRead(APacket: TIdRTCPPacket;
                            ABinding: TIdSocketHandle);
     procedure DoOnRTPRead(APacket: TIdRTPPacket;
                           ABinding: TIdSocketHandle);
+    procedure SetProfile(const Value: TIdRTPProfile);
   protected
     procedure DoUDPRead(AData: TStream;
                         ABinding: TIdSocketHandle); override;
@@ -41,18 +42,16 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
-    function  JoinSession(Host: String; Port: Cardinal): TIdRTPSession;
     procedure SendPacket(Host: String;
                          Port: Cardinal;
-                         Packet: TIdRTPBasePacket); override;
+                         Packet: TIdRTPBasePacket); 
 
-    property Profile: TIdRTPProfile read FProfile;
   published
-    property CanonicalName: String           read fCanonicalName write fCanonicalName;
-    property ControlPort:   Cardinal         read FControlPort write FControlPort;
-    property Session:       TIdRTPSession    read FSession;
-    property OnRTCPRead:    TIdRTCPReadEvent read FOnRTCPRead write FOnRTCPRead;
-    property OnRTPRead:     TIdRTPReadEvent  read FOnRTPRead write FOnRTPRead;
+    property ControlPort:   Cardinal         read fControlPort write fControlPort;
+    property Profile:       TIdRTPProfile    read fProfile write SetProfile;
+    property OnRTCPRead:    TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
+    property OnRTPRead:     TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
+    property Session:       TIdRTPSession    read fSession;
   end;
 
 implementation
@@ -66,9 +65,6 @@ constructor TIdRTPServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.FProfile := TIdAudioVisualProfile.Create;
-  Self.FSession := TIdRTPSession.Create(Self, Self.Profile);
-
   Self.ThreadedEvent := true;
 
   Self.DefaultPort := 8000;
@@ -77,34 +73,9 @@ end;
 
 destructor TIdRTPServer.Destroy;
 begin
-  Self.Profile.Free;
   Self.Session.Free;
 
   inherited Destroy;
-end;
-
-function TIdRTPServer.JoinSession(Host: String; Port: Cardinal): TIdRTPSession;
-var
-  Pkt: TIdRTCPSourceDescription;
-  S:   TStringStream;
-begin
-  Pkt := TIdRTCPSourceDescription.Create;
-  try
-    Pkt.AddChunk.AddCanonicalName(Self.CanonicalName);
-    Pkt.PrepareForTransmission(Self.Session);
-
-    S := TStringStream.Create('');
-    try
-      Pkt.PrintOn(S);
-      Self.Send(Host, Port, S.DataString);
-    finally
-      S.Free;
-    end;
-  finally
-    Pkt.Free;
-  end;
-
-  Result := Self.Session;
 end;
 
 procedure TIdRTPServer.SendPacket(Host: String;
@@ -163,6 +134,12 @@ begin
 
   if Assigned(Self.OnRTPRead) then
     Self.OnRTPRead(Self, APacket, ABinding);
+end;
+
+procedure TIdRTPServer.SetProfile(const Value: TIdRTPProfile);
+begin
+  Self.fProfile := Value;
+  Self.fSession := TIdRTPSession.Create(Self, Value);
 end;
 
 end.

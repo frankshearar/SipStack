@@ -6,7 +6,7 @@ uses
   Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockCore,
   IdSipMockTransactionDispatcher, IdSipTransaction, IdSipTransport,
-  TestFramework, TestFrameworkSip;
+  IdSocketHandle, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -129,7 +129,7 @@ type
   end;
 
   TestTIdSipSession = class(TTestCaseTU,
-                            IIdSipDataListener,
+                            IIdRTPDataListener,
                             IIdSipSessionListener,
                             IIdSipTransportSendingListener)
   private
@@ -147,10 +147,8 @@ type
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
                                 const Invite: TIdSipRequest);
-    procedure OnNewData(const Data: TStream;
-                        const Port: Integer;
-                        const Format: TIdRTPPayload);
-    procedure OnNewUdpData(const Data: TStream);
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnSendRequest(const Request: TIdSipRequest;
                             const Transport: TIdSipTransport);
@@ -209,8 +207,8 @@ const
 implementation
 
 uses
-  IdException, IdGlobal, IdSipConsts, IdSocketHandle,
-  IdUdpServer, SyncObjs, SysUtils, TestMessages, IdSipMockTransport;
+  IdException, IdGlobal, IdSipConsts, IdUdpServer, SyncObjs, SysUtils,
+  TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
@@ -1943,16 +1941,12 @@ begin
   Self.OnModifiedSessionFired := true;
 end;
 
-procedure TestTIdSipSession.OnNewData(const Data: TStream;
-                                      const Port: Integer;
-                                      const Format: TIdRTPPayload);
+procedure TestTIdSipSession.OnNewData(Data: TIdRTPPayload;
+                                      Binding: TIdSocketHandle);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipSession.OnNewUdpData(const Data: TStream);
-begin
-end;
 
 procedure TestTIdSipSession.OnNewSession(const Session: TIdSipSession);
 begin

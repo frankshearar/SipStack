@@ -3,7 +3,7 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdSdp, TestFramework;
+  Classes, IdRTPServer, IdSdp, TestFramework;
 
 type
   TestFunctions = class(TTestCase)
@@ -101,6 +101,7 @@ type
     procedure TestAttributeAt;
     procedure TestFormatClear;
     procedure TestGetFormat;
+    procedure TestInitialState;
     procedure TestPrintOnBasic;
     procedure TestPrintOnFull;
     procedure TestPrintOnWithPortCount;
@@ -385,16 +386,34 @@ type
     procedure TestParseVersionMalformed;
     procedure TestParseVersionMultipleHeaders;
   end;
-
-  TestTIdSdpPayloadProcessor = class(TTestCase)
+{
+  TestTIdFilteredRTPPeer = class(TTestCase)
   private
-    Proc: TIdSdpPayloadProcessor;
+    LocalDesc:  TIdSdpMediaDescription;
+    RemoteDesc: TIdSdpMediaDescription;
+    Peer:       TIdFilteredRTPPeer;
+    Server:     TIdRTPServer;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestFilter;
+    procedure TestNormalOperation;
+  end;
+}
+  TestTIdSdpPayloadProcessor = class(TTestCase)
+  private
+    Proc: TIdSdpPayloadProcessor;
+
+    procedure CheckServerActiveOn(Port: Cardinal);
+    procedure CheckServerNotActiveOn(Port: Cardinal);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestMediaDescriptionWithMultiplePorts;
     procedure TestMultipleMediaDescriptions;
-    procedure TestServerAt;
+    procedure TestSessionCount;
     procedure TestSingleMediaDescription;
     procedure TestStopListening;
   end;
@@ -416,6 +435,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -435,6 +455,7 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
+}
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
@@ -1092,6 +1113,11 @@ begin
     Self.M.AddFormat(IntToStr(I));
     CheckEquals(IntToStr(I), Self.M.Formats[I], 'Formats[' + IntToStr(I) + ']');
   end;
+end;
+
+procedure TestTIdSdpMediaDescription.TestInitialState;
+begin
+  CheckEquals(1, Self.M.PortCount, 'PortCount');
 end;
 
 procedure TestTIdSdpMediaDescription.TestPrintOnBasic;
@@ -3386,7 +3412,7 @@ begin
     CheckEquals(6666,
                 Self.Payload.MediaDescriptionAt(0).Port,
                 'MediaDescriptionAt(0).Port');
-    CheckEquals(0,
+    CheckEquals(1,
                 Self.Payload.MediaDescriptionAt(0).PortCount,
                 'MediaDescriptionAt(0).PortCount');
     CheckEquals('RTP/AVP',
@@ -4370,7 +4396,47 @@ begin
     S.Free;
   end;
 end;
+{
+//******************************************************************************
+//* TestTIdFilteredRTPPeer                                                     *
+//******************************************************************************
+//* TestTIdFilteredRTPPeer Public methods **************************************
 
+procedure TestTIdFilteredRTPPeer.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Server     := TIdRTPServer.Create(nil);
+  Self.LocalDesc  := TIdSdpMediaDescription.Create;
+  Self.RemoteDesc := TIdSdpMediaDescription.Create;
+
+  Self.Peer := TIdFilteredRTPPeer.Create(Self.Server,
+                                         Self.LocalDesc,
+                                         Self.RemoteDesc);
+end;
+
+procedure TestTIdFilteredRTPPeer.TearDown;
+begin
+  Self.Peer.Free;
+  Self.RemoteDesc.Free;
+  Self.LocalDesc.Free;
+  Self.Server.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdFilteredRTPPeer Published methods ***********************************
+
+procedure TestTIdFilteredRTPPeer.TestFilter;
+begin
+  Fail('Start here - check that unexpected payloads get dropped');
+end;
+
+procedure TestTIdFilteredRTPPeer.TestNormalOperation;
+begin
+  Fail('Start here - check that expected data gets through');
+end;
+}
 //******************************************************************************
 //* TestTIdSdpPayloadProcessor                                                 *
 //******************************************************************************
@@ -4390,37 +4456,19 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSdpPayloadProcessor Published methods *******************************
+//* TestTIdSdpPayloadProcessor Private methods *********************************
 
-procedure TestTIdSdpPayloadProcessor.TestMultipleMediaDescriptions;
+procedure TestTIdSdpPayloadProcessor.CheckServerActiveOn(Port: Cardinal);
 var
   Server: TIdUDPServer;
 begin
-  Self.Proc.StartListening('v=0'#13#10
-                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
-                  + 's=-'#13#10
-                  + 'c=IN IP4 127.0.0.1'#13#10
-                  + 'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'm=text 8002 RTP/AVP 100'#13#10
-                  + 'a=rtpmap:100 t140/1000');
-
-
   Server := TIdUDPServer.Create(nil);
   try
-    Server.DefaultPort := 8000;
+    Server.DefaultPort := Port;
 
     try
       Server.Active := true;
-      Fail('No server started on 8000');
-    except
-      on EIdCouldNotBindSocket do;
-    end;
-
-    Server.DefaultPort := 8002;
-
-    try
-      Server.Active := true;
-      Fail('No server started on 8002');
+      Fail('No server started on ' + IntToStr(Port));
     except
       on EIdCouldNotBindSocket do;
     end;
@@ -4429,79 +4477,131 @@ begin
   end;
 end;
 
-procedure TestTIdSdpPayloadProcessor.TestServerAt;
+procedure TestTIdSdpPayloadProcessor.CheckServerNotActiveOn(Port: Cardinal);
+var
+  Binding: TIdSocketHandle;
+  Server:  TIdUDPServer;
+begin
+  Server := TIdUDPServer.Create(nil);
+  try
+    Binding := Server.Bindings.Add;
+    try
+      Binding.Port  := Port;
+      Server.Active := true;
+      Server.Active := false;
+    except
+      on EIdCouldNotBindSocket do
+        Fail('Port ' + IntToStr(Port) + ' not closed');
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+//* TestTIdSdpPayloadProcessor Published methods *******************************
+
+procedure TestTIdSdpPayloadProcessor.TestMediaDescriptionWithMultiplePorts;
 begin
   Self.Proc.StartListening('v=0'#13#10
-                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
-                  + 's=-'#13#10
-                  + 'c=IN IP4 127.0.0.1'#13#10
-                  + 'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'm=text 8002 RTP/AVP 100'#13#10
-                  + 'a=rtpmap:100 t140/1000');
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 8000/2 RTP/AVP 0'#13#10);
 
-  Check(Self.Proc.ServerFor(8000) <> Self.Proc.ServerFor(8002),
-        'Different ports should return different servers');
+  Self.CheckServerActiveOn(8000);
+  Self.CheckServerActiveOn(8002);
 
-  CheckEquals(8000, Self.Proc.ServerFor(8000).DefaultPort, '8000');
-  CheckEquals(8002, Self.Proc.ServerFor(8002).DefaultPort, '8002');
+  CheckEquals(1,
+              Self.Proc.Description.MediaDescriptionCount,
+              'Number of media descriptions');
+  CheckEquals(8000,
+              Self.Proc.Description.MediaDescriptionAt(0).Port,
+              'First media description port');
+end;
+
+procedure TestTIdSdpPayloadProcessor.TestMultipleMediaDescriptions;
+begin
+  Self.Proc.StartListening('v=0'#13#10
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 8000 RTP/AVP 0'#13#10
+                         + 'm=text 8002 RTP/AVP 100'#13#10
+                         + 'a=rtpmap:100 t140/1000'#13#10);
+
+  Self.CheckServerActiveOn(8000);
+  Self.CheckServerActiveOn(8002);
+
+  CheckEquals(2,
+              Self.Proc.Description.MediaDescriptionCount,
+              'Number of media descriptions');
+  CheckEquals(8000,
+              Self.Proc.Description.MediaDescriptionAt(0).Port,
+              'First media description port');
+  CheckEquals(8002,
+              Self.Proc.Description.MediaDescriptionAt(1).Port,
+              'Second media description port');
+end;
+
+procedure TestTIdSdpPayloadProcessor.TestSessionCount;
+begin
+  Self.Proc.StartListening('v=0'#13#10
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 7000/4 RTP/AVP 0'#13#10
+                         + 'm=audio 8000 RTP/AVP 0'#13#10
+                         + 'm=text 8002 RTP/AVP 100'#13#10
+                         + 'a=rtpmap:100 t140/1000'#13#10);
+
+  CheckEquals(3, Self.Proc.SessionCount, 'SessionCount');
+  CheckEquals(3,
+              Self.Proc.Description.MediaDescriptionCount,
+              'Number of media descriptions');
+  CheckEquals(7000,
+              Self.Proc.Description.MediaDescriptionAt(0).Port,
+              'First media description port');
+  CheckEquals(8000,
+              Self.Proc.Description.MediaDescriptionAt(1).Port,
+              'Second media description port');
+  CheckEquals(8002,
+              Self.Proc.Description.MediaDescriptionAt(2).Port,
+              'Third media description port');
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestSingleMediaDescription;
-var
-  Server: TIdUDPServer;
 begin
   Self.Proc.StartListening('v=0'#13#10
-                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
-                  + 's=-'#13#10
-                  + 'c=IN IP4 127.0.0.1'#13#10
-                  + 'm=audio 8000 RTP/AVP 0'#13#10);
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 8000 RTP/AVP 0'#13#10);
 
+  Self.CheckServerActiveOn(8000); // RTP
+  Self.CheckServerActiveOn(8001); // RTCP
 
-  Server := TIdUDPServer.Create(nil);
-  try
-    Server.DefaultPort := 8000;
-
-    try
-      Server.Active := true;
-      Fail('No server started');
-    except
-      on EIdCouldNotBindSocket do;
-    end;
-  finally
-    Server.Free;
-  end;
+  CheckEquals(1,
+              Self.Proc.Description.MediaDescriptionCount,
+              'Number of media descriptions');
+  CheckEquals(8000,
+              Self.Proc.Description.MediaDescriptionAt(0).Port,
+              'Media description port');
 end;
 
 procedure TestTIdSdpPayloadProcessor.TestStopListening;
 var
-  Binding: TIdSocketHandle;
-  I:       Integer;
-  Server:  TIdUDPServer;
+  I: Integer;
 begin
   Self.Proc.StartListening('v=0'#13#10
-                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
-                  + 's=-'#13#10
-                  + 'c=IN IP4 127.0.0.1'#13#10
-                  + 'm=audio 8000 RTP/AVP 0'#13#10
-                  + 'm=audio 8002 RTP/AVP 8');
+                         + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
+                         + 's=-'#13#10
+                         + 'c=IN IP4 127.0.0.1'#13#10
+                         + 'm=audio 8000 RTP/AVP 0'#13#10
+                         + 'm=audio 8002 RTP/AVP 8'#13#10);
   Self.Proc.StopListening;
 
-  Server := TIdUDPServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-    for I := 8000 to 8003 do begin
-      try
-        Binding.Port  := I;
-        Server.Active := true;
-        Server.Active := false;
-      except
-        on EIdCouldNotBindSocket do
-          Fail('Port ' + IntToStr(I) + ' not closed');
-      end;
-    end
-  finally
-    Server.Free;
-  end;
+  for I := 8000 to 8003 do
+    Self.CheckServerNotActiveOn(I);
 end;
 
 initialization

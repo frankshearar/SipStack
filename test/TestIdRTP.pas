@@ -550,7 +550,7 @@ type
     procedure TestSenderCount;
   end;
 
-  TestTIdRTPSenders = class(TTestCase)
+  TestTIdRTPSenderTable = class(TTestCase)
   private
     Members: TIdRTPMemberTable;
     Senders: TIdRTPSenderTable;
@@ -587,6 +587,7 @@ type
   published
     procedure TestAcceptableSSRC;
     procedure TestAddMember;
+    procedure TestAddReceiver;
     procedure TestAddSender;
     procedure TestAddSenderAddsMember;
     procedure TestCantRemoveSelfFromSession;
@@ -713,14 +714,9 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdRTPEncoding.Suite);
-  Result.AddTest(TestTIdRTPNullEncoding.Suite);
-  Result.AddTest(TestTIdT140Encoding.Suite);
-  Result.AddTest(TestTIdTelephoneEventEncoding.Suite);
-  Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdNullPayload.Suite);
+  Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdRTPTelephoneEventPayload.Suite);
   Result.AddTest(TestTIdRTPT140Payload.Suite);
   Result.AddTest(TestTIdRTPProfile.Suite);
@@ -747,9 +743,8 @@ begin
   Result.AddTest(TestTIdRTCPApplicationDefined.Suite);
   Result.AddTest(TestTIdCompoundRTCPPacket.Suite);
   Result.AddTest(TestTIdRTPMember.Suite);
-}
   Result.AddTest(TestTIdRTPMemberTable.Suite);
-  Result.AddTest(TestTIdRTPSenders.Suite);
+  Result.AddTest(TestTIdRTPSenderTable.Suite);
   Result.AddTest(TestSessionDelegationMethods.Suite);
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
@@ -5231,11 +5226,11 @@ end;
 
 procedure TestTIdRTCPBye.TestPrepareForTransmission;
 var
-  MockAgent: TIdAbstractRTPPeer;
+  MockAgent: TIdMockRTPPeer;
   Profile:   TIdRTPProfile;
   Session:   TIdRTPSession;
 begin
-  MockAgent := TIdMockRTPPeer.Create(nil);
+  MockAgent := TIdMockRTPPeer.Create;
   try
     Profile := TIdAudioVisualProfile.Create;
     try
@@ -6357,11 +6352,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPSenders                                                          *
+//* TestTIdRTPSenderTable                                                      *
 //******************************************************************************
-//* TestTIdRTPSenders Public methods *******************************************
+//* TestTIdRTPSenderTable Public methods ***************************************
 
-procedure TestTIdRTPSenders.SetUp;
+procedure TestTIdRTPSenderTable.SetUp;
 begin
   inherited SetUp;
 
@@ -6370,7 +6365,7 @@ begin
   Self.SSRC    := $decafbad;
 end;
 
-procedure TestTIdRTPSenders.TearDown;
+procedure TestTIdRTPSenderTable.TearDown;
 begin
   Self.Senders.Free;
   Self.Members.Free;
@@ -6378,9 +6373,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdRTPSenders Published methods ****************************************
+//* TestTIdRTPSenderTable Published methods ************************************
 
-procedure TestTIdRTPSenders.TestAddAndFind;
+procedure TestTIdRTPSenderTable.TestAddAndFind;
 var
   Member: TIdRTPMember;
 begin
@@ -6399,7 +6394,7 @@ begin
         'Senders table doesn''t simply reference Members table');
 end;
 
-procedure TestTIdRTPSenders.TestAddSetsIsSender;
+procedure TestTIdRTPSenderTable.TestAddSetsIsSender;
 var
   Member: TIdRTPMember;
 begin
@@ -6410,7 +6405,7 @@ begin
   Check(Member.IsSender, 'Member not set as IsSender');
 end;
 
-procedure TestTIdRTPSenders.TestContains;
+procedure TestTIdRTPSenderTable.TestContains;
 var
   NonSenderSSRC: Cardinal;
 begin
@@ -6424,7 +6419,7 @@ begin
   Check(not Self.Senders.Contains(NonSenderSSRC), 'Table contains a non-sender');
 end;
 
-procedure TestTIdRTPSenders.TestMemberAt;
+procedure TestTIdRTPSenderTable.TestMemberAt;
 var
   NewSSRC: Cardinal;
 begin
@@ -6441,7 +6436,7 @@ begin
               'Index 1');
 end;
 
-procedure TestTIdRTPSenders.TestMemberAtAnotherTest;
+procedure TestTIdRTPSenderTable.TestMemberAtAnotherTest;
 var
   NewSSRC: Cardinal;
 begin
@@ -6455,7 +6450,7 @@ begin
               'Index 0');
 end;
 
-procedure TestTIdRTPSenders.TestRemove;
+procedure TestTIdRTPSenderTable.TestRemove;
 var
   NewSSRC: Cardinal;
 begin
@@ -6472,7 +6467,7 @@ begin
   CheckEquals(1, Self.Senders.Count, 'Sender not removed (2)');
 end;
 
-procedure TestTIdRTPSenders.TestRemoveAll;
+procedure TestTIdRTPSenderTable.TestRemoveAll;
 begin
   Self.Senders.Add(Self.SSRC);
   Self.Members.Add($cafebabe);
@@ -6497,7 +6492,7 @@ begin
 
   Self.Profile := TIdAudioVisualProfile.Create;
 
-  Self.Agent   := TIdMockRTPPeer.Create(nil);
+  Self.Agent   := TIdMockRTPPeer.Create;
   Self.Agent.Profile := Self.Profile;
 
   Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
@@ -6565,6 +6560,32 @@ begin
         'Different entry returned for same SSRC');
 end;
 
+procedure TestSessionDelegationMethods.TestAddReceiver;
+var
+  Host:          String;
+  OriginalCount: Cardinal;
+  Port:          Cardinal;
+begin
+  Host := '127.0.0.1';
+  Port := 5050;
+
+  OriginalCount := Self.Session.MemberCount;
+  CheckEquals(1, OriginalCount, 'Empty table, except for self');
+
+  Self.Session.AddReceiver(Host, Port);
+  CheckEquals(OriginalCount + 1,
+              Self.Session.MemberCount,
+              'Host/port not added');
+
+  Self.Session.AddReceiver(Host, Port);
+  CheckEquals(OriginalCount + 1,
+              Self.Session.MemberCount,
+              'Host/port re-added');
+
+  Check(Self.Session.Member(Host, Port) = Self.Session.AddReceiver(Host, Port),
+        'Different entry returned for same Host/port');
+end;
+
 procedure TestSessionDelegationMethods.TestAddSender;
 begin
   CheckEquals(0, Self.Session.SenderCount, 'Empty table');
@@ -6611,9 +6632,14 @@ end;
 
 procedure TestSessionDelegationMethods.TestIsSender;
 begin
-  Check(not Self.Session.IsSender(Self.SSRC), 'Empty table');
-  Self.Session.AddSender(Self.SSRC);
-  Check(Self.Session.IsSender(Self.SSRC), 'SSRC not added?');
+  Check(not Self.Session.IsSender(Self.SSRC),
+        'Empty table; SSRC not found');
+  Self.Session.AddMember(Self.SSRC);
+  Check(not Self.Session.IsSender(Self.SSRC),
+        'SSRC not meant to be a sender');
+  Self.Session.Member(Self.SSRC).IsSender := true;
+  Check(Self.Session.IsSender(Self.SSRC),
+        'SSRC meant to be a sender');
 end;
 
 procedure TestSessionDelegationMethods.TestIsSenderSelf;

@@ -3,7 +3,8 @@ unit TestFrameworkRtp;
 interface
 
 uses
-  Classes, Contnrs, IdRTP, SyncObjs, SysUtils, TestFrameworkEx;
+  Classes, Contnrs, IdRTP, IdSipInterfacedObject, SyncObjs, SysUtils,
+  TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)
@@ -11,7 +12,8 @@ type
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
   end;
 
-  TIdMockRTPPeer = class(TIdAbstractRTPPeer)
+  TIdMockRTPPeer = class(TIdSipInterfacedObject,
+                         IIdAbstractRTPPeer)
   private
     fLastRTP:   TIdRTPPacket;
     fProfile:   TIdRTPProfile;
@@ -23,12 +25,12 @@ type
     function  GetSecondLastRTCP: TIdRTCPPacket;
     procedure SetProfile(const Value: TIdRTPProfile);
   public
-    constructor Create(AOwner: TComponent); override;
+    constructor Create;
     destructor  Destroy; override;
 
     procedure SendPacket(Host: String;
                          Port: Cardinal;
-                         Packet: TIdRTPBasePacket); override;
+                         Packet: TIdRTPBasePacket);
 
     property LastRTCP:       TIdRTCPPacket read GetLastRTCP;
     property LastRTP:        TIdRTPPacket  read fLastRTP;
@@ -36,12 +38,7 @@ type
     property RTCPCount:      Cardinal      read GetRTCPCount;
     property SecondLastRTCP: TIdRTCPPacket read GetSecondLastRTCP;
   end;
-{
-  TIdMockEncoding = class(TIdRTPEncoding)
-  public
-    function PayloadType: TIdRTPPayloadClass; override;
-  end;
-}
+
   TIdMockPayload = class(TIdRTPPayload)
   private
     fHasKnownLength: Boolean;
@@ -92,9 +89,9 @@ end;
 //******************************************************************************
 //* TIdMockRTPPeer Public methods **********************************************
 
-constructor TIdMockRTPPeer.Create(AOwner: TComponent);
+constructor TIdMockRTPPeer.Create;
 begin
-  inherited Create(AOwner);
+  inherited Create;
 
   Self.fRTCPCount := 0;
   Self.RTCPBuffer := TObjectList.Create(true);
@@ -149,17 +146,7 @@ begin
   Self.fLastRTP := TIdRTPPacket.Create(Value);
   Self.fProfile := Value;
 end;
-{
-//******************************************************************************
-//* TIdMockEncoding                                                            *
-//******************************************************************************
-//* TIdMockEncoding Public methods *********************************************
 
-function TIdMockEncoding.PayloadType: TIdRTPPayloadClass;
-begin
-  Result := TIdMockPayload;
-end;
-}
 //******************************************************************************
 //* TIdMockPayload                                                             *
 //******************************************************************************

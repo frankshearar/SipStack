@@ -5,7 +5,7 @@ interface
 uses
   Classes, IdRTP, IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
   IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
-  TestFrameworkEx;
+  IdSocketHandle, TestFrameworkEx;
 
 type
   TTestCaseSip = class(TThreadingTestCase)
@@ -13,18 +13,19 @@ type
   end;
 
   TIdSipTestDataListener = class(TIdSipInterfacedObject,
-                                    IIdSipDataListener)
+                                 IIdRtpDataListener)
   private
-    fNewData: Boolean;
+    fNewData:    Boolean;
+    fNewUdpData: Boolean;
   public
     constructor Create;
 
-    procedure OnNewData(const Data: TStream;
-                        const Port: Integer;
-                        const Format: TIdRTPPayload);
-    procedure OnNewUdpData(const Data: TStream);
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
+    procedure OnNewUdpData(Data: TStream);
 
-    property NewData: Boolean read fNewData;
+    property NewData:    Boolean read fNewData;
+    property NewUdpData: Boolean read fNewUdpData;
   end;
 
   TIdSipTestMessageListener = class(TIdSipInterfacedObject,
@@ -187,18 +188,19 @@ constructor TIdSipTestDataListener.Create;
 begin
   inherited Create;
 
-  Self.fNewData := false;
+  Self.fNewData    := false;
+  Self.fNewUdpData := false;
 end;
 
-procedure TIdSipTestDataListener.OnNewData(const Data: TStream;
-                                           const Port: Integer;
-                                           const Format: TIdRTPPayload);
+procedure TIdSipTestDataListener.OnNewData(Data: TIdRTPPayload;
+                                           Binding: TIdSocketHandle);
 begin
   Self.fNewData := true;
 end;
 
-procedure TIdSipTestDataListener.OnNewUdpData(const Data: TStream);
+procedure TIdSipTestDataListener.OnNewUdpData(Data: TStream);
 begin
+  Self.fNewUdpData := true;
 end;
 
 //******************************************************************************

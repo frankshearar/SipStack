@@ -817,11 +817,17 @@ type
     procedure RemoveAll;
   end;
 
-  TIdAbstractRTPPeer = class(TIdUDPServer)
-  public
+  IIdAbstractRTPPeer = interface(IInterface)
     procedure SendPacket(Host: String;
                          Port: Cardinal;
-                         Packet: TIdRTPBasePacket); virtual; abstract;
+                         Packet: TIdRTPBasePacket);
+  end;
+
+  // I provide a protocol for things that listen for RTP data.
+  IIdRTPDataListener = interface
+    ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
   end;
 
   // I provide a self-contained SSRC space.
@@ -833,18 +839,21 @@ type
   // * Keep track of session state
   TIdRTPSession = class(TObject)
   private
-    Agent:                      TIdAbstractRTPPeer;
+    Agent:                      IIdAbstractRTPPeer;
     BaseTime:                   TDateTime;
     BaseTimestamp:              Cardinal; // in clock rate ticks
+    DataListenerLock:           TCriticalSection;
     fSyncSrcID:                 Cardinal;
     fAssumedMTU:                Cardinal;
     fAvgRTCPSize:               Cardinal;
     fCanonicalName:             String;
     fNoControlSent:             Boolean;
     fMaxRTCPBandwidth:          Cardinal; // octets per second
+    fMinimumRTCPSendInterval:   TDateTime; // in seconds
     fPreviousMemberCount:       Cardinal; // member count at last transmission time
     fReceiverBandwidthFraction: Double;
     fMissedReportTolerance:     Cardinal;
+    fProfile:                   TIdRTPProfile;
     fSenderBandwidthFraction:   Double;
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
@@ -854,8 +863,6 @@ type
     NextTransmissionTime:       TDateTime;
     NoDataSent:                 Boolean;
     PreviousTransmissionTime:   TDateTime;
-    Profile:                    TIdRTPProfile;
-    Senders:                    TIdRTPSenderTable;
     SequenceNo:                 TIdRTPSequenceNo;
     Timer:                      TIdRTPTimerQueue;
     TransmissionLock:           TCriticalSection;
@@ -870,6 +877,7 @@ type
     procedure AdjustAvgRTCPSize(Control: TIdRTCPPacket);
     procedure AdjustTransmissionTime(Members: TIdRTPMemberTable);
     function  DefaultAssumedMTU: Cardinal;
+    function  DefaultMinimumRTCPSendInterval: TDateTime;
     function  DefaultMissedReportTolerance: Cardinal;
     function  DefaultNoControlSentAvgRTCPSize: Cardinal;
     function  DefaultReceiverBandwidthFraction: Double;
@@ -883,7 +891,7 @@ type
     procedure SetSyncSrcId(const Value: Cardinal);
     procedure TransmissionTimeExpire(Sender: TObject);
   public
-    constructor Create(Agent: TIdAbstractRTPPeer;
+    constructor Create(Agent: IIdAbstractRTPPeer;
                        Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
@@ -899,9 +907,9 @@ type
     function  IsSender(SSRC: Cardinal): Boolean; overload;
     procedure LeaveSession(Reason: String = '');
     function  LockMembers: TIdRTPMemberTable;
-    function  Member(SSRC: Cardinal): TIdRTPMember;
+    function  Member(SSRC: Cardinal): TIdRTPMember; overload;
+    function  Member(Host: String; Port: Cardinal): TIdRTPMember; overload;
     function  MemberCount: Cardinal;
-    function  MinimumRTCPSendInterval: TDateTime;
     function  NewSSRC: Cardinal;
     function  NextSequenceNo: TIdRTPSequenceNo;
     function  NothingSent: Boolean;
@@ -917,29 +925,27 @@ type
     procedure ResolveSSRCCollision;
     procedure SendControl(Packet: TIdRTCPPacket);
     procedure SendData(Data: TIdRTPPayload);
-    procedure SendDataTo(Data: TIdRTPPayload;
-                         Host: String;
-                         Port: Cardinal);
     function  Sender(SSRC: Cardinal): TIdRTPMember;
-    function  SenderAt(Index: Cardinal): TIdRTPMember;
     function  SenderCount: Cardinal;
     procedure SendReport;
     function  TimeOffsetFromStart(WallclockTime: TDateTime): TDateTime;
     procedure UnlockMembers;
 
-    property AssumedMTU:                Cardinal read fAssumedMTU write fAssumedMTU;
-    property AvgRTCPSize:               Cardinal read fAvgRTCPSize;
-    property CanonicalName:             String   read fCanonicalName write fCanonicalName;
-    property NoControlSent:             Boolean  read fNoControlSent;
-    property MaxRTCPBandwidth:          Cardinal read fMaxRTCPBandwidth write fMaxRTCPBandwidth;
-    property PreviousMemberCount:       Cardinal read fPreviousMemberCount;
-    property MissedReportTolerance:     Cardinal read fMissedReportTolerance write fMissedReportTolerance;
-    property ReceiverBandwidthFraction: Double   read fReceiverBandwidthFraction write fReceiverBandwidthFraction;
-    property SenderBandwidthFraction:   Double   read fSenderBandwidthFraction write fSenderBandwidthFraction;
-    property SentOctetCount:            Cardinal read fSentOctetCount;
-    property SentPacketCount:           Cardinal read fSentPacketCount;
-    property SessionBandwith:           Cardinal read fSessionBandwidth write fSessionBandwidth;
-    property SyncSrcID:                 Cardinal read fSyncSrcID;
+    property AssumedMTU:                Cardinal      read fAssumedMTU write fAssumedMTU;
+    property AvgRTCPSize:               Cardinal      read fAvgRTCPSize;
+    property CanonicalName:             String        read fCanonicalName write fCanonicalName;
+    property NoControlSent:             Boolean       read fNoControlSent;
+    property MaxRTCPBandwidth:          Cardinal      read fMaxRTCPBandwidth write fMaxRTCPBandwidth;
+    property MinimumRTCPSendInterval:   TDateTime     read fMinimumRTCPSendInterval write fMinimumRTCPSendInterval;
+    property PreviousMemberCount:       Cardinal      read fPreviousMemberCount;
+    property MissedReportTolerance:     Cardinal      read fMissedReportTolerance write fMissedReportTolerance;
+    property Profile:                   TIdRTPProfile read fProfile;
+    property ReceiverBandwidthFraction: Double        read fReceiverBandwidthFraction write fReceiverBandwidthFraction;
+    property SenderBandwidthFraction:   Double        read fSenderBandwidthFraction write fSenderBandwidthFraction;
+    property SentOctetCount:            Cardinal      read fSentOctetCount;
+    property SentPacketCount:           Cardinal      read fSentPacketCount;
+    property SessionBandwith:           Cardinal      read fSessionBandwidth write fSessionBandwidth;
+    property SyncSrcID:                 Cardinal      read fSyncSrcID;
   end;
 
   // I provide a buffer to objects that receive RTP packets. I assemble these
@@ -960,6 +966,7 @@ type
     procedure RemoveLast;
   end;
 
+  ENoAgent = class(Exception);
   ENoPayloadTypeFound = class(Exception);
   EStreamTooShort = class(Exception);
   EUnknownSDES = class(Exception);
@@ -999,26 +1006,26 @@ const
   RFC3550Version     = 2;
   AudioVisualProfile = 'RTP/AVP';
 
-  CelBEncoding                = 'CelB';
-  CNEncoding                  = 'CN';
-  DVI4Encoding                = 'DVI4';
-  G722Encoding                = 'G722';
-  G723Encoding                = 'G723';
-  G728Encoding                = 'G728';
-  G729Encoding                = 'G729';
-  GSMEncoding                 = 'GSM';
-  H261Encoding                = 'H261';
-  H263Encoding                = 'H263';
-  JPEGEncoding                = 'JPEG';
-  L16Encoding                 = 'L16';
-  LPCEncoding                 = 'LPC';
-  MP2TEncoding                = 'MP2T';
-  MPAEncoding                 = 'MPA';
-  MPVEncoding                 = 'MPV';
-  NVEncoding                  = 'nv';
-  PCMMuLawEncoding            = 'PCMU';
-  PCMALawEncoding             = 'PCMA';
-  QCELPEncoding               = 'QCELP';
+  CelBEncoding     = 'CelB';
+  CNEncoding       = 'CN';
+  DVI4Encoding     = 'DVI4';
+  G722Encoding     = 'G722';
+  G723Encoding     = 'G723';
+  G728Encoding     = 'G728';
+  G729Encoding     = 'G729';
+  GSMEncoding      = 'GSM';
+  H261Encoding     = 'H261';
+  H263Encoding     = 'H263';
+  JPEGEncoding     = 'JPEG';
+  L16Encoding      = 'L16';
+  LPCEncoding      = 'LPC';
+  MP2TEncoding     = 'MP2T';
+  MPAEncoding      = 'MPA';
+  MPVEncoding      = 'MPV';
+  NVEncoding       = 'nv';
+  PCMMuLawEncoding = 'PCMU';
+  PCMALawEncoding  = 'PCMA';
+  QCELPEncoding    = 'QCELP';
 
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
@@ -4283,19 +4290,21 @@ end;
 //******************************************************************************
 //* TIdRTPSession Public methods ***********************************************
 
-constructor TIdRTPSession.Create(Agent: TIdAbstractRTPPeer;
+constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer;
                                  Profile: TIdRTPProfile);
 begin
   inherited Create;
 
   Self.Agent          := Agent;
   Self.fNoControlSent := true;
+  Self.MinimumRTCPSendInterval := Self.DefaultMinimumRTCPSendInterval;
   Self.NoDataSent     := true;
-  Self.Profile        := Profile;
+  Self.fProfile       := Profile;
+
+  Self.DataListenerLock := TCriticalSection.Create;
 
   Self.MemberLock := TCriticalSection.Create;
   Self.Members    := TIdRTPMemberTable.Create;
-  Self.Senders    := TIdRTPSenderTable.Create(Self.Members);
 
   Self.TransmissionLock := TCriticalSection.Create;
   Self.Timer            := TIdRTPTimerQueue.Create;
@@ -4310,9 +4319,10 @@ destructor TIdRTPSession.Destroy;
 begin
   Self.Timer.Free;
   Self.TransmissionLock.Free;
-  Self.Senders.Free;
   Self.Members.Free;
   Self.MemberLock.Free;
+  Self.DataListenerLock.Free;
+  Self.Agent := nil;
 
   inherited Destroy;
 end;
@@ -4323,29 +4333,45 @@ begin
 end;
 
 function TIdRTPSession.AddMember(SSRC: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
 begin
-  Self.MemberLock.Acquire;
+  Members := Self.LockMembers;
   try
-    Result := Self.Members.Add(SSRC);
+    Result := Members.Add(SSRC);
   finally
-    Self.MemberLock.Release;
+    Self.UnlockMembers
   end;
 end;
 
 function TIdRTPSession.AddReceiver(Host: String; Port: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
 begin
   // When we start up a session with the intention of sending data to someone
   // (as opposed to solely listening), we need to send data to that person
   // knowing only their address. Since they've not sent US any data, we can't
   // know their SSRC. Therefore we add them as a receiver, and note the first
   // SSRC we get from that address. From then on we act as normal.
-  Result := nil;
+
+  Members := Self.LockMembers;
+  try
+    Result := Members.AddReceiver(Host, Port);
+  finally
+    Self.UnlockMembers;
+  end;
 end;
 
 function TIdRTPSession.AddSender(SSRC: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
 begin
-  Self.Members.Add(SSRC);
-  Result := Self.Senders.Add(SSRC);
+  Members := Self.LockMembers;
+  try
+    Result := Members.AddSender(SSRC);
+  finally
+    Self.UnlockMembers;
+  end;
 end;
 
 function TIdRTPSession.CreateNextReport: TIdCompoundRTCPPacket;
@@ -4396,13 +4422,21 @@ end;
 
 function TIdRTPSession.IsSender: Boolean;
 begin
-  Result := IsSender(Self.SyncSrcID);
-//  Result := Self.Members.Find(Self.SyncSrcID).IsSender;
+  Result := Self.IsSender(Self.SyncSrcID);
 end;
 
 function TIdRTPSession.IsSender(SSRC: Cardinal): Boolean;
+var
+  Member:  TIdRTPMember;
+  Members: TIdRTPMemberTable;
 begin
-  Result := Self.Senders.Contains(SSRC);
+  Members := Self.LockMembers;
+  try
+    Member := Members.Find(SSRC);
+    Result := Assigned(Member) and Member.IsSender;
+  finally
+    Self.UnlockMembers;
+  end;
 end;
 
 procedure TIdRTPSession.LeaveSession(Reason: String = '');
@@ -4427,28 +4461,39 @@ begin
 end;
 
 function TIdRTPSession.Member(SSRC: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
 begin
-  Self.MemberLock.Acquire;
+  Members := Self.LockMembers;
   try
-    Result := Self.Members.Find(SSRC);
+    Result := Members.Find(SSRC);
   finally
-    Self.MemberLock.Release;
+    Self.UnlockMembers;
+  end;
+end;
+
+function TIdRTPSession.Member(Host: String; Port: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
+begin
+  Members := Self.LockMembers;
+  try
+    Result := Members.FindReceiver(Host, Port);
+  finally
+    Self.UnlockMembers;
   end;
 end;
 
 function TIdRTPSession.MemberCount: Cardinal;
+var
+  Members: TIdRTPMemberTable;
 begin
-  Self.MemberLock.Acquire;
+  Members := Self.LockMembers;
   try
-    Result := Self.Members.Count;
+    Result := Members.Count;
   finally
-    Self.MemberLock.Release;
+    Self.UnlockMembers;
   end;
-end;
-
-function TIdRTPSession.MinimumRTCPSendInterval: TDateTime;
-begin
-  Result := 5*OneSecond;
 end;
 
 function TIdRTPSession.NewSSRC: Cardinal;
@@ -4552,8 +4597,15 @@ begin
 end;
 
 procedure TIdRTPSession.RemoveSender(SSRC: Cardinal);
+var
+  Members: TIdRTPMemberTable;
 begin
-  Self.Senders.Remove(SSRC);
+  Members := Self.LockMembers;
+  try
+    Members.Remove(SSRC);
+  finally
+    Self.UnlockMembers;
+  end;
 end;
 
 procedure TIdRTPSession.RemoveTimedOutMembers;
@@ -4624,33 +4676,19 @@ begin
   end;
 end;
 
-procedure TIdRTPSession.SendDataTo(Data: TIdRTPPayload;
-                                   Host: String;
-                                   Port: Cardinal);
-var
-  Member:    TIdRTPMember;
-  TempTable: TIdRTPMemberTable;
-begin
-  TempTable := TIdRTPMemberTable.Create;
-  try
-    Member := TempTable.Add(Self.NewSSRC);
-    Member.SourceAddress := Host;
-    Member.SourcePort    := Port;
-
-    Self.SendDataToTable(Data, TempTable);
-  finally
-    TempTable.Free;
-  end;
-end;
-
 function TIdRTPSession.Sender(SSRC: Cardinal): TIdRTPMember;
+var
+  Members: TIdRTPMemberTable;
 begin
-  Result := Self.Senders.Find(SSRC);
-end;
+  Members := Self.LockMembers;
+  try
+    Result := Members.Find(SSRC);
 
-function TIdRTPSession.SenderAt(Index: Cardinal): TIdRTPMember;
-begin
-  Result := Self.Senders.SenderAt(Index);
+    if not Result.IsSender then
+      Result := nil;
+  finally
+    Self.UnlockMembers;
+  end;
 end;
 
 function TIdRTPSession.SenderCount: Cardinal;
@@ -4822,6 +4860,11 @@ begin
   Result := 1500;
 end;
 
+function TIdRTPSession.DefaultMinimumRTCPSendInterval: TDateTime;
+begin
+  Result := 5*OneSecond;
+end;
+
 function TIdRTPSession.DefaultMissedReportTolerance: Cardinal;
 begin
   Result := 5;
@@ -4829,7 +4872,7 @@ end;
 
 function TIdRTPSession.DefaultNoControlSentAvgRTCPSize: Cardinal;
 begin
-  Result := 20; // a small SDES
+  Result := 20; // a small Source DEScription
 end;
 
 function TIdRTPSession.DefaultReceiverBandwidthFraction: Double;

@@ -9,10 +9,11 @@ uses
 type
   TestTIdRTPServer = class(TTestRTP)
   private
-    Encoding: TIdRTPPayload;
     Client:   TIdRTPServer;
     Packet:   TIdRTPPacket;
+    Profile:  TIdRTPProfile;
     Server:   TIdRTPServer;
+    Session:  TIdRTPSession;
     procedure CheckReceivePacket(Sender: TObject;
                                  AData: TStream;
                                  ABinding: TIdSocketHandle);
@@ -35,6 +36,7 @@ type
   private
     Client:    TIdRTPServer;
     Msg:       String;
+    Profile:   TIdRTPProfile;
     RTCPEvent: TEvent;
     Server:    TIdRTPServer;
     T140PT:    TIdRTPPayloadType;
@@ -61,7 +63,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTPServer unit tests');
   Result.AddTest(TestTIdRTPServer.Suite);
-//  Result.AddTest(TestT140.Suite);
+  Result.AddTest(TestT140.Suite);
 end;
 
 //******************************************************************************
@@ -71,20 +73,40 @@ end;
 
 procedure TestTIdRTPServer.SetUp;
 var
-  Binding:    TIdSocketHandle;
-  NoEncoding: TIdRTPPayload;
-  PT:         TIdRTPPayloadType;
+  Binding:      TIdSocketHandle;
+  NoEncoding:   TIdRTPPayload;
+  T140:         TIdRTPPayload;
+  PT:           TIdRTPPayloadType;
 begin
   inherited SetUp;
 
   PT := 96;
 
+  Self.Profile := TIdAudioVisualProfile.Create;
   Self.Server := TIdRTPServer.Create(nil);
+  Self.Session := Self.Server.Session;
+
+  NoEncoding := TIdRTPPayload.CreatePayload('No encoding/0');
+  try
+    Self.Profile.AddEncoding(NoEncoding, PT);
+  finally
+    NoEncoding.Free;
+  end;
+
+  T140 := TIdRTPPayload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
+  try
+    Self.Profile.AddEncoding(T140, PT + 1);
+  finally
+    T140.Free;
+  end;
+
+//  Self.Server := TIdRTPServer.Create(nil);
+  Self.Server.Profile := Self.Profile;
   Binding := Self.Server.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := 5004;
 
-  Self.Packet := TIdRTPPacket.Create(Self.Server.Profile);
+  Self.Packet := TIdRTPPacket.Create(Self.Profile);
   Self.Packet.Version      := 2;
   Self.Packet.HasPadding   := false;
   Self.Packet.HasExtension := false;
@@ -98,20 +120,10 @@ begin
   Self.Packet.SyncSrcID    := $decafbad;
 
   Self.Client := TIdRTPServer.Create(nil);
+  Self.Client.Profile := Self.Profile;
   Binding := Self.Client.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := 6543; // arbitrary value
-
-  NoEncoding := TIdRTPPayload.CreatePayload('No encoding/0');
-  try
-    Self.Server.Profile.AddEncoding(NoEncoding, PT);
-  finally
-    NoEncoding.Free;
-  end;
-
-  Self.Encoding := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
-  Self.Server.Profile.AddEncoding(Self.Encoding, PT + 1);
-  Self.Client.Profile.AddEncoding(Self.Encoding, PT + 1);
 
   Self.Client.Active := true;
   Self.Server.Active := true;
@@ -122,10 +134,11 @@ begin
   Self.Server.Active := false;
   Self.Client.Active := false;
 
-  Self.Encoding.Free;
   Self.Client.Free;
   Self.Packet.Free;
   Self.Server.Free;
+  Self.Session.Free;
+  Self.Profile.Free;
 
   inherited TearDown;
 end;
@@ -139,7 +152,7 @@ var
   P: TIdRTPPacket;
 begin
   try
-    P := TIdRTPPacket.Create(Self.Server.Profile);
+    P := TIdRTPPacket.Create(Self.Profile);
     try
       P.ReadFrom(AData);
       Self.CheckHasEqualHeaders(Self.Packet, P);
@@ -203,15 +216,6 @@ begin
                        S.DataString);
 
       Self.WaitForSignaled;
-
-      Check(Self.Server.Session.IsMember(RTCP.SyncSrcID),
-            'Member not added');
-      CheckEquals(Self.Client.Bindings[0].IP,
-                  Self.Server.Session.Member(RTCP.SyncSrcID).ControlAddress,
-                  'Control address');
-      CheckEquals(Self.Client.Bindings[0].Port,
-                  Self.Server.Session.Member(RTCP.SyncSrcID).ControlPort,
-                  'Control port');
     finally
       RTCP.Free;
     end;
@@ -234,15 +238,6 @@ begin
                      S.DataString);
 
     Self.WaitForSignaled;
-
-    Check(Self.Server.Session.IsMember(Self.Packet.SyncSrcID),
-          'Member not added');
-    CheckEquals(Self.Client.Bindings[0].IP,
-                Self.Server.Session.Member(Self.Packet.SyncSrcID).SourceAddress,
-                'Source address');
-    CheckEquals(Self.Client.Bindings[0].Port,
-                Self.Server.Session.Member(Self.Packet.SyncSrcID).SourcePort,
-                'Source port');
   finally
     S.Free;
   end;
@@ -284,6 +279,8 @@ var
 begin
   inherited SetUp;
 
+  Self.Profile := TIdAudioVisualProfile.Create;
+
   Self.DefaultTimeout := 5000;
   Self.RTCPEvent := TSimpleEvent.Create;
 
@@ -291,19 +288,20 @@ begin
   Self.T140PT := 96;
 
   Self.Server := TIdRTPServer.Create(nil);
+  Self.Server.Profile := Self.Profile;
   Binding      := Self.Server.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := 5004;
 
   Self.Client  := TIdRTPServer.Create(nil);
+  Self.Client.Profile := Self.Profile;
   Binding      := Self.Client.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := Self.Server.DefaultPort + 2;
 
   T140 := TIdRTPT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   try
-    Self.Server.Profile.AddEncoding(T140, Self.T140PT);
-    Self.Client.Profile.AddEncoding(T140, Self.T140PT);
+    Self.Profile.AddEncoding(T140, Self.T140PT);
   finally
     T140.Free;
   end;
@@ -320,6 +318,7 @@ begin
   Self.Client.Free;
   Self.Server.Free;
   Self.RTCPEvent.Free;
+  Self.Profile.Free;
 
   inherited TearDown;
 end;
@@ -361,28 +360,20 @@ var
   Payload: TIdRTPT140Payload;
   Session: TIdRTPSession;
 begin
-  Self.ExceptionMessage := 'Waiting for RTCP to Server';
   Self.Server.OnRTCPRead := Self.ReceiveAnyOldJunk;
   Self.Client.OnRTCPRead := Self.ReceiveAnyOldJunk;
   Self.Server.OnRTPRead := Self.StoreT140Data;
 
-  Self.Server.JoinSession(Self.Client.Bindings[0].IP,
-                          Self.Client.Bindings[0].Port);
-  Self.WaitForSignaled(Self.RTCPEvent);
-
-  Self.ExceptionMessage := 'Waiting for RTCP to Client';
-  Session := Self.Client.JoinSession(Self.Server.Bindings[0].IP,
-                                     Self.Server.Bindings[0].Port);
-  Self.WaitForSignaled(Self.RTCPEvent);
+  Session := Self.Client.Session;
+  Session.AddReceiver(Self.Server.Bindings[0].IP,
+                      Self.Server.Bindings[0].Port);
 
   Self.ExceptionMessage := 'Waiting for RFC 2793 data';
   Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
   try
     Payload.Block := Self.Msg;
     Payload.StartTime := Now;
-    Session.SendDataTo(Payload,
-                       Self.Server.Bindings[0].IP,
-                       Self.Server.Bindings[0].Port);
+    Session.SendData(Payload);
   finally
     Payload.Free;
   end;

@@ -20,17 +20,18 @@ type
     PacketCount: TLabel;
     Timer1: TTimer;
     Leave: TButton;
-    procedure JoinClick(Sender: TObject);
     procedure LeaveClick(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure SentKeyPress(Sender: TObject; var Key: Char);
   private
     ByteCounter:   Cardinal;
-//    Client:        TIdRTPServer;
+    Client:        TIdRTPServer;
     Lock:          TCriticalSection;
     PacketCounter: Cardinal;
+    Profile:       TIdRTPProfile;
     SendBuffer:    String;
     Server:        TIdRTPServer;
+    Session:       TIdRTPSession;
     T140:          TIdRTPPayload;
     T140PT:        TIdRTPPayloadType;
 
@@ -65,35 +66,47 @@ constructor TIdSpikeT140.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.Profile := TIdAudioVisualProfile.Create;
   Self.Server := TIdRTPServer.Create(nil);
-  Self.Server.OnRTPRead     := Self.ReadRTP;
-  Self.Server.OnUDPRead     := Self.CountUDP;
-  Self.Server.DefaultPort   := 8002;
-  Self.Server.Active        := true;
+  Self.Server.DefaultPort := 8002;
+  Self.Server.Profile     := Self.Profile;
+  Self.Server.Active      := true;
 
-//  Self.Client := TIdRTPServer.Create(nil);
-//  Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
-//  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
-//  Self.Client.Active      := true;
+  Self.Session := Self.Server.Session;
+
+  Self.Client := TIdRTPServer.Create(nil);
+  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
+  Self.Client.DefaultPort := Self.Server.DefaultPort + 2;
+  Self.Client.OnRTPRead   := Self.ReadRTP;
+  Self.Client.OnUDPRead   := Self.CountUDP;
+  Self.Client.Profile     := Self.Profile;
+  Self.Client.Active      := true;
 
   Self.T140   := TIdRTPT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
   Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
   Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
-//  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
+  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
 
   Self.Lock := TCriticalSection.Create;
   Self.SendBuffer := '';
+
+  Self.Session.AddReceiver(IndyGetHostName,
+                                  Self.Client.Bindings[0].Port);
+  Self.Reset;
 end;
 
 destructor TIdSpikeT140.Destroy;
 begin
   Self.Lock.Free;
 
-//  Self.Client.Active := false;
+  Self.Client.Active := false;
   Self.Server.Active := false;
-//  Self.Client.Free;
-  Self.Server.Free;
+
   Self.T140.Free;
+  Self.Client.Free;
+  Self.Session.Free;
+  Self.Server.Free;
+  Self.Profile.Free;
 
   inherited Destroy;
 end;
@@ -155,17 +168,9 @@ end;
 
 //* TIdSpikeT140 Published methods *********************************************
 
-procedure TIdSpikeT140.JoinClick(Sender: TObject);
-begin
-  Self.Reset;
-//  Self.Client.JoinSession(IndyGetHostName, Self.Server.DefaultPort);
-  Self.Server.JoinSession(IndyGetHostName, Self.Server.DefaultPort);
-end;
-
 procedure TIdSpikeT140.LeaveClick(Sender: TObject);
 begin
-//  Self.Client.Session.LeaveSession('Bye!');
-  Self.Server.Session.LeaveSession('Bye!');
+  Self.Session.LeaveSession('Bye!');
 end;
 
 procedure TIdSpikeT140.Timer1Timer(Sender: TObject);
@@ -181,7 +186,7 @@ begin
     Payload := TIdRTPT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
     try
       Payload.Block := Self.SendBuffer;
-      Self.Server.Session.SendData(Payload);
+      Self.Session.SendData(Payload);
       Self.SendBuffer := '';
     finally
       Payload.Free;
