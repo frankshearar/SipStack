@@ -354,9 +354,11 @@ type
     Actions:    TObjectList;
     Observed:   TIdObservable;
 
-    function ActionAt(Index: Integer): TIdSipAction;
-    function FindAction(Msg: TIdSipMessage): TIdSipAction;
-    function FindSession(Msg: TIdSipMessage): TIdSipSession;
+    function  ActionAt(Index: Integer): TIdSipAction;
+    function  FindAction(Msg: TIdSipMessage): TIdSipAction;
+    function  FindSession(Msg: TIdSipMessage): TIdSipSession;
+    procedure LockActions;
+    procedure UnlockActions;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -2021,11 +2023,11 @@ destructor TIdSipActions.Destroy;
 begin
   Self.Observed.Free;
 
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Self.Actions.Free;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
   Self.ActionLock.Free;
 
@@ -2036,7 +2038,7 @@ function TIdSipActions.Add(Action: TIdSipAction): TIdSipAction;
 begin
   Result := Action;
 
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     try
       Self.Actions.Add(Action);
@@ -2050,7 +2052,7 @@ begin
       raise;
     end;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 
   Self.Observed.NotifyListenersOfChange;
@@ -2059,11 +2061,11 @@ end;
 function TIdSipActions.AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
                                         Request: TIdSipRequest): TIdSipInboundInvite;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Result := Self.Add(TIdSipInboundInvite.Create(UserAgent, Request)) as TIdSipInboundInvite;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2075,11 +2077,11 @@ end;
 function TIdSipActions.AddOutboundAction(UserAgent: TIdSipAbstractUserAgent;
                                          ActionType: TIdSipActionClass): TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Result := Self.Add(ActionType.Create(UserAgent));
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2089,7 +2091,7 @@ var
   I:            Integer;
   InitialCount: Integer;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     InitialCount := Self.Actions.Count;
 
@@ -2102,7 +2104,7 @@ begin
 
     Changed := InitialCount <> Self.Actions.Count;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 
   if Changed then
@@ -2112,11 +2114,11 @@ end;
 function TIdSipActions.Count: Integer;
 begin
   // Return the number of actions, both terminated and ongoing.
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Result := Self.Actions.Count;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2125,7 +2127,7 @@ var
   I: Integer;
 begin
   // Return the number of ongoing (non-session) actions of type MethodName.
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Result := 0;
 
@@ -2136,7 +2138,7 @@ begin
         and (Self.ActionAt(I).Method = MethodName)
         and not Self.ActionAt(I).IsTerminated then Inc(Result);
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2159,7 +2161,7 @@ procedure TIdSipActions.FindActionAndPerformOr(Msg: TIdSipMessage;
 var
   Action: TIdSipAction;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Action := Self.FindAction(Msg);
 
@@ -2169,7 +2171,7 @@ begin
       NotFoundBlock.Execute(nil);
 
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 
   Self.CleanOutTerminatedActions;
@@ -2180,14 +2182,14 @@ procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
 var
   Session: TIdSipSession;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Session := Self.FindSession(Msg);
 
     if Assigned(Session) then
       Proc(Session, Msg as TIdSipRequest);
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 
   Self.CleanOutTerminatedActions;
@@ -2200,13 +2202,13 @@ begin
   // Find the action, and execute Block regardless of whether we found the
   // action. FindAction returns nil in this case.
 
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Action := Self.FindAction(Msg);
 
     Block.Execute(Action);
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 
   Self.CleanOutTerminatedActions;
@@ -2237,7 +2239,7 @@ var
   I: Integer;
 begin
   // Return the number of ongoing Sessions
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     Result := 0;
 
@@ -2246,7 +2248,7 @@ begin
         and not Self.ActionAt(I).IsTerminated then
         Inc(Result);
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2254,14 +2256,14 @@ procedure TIdSipActions.TerminateAllActions;
 var
   I: Integer;
 begin
-  Self.ActionLock.Acquire;
+  Self.LockActions;
   try
     for I := 0 to Self.Actions.Count - 1 do
       if not Self.ActionAt(I).IsOwned
         and not Self.ActionAt(I).IsTerminated then
         Self.ActionAt(I).Terminate;
   finally
-    Self.ActionLock.Release;
+    Self.UnlockActions;
   end;
 end;
 
@@ -2269,7 +2271,7 @@ end;
 
 function TIdSipActions.ActionAt(Index: Integer): TIdSipAction;
 begin
-  // Precondition: you've invoked Self.ActionLock.Acquire
+  // Precondition: you've invoked Self.LockActions
   Result := Self.Actions[Index] as TIdSipAction;
 end;
 
@@ -2309,6 +2311,16 @@ begin
     else
       Inc(I);
   end;
+end;
+
+procedure TIdSipActions.LockActions;
+begin
+  Self.ActionLock.Acquire;
+end;
+
+procedure TIdSipActions.UnlockActions;
+begin
+  Self.ActionLock.Release;
 end;
 
 //******************************************************************************

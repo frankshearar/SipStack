@@ -86,7 +86,9 @@ type
     function  ShortestWait: Cardinal;
   protected
     function  IndexOfEvent(Event: Pointer): Integer;
+    procedure LockTimer; virtual;
     procedure TriggerEarliestEvent; virtual;
+    procedure UnlockTimer; virtual;
 
     property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
     property EventList:       TObjectList      read fEventList;
@@ -148,12 +150,12 @@ type
   public
     function  EventAt(Index: Integer): TIdWait;
     function  EventCount: Integer;
-    procedure LockTimer;
+    procedure LockTimer; override;
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
     procedure Terminate; override;
     procedure TriggerEarliestEvent; override;
-    procedure UnlockTimer;
+    procedure UnlockTimer; override;
   end;
 
 // Math and conversion functions
@@ -262,12 +264,12 @@ end;
 
 destructor TIdTimerQueue.Destroy;
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     Self.WaitEvent.Free;
     Self.EventList.Free;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
   Self.Lock.Free;
 
@@ -333,12 +335,12 @@ end;
 
 procedure TIdTimerQueue.Terminate;
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     Self.Terminated := true;
     Self.WaitEvent.SetEvent;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
 end;
 
@@ -349,7 +351,7 @@ var
   Found: Boolean;
 begin
   Found := false;
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     Result := 0;
     while (Result < Self.EventList.Count) and not Found do begin
@@ -362,15 +364,20 @@ begin
     if not Found or (Result >= Self.EventList.Count) then
       Result := NotFoundSentinelValue;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
+end;
+
+procedure TIdTimerQueue.LockTimer;
+begin
+  Self.Lock.Acquire;
 end;
 
 procedure TIdTimerQueue.TriggerEarliestEvent;
 var
   NextEvent: TIdWait;
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     NextEvent := Self.EarliestEvent;
     if Assigned(NextEvent) and NextEvent.Due then begin
@@ -381,8 +388,13 @@ begin
 
     Self.WaitEvent.ResetEvent;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
+end;
+
+procedure TIdTimerQueue.UnlockTimer;
+begin
+  Self.Lock.Release;
 end;
 
 //* TIdTimerQueue Private methods **********************************************
@@ -391,7 +403,7 @@ procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
                                     Event: TIdWait;
                                     Data: TObject);
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     try
       Self.EventList.Add(Event);
@@ -411,7 +423,7 @@ begin
 
     Self.WaitEvent.SetEvent;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
 end;
 
@@ -442,7 +454,7 @@ var
   I: Integer;
 begin
   // This removes ALL matching wait events matching Event.
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     I := 0;
     while (I < Self.EventList.Count) do
@@ -453,7 +465,7 @@ begin
 
     Self.WaitEvent.SetEvent;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
 end;
 
@@ -461,7 +473,7 @@ function TIdTimerQueue.ShortestWait: Cardinal;
 var
   NextEvent: TIdWait;
 begin
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     NextEvent := Self.EarliestEvent;
     if Assigned(NextEvent) then
@@ -469,7 +481,7 @@ begin
     else
       Result := DefaultSleepTime;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
 end;
 
@@ -554,7 +566,9 @@ end;
 
 procedure TIdDebugTimerQueue.LockTimer;
 begin
-  Self.Lock.Acquire;
+  // Expose for debugging purposes.
+
+  inherited LockTimer;
 end;
 
 function TIdDebugTimerQueue.ScheduledEvent(Event: TObject): Boolean;
@@ -580,7 +594,7 @@ var
 begin
   // We fire the next event regardless of whether it's due or not.
 
-  Self.Lock.Acquire;
+  Self.LockTimer;
   try
     NextEvent := Self.EarliestEvent;
     if Assigned(NextEvent) then begin
@@ -591,13 +605,15 @@ begin
 
     Self.WaitEvent.ResetEvent;
   finally
-    Self.Lock.Release;
+    Self.UnlockTimer;
   end;
 end;
 
 procedure TIdDebugTimerQueue.UnlockTimer;
 begin
-  Self.Lock.Release;
+  // Expose for debugging purposes.
+
+  inherited UnlockTimer;
 end;
 
 //* TIdDebugTimerQueue Protected methods ***************************************
