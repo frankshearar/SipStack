@@ -164,7 +164,7 @@ type
     procedure ActOnRequest(Request: TIdSipRequest;
                            Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
-                           Receiver: TIdSipTransport); virtual;
+                            Receiver: TIdSipTransport); virtual;
     function  AuthenticationHeader: String; virtual;
     function  AuthenticationHeaderValue: String; virtual;
     function  AuthenticationStatusCode: Cardinal; virtual;
