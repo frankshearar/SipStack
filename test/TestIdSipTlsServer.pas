@@ -11,21 +11,15 @@ type
     procedure DoOnGetPassword(var Password: String);
   protected
     function ServerType: TIdSipTcpServerClass; override;
-    function SipClientType: TIdSipTcpClientClass; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   end;
 
-const
-  RootCert   = '..\etc\cacert.pem';
-  ServerCert = '..\etc\newcert.pem';
-  ServerKey  = '..\etc\newkey.pem';
-
 implementation
 
 uses
-  IdSSLOpenSSL, TestFramework;
+  IdSSLOpenSSL, TestIdSipTransport, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -44,14 +38,14 @@ var
 begin
   inherited SetUp;
 
-  TLS := Self.LocalAddressServer as TIdSipTlsServer;
+  TLS := Self.LowPortServer as TIdSipTlsServer;
 
   TLS.OnGetPassword     := Self.DoOnGetPassword;
   TLS.RootCertificate   := RootCert;
   TLS.ServerCertificate := ServerCert;
   TLS.ServerKey         := ServerKey;
 
-  TLS := Self.LocalHostServer as TIdSipTlsServer;
+  TLS := Self.HighPortServer as TIdSipTlsServer;
 
   TLS.OnGetPassword     := Self.DoOnGetPassword;
   TLS.RootCertificate   := RootCert;
@@ -75,16 +69,11 @@ begin
   Result := TIdSipTlsServer;
 end;
 
-function TestTIdSipTlsServer.SipClientType: TIdSipTcpClientClass;
-begin
-  Result := TIdSipTlsClient;
-end;
-
 //* TestTIdSipTlsServer Private methods ****************************************
 
 procedure TestTIdSipTlsServer.DoOnGetPassword(var Password: String);
 begin
-  Password := 'test';
+  Password := CertPasswd;
 end;
 
 initialization
