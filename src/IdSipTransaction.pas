@@ -571,10 +571,22 @@ end;
 
 destructor TIdSipTransactionDispatcher.Destroy;
 begin
+  Self.TransactionLock.Acquire;
+  try
+    Self.Transactions.Free;
+  finally
+    Self.TransactionLock.Release;
+  end;
   Self.TransactionLock.Free;
-  Self.Transactions.Free;
+
+  Self.TransportLock.Acquire;
+  try
+    Self.Transports.Free;
+  finally
+    Self.TransportLock.Release;
+  end;
   Self.TransportLock.Free;
-  Self.Transports.Free;
+
   Self.MsgListeners.Free;
 
   inherited Destroy;
@@ -1765,7 +1777,7 @@ begin
   end;
 
   case NewState of
-    itsCompleted:  begin
+    itsCompleted: begin
       Self.StartTimerD;
     end;
     itsTerminated: Self.StopTimerD;
