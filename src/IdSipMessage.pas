@@ -55,8 +55,8 @@ type
     procedure ClearHeaders;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
-    function  HeaderCount: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
+    function  HeaderCount: Integer;    
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
@@ -413,14 +413,14 @@ begin
   Result := Self.Headers[HeaderName];
 end;
 
-function TIdSipMessage.HeaderCount: Integer;
-begin
-  Result := Self.Headers.Count;
-end;
-
 function TIdSipMessage.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.Headers.HasHeader(HeaderName);
+end;
+
+function TIdSipMessage.HeaderCount: Integer;
+begin
+  Result := Self.Headers.Count;
 end;
 
 function TIdSipMessage.LastHop: TIdSipViaHeader;
