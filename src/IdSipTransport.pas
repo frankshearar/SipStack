@@ -112,11 +112,11 @@ type
     procedure VisitRequest(Request: TIdSipRequest);
     procedure VisitResponse(Response: TIdSipResponse);
 
-    property Address:  String           read GetAddress write SetAddress;
-    property HostName: String           read fHostName write fHostName;
-    property Port:     Cardinal         read GetPort write SetPort;
-    property Timeout:  Cardinal         read fTimeout write fTimeout;
-    property UseRport: Boolean          read fUseRport write fUseRport;
+    property Address:  String   read GetAddress write SetAddress;
+    property HostName: String   read fHostName write fHostName;
+    property Port:     Cardinal read GetPort write SetPort;
+    property Timeout:  Cardinal read fTimeout write fTimeout;
+    property UseRport: Boolean  read fUseRport write fUseRport;
   end;
 
   // I implement the Transmission Control Protocol (RFC 793) connections for the
