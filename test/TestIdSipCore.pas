@@ -42,6 +42,7 @@ type
     function  SecondLastSentResponse: TIdSipResponse;
     procedure ReceiveRequest(Request: TIdSipRequest);
     procedure ReceiveResponse(Response: TIdSipResponse); overload;
+    function  SecondLastSentRequest: TIdSipRequest;
     function  SentAckCount: Cardinal;
     function  SentRequestCount: Cardinal;
     function  SentResponseCount: Cardinal;
@@ -380,6 +381,7 @@ type
     procedure TestIsInvite; override;
     procedure TestMethod;
     procedure TestReceiveGlobalFailed;
+    procedure TestReceiveInviteOkBeforeCancelOk;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
     procedure TestReceiveServerFailed;
@@ -635,7 +637,8 @@ type
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure ReceiveRemoteDecline;
     procedure ReceiveForbidden;
-    procedure ReceiveMovedTemporarily(const Contact: String);
+    procedure ReceiveMovedTemporarily(const Contact: String); overload;
+    procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
   protected
     SDP: String;
@@ -674,7 +677,9 @@ type
     procedure TestReceive3xxWithNoContacts;
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
+    procedure TestReceiveInviteOkBeforeCancelOk;
     procedure TestRedirectAndAccept;
+    procedure TestRedirectMultipleOks;
     procedure TestRedirectWithMultipleContacts;
     procedure TestTerminateUnestablishedSession;
     procedure TestTerminateEstablishedSession;
@@ -967,7 +972,6 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
- 
 end;
 
 //******************************************************************************
@@ -1128,6 +1132,11 @@ end;
 procedure TTestCaseTU.ReceiveResponse(Response: TIdSipResponse);
 begin
   Self.Dispatcher.Transport.FireOnResponse(Response);
+end;
+
+function TTestCaseTU.SecondLastSentRequest: TIdSipRequest;
+begin
+  Result := Self.Dispatcher.Transport.SecondLastRequest;
 end;
 
 function TTestCaseTU.SentAckCount: Cardinal;
@@ -5418,6 +5427,49 @@ begin
     Self.CheckReceiveFailed(StatusCode);
 end;
 
+procedure TestTIdSipOutboundInvite.TestReceiveInviteOkBeforeCancelOk;
+var
+  Action: TIdSipOutboundInvite;
+  Cancel: TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---        100 Trying       ---
+  //  ---          CANCEL         --->
+  // <--- 200 OK (for the INVITE) ---
+  //  ---           ACK           --->
+  // <--- 200 OK (for the CANCEL) ---
+  //  ---           BYE           --->
+  // <---   200 OK (for the BYE)  ---
+
+  Action := Self.CreateAction as TIdSipOutboundInvite;
+
+  Invite := TIdSipRequest.Create;
+  try
+    Cancel := TIdSipRequest.Create;
+    try
+      Invite.Assign(Self.LastSentRequest);
+      Self.ReceiveTrying(Invite);
+
+      Action.Cancel;
+      Cancel.Assign(Self.LastSentRequest);
+
+      Self.MarkSentRequestCount;
+      Self.ReceiveOk(Invite);
+      Self.ReceiveOk(Cancel);
+
+      CheckRequestSent('No request sent to terminate the cancelled session');
+      CheckEquals(MethodBye,
+                  Self.LastSentRequest.Method,
+                  'Terminating request');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
 begin
   Self.CreateAction;
@@ -7072,6 +7124,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contacts: array of String);
+var
+  I:        Integer;
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+                                          SIPMovedTemporarily);
+  try
+    for I := Low(Contacts) to High(Contacts) do
+      Response.AddHeader(ContactHeaderFull).Value := Contacts[I];
+      
+    Self.ReceiveResponse(Response);
+  finally
+    Response.Free;
+  end;
+
+end;
+
 procedure TestTIdSipOutboundSession.ReceiveOKWithRecordRoute;
 var
   Response: TIdSipResponse;
@@ -7650,6 +7720,44 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.TestReceiveInviteOkBeforeCancelOk;
+var
+  Cancel: TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---        100 Trying       ---
+  //  ---          CANCEL         --->
+  // <--- 200 OK (for the INVITE) ---
+  //  ---           ACK           --->
+  // <--- 200 OK (for the CANCEL) ---
+  //  ---           BYE           --->
+  // <---   200 OK (for the BYE)  ---
+
+  Invite := TIdSipRequest.Create;
+  try
+    Cancel := TIdSipRequest.Create;
+    try
+      Invite.Assign(Self.LastSentRequest);
+      Self.ReceiveTrying(Invite);
+
+      Self.Session.Cancel;
+      Cancel.Assign(Self.LastSentRequest);
+
+      Self.MarkSentRequestCount;
+      Self.ReceiveOk(Invite);
+      Self.ReceiveOk(Cancel);
+
+      Check(Self.OnEndedSessionFired,
+            'Listeners not notified of end of session');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestRedirectAndAccept;
 var
   Contact:     String;
@@ -7684,25 +7792,48 @@ begin
         'Listeners not notified of a successful call');
 end;
 
+procedure TestTIdSipOutboundSession.TestRedirectMultipleOks;
+var
+  Contacts: array of String;
+begin
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.MarkSentRequestCount;
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to contact all Contacts');
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveOk(Self.SecondLastSentRequest);
+  Self.ReceiveOk(Self.LastSentRequest);
+  CheckRequestSent('We expect the session to send a BYE');
+  CheckEquals(MethodBye,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
+end;
+
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
 var
-  Redir: TIdSipResponse;
+  Contacts: array of String;
 begin
-  Redir := TIdSipResponse.InResponseTo(Self.LastSentRequest, SIPMovedTemporarily);
-  try
-    Redir.AddHeader(ContactHeaderFull).Value := 'sip:foo@bar.org';
-    Redir.AddHeader(ContactHeaderFull).Value := 'sip:bar@bar.org';
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
 
-    Self.MarkSentRequestCount;
+  Self.MarkSentRequestCount;
 
-    Self.ReceiveResponse(Redir);
+  Self.ReceiveMovedTemporarily(Contacts);
 
-    CheckEquals(Self.RequestCount + Redir.ContactCount,
-                Self.Dispatcher.Transport.SentRequestCount,
-                'Session didn''t attempt to contact all Contacts');
-  finally
-    Redir.Free;
-  end;
+  // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
+  CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
+              Self.Dispatcher.Transport.SentRequestCount,
+              'Session didn''t attempt to contact all Contacts');
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;

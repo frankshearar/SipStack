@@ -649,6 +649,8 @@ type
     fInitialResendInterval:  Cardinal; // in milliseconds
     fProgressResendInterval: Cardinal; // in milliseconds
   public
+    constructor Create(UA: TIdSipAbstractUserAgent); override;
+
     function Accept(Request: TIdSipRequest;
                     UsingSecureTransport: Boolean): TIdSipAction; override;
     function AcceptsMethods: String; override;
@@ -833,6 +835,10 @@ type
                                         UsingSecureTransport: Boolean);
     procedure NotifyOfRedirect(Response: TIdSipResponse);
     procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure SendAckFor(Response: TIdSipResponse;
+                         UsingSecureTransport: Boolean);
+    procedure SendBye(Response: TIdSipResponse;
+                      UsingSecureTransport: Boolean);
     procedure SendCancel;
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
@@ -1182,6 +1188,7 @@ type
     function  NoMoreRedirectedInvites: Boolean;
     procedure RemoveFinishedRedirectedInvite(InviteAgent: TIdSipAction);
     procedure SetDestination(Value: TIdSipAddressHeader);
+    procedure TerminateAllRedirects;
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
@@ -3385,7 +3392,6 @@ begin
   Self.fProxy                 := TIdSipUri.Create('');
   Self.HasProxy               := false;
   Self.InitialResendInterval  := DefaultT1;
-  Self.ProgressResendInterval := OneMinute*1000;
 end;
 
 destructor TIdSipUserAgent.Destroy;
@@ -3551,6 +3557,13 @@ end;
 //* TIdSipInviteModule                                                         *
 //******************************************************************************
 //* TIdSipInviteModule Public methods ******************************************
+
+constructor TIdSipInviteModule.Create(UA: TIdSipAbstractUserAgent);
+begin
+  inherited Create(UA);
+
+  Self.ProgressResendInterval := OneMinute*1000;
+end;
 
 function TIdSipInviteModule.Accept(Request: TIdSipRequest;
                                    UsingSecureTransport: Boolean): TIdSipAction;
@@ -4220,6 +4233,8 @@ begin
   Self.HasReceivedProvisionalResponse := false;
   Self.ReceivedFinalResponse          := false;
   Self.SentCancel                     := false;
+
+  Self.CancelRequest := TIdSipRequest.Create;
 end;
 
 destructor TIdSipOutboundInvite.Destroy;
@@ -4331,24 +4346,41 @@ end;
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
                                                 UsingSecureTransport: Boolean): Boolean;
 begin
-  Result                     := true;
-  Self.ReceivedFinalResponse := true;
   // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
   // A 2xx response immediately terminates a client INVITE transaction so that
   // the ACK can get passed up to the UA (as an unhandled request).
+  Result := false;
 
-  if Self.Cancelling and Self.CancelRequest.Match(Response) then
-    // If we receive a 200 OK for our CANCEL (which we should!) we just ignore it.
-    // Yes, we mean to do that. Yes, it complies with the RFC.
-  else if not Self.DialogEstablished then begin
-    Self.NotifyOfDialogEstablished(Response, UsingSecureTransport)
+  if Self.Cancelling and Self.CancelRequest.Match(Response) then begin
+    // We received a 2xx for the CANCEL. Do nothing.
   end
   else begin
-    Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
-  end;
+    // Either we're not cancelling, or the 2xx doesn't match the CANCEL and
+    // thus must match the INVITE.
 
-  Assert(Assigned(Self.Dialog),
-         'Nothing set this Invite''s Dialog property');
+    Self.ReceivedFinalResponse := true;
+
+    if Self.Cancelling then begin
+      // (a) Don't bother notifying of an established dialog - the dialog's
+      //     cancelled and we'll tear it down immediately.
+      // (b) Send the BYE to tear down the cancelled session.
+      Self.SendAckFor(Response, UsingSecureTransport);
+      Self.SendBye(Response, UsingSecureTransport);
+    end
+    else begin
+      Result := true;
+      if not Self.DialogEstablished then begin
+          Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
+
+          Assert(Assigned(Self.Dialog),
+                 'Nothing set this Invite''s Dialog property');
+      end
+      else begin
+        // Catchall clause. We shouldn't ever reach this.
+        Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
+      end;
+    end;
+  end;
 end;
 
 function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;
@@ -4457,11 +4489,62 @@ begin
   end;
 end;
 
+procedure TIdSipOutboundInvite.SendAckFor(Response: TIdSipResponse;
+                                          UsingSecureTransport: Boolean);
+var
+  Ack: TIdSipRequest;
+  Dlg: TIdSipDialog;
+begin
+  Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
+                                           Response,
+                                           UsingSecureTransport);
+  try
+    Ack := Self.UA.CreateAck(Dlg);
+    try
+      Self.SendRequest(Ack);
+    finally
+      Ack.Free;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TIdSipOutboundInvite.SendBye(Response: TIdSipResponse;
+                                       UsingSecureTransport: Boolean);
+var
+  Bye: TIdSipRequest;
+  Dlg: TIdSipDialog;
+begin
+  Dlg := TIdSipDialog.CreateOutboundDialog(Self.InitialRequest,
+                                           Response,
+                                           UsingSecureTransport);
+  try
+    Bye := Self.UA.CreateBye(Dlg);
+    try
+      Self.SendRequest(Bye);
+    finally
+      Bye.Free;
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
 procedure TIdSipOutboundInvite.SendCancel;
+var
+  Cancel: TIdSipRequest;
 begin
   Assert(not Self.SentCancel, 'SendCancel already invoked');
   Self.SentCancel := true;
-  Self.CancelRequest := Self.InitialRequest.CreateCancel;
+
+  Cancel := Self.InitialRequest.CreateCancel;
+  try
+    Self.CancelRequest.Assign(Cancel);
+  finally
+    Cancel.Free;
+  end;
+
   Self.SendRequest(Self.CancelRequest);
 end;
 
@@ -6272,6 +6355,8 @@ begin
     Self.FullyEstablished := true;
 
     Self.RemoveFinishedRedirectedInvite(InviteAgent);
+    Self.TerminateAllRedirects;
+
     Self.NotifyOfEstablishedSession;
   end
   else
@@ -6305,6 +6390,14 @@ var
   Redirect: TIdSipOutboundRedirectedInvite;
 begin
   Redirect := Self.UA.AddOutboundRedirectedInvite;
+
+  Self.RedirectedInviteLock.Acquire;
+  try
+    Self.RedirectedInvites.Add(Redirect);
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
+
   Redirect.Contact := Contact;
   Redirect.OriginalInvite := OriginalInvite;
   Redirect.AddListener(Self);
@@ -6334,6 +6427,19 @@ end;
 procedure TIdSipOutboundSession.SetDestination(Value: TIdSipAddressHeader);
 begin
   Self.fDestination.Assign(Value);
+end;
+
+procedure TIdSipOutboundSession.TerminateAllRedirects;
+var
+  I: Integer;
+begin
+  Self.RedirectedInviteLock.Acquire;
+  try
+    for I := 0 to Self.RedirectedInvites.Count - 1 do
+      (Self.RedirectedInvites[I] as TIdSipOutboundRedirectedInvite).Terminate;
+  finally
+    Self.RedirectedInviteLock.Release;
+  end;
 end;
 
 //******************************************************************************
