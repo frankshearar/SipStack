@@ -75,7 +75,7 @@ type
   end;
 
   TIdRTPTestRTPDataListener = class(TIdInterfacedObject,
-                                IIdRTPDataListener)
+                                    IIdRTPDataListener)
   private
     fBindingParam: TIdSocketHandle;
     fDataParam:    TIdRTPPayload;
