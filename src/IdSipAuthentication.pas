@@ -15,12 +15,6 @@ uses
   Contnrs, IdHashMessageDigest, IdSipMessage, SysUtils;
 
 type
-  // I provide a means for Transaction User components (i.e., User Agent
-  // cores, Proxy cores, Registrar cores and the like) to authenticate a
-  // request. I do this by something supplying me with a list of
-  // username+realms and digests. I thus never see the unencrypted passwords.
-  // I also supply a means to create the digests.
-
   TIdUserInfo = class(TObject)
   private
     fDigest:   String;
@@ -32,6 +26,13 @@ type
     property Username: String read fUsername write fUsername;
   end;
 
+  // I provide a means for Transaction User components (i.e., User Agent
+  // cores, Proxy cores, Registrar cores and the like) to authenticate a
+  // request. I do this by something supplying me with a list of
+  // username+realms and digests. I thus never see the unencrypted passwords.
+  // I also supply a means to create the digests.
+  //
+  // I thus provide the server half of the authentication process.
   TIdSipAbstractAuthenticator = class(TObject)
   private
     Coder:    TIdHashMessageDigest5;
