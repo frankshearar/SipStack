@@ -762,7 +762,7 @@ type
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     procedure AddListeners(Listeners: TIdNotificationList);
-    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
+    function  CreateNewAttempt: TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure NotifyOfNetworkFailure(const Reason: String); virtual;
@@ -810,7 +810,7 @@ type
 
   TIdSipInvite = class(TIdSipAction)
   protected
-    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
 
@@ -982,7 +982,7 @@ type
 
   TIdSipOptions = class(TIdSipAction)
   protected
-    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
 
@@ -1021,7 +1021,7 @@ type
 
   TIdSipRegistration = class(TIdSipAction)
   protected
-    function CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
 
@@ -1162,7 +1162,7 @@ type
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
-    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function  CreateNewAttempt: TIdSipRequest; override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
     procedure NotifyOfEndedSession(const Reason: String);
@@ -4058,7 +4058,7 @@ end;
 
 //* TIdSipInvite Protected methods *********************************************
 
-function TIdSipInvite.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+function TIdSipInvite.CreateNewAttempt: TIdSipRequest;
 var
   TempTo: TIdSipToHeader;
 begin
@@ -4851,7 +4851,7 @@ end;
 
 //* TIdSipOptions Protected methods ********************************************
 
-function TIdSipOptions.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+function TIdSipOptions.CreateNewAttempt: TIdSipRequest;
 var
   TempTo: TIdSipToHeader;
 begin
@@ -5012,7 +5012,7 @@ end;
 
 //* TIdSipRegistration Protected methods ***************************************
 
-function TIdSipRegistration.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+function TIdSipRegistration.CreateNewAttempt: TIdSipRequest;
 var
   TempTo: TIdSipToHeader;
 begin
@@ -5801,9 +5801,9 @@ begin
     Self.Dialog.ReceiveResponse(Response);
 end;
 
-function TIdSipSession.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+function TIdSipSession.CreateNewAttempt: TIdSipRequest;
 begin
-  Result := Self.UA.CreateInvite(Challenge.ToHeader,
+  Result := Self.UA.CreateInvite(Self.InitialRequest.ToHeader,
                                  Self.InitialRequest.Body,
                                  Self.InitialRequest.ContentType);
 end;

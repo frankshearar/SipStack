@@ -109,7 +109,7 @@ type
 
   TIdSipNullAction = class(TIdSipAction)
   protected
-    function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
+    function  CreateNewAttempt: TIdSipRequest; override;
   public
     class function Method: String; override;
   end;
@@ -1605,7 +1605,7 @@ end;
 
 //* TIdSipNullAction Protected methods *****************************************
 
-function TIdSipNullAction.CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest;
+function TIdSipNullAction.CreateNewAttempt: TIdSipRequest;
 begin
   Result := nil;
 end;
