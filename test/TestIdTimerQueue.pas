@@ -62,8 +62,8 @@ type
     procedure TestRemoveNonExistentEventWithOtherEvents;
     procedure TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
     procedure TestRemoveNotifyEvent;
-    procedure TestTwoNotifyEvents;
     procedure TestTwoEvents;
+    procedure TestTwoNotifyEvents;
     procedure TestTwoOutOfOrderEvents;
     procedure TestWaitForEarliestEvent;
   end;
@@ -92,13 +92,13 @@ constructor TThreadEvent.Create(Event: TEvent;
                                 OnEventSet: TNotifyEvent;
                                 MaxWait: Cardinal);
 begin
+  inherited Create(true);
+
   Self.Event      := Event;
   Self.MaxWait    := MaxWait;
   Self.OnEventSet := OnEventSet;
 
-  Self.FreeOnTerminate := true;
-
-  inherited Create(false);
+//  Self.FreeOnTerminate := true;
 end;
 
 //* TThreadEvent Protected methods *********************************************
@@ -107,10 +107,8 @@ procedure TThreadEvent.Execute;
 begin
   Self.Event.WaitFor(Self.MaxWait);
 
-  if Assigned(Self.OnEventSet) then
+  if not Self.Terminated and Assigned(Self.OnEventSet) then
     Self.OnEventSet(Self);
-
-  Self.Terminate;
 end;
 
 //******************************************************************************
@@ -138,7 +136,7 @@ begin
   // You set Self.EventOne. That makes Self.T1 wake up and fire
   // Self.OnEventOneSet which sets Self.CallbackEventOne. We do this complicated
   // mission so that Self.OnEventOneSet doesn't run from within the main (VCL/CLX)
-  // thread.
+  // thread, allowing us to capture the order in which events fire.
 
   Self.T1 := TThreadEvent.Create(Self.EventOne,
                                  Self.OnEventOneSet,
@@ -146,12 +144,20 @@ begin
   Self.T2 := TThreadEvent.Create(Self.EventTwo,
                                  Self.OnEventTwoSet,
                                  LongTimeout);
+
   Self.T1.Resume;
   Self.T2.Resume;
 end;
 
 procedure TestTIdTimerQueue.TearDown;
 begin
+  Self.T2.Terminate;
+  Self.T2.WaitFor;
+  Self.T2.Free;
+  Self.T1.Terminate;
+  Self.T1.WaitFor;
+  Self.T1.Free;
+
   Self.Queue.Terminate;
   Self.Lock.Free;
   Self.EventTwo.Free;
@@ -269,6 +275,10 @@ end;
 
 procedure TestTIdTimerQueue.TestOneEvent;
 begin
+  TThreadEvent.Create(Self.EventOne,
+                      Self.OnEventOneSet,
+                      LongTimeout);
+
   Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
 
   Self.ExceptionMessage := 'Event didn''t fire';
@@ -336,9 +346,31 @@ begin
 
   Self.ExceptionMessage := 'Event didn''t fire';
 
-  Self.WaitForAll([Self.EventOne, Self.ThreadEvent],
-                  LongTimeout);
+  Self.WaitForSignaled(Self.EventOne);
   Check(not Self.Notified, 'TNotifyEvent wasn''t removed');
+end;
+
+procedure TestTIdTimerQueue.TestTwoEvents;
+begin
+  TThreadEvent.Create(Self.EventOne,
+                      Self.OnEventOneSet,
+                      LongTimeout);
+  TThreadEvent.Create(Self.EventTwo,
+                      Self.OnEventTwoSet,
+                      LongTimeout);
+
+  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
+  Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
+
+  Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
+                  LongTimeout);
+
+  Self.Lock.Acquire;
+  try
+    CheckEquals('12', Self.OrderOfFire, 'Order of events');
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TestTIdTimerQueue.TestTwoNotifyEvents;
@@ -351,22 +383,6 @@ begin
   Self.Lock.Acquire;
   try
     CheckEquals('ab', Self.OrderOfFire, 'Order of events');
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-procedure TestTIdTimerQueue.TestTwoEvents;
-begin
-  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
-  Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
-
-  Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
-                  LongTimeout);
-
-  Self.Lock.Acquire;
-  try
-    CheckEquals('12', Self.OrderOfFire, 'Order of events');
   finally
     Self.Lock.Release;
   end;
