@@ -607,6 +607,8 @@ type
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
+    procedure ReceiveAckWithBody(const SessionDesc,
+                                       ContentType: String);
   protected
     procedure CheckResendWaitTime(Milliseconds: Cardinal;
                                   const Msg: String); override;
@@ -645,9 +647,11 @@ type
   TestTIdSipOutboundSession = class(TestTIdSipSession,
                                     IIdSipUserAgentListener)
   private
-    RemoteMimeType:   String;
+    LocalMimeType:    String;
+    LocalDescription: String;
     OnDroppedMessage: Boolean;
     RemoteDesc:       String;
+    RemoteMimeType:   String;
     Session:          TIdSipOutboundSession;
 
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
@@ -3828,6 +3832,7 @@ begin
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, first INVITE');
   InboundSession := Self.Session;
   InboundSession.AcceptCall('', '');
+  Self.ReceiveAck;
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
@@ -6720,8 +6725,6 @@ begin
   Self.Invite.ContentType   := SdpMimeType;
   Self.Invite.Body          := Self.SimpleSdp.AsString;
   Self.Invite.ContentLength := Length(Self.SimpleSdp.AsString);
-
-  Self.CreateAction;
 end;
 
 procedure TestTIdSipInboundSession.TearDown;
@@ -6743,11 +6746,12 @@ end;
 
 function TestTIdSipInboundSession.CreateAction: TIdSipAction;
 begin
-  if (Self.RemoteDesc <> '') then begin
-    Self.Invite.Body          := Self.RemoteDesc;
-    Self.Invite.ContentLength := Length(Self.RemoteDesc);
+  Self.Invite.Body := Self.RemoteDesc;
+
+  if (Self.Invite.Body <> '') then
     Self.Invite.ContentType   := Self.RemoteContentType;
-  end;
+
+  Self.Invite.ContentLength := Length(Self.RemoteDesc);
 
   Self.Invite.LastHop.Branch := Self.Core.NextBranch;
   Self.Invite.From.Tag       := Self.Core.NextTag;
@@ -6818,22 +6822,58 @@ begin
     Self.SentRequestTerminated := true;
 end;
 
+procedure TestTIdSipInboundSession.ReceiveAckWithBody(const SessionDesc,
+                                                            ContentType: String);
+var
+  Ack: TIdSipRequest;
+begin
+  Ack := Self.Invite.AckFor(Self.LastSentResponse);
+  try
+    Ack.Body          := SessionDesc;
+    Ack.ContentType   := ContentType;
+    Ack.ContentLength := Length(Ack.Body);
+
+    Self.ReceiveRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+end;
+
 //* TestTIdSipInboundSession Published methods ****************************************
 
 procedure TestTIdSipInboundSession.TestAcceptCall;
+var
+  Answer:         String;
+  AnswerMimeType: String;
 begin
-  Self.Session.AcceptCall('', '');
+  Self.RemoteContentType := SdpMimeType;
+  Self.RemoteDesc        := TIdSipTestResources.BasicSDP('proxy.tessier-ashpool.co.luna');
+  Self.CreateAction;
+  CheckEquals(Self.RemoteDesc,
+              Self.Session.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(Self.RemoteContentType,
+              Self.Session.RemoteMimeType,
+              'RemoteMimeType');
+
+  Answer         := TIdSipTestResources.BasicSDP('public.booth.org');
+  AnswerMimeType := SdpMimeType;
+
+  Self.Session.AcceptCall(Answer, AnswerMimeType);
 
   Check(Self.Session.DialogEstablished,
         'Dialog not established');
   CheckNotNull(Self.Session.Dialog,
                'Dialog object wasn''t created');
+  CheckEquals(Answer,         Self.Session.LocalSessionDescription, 'LocalSessionDescription');
+  CheckEquals(AnswerMimeType, Self.Session.LocalMimeType,           'LocalMimeType');
 end;
 
 procedure TestTIdSipInboundSession.TestAddSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
 begin
+  Self.CreateAction;
   Self.Session.AcceptCall('', '');
   Self.ReceiveAck;
 
@@ -6870,7 +6910,7 @@ begin
   // <---  ACK   ---
   // <--- CANCEL ---
   //  --- 200 OK --->
-
+  Self.CreateAction;
   Self.Session.AcceptCall('', '');
 
   Self.MarkSentResponseCount;
@@ -6911,6 +6951,7 @@ begin
   //  ---         200 OK         ---> (for the CANCEL)
   //  --- 487 Request Terminated ---> (for the INVITE)
   // <---           ACK          ---
+  Self.CreateAction;
   SessionCount := Self.Core.SessionCount;
 
   Self.ReceiveCancel;
@@ -6937,6 +6978,9 @@ begin
   //  ---         180 Ringing                 --->
   //  ---         500 Internal Server Error   --->
 
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
   Self.Session.AcceptCall('', '');
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
@@ -6960,6 +7004,7 @@ procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
 var
   SessionCount: Integer;
 begin
+  Self.CreateAction;
   SessionCount := Self.Core.SessionCount;
 
   Self.ReceiveCancel;
@@ -6973,15 +7018,17 @@ end;
 
 procedure TestTIdSipInboundSession.TestInviteHasNoOffer;
 var
-  Offer:     String;
-  OfferType: String;
+  Answer:     String;
+  AnswerType: String;
+  Offer:      String;
+  OfferType:  String;
 begin
   // <--- INVITE (with no body) ---
   //  ---  200 OK (with offer)  ---
   // <---   ACK (with answer)   ---
   Self.RemoteContentType := '';
   Self.RemoteDesc        := '';
-  Self.ReceiveInvite;
+  Self.CreateAction;
 
   Check(Assigned(Self.Session), 'OnInboundCall not called');
 
@@ -6998,6 +7045,17 @@ begin
   CheckEquals(OfferType,
               Self.LastSentResponse.ContentType,
               'Offer MIME type');
+
+  Answer     := TIdSipTestResources.BasicSDP('remotehost');
+  AnswerType := SdpMimeType;
+
+  Self.ReceiveAckWithBody(Answer, AnswerType);
+  CheckEquals(Self.Session.RemoteSessionDescription,
+              Answer,
+              'RemoteSessionDescription');
+  CheckEquals(Self.Session.RemoteMimeType,
+              AnswerType,
+              'RemoteMimeType');
 end;
 
 procedure TestTIdSipInboundSession.TestInviteHasOffer;
@@ -7010,7 +7068,7 @@ begin
   // <--- ACK (with repeat of offer) ---
   Self.RemoteContentType := SdpMimeType;
   Self.RemoteDesc        := TIdSipTestResources.BasicSDP('1.2.3.4');
-  Self.ReceiveInvite;
+  Self.CreateAction;
 
   Check(Assigned(Self.Session), 'OnInboundCall not called');
 
@@ -7031,12 +7089,14 @@ end;
 
 procedure TestTIdSipInboundSession.TestIsInboundCall;
 begin
+  Self.CreateAction;
   Check(Self.Session.IsInboundCall,
         'Inbound session; IsInboundCall');
 end;
 
 procedure TestTIdSipInboundSession.TestIsOutboundCall;
 begin
+  Self.CreateAction;
   Check(not Self.Session.IsOutboundCall,
         'Inbound session; IsOutboundCall');
 end;
@@ -7065,10 +7125,13 @@ begin
 
   // We need the Ringing response to get the To tag - Ringing establishes the
   // dialog!
+  Self.CreateAction;
+
   Ringing := Self.LastSentResponse;
   CheckEquals(SIPRinging,
               Ringing.StatusCode,
               'Sanity check');
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
   Check(Self.Session.DialogEstablished,
         'Session should have established a dialog - it''s sent a 180, after all');
 
@@ -7109,7 +7172,9 @@ begin
   //  ---    200 OK   --->
   //   <no ACK returned>
   //  ---     BYE     --->
+  Self.CreateAction;
 
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
   Self.Session.AcceptCall('', '');
   Self.ReceiveAck;
 
@@ -7132,6 +7197,8 @@ end;
 
 procedure TestTIdSipInboundSession.TestReceiveBye;
 begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
   Self.Session.AcceptCall('', '');
 
   Self.ReceiveBye(Self.Session.Dialog);
@@ -7144,6 +7211,8 @@ var
   Dest:         TIdSipAddressHeader;
   SentResponse: TIdSipResponse;
 begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
   Self.MarkSentResponseCount;
 
   Dest := TIdSipAddressHeader.Create;
@@ -7175,6 +7244,9 @@ end;
 
 procedure TestTIdSipInboundSession.TestRejectCallBusy;
 begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
   Self.MarkSentResponseCount;
   Self.Session.RejectCallBusy;
   CheckResponseSent('No response sent');
@@ -7189,6 +7261,9 @@ procedure TestTIdSipInboundSession.TestRemoveSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
 begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
   Self.Session.AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
@@ -7218,8 +7293,10 @@ var
   Request:      TIdSipRequest;
   SessionCount: Integer;
 begin
-  Self.MarkSentRequestCount;
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
 
+  Self.MarkSentRequestCount;
   Self.Session.AcceptCall('', '');
 
   SessionCount := Self.Core.SessionCount;
@@ -7239,6 +7316,9 @@ var
   Response:     TIdSipResponse;
   SessionCount: Integer;
 begin
+  Self.CreateAction;
+  Check(Assigned(Self.Session), 'OnInboundCall not called');
+
   Self.MarkSentResponseCount;
   SessionCount  := Self.Core.SessionCount;
 
@@ -7318,6 +7398,9 @@ begin
 
   Self.RemoteDesc     := RemoteSessionDescription;
   Self.RemoteMimeType := MimeType;
+
+  Session.LocalSessionDescription := Self.LocalDescription;
+  Session.LocalMimeType           := Self.MimeType;
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
@@ -7517,16 +7600,28 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCall;
 var
-  Invite:    TIdSipRequest;
-  SessCount: Integer;
-  Session:   TIdSipSession;
-  TranCount: Integer;
+  Invite:     TIdSipRequest;
+  SessCount:  Integer;
+  Session:    TIdSipSession;
+  TranCount:  Integer;
+  Answer:     String;
+  AnswerType: String;
 begin
   Self.MarkSentRequestCount;
   SessCount    := Self.Core.SessionCount;
   TranCount    := Self.Dispatcher.TransactionCount;
 
+  Self.SDP      := TIdSipTestResources.BasicSDP('proxy.tessier-ashpool.co.luna');
+  Self.MimeType := SdpMimeType;
+
   Session := Self.CreateAction as TIdSipSession;
+
+  CheckEquals(Self.SDP,
+              Session.LocalSessionDescription,
+              'LocalSessionDescription');
+  CheckEquals(Self.MimeType,
+              Session.LocalMimeType,
+              'LocalMimeType');
 
   CheckRequestSent('no INVITE sent');
   Invite := Self.LastSentRequest;
@@ -7558,7 +7653,16 @@ begin
               Session.Dialog.ID.RemoteTag,
               'Dialog''s Remote Tag');
 
-  Self.ReceiveOk(Invite);
+  Answer     := TIdSipTestResources.BasicSDP('sip.fried-neurons.org');
+  AnswerType := SdpMimeType;
+  Self.ReceiveOkWithBody(Invite, Answer, AnswerType);
+
+  CheckEquals(Answer,
+              Session.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(AnswerType,
+              Session.RemoteMimeType,
+              'RemoteMimeType');
 
   Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
 end;
@@ -7695,20 +7799,21 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCallWithoutOffer;
 var
-  ContentType: String;
-  Offer:       String;
+  OfferType: String;
+  Offer:     String;
+  Session:   TIdSipOutboundSession;
 begin
   //  ---       INVITE      --->
   // <--- 200 (with offer)  ---
   //  --- ACK (with answer) --->
 
-  ContentType := SdpMimeType;
-  Offer       := TIdSipTestResources.BasicSDP('1.1.1.1');
+  OfferType := SdpMimeType;
+  Offer     := TIdSipTestResources.BasicSDP('1.1.1.1');
 
   Self.MimeType := '';
   Self.SDP      := '';
 
-  Self.CreateAction;
+  Session := Self.CreateAction as TIdSipOutboundSession;
 
   CheckEquals(Self.SDP,
               Self.LastSentRequest.Body,
@@ -7717,23 +7822,30 @@ begin
               Self.LastSentRequest.ContentType,
               'INVITE Content-Type');
 
-  Self.MarkSentAckCount;
+  Self.LocalDescription := TIdSipTestResources.BasicSDP('localhost');
+  Self.LocalMimeType    := SdpMimeType;
 
+  Self.MarkSentAckCount;
   Self.ReceiveOkWithBody(Self.LastSentRequest,
                          Offer,
-                         ContentType);
+                         OfferType);
 
   Check(Self.OnEstablishedSessionFired,
         'OnEstablishedSession didn''t fire');
   CheckEquals(Offer,
               Self.RemoteDesc,
               'Remote description');
-  CheckEquals(ContentType,
+  CheckEquals(OfferType,
               Self.RemoteMimeType,
               'Remote description''s MIME type');
 
   CheckAckSent('No ACK sent');
-  Fail('We need to somehow feed our answer into the Session/ACK');
+  CheckEquals(Session.LocalSessionDescription,
+              Self.LastSentAck.Body,
+              'ACK answer');
+  CheckEquals(Session.LocalMimeType,
+              Self.LastSentAck.ContentType,
+              'ACK answer MIME type');
 end;
 
 procedure TestTIdSipOutboundSession.TestCircularRedirect;

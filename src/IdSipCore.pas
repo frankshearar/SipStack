@@ -593,7 +593,7 @@ type
     destructor  Destroy; override;
 
     function  Call(Dest: TIdSipAddressHeader;
-                   const InitialOffer: String;
+                   const LocalSessionDescription: String;
                    const MimeType: String): TIdSipOutboundSession;
     function  SessionCount: Integer;
 
@@ -1070,10 +1070,14 @@ type
                         IIdSipInviteListener,
                         IIdSipInboundInviteListener)
   private
-    DialogLock:           TCriticalSection;
-    fDialog:              TIdSipDialog;
-    fReceivedAck:         Boolean;
-    UsingSecureTransport: Boolean;
+    DialogLock:                TCriticalSection;
+    fDialog:                   TIdSipDialog;
+    fLocalSessionDescription:  String;
+    fLocalMimeType:            String;
+    fReceivedAck:              Boolean;
+    fRemoteSessionDescription: String;
+    fRemoteMimeType:           String;
+    UsingSecureTransport:      Boolean;
 
     procedure NotifyOfModifiedSession(Answer: TIdSipResponse);
     procedure RejectOutOfOrderRequest(Request: TIdSipRequest);
@@ -1134,8 +1138,12 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
-    property Dialog:      TIdSipDialog read GetDialog;
-    property ReceivedAck: Boolean      read fReceivedAck;
+    property Dialog:                   TIdSipDialog read GetDialog;
+    property LocalSessionDescription:  String       read fLocalSessionDescription write fLocalSessionDescription;
+    property LocalMimeType:            String       read fLocalMimeType write fLocalMimeType;
+    property ReceivedAck:              Boolean      read fReceivedAck;
+    property RemoteSessionDescription: String       read fRemoteSessionDescription write fRemoteSessionDescription;
+    property RemoteMimeType:           String       read fRemoteMimeType write fRemoteMimeType;
   end;
 
   TIdSipInboundSession = class(TIdSipSession)
@@ -1146,6 +1154,8 @@ type
   protected
     function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     procedure OnFailure(InviteAgent: TIdSipInboundInvite); override;
+    procedure OnSuccess(InviteAgent: TIdSipInboundInvite;
+                        Ack: TIdSipRequest); override;
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse); override;
     procedure ReceiveCancel(Cancel: TIdSipRequest); override;
@@ -1176,8 +1186,6 @@ type
   TIdSipOutboundSession = class(TIdSipSession)
   private
     fDestination:         TIdSipAddressHeader;
-    fInitialOffer:        String;
-    fMimeType:            String;
     InitialInvite:        TIdSipOutboundInitialInvite;
     TargetUriSet:         TIdSipContacts;
     RedirectedInvites:    TObjectList;
@@ -1213,9 +1221,7 @@ type
     procedure Send; override;
     procedure Terminate; override;
 
-    property Destination:  TIdSipAddressHeader read fDestination write SetDestination;
-    property InitialOffer: String              read fInitialOffer write fInitialOffer;
-    property MimeType:     String              read fMimeType write fMimeType;
+    property Destination: TIdSipAddressHeader read fDestination write SetDestination;
   end;
 
   TIdSipInboundInviteExpire = class(TIdSipActionClosure)
@@ -3377,13 +3383,13 @@ begin
 end;
 
 function TIdSipUserAgent.Call(Dest: TIdSipAddressHeader;
-                              const InitialOffer: String;
+                              const LocalSessionDescription: String;
                               const MimeType: String): TIdSipOutboundSession;
 begin
   Result := Self.AddOutboundSession;
-  Result.Destination  := Dest;
-  Result.InitialOffer := InitialOffer;
-  Result.MimeType     := MimeType;
+  Result.Destination             := Dest;
+  Result.LocalSessionDescription := LocalSessionDescription;
+  Result.LocalMimeType           := MimeType;
 end;
 
 function TIdSipUserAgent.SessionCount: Integer;
@@ -5981,6 +5987,9 @@ begin
   Self.InitialInvite := Self.UA.AddInboundInvite(Invite);
   Self.InitialInvite.AddListener(Self);
 
+  Self.RemoteSessionDescription := Invite.Body;
+  Self.RemoteMimeType           := Invite.ContentType;
+
   Self.InitialRequest.Assign(Invite);
 
   Self.UsingSecureTransport := UsingSecureTransport;
@@ -5988,6 +5997,9 @@ end;
 
 function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): String;
 begin
+  Self.LocalSessionDescription := Offer;
+  Self.LocalMimeType           := ContentType;
+
   Self.InitialInvite.Accept(Offer, ContentType);
   Self.FullyEstablished := true;
 end;
@@ -6072,6 +6084,18 @@ begin
     Self.Terminate
   else
     inherited OnFailure(InviteAgent);
+end;
+
+procedure TIdSipInboundSession.OnSuccess(InviteAgent: TIdSipInboundInvite;
+                                         Ack: TIdSipRequest);
+begin
+  inherited OnSuccess(InviteAgent, Ack);
+
+  if (InviteAgent = Self.InitialInvite)
+     and (Self.RemoteSessionDescription = '') then begin
+     Self.RemoteSessionDescription := Ack.Body;
+     Self.RemoteMimeType           := Ack.ContentType;
+  end;
 end;
 
 procedure TIdSipInboundSession.OnSuccess(InviteAgent: TIdSipOutboundInvite;
@@ -6213,8 +6237,8 @@ begin
   inherited Send;
 
   Self.InitialInvite.Destination := Self.Destination;
-  Self.InitialInvite.Offer       := Self.InitialOffer;
-  Self.InitialInvite.MimeType    := Self.MimeType;
+  Self.InitialInvite.Offer       := Self.LocalSessionDescription;
+  Self.InitialInvite.MimeType    := Self.LocalMimeType;
   Self.InitialInvite.Send;
 end;
 
@@ -6357,8 +6381,14 @@ begin
     Self.RemoveFinishedRedirectedInvite(InviteAgent);
     Self.TerminateAllRedirects;
 
-    Self.NotifyOfEstablishedSession(Response.Body,
-                                    Response.ContentType);
+    Self.RemoteSessionDescription := Response.Body;
+    Self.RemoteMimeType           := Response.ContentType;
+
+    Self.NotifyOfEstablishedSession(Self.RemoteSessionDescription,
+                                    Self.RemoteMimeType);
+
+    InviteAgent.Offer    := Self.LocalSessionDescription;
+    InviteAgent.MimeType := Self.LocalMimeType;
   end
   else
     Self.NotifyOfModifiedSession(Response);
