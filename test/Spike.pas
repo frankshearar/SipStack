@@ -48,10 +48,13 @@ type
     Register: TButton;
     Options: TButton;
     UseAsProxy: TCheckBox;
-    ContactUri: TEdit;
     Label4: TLabel;
     Label5: TLabel;
     UseLooseRouting: TCheckBox;
+    ContactUri: TEdit;
+    HostName: TEdit;
+    Label6: TLabel;
+    MasqAsNat: TCheckBox;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -66,6 +69,7 @@ type
     procedure ContactUriChange(Sender: TObject);
     procedure UseAsProxyClick(Sender: TObject);
     procedure RegistrarUriChange(Sender: TObject);
+    procedure HostNameChange(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -75,7 +79,6 @@ type
     DataStore:      TStream;
     Dispatch:       TIdSipTransactionDispatcher;
     DTMFPanel:      TIdDTMFPanel;
-    Gateway:        String; // the IP of the NATting gateway
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     RTPByteCount:   Integer;
@@ -85,6 +88,8 @@ type
     Transports:     TObjectList;
     UA:             TIdSipUserAgentCore;
     UDPByteCount:   Integer;
+
+    fPayloadProcessor:    TIdSdpPayloadProcessor;
 
     function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     function  LocalSDP(const Address: String): String;
@@ -139,10 +144,9 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
-  end;
 
-const
-  AudioFile = 'dump.wav';
+    property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
+  end;
 
 var
   rnidSpike: TrnidSpike;
@@ -168,9 +172,6 @@ var
   From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
-
-//  Self.Gateway := GStack.LocalAddress;
-  Self.Gateway := '80.168.137.82';
 
   Self.Transports := TObjectList.Create(true);
   Self.RunningPort := IdPORT_SIP;
@@ -218,25 +219,6 @@ begin
   Self.UA.UserAgentName := '';
   Self.UA.AddAllowedMethod(MethodRegister);
 
-  Contact := TIdSipContactHeader.Create;
-  try
-    Contact.Value := 'sip:franks@'
-                   + (Self.Transports[0] as TIdSipTransport).HostName + ':'
-                   + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
-    Self.UA.Contact := Contact;
-  finally
-    Contact.Free;
-  end;
-
-  From := TIdSipFromHeader.Create;
-  try
-    From.Value := 'sip:franks@' + (Self.Transports[0] as TIdSipTransport).HostName
-                + ':' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
-    Self.UA.From := From;
-  finally
-    From.Free;
-  end;
-
   try
     BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port);
     Self.StartTransports;
@@ -246,14 +228,26 @@ begin
                 + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port) + ') - '
                 + 'kill it and restart this');
   end;
-  Self.UA.From.Value := 'sip:rnid01@' + Self.Gateway;
+  Self.UA.Contact.Value := Self.ContactUri.Text;
+  Self.UA.From.Value    := Self.ContactUri.Text;
   Self.UA.HasProxy := Self.UseAsProxy.Checked;
   Self.UA.Proxy.Uri := Self.RegistrarUri.Text + ';lr';
+
+  Self.fPayloadProcessor := TIdSdpPayloadProcessor.Create;
+
+  Self.PayloadProcessor.AddRTPListener(Self.HistListener);
+  Self.PayloadProcessor.AddRTPListener(Self);
+  Self.PayloadProcessor.AddDataListener(Self);
+  Self.PayloadProcessor.AddDataListener(Self.DTMFPanel);
+
+  Self.DTMFPanel.Processor := Self.PayloadProcessor;
 end;
 
 destructor TrnidSpike.Destroy;
 begin
   Self.StopTransports;
+
+  Self.PayloadProcessor.Free;
 
   Self.UA.Free;
   Self.Dispatch.Free;
@@ -287,7 +281,7 @@ var
 begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
-  Result.HostName := Self.Gateway;
+  Result.HostName := Self.HostName.Text;
 
   if (GStack.LocalAddress <> LocalHostName) then begin
     Binding      := Result.Bindings.Add;
@@ -356,10 +350,12 @@ begin
   finally
     Self.Lock.Release;
   end;
+  Self.LogMessage(Response, true);
 end;
 
 procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession);
 begin
+  Self.PayloadProcessor.RemoteSessionDescription := ''; //Response.Body;
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -374,10 +370,6 @@ begin
 
   Self.AudioPlayer.Stop;
   Self.StopReadingData;
-  Session.PayloadProcessor.RemoveDataListener(Self);
-  Session.PayloadProcessor.RemoveRTPListener(Self.HistListener);
-  Session.PayloadProcessor.RemoveDataListener(Self.DTMFPanel);
-  Self.DTMFPanel.Processor := nil;
 end;
 
 procedure TrnidSpike.OnException(E: Exception;
@@ -411,16 +403,17 @@ var
 begin
   Self.ResetCounters;
 
-  Session.AcceptCall(Self.LocalSDP(Self.Gateway),
-                     SdpMimeType);
-
   Self.AudioPlayer.Play(AnyAudioDevice);
-  Session.PayloadProcessor.AddRTPListener(Self.HistListener);
-  Session.PayloadProcessor.AddRTPListener(Self);
-  Session.PayloadProcessor.AddDataListener(Self);
-  Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
 
-  Self.DTMFPanel.Processor := Session.PayloadProcessor;
+  // Offer contains a description of what data we expect to receive. Sometimes
+  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
+  // port 8000's already bound. We thus try to honour the offer as closely as
+  // possible.
+  Self.PayloadProcessor.RemoteSessionDescription := Session.CurrentRequest.Body;
+
+  Self.PayloadProcessor.StartListening(Self.LocalSDP(Self.HostName.Text));
+  Session.AcceptCall(Self.PayloadProcessor.LocalSessionDescription,
+                     SdpMimeType);
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -495,7 +488,13 @@ end;
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
                                    Transport: TIdSipTransport);
 begin
-  Request.LastHop.SentBy := Self.Gateway;
+  // Don't ever do this: we're on a private LAN accessing the SIP network
+  // through a NATting firewall. Doing the below makes us look like the
+  // firewall itself to things in the Internet.
+
+  if Self.MasqAsNat.Checked then
+    Request.LastHop.SentBy := Self.HostName.Text;
+
   Self.LogMessage(Request, false);
 end;
 
@@ -590,16 +589,14 @@ begin
 
     Self.ResetCounters;
 
+    Self.AudioPlayer.Play(AnyAudioDevice);
+    Self.PayloadProcessor.StartListening(Self.LocalSDP(Self.HostName.Text));
+
     Session := Self.UA.Call(Target,
-                            Self.LocalSDP(Self.Gateway),
+                            Self.PayloadProcessor.LocalSessionDescription,
                             SdpMimeType);
 
     Session.AddSessionListener(Self);
-    Self.AudioPlayer.Play(AnyAudioDevice);
-    Session.PayloadProcessor.AddRTPListener(Self.HistListener);
-    Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
-    Self.DTMFPanel.Processor := Session.PayloadProcessor;
-    Session.PayloadProcessor.AddDataListener(Self);
   finally
     Target.Free;
   end;
@@ -667,7 +664,8 @@ begin
     for J := 0 to (Self.Transports[I] as TIdSipTransport).Bindings.Count - 1 do
       (Self.Transports[I] as TIdSipTransport).Bindings[J].Port := NewPort;
 
-  Self.UA.From.Address.Port := NewPort;
+  Self.UA.Contact.Address.Port := NewPort;
+  Self.UA.From.Address.Port    := NewPort;
 
   Self.StartTransports;
 end;
@@ -717,6 +715,7 @@ end;
 procedure TrnidSpike.ContactUriChange(Sender: TObject);
 begin
   Self.UA.Contact.Value := Self.ContactUri.Text;
+  Self.UA.From.Value    := Self.ContactUri.Text;
 end;
 
 procedure TrnidSpike.UseAsProxyClick(Sender: TObject);
@@ -734,6 +733,22 @@ begin
     Uri := Uri + ';lr';
 
   Self.UA.Proxy.Uri := Uri;
+end;
+
+procedure TrnidSpike.HostNameChange(Sender: TObject);
+var
+  I, J:    Integer;
+begin
+  Self.StopTransports;
+
+  for I := 0 to Self.Transports.Count - 1 do
+    (Self.Transports[I] as TIdSipTransport).HostName := Self.HostName.Text;
+
+  Self.UA.HostName               := Self.HostName.Text;
+  Self.PayloadProcessor.Host     := Self.HostName.Text;
+  Self.PayloadProcessor.Username := Self.UA.Username;
+
+  Self.StartTransports;
 end;
 
 end.

@@ -493,7 +493,6 @@ type
   private
     DialogLock:           TCriticalSection;
     fDialog:              TIdSipDialog;
-    fPayloadProcessor:    TIdSdpPayloadProcessor;
     fReceivedAck:         Boolean;
     OpenTransactionLock:  TCriticalSection;
     OpenTransactions:     TObjectList;
@@ -536,9 +535,8 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
-    property Dialog:           TIdSipDialog           read fDialog;
-    property PayloadProcessor: TIdSdpPayloadProcessor read fPayloadProcessor;
-    property ReceivedAck:      Boolean                read fReceivedAck;
+    property Dialog:      TIdSipDialog read fDialog;
+    property ReceivedAck: Boolean      read fReceivedAck;
   end;
 
   TIdSipInboundSession = class(TIdSipSession)
@@ -2585,10 +2583,6 @@ begin
   Self.fIsTerminated := false;
   Self.fReceivedAck  := false;
 
-  Self.fPayloadProcessor := TIdSdpPayloadProcessor.Create;
-  Self.PayloadProcessor.Host     := Self.UA.HostName;
-  Self.PayloadProcessor.Username := Self.UA.Username;
-
   Self.OpenTransactionLock := TCriticalSection.Create;
   Self.OpenTransactions    := TObjectList.Create(true);
 
@@ -2599,8 +2593,6 @@ destructor TIdSipSession.Destroy;
 begin
   Self.OpenTransactions.Free;
   Self.OpenTransactionLock.Free;
-
-  Self.PayloadProcessor.Free;
 
   Self.DialogLock.Free;
 
@@ -2893,8 +2885,6 @@ begin
   Self.UsingSecureTransport := UsingSecureTransport;
 
   Self.OkTimer := TIdSipSessionTimer.Create(Self, DefaultT1, DefaultT2);
-
-  Self.PayloadProcessor.RemoteSessionDescription := Invite.Body;
 end;
 
 destructor TIdSipInboundSession.Destroy;
@@ -2910,18 +2900,11 @@ function TIdSipInboundSession.AcceptCall(const Offer, ContentType: String): Stri
 var
   OkResponse: TIdSipResponse;
 begin
-  // Offer contains a description of what data we expect to receive. Sometimes
-  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
-  // port 8000's already bound. We thus try to honour the offer as closely as
-  // possible, and return the _actual_ offer sent.
-
   // The type of payload processor depends on the ContentType passed in!
-  Self.PayloadProcessor.StartListening(Offer);
-
   OkResponse := Self.UA.CreateResponse(Self.CurrentRequest, SIPOK);
   try
-    Result := Self.PayloadProcessor.LocalSessionDescription;
-    OkResponse.Body := Result;
+    OkResponse.Body := Offer;
+    Result := OkResponse.Body;
 
     OkResponse.ContentLength := Length(OkResponse.Body);
     OkResponse.ContentType   := ContentType;
@@ -3099,7 +3082,6 @@ begin
   if not Self.InCall then begin
     Self.InCall := true;
 
-    Self.PayloadProcessor.StartListening(InitialOffer);
     Invite := Self.UA.CreateInvite(Dest, InitialOffer, MimeType);
     try
       Self.CurrentRequest.Assign(Invite);
@@ -3178,7 +3160,6 @@ begin
   try
     if not Self.DialogEstablished then begin
       fDialog := Self.CreateOutboundDialog(Response, UsingSecureTransport);
-      Self.PayloadProcessor.RemoteSessionDescription := Response.Body;
       Self.NotifyOfEstablishedSession;
     end;
   finally
