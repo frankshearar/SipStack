@@ -105,6 +105,8 @@ type
 
   TestTIdSipResponse = class(TTestCaseSip)
   private
+    Contact:  TIdSipContactHeader;
+    Request:  TIdSipRequest;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -113,6 +115,11 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestInResponseToRecordRoute;
+    procedure TestInResponseToSipsRecordRoute;
+    procedure TestInResponseToSipsRequestUri;
+    procedure TestInResponseToTryingWithTimestamps;
+    procedure TestInResponseToWithContact;
     procedure TestIsEqualToComplexMessages;
     procedure TestIsEqualToDifferentHeaders;
     procedure TestIsEqualToDifferentSipVersion;
@@ -125,12 +132,34 @@ type
     procedure TestIsProvisional;
     procedure TestIsRequest;
     procedure TestIsTrying;
+    procedure TestWillEstablishDialog;
   end;
 
 implementation
 
 uses
   Classes, IdSipConsts, TestMessages;
+
+const
+  AllMethods: array[1..7] of String = (MethodAck, MethodBye, MethodCancel,
+      MethodInvite, MethodOptions, MethodParam, MethodRegister);
+  AllResponses: array[1..50] of Cardinal = (SIPTrying, SIPRinging,
+      SIPCallIsBeingForwarded, SIPQueued, SIPSessionProgess, SIPOK,
+      SIPMultipleChoices, SIPMovedPermanently, SIPMovedTemporarily,
+      SIPUseProxy, SIPAlternativeService, SIPBadRequest, SIPUnauthorized,
+      SIPPaymentRequired, SIPForbidden, SIPNotFound, SIPMethodNotAllowed,
+      SIPNotAcceptableClient, SIPProxyAuthenticationRequired,
+      SIPRequestTimeout, SIPGone, SIPRequestEntityTooLarge,
+      SIPRequestURITooLarge, SIPUnsupportedMediaType, SIPUnsupportedURIScheme,
+      SIPBadExtension, SIPExtensionRequired, SIPIntervalTooBrief,
+      SIPTemporarilyNotAvailable, SIPCallLegOrTransactionDoesNotExist,
+      SIPLoopDetected, SIPTooManyHops, SIPAddressIncomplete, SIPAmbiguous,
+      SIPBusyHere, SIPRequestTerminated, SIPNotAcceptableHere,
+      SIPRequestPending, SIPUndecipherable, SIPInternalServerError,
+      SIPNotImplemented, SIPBadGateway, SIPServiceUnavailable,
+      SIPServerTimeOut, SIPSIPVersionNotSupported, SIPMessageTooLarge,
+      SIPBusyEverywhere, SIPDecline, SIPDoesNotExistAnywhere,
+      SIPNotAcceptableGlobal);
 
 function Suite: ITestSuite;
 begin
@@ -1268,8 +1297,20 @@ end;
 //* TestTIdSipResponse Public methods ******************************************
 
 procedure TestTIdSipResponse.SetUp;
+var
+  P: TIdSipParser;
 begin
   inherited SetUp;
+
+  P := TIdSipParser.Create;
+  try
+    Self.Request := P.ParseAndMakeRequest(BasicRequest);
+  finally
+    P.Free;
+  end;
+
+  Self.Contact := TIdSipContactHeader.Create;
+  Self.Contact.Value := Self.Request.RequestUri.Uri;
 
   Self.Response := TIdSipResponse.Create;
 end;
@@ -1277,6 +1318,8 @@ end;
 procedure TestTIdSipResponse.TearDown;
 begin
   Self.Response.Free;
+  Self.Contact.Free;
+  Self.Request.Free;
 
   inherited TearDown;
 end;
@@ -1373,6 +1416,118 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToRecordRoute;
+var
+  RequestRecordRoutes:  TIdSipHeadersFilter;
+  Response:             TIdSipResponse;
+  ResponseRecordRoutes: TIdSipHeadersFilter;
+begin
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
+
+  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
+  try
+    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+    try
+      ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
+      try
+        Check(ResponseRecordRoutes.IsEqualTo(RequestRecordRoutes),
+              'Record-Route header sets mismatch');
+      finally
+        ResponseRecordRoutes.Free;
+      end;
+    finally
+      Response.Free;
+    end;
+  finally
+    RequestRecordRoutes.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToSipsRecordRoute;
+var
+  Response:    TIdSipResponse;
+  SipsContact: TIdSipContactHeader;
+begin
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+  try
+    SipsContact := Response.FirstContact;
+    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
+                'Must use a SIPS URI in the Contact');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToSipsRequestUri;
+var
+  Response:    TIdSipResponse;
+  SipsContact: TIdSipContactHeader;
+begin
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+  try
+    SipsContact := Response.FirstContact;
+    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
+                'Must use a SIPS URI in the Contact');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToTryingWithTimestamps;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Request.AddHeader(TimestampHeader).Value := '1';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Check(Response.HasHeader(TimestampHeader),
+          'Timestamp header(s) not copied');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToWithContact;
+var
+  FromFilter: TIdSipHeadersFilter;
+  P:          TIdSipParser;
+  Response:   TIdSipResponse;
+begin
+  P := TIdSipParser.Create;
+  try
+    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+    try
+      FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
+      try
+        CheckEquals(1, FromFilter.Count, 'Number of From headers');
+      finally
+        FromFilter.Free;
+      end;
+
+      CheckEquals(SIPOK, Response.StatusCode,           'StatusCode mismatch');
+      Check(Response.CSeq.IsEqualTo(Self.Request.CSeq), 'Cseq header mismatch');
+      Check(Response.From.IsEqualTo(Self.Request.From), 'From header mismatch');
+      Check(Response.Path.IsEqualTo(Self.Request.Path), 'Via headers mismatch');
+
+      Check(Request.ToHeader.IsEqualTo(Response.ToHeader),
+            'To header mismatch');
+
+      Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
+    finally
+      Response.Free;
+    end;
+  finally
+    P.Free;
   end;
 end;
 
@@ -1601,6 +1756,27 @@ begin
 
   Self.Response.StatusCode := SIPTrying;
   Check(Self.Response.IsTrying, Self.Response.StatusText);
+end;
+
+procedure TestTIdSipResponse.TestWillEstablishDialog;
+var
+  I, J:    Integer;
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    for I := Low(AllMethods) to High(AllMethods) do
+      for J := Low(AllResponses) to High(AllResponses) do begin
+        Request.Method := AllMethods[I];
+        Self.Response.StatusCode := AllResponses[J];
+
+        Check((Request.IsInvite and Self.Response.IsOK)
+            = Self.Response.WillEstablishDialog(Request),
+              AllMethods[I] + ' + ' + Self.Response.StatusText);
+      end;
+  finally
+    Request.Free;
+  end;
 end;
 
 initialization

@@ -54,7 +54,6 @@ type
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
-    procedure TestCreateResponse;
   end;
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
@@ -102,11 +101,7 @@ type
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
-    procedure TestCreateResponseRecordRoute;
-    procedure TestCreateResponseSipsRecordRoute;
-    procedure TestCreateResponseSipsRequestUri;
     procedure TestCreateResponseToTagMissing;
-    procedure TestCreateResponseTryingWithTimestamps;
     procedure TestCreateResponseUserAgent;
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
@@ -601,36 +596,6 @@ begin
     CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
   finally
     Schemes.Free;
-  end;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TestCreateResponse;
-var
-  FromFilter: TIdSipHeadersFilter;
-  Response:   TIdSipResponse;
-begin
-  Self.Request.ToHeader.Tag := Self.UA.NextTag;
-
-  Response := Self.UA.CreateResponse(Self.Request, SIPOK);
-  try
-    FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
-    try
-      CheckEquals(1, FromFilter.Count, 'Number of From headers');
-    finally
-      FromFilter.Free;
-    end;
-
-    CheckEquals(SIPOK, Response.StatusCode,          'StatusCode mismatch');
-    Check(Response.CSeq.IsEqualTo(Self.Request.CSeq), 'Cseq header mismatch');
-    Check(Response.From.IsEqualTo(Self.Request.From), 'From header mismatch');
-    Check(Response.Path.IsEqualTo(Self.Request.Path), 'Via headers mismatch');
-
-    Check(Self.Request.ToHeader.IsEqualTo(Response.ToHeader),
-          'To header mismatch');
-
-    Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
-  finally
-    Response.Free;
   end;
 end;
 
@@ -1211,69 +1176,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestCreateResponseRecordRoute;
-var
-  RequestRecordRoutes:  TIdSipHeadersFilter;
-  Response:             TIdSipResponse;
-  ResponseRecordRoutes: TIdSipHeadersFilter;
-begin
-  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
-  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
-  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
-
-  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Invite.Headers, RecordRouteHeader);
-  try
-    Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
-    try
-      ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
-      try
-        Check(ResponseRecordRoutes.IsEqualTo(RequestRecordRoutes),
-              'Record-Route header sets mismatch');
-      finally
-        ResponseRecordRoutes.Free;
-      end;
-    finally
-      Response.Free;
-    end;
-  finally
-    RequestRecordRoutes.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateResponseSipsRecordRoute;
-var
-  Contact:  TIdSipContactHeader;
-  Response: TIdSipResponse;
-begin
-  Self.Invite.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
-
-  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
-  try
-    Contact := Response.FirstContact;
-    CheckEquals(SipsScheme, Contact.Address.Scheme,
-                'Must use a SIPS URI in the Contact');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateResponseSipsRequestUri;
-var
-  Contact:  TIdSipContactHeader;
-  Response: TIdSipResponse;
-begin
-  Self.Invite.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-
-  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
-  try
-    Contact := Response.FirstContact;
-    CheckEquals(SipsScheme, Contact.Address.Scheme,
-                'Must use a SIPS URI in the Contact');
-  finally
-    Response.Free;
-  end;
-end;
-
 procedure TestTIdSipUserAgentCore.TestCreateResponseToTagMissing;
 var
   Response: TIdSipResponse;
@@ -1289,21 +1191,6 @@ begin
     CheckEquals(Response.ToHeader.Address,
                 Self.Invite.ToHeader.Address,
                 'To header address mismatch');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateResponseTryingWithTimestamps;
-var
-  Response: TIdSipResponse;
-begin
-  Self.Invite.AddHeader(TimestampHeader).Value := '1';
-
-  Response := Self.Core.CreateResponse(Self.Invite, SIPTrying);
-  try
-    Check(Response.HasHeader(TimestampHeader),
-          'Timestamp header(s) not copied');
   finally
     Response.Free;
   end;

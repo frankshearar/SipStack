@@ -647,38 +647,11 @@ end;
 
 function TIdSipAbstractUserAgent.CreateResponse(Request: TIdSipRequest;
                                                 ResponseCode: Cardinal): TIdSipResponse;
-var
-  TimestampHeaders: TIdSipHeadersFilter;
 begin
-  Result := TIdSipResponse.Create;
-  try
-    Result.StatusCode := ResponseCode;
+  Result := TIdSipResponse.InResponseTo(Request, ResponseCode);
 
-    // cf RFC 3261 section 8.2.6.1
-    if (Result.StatusCode = SIPTrying) then begin
-      TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
-                                                     TimestampHeader);
-      try
-        Result.AddHeaders(TimestampHeaders);
-      finally
-        TimestampHeaders.Free;
-      end;
-    end;
-
-    // cf RFC 3261 section 8.2.6.2
-    Result.Path         := Request.Path;
-    Result.CallID       := Request.CallID;
-    Result.CSeq         := Request.CSeq;
-    Result.From         := Request.From;
-    Result.ToHeader     := Request.ToHeader;
-
-    if not Request.ToHeader.HasTag then
-      Result.ToHeader.Tag := Self.NextTag;
-  except
-    Result.Free;
-
-    raise;
-  end;
+  if not Request.ToHeader.HasTag then
+    Result.ToHeader.Tag := Self.NextTag;
 end;
 
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
@@ -1175,35 +1148,16 @@ end;
 
 function TIdSipUserAgentCore.CreateResponse(Request: TIdSipRequest;
                                             ResponseCode: Cardinal): TIdSipResponse;
-var
-  FirstRR:          TIdSipRecordRouteHeader;
-  ReqRecordRoutes:  TIdSipHeadersFilter;
 begin
-  Result := inherited CreateResponse(Request, ResponseCode);
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        ResponseCode,
+                                        Self.Contact);
 
-  // cf RFC 3261 section 12.1.1
-  ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers,
-                                                RecordRouteHeader);
-  try
-    Result.AddHeaders(ReqRecordRoutes);
+  if not Request.ToHeader.HasTag then
+    Result.ToHeader.Tag := Self.NextTag;
 
-    if (ReqRecordRoutes.Count > 0) then begin
-      FirstRR := ReqRecordRoutes.Items[0] as TIdSipRecordRouteHeader;
-      if (FirstRR.Address.IsSecure) then
-        Self.Contact.Address.Scheme := SipsScheme;
-    end;
-
-    if Request.HasSipsUri then
-      Self.Contact.Address.Scheme := SipsScheme;
-
-    Result.AddHeader(Self.Contact);
-//      Result.AddHeader(Self.From);
-
-    if (Self.UserAgentName <> '') then
-      Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-  finally
-    ReqRecordRoutes.Free;
-  end;
+  if (Self.UserAgentName <> '') then
+    Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
 end;
 
 function TIdSipUserAgentCore.ReceiveRequest(Request: TIdSipRequest;

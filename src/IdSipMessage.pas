@@ -134,6 +134,14 @@ type
   protected
     function FirstLine: String; override;
   public
+    class function InResponseTo(Request: TIdSipRequest;
+                                StatusCode: Cardinal): TIdSipResponse; overload;
+    class function InResponseTo(Request: TIdSipRequest;
+                                StatusCode: Cardinal;
+                                Contact: TIdSipContactHeader): TIdSipResponse; overload;
+    class function WillEstablishDialog(Request: TIdSipRequest;
+                                       Response: TIdSipResponse): Boolean; overload;
+
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
@@ -143,6 +151,7 @@ type
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
+    function  WillEstablishDialog(Request: TIdSipRequest): Boolean; overload;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -876,6 +885,86 @@ end;
 //*******************************************************************************
 //* TIdSipResponse Public methods ***********************************************
 
+class function TIdSipResponse.InResponseTo(Request: TIdSipRequest; StatusCode: Cardinal): TIdSipResponse;
+var
+  TimestampHeaders: TIdSipHeadersFilter;
+begin
+  Result := TIdSipResponse.Create;
+  try
+    Result.StatusCode := StatusCode;
+
+    // cf RFC 3261 section 8.2.6.1
+    if (Result.StatusCode = SIPTrying) then begin
+      TimestampHeaders := TIdSipHeadersFilter.Create(Request.Headers,
+                                                     TimestampHeader);
+      try
+        Result.AddHeaders(TimestampHeaders);
+      finally
+        TimestampHeaders.Free;
+      end;
+    end;
+
+    // cf RFC 3261 section 8.2.6.2
+    Result.Path         := Request.Path;
+    Result.CallID       := Request.CallID;
+    Result.CSeq         := Request.CSeq;
+    Result.From         := Request.From;
+    Result.ToHeader     := Request.ToHeader;
+  except
+    Result.Free;
+
+    raise;
+  end;
+end;
+
+class function TIdSipResponse.InResponseTo(Request: TIdSipRequest;
+                                           StatusCode: Cardinal;
+                                           Contact: TIdSipContactHeader): TIdSipResponse;
+var
+  NewContact:       TIdSipContactHeader;
+  FirstRR:          TIdSipRecordRouteHeader;
+  ReqRecordRoutes:  TIdSipHeadersFilter;
+begin
+  Result := Self.InResponseTo(Request, StatusCode);
+
+  if Result.WillEstablishDialog(Request) then begin
+    // cf RFC 3261 section 12.1.1
+    ReqRecordRoutes := TIdSipHeadersFilter.Create(Request.Headers,
+                                                  RecordRouteHeader);
+    try
+      Result.AddHeaders(ReqRecordRoutes);
+
+      NewContact := TIdSipContactHeader.Create;
+      try
+        NewContact.Assign(Contact);
+
+        if not ReqRecordRoutes.IsEmpty then begin
+          ReqRecordRoutes.First;
+
+          FirstRR := ReqRecordRoutes.CurrentHeader as TIdSipRecordRouteHeader;
+          if (FirstRR.Address.IsSecure) then
+            NewContact.Address.Scheme := SipsScheme;
+        end;
+
+        if Request.HasSipsUri then
+          NewContact.Address.Scheme := SipsScheme;
+
+        Result.AddHeader(NewContact);
+      finally
+        NewContact.Free;
+      end;
+    finally
+      ReqRecordRoutes.Free;
+    end;
+  end;
+end;
+
+class function TIdSipResponse.WillEstablishDialog(Request: TIdSipRequest;
+                                                  Response: TIdSipResponse): Boolean;
+begin
+  Result := Request.IsInvite and Response.IsOK;
+end;
+
 procedure TIdSipResponse.Accept(Visitor: IIdSipMessageVisitor);
 begin
   Visitor.VisitResponse(Self);
@@ -937,6 +1026,11 @@ end;
 function TIdSipResponse.MalformedException: EBadMessageClass;
 begin
   Result := EBadResponse;
+end;
+
+function TIdSipResponse.WillEstablishDialog(Request: TIdSipRequest): Boolean;
+begin
+  Result := TIdSipResponse.WillEstablishDialog(Request, Self);
 end;
 
 //* TIdSipResponse Protected methods *******************************************
