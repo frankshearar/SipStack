@@ -31,6 +31,7 @@ type
 
     procedure EndFlash;
     procedure Flash;
+    procedure OnEndFlash(Sender: TObject);
   end;
 
   TIdDTMFButtonArray = array[DTMF0..DTMFFlash] of TIdColourButton;
@@ -112,6 +113,11 @@ begin
   Self.BevelInner := bvLowered;
   Self.BevelOuter := bvLowered;
   Self.Color      := clGreen; //Self.Color xor clWhite;
+end;
+
+procedure TIdColourButton.OnEndFlash(Sender: TObject);
+begin
+  Self.EndFlash;
 end;
 
 //* TIdColourButton Protected methods *****************************************
@@ -259,6 +265,8 @@ begin
   Self.Buttons[Event.Event].Flash;
 
   // wait Duration milliseconds
+  Self.Timer.AddEvent(Event.Duration,
+                      Self.Buttons[Event.Event].OnEndFlash);
 
   if Event.IsEnd then
     Self.Buttons[Event.Event].EndFlash;
@@ -377,10 +385,13 @@ end;
 
 procedure TIdDTMFPanel.SetProcessor(Value: TIdSDPPayloadProcessor);
 begin
+  if Assigned(Self.fProcessor) then
+    Self.fProcessor.RemoveDataListener(Self);
+
   Self.fProcessor := Value;
 
   if Assigned(Self.fProcessor) then
-  Self.fProcessor.AddDataListener(Self);
+    Self.fProcessor.AddDataListener(Self);
 end;
 
 end.
