@@ -12,8 +12,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,  IdSipMessage,
-  IdSipTimer, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
+  IdSipMessage, IdSipTimer, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils;
 
 const
   DefaultT1    = 500;   // milliseconds
@@ -74,7 +74,9 @@ type
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
+    fTimer:          TIdTimerQueue;
     MsgListeners:    TIdNotificationList;
+    TimerLock:       TCriticalSection;
     Transports:      TObjectList;
     TransportLock:   TCriticalSection;
     Transactions:    TObjectList;
@@ -127,17 +129,33 @@ type
                                    Receiver: TIdSipTransport): TIdSipTransaction;
     procedure ClearTransports;
     function  LoopDetected(Request: TIdSipRequest): Boolean;
+    procedure OnClientInviteTransactionTimerA(Event: TObject);
+    procedure OnClientInviteTransactionTimerB(Event: TObject);
+    procedure OnClientInviteTransactionTimerD(Event: TObject);
+    procedure OnServerInviteTransactionTimerG(Event: TObject);
+    procedure OnServerInviteTransactionTimerH(Event: TObject);
+    procedure OnServerInviteTransactionTimerI(Event: TObject);
+    procedure OnServerNonInviteTransactionTimerJ(Event: TObject);
     procedure RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
+    procedure ScheduleEvent(Event: TNotifyEvent;
+                            WaitTime: Cardinal;
+                            Request: TIdSipMessage);
     procedure Send(Msg: TIdSipMessage); virtual;
     procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
+    function  TimerBInterval: Cardinal;
+    function  TimerDInterval: Cardinal;
+    function  TimerHInterval: Cardinal;
+    function  TimerIInterval: Cardinal;
+    function  TimerJInterval: Cardinal;
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property T1Interval: Cardinal read fT1Interval write fT1Interval;
-    property T2Interval: Cardinal read fT2Interval write fT2Interval;
-    property T4Interval: Cardinal read fT4Interval write fT4Interval;
+    property T1Interval: Cardinal      read fT1Interval write fT1Interval;
+    property T2Interval: Cardinal      read fT2Interval write fT2Interval;
+    property T4Interval: Cardinal      read fT4Interval write fT4Interval;
+    property Timer:      TIdTimerQueue read fTimer write fTimer;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -193,8 +211,6 @@ type
     procedure TryResendInitialRequest;
     procedure TrySendRequest(R: TIdSipRequest);
     procedure TrySendResponse(R: TIdSipResponse); virtual;
-
-    property Dispatcher: TIdSipTransactionDispatcher read fDispatcher;
   public
     class function CreateClientTransactionType(Dispatcher: TIdSipTransactionDispatcher;
                                                Request: TIdSipRequest): TIdSipTransaction;
@@ -221,10 +237,12 @@ type
     procedure RemoveTransactionListener(const Listener: IIdSipTransactionListener);
     procedure SendRequest; virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
+    procedure Terminate(Quiet: Boolean);
 
-    property InitialRequest: TIdSipRequest          read fInitialRequest;
-    property LastResponse:   TIdSipResponse         read fLastResponse;
-    property State:          TIdSipTransactionState read fState;
+    property Dispatcher:     TIdSipTransactionDispatcher read fDispatcher;
+    property InitialRequest: TIdSipRequest               read fInitialRequest;
+    property LastResponse:   TIdSipResponse              read fLastResponse;
+    property State:          TIdSipTransactionState      read fState;
   end;
 
   TIdSipServerTransaction = class(TIdSipTransaction)
@@ -237,64 +255,24 @@ type
     function  IsClient: Boolean; override;
   end;
 
-  TIdSipServerInviteTransaction = class;
-  TIdSipServerInviteTransactionTimer = class(TObject)
-  private
-    fTimerGInterval:  Cardinal;
-    fTimerGIsRunning: Boolean;
-    fTimerHInterval:  Cardinal;
-    fTimerHIsRunning: Boolean;
-    fTimerIInterval:  Cardinal;
-    fTimerIIsRunning: Boolean;
-    Owner:            TIdSipServerInviteTransaction;
-    State:            TIdSipTransactionState;
-    T2:               Cardinal;
-    Timer:            TIdTimerQueue;
-
-    procedure OnException(T: TIdBaseThread;
-                          E: Exception);
-    procedure OnTimerG(Sender: TObject);
-    procedure OnTimerH(Sender: TObject);
-    procedure OnTimerI(Sender: TObject);
-  public
-    constructor Create(OwnerTran: TIdSipServerInviteTransaction;
-                       T1: Cardinal = DefaultT1;
-                       T2: Cardinal = DefaultT2;
-                       T4: Cardinal = DefaultT4);
-    destructor  Destroy; override;
-
-    procedure ChangeState(NewState: TIdSipTransactionState);
-    procedure FireTimerG;
-    procedure StartTimerG;
-    procedure StartTimerH;
-    procedure StartTimerI;
-    procedure StopTimerG;
-    procedure StopTimerH;
-    procedure StopTimerI;
-    function  TimerGInterval: Cardinal;
-    function  TimerGIsRunning: Boolean;
-    function  TimerHInterval: Cardinal;
-    function  TimerHIsRunning: Boolean;
-    function  TimerIInterval: Cardinal;
-    function  TimerIIsRunning: Boolean;
-  end;
-
   TIdSipServerInviteTransaction = class(TIdSipServerTransaction)
   private
-    Timer: TIdSipServerInviteTransactionTimer;
+    fTimerGInterval: Cardinal;
 
     procedure ChangeToConfirmed(R: TIdSipRequest;
                                 T: TIdSipTransport);
     function  Create100Response(R: TIdSipRequest): TIdSipResponse;
+    procedure ScheduleTimerG;
+    procedure ScheduleTimerH;
+    procedure ScheduleTimerI;
     procedure TrySend100Response(R: TIdSipRequest);
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
-    procedure SetState(Value: TIdSipTransactionState); override;
+    procedure ChangeToCompleted; override;
     procedure TrySendResponse(R: TIdSipResponse); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
-    destructor  Destroy; override;
 
     procedure FireTimerG;
     procedure FireTimerH;
@@ -308,10 +286,7 @@ type
 
   TIdSipServerNonInviteTransaction = class(TIdSipServerTransaction)
   private
-    TimerJ: TIdSipTimer;
-
     procedure ChangeToTrying;
-    procedure OnTimerJ(Sender: TObject);
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
@@ -319,8 +294,6 @@ type
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
-    destructor  Destroy; override;
-
     procedure FireTimerJ;
     function  IsInvite: Boolean; override;
     function  IsNull: Boolean; override;
@@ -334,60 +307,21 @@ type
     function IsClient: Boolean; override;
   end;
 
-  TIdSipClientInviteTransactionTimer = class(TObject)
-  private
-    fTimerAInterval:  Cardinal;
-    fTimerAIsRunning: Boolean;
-    fTimerBInterval:  Cardinal;
-    fTimerBIsRunning: Boolean;
-    fTimerDInterval:  Cardinal;
-    fTimerDIsRunning: Boolean;
-    Lock:             TCriticalSection;
-    Owner:            TIdSipClientInviteTransaction;
-    State:            TIdSipTransactionState;
-    Timer:            TIdTimerQueue;
-
-    procedure OnException(T: TIdBaseThread;
-                          E: Exception);
-    procedure OnTimerA(Sender: TObject);
-    procedure OnTimerB(Sender: TObject);
-    procedure OnTimerD(Sender: TObject);
-  public
-    constructor Create(OwnerTran: TIdSipClientInviteTransaction;
-                       T1: Cardinal = DefaultT1);
-    destructor  Destroy; override;
-
-    procedure ChangeState(NewState: TIdSipTransactionState);
-    procedure FireTimerA;
-    procedure Start;
-    procedure StartTimerA;
-    procedure StartTimerB;
-    procedure StartTimerD;
-    procedure StopTimerA;
-    procedure StopTimerB;
-    procedure StopTimerD;
-    function  TimerAInterval: Cardinal;
-    function  TimerAIsRunning: Boolean;
-    function  TimerBInterval: Cardinal;
-    function  TimerBIsRunning: Boolean;
-    function  TimerDInterval: Cardinal;
-    function  TimerDIsRunning: Boolean;
-  end;
-
   TIdSipClientInviteTransaction = class(TIdSipClientTransaction)
   private
-    Timer: TIdSipClientInviteTransactionTimer;
+    TimerAInterval: Cardinal;
 
     procedure ChangeToCalling;
+    procedure ScheduleTimerA;
+    procedure ScheduleTimerB;
+    procedure ScheduleTimerD;
     procedure TrySendACK(R: TIdSipResponse);
   protected
     procedure ChangeToCompleted(R: TIdSipResponse;
                                 T: TIdSipTransport); override;
-    procedure SetState(Value: TIdSipTransactionState); override;
   public
     constructor Create(Dispatcher: TIdSipTransactionDispatcher;
                        InitialRequest: TIdSipRequest); override;
-    destructor  Destroy; override;
 
     procedure FireTimerA;
     procedure FireTimerB;
@@ -558,6 +492,7 @@ begin
   inherited Create;
 
   Self.MsgListeners := TIdNotificationList.Create;
+  Self.TimerLock    := TCriticalSection.Create;
 
   Self.Transports    := TObjectList.Create(false);
   Self.TransportLock := TCriticalSection.Create;
@@ -588,6 +523,7 @@ begin
   end;
   Self.TransportLock.Free;
 
+  Self.TimerLock.Free;
   Self.MsgListeners.Free;
 
   inherited Destroy;
@@ -687,9 +623,141 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.OnClientInviteTransactionTimerA(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipClientInviteTransaction) then
+      (Tran as TIdSipClientInviteTransaction).FireTimerA;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnClientInviteTransactionTimerB(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipClientInviteTransaction) then
+      (Tran as TIdSipClientInviteTransaction).FireTimerB;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnClientInviteTransactionTimerD(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipClientInviteTransaction) then
+      (Tran as TIdSipClientInviteTransaction).FireTimerD;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnServerInviteTransactionTimerG(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipServerInviteTransaction) then
+      (Tran as TIdSipServerInviteTransaction).FireTimerG;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnServerInviteTransactionTimerH(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipServerInviteTransaction) then
+      (Tran as TIdSipServerInviteTransaction).FireTimerH;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnServerInviteTransactionTimerI(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipServerInviteTransaction) then
+      (Tran as TIdSipServerInviteTransaction).FireTimerI;
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipTransactionDispatcher.OnServerNonInviteTransactionTimerJ(Event: TObject);
+var
+  Request: TIdSipRequest;
+  Tran:    TIdSipTransaction;
+begin
+  Request := (Event as TIdNotifyEventWait).Data as TIdSipRequest;
+  try
+    Tran := Self.FindTransaction(Request, false);
+    if Assigned(Tran)
+      and not Tran.IsTerminated
+      and (Tran is TIdSipServerNonInviteTransaction) then
+      (Tran as TIdSipServerNonInviteTransaction).FireTimerJ;
+  finally
+    Request.Free;
+  end;
+end;
+
 procedure TIdSipTransactionDispatcher.RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
 begin
   Self.MsgListeners.RemoveListener(Listener);
+end;
+
+procedure TIdSipTransactionDispatcher.ScheduleEvent(Event: TNotifyEvent;
+                                                    WaitTime: Cardinal;
+                                                    Request: TIdSipMessage);
+begin
+  Self.TimerLock.Acquire;
+  try
+    if Assigned(Self.Timer) then
+      Self.Timer.AddEvent(WaitTime, Event, Request);
+  finally
+    Self.TimerLock.Release;
+  end;
 end;
 
 procedure TIdSipTransactionDispatcher.Send(Msg: TIdSipMessage);
@@ -760,6 +828,36 @@ begin
   end
   else
     Self.Send(Response);
+end;
+
+function TIdSipTransactionDispatcher.TimerBInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := 64*Self.T1Interval;
+end;
+
+function TIdSipTransactionDispatcher.TimerDInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := 64*Self.T1Interval;
+end;
+
+function TIdSipTransactionDispatcher.TimerHInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := 64*Self.T1Interval;
+end;
+
+function TIdSipTransactionDispatcher.TimerIInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := Self.T4Interval;
+end;
+
+function TIdSipTransactionDispatcher.TimerJInterval: Cardinal;
+begin
+  // Result in milliseconds
+  Result := 64*Self.T1Interval;
 end;
 
 function TIdSipTransactionDispatcher.TransactionCount: Integer;
@@ -1100,6 +1198,11 @@ begin
   Self.LastResponse.Assign(R);
 end;
 
+procedure TIdSipTransaction.Terminate(Quiet: Boolean);
+begin
+  Self.ChangeToTerminated(Quiet);
+end;
+
 //* TIdSipTransaction Protected methods ****************************************
 
 procedure TIdSipTransaction.ChangeToCompleted;
@@ -1326,163 +1429,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipServerInviteTransactionTimer                                         *
-//******************************************************************************
-//* TIdSipServerInviteTransactionTimer Public methods **************************
-
-constructor TIdSipServerInviteTransactionTimer.Create(OwnerTran: TIdSipServerInviteTransaction;
-                                                      T1: Cardinal = DefaultT1;
-                                                      T2: Cardinal = DefaultT2;
-                                                      T4: Cardinal = DefaultT4);
-begin
-  inherited Create;
-  Self.Owner := OwnerTran;
-
-  Self.Timer := TIdTimerQueue.Create(false);
-  Self.Timer.OnException := Self.OnException;
-
-  Self.fTimerGInterval := T1;
-  Self.fTimerHInterval := 64*T1;
-  Self.fTimerIInterval := T4;
-
-  Self.T2 := T2
-end;
-
-destructor TIdSipServerInviteTransactionTimer.Destroy;
-begin
-  Self.Timer.Terminate;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.ChangeState(NewState: TIdSipTransactionState);
-begin
-  Self.State := NewState;
-
-  case NewState of
-    itsCompleted: begin
-      Self.StartTimerG;
-      Self.StartTimerH;
-    end;
-    itsConfirmed: begin
-      Self.StopTimerG;
-      Self.StopTimerH;
-      Self.StartTimerI;
-    end;
-    itsTerminated: begin
-      Self.StopTimerG;
-      Self.StopTimerH;
-      Self.StopTimerI;
-    end;
-  end;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.FireTimerG;
-begin
-  if (Self.fTimerGInterval < T2) then
-    Self.fTimerGInterval := 2*Self.fTimerGInterval
-  else
-    Self.fTimerGInterval := T2;
-
-  Self.Owner.FireTimerG;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StartTimerG;
-begin
-  Self.Timer.AddEvent(Self.TimerGInterval, Self.OnTimerG);
-  Self.fTimerGIsRunning := true;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StartTimerH;
-begin
-  Self.Timer.AddEvent(Self.TimerHInterval, Self.OnTimerH);
-  Self.fTimerHIsRunning := true;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StartTimerI;
-begin
-  Self.Timer.AddEvent(Self.TimerIInterval, Self.OnTimerI);
-  Self.fTimerIIsRunning := true;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StopTimerG;
-begin
-  Self.fTimerGIsRunning := false;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StopTimerH;
-begin
-  Self.fTimerHIsRunning := false;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.StopTimerI;
-begin
-  Self.fTimerIIsRunning := false;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerGInterval: Cardinal;
-begin
-  Result := Self.fTimerGInterval;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerGIsRunning: Boolean;
-begin
-  Result := Self.fTimerGIsRunning;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerHInterval: Cardinal;
-begin
-  Result := Self.fTimerHInterval;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerHIsRunning: Boolean;
-begin
-  Result := Self.fTimerHIsRunning;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerIInterval: Cardinal;
-begin
-  Result := Self.fTimerIInterval;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerIIsRunning: Boolean;
-begin
-  Result := Self.fTimerIIsRunning;
-end;
-
-//* TIdSipServerInviteTransactionTimer Private methods *************************
-
-procedure TIdSipServerInviteTransactionTimer.OnException(T: TIdBaseThread;
-                                                         E: Exception);
-begin
-  Self.Owner.ExceptionRaised(E);
-end;
-
-procedure TIdSipServerInviteTransactionTimer.OnTimerG(Sender: TObject);
-begin
-  if Self.TimerGIsRunning then begin
-    Self.FireTimerG;
-    Self.Timer.AddEvent(Self.TimerGInterval, Self.OnTimerG);
-  end;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.OnTimerH(Sender: TObject);
-begin
-  if Self.TimerHIsRunning then begin
-    Self.Owner.FireTimerH;
-    Self.Timer.AddEvent(Self.TimerHInterval, Self.OnTimerH);
-  end;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.OnTimerI(Sender: TObject);
-begin
-  if Self.TimerIIsRunning then begin
-    Self.Owner.FireTimerI;
-    Self.Timer.AddEvent(Self.TimerIInterval, Self.OnTimerI);
-  end;
-end;
-
-//******************************************************************************
 //* TIdSipServerInviteTransaction                                              *
 //******************************************************************************
 //* TIdSipServerInviteTransaction Public methods *******************************
@@ -1492,26 +1438,23 @@ constructor TIdSipServerInviteTransaction.Create(Dispatcher: TIdSipTransactionDi
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.Timer := TIdSipServerInviteTransactionTimer.Create(Self,
-                                                          Self.Dispatcher.T1Interval,
-                                                          Self.Dispatcher.T2Interval,
-                                                          Self.Dispatcher.T4Interval);
-
   Self.ChangeToProceeding;
-end;
-
-destructor TIdSipServerInviteTransaction.Destroy;
-begin
-  Self.Timer.Free;
-
-  inherited Destroy;
 end;
 
 procedure TIdSipServerInviteTransaction.FireTimerG;
 begin
+  if not (Self.State = itsCompleted) then Exit;
+
   if (Self.State = itsCompleted)
     and not Self.Dispatcher.WillUseReliableTranport(Self.InitialRequest) then
     Self.TrySendLastResponse(Self.InitialRequest);
+
+  if (Self.fTimerGInterval < Self.Dispatcher.T2Interval) then
+    Self.fTimerGInterval := 2*Self.fTimerGInterval
+  else
+    Self.fTimerGInterval := Self.Dispatcher.T2Interval;
+
+  Self.ScheduleTimerG;
 end;
 
 procedure TIdSipServerInviteTransaction.FireTimerH;
@@ -1573,10 +1516,13 @@ end;
 
 //* TIdSipServerInviteTransaction Protected methods ***************************
 
-procedure TIdSipServerInviteTransaction.SetState(Value: TIdSipTransactionState);
+procedure TIdSipServerInviteTransaction.ChangeToCompleted;
 begin
-  inherited SetState(Value);
-  Self.Timer.ChangeState(Value);
+  inherited ChangeToCompleted;
+
+  Self.fTimerGInterval := Self.Dispatcher.T1Interval;
+  Self.ScheduleTimerG;
+  Self.ScheduleTimerH;
 end;
 
 //* TIdSipServerInviteTransaction Private methods ******************************
@@ -1585,6 +1531,8 @@ procedure TIdSipServerInviteTransaction.ChangeToConfirmed(R: TIdSipRequest;
                                                           T: TIdSipTransport);
 begin
   Self.SetState(itsConfirmed);
+
+  Self.ScheduleTimerI;
 end;
 
 function TIdSipServerInviteTransaction.Create100Response(R: TIdSipRequest): TIdSipResponse;
@@ -1605,6 +1553,27 @@ begin
 
     raise;
   end;
+end;
+
+procedure TIdSipServerInviteTransaction.ScheduleTimerG;
+begin
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerG,
+                                Self.fTimerGInterval,
+                                Self.InitialRequest.Copy);
+end;
+
+procedure TIdSipServerInviteTransaction.ScheduleTimerH;
+begin
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerH,
+                                Self.Dispatcher.TimerHInterval,
+                                Self.InitialRequest.Copy);
+end;
+
+procedure TIdSipServerInviteTransaction.ScheduleTimerI;
+begin
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerInviteTransactionTimerI,
+                                Self.Dispatcher.TimerIInterval,
+                                Self.InitialRequest.Copy);
 end;
 
 procedure TIdSipServerInviteTransaction.TrySend100Response(R: TIdSipRequest);
@@ -1643,19 +1612,6 @@ begin
   inherited Create(Dispatcher, InitialRequest);
 
   Self.ChangeToTrying;
-
-  Self.TimerJ          := TIdSipTimer.Create(true);
-  Self.TimerJ.Interval := 64*Self.Dispatcher.T1Interval;
-  Self.TimerJ.OnTimer  := Self.OnTimerJ;
-end;
-
-destructor TIdSipServerNonInviteTransaction.Destroy;
-begin
-  if Assigned(Self.TimerJ) then
-    Self.TimerJ.TerminateAndWaitFor;
-  Self.TimerJ.Free;
-
-  inherited Destroy;
 end;
 
 procedure TIdSipServerNonInviteTransaction.FireTimerJ;
@@ -1709,7 +1665,9 @@ procedure TIdSipServerNonInviteTransaction.ChangeToCompleted;
 begin
   inherited ChangeToCompleted;
 
-  Self.TimerJ.Resume;
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnServerNonInviteTransactionTimerJ,
+                                Self.Dispatcher.TimerJInterval,
+                                Self.InitialRequest.Copy);
 end;
 
 procedure TIdSipServerNonInviteTransaction.TrySendResponse(R: TIdSipResponse);
@@ -1724,11 +1682,6 @@ end;
 procedure TIdSipServerNonInviteTransaction.ChangeToTrying;
 begin
   Self.SetState(itsTrying);
-end;
-
-procedure TIdSipServerNonInviteTransaction.OnTimerJ(Sender: TObject);
-begin
-  Self.FireTimerJ;
 end;
 
 procedure TIdSipServerNonInviteTransaction.TrySendLastResponse(R: TIdSipRequest);
@@ -1755,173 +1708,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipClientInviteTransactionTimer                                         *
-//******************************************************************************
-//* TIdSipClientInviteTransactionTimer Public methods **************************
-
-constructor TIdSipClientInviteTransactionTimer.Create(OwnerTran: TIdSipClientInviteTransaction;
-                                                      T1: Cardinal = DefaultT1);
-begin
-  inherited Create;
-  Self.Lock := TCriticalSection.Create;
-  Self.Owner := OwnerTran;
-
-  Self.Timer := TIdTimerQueue.Create(false);
-  Self.Timer.OnException := Self.OnException;
-
-  Self.fTimerAInterval := T1;
-  Self.fTimerBInterval := 64*T1;
-  Self.fTimerDInterval := 64*T1;
-end;
-
-destructor TIdSipClientInviteTransactionTimer.Destroy;
-begin
-  Self.Timer.Terminate;
-
-  Self.Lock.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.ChangeState(NewState: TIdSipTransactionState);
-begin
-  Self.State := NewState;
-
-  if (NewState <> itsCalling) then begin
-    Self.StopTimerA;
-    Self.StopTimerB;
-  end;
-
-  case NewState of
-    itsCompleted: begin
-      Self.StartTimerD;
-    end;
-    itsTerminated: Self.StopTimerD;
-  end;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.FireTimerA;
-begin
-  Self.Lock.Acquire;
-  try
-    Self.fTimerAInterval := 2*Self.fTimerAInterval;
-  finally
-    Self.Lock.Release;
-  end;
-
-  Owner.FireTimerA;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.Start;
-begin
-  Self.StartTimerA;
-  Self.StartTimerB;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StartTimerA;
-begin
-  Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
-  Self.fTimerAIsRunning := true;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StartTimerB;
-begin
-  Self.Timer.AddEvent(Self.TimerBInterval, Self.OnTimerB);
-  Self.fTimerBIsRunning := true;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StartTimerD;
-begin
-  Self.Timer.AddEvent(Self.TimerDInterval, Self.OnTimerD);
-  Self.fTimerDIsRunning := true;  
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StopTimerA;
-begin
-  Self.fTimerAIsRunning := false;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StopTimerB;
-begin
-  Self.fTimerBIsRunning := false;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.StopTimerD;
-begin
-  Self.fTimerDIsRunning := false;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerAInterval: Cardinal;
-begin
-  Self.Lock.Acquire;
-  try
-    Result := Self.fTimerAInterval;
-  finally
-    Self.Lock.Release;
-  end;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerAIsRunning: Boolean;
-begin
-  Result := Self.fTimerAIsRunning;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerBInterval: Cardinal;
-begin
-  Result := Self.fTimerBInterval;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerBIsRunning: Boolean;
-begin
-  Result := Self.fTimerBIsRunning;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerDInterval: Cardinal;
-begin
-  Result := Self.fTimerDInterval;
-end;
-
-function TIdSipClientInviteTransactionTimer.TimerDIsRunning: Boolean;
-begin
-  Result := Self.fTimerDIsRunning;
-end;
-
-//* TIdSipClientInviteTransactionTimer Private methods *************************
-
-procedure TIdSipClientInviteTransactionTimer.OnException(T: TIdBaseThread;
-                                                          E: Exception);
-begin
-  Self.Owner.ExceptionRaised(E);
-end;
-
-procedure TIdSipClientInviteTransactionTimer.OnTimerA(Sender: TObject);
-begin
-  if Self.TimerAIsRunning then begin
-    Self.FireTimerA;
-    Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
-  end;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.OnTimerB(Sender: TObject);
-begin
-  if Self.TimerBIsRunning then begin
-    Self.StopTimerB;
-    Owner.FireTimerB;
-  end;
-end;
-
-procedure TIdSipClientInviteTransactionTimer.OnTimerD(Sender: TObject);
-begin
-  if Self.TimerDIsRunning then begin
-    Self.StopTimerD;
-    Owner.FireTimerD;
-
-    Self.StopTimerA;
-    Self.StopTimerB;
-  end;
-end;
-
-//******************************************************************************
 //* TIdSipClientInviteTransaction                                              *
 //******************************************************************************
 //* TIdSipClientInviteTransaction Public methods *******************************
@@ -1931,34 +1717,34 @@ constructor TIdSipClientInviteTransaction.Create(Dispatcher: TIdSipTransactionDi
 begin
   inherited Create(Dispatcher, InitialRequest);
 
-  Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self,
-                                                          Self.Dispatcher.T1Interval);
+  Self.TimerAInterval := Self.Dispatcher.T1Interval;
+
   Self.ChangeToCalling;
-end;
-
-destructor TIdSipClientInviteTransaction.Destroy;
-begin
-  Self.Timer.Free;
-
-  inherited Destroy;
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;
 begin
-  if (Self.State = itsCalling) then
-    Self.TryResendInitialRequest;
+  if (Self.State <> itsCalling) then Exit;
+
+  Self.TryResendInitialRequest;
+
+  Self.TimerAInterval := 2*Self.TimerAInterval;
+  Self.ScheduleTimerA;
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerB;
 begin
-  if (Self.State = itsCalling) then
-    Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
-                     Self.InitialRequest,
-                     SessionTimeoutMsg);
+  if (Self.State <> itsCalling) then Exit;
+
+  Self.DoOnTimeout(Self.Dispatcher.FindAppropriateTransport(Self.InitialRequest),
+                   Self.InitialRequest,
+                   SessionTimeoutMsg);
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerD;
 begin
+  if (Self.State <> itsCompleted) then Exit;
+
   Self.ChangeToTerminated(true);
 end;
 
@@ -2010,7 +1796,7 @@ begin
 
     Self.ChangeToCalling;
 
-    Self.Timer.Start;
+    Self.ScheduleTimerA;
 
     Self.TrySendRequest(Self.InitialRequest);
   end;
@@ -2032,11 +1818,14 @@ begin
   // to itsTerminated.
 
   Self.SetState(itsCompleted);
+  Self.ScheduleTimerB;
+  Self.ScheduleTimerD;
 
   Self.TrySendACK(R);
 
   if FirstResponse then
     Self.NotifyOfResponse(R, T);
+
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
@@ -2046,10 +1835,25 @@ begin
   Self.SetState(itsCalling);
 end;
 
-procedure TIdSipClientInviteTransaction.SetState(Value: TIdSipTransactionState);
+procedure TIdSipClientInviteTransaction.ScheduleTimerA;
 begin
-  inherited SetState(Value);
-  Self.Timer.ChangeState(Value);
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnClientInviteTransactionTimerA,
+                                Self.TimerAInterval,
+                                Self.InitialRequest.Copy);
+end;
+
+procedure TIdSipClientInviteTransaction.ScheduleTimerB;
+begin
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnClientInviteTransactionTimerB,
+                                Self.Dispatcher.TimerBInterval,
+                                Self.InitialRequest.Copy);
+end;
+
+procedure TIdSipClientInviteTransaction.ScheduleTimerD;
+begin
+  Self.Dispatcher.ScheduleEvent(Self.Dispatcher.OnClientInviteTransactionTimerD,
+                                Self.Dispatcher.TimerDInterval,
+                                Self.InitialRequest.Copy);
 end;
 
 procedure TIdSipClientInviteTransaction.TrySendACK(R: TIdSipResponse);

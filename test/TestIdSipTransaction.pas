@@ -166,6 +166,7 @@ type
 
     procedure MoveToCompletedState;
     procedure MoveToConfirmedState;
+    procedure MoveToTerminatedState;
     procedure OnInitialRequestSentToTU(Sender: TObject;
                                        R: TIdSipRequest);
     procedure ReceiveInvite;
@@ -192,8 +193,13 @@ type
     procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestResponseRetransmissionInCompletedState;
     procedure TestSending100;
+    procedure TestTimerGEventScheduled;
+    procedure TestTimerGIntervalIncreases;
+    procedure TestTimerGOnlyFiresInCompletedState;
     procedure TestTimerGStops;
+    procedure TestTimerHEventScheduled;
     procedure TestTimerHFired;
+    procedure TestTimerIEventScheduled;
     procedure TestTimerIFired;
     procedure TestTransportErrorInCompletedState;
     procedure TestTransportErrorInProceedingState;
@@ -227,6 +233,7 @@ type
     procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestReReceiveInitialRequestInProceedingState;
     procedure TestResponseFromTUInCompletedState;
+    procedure TestTimerJEventScheduled;
     procedure TestTimerJFired;
     procedure TestTransportErrorInCompletedState;
     procedure TestTransportErrorInProceedingState;
@@ -248,6 +255,13 @@ type
     procedure SetUp; override;
   published
     procedure TestACK;
+    procedure TestFireTimerAInCallingState;
+    procedure TestFireTimerAInCompletedState;
+    procedure TestFireTimerAInProceedingState;
+    procedure TestFireTimerBInCompletedState;
+    procedure TestFireTimerBInProceedingState;
+    procedure TestFireTimerDInCallingState;
+    procedure TestFireTimerDInProceedingState;
     procedure TestInitialState;
     procedure TestInviteWithHostUnreachable;
     procedure TestIsClient;
@@ -268,7 +282,12 @@ type
     procedure TestReceive3xxInProceedingState;
     procedure TestReceiveMultipleResponsesInCompletedState;
     procedure TestReliableTransportNoInviteRetransmissions;
+    procedure TestTimerAFired;
+    procedure TestTimerAIncreases;
+    procedure TestTimerBFired;
+    procedure TestTimerBScheduled;
     procedure TestTimerDFired;
+    procedure TestTimerDScheduled;
     procedure TestTimeout;
     procedure TestTransportErrorInCallingState;
     procedure TestTransportErrorInCompletedState;
@@ -309,45 +328,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  end;
-
-  TestTIdSipServerInviteTransactionTimer = class(TTestTimer)
-  private
-    Timer:       TIdSipServerInviteTransactionTimer;
-    Transaction: TIdSipServerInviteTransaction;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestCompletedStartsTimerG;
-    procedure TestCompletedStartsTimerH;
-    procedure TestConfirmedStopsTimerG;
-    procedure TestConfirmedStopsTimerH;
-    procedure TestConfirmedStartsTimerI;
-    procedure TestTerminateStopsAllTimers;
-    procedure TestTimerHInterval;
-  end;
-
-  TestTIdSipClientInviteTransactionTimer = class(TTestTimer)
-  private
-    Timer:       TIdSipClientInviteTransactionTimer;
-    Transaction: TIdSipClientInviteTransaction;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestCallingLeavesTimerARunning;
-    procedure TestCallingLeavesTimerBRunning;
-    procedure TestCompletedStartsTimerD;
-    procedure TestCompletedStopsTimerA;
-    procedure TestCompletedStopsTimerB;
-    procedure TestInitialTimerAInterval;
-    procedure TestInitialTimerAIntervalDoubles;
-    procedure TestProceedingStopsTimerA;
-    procedure TestProceedingStopsTimerB;
-    procedure TestTerminateStopsAllTimers;
-    procedure TestTimerAInitiallyStarted;
-    procedure TestTimerBInitiallyStarted;
   end;
 
   TestTIdSipClientNonInviteTransactionTimer = class(TTestTimer)
@@ -457,7 +437,8 @@ type
 implementation
 
 uses
-  IdException, IdSdp, IdSipConsts, Math, SysUtils, TypInfo;
+  Classes, IdException, IdSdp, IdSipConsts, IdTimerQueue, Math, SysUtils,
+  TypInfo;
 
 function Suite: ITestSuite;
 begin
@@ -468,8 +449,6 @@ begin
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipServerInviteTransactionTimer.Suite);
-  Result.AddTest(TestTIdSipClientInviteTransactionTimer.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimer.Suite);
   Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveResponseMethod.Suite);
@@ -1849,6 +1828,15 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
+procedure TestTIdSipServerInviteTransaction.MoveToTerminatedState;
+begin
+  (Self.Tran as TIdSipServerInviteTransaction).FireTimerI;
+
+  CheckEquals(Transaction(itsTerminated),
+              Transaction(Self.Tran.State),
+              'MoveToTerminatedState postcondition');
+end;
+
 procedure TestTIdSipServerInviteTransaction.OnInitialRequestSentToTU(Sender: TObject;
                                                                      R: TIdSipRequest);
 begin
@@ -2205,6 +2193,180 @@ begin
   end;
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestTimerGEventScheduled;
+var
+  DebugTimer:  TIdDebugTimerQueue;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  TimerGEvent: TIdWait;
+begin
+  Event := Self.MockDispatcher.OnServerInviteTransactionTimerG;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToCompletedState;
+
+    DebugTimer.LockTimer;
+    try
+      // "+1" because entering Completed starts TWO timers - G and H.
+      Check(EventCount < DebugTimer.EventCount + 1, 'No events scheduled');
+
+      // "-2" because, arbitrarily, the implementation adds TimerG and then
+      // TimerH.
+      TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
+      Check(TimerGEvent.MatchEvent(@Event),
+            'Wrong notify event');
+      CheckEquals(Self.MockDispatcher.T1Interval,
+                  TimerGEvent.DebugWaitTime,
+                  'Bad wait time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestTimerGIntervalIncreases;
+var
+  DebugTimer:       TIdDebugTimerQueue;
+  Event:            TNotifyEvent;
+  EventCount:       Integer;
+  ExpectedInterval: Cardinal;
+  FireCount:        Integer;
+  I:                Integer;
+  TimerGEvent:      TIdWait;
+begin
+  // TimerG starts at Dispatcher.T1Interval. It then exponentially increases
+  // up to Dispatcher.T2Interval, where it remains constant.
+
+  Event := Self.MockDispatcher.OnServerInviteTransactionTimerG;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+    EventCount := DebugTimer.EventCount;
+
+    // First TimerG
+    Self.MoveToCompletedState;
+
+    DebugTimer.LockTimer;
+    try
+      // "+1" because entering Completed starts TWO timers - G and H.
+      Check(EventCount < DebugTimer.EventCount + 1, 'No event scheduled');
+
+      // "-2" because, arbitrarily, the implementation adds TimerG and then
+      // TimerH.
+      //
+      TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
+      Check(TimerGEvent.MatchEvent(@Event),
+            'Wrong notify event');
+      CheckEquals(Self.MockDispatcher.T1Interval,
+                  TimerGEvent.DebugWaitTime,
+                  'Bad wait time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+
+    FireCount := 2;
+    ExpectedInterval := 2 * Self.MockDispatcher.T1Interval;
+    while (TimerGEvent.DebugWaitTime < Self.MockDispatcher.T2Interval) do begin
+      EventCount := DebugTimer.EventCount;
+
+      (Self.Tran as TIdSipServerInviteTransaction).FireTimerG;
+
+      DebugTimer.LockTimer;
+      try
+        TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+        Check(EventCount < DebugTimer.EventCount,
+              'No event scheduled (' + IntToStr(FireCount) + ')');
+        CheckEquals(ExpectedInterval,
+                    TimerGEvent.DebugWaitTime,
+                    'Bad wait time (' + IntToStr(FireCount) + ')');
+      finally
+        DebugTimer.UnlockTimer;
+      end;
+
+      ExpectedInterval := 2 * ExpectedInterval;
+      Inc(FireCount);
+    end;
+
+    ExpectedInterval := Self.MockDispatcher.T2Interval;
+    for I := 1 to 5 do begin
+      EventCount := DebugTimer.EventCount;
+
+      (Self.Tran as TIdSipServerInviteTransaction).FireTimerG;
+
+      DebugTimer.LockTimer;
+      try
+        TimerGEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+        Check(EventCount < DebugTimer.EventCount,
+              'No event scheduled (' + IntToStr(FireCount) + ')');
+        CheckEquals(ExpectedInterval,
+                    TimerGEvent.DebugWaitTime,
+                    'Bad wait time (' + IntToStr(FireCount) + ')');
+      finally
+        DebugTimer.UnlockTimer;
+      end;
+
+      Inc(FireCount);
+    end;
+
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestTimerGOnlyFiresInCompletedState;
+var
+  DebugTimer: TIdDebugTimerQueue;
+  EventCount: Integer;
+begin
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+
+    EventCount := DebugTimer.EventCount;
+
+    (Self.Tran as TIdSipServerInviteTransaction).FireTimerG;
+
+    DebugTimer.LockTimer;
+    try
+      CheckEquals(EventCount,
+                  DebugTimer.EventCount,
+                  'Timer G fired in Proceeding');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+
+    Self.MoveToCompletedState;
+    Self.MoveToConfirmedState;
+
+    DebugTimer.LockTimer;
+    try
+      EventCount := DebugTimer.EventCount;
+      (Self.Tran as TIdSipServerInviteTransaction).FireTimerG;
+      CheckEquals(EventCount,
+                  DebugTimer.EventCount,
+                  'Timer G fired in Confirmed');
+
+      Self.MoveToTerminatedState;
+      (Self.Tran as TIdSipServerInviteTransaction).FireTimerG;
+      CheckEquals(EventCount,
+                  DebugTimer.EventCount,
+                  'Timer G fired in Confirmed');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestTimerGStops;
 begin
   Self.MoveToCompletedState;
@@ -2215,6 +2377,43 @@ begin
   CheckEquals(0,
               Self.MockDispatcher.Transport.SentResponseCount,
               'Timer G wasn''t stopped');
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestTimerHEventScheduled;
+var
+  DebugTimer:  TIdDebugTimerQueue;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  TimerHEvent: TIdWait;
+begin
+  Event := Self.MockDispatcher.OnServerInviteTransactionTimerH;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToCompletedState;
+
+    DebugTimer.LockTimer;
+    try
+      // "+1" because entering Completed starts TWO timers - G and H.
+      Check(EventCount < DebugTimer.EventCount + 1, 'No events scheduled');
+
+      // "-1" because, arbitrarily, the implementation adds TimerH and then
+      // TimerH.
+      TimerHEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+      Check(TimerHEvent.MatchEvent(@Event),
+            'Wrong notify event');
+      CheckEquals(Self.MockDispatcher.TimerHInterval,
+                  TimerHEvent.DebugWaitTime,
+                  'Bad wait time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTimerHFired;
@@ -2240,6 +2439,41 @@ begin
           'Listener not told about failure');
   finally
     Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipServerInviteTransaction.TestTimerIEventScheduled;
+var
+  DebugTimer:  TIdDebugTimerQueue;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
+begin
+  Event := Self.MockDispatcher.OnServerInviteTransactionTimerI;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToCompletedState;
+    Self.MoveToConfirmedState;
+
+    DebugTimer.LockTimer;
+    try
+      Check(EventCount < DebugTimer.EventCount, 'No event scheduled');
+
+      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+      Check(LatestEvent.MatchEvent(@Event),
+            'Wrong notify event');
+      CheckEquals(Self.MockDispatcher.TimerIInterval,
+                  LatestEvent.DebugWaitTime,
+                  'Bad wait time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
   end;
 end;
 
@@ -2644,6 +2878,41 @@ begin
               'Response from TU wasn''t dropped on the floor');
 end;
 
+procedure TestTIdSipServerNonInviteTransaction.TestTimerJEventScheduled;
+var
+  DebugTimer:  TIdDebugTimerQueue;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
+begin
+  Event := Self.MockDispatcher.OnServerNonInviteTransactionTimerJ;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToProceedingState(Self.Tran);
+    Self.MoveToCompletedState(Self.Tran);
+
+    DebugTimer.LockTimer;
+    try
+      Check(EventCount < DebugTimer.EventCount, 'No event scheduled');
+
+      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+      Check(LatestEvent.MatchEvent(@Event),
+            'Wrong notify event');
+      CheckEquals(Self.MockDispatcher.TimerJInterval,
+                  LatestEvent.DebugWaitTime,
+                  'Bad wait time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
 procedure TestTIdSipServerNonInviteTransaction.TestTimerJFired;
 var
   Tran: TIdSipTransaction;
@@ -2830,6 +3099,155 @@ begin
         'No ACK sent');
   Self.CheckACK(Self.MockDispatcher.Transport.LastACK,
                 Self.Response);
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerAInCallingState;
+var
+  DebugTimer: TIdDebugTimerQueue;
+  Event:      TNotifyEvent;
+  EventCount: Integer;
+  LastEvent:  TIdWait;
+  Tran:       TIdSipClientInviteTransaction;
+begin
+  Event := Self.MockDispatcher.OnClientInviteTransactionTimerA;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+
+    EventCount := DebugTimer.EventCount;
+
+    Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                        Self.Request) as TIdSipClientInviteTransaction;
+    try
+      Tran.SendRequest;
+
+      DebugTimer.LockTimer;
+      try
+        Check(EventCount < DebugTimer.EventCount,
+              'No event added');
+        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+        Check(LastEvent.MatchEvent(@Event),
+              'Wrong event scheduled');
+        CheckEquals(Self.MockDispatcher.T1Interval,
+                    LastEvent.DebugWaitTime,
+                    'Wrong time');
+      finally
+        DebugTimer.UnlockTimer;
+      end;
+    finally
+      Tran.Free;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerAInCompletedState;
+var
+  SentRequestCount: Cardinal;
+begin
+  Self.MoveToProceedingState(Self.Tran);
+  Self.MoveToCompletedState(Self.Tran);
+
+  SentRequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+
+  (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
+
+  CheckEquals(SentRequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'Timer A fired in Completed state');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerAInProceedingState;
+var
+  SentRequestCount: Cardinal;
+begin
+  Self.MoveToProceedingState(Self.Tran);
+
+  SentRequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+
+  (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
+
+  CheckEquals(SentRequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'Timer A fired in Proceeding state');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerBInCompletedState;
+var
+  Tran: TIdSipClientInviteTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
+  try
+    Tran.SendRequest;
+    Self.MoveToProceedingState(Tran);
+    Self.MoveToCompletedState(Tran);
+    Tran.FireTimerB;
+
+    CheckNotEquals(Transaction(itsTerminated),
+                   Transaction(Tran.State),
+                   'Timer B fired in Calling state');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerBInProceedingState;
+var
+  Tran: TIdSipClientInviteTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
+  try
+    Tran.SendRequest;
+    Self.MoveToProceedingState(Tran);
+    Tran.FireTimerB;
+
+    CheckNotEquals(Transaction(itsTerminated),
+                   Transaction(Tran.State),
+                   'Timer B fired in Proceeding state');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerDInCallingState;
+var
+  Tran: TIdSipClientInviteTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
+  try
+    Tran.SendRequest;
+    Tran.FireTimerD;
+
+    CheckNotEquals(Transaction(itsTerminated),
+                   Transaction(Tran.State),
+                   'Timer D fired in Calling state');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestFireTimerDInProceedingState;
+var
+  Tran: TIdSipClientInviteTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
+  try
+    Tran.SendRequest;
+    Self.MoveToProceedingState(Tran);
+    Tran.FireTimerD;
+
+    CheckNotEquals(Transaction(itsTerminated),
+                   Transaction(Tran.State),
+                   'Timer D fired in Proceeding state');
+  finally
+    Tran.Free;
+  end;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestInitialState;
@@ -3133,6 +3551,127 @@ begin
   end;
 end;
 
+procedure TestTIdSipClientInviteTransaction.TestTimerAFired;
+var
+  SentRequestCount: Cardinal;
+begin
+  Self.MoveToProceedingState(Self.Tran);
+  Self.MoveToCompletedState(Self.Tran);
+
+  SentRequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+
+  (Self.Tran as TIdSipClientInviteTransaction).FireTimerA;
+
+  CheckEquals(SentRequestCount,
+              Self.MockDispatcher.Transport.SentRequestCount,
+              'Timer A fired in Proceeding state');
+end;              
+
+procedure TestTIdSipClientInviteTransaction.TestTimerAIncreases;
+var
+  DebugTimer:       TIdDebugTimerQueue;
+  ExpectedInterval: Cardinal;
+  Event:            TNotifyEvent;
+  EventCount:       Integer;
+  FireCount:        Integer;
+  LastEvent:        TIdWait;
+  Tran:             TIdSipClientInviteTransaction;
+begin
+  Tran := Self.Tran as TIdSipClientInviteTransaction;
+  Event := Self.MockDispatcher.OnClientInviteTransactionTimerA;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+
+
+    ExpectedInterval := 2*Self.MockDispatcher.T1Interval;
+    for FireCount := 2 to 8 do begin
+      EventCount := DebugTimer.EventCount;
+
+      Tran.FireTimerA;
+
+      DebugTimer.LockTimer;
+      try
+        Check(EventCount < DebugTimer.EventCount,
+              'No event added (' + IntToStr(FireCount) + ')');
+        LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+        Check(LastEvent.MatchEvent(@Event),
+              'Wrong event added (' + IntToStr(FireCount) + ')');
+        CheckEquals(ExpectedInterval,
+                    LastEvent.DebugWaitTime,
+                    'Wrong time added (' + IntToStr(FireCount) + ')');
+      finally
+        DebugTimer.UnlockTimer;
+      end;
+      ExpectedInterval := 2 * ExpectedInterval;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestTimerBFired;
+var
+  Tran: TIdSipClientInviteTransaction;
+begin
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request) as TIdSipClientInviteTransaction;
+  try
+    Tran.AddTransactionListener(Self);
+    Self.CheckTerminated := Self.Terminated;
+
+    Tran.SendRequest;
+
+    Tran.FireTimerB;
+
+    CheckEquals(Transaction(itsTerminated),
+                Transaction(Tran.State),
+                'Terminated');
+  finally
+    Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestTimerBScheduled;
+var
+  DebugTimer: TIdDebugTimerQueue;
+  Event:      TNotifyEvent;
+  EventCount: Integer;
+  TimerBEvent:  TIdWait;
+begin
+  Event := Self.MockDispatcher.OnClientInviteTransactionTimerB;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToProceedingState(Self.Tran);
+    Self.MoveToCompletedState(Self.Tran);
+
+    DebugTimer.LockTimer;
+    try
+      // "+1" because the transaction schedules TWO events
+      Check(EventCount < DebugTimer.EventCount + 1,
+            'No event added');
+
+      // "-2" because the implementation schedules timer B then timer D.
+      TimerBEvent := DebugTimer.EventAt(DebugTimer.EventCount - 2);
+      Check(TimerBEvent.MatchEvent(@Event),
+            'Wrong event scheduled');
+      CheckEquals(Self.MockDispatcher.TimerBInterval,
+                  TimerBEvent.DebugWaitTime,
+                  'Wrong time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
+  end;
+end;
+
 procedure TestTIdSipClientInviteTransaction.TestTimerDFired;
 var
   Tran: TIdSipClientInviteTransaction;
@@ -3157,6 +3696,42 @@ begin
     Check(not Self.TransactionTerminated, 'OnTerminated fired');
   finally
     Tran.Free;
+  end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestTimerDScheduled;
+var
+  DebugTimer: TIdDebugTimerQueue;
+  Event:      TNotifyEvent;
+  EventCount: Integer;
+  LastEvent:  TIdWait;
+begin
+  Event := Self.MockDispatcher.OnClientInviteTransactionTimerD;
+  DebugTimer := TIdDebugTimerQueue.Create;
+  try
+    Self.MockDispatcher.Timer := DebugTimer;
+
+    EventCount := DebugTimer.EventCount;
+
+    Self.MoveToProceedingState(Self.Tran);
+    Self.MoveToCompletedState(Self.Tran);
+
+    DebugTimer.LockTimer;
+    try
+      Check(EventCount < DebugTimer.EventCount,
+            'No event added');
+      LastEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+      Check(LastEvent.MatchEvent(@Event),
+            'Wrong event scheduled');
+      CheckEquals(Self.MockDispatcher.TimerDInterval,
+                  LastEvent.DebugWaitTime,
+                  'Wrong time');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
+  finally
+    Self.MockDispatcher.Timer := nil;
+    DebugTimer.Terminate;
   end;
 end;
 
@@ -3558,199 +4133,6 @@ begin
   Self.Dispatcher.Free;
 
   inherited TearDown;
-end;
-
-//******************************************************************************
-//* TestTIdSipServerInviteTransactionTimer                                     *
-//******************************************************************************
-//* TestTIdSipServerInviteTransactionTimer Public methods **********************
-
-procedure TestTIdSipServerInviteTransactionTimer.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Request.Method := MethodInvite;
-  Self.Transaction := TIdSipServerInviteTransaction.Create(Self.Dispatcher,
-                                                           Self.Request);
-
-  Self.Timer := TIdSipServerInviteTransactionTimer.Create(Self.Transaction);
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TearDown;
-begin
-  Self.Timer.Free;
-  Self.Transaction.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipServerInviteTransactionTimer Published methods *******************
-
-procedure TestTIdSipServerInviteTransactionTimer.TestCompletedStartsTimerG;
-begin
-  Self.Timer.ChangeState(itsCompleted);
-  Check(Self.Timer.TimerGIsRunning, 'Timer G wasn''t started');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestCompletedStartsTimerH;
-begin
-  Self.Timer.ChangeState(itsCompleted);
-  Check(Self.Timer.TimerHIsRunning, 'Timer H wasn''t started');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestTimerHInterval;
-begin
-  CheckEquals(64*DefaultT1,
-              Self.Timer.TimerHInterval,
-              'Timer H interval');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestConfirmedStopsTimerG;
-begin
-  Self.Timer.StartTimerG;
-  Self.Timer.ChangeState(itsConfirmed);
-  Check(not Self.Timer.TimerGIsRunning, 'Timer G wasn''t stopped');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestConfirmedStopsTimerH;
-begin
-  Self.Timer.StartTimerH;
-  Self.Timer.ChangeState(itsConfirmed);
-  Check(not Self.Timer.TimerHIsRunning, 'Timer H wasn''t stopped');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestConfirmedStartsTimerI;
-begin
-  Self.Timer.ChangeState(itsConfirmed);
-  Check(Self.Timer.TimerIIsRunning, 'Timer I wasn''t started');
-end;
-
-procedure TestTIdSipServerInviteTransactionTimer.TestTerminateStopsAllTimers;
-begin
-  Self.Timer.StartTimerG;
-  Self.Timer.StartTimerH;
-  Self.Timer.StartTimerI;
-  Self.Timer.ChangeState(itsTerminated);
-  Check(not Self.Timer.TimerGIsRunning, 'Timer G wasn''t stopped');
-  Check(not Self.Timer.TimerHIsRunning, 'Timer H wasn''t stopped');
-  Check(not Self.Timer.TimerIIsRunning, 'Timer I wasn''t stopped');
-end;
-
-//******************************************************************************
-//* TestTIdSipClientInviteTransactionTimer                                     *
-//******************************************************************************
-//* TestTIdSipClientInviteTransactionTimer Public methods **********************
-
-procedure TestTIdSipClientInviteTransactionTimer.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Request.Method := MethodInvite;
-  Self.Transaction := TIdSipClientInviteTransaction.Create(Self.Dispatcher,
-                                                           Self.Request);
-
-  Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self.Transaction);
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TearDown;
-begin
-  Self.Timer.Free;
-  Self.Transaction.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipClientInviteTransactionTimer Published methods *******************
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCallingLeavesTimerARunning;
-begin
-  Self.Timer.StartTimerA;
-  Self.Timer.ChangeState(itsCalling);
-  Self.Timer.ChangeState(itsCalling);
-  Check(Self.Timer.TimerAIsRunning, 'Timer A was stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCallingLeavesTimerBRunning;
-begin
-  Self.Timer.StartTimerB;
-  Self.Timer.ChangeState(itsCalling);
-  Self.Timer.ChangeState(itsCalling);
-  Check(Self.Timer.TimerBIsRunning, 'Timer B was stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStartsTimerD;
-begin
-  Self.Timer.ChangeState(itsCompleted);
-  Check(Self.Timer.TimerDIsRunning, 'Timer D wasn''t started');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStopsTimerA;
-begin
-  Self.Timer.StartTimerA;
-  Self.Timer.ChangeState(itsCompleted);
-  Check(not Self.Timer.TimerAIsRunning, 'Timer A wasn''t stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStopsTimerB;
-begin
-  Self.Timer.StartTimerB;
-  Self.Timer.ChangeState(itsCompleted);
-  Check(not Self.Timer.TimerBIsRunning, 'Timer B wasn''t stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestInitialTimerAInterval;
-begin
-  CheckEquals(DefaultT1,
-              Self.Timer.TimerAInterval,
-              'TimerA''s initial interval');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestInitialTimerAIntervalDoubles;
-var
-  I: Integer;
-begin
-  for I := 1 to 6 do begin
-    Self.Timer.FireTimerA;
-    CheckEquals(Power(2, I)*DefaultT1,
-                Self.Timer.TimerAInterval,
-                'TimerA''s interval after ' + IntToStr(I) + ' fires');
-  end;
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestProceedingStopsTimerA;
-begin
-  Self.Timer.StartTimerA;
-  Self.Timer.ChangeState(itsProceeding);
-  Check(not Self.Timer.TimerAIsRunning, 'Timer A wasn''t stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestProceedingStopsTimerB;
-begin
-  Self.Timer.StartTimerB;
-  Self.Timer.ChangeState(itsProceeding);
-  Check(not Self.Timer.TimerBIsRunning, 'Timer B wasn''t stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestTerminateStopsAllTimers;
-begin
-  Self.Timer.Start;
-  Self.Timer.StartTimerD;
-  Self.Timer.ChangeState(itsTerminated);
-  Check(not Self.Timer.TimerAIsRunning, 'Timer A wasn''t stopped');
-  Check(not Self.Timer.TimerBIsRunning, 'Timer B wasn''t stopped');
-  Check(not Self.Timer.TimerDIsRunning, 'Timer D wasn''t stopped');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestTimerAInitiallyStarted;
-begin
-  Self.Timer.Start;
-  Check(Self.Timer.TimerAIsRunning, 'Timer A not running initially');
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestTimerBInitiallyStarted;
-begin
-  Self.Timer.Start;
-  Check(Self.Timer.TimerBIsRunning, 'Timer B not running initially');
 end;
 
 //******************************************************************************
