@@ -4,14 +4,10 @@ interface
 
 uses
   Classes, IdRTP, IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
-  IdSipCore, IdSipTransaction, IdSipTransport, TestFrameworkEx;
+  IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
+  TestFrameworkEx;
 
 type
-  TTestRTP = class(TThreadingTestCase)
-  public
-    procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-  end;
-
   TTestCaseSip = class(TThreadingTestCase)
     procedure CheckEquals(Expected, Received: TIdSipURI; Message: String); overload;
   end;
@@ -29,13 +25,16 @@ type
     property NewData: Boolean read fNewData;
   end;
 
-  TIdSipTestMessageListener = class(TIdSipInterfacedObject, IIdSipMessageListener)
+  TIdSipTestMessageListener = class(TIdSipInterfacedObject,
+                                    IIdSipMessageListener)
   private
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
   public
     constructor Create;
 
@@ -141,30 +140,6 @@ uses
   SysUtils;
 
 //******************************************************************************
-//* TTestRTP                                                                   *
-//******************************************************************************
-//* TTestRTP Public methods ****************************************************
-
-procedure TTestRTP.CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-var
-  I: Integer;
-begin
-  CheckEquals(Expected.Version,            Received.Version,              'Version');
-  CheckEquals(Expected.HasPadding,         Received.HasPadding,           'HasPadding');
-  CheckEquals(Expected.CsrcCount,          Received.CsrcCount,            'CSRC count');
-  CheckEquals(Expected.IsMarker,           Received.IsMarker,             'IsMarker');
-  CheckEquals(Expected.PayloadType,        Received.PayloadType,          'PayloadType');
-  CheckEquals(Expected.SequenceNo,         Received.SequenceNo,           'SequenceNo');
-  CheckEquals(Integer(Expected.Timestamp), Integer(Received.Timestamp),   'Timestamp');
-  CheckEquals(Expected.SyncSrcID,          Received.SyncSrcID,            'SSRC ID');
-
-  for I := 0 to Expected.CsrcCount - 1 do
-    CheckEquals(Integer(Expected.CsrcIDs[I]),
-                Integer(Received.CsrcIDs[I]),
-                IntToStr(I) + 'th CSRC ID');
-end;
-
-//******************************************************************************
 //* TTestCaseSip                                                               *
 //******************************************************************************
 //* TTestCaseSip Public methods ************************************************
@@ -210,12 +185,14 @@ end;
 
 //* TIdSipTestMessageListener Private methods **********************************
 
-procedure TIdSipTestMessageListener.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TIdSipTestMessageListener.OnReceiveRequest(const Request: TIdSipRequest;
+                                                     const ReceivedOn: TIdSipIPTarget);
 begin
   Self.fReceivedRequest := true;
 end;
 
-procedure TIdSipTestMessageListener.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TIdSipTestMessageListener.OnReceiveResponse(const Response: TIdSipResponse;
+                                                      const ReceivedOn: TIdSipIPTarget);
 begin
   Self.fReceivedResponse := true;
 end;
