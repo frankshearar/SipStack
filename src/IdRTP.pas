@@ -4585,7 +4585,7 @@ begin
   Self.Members    := TIdRTPMemberTable.Create;
 
   Self.TransmissionLock := TCriticalSection.Create;
-  Self.Timer            := TIdTimerQueue.Create;
+  Self.Timer            := TIdTimerQueue.Create(false);
 
   Self.AssumedMTU            := Self.DefaultAssumedMTU;
   Self.MissedReportTolerance := Self.DefaultMissedReportTolerance;
