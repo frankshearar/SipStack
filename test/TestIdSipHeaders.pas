@@ -544,6 +544,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestContactFor;
     procedure TestCreateOnEmptySet;
     procedure TestCurrentContact;
     procedure TestHasContact;
@@ -5217,6 +5218,28 @@ begin
 end;
 
 //* TestTIdSipContacts Published methods ***************************************
+
+procedure TestTIdSipContacts.TestContactFor;
+var
+  From: TIdSipFromHeader;
+  H:    TIdSipHeader;
+begin
+  From := TIdSipFromHeader.Create;
+  try
+    From.Address.Uri := 'sip:case@fried-neurons.org';
+
+    Check(nil = Self.Contacts.ContactFor(From), 'Empty set');
+
+    Self.Contacts.Add(ContactHeaderFull).Value := From.Value + '1';
+    H := Self.Contacts.Add(ContactHeaderFull);
+    H.Value := From.Value;
+    Self.Contacts.Add(ContactHeaderFull).Value := From.Value + '2';
+
+    Check(H = Self.Contacts.ContactFor(From), 'Wrong header');
+  finally
+    From.Free;
+  end;
+end;
 
 procedure TestTIdSipContacts.TestCreateOnEmptySet;
 var

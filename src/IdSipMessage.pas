@@ -827,6 +827,7 @@ type
     constructor Create; overload;
     destructor  Destroy; override;
 
+    function ContactFor(Address: TIdSipAddressHeader): TIdSipContactHeader;
     function CurrentContact: TIdSipContactHeader;
     function HasContact(Address: TIdSipAddressHeader): Boolean;
   end;
@@ -5210,6 +5211,19 @@ begin
   Self.BlankHeaders.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipContacts.ContactFor(Address: TIdSipAddressHeader): TIdSipContactHeader;
+begin
+  Result := nil;
+  Self.First;
+
+  while Self.HasNext and not Assigned(Result) do begin
+    if Self.CurrentContact.Address.Equals(Address.Address) then
+      Result := Self.CurrentContact;
+
+    Self.Next;
+  end;
 end;
 
 function TIdSipContacts.CurrentContact: TIdSipContactHeader;
