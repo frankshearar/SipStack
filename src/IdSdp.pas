@@ -590,7 +590,6 @@ type
                      Binding: TIdSocketHandle);
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdSocketHandle);
-    function  PeerAt(Index: Integer): TIdFilteredRTPPeer;
     function  ServerAt(Index: Integer): TIdRTPServer;
     procedure SetRemoteSessionDescription(const Value: String);
     procedure SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
@@ -3692,11 +3691,6 @@ procedure TIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
                                        Binding: TIdSocketHandle);
 begin
   Self.NotifyRTPListenersOfRTP(Packet, Binding);
-end;
-
-function TIdSdpPayloadProcessor.PeerAt(Index: Integer): TIdFilteredRTPPeer;
-begin
-//  Result := Self.Filters[Index] as TIdFilteredRTPPeer;
 end;
 
 function TIdSdpPayloadProcessor.ServerAt(Index: Integer): TIdRTPServer;
