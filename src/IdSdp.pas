@@ -2443,6 +2443,9 @@ class function TIdSdpParser.IsByteString(const Token: String): Boolean;
 var
   I: Integer;
 begin
+//   byte-string =         1*(0x01..0x09|0x0b|0x0c|0x0e..0xff)
+//                         ;any byte except NUL, CR or LF
+
   Result := Token <> '';
 
   if Result then
