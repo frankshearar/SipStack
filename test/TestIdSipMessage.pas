@@ -2087,7 +2087,7 @@ begin
         FromFilter.Free;
       end;
 
-      CheckEquals(SIPOK, Response.StatusCode,           'StatusCode mismatch');
+      CheckEquals(SIPOK, Response.StatusCode,        'StatusCode mismatch');
       Check(Response.CSeq.Equals(Self.Request.CSeq), 'Cseq header mismatch');
       Check(Response.From.Equals(Self.Request.From), 'From header mismatch');
       Check(Response.Path.Equals(Self.Request.Path), 'Via headers mismatch');
