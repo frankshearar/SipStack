@@ -135,7 +135,9 @@ type
     property Data: String read fData write fData;
   end;
 
-  // I am a T.140 payload, as defined in RFC 2793 (and the bis draft)
+  // I am a T.140 payload, as defined in RFC 2793 (and the bis draft). Note that
+  // while I provide Unicode (i.e., UCS-2) access to my data, I read to and
+  // write from the network in UTF-8, as per RFC 2793 and its successor(s).
   TIdRTPT140Payload = class(TIdRTPPayload)
   private
     fBlock: WideString;
@@ -727,6 +729,7 @@ type
     fMaxMisOrder:                 Word;
     fMinimumSequentialPackets:    Word;
     fPreviousPacketTransit:       Int64; // Transit time of previous packet in clock rate ticks
+//    fPreValidatedData:            TIdRTPpac
     fProbation:                   Cardinal; // The number of packets still to be received before this member's considered valid
     fReceivedPackets:             Cardinal; // The number of received packets as of right now
     fReceivedPrior:               Cardinal; // The number of received packets in the last UpdateStatistics
@@ -1102,6 +1105,7 @@ type
   EStreamTooShort = class(Exception);
   EUnknownSDES = class(Exception);
 
+// Math and conversion functions
 function  AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
 function  AddModuloWord(Addend, Augend: Word): Word;
 function  DateTimeToNTPFractionsOfASecond(DT: TDateTime): Cardinal;
@@ -1117,6 +1121,17 @@ function  NowAsNTP: TIdNTPTimestamp;
 function  NtoHL(Value: Cardinal): Cardinal;
 function  NtoHS(Value: Word): Cardinal;
 
+// Unicode functions
+function CodePointToUTF8(CodePoint: DWord): String;
+function HighSurrogate(CodePoint: DWord): Word;
+function IsHighSurrogate(W: Word): Boolean;
+function IsLowSurrogate(W: Word): Boolean;
+function LowSurrogate(CodePoint: DWord): Word;
+function SurrogateToCodePoint(HighSurrogate, LowSurrogate: Word): DWord;
+function UTF16LEToUTF8(const W: WideString): String;
+function UTF8ToUTF16LE(const S: String): WideString;
+
+// Stream functions
 function  Eof(Src: TStream): Boolean;
 function  PeekByte(Src: TStream): Byte;
 function  PeekWord(Src: TStream): Word;
@@ -1229,7 +1244,7 @@ const
   SDESNote  = 7;
   SDESPriv  = 8;
 
-// From RFC 2793
+// From RFC 2793 and T.140
 const
   InterleavedT140ClockRate    = 8000;
   RedundancyEncoding          = 'RED'; // same as in RFC 2198
@@ -1241,6 +1256,10 @@ const
   RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncoding;
   T140MimeType                = TextMediaType + '/' + T140Encoding;
   T140RecommendedBufferTime   = 300;
+  T140ByteOrderMark           = WideChar($feff);
+  T140Escape                  = WideChar($001b);
+  T140StartOfString           = WideChar($0098);
+  T140StringTerminator        = WideChar($009C);
 
 // From RFC 2833
 const
@@ -1269,6 +1288,12 @@ const
 const
   NullEncodingName     = 'null';
   ReservedEncodingName = 'reserved';
+
+const
+  UnicodeHighSurrogateStart = $D800;
+  UnicodeHighSurrogateEnd   = $DBFF;
+  UnicodeLowSurrogateStart  = $DC00;
+  UnicodeLowSurrogateEnd    = $DFFF;
 
 implementation
 
@@ -1416,6 +1441,196 @@ end;
 function NtoHS(Value: Word): Cardinal;
 begin
   Result := HtoNS(Value);
+end;
+
+function CodePointToUTF8(CodePoint: DWord): String;
+begin
+  if      (CodePoint < $00000080) then begin
+    // 0000 0000-0000 007F
+    Result := Chr(CodePoint)
+  end
+  else if (CodePoint < $00000800) then begin
+    // 0000 0080-0000 07FF
+    Result := Chr($C0 or ((CodePoint shr 6) and $FF))
+            + Chr($80 or  (CodePoint and $3F));
+  end
+  else if (CodePoint < $00010000) then begin
+    // 0000 0800-0000 FFFF
+    Result := Chr($E0 or ((CodePoint shr 12) and $FF))
+            + Chr($80 or ((CodePoint shr 6)  and $3F))
+            + Chr($80 or  (CodePoint and $3F));
+  end
+  else if (CodePoint < $00200000) then begin
+    // 0001 0000-001F FFFF
+    Result := Chr($F0 or ((CodePoint shr 18) and $FF))
+            + Chr($80 or ((CodePoint shr 12) and $3F))
+            + Chr($80 or ((CodePoint shr 6)  and $3F))
+            + Chr($80 or  (CodePoint and $3F));
+  end
+  else if (CodePoint < $04000000) then begin
+    // 0020 0000-03FF FFFF
+    Result := Chr($F8 or ((CodePoint shr 24) and $FF))
+            + Chr($80 or ((CodePoint shr 18) and $3F))
+            + Chr($80 or ((CodePoint shr 12) and $3F))
+            + Chr($80 or ((CodePoint shr 6)  and $3F))
+            + Chr($80 or  (CodePoint and $3F));
+  end
+  else if (CodePoint < $80000000) then begin
+    // 0400 0000-7FFF FFFF
+    Result := Chr($FC or ((CodePoint shr 30) and $FF))
+            + Chr($80 or ((CodePoint shr 24) and $3F))
+            + Chr($80 or ((CodePoint shr 18) and $3F))
+            + Chr($80 or ((CodePoint shr 12) and $3F))
+            + Chr($80 or ((CodePoint shr 6)  and $3F))
+            + Chr($80 or  (CodePoint and $3F));
+  end
+  else
+    raise EConvertError.Create('Not a Unicode character');
+end;
+
+function HighSurrogate(CodePoint: DWord): Word;
+var
+  U:    DWord;
+  X, W: Word;
+begin
+  X := CodePoint and $FFFF;
+  U := (CodePoint shr 16) and ((1 shl 5) - 1);
+  W := U - 1;
+
+  Result := UnicodeHighSurrogateStart or (W shl 6) or (X shr 10);
+end;
+
+function IsHighSurrogate(W: Word): Boolean;
+begin
+  Result := (UnicodeHighSurrogateStart <= W)
+        and (W <= UnicodeHighSurrogateEnd);
+end;
+
+function IsLowSurrogate(W: Word): Boolean;
+begin
+  Result := (UnicodeLowSurrogateStart <= W)
+        and (W <= UnicodeLowSurrogateEnd);
+end;
+
+function LowSurrogate(CodePoint: DWord): Word;
+var
+  X: Word;
+begin
+  X := CodePoint and $FFFF;
+
+  Result := UnicodeLowSurrogateStart or (X and ((1 shl 10) - 1));
+end;
+
+function SurrogateToCodePoint(HighSurrogate, LowSurrogate: Word): DWord;
+const
+  SURROGATE_OFFSET = $10000
+                   - (UnicodeHighSurrogateStart shl 10)
+                   - UnicodeLowSurrogateStart;
+begin
+  Result := (HighSurrogate shl 10) + LowSurrogate + SURROGATE_OFFSET;
+end;
+
+function UTF16LEToUTF8(const W: WideString): String;
+var
+  CodePoint: DWord;
+  I:         Integer;
+begin
+  Result := '';
+  I := 1;
+  while (I <= Length(W)) do begin
+    CodePoint := 0;
+    if not IsHighSurrogate(Ord(W[I])) then begin
+      CodePoint := Ord(W[I]);
+    end
+    else begin
+      if (Length(W) < I + 1) then
+        raise EConvertError.Create('String too short for last UTF-16 char');
+      CodePoint := SurrogateToCodePoint(Ord(W[I]), Ord(W[I + 1]));
+
+      Inc(I);
+    end;
+
+    Result := Result + CodePointToUTF8(CodePoint);
+    Inc(I);
+  end;
+end;
+
+function  UTF8ToUTF16LE(const S: String): WideString;
+var
+  CodePoint: DWord;
+  I:         Integer;
+begin
+  CodePoint := 0;
+  Result    := '';
+  I         := 1;
+  while (I <= Length(S)) do begin
+    if (Ord(S[I]) < $80) then
+      // 0000 0000-0000 007F
+      // 0xxxxxxx
+      CodePoint := Ord(S[I])
+    else if (Ord(S[I]) < $E0) then begin
+      // 0000 0080-0000 07FF
+      // 110xxxxx 10xxxxxx
+      if (Length(S) < I + 1) then
+        raise EConvertError.Create('String too short for last UTF-8 char');
+      CodePoint := ((Ord(S[I])  and $1F) shl 6)
+               + (Ord(S[I + 1]) and $3F);
+      Inc(I);
+    end
+    else if (Ord(S[I]) < $F0) then begin
+      // 0000 0800-0000 FFFF
+      // 1110xxxx 10xxxxxx 10xxxxxx
+      if (Length(S) < I + 2) then
+        raise EConvertError.Create('String too short for last UTF-8 char');
+      CodePoint := ((Ord(S[I])   and $0F) shl 12)
+               + ((Ord(S[I + 1]) and $3F) shl 6)
+               +  (Ord(S[I + 2]) and $3F);
+      Inc(I, 2);
+    end
+    else if (Ord(S[I]) < $F8) then begin
+      // 0001 0000-001F FFFF
+      // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+      if (Length(S) < I + 3) then
+        raise EConvertError.Create('String too short for last UTF-8 char');
+      CodePoint := ((Ord(S[I])   and $07) shl 18)
+               + ((Ord(S[I + 1]) and $3F) shl 12)
+               + ((Ord(S[I + 2]) and $3F) shl 6)
+               +  (Ord(S[I + 3]) and $3F);
+      Inc(I, 3);
+    end
+    else if (Ord(S[I]) < $FC) then begin
+      // 0020 0000-03FF FFFF
+      // 111110xx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
+      if (Length(S) < I + 4) then
+        raise EConvertError.Create('String too short for last UTF-8 char');
+      CodePoint := ((Ord(S[I])   and $03) shl 24)
+               + ((Ord(S[I + 1]) and $3F) shl 18)
+               + ((Ord(S[I + 2]) and $3F) shl 12)
+               + ((Ord(S[I + 3]) and $3F) shl 6)
+               +  (Ord(S[I + 4]) and $3F);
+      Inc(I, 4);
+    end
+    else if (Ord(S[I]) < $FE) then begin
+      // 0400 0000-7FFF FFFF
+      // 1111110x 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx 10xxxxxx
+      if (Length(S) < I + 5) then
+        raise EConvertError.Create('String too short for last UTF-8 char');
+      CodePoint := ((Ord(S[I])   and $01) shl 30)
+               + ((Ord(S[I + 1]) and $3F) shl 24)
+               + ((Ord(S[I + 2]) and $3F) shl 18)
+               + ((Ord(S[I + 3]) and $3F) shl 12)
+               + ((Ord(S[I + 4]) and $3F) shl 6)
+               +  (Ord(S[I + 5]) and $3F);
+      Inc(I, 5);
+    end;
+
+    if (CodePoint > Ord(High(WideChar))) then
+      Result := Result + WideChar(HighSurrogate(CodePoint))
+                       + WideChar(LowSurrogate(CodePoint))
+    else
+      Result := Result + WideChar(CodePoint and $FFFF);
+    Inc(I);
+  end;
 end;
 
 function Eof(Src: TStream): Boolean;
@@ -1845,12 +2060,12 @@ end;
 
 procedure TIdRTPT140Payload.ReadFrom(Src: TStream);
 begin
-  Self.Block := ReadRemainderOfStreamAsWideString(Src);
+  Self.Block := UTF8ToUTF16LE(ReadRemainderOfStream(Src));
 end;
 
 procedure TIdRTPT140Payload.PrintOn(Dest: TStream);
 begin
-  WriteWideString(Dest, Self.Block);
+  WriteString(Dest, UTF16LEToUTF8(Self.Block));
 end;
 
 //* TIdRTPT140Payload Protected methods ****************************************
@@ -4995,12 +5210,11 @@ begin
 
   SSRC := Self.Member(RTP.SyncSrcID);
 
-  if SSRC.UpdateStatistics(RTP,
-                           DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
-                                                  RTP.Payload.ClockRate)) then begin
-    // We send valid, in-sequence RTP up the stack
-    Self.NotifyListenersOfData(RTP.Payload, Binding);
-  end;
+  SSRC.UpdateStatistics(RTP,
+                        DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
+                                               RTP.Payload.ClockRate));
+  // We send RTP (not necessarily valid, in-sequence RTP) up the stack
+  Self.NotifyListenersOfData(RTP.Payload, Binding);
 end;
 
 function TIdRTPSession.ReceiverCount: Cardinal;

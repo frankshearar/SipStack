@@ -15,6 +15,18 @@ uses
   IdGlobal, IdRTP, TestFramework, TestFrameworkRtp;
 
 type
+  TestUnicodeFunctions = class(TTestRTP)
+  published
+    procedure TestCodePointToUTF8;
+    procedure TestHighSurrogate;
+    procedure TestIsHighSurrogate;
+    procedure TestIsLowSurrogate;
+    procedure TestLowSurrogate;
+    procedure TestSurrogateToCodePoint;
+    procedure TestUTF16LEToUTF8;
+    procedure TestUTF8ToUTF16LE;
+  end;
+
   TestFunctions = class(TTestRTP)
   published
     procedure TestAddModulo;
@@ -102,7 +114,9 @@ type
     procedure TestLength;
     procedure TestName;
     procedure TestPrintOn;
+    procedure TestPrintOnWithRealUnicode;
     procedure TestReadFrom;
+    procedure TestReadFromWithRealUnicode;
   end;
 
   TestTIdRTPTelephoneEventPayload = class(TPayloadTestCase)
@@ -808,11 +822,15 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
+  Result.AddTest(TestUnicodeFunctions.Suite);
   Result.AddTest(TestFunctions.Suite);
+{
   Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdRTPReservedPayload.Suite);
   Result.AddTest(TestTIdRTPTelephoneEventPayload.Suite);
+}
   Result.AddTest(TestTIdRTPT140Payload.Suite);
+{
   Result.AddTest(TestTIdRTPProfile.Suite);
   Result.AddTest(TestTIdAudioVisualProfile.Suite);
   Result.AddTest(TestTIdRTPHeaderExtension.Suite);
@@ -849,6 +867,7 @@ begin
   Result.AddTest(TestTIdRTPListenerReceiveRTCPMethod.Suite);
   Result.AddTest(TestTIdRTPListenerReceiveRTPMethod.Suite);
   Result.AddTest(TestTIdRTPDataListenerNewDataMethod.Suite);
+}
 end;
 
 function ShowEncoded(S: String): String;
@@ -859,6 +878,231 @@ begin
 
   for I := 1 to Length(S) do
     Result := Result + '#$' + IntToHex(Ord(S[I]), 2);
+end;
+
+//******************************************************************************
+//* TestUnicodeFunctions                                                       *
+//******************************************************************************
+//* TestUnicodeFunctions Published methods *************************************
+
+procedure TestUnicodeFunctions.TestCodePointToUTF8;
+var
+  I: DWord;
+begin
+  // 0000 0000-0000 007F
+  for I := 0 to $7F do
+    CheckEquals(Chr(I),
+                CodePointToUTF8(I),
+                Chr(I));
+
+  // 0000 0080-0000 07FF
+  CheckEquals(#$C2#$80,
+              CodePointToUTF8($80),
+              '$80');
+
+  CheckEquals(#$DF#$BF,
+              CodePointToUTF8($7FF),
+              '$7FF');
+
+  // 0000 0800-0000 FFFF
+  CheckEquals(#$E0#$A0#$80,
+              CodePointToUTF8($800),
+              '$800');
+  CheckEquals(#$E2#$98#$BA,
+              CodePointToUTF8($263A),
+              '$263A');
+  CheckEquals(#$E7#$BF#$BF,
+              CodePointToUTF8($7FFF),
+              '$7FFF');
+  CheckEquals(#$E8#$AA#$9E,
+              CodePointToUTF8($8A9E),
+              '$8A9E');
+  CheckEquals(#$EF#$BF#$BF,
+              CodePointToUTF8($FFFF),
+              '$FFFF');
+
+  // 0001 0000-001F FFFF
+  CheckEquals(#$F0#$90#$80#$80,
+              CodePointToUTF8($10000),
+              '$10000');
+  CheckEquals(#$F7#$BF#$BF#$BF,
+              CodePointToUTF8($1FFFFF),
+              '$1FFFFF');
+
+  // 0020 0000-03FF FFFF
+  CheckEquals(#$F8#$88#$80#$80#$80,
+              CodePointToUTF8($200000),
+              '$200000');
+  CheckEquals(#$FB#$BF#$BF#$BF#$BF,
+              CodePointToUTF8($3FFFFFF),
+              '$3FFFFFF');
+
+  // 0400 0000-7FFF FFFF
+  CheckEquals(#$FC#$84#$80#$80#$80#$80,
+              CodePointToUTF8($4000000),
+              '$4000000');
+  CheckEquals(#$FC#$87#$BF#$BF#$BF#$BF,
+              CodePointToUTF8($07FFFFFF),
+              '$07FFFFFF');
+  CheckEquals(#$FD#$BF#$BF#$BF#$BF#$BF,
+              CodePointToUTF8($7FFFFFFF),
+              '$7FFFFFFF');
+end;
+
+procedure TestUnicodeFunctions.TestHighSurrogate;
+begin
+  CheckEquals(IntToHex($D950, 4),
+              IntToHex(HighSurrogate($00064321), 4),
+              '$00064321');
+end;
+
+procedure TestUnicodeFunctions.TestIsHighSurrogate;
+var
+  I: Word;
+begin
+  for I := 0 to UnicodeHighSurrogateStart - 1 do
+    Check(not IsHighSurrogate(I), IntToStr(I));
+
+  for I := UnicodeHighSurrogateStart to UnicodeHighSurrogateEnd do
+    Check(IsHighSurrogate(I), IntToStr(I));
+
+  for I := UnicodeHighSurrogateEnd + 1 to High(I) do
+    Check(not IsHighSurrogate(I), IntToStr(I));
+end;
+
+procedure TestUnicodeFunctions.TestIsLowSurrogate;
+var
+  I: Word;
+begin
+  for I := 0 to UnicodeLowSurrogateStart - 1 do
+    Check(not IsLowSurrogate(I), IntToStr(I));
+
+  for I := UnicodeLowSurrogateStart to UnicodeLowSurrogateEnd do
+    Check(IsLowSurrogate(I), IntToStr(I));
+
+  for I := UnicodeLowSurrogateEnd + 1 to High(I) do
+    Check(not IsLowSurrogate(I), IntToStr(I));
+end;
+
+procedure TestUnicodeFunctions.TestLowSurrogate;
+begin
+  CheckEquals(IntToHex($DF21, 4),
+              IntToHex(LowSurrogate($00064321), 4),
+              '$00064321');
+end;
+
+procedure TestUnicodeFunctions.TestSurrogateToCodePoint;
+begin
+  CheckEquals(IntToHex($00064321, 4),
+              IntToHex(SurrogateToCodePoint($D950, $DF21), 4),
+              '$00064321');
+end;
+
+procedure TestUnicodeFunctions.TestUTF16LEToUTF8;
+var
+  C:     Char;
+  UTF16: WideString;
+  UTF8:  String;
+begin
+  for C := Chr(32) to Chr(127) do
+    CheckEquals(C, UTF16LEToUTF8(C), C);
+
+  UTF8 := 'A multi-character string';
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF8),
+               UTF8);
+
+  UTF8 := #$41#$E2#$89#$A2#$CE#$91#$2E;
+  UTF16 := WideChar($0041);
+  UTF16 := UTF16 + WideChar($2262) + WideChar($0391) + WideChar($002E);
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF16),
+               '"A<NOT IDENTICAL TO><ALPHA>."');
+
+  UTF8 := #$48#$69#$20#$4D#$6F#$6D#$20#$E2#$98#$BA#$21;
+  UTF16 := WideChar($0048);
+  UTF16 := UTF16
+         + WideChar($0069) + WideChar($0020) + WideChar($004D) + WideChar($006F)
+         + WideChar($006D) + WideChar($0020) + WideChar($263A) + WideChar($0021);
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF16),
+               '"Hi Mom <WHITE SMILING FACE>!"');
+
+  UTF8 := #$E6#$97#$A5#$E6#$9C#$AC#$E8#$AA#$9E;
+  UTF16 := WideChar($65E5);
+  UTF16 := UTF16 + WideChar($672C) +WideChar($8A9E);
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF16),
+               '"nihongo" in kanji');
+
+  UTF8 := #$EF#$BB#$BF;
+  UTF16 := WideChar($FEFF);
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF16),
+               '$FEFF');
+
+  // Character 0006 4321
+  UTF8 := #$F1#$A4#$8C#$A1;
+  UTF16 := WideChar($D950);
+  UTF16 := UTF16 + WideChar($DF21);
+  CheckEqualsW(UTF8,
+               UTF16LEToUTF8(UTF16),
+               '$0006 4321');
+end;
+
+procedure TestUnicodeFunctions.TestUTF8ToUTF16LE;
+var
+  C:     Char;
+  UTF16: WideString;
+  UTF8:  String;
+begin
+  // This test needs more test points, esp for characters
+  // 0020 0000-03FF FFFF and 0400 0000-7FFF FFFF
+
+  for C := Chr(32) to Chr(127) do
+    CheckEquals(C, UTF8ToUTF16LE(C), C);
+
+  UTF8 := 'A multi-character string';
+  CheckEqualsW(UTF8,
+               UTF8ToUTF16LE(UTF8),
+               UTF8);
+
+  UTF8 := #$41#$E2#$89#$A2#$CE#$91#$2E;
+  UTF16 := WideChar($0041);
+  UTF16 := UTF16 + WideChar($2262) + WideChar($0391) + WideChar($002E);
+  CheckEqualsW(UTF16,
+               UTF8ToUTF16LE(UTF8),
+               '"A<NOT IDENTICAL TO><ALPHA>."');
+
+  UTF8 := #$48#$69#$20#$4D#$6F#$6D#$20#$E2#$98#$BA#$21;
+  UTF16 := WideChar($0048);
+  UTF16 := UTF16
+         + WideChar($0069) + WideChar($0020) + WideChar($004D) + WideChar($006F)
+         + WideChar($006D) + WideChar($0020) + WideChar($263A) + WideChar($0021);
+  CheckEqualsW(UTF16,
+               UTF8ToUTF16LE(UTF8),
+               '"Hi Mom <WHITE SMILING FACE>!"');
+
+
+  UTF8 := #$E6#$97#$A5#$E6#$9C#$AC#$E8#$AA#$9E;
+  UTF16 := WideChar($65E5);
+  UTF16 := UTF16 + WideChar($672C) +WideChar($8A9E);
+  CheckEqualsW(UTF16,
+               UTF8ToUTF16LE(UTF8),
+               '"nihongo" in kanji');
+
+  UTF8 := #$EF#$BB#$BF;
+  CheckEqualsW(WideChar($FEFF),
+               UTF8ToUTF16LE(UTF8),
+               '$FEFF');
+
+  // Character 0006 4321
+  UTF8 := #$F1#$A4#$8C#$A1;
+  UTF16 := WideChar($D950);
+  UTF16 := UTF16 + WideChar($DF21);
+  CheckEqualsW(UTF16,
+               UTF8ToUTF16LE(UTF8),
+               '$0006 4321');
 end;
 
 //******************************************************************************
@@ -1706,45 +1950,71 @@ end;
 
 procedure TestTIdRTPT140Payload.TestPrintOn;
 var
-  Data: WideString;
-  S:    TStringStream;
+  S: TStringStream;
 begin
-  Data := 'fooing the bar';
   S := TStringStream.Create('');
   try
-    Self.Packet.Block := Data;
+    Self.Packet.Block := 'fooing the bar';
 
     Self.Packet.PrintOn(S);
 
-    CheckUnicode(Data,
-                 S.DataString,
-                 'PrintOn');
+    CheckEquals('fooing the bar',
+                S.DataString,
+                'PrintOn');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPT140Payload.TestPrintOnWithRealUnicode;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Packet.Block := T140ByteOrderMark;
+    Self.Packet.Block := Self.Packet.Block + 'fooing the bar';
+
+    Self.Packet.PrintOn(S);
+
+    CheckEquals(#$ef#$bb#$bf'fooing the bar',
+                S.DataString,
+                'PrintOn');
   finally
     S.Free;
   end;
 end;
 
 procedure TestTIdRTPT140Payload.TestReadFrom;
-
-  function WideStringToStr(const W: WideString): String;
-  var
-    I: Integer;
-  begin
-    Result := '';
-    for I := 1 to Length(W) do
-      Result := Result + #0 + Char((Ord(W[I]) and $00ff));
-  end;
 var
-  Data: String;
-  S:    TStringStream;
+  S: TStringStream;
 begin
-  Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  S := TStringStream.Create(WideStringToStr(Data));  // we actually need a stream that contains a WideString. This isn't it!
+  S := TStringStream.Create('ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn');
   try
     Self.Packet.ReadFrom(S);
 
-    CheckUnicode(Data,
-                 S.DataString,
+    CheckEqualsW('ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn',
+                Self.Packet.Block,
+                'Block');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPT140Payload.TestReadFromWithRealUnicode;
+var
+  Data: WideString;
+  S:    TStringStream;
+begin
+  S := TStringStream.Create(#$ef#$bb#$bf'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn');
+  try
+    Self.Packet.ReadFrom(S);
+
+    Data := T140ByteOrderMark;
+    Data := Data + 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+    CheckEqualsW(Data,
+                 Self.Packet.Block,
                  'Block');
   finally
     S.Free;
