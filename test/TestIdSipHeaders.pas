@@ -416,6 +416,7 @@ type
   published
     procedure TestCreateOnEmptySet;
     procedure TestCurrentRoute;
+    procedure TestGetAllButFirst;
   end;
 
   TestTIdSipViaPath = class(TTestCase)
@@ -4341,6 +4342,30 @@ begin
   Self.Routes.Next;
   Check(NewRoute = Self.Routes.CurrentRoute,
         'Second Route');
+end;
+
+procedure TestTIdSipRoutePath.TestGetAllButFirst;
+var
+  Expected: TIdSipRoutePath;
+  Received: TIdSipRoutePath;
+begin
+  Expected := TIdSipRoutePath.Create;
+  try
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+    Expected.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+
+    Self.Routes.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+    Self.Routes.Add(Expected);
+
+    Received := Self.Routes.GetAllButFirst;
+    try
+      Check(Expected.IsEqualTo(Received), 'Unexpected header set returned');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
 end;
 
 //******************************************************************************

@@ -8,8 +8,8 @@ uses
 type
   TThreadingTestCase = class(TTestCase)
   protected
-    ExceptionType:    ExceptClass;
     ExceptionMessage: String;
+    ExceptionType:    ExceptClass;    
     fDefaultTimeout:  Cardinal;
     ThreadEvent:      TEvent;
 
@@ -77,7 +77,7 @@ end;
 
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent);
 begin
-  if (wrSignaled <> Event.WaitFor(DefaultTimeout)) then
+  if (wrSignaled <> Event.WaitFor(Self.DefaultTimeout)) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
   Event.ResetEvent;
@@ -90,7 +90,7 @@ end;
 
 procedure TThreadingTestCase.WaitForTimeout(Event: TEvent; Msg: String);
 begin
-  if (wrTimeout <> Event.WaitFor(DefaultTimeout)) then
+  if (wrTimeout <> Event.WaitFor(Self.DefaultTimeout)) then
     Fail(Msg);
 end;
 

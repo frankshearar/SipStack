@@ -119,15 +119,6 @@ type
     property Username:      String        read fUsername write fUsername;
     property UserParameter: String        read GetUserParameter write SetUserParameter;
   end;
-{
-  TIdSipsUri = class(TIdSipUri)
-  public
-    function DefaultPort: Cardinal; override;
-    function DefaultTransport: String; override;
-    function IsSecure: Boolean; override;
-  end;
-}
-  ESchemeNotSupported = class(Exception);
 
   TIdSipHeader = class(TPersistent)
   private
@@ -627,6 +618,7 @@ type
     destructor  Destroy; override;
 
     function CurrentRoute: TIdSipRouteHeader;
+    function GetAllButFirst: TIdSipRoutePath;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
@@ -637,6 +629,8 @@ type
     function  Length: Integer;
     procedure RemoveLastHop;
   end;
+
+  ESchemeNotSupported = class(Exception);
 
 const
   ConvertErrorMsg       = 'Failed to convert ''%s'' to type %s';
@@ -1438,27 +1432,7 @@ begin
     end;
   end;
 end;
-{
-//******************************************************************************
-//* TIdSipsUri                                                                 *
-//******************************************************************************
-//* TIdSipsUri Public methods **************************************************
 
-function TIdSipsUri.DefaultPort: Cardinal;
-begin
-  Result := IdPORT_SIPS;
-end;
-
-function TIdSipsUri.DefaultTransport: String;
-begin
-  Result := TransportParamTLS;
-end;
-
-function TIdSipsUri.IsSecure: Boolean;
-begin
-  Result := true;
-end;
-}
 //******************************************************************************
 //* TIdSipHeader                                                               *
 //******************************************************************************
@@ -1466,8 +1440,7 @@ end;
 
 class function TIdSipHeader.EncodeQuotedStr(const S: String): String;
 begin
-  Result := S;
-  Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(S,      '\', '\\', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
 end;
 
@@ -3517,6 +3490,26 @@ end;
 function TIdSipRoutePath.CurrentRoute: TIdSipRouteHeader;
 begin
   Result := Self.CurrentHeader as TIdSipRouteHeader;
+end;
+
+function TIdSipRoutePath.GetAllButFirst: TIdSipRoutePath;
+begin
+  Result := TIdSipRoutePath.Create;
+  try
+    Self.First;
+
+    if Self.HasNext then
+      Self.Next;
+
+    while Self.HasNext do begin
+      Result.Add(Self.CurrentHeader);
+      Self.Next;
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
 end;
 
 //******************************************************************************

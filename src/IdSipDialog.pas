@@ -25,7 +25,7 @@ type
     fRemoteSequenceNo:   Cardinal;
     fRemoteTarget:       TIdSipURI;
     fRemoteURI:          TIdSipURI;
-    fRouteSet:           TIdSipHeaders;
+    fRouteSet:           TIdSipRoutePath;
     fState:              TIdSipDialogState;
     LocalSequenceNoLock: TCriticalSection;
 
@@ -71,21 +71,22 @@ type
     constructor Create(const Dialog: TIdSipDialog); overload;
     destructor  Destroy; override;
 
+    function  CreateRequest: TIdSipRequest;
     procedure HandleMessage(const Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(const Response: TIdSipResponse); overload; virtual;
     function  IsNull: Boolean; virtual;
     function  IsOutOfOrder(const Request: TIdSipRequest): Boolean;
     function  NextLocalSequenceNo: Cardinal;
 
-    property ID:               TIdSipDialogID read fID;
-    property IsEarly:          Boolean        read GetIsEarly;
-    property IsSecure:         Boolean        read fIsSecure;
-    property LocalSequenceNo:  Cardinal       read GetLocalSequenceNo;
-    property LocalURI:         TIdSipURI      read fLocalURI;
-    property RemoteSequenceNo: Cardinal       read fRemoteSequenceNo;
-    property RemoteTarget:     TIdSipURI      read fRemoteTarget write SetRemoteTarget;
-    property RemoteURI:        TIdSipURI      read fRemoteURI;
-    property RouteSet:         TIdSipHeaders  read fRouteSet;
+    property ID:               TIdSipDialogID  read fID;
+    property IsEarly:          Boolean         read GetIsEarly;
+    property IsSecure:         Boolean         read fIsSecure;
+    property LocalSequenceNo:  Cardinal        read GetLocalSequenceNo;
+    property LocalURI:         TIdSipURI       read fLocalURI;
+    property RemoteSequenceNo: Cardinal        read fRemoteSequenceNo;
+    property RemoteTarget:     TIdSipURI       read fRemoteTarget write SetRemoteTarget;
+    property RemoteURI:        TIdSipURI       read fRemoteURI;
+    property RouteSet:         TIdSipRoutePath read fRouteSet;
 
     property OnEstablished: TIdSipDialogEvent read fOnEstablished write fOnEstablished;
   end;
@@ -192,6 +193,61 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipDialog.CreateRequest: TIdSipRequest;
+var
+  FirstRoute: TIdSipRouteHeader;
+  Routes:     TIdSipHeaderList;
+begin
+  Result := TIdSipRequest.Create;
+
+  Result.MaxForwards := Result.DefaultMaxForwards;
+  Result.ToHeader.Address := Self.RemoteURI;
+  Result.ToHeader.Tag     := Self.ID.RemoteTag;
+  Result.From.Address     := Self.LocalURI;
+  Result.From.Tag         := Self.ID.LocalTag;
+  Result.CallID           := Self.ID.CallID;
+
+  Result.CSeq.SequenceNo := Self.NextLocalSequenceNo;
+
+  if (Self.RouteSet.IsEmpty) then begin
+    Result.RequestUri := Self.RemoteTarget;
+  end
+  else begin
+    Self.RouteSet.First;
+    FirstRoute := Self.RouteSet.CurrentHeader as TIdSipRouteHeader;
+
+    if FirstRoute.IsLooseRoutable then begin
+      Result.RequestUri := Self.RemoteTarget;
+
+      while Self.RouteSet.HasNext do begin
+        Result.AddHeader(RouteHeader).Assign(Self.RouteSet.CurrentHeader);
+        Self.RouteSet.Next;
+      end;
+    end
+    else begin
+      Result.RequestUri := FirstRoute.Address;
+      // RFC 3261 section 12.2.1.1; 19.1.5
+      Result.RequestUri.Headers.Clear;
+      Result.RequestUri.RemoveParameter(MethodParam);
+
+      // Yes, we skip the first route. We use the 1st entry as the
+      // Request-URI, remember?
+      Routes := Self.RouteSet.GetAllButFirst;
+      try
+        Routes.First;
+        while Routes.HasNext do begin
+          Result.AddHeader(RouteHeader).Assign(Routes.CurrentHeader);
+          Routes.Next;
+        end;
+      finally
+        Routes.Free;
+      end;
+
+      (Result.AddHeader(RouteHeader) as TIdSipRouteHeader).Address := Self.RemoteURI;
+    end;
+  end;
+end;
+
 procedure TIdSipDialog.HandleMessage(const Request: TIdSipRequest);
 begin
   if Request.IsInvite then
@@ -296,7 +352,7 @@ begin
 
   Self.SetIsSecure(IsSecure);
 
-  fRouteSet := TIdSipHeaders.Create;
+  fRouteSet := TIdSipRoutePath.Create;
 
   RouteSet.First;
   while RouteSet.HasNext do begin

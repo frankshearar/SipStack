@@ -3,7 +3,7 @@ unit TestIdRTPTimerQueue;
 interface
 
 uses
-  Classes, IdRTPTimerQueue, SyncObjs, SysUtils, TestFramework;
+  Classes, IdRTPTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   // I wait in a separate thread for something to set Event. Then I
@@ -21,13 +21,12 @@ type
                        MaxWait: Cardinal);
   end;
 
-
-  TestTIdRTPTimerQueue = class(TTestCase)
+  TestTIdRTPTimerQueue = class(TThreadingTestCase)
   private
+    CallbackEventOne: TEvent;
+    CallbackEventTwo: TEvent;
     EventOne:         TEvent;
     EventTwo:         TEvent;
-    ExceptionMessage: String;
-    ExceptionType:    ExceptClass;
     Lock:             TCriticalSection;
     Notified:         Boolean;
     OrderOfFire:      String;
@@ -36,27 +35,30 @@ type
     T2:               TThreadEvent;
 
     procedure CheckNotifyEvent(Sender: TObject);
+    procedure NotifyEventOne(Sender: TObject);
+    procedure NotifyEventTwo(Sender: TObject);
     procedure OnEventOneSet(Sender: TObject);
     procedure OnEventTwoSet(Sender: TObject);
-    procedure WaitFor(Event: TEvent);
     procedure WaitForAll(Events: array of TEvent;
                          Timeout: Cardinal);
-    procedure WaitForTimeout(Event: TEvent);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestEarliestEvent;
     procedure TestBefore;
     procedure TestNotifyEvent;
     procedure TestOneEvent;
+    procedure TestRemoveEvent;
+    procedure TestRemoveNotifyEvent;
+    procedure TestTwoNotifyEvents;
     procedure TestTwoEvents;
     procedure TestTwoOutOfOrderEvents;
+    procedure TestWaitForEarliestEvent;
   end;
 
 const
-  DefaultTimeout = 10;
-  LongTimeout    = 10*DefaultTimeout;
+  ShortTimeout = 10;
+  LongTimeout  = 10*ShortTimeout;
 
 implementation
 
@@ -81,6 +83,7 @@ begin
   Self.Event      := Event;
   Self.MaxWait    := MaxWait;
   Self.OnEventSet := OnEventSet;
+
   inherited Create(false);
 end;
 
@@ -92,6 +95,8 @@ begin
 
   if Assigned(Self.OnEventSet) then
     Self.OnEventSet(Self);
+    
+  Self.Terminate;
 end;
 
 //******************************************************************************
@@ -103,15 +108,18 @@ procedure TestTIdRTPTimerQueue.SetUp;
 begin
   inherited SetUp;
 
+  Self.DefaultTimeout   := 100;
   Self.ExceptionType    := Exception;
   Self.ExceptionMessage := 'The event waited for was never fired';
   Self.Notified         := false;
   Self.OrderOfFire      := '';
 
-  Self.EventOne := TSimpleEvent.Create;
-  Self.EventTwo := TSimpleEvent.Create;
-  Self.Lock     := TCriticalSection.Create;
-  Self.Queue    := TIdRTPTimerQueue.Create;
+  Self.CallbackEventOne := TSimpleEvent.Create;
+  Self.CallbackEventTwo := TSimpleEvent.Create;
+  Self.EventOne         := TSimpleEvent.Create;
+  Self.EventTwo         := TSimpleEvent.Create;
+  Self.Lock             := TCriticalSection.Create;
+  Self.Queue            := TIdRTPTimerQueue.Create;
 
   Self.T1 := TThreadEvent.Create(Self.EventOne,
                                  Self.OnEventOneSet,
@@ -119,6 +127,8 @@ begin
   Self.T2 := TThreadEvent.Create(Self.EventTwo,
                                  Self.OnEventTwoSet,
                                  LongTimeout);
+  Self.T1.Resume;
+  Self.T2.Resume;
 end;
 
 procedure TestTIdRTPTimerQueue.TearDown;
@@ -130,6 +140,8 @@ begin
   Self.Lock.Free;
   Self.EventTwo.Free;
   Self.EventOne.Free;
+  Self.CallbackEventTwo.Free;
+  Self.CallbackEventOne.Free;
 
   inherited TearDown;
 end;
@@ -139,32 +151,50 @@ end;
 procedure TestTIdRTPTimerQueue.CheckNotifyEvent(Sender: TObject);
 begin
   Self.Notified := true;
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdRTPTimerQueue.NotifyEventOne(Sender: TObject);
+begin
+  Self.Lock.Acquire;
+  try
+    Self.OrderOfFire := Self.OrderOfFire + 'a';
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+procedure TestTIdRTPTimerQueue.NotifyEventTwo(Sender: TObject);
+begin
+  Self.Lock.Acquire;
+  try
+    Self.OrderOfFire := Self.OrderOfFire + 'b';
+  finally
+    Self.Lock.Release;
+  end;
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdRTPTimerQueue.OnEventOneSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
-    Self.OrderOfFire := Self.OrderOfFire + '1'
+    Self.OrderOfFire := Self.OrderOfFire + '1';
   finally
     Self.Lock.Release;
   end;
+  Self.CallbackEventOne.SetEvent;
 end;
 
 procedure TestTIdRTPTimerQueue.OnEventTwoSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
-    Self.OrderOfFire := Self.OrderOfFire + '2'
+    Self.OrderOfFire := Self.OrderOfFire + '2';
   finally
     Self.Lock.Release;
   end;
-end;
-
-procedure TestTIdRTPTimerQueue.WaitFor(Event: TEvent);
-begin
-  if (wrSignaled <> Event.WaitFor(LongTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.CallbackEventTwo.SetEvent;
 end;
 
 procedure TestTIdRTPTimerQueue.WaitForAll(Events: array of TEvent;
@@ -177,51 +207,13 @@ begin
 
   for I := Low(Events) to High(Events) do begin
     Self.ExceptionMessage := Msg + '; Event ' + IntToStr(I);
-    Self.WaitFor(Events[I]);
+    Self.WaitForSignaled(Events[I]);
   end;
 
   Self.ExceptionMessage := Msg;
 end;
 
-procedure TestTIdRTPTimerQueue.WaitForTimeout(Event: TEvent);
-begin
-  if (wrTimeout <> Event.WaitFor(LongTimeout)) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
 //* TestTIdRTPTimerQueue Published methods *************************************
-
-procedure TestTIdRTPTimerQueue.TestEarliestEvent;
-var
-  EventThree, EventFour: TEvent;
-begin
-  EventThree := TSimpleEvent.Create;
-  try
-    EventFour := TSimpleEvent.Create;
-    try
-      Check(Self.Queue.EarliestEvent = nil, 'Empty list');
-      Self.Queue.AddEvent(100, Self.EventOne);
-      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventOne,
-            'One item');
-
-      Self.Queue.AddEvent(50, Self.EventTwo);
-      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventTwo,
-            'An earlier item added');
-
-      Self.Queue.AddEvent(150, EventThree);
-      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = Self.EventTwo,
-            'A later item added');
-
-      Self.Queue.AddEvent($ffffff00, EventFour);
-      Check((Self.Queue.EarliestEvent as TIdRTPEventWait).Event = EventFour,
-            'A really early item added');
-    finally
-      EventFour.Free;
-    end;
-  finally
-    EventThree.Free;
-  end;
-end;
 
 procedure TestTIdRTPTimerQueue.TestBefore;
 begin
@@ -250,13 +242,12 @@ end;
 
 procedure TestTIdRTPTimerQueue.TestNotifyEvent;
 begin
-  Self.Queue.AddEvent(DefaultTimeout, Self.CheckNotifyEvent);
-  Self.Queue.AddEvent(DefaultTimeout*2, Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout, Self.CheckNotifyEvent);
 
   Self.ExceptionMessage := 'Event didn''t fire';
   Self.Queue.Start;
   try
-    Self.WaitFor(Self.EventOne);
+    Self.WaitForSignaled(Self.ThreadEvent);
     Check(Self.Notified, 'TNotifyEvent didn''t fire');
   finally
     Self.Queue.Stop;
@@ -265,31 +256,81 @@ end;
 
 procedure TestTIdRTPTimerQueue.TestOneEvent;
 begin
-  Self.ExceptionMessage := 'Event shouldn''t fire';
-  Self.Queue.AddEvent(DefaultTimeout, Self.EventOne);
-  Self.WaitForTimeout(Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
 
   Self.ExceptionMessage := 'Event didn''t fire';
   Self.Queue.Start;
   try
-    Self.WaitFor(Self.EventOne);
+    Self.WaitForSignaled(Self.EventOne);
   finally
     Self.Queue.Stop;
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestTwoEvents;
+procedure TestTIdRTPTimerQueue.TestRemoveEvent;
 begin
-  Self.Queue.AddEvent(DefaultTimeout, Self.EventOne);
-  Self.Queue.AddEvent(2*DefaultTimeout, Self.EventTwo);
+  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout*2, Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout*3, Self.EventTwo);
+  Self.Queue.RemoveEvent(Self.EventOne);
+
+  Self.ExceptionMessage := 'Event didn''t fire';
   Self.Queue.Start;
   try
-    Self.WaitForAll([Self.EventOne, Self.EventTwo],
-                    LongTimeout);
+    Self.WaitForSignaled(Self.EventTwo);
+    CheckEquals(0,
+                Pos('1', Self.OrderOfFire),
+                'EventOne wasn''t removed (Order of fire was '
+              + Self.OrderOfFire + ')');
+  finally
+    Self.Queue.Stop;
+  end;
+end;
 
-    // We have to sleep because although Queue has set both events, the two
-    // wait-threads have not yet executed their callbacks!
-    IdGlobal.Sleep(50);
+procedure TestTIdRTPTimerQueue.TestRemoveNotifyEvent;
+begin
+  Self.Queue.AddEvent(ShortTimeout,   Self.CheckNotifyEvent);
+  Self.Queue.AddEvent(ShortTimeout*2, Self.CheckNotifyEvent);
+  Self.Queue.AddEvent(ShortTimeout*3, Self.EventOne);
+  Self.Queue.RemoveEvent(Self.CheckNotifyEvent);
+
+  Self.ExceptionMessage := 'Event didn''t fire';
+  Self.Queue.Start;
+  try
+    Self.WaitForSignaled(Self.EventOne);
+    Check(not Self.Notified, 'TNotifyEvent wasn''t removed');
+  finally
+    Self.Queue.Stop;
+  end;
+end;
+
+procedure TestTIdRTPTimerQueue.TestTwoNotifyEvents;
+begin
+  Self.Queue.AddEvent(ShortTimeout,   Self.NotifyEventOne);
+  Self.Queue.AddEvent(2*ShortTimeout, Self.NotifyEventTwo);
+  Self.Queue.Start;
+  try
+    Self.WaitForSignaled(Self.ThreadEvent);
+  finally
+    Self.Queue.Stop;
+  end;
+
+  Self.Lock.Acquire;
+  try
+    CheckEquals('ab', Self.OrderOfFire, 'Order of events');
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+procedure TestTIdRTPTimerQueue.TestTwoEvents;
+begin
+  Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
+  Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
+  Self.Queue.Start;
+  try
+    Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
+                    LongTimeout);
   finally
     Self.Queue.Stop;
   end;
@@ -304,15 +345,12 @@ end;
 
 procedure TestTIdRTPTimerQueue.TestTwoOutOfOrderEvents;
 begin
-  Self.Queue.AddEvent(2*DefaultTimeout, Self.EventOne);
-  Self.Queue.AddEvent(DefaultTimeout,   Self.EventTwo);
+  Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
+  Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
   Self.Queue.Start;
   try
-    Self.WaitForAll([Self.EventOne, Self.EventTwo], LongTimeout);
-
-    // We have to sleep because although Queue has set both events, the two
-    // wait-threads have not yet executed their callbacks!
-    IdGlobal.Sleep(50);
+    Self.WaitForAll([Self.CallbackEventOne, Self.CallbackEventTwo],
+                    LongTimeout);
   finally
     Self.Queue.Stop;
   end;
@@ -323,6 +361,35 @@ begin
     finally
       Self.Lock.Release;
     end;
+end;
+
+procedure TestTIdRTPTimerQueue.TestWaitForEarliestEvent;
+begin
+  Self.Queue.Start;
+  try
+    Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
+    Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
+
+    Self.WaitForSignaled(Self.CallbackEventTwo);
+
+    Self.Lock.Acquire;
+    try
+      CheckEquals('2', Self.OrderOfFire, 'We expect only EventTwo to fire');
+    finally
+      Self.Lock.Release;
+    end;
+
+    Self.WaitForSignaled(Self.CallbackEventOne);
+
+    Self.Lock.Acquire;
+    try
+      CheckEquals('21', Self.OrderOfFire, 'Order of events');
+    finally
+      Self.Lock.Release;
+    end;
+  finally
+    Self.Queue.Stop;
+  end;
 end;
 
 initialization

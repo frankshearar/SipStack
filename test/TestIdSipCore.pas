@@ -60,17 +60,17 @@ type
                                   IIdSipSessionListener,
                                   IIdSipUserAgentListener)
   private
-    CheckOnInboundCall:   TIdSipSessionEvent;
-    Dlg:                 TIdSipDialog;
-    ID:                  TIdSipDialogID;
-    LocalSequenceNo:     Cardinal;
-    LocalUri:            TIdSipURI;
-    OnInboundCallFired:  Boolean;
-    RemoteSequenceNo:    Cardinal;
-    RemoteTarget:        TIdSipURI;
-    RemoteUri:           TIdSipURI;
-    RouteSet:            TIdSipHeaders;
-    SessionEstablished:  Boolean;
+    CheckOnInboundCall: TIdSipSessionEvent;
+    Dlg:                TIdSipDialog;
+    ID:                 TIdSipDialogID;
+    LocalSequenceNo:    Cardinal;
+    LocalUri:           TIdSipURI;
+    OnInboundCallFired: Boolean;
+    RemoteSequenceNo:   Cardinal;
+    RemoteTarget:       TIdSipURI;
+    RemoteUri:          TIdSipURI;
+    RouteSet:           TIdSipHeaders;
+    SessionEstablished: Boolean;
 
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
@@ -95,11 +95,6 @@ type
     procedure TestCreateRegister;
     procedure TestCreateRegisterReusesCallIDForSameRegistrar;
     procedure TestCreateRequest;
-    procedure TestCreateRequestInDialog;
-    procedure TestCreateRequestInDialogRouteSetEmpty;
-    procedure TestCreateRequestInDialogRouteSetWithLrParam;
-    procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
-    procedure TestCreateRequestInDialogTopRouteHasForbiddenParameters;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
     procedure TestCreateRequestWithTransport;
@@ -210,11 +205,6 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
-    procedure TestCreateCancel;
-    procedure TestCreateCancelANonInviteRequest;
-    procedure TestCreateCancelWithProxyRequire;
-    procedure TestCreateCancelWithRequire;
-    procedure TestCreateCancelWithRoute;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestReceive2xxSendsAck;
     procedure TestReceiveBye;
@@ -268,6 +258,7 @@ type
   published
     procedure TestAddListener;
     procedure TestRegister;
+    procedure TestFindCurrentBindings;
     procedure TestReceiveFail;
     procedure TestReceiveIntervalTooBrief;
     procedure TestReceiveIntervalTooBriefForOneContact;
@@ -995,147 +986,6 @@ begin
     end;
   finally
     Dest.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateRequestInDialog;
-var
-  R: TIdSipRequest;
-begin
-  R := Self.Core.CreateRequest(Dlg);
-  try
-    CheckEquals(Self.Dlg.RemoteURI,    R.ToHeader.Address,   'To URI');
-    CheckEquals(Self.Dlg.ID.RemoteTag, R.ToHeader.Tag,       'To tag');
-    CheckEquals(Self.Dlg.LocalURI,     R.From.Address,       'From URI');
-    CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,           'From tag');
-    CheckEquals(Self.Dlg.ID.CallID,    R.CallID,             'Call-ID');
-
-    Check(R.HasHeader(MaxForwardsHeader), 'Max-Forwards header missing');
-
-    // we should somehow check that CSeq.SequenceNo has been (randomly) generated. How?
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogRouteSetEmpty;
-var
-  P:        TIdSipParser;
-  R:        TIdSipRequest;
-  Response: TIdSipResponse;
-  Routes:   TIdSipHeadersFilter;
-begin
-  P := TIdSipParser.Create;
-  try
-    Response := P.ParseAndMakeResponse(LocalLoopResponse);
-    try
-      Response.StatusCode := SIPTrying;
-      Self.Dispatcher.Transport.FireOnResponse(Response);
-    finally
-      Response.Free;
-    end;
-  finally
-    P.Free;
-  end;
-
-  Self.Dlg.RouteSet.Clear;
-
-  R := Self.Core.CreateRequest(Self.Dlg);
-  try
-    CheckEquals(Self.Dlg.RemoteTarget, R.RequestUri, 'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Check(Routes.IsEmpty, 'Route headers are present');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogRouteSetWithLrParam;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.Dlg.RouteSet.Clear;
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server10.biloxi.com;lr>';
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server9.biloxi.com>';
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server8.biloxi.com;lr>';
-
-  R := Self.Core.CreateRequest(Dlg);
-  try
-    CheckEquals(Self.Dlg.RemoteTarget,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
-            'Route headers not set to the Dialog route set');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogRouteSetWithoutLrParam;
-var
-  P:        TIdSipParser;
-  R:        TIdSipRequest;
-  Response: TIdSipResponse;
-  Routes:   TIdSipHeadersFilter;
-begin
-  P := TIdSipParser.Create;
-  try
-    Response := P.ParseAndMakeResponse(LocalLoopResponse);
-    try
-      Response.StatusCode := SIPTrying;
-      Self.Dispatcher.Transport.FireOnResponse(Response);
-    finally
-      Response.Free;
-    end;
-  finally
-    P.Free;
-  end;
-
-  R := Self.Core.CreateRequest(Self.Dlg);
-  try
-    CheckEquals((Self.Dlg.RouteSet.Items[0] as TIdSipRouteHeader).Address,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      // These are the manipulations the dialog's meant to perform on its route
-      // set. Just so you know we're not fiddling our test data.
-      Self.Dlg.RouteSet.Delete(0);
-      Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.URI + '>';
-
-      Check(Self.Dlg.RouteSet.IsEqualTo(Routes), 'Routes not added correctly');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestCreateRequestInDialogTopRouteHasForbiddenParameters;
-var
-  Request: TIdSipRequest;
-begin
-  Self.Dlg.RouteSet.Items[0].Value := '<sip:127.0.0.1;transport=tcp;method=REGISTER?Subject=foo>';
-  Request := Self.Core.CreateRequest(Self.Dlg);
-  try
-    CheckEquals('sip:127.0.0.1;transport=tcp',
-                Request.RequestUri.Uri, 'Request-URI; SIP section 12.2.1.1');
-  finally
-    Request.Free;
   end;
 end;
 
@@ -2512,7 +2362,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Session := TIdSipSession.Create(Self.Core);
+  Session := TIdSipOutboundSession.Create(Self.Core);
   try
     Session.AddSessionListener(Self);
     Self.Dispatcher.Transport.FailWith := EIdConnectTimeout;
@@ -2594,114 +2444,6 @@ begin
     Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
   finally
     Response.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.EstablishedSession.CreateCancel(Self.Invite);
-  try
-    CheckEquals(MethodCancel, Cancel.Method, 'Unexpected method');
-    CheckEquals(MethodCancel,
-                Cancel.CSeq.Method,
-                'CSeq method');
-    Check(Self.Invite.RequestUri.Equals(Cancel.RequestUri),
-          'Request-URI');
-    CheckEquals(Self.Invite.CallID,
-                Cancel.CallID,
-                'Call-ID header');
-    Check(Self.Invite.ToHeader.IsEqualTo(Cancel.ToHeader),
-          'To header');
-    CheckEquals(Self.Invite.CSeq.SequenceNo,
-                Cancel.CSeq.SequenceNo,
-                'CSeq numerical portion');
-    Check(Self.Invite.From.IsEqualTo(Cancel.From),
-          'From header');
-    CheckEquals(1,
-                Cancel.Path.Length,
-                'Via headers');
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateCancelANonInviteRequest;
-var
-  Options: TIdSipRequest;
-begin
-  Options := TIdSipRequest.Create;
-  try
-    Options.Method := MethodOptions;
-    try
-      Self.EstablishedSession.CreateCancel(Options);
-      Fail('Failed to bail out of creating a CANCEL for a non-INVITE request');
-    except
-      on EAssertionFailed do;
-    end;
-  finally
-    Options.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateCancelWithProxyRequire;
-var
-  Cancel: TIdSipRequest;
-begin
-  Self.Invite.AddHeader(ProxyRequireHeader).Value := 'foofoo';
-
-  Cancel := Self.EstablishedSession.CreateCancel(Self.Invite);
-  try
-    Check(not Cancel.HasHeader(ProxyRequireHeader),
-          'Proxy-Require headers copied');
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateCancelWithRequire;
-var
-  Cancel: TIdSipRequest;
-begin
-  Self.Invite.AddHeader(RequireHeader).Value := 'foofoo, barbar';
-
-  Cancel := Self.EstablishedSession.CreateCancel(Self.Invite);
-  try
-    Check(not Cancel.HasHeader(ProxyRequireHeader),
-          'Require headers copied');
-  finally
-    Cancel.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestCreateCancelWithRoute;
-var
-  Cancel:             TIdSipRequest;
-  CancelRouteHeaders: TIdSipHeadersFilter;
-  InviteRouteHeaders: TIdSipHeadersFilter;
-begin
-  Self.Invite.AddHeader(RouteHeader).Value := '<sip:127.0.0.1>';
-  Self.Invite.AddHeader(RouteHeader).Value := '<sip:127.0.0.2>';
-
-  Cancel := Self.EstablishedSession.CreateCancel(Self.Invite);
-  try
-    InviteRouteHeaders := TIdSipHeadersFilter.Create(Invite.Headers,
-                                                     RouteHeader);
-    try
-      CancelRouteHeaders := TIdSipHeadersFilter.Create(Cancel.Headers,
-                                                       RouteHeader);
-      try
-        Check(InviteRouteHeaders.IsEqualTo(CancelRouteHeaders),
-              'Route headers not copied');
-      finally
-        CancelRouteHeaders.Free;
-      end;
-    finally
-      InviteRouteHeaders.Free;
-    end;
-  finally
-    Cancel.Free;
   end;
 end;
 
@@ -3088,10 +2830,33 @@ begin
 end;
 
 procedure TestTIdSipRegistration.TestRegister;
+var
+  Request: TIdSipRequest;
 begin
   Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
   Check(Self.Dispatcher.Transport.SentRequestCount > 0,
         'No request sent');
+
+  Request := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(Self.Registrar.From.Address.Uri,
+              Request.RequestUri.Uri,
+              'Request-URI');
+  CheckEquals(MethodRegister, Request.Method, 'Method');
+  Check(Request.Contacts.IsEqualTo(Self.Contacts),
+        'Bindings');
+end;
+
+procedure TestTIdSipRegistration.TestFindCurrentBindings;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Reg.FindCurrentBindings(Self.Registrar.From.Address);
+  Check(Self.Dispatcher.Transport.SentRequestCount > 0,
+        'No request sent');
+
+  Request := Self.Dispatcher.Transport.LastRequest;
+  Check(Request.Contacts.IsEmpty,
+        'Contact headers present');
 end;
 
 procedure TestTIdSipRegistration.TestReceiveFail;

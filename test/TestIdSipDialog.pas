@@ -27,6 +27,11 @@ type
     procedure TearDown; override;
   published
     procedure TestCreateFromAnotherDialog;
+    procedure TestCreateRequestInDialog;
+    procedure TestCreateRequestInDialogRouteSetEmpty;
+    procedure TestCreateRequestInDialogRouteSetWithLrParam;
+    procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
+    procedure TestCreateRequestInDialogTopRouteHasForbiddenParameters;
     procedure TestCreateWithStrings;
     procedure TestDialogID;
     procedure TestEarlyState;
@@ -175,6 +180,151 @@ begin
           'RouteSet');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialog;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals(Self.Dlg.RemoteURI,    R.ToHeader.Address, 'To URI');
+    CheckEquals(Self.Dlg.ID.RemoteTag, R.ToHeader.Tag,     'To tag');
+    CheckEquals(Self.Dlg.LocalURI,     R.From.Address,     'From URI');
+    CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,         'From tag');
+    CheckEquals(Self.Dlg.ID.CallID,    R.CallID,           'Call-ID');
+
+    Check(R.HasHeader(MaxForwardsHeader), 'Max-Forwards header missing');
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialogRouteSetEmpty;
+var
+  P:        TIdSipParser;
+  R:        TIdSipRequest;
+  Response: TIdSipResponse;
+  Routes:   TIdSipRoutePath;
+begin
+  P := TIdSipParser.Create;
+  try
+    Response := P.ParseAndMakeResponse(LocalLoopResponse);
+    try
+      Response.StatusCode := SIPTrying;
+      Self.Dlg.HandleMessage(Response);
+    finally
+      Response.Free;
+    end;
+  finally
+    P.Free;
+  end;
+
+  Self.Dlg.RouteSet.Clear;
+
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals(Self.Dlg.RemoteTarget, R.RequestUri, 'Request-URI');
+
+    Routes := TIdSipRoutePath.Create(R.Headers);
+    try
+      Check(Routes.IsEmpty, 'Route headers are present');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialogRouteSetWithLrParam;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipRoutePath;
+begin
+  Self.Dlg.RouteSet.Clear;
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server10.biloxi.com;lr>';
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server9.biloxi.com>';
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server8.biloxi.com;lr>';
+
+  R := Self.Dlg.CreateRequest();
+  try
+    CheckEquals(Self.Dlg.RemoteTarget,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipRoutePath.Create(R.Headers);
+    try
+      Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
+            'Route headers not set to the Dialog route set');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialogRouteSetWithoutLrParam;
+var
+  DlgRoutes: TIdSipRoutePath;
+  P:         TIdSipParser;
+  R:         TIdSipRequest;
+  Response:  TIdSipResponse;
+  Routes:    TIdSipRoutePath;
+begin
+  P := TIdSipParser.Create;
+  try
+    Response := P.ParseAndMakeResponse(LocalLoopResponse);
+    try
+      Response.StatusCode := SIPTrying;
+      Self.Dlg.HandleMessage(Response);
+    finally
+      Response.Free;
+    end;
+  finally
+    P.Free;
+  end;
+
+  R := Self.Dlg.CreateRequest;
+  try
+    Self.Dlg.RouteSet.First;
+    CheckEquals(Self.Dlg.RouteSet.CurrentRoute.Address,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipRoutePath.Create(R.Headers);
+    try
+      // These are the manipulations the dialog's meant to perform on its route
+      // set. Just so you know we're not fiddling our test data.
+      DlgRoutes := Self.Dlg.RouteSet.GetAllButFirst;
+      try
+        DlgRoutes.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.URI + '>';
+
+        Check(DlgRoutes.IsEqualTo(Routes), 'Routes not added correctly');
+      finally
+        DlgRoutes.Free;
+      end;
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestInDialogTopRouteHasForbiddenParameters;
+var
+  Request: TIdSipRequest;
+begin
+  Self.Dlg.RouteSet.Items[0].Value := '<sip:127.0.0.1;transport=tcp;method=REGISTER?Subject=foo>';
+  Request := Self.Dlg.CreateRequest;
+  try
+    CheckEquals('sip:127.0.0.1;transport=tcp',
+                Request.RequestUri.Uri, 'Request-URI; SIP section 12.2.1.1');
+  finally
+    Request.Free;
   end;
 end;
 

@@ -3,8 +3,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdSipMessage, IdSipTimer,
-  IdSipTransport, SyncObjs;
+  Classes, Contnrs, IdInterfacedObject, IdRTPTimerQueue, IdSipMessage,
+  IdSipTimer, IdSipTransport, SyncObjs;
 
 const
   DefaultT1    = 500;   // ms
@@ -226,12 +226,16 @@ type
   TIdSipServerInviteTransaction = class;
   TIdSipServerInviteTransactionTimer = class(TObject)
   private
-    T2:     Cardinal;
-    Owner:  TIdSipServerInviteTransaction;
-    State:  TIdSipTransactionState;
-    TimerG: TIdSipTimer;
-    TimerH: TIdSipTimer;
-    TimerI: TIdSipTimer;
+    fTimerGInterval:  Cardinal;
+    fTimerGIsRunning: Boolean;
+    fTimerHInterval:  Cardinal;
+    fTimerHIsRunning: Boolean;
+    fTimerIInterval:  Cardinal;
+    fTimerIIsRunning: Boolean;
+    Owner:            TIdSipServerInviteTransaction;
+    State:            TIdSipTransactionState;
+    T2:               Cardinal;
+    Timer:            TIdRTPTimerQueue;
 
     procedure OnTimerG(Sender: TObject);
     procedure OnTimerH(Sender: TObject);
@@ -245,17 +249,17 @@ type
 
     procedure ChangeState(NewState: TIdSipTransactionState);
     procedure FireTimerG;
-    procedure FireTimerH;
-    procedure FireTimerI;
     procedure StartTimerG;
     procedure StartTimerH;
     procedure StartTimerI;
     procedure StopTimerG;
     procedure StopTimerH;
     procedure StopTimerI;
+    function  TimerGInterval: Cardinal;
     function  TimerGIsRunning: Boolean;
-    function  TimerHIsRunning: Boolean;
     function  TimerHInterval: Cardinal;
+    function  TimerHIsRunning: Boolean;
+    function  TimerIInterval: Cardinal;
     function  TimerIIsRunning: Boolean;
   end;
 
@@ -311,18 +315,22 @@ type
 
   TIdSipClientTransaction = class(TIdSipTransaction)
   public
-    function  IsClient: Boolean; override;
+    function IsClient: Boolean; override;
   end;
 
   TIdSipClientInviteTransaction = class;
   TIdSipClientInviteTransactionTimer = class(TObject)
   private
-    Lock:   TCriticalSection;
-    Owner:  TIdSipClientInviteTransaction;
-    State:  TIdSipTransactionState;
-    TimerA: TIdSipTimer;
-    TimerB: TIdSipTimer;
-    TimerD: TIdSipTimer;
+    fTimerAInterval:  Cardinal;
+    fTimerAIsRunning: Boolean;
+    fTimerBInterval:  Cardinal;
+    fTimerBIsRunning: Boolean;
+    fTimerDInterval:  Cardinal;
+    fTimerDIsRunning: Boolean;
+    Lock:             TCriticalSection;
+    Owner:            TIdSipClientInviteTransaction;
+    State:            TIdSipTransactionState;
+    Timer:            TIdRTPTimerQueue;
 
     procedure OnTimerA(Sender: TObject);
     procedure OnTimerB(Sender: TObject);
@@ -343,7 +351,9 @@ type
     procedure StopTimerD;
     function  TimerAInterval: Cardinal;
     function  TimerAIsRunning: Boolean;
+    function  TimerBInterval: Cardinal;
     function  TimerBIsRunning: Boolean;
+    function  TimerDInterval: Cardinal;
     function  TimerDIsRunning: Boolean;
   end;
 
@@ -376,13 +386,17 @@ type
   TIdSipClientNonInviteTransaction = class;
   TIdSipClientNonInviteTransactionTimer = class(TObject)
   private
-    Lock:   TCriticalSection;
-    Owner:  TIdSipClientNonInviteTransaction;
-    State:  TIdSipTransactionState;
-    T2:     Cardinal;
-    TimerE: TIdSipTimer;
-    TimerF: TIdSipTimer;
-    TimerK: TIdSipTimer;
+    fTimerEInterval:  Cardinal;
+    fTimerEIsRunning: Boolean;
+    fTimerFInterval:  Cardinal;
+    fTimerFIsRunning: Boolean;
+    fTimerKInterval:  Cardinal;
+    fTimerKIsRunning: Boolean;
+    Lock:             TCriticalSection;
+    Owner:            TIdSipClientNonInviteTransaction;
+    State:            TIdSipTransactionState;
+    T2:               Cardinal;
+    Timer:            TIdRTPTimerQueue;
 
     procedure OnTimerE(Sender: TObject);
     procedure OnTimerF(Sender: TObject);
@@ -406,6 +420,7 @@ type
     procedure StopTimerK;
     function  TimerEInterval: Cardinal;
     function  TimerEIsRunning: Boolean;
+    function  TimerFInterval: Cardinal;
     function  TimerFIsRunning: Boolean;
     function  TimerKInterval: Cardinal;
     function  TimerKIsRunning: Boolean;
@@ -1163,31 +1178,19 @@ begin
   inherited Create;
   Self.Owner := OwnerTran;
 
-  Self.TimerG := TIdSipTimer.Create;
-  Self.TimerG.Interval := T1;
-  Self.TimerG.OnTimer  := Self.OnTimerG;
+  Self.Timer := TIdRTPTimerQueue.Create(false);
 
-  Self.TimerH := TIdSipTimer.Create;
-  Self.TimerH.Interval := 64*T1;
-  Self.TimerH.OnTimer  := Self.OnTimerH;
-
-  Self.TimerI := TIdSipTimer.Create;
-  Self.TimerI.Interval := T4;
-  Self.TimerI.OnTimer  := Self.OnTimerI;
+  Self.fTimerGInterval := T1;
+  Self.fTimerHInterval := 64*T1;
+  Self.fTimerIInterval := T4;
 
   Self.T2 := T2
 end;
 
 destructor TIdSipServerInviteTransactionTimer.Destroy;
 begin
-  Self.TimerI.TerminateAndWaitFor;
-  Self.TimerI.Free;
-
-  Self.TimerH.TerminateAndWaitFor;
-  Self.TimerH.Free;
-
-  Self.TimerG.TerminateAndWaitFor;
-  Self.TimerG.Free;
+  Self.Timer.TerminateAndWaitFor;
+  Self.Timer.Free;
 
   inherited Destroy;
 end;
@@ -1216,89 +1219,101 @@ end;
 
 procedure TIdSipServerInviteTransactionTimer.FireTimerG;
 begin
-  if (Self.TimerG.Interval < T2) then
-    Self.TimerG.Interval := 2*Self.TimerG.Interval
+  if (Self.fTimerGInterval < T2) then
+    Self.fTimerGInterval := 2*Self.fTimerGInterval
   else
-    Self.TimerG.Interval := T2;
+    Self.fTimerGInterval := T2;
 
   Self.Owner.FireTimerG;
 end;
 
-procedure TIdSipServerInviteTransactionTimer.FireTimerH;
-begin
-  Self.Owner.FireTimerH;
-end;
-
-procedure TIdSipServerInviteTransactionTimer.FireTimerI;
-begin
-  Self.Owner.FireTimerI;
-end;
-
 procedure TIdSipServerInviteTransactionTimer.StartTimerG;
 begin
-  Self.TimerG.Start;
+  Self.Timer.AddEvent(Self.TimerGInterval, Self.OnTimerG);
+  Self.fTimerGIsRunning := true;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.StartTimerH;
 begin
-  Self.TimerH.Start;
+  Self.Timer.AddEvent(Self.TimerHInterval, Self.OnTimerH);
+  Self.fTimerHIsRunning := true;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.StartTimerI;
 begin
-  Self.TimerI.Start;
+  Self.Timer.AddEvent(Self.TimerIInterval, Self.OnTimerI);
+  Self.fTimerIIsRunning := true;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.StopTimerG;
 begin
-  Self.TimerG.Stop;
+  Self.fTimerGIsRunning := false;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.StopTimerH;
 begin
-  Self.TimerH.Stop;
+  Self.fTimerHIsRunning := false;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.StopTimerI;
 begin
-  Self.TimerI.Stop;
+  Self.fTimerIIsRunning := false;
+end;
+
+function TIdSipServerInviteTransactionTimer.TimerGInterval: Cardinal;
+begin
+  Result := Self.fTimerGInterval;
 end;
 
 function TIdSipServerInviteTransactionTimer.TimerGIsRunning: Boolean;
 begin
-  Result := not Self.TimerG.Stopped;
-end;
-
-function TIdSipServerInviteTransactionTimer.TimerHIsRunning: Boolean;
-begin
-  Result := not Self.TimerH.Stopped;
+  Result := Self.fTimerGIsRunning;
 end;
 
 function TIdSipServerInviteTransactionTimer.TimerHInterval: Cardinal;
 begin
-  Result := Self.TimerH.Interval;
+  Result := Self.fTimerHInterval;
+end;
+
+function TIdSipServerInviteTransactionTimer.TimerHIsRunning: Boolean;
+begin
+  Result := Self.fTimerHIsRunning;
+end;
+
+function TIdSipServerInviteTransactionTimer.TimerIInterval: Cardinal;
+begin
+  Result := Self.fTimerIInterval;
 end;
 
 function TIdSipServerInviteTransactionTimer.TimerIIsRunning: Boolean;
 begin
-  Result := not Self.TimerI.Stopped;  
+  Result := Self.fTimerIIsRunning;
 end;
 
 //* TIdSipServerInviteTransactionTimer Private methods *************************
 
 procedure TIdSipServerInviteTransactionTimer.OnTimerG(Sender: TObject);
 begin
-  Self.FireTimerG;
+  if Self.TimerGIsRunning then begin
+    Self.FireTimerG;
+    Self.Timer.AddEvent(Self.TimerGInterval, Self.OnTimerG);
+  end;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.OnTimerH(Sender: TObject);
 begin
-  Self.FireTimerH;
+  if Self.TimerHIsRunning then begin
+    Self.Owner.FireTimerH;
+    Self.Timer.AddEvent(Self.TimerHInterval, Self.OnTimerH);
+  end;
 end;
 
 procedure TIdSipServerInviteTransactionTimer.OnTimerI(Sender: TObject);
 begin
-  Self.FireTimerI;
+  if Self.TimerIIsRunning then begin
+    Self.Owner.FireTimerI;
+    Self.Timer.AddEvent(Self.TimerIInterval, Self.OnTimerI);
+  end;
 end;
 
 //******************************************************************************
@@ -1586,29 +1601,17 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.Owner := OwnerTran;
 
-  Self.TimerA          := TIdSipTimer.Create(true);
-  Self.TimerA.Interval := T1;
-  Self.TimerA.OnTimer  := Self.OnTimerA;
+  Self.Timer := TIdRTPTimerQueue.Create(false);
 
-  Self.TimerB          := TIdSipTimer.Create(true);
-  Self.TimerB.Interval := 64*T1;
-  Self.TimerB.OnTimer  := Self.OnTimerB;
-
-  Self.TimerD          := TIdSipTimer.Create(true);
-  Self.TimerD.Interval := 64*T1;
-  Self.TimerD.OnTimer  := Self.OnTimerD;
+  Self.fTimerAInterval := T1;
+  Self.fTimerBInterval := 64*T1;
+  Self.fTimerDInterval := 64*T1;
 end;
 
 destructor TIdSipClientInviteTransactionTimer.Destroy;
 begin
-  Self.TimerD.TerminateAndWaitFor;
-  Self.TimerD.Free;
-
-  Self.TimerB.TerminateAndWaitFor;
-  Self.TimerB.Free;
-
-  Self.TimerA.TerminateAndWaitFor;
-  Self.TimerA.Free;
+  Self.Timer.TerminateAndWaitFor;
+  Self.Timer.Free;
 
   Self.Lock.Free;
 
@@ -1623,7 +1626,7 @@ begin
     Self.StopTimerA;
     Self.StopTimerB;
   end;
-  
+
   case NewState of
     itsCompleted:  Self.StartTimerD;
     itsTerminated: Self.StopTimerD;
@@ -1635,7 +1638,7 @@ procedure TIdSipClientInviteTransactionTimer.FireTimerA;
 begin
   Self.Lock.Acquire;
   try
-    Self.TimerA.Interval := 2*Self.TimerA.Interval;
+    Self.fTimerAInterval := 2*Self.fTimerAInterval;
   finally
     Self.Lock.Release;
   end;
@@ -1651,39 +1654,42 @@ end;
 
 procedure TIdSipClientInviteTransactionTimer.StartTimerA;
 begin
-  Self.TimerA.Start;
+  Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
+  Self.fTimerAIsRunning := true;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StartTimerB;
 begin
-  Self.TimerB.Start;
+  Self.Timer.AddEvent(Self.TimerBInterval, Self.OnTimerB);
+  Self.fTimerBIsRunning := true;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StartTimerD;
 begin
-  Self.TimerD.Start;
+  Self.Timer.AddEvent(Self.TimerDInterval, Self.OnTimerD);
+  Self.fTimerDIsRunning := true;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerA;
 begin
-  Self.TimerA.Stop;
+  Self.fTimerAIsRunning := false;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerB;
 begin
-  Self.TimerB.Stop;
+  Self.fTimerBIsRunning := false;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerD;
 begin
-  Self.TimerD.Stop;
+  Self.fTimerDIsRunning := false;
 end;
 
 function TIdSipClientInviteTransactionTimer.TimerAInterval: Cardinal;
 begin
   Self.Lock.Acquire;
   try
-    Result := Self.TimerA.Interval;
+    Result := Self.fTimerAInterval;
   finally
     Self.Lock.Release;
   end;
@@ -1691,39 +1697,56 @@ end;
 
 function TIdSipClientInviteTransactionTimer.TimerAIsRunning: Boolean;
 begin
-  Result := not Self.TimerA.Stopped;
+  Result := Self.fTimerAIsRunning;
+end;
+
+function TIdSipClientInviteTransactionTimer.TimerBInterval: Cardinal;
+begin
+  Result := Self.fTimerBInterval;
 end;
 
 function TIdSipClientInviteTransactionTimer.TimerBIsRunning: Boolean;
 begin
-  Result := not Self.TimerB.Stopped;
+  Result := Self.fTimerBIsRunning;
+end;
+
+function TIdSipClientInviteTransactionTimer.TimerDInterval: Cardinal;
+begin
+  Result := Self.fTimerDInterval;
 end;
 
 function TIdSipClientInviteTransactionTimer.TimerDIsRunning: Boolean;
 begin
-  Result := not Self.TimerD.Stopped;
+  Result := Self.fTimerDIsRunning;
 end;
 
 //* TIdSipClientInviteTransactionTimer Private methods *************************
 
 procedure TIdSipClientInviteTransactionTimer.OnTimerA(Sender: TObject);
 begin
-  Self.FireTimerA;
+  if Self.TimerAIsRunning then begin
+    Self.FireTimerA;
+    Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
+  end;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.OnTimerB(Sender: TObject);
 begin
-  Self.StopTimerB;
-  Owner.FireTimerB;
+  if Self.TimerBIsRunning then begin
+    Self.StopTimerB;
+    Owner.FireTimerB;
+  end;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.OnTimerD(Sender: TObject);
 begin
-  Self.StopTimerD;
-  Owner.FireTimerD;
+  if Self.TimerDIsRunning then begin
+    Self.StopTimerD;
+    Owner.FireTimerD;
 
-  Self.TimerA.Stop;
-  Self.TimerB.Stop;
+    Self.StopTimerA;
+    Self.StopTimerB;
+  end;
 end;
 
 //******************************************************************************
@@ -1738,12 +1761,13 @@ begin
 
   Self.Timer := TIdSipClientInviteTransactionTimer.Create(Self,
                                                           Self.Dispatcher.T1Interval);
-  Self.ChangeToCalling;  
+  Self.ChangeToCalling;
 end;
 
 destructor TIdSipClientInviteTransaction.Destroy;
 begin
   Self.Timer.Free;
+
   inherited Destroy;
 end;
 
@@ -1912,32 +1936,19 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.Owner := OwnerTran;
 
-  Self.TimerE          := TIdSipTimer.Create(true);
-  Self.TimerE.Interval := T1;
-  Self.TimerE.OnTimer  := Self.OnTimerE;
+  Self.Timer := TIdRTPTimerQueue.Create(false);
 
-  Self.TimerF          := TIdSipTimer.Create(true);
-  Self.TimerF.Interval := 64*T1;
-  Self.TimerF.OnTimer  := Self.OnTimerF;
-
-  Self.TimerK          := TIdSipTimer.Create(true);
-  Self.TimerK.Interval := T4;
-  Self.TimerK.OnTimer  := Self.OnTimerK;
+  Self.fTimerEInterval := T1;
+  Self.fTimerFInterval := 64*T1;
+  Self.fTimerKInterval := T4;
 
   Self.T2 := T2;
 end;
 
 destructor TIdSipClientNonInviteTransactionTimer.Destroy;
 begin
-  Self.TimerK.TerminateAndWaitFor;
-  Self.TimerK.Free;
-
-  Self.TimerF.TerminateAndWaitFor;
-  Self.TimerF.Free;
-
-  Self.TimerE.TerminateAndWaitFor;
-  Self.TimerE.Free;
-
+  Self.Timer.TerminateAndWaitFor;
+  Self.Timer.Free;
   Self.Lock.Free;
 
   inherited Destroy;
@@ -1966,13 +1977,13 @@ begin
   Self.Lock.Acquire;
   try
     if (Self.State = itsTrying) then begin
-      if (Self.TimerE.Interval < Self.T2) then
-        Self.TimerE.Interval := 2*Self.TimerE.Interval
+      if (Self.fTimerEInterval < Self.T2) then
+        Self.fTimerEInterval := 2*Self.fTimerEInterval
       else
-        Self.TimerE.Interval := Self.T2;
+        Self.fTimerEInterval := Self.T2;
     end
     else if (Self.State = itsProceeding) then begin
-      Self.TimerE.Interval := Self.T2;
+      Self.fTimerEInterval := Self.T2;
     end;
   finally
     Self.Lock.Release;
@@ -1986,7 +1997,7 @@ begin
   Self.StopTimerE;
   Self.Lock.Acquire;
   try
-    Self.TimerE.Interval := NewInterval;
+    Self.fTimerEInterval := NewInterval;
   finally
     Self.Lock.Release;
   end;
@@ -2001,39 +2012,42 @@ end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StartTimerE;
 begin
-  Self.TimerE.Start;
+  Self.Timer.AddEvent(Self.TimerEInterval, Self.OnTimerE);
+  Self.fTimerEIsRunning := true;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StartTimerF;
 begin
-  Self.TimerF.Start;
+  Self.Timer.AddEvent(Self.TimerFInterval, Self.OnTimerF);
+  Self.fTimerFIsRunning := true;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StartTimerK;
 begin
-  Self.TimerK.Start;
+  Self.Timer.AddEvent(Self.TimerKInterval, Self.OnTimerK);
+  Self.fTimerKIsRunning := true;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StopTimerE;
 begin
-  Self.TimerE.Stop;
+  Self.fTimerEIsRunning := false;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StopTimerF;
 begin
-  Self.TimerF.Stop;
+  Self.fTimerFIsRunning := false;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.StopTimerK;
 begin
-  Self.TimerK.Stop;
+  Self.fTimerKIsRunning := false;
 end;
 
 function TIdSipClientNonInviteTransactionTimer.TimerEInterval: Cardinal;
 begin
   Self.Lock.Acquire;
   try
-    Result := Self.TimerE.Interval;
+    Result := Self.fTimerEInterval;
   finally
     Self.Lock.Release;
   end;
@@ -2041,39 +2055,53 @@ end;
 
 function TIdSipClientNonInviteTransactionTimer.TimerEIsRunning: Boolean;
 begin
-  Result := not Self.TimerE.Stopped;
+  Result := Self.fTimerEIsRunning;
+end;
+
+function TIdSipClientNonInviteTransactionTimer.TimerFInterval: Cardinal;
+begin
+  Result := Self.fTimerFInterval;
 end;
 
 function TIdSipClientNonInviteTransactionTimer.TimerFIsRunning: Boolean;
 begin
-  Result := not Self.TimerF.Stopped;
+  Result := Self.fTimerFIsRunning;
 end;
 
 function TIdSipClientNonInviteTransactionTimer.TimerKInterval: Cardinal;
 begin
-  Result := Self.TimerK.Interval;
+  Result := Self.fTimerKInterval;
 end;
 
 function TIdSipClientNonInviteTransactionTimer.TimerKIsRunning: Boolean;
 begin
-  Result := not Self.TimerK.Stopped;
+  Result := Self.fTimerKIsRunning;
 end;
 
 //* TIdSipClientNonInviteTransactionTimer Private methods **********************
 
 procedure TIdSipClientNonInviteTransactionTimer.OnTimerE(Sender: TObject);
 begin
-  Self.FireTimerE;
+  if Self.TimerEIsRunning then begin
+    Self.FireTimerE;
+    Self.Timer.AddEvent(Self.TimerEInterval, Self.OnTimerE);
+  end;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.OnTimerF(Sender: TObject);
 begin
-  Owner.FireTimerF;
+  if Self.TimerEIsRunning then begin
+    Self.Owner.FireTimerF;
+    Self.Timer.AddEvent(Self.TimerEInterval, Self.OnTimerE);
+  end;
 end;
 
 procedure TIdSipClientNonInviteTransactionTimer.OnTimerK(Sender: TObject);
 begin
-  Owner.FireTimerK;
+  if Self.TimerKIsRunning then begin
+    Self.Owner.FireTimerK;
+    Self.Timer.AddEvent(Self.TimerKInterval, Self.OnTimerK);
+  end;
 end;
 
 //******************************************************************************
