@@ -355,41 +355,43 @@ const
 
 // for IdResourceStrings ?
 const
-  BranchMagicCookie        = 'z9hG4bK';
-  BranchParam              = 'branch';
-  CallIDHeaderFull         = 'Call-ID';
-  CallIDHeaderShort        = 'i';
-  ContactHeaderFull        = 'Contact';
-  ContactHeaderShort       = 'm';
-  ContentEncodingFull      = 'Content-Encoding';
-  ContentEncodingShort     = 'e';
-  ContentLengthHeaderFull  = 'Content-Length';
-  ContentLengthHeaderShort = 'l';
-  ContentTypeHeaderFull    = 'Content-Type';
-  ContentTypeHeaderShort   = 'c';
-  CSeqHeader               = 'CSeq';
-  DefaultMaxForwards       = 70;
-  DateHeader               = 'Date';
-  ExpiresHeader            = 'Expires';
-  FromHeaderFull           = 'From';
-  FromHeaderShort          = 'f';
-  MaddrParam               = 'maddr';
-  MaxForwardsHeader        = 'Max-Forwards';
-  MethodAck                = 'ACK';
-  MethodBye                = 'BYE';
-  MethodCancel             = 'CANCEL';
-  MethodInvite             = 'INVITE';
-  MethodOptions            = 'OPTIONS';
-  MethodRegister           = 'REGISTER';
-  ReceivedParam            = 'received';
-  SipName                  = 'SIP';
-  SubjectHeaderFull        = 'Subject';
-  SubjectHeaderShort       = 's';
-  ToHeaderFull             = 'To';
-  ToHeaderShort            = 't';
-  TTLParam                 = 'ttl';
-  ViaHeaderFull            = 'Via';
-  ViaHeaderShort           = 'v';
+  BranchMagicCookie          = 'z9hG4bK';
+  BranchParam                = 'branch';
+  CallIDHeaderFull           = 'Call-ID';
+  CallIDHeaderShort          = 'i';
+  ContactHeaderFull          = 'Contact';
+  ContactHeaderShort         = 'm';
+  ContentEncodingHeaderFull  = 'Content-Encoding';
+  ContentEncodingHeaderShort = 'e';
+  ContentLengthHeaderFull    = 'Content-Length';
+  ContentLengthHeaderShort   = 'l';
+  ContentTypeHeaderFull      = 'Content-Type';
+  ContentTypeHeaderShort     = 'c';
+  CSeqHeader                 = 'CSeq';
+  DefaultMaxForwards         = 70;
+  DateHeader                 = 'Date';
+  ExpiresHeader              = 'Expires';
+  FromHeaderFull             = 'From';
+  FromHeaderShort            = 'f';
+  MaddrParam                 = 'maddr';
+  MaxForwardsHeader          = 'Max-Forwards';
+  MethodAck                  = 'ACK';
+  MethodBye                  = 'BYE';
+  MethodCancel               = 'CANCEL';
+  MethodInvite               = 'INVITE';
+  MethodOptions              = 'OPTIONS';
+  MethodRegister             = 'REGISTER';
+  ReceivedParam              = 'received';
+  SipName                    = 'SIP';
+  SubjectHeaderFull          = 'Subject';
+  SubjectHeaderShort         = 's';
+  SupportedHeaderFull        = 'Supported';
+  SupportedHeaderShort       = 'k';
+  ToHeaderFull               = 'To';
+  ToHeaderShort              = 't';
+  TTLParam                   = 'ttl';
+  ViaHeaderFull              = 'Via';
+  ViaHeaderShort             = 'v';
 
 // for IdAssignedNumbers
 const
@@ -1764,20 +1766,28 @@ end;
 
 function TIdSipParser.CanonicaliseName(HeaderName: String): String;
 begin
-       if IsEqual(ContactHeaderFull,        HeaderName) then Result := ContactHeaderFull
-  else if IsEqual(ContactHeaderShort,       HeaderName) then Result := ContactHeaderFull
-  else if IsEqual(ContentLengthHeaderFull,  HeaderName) then Result := ContentLengthHeaderFull
-  else if IsEqual(ContentLengthHeaderShort, HeaderName) then Result := ContentLengthHeaderFull
-  else if IsEqual(CSeqHeader,               HeaderName) then Result := CSeqHeader
-  else if IsEqual(FromHeaderFull,           HeaderName) then Result := FromHeaderFull
-  else if IsEqual(FromHeaderShort,          HeaderName) then Result := FromHeaderFull
-  else if IsEqual(MaxForwardsHeader,        HeaderName) then Result := MaxForwardsHeader
-  else if IsEqual(SubjectHeaderFull,        HeaderName) then Result := SubjectHeaderFull
-  else if IsEqual(SubjectHeaderShort,       HeaderName) then Result := SubjectHeaderFull
-  else if IsEqual(ToHeaderFull,             HeaderName) then Result := ToHeaderFull
-  else if IsEqual(ToHeaderShort,            HeaderName) then Result := ToHeaderFull
-  else if IsEqual(ViaHeaderFull,            HeaderName) then Result := ViaHeaderFull
-  else if IsEqual(ViaHeaderShort,           HeaderName) then Result := ViaHeaderFull
+       if IsEqual(CallIDHeaderFull,           HeaderName) then Result := CallIDHeaderFull
+  else if IsEqual(CallIDHeaderShort,          HeaderName) then Result := CallIDHeaderFull
+  else if IsEqual(ContactHeaderFull,          HeaderName) then Result := ContactHeaderFull
+  else if IsEqual(ContactHeaderShort,         HeaderName) then Result := ContactHeaderFull
+  else if IsEqual(ContentEncodingHeaderFull,  HeaderName) then Result := ContentEncodingHeaderFull
+  else if IsEqual(ContentEncodingHeaderShort, HeaderName) then Result := ContentEncodingHeaderFull
+  else if IsEqual(ContentLengthHeaderFull,    HeaderName) then Result := ContentLengthHeaderFull
+  else if IsEqual(ContentLengthHeaderShort,   HeaderName) then Result := ContentLengthHeaderFull
+  else if IsEqual(ContentTypeHeaderFull,      HeaderName) then Result := ContentTypeHeaderFull
+  else if IsEqual(ContentTypeHeaderShort,     HeaderName) then Result := ContentTypeHeaderFull
+  else if IsEqual(CSeqHeader,                 HeaderName) then Result := CSeqHeader
+  else if IsEqual(FromHeaderFull,             HeaderName) then Result := FromHeaderFull
+  else if IsEqual(FromHeaderShort,            HeaderName) then Result := FromHeaderFull
+  else if IsEqual(MaxForwardsHeader,          HeaderName) then Result := MaxForwardsHeader
+  else if IsEqual(SubjectHeaderFull,          HeaderName) then Result := SubjectHeaderFull
+  else if IsEqual(SubjectHeaderShort,         HeaderName) then Result := SubjectHeaderFull
+  else if IsEqual(SupportedHeaderFull,        HeaderName) then Result := SupportedHeaderFull
+  else if IsEqual(SupportedHeaderShort,       HeaderName) then Result := SupportedHeaderFull
+  else if IsEqual(ToHeaderFull,               HeaderName) then Result := ToHeaderFull
+  else if IsEqual(ToHeaderShort,              HeaderName) then Result := ToHeaderFull
+  else if IsEqual(ViaHeaderFull,              HeaderName) then Result := ViaHeaderFull
+  else if IsEqual(ViaHeaderShort,             HeaderName) then Result := ViaHeaderFull
   else
     Result := HeaderName;
 end;
@@ -1928,23 +1938,10 @@ begin
 end;
 
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
-var
-  N: Integer;
 begin
   try
     if TIdSipHeaders.IsContact(Header) then
       Self.ParseContactHeader(Msg, Self.GetHeaderValue(Header))
-    else if TIdSipHeaders.IsContentLength(Header) then
-      Msg.ContentLength := Self.GetHeaderNumberValue(Msg, Header)
-    else if TIdSipHeaders.IsMaxForwards(Header) then begin
-      N := Self.GetHeaderNumberValue(Msg, Header);
-      if (N < 0) or (N > 255) then
-        raise Msg.MalformedException.Create(Format(MalformedToken, [Self.GetHeaderName(Header), Header]));
-      Msg.MaxForwards := N;
-    end
-  //  else if TIdSipHeaders.IsTo(Header) then begin
-  //    Msg.Headers.Add(ToHeaderFull).Value := Self.GetHeaderValue(Header);
-  //  end
     else if TIdSipHeaders.IsVia(Header) then
       Self.ParseViaHeader(Msg, Self.GetHeaderValue(Header))
     else

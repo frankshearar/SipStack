@@ -242,6 +242,27 @@ const
                 + 'm=video 3227 RTP/AVP 31'#13#10
                 + 'a=rtpmap:31 LPC';
 
+  //   This INVITE is legal and has a Request-URI with a SIP URI containing
+  //   escaped characters.
+  TortureTest24 = 'INVITE sip:sip%3Auser%40example.com@company.com;other-param=summit SIP/2.0'#13#10
+                + 'To: sip:user@company.com'#13#10
+                + 'From: sip:caller@university.edu;tag=938'#13#10
+                + 'Max-Forwards: 87'#13#10
+                + 'Call-ID: 4@10.0.0.1'#13#10
+                + 'CSeq: 1 INVITE'#13#10
+                + 'Via: SIP/2.0/UDP 135.180.130.133:5060;branch=z9hG4bKkdjuw'#13#10
+                + 'Content-Type: application/sdp'#13#10
+                + 'Content-Length: 174'#13#10
+                + #13#10
+                + 'v=0'#13#10
+                + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                + 's=-'#13#10
+                + 'c=IN IP4 135.180.130.88'#13#10
+                + 't=0 0'#13#10
+                + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                + 'm=video 3227 RTP/AVP 31'#13#10
+                + 'a=rtpmap:31 LPC';
+
   //   This is an illegal and badly mangled message.
   //
   //   A server should respond 400 with an appropriate reason phrase if it

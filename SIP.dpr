@@ -23,7 +23,7 @@ uses
   TestIdSipClient in 'test\TestIdSipClient.pas';
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

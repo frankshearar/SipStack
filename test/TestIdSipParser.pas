@@ -250,6 +250,7 @@ type
     procedure TestTortureTest21;
     procedure TestTortureTest22;
     procedure TestTortureTest23;
+    procedure TestTortureTest24;
     procedure TestTortureTest35;
     procedure TestTortureTest40;
   end;
@@ -1874,6 +1875,13 @@ end;
 
 procedure TestTIdSipParser.TestCanonicaliseName;
 begin
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName('call-ID'),         'call-ID');
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName('Call-ID'),         'Call-ID');
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName('i'),               'i');
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName('I'),               'I');
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName(CallIDHeaderFull),  'CallIDHeaderFull constant');
+  CheckEquals(CallIDHeaderFull, Self.P.CanonicaliseName(CallIDHeaderShort), 'CallIDHeaderShort constant');
+
   CheckEquals(CSeqHeader, Self.P.CanonicaliseName('cseq'),     'cseq');
   CheckEquals(CSeqHeader, Self.P.CanonicaliseName('CSeq'),     'CSeq');
   CheckEquals(CSeqHeader, Self.P.CanonicaliseName(CSeqHeader), 'CSeqHeader constant');
@@ -1884,6 +1892,20 @@ begin
   CheckEquals(ContactHeaderFull, Self.P.CanonicaliseName('M'),                'M');
   CheckEquals(ContactHeaderFull, Self.P.CanonicaliseName(ContactHeaderFull),  'ContactHeaderFull constant');
   CheckEquals(ContactHeaderFull, Self.P.CanonicaliseName(ContactHeaderShort), 'ContactHeaderShort constant');
+
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName('content-encoding'),         'content-encoding');
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName('Content-Encoding'),         'Content-Encoding');
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName('e'),                        'e');
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName('E'),                        'E');
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName(ContentEncodingHeaderFull),  'ContentEncodingHeaderFull constant');
+  CheckEquals(ContentEncodingHeaderFull, Self.P.CanonicaliseName(ContentEncodingHeaderShort), 'ContentEncodingHeaderShort constant');
+
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName('content-type'),         'content-type');
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName('Content-Type'),         'Content-Type');
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName('c'),                    'c');
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName('C'),                    'C');
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName(ContentTypeHeaderFull),  'ContentTypeHeaderFull constant');
+  CheckEquals(ContentTypeHeaderFull, Self.P.CanonicaliseName(ContentTypeHeaderShort), 'ContentTypeHeaderShort constant');
 
   CheckEquals(ContentLengthHeaderFull, Self.P.CanonicaliseName('Content-Length'),         'Content-Length');
   CheckEquals(ContentLengthHeaderFull, Self.P.CanonicaliseName('Content-Length'),         'Content-Length');
@@ -1909,6 +1931,13 @@ begin
   CheckEquals(SubjectHeaderFull, Self.P.CanonicaliseName('S'),                'S');
   CheckEquals(SubjectHeaderFull, Self.P.CanonicaliseName(SubjectHeaderFull),  'SubjectHeaderFull constant');
   CheckEquals(SubjectHeaderFull, Self.P.CanonicaliseName(SubjectHeaderShort), 'SubjectHeaderShort constant');
+
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName('supported'),          'supported');
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName('Supported'),          'Supported');
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName('k'),                  'k');
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName('K'),                  'K');
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName(SupportedHeaderFull),  'SupportedHeaderFull constant');
+  CheckEquals(SupportedHeaderFull, Self.P.CanonicaliseName(SupportedHeaderShort), 'SupportedHeaderShort constant');
 
   CheckEquals(ToHeaderFull, Self.P.CanonicaliseName('to'),          'to');
   CheckEquals(ToHeaderFull, Self.P.CanonicaliseName('To'),          'To');
@@ -3087,6 +3116,23 @@ end;
 procedure TestTIdSipParser.TestTortureTest23;
 begin
   Self.CheckTortureTest(TortureTest23, RequestUriNoSpaces);
+end;
+
+procedure TestTIdSipParser.TestTortureTest24;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(TortureTest24);
+  try
+    Self.P.Source := Str;
+    Self.P.ParseRequest(Request);
+
+    CheckEquals('sip:sip%3Auser%40example.com@company.com;other-param=summit',
+                Request.Request,
+                'Request-URI');
+  finally
+    Str.Free;
+  end;
 end;
 
 procedure TestTIdSipParser.TestTortureTest35;
