@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress,
-  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdSocketHandle,
-  IdUDPServer, SyncObjs;
+  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdSipNotification,
+  IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -524,11 +524,10 @@ type
   TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
                              IIdRTPListener)
   private
-    FilteredListenerLock: TCriticalSection;
-    FilteredListeners:    TList;
-    fLocalDescription:    TIdSdpMediaDescription;
-    fRemoteDescription:   TIdSdpMediaDescription;
-    fPeer:                Pointer;
+    FilteredListeners:  TIdSipNotificationList;
+    fLocalDescription:  TIdSdpMediaDescription;
+    fRemoteDescription: TIdSdpMediaDescription;
+    fPeer:              Pointer;
 
     function  GetPeer: IIdAbstractRTPPeer;
     procedure NotifyFilteredListeners(Packet: TIdRTPPacket;
@@ -626,6 +625,17 @@ type
     property Profile:                  TIdRTPProfile read fProfile;
     property RemoteSessionDescription: String        read fRemoteSessionDescription write SetRemoteSessionDescription;
     property Username:                 String        read fUsername write fUsername;
+  end;
+
+  TIdRTPFilteredListenerFilteredRTPMethod = class(TIdSipMethod)
+  private
+    fBinding: TIdSocketHandle;
+    fPacket:  TIdRTPPacket;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Binding: TIdSocketHandle read fBinding write fBinding;
+    property Packet: TIdRTPPacket     read fPacket write fPacket;
   end;
 
 const
@@ -3266,8 +3276,7 @@ constructor TIdFilteredRTPPeer.Create(Peer: IIdAbstractRTPPeer;
 begin
   inherited Create;
 
-  Self.FilteredListenerLock := TCriticalSection.Create;
-  Self.FilteredListeners    := TList.Create;
+  Self.FilteredListeners    := TIdSipNotificationList.Create;
 
   fLocalDescription := TIdSdpMediaDescription.Create;
   fLocalDescription.Assign(LocalDescription);
@@ -3286,30 +3295,18 @@ begin
   fLocalDescription.Free;
 
   Self.FilteredListeners.Free;
-  Self.FilteredListenerLock.Free;
-
 
   inherited Destroy;
 end;
 
 procedure TIdFilteredRTPPeer.AddFilteredListener(const Listener: IIdRTPFilteredListener);
 begin
-  Self.FilteredListenerLock.Acquire;
-  try
-    Self.FilteredListeners.Add(Pointer(Listener));
-  finally
-    Self.FilteredListenerLock.Release;
-  end;
+  Self.FilteredListeners.AddListener(Listener);
 end;
 
 procedure TIdFilteredRTPPeer.RemoveFilteredListener(const Listener: IIdRTPFilteredListener);
 begin
-  Self.FilteredListenerLock.Acquire;
-  try
-    Self.FilteredListeners.Remove(Pointer(Listener));
-  finally
-    Self.FilteredListenerLock.Release;
-  end;
+  Self.FilteredListeners.RemoveListener(Listener);
 end;
 
 procedure TIdFilteredRTPPeer.SendPacket(const Host: String;
@@ -3329,15 +3326,16 @@ end;
 procedure TIdFilteredRTPPeer.NotifyFilteredListeners(Packet: TIdRTPPacket;
                                                      Binding: TIdSocketHandle);
 var
-  I: Integer;
+  Notification: TIdRTPFilteredListenerFilteredRTPMethod;
 begin
-  Self.FilteredListenerLock.Acquire;
+  Notification := TIdRTPFilteredListenerFilteredRTPMethod.Create;
   try
-    for I := 0 to Self.FilteredListeners.Count - 1 do
-      IIdRTPFilteredListener(Self.FilteredListeners[I]).OnFilteredRTP(Packet,
-                                                                      Binding);
+    Notification.Binding := Binding;
+    Notification.Packet  := Packet;
+
+    Self.FilteredListeners.Notify(Notification);
   finally
-    Self.FilteredListenerLock.Release;
+    Notification.Free;
   end;
 end;
 
@@ -3784,6 +3782,16 @@ begin
   finally
     Self.RTPServerLock.Release;
   end;
+end;
+
+//******************************************************************************
+//* TIdRTPFilteredListenerFilteredRTPMethod                                    *
+//******************************************************************************
+//* TIdRTPFilteredListenerFilteredRTPMethod Public methods *********************
+
+procedure TIdRTPFilteredListenerFilteredRTPMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdRTPFilteredListener).OnFilteredRTP(Self.Packet, Self.Binding);
 end;
 
 end.
