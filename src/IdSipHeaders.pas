@@ -215,6 +215,8 @@ type
     constructor Create; override;
     destructor Destroy; override;
 
+    procedure RemoveValues(Header: TIdSipCommaSeparatedHeader);
+
     property Values: TStrings read fValues;
   end;
 
@@ -1842,6 +1844,15 @@ begin
   fValues.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipCommaSeparatedHeader.RemoveValues(Header: TIdSipCommaSeparatedHeader);
+var
+  I: Integer;
+begin
+  // TODO: Find a better way to do this than Schlemiel the Painter!
+  for I := 0 to Header.Values.Count - 1 do
+    Self.Values.Delete(Self.Values.IndexOf(Header.Values[I]));
 end;
 
 //* TIdSipCommaSeparatedHeader Protected methods *******************************

@@ -64,6 +64,7 @@ type
     function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  FirstMinExpires: TIdSipNumericHeader;
+    function  FirstRequire: TIdSipCommaSeparatedHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  HeaderCount: Integer;
@@ -108,6 +109,7 @@ type
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  DefaultMaxForwards: Cardinal;
+    function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -145,6 +147,7 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  Description: String;
+    function  FirstUnsupported: TIdSipCommaSeparatedHeader;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
@@ -500,6 +503,11 @@ begin
   Result := Self.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader;
 end;
 
+function TIdSipMessage.FirstRequire: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(RequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
 function TIdSipMessage.HasExpiry: Boolean;
 var
   Contacts: TIdSipContacts;
@@ -745,6 +753,11 @@ begin
   Result := 70;
 end;
 
+function TIdSipRequest.FirstProxyRequire: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
 function TIdSipRequest.HasSipsUri: Boolean;
 var
   S: String;
@@ -986,6 +999,11 @@ end;
 function TIdSipResponse.Description: String;
 begin
   Result := IntToStr(Self.StatusCode) + ' ' + Self.StatusText;
+end;
+
+function TIdSipResponse.FirstUnsupported: TIdSipCommaSeparatedHeader;
+begin
+  Result := Self.FirstHeader(UnsupportedHeader) as TIdSipCommaSeparatedHeader;
 end;
 
 function TIdSipResponse.IsEqualTo(Msg: TIdSipMessage): Boolean;

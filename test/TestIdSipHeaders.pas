@@ -99,6 +99,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestRemoveValues;
     procedure TestValue; override;
   end;
 
@@ -1305,6 +1306,44 @@ begin
 end;
 
 //* TestTIdSipCommaSeparatedHeader Published methods ***************************
+
+procedure TestTIdSipCommaSeparatedHeader.TestRemoveValues;
+var
+  Keepers: TStrings;
+  I:       Integer;
+  Remove:  TIdSipCommaSeparatedHeader;
+begin
+  Keepers := TStringList.Create;
+  try
+    Keepers.Add('Baz');
+    Keepers.Add('Quaax');
+    Keepers.Add('Qwglm');
+
+    Remove := TIdSipCommaSeparatedHeader.Create;
+    try
+      Remove.Value := 'Foo, Bar';
+
+      Self.C.Values.AddStrings(Keepers);
+      Self.C.Values.AddStrings(Remove.Values);
+
+      Self.C.RemoveValues(Remove);
+
+      for I := 0 to Remove.Values.Count - 1 do
+        CheckEquals(-1,
+                    Self.C.Values.IndexOf(Remove.Values[I]),
+                    '''' + Remove.Values[I] + ''' not removed');
+
+      for I := 0 to Keepers.Count - 1 do
+        CheckNotEquals(-1,
+                       Self.C.Values.IndexOf(Keepers[I]),
+                       '''' + Keepers[I] + ''' removed');
+    finally
+      Remove.Free;
+    end;
+  finally
+    Keepers.Free;
+  end;
+end;
 
 procedure TestTIdSipCommaSeparatedHeader.TestValue;
 begin

@@ -9,29 +9,29 @@ type
   TIdRTPWait = class(TObject)
     fTriggerTime: Cardinal;
   public
-    property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;
-
     function  Due: Boolean;
     function  TimeToWait: Cardinal;
     procedure Trigger; virtual; abstract;
+
+    property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;    
   end;
 
   TIdRTPEventWait = class(TIdRTPWait)
   private
     fEvent: TEvent;
   public
-    property Event: TEvent read fEvent write fEvent;
-
     procedure Trigger; override;
+
+    property Event: TEvent read fEvent write fEvent;
   end;
 
   TIdRTPNotifyEventWait = class(TIdRTPWait)
   private
     fEvent: TNotifyEvent;
   public
-    property Event: TNotifyEvent read fEvent write fEvent;
-
     procedure Trigger; override;
+
+    property Event: TNotifyEvent read fEvent write fEvent;
   end;
 
   // I supply a single timer thread with which you may register a wait time

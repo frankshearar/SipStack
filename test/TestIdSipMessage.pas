@@ -43,6 +43,7 @@ type
     procedure TestFirstExpires;
     procedure TestFirstHeader;
     procedure TestFirstMinExpires;
+    procedure TestFirstRequire;
     procedure TestHasExpiry;
     procedure TestHeaderCount;
     procedure TestLastHop;
@@ -75,7 +76,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
-    procedure TestNewRequestHasContentLength;
+    procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
     procedure TestIsAck;
     procedure TestIsBye;
@@ -98,6 +99,7 @@ type
     procedure TestMatchInviteServer;
     procedure TestMatchNonInviteClient;
     procedure TestMatchNonInviteServer;
+    procedure TestNewRequestHasContentLength;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetPath;
@@ -115,6 +117,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestFirstUnsupported;
     procedure TestInResponseToRecordRoute;
     procedure TestInResponseToSipsRecordRoute;
     procedure TestInResponseToSipsRequestUri;
@@ -469,6 +472,21 @@ begin
   Self.Msg.AddHeader(MinExpiresHeader);
 
   Check(E = Self.Msg.FirstMinExpires, 'Wrong Min-Expires');
+end;
+
+procedure TestTIdSipMessage.TestFirstRequire;
+var
+  R: TIdSipHeader;
+begin
+  Self.Msg.ClearHeaders;
+
+  CheckNotNull(Self.Msg.FirstRequire, 'Require not present');
+  CheckEquals(1, Self.Msg.HeaderCount, 'Require not auto-added');
+
+  R := Self.Msg.FirstHeader(RequireHeader);
+  Self.Msg.AddHeader(RequireHeader);
+
+  Check(R = Self.Msg.FirstRequire, 'Wrong Require');
 end;
 
 procedure TestTIdSipMessage.TestHasExpiry;
@@ -835,17 +853,19 @@ begin
   Check(Pos(MaxForwardsHeader, Self.Request.AsString) > 0, 'No Max-Forwards header');
 end;
 
-procedure TestTIdSipRequest.TestNewRequestHasContentLength;
+procedure TestTIdSipRequest.TestFirstProxyRequire;
 var
-  R: TIdSipRequest;
+  P: TIdSipHeader;
 begin
-  R := TIdSipRequest.Create;
-  try
-    Check(Pos(ContentLengthHeaderFull, R.AsString) > 0,
-          'Content-Length missing from new request');
-  finally
-    R.Free;
-  end;
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstProxyRequire, 'Proxy-Require not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Proxy-Require not auto-added');
+
+  P := Self.Request.FirstHeader(ProxyRequireHeader);
+  Self.Request.AddHeader(ProxyRequireHeader);
+
+  Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
 end;
 
 procedure TestTIdSipRequest.TestHasSipsUri;
@@ -1234,6 +1254,19 @@ begin
         'Different method');
 end;
 
+procedure TestTIdSipRequest.TestNewRequestHasContentLength;
+var
+  R: TIdSipRequest;
+begin
+  R := TIdSipRequest.Create;
+  try
+    Check(Pos(ContentLengthHeaderFull, R.AsString) > 0,
+          'Content-Length missing from new request');
+  finally
+    R.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestRequiresResponse;
 begin
   Self.Request.Method := MethodAck;
@@ -1417,6 +1450,21 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestFirstUnsupported;
+var
+  U: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstUnsupported, 'Unsupported not present');
+  CheckEquals(1, Self.Response.HeaderCount, 'Unsupported not auto-added');
+
+  U := Self.Response.FirstHeader(UnsupportedHeader);
+  Self.Response.AddHeader(UnsupportedHeader);
+
+  Check(U = Self.Response.FirstUnsupported, 'Wrong Unsupported');
 end;
 
 procedure TestTIdSipResponse.TestInResponseToRecordRoute;
