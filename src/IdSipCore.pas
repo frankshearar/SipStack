@@ -84,10 +84,10 @@ type
     function  NextCallID: String;
     function  ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
-                             Receiver: TIdSipTransport): Boolean; virtual; abstract;
+                             Receiver: TIdSipTransport): Boolean; virtual;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
-                              Receiver: TIdSipTransport); virtual; abstract;
+                              Receiver: TIdSipTransport); virtual;
 
     property Dispatcher: TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:   String                      read fHostName write fHostName;
@@ -379,6 +379,19 @@ end;
 function TIdSipAbstractCore.NextCallID: String;
 begin
   Result := IntToHex(TIdRandomNumber.NextCardinal, 8) + '@' + Self.HostName;
+end;
+
+function TIdSipAbstractCore.ReceiveRequest(Request: TIdSipRequest;
+                                           Transaction: TIdSipTransaction;
+                                           Receiver: TIdSipTransport): Boolean;
+begin
+  Result := false;
+end;
+
+procedure TIdSipAbstractCore.ReceiveResponse(Response: TIdSipResponse;
+                                             Transaction: TIdSipTransaction;
+                                             Receiver: TIdSipTransport);
+begin
 end;
 
 //* TIdSipAbstractCore Private methods *****************************************
