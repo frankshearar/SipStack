@@ -95,8 +95,10 @@ type
     procedure TestCNonce;
     procedure TestDigestResponse;
     procedure TestDigestUri;
+    procedure TestGetValue;
     procedure TestIsBasic;
     procedure TestIsDigest;
+    procedure TestName; virtual;
     procedure TestNonce;
     procedure TestIsNonce;
     procedure TestNonceCount;
@@ -107,6 +109,7 @@ type
     procedure TestUnquotedResponse;
     procedure TestUsername;
     procedure TestValue; override;
+    procedure TestValueSingleParam;
   end;
 
   TestTIdSipCallIDHeader = class(THeaderTestCase)
@@ -215,6 +218,21 @@ type
     procedure TestGetSetTag;
   end;
 
+  TestTIdSipMaxForwardsHeader = class(THeaderTestCase)
+  private
+    M: TIdSipMaxForwardsHeader;
+  protected
+   function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestName;
+    procedure TestValue; override;
+    procedure TestValueNonNumber;
+    procedure TestValueTooBig;
+    procedure TestValueWithParam;
+  end;
+
   TestTIdSipNumericHeader = class(THeaderTestCase)
   private
     N: TIdSipNumericHeader;
@@ -229,19 +247,30 @@ type
     procedure TestValueWithString;
   end;
 
-  TestTIdSipMaxForwardsHeader = class(THeaderTestCase)
+  TestTIdSipProxyAuthenticateHeader = class(THeaderTestCase)
   private
-    M: TIdSipMaxForwardsHeader;
+     P: TIdSipProxyAuthenticateHeader;
   protected
-   function HeaderType: TIdSipHeaderClass; override;
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
   published
-    procedure TestName;
+    procedure TestDomain;
+    procedure TestName; virtual;
+    procedure TestRemoveStaleResponse;
+    procedure TestStale;
     procedure TestValue; override;
-    procedure TestValueNonNumber;
-    procedure TestValueTooBig;
-    procedure TestValueWithParam;
+  end;
+
+  TestTIdSipProxyAuthorizationHeader = class(TestTIdSipAuthorizationHeader)
+  private
+    P: TIdSipProxyAuthorizationHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestName; override;
   end;
 
   TestTIdSipRouteHeader = class(THeaderTestCase)
@@ -343,27 +372,30 @@ type
     procedure TestSetValueMalformed;
   end;
 
-  TestTIdSipWeightedCommaSeparatedHeader = class(TTestCase)
+  TestTIdSipWeightedCommaSeparatedHeader = class(THeaderTestCase)
   private
     W: TIdSipWeightedCommaSeparatedHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAddValue;
     procedure TestClearValues;
     procedure TestGetValue;
-    procedure TestSetValue;
+    procedure TestValue; override;
     procedure TestValueMalformed;
   end;
 
-  TestTIdSipWWWAuthenticateHeader = class(THeaderTestCase)
+  TestTIdSipWWWAuthenticateHeader = class(TestTIdSipProxyAuthenticateHeader)
   private
      W: TIdSipWWWAuthenticateHeader;
   protected
     function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
+  published
+    procedure TestName; override;
   end;
 
   TestTIdSipHeadersFilter = class(TTestCase)
@@ -434,17 +466,6 @@ type
     procedure TestSetMaxForwards;
   end;
 
-  TestTIdSipExpiresHeaders = class(TTestCase)
-  private
-    Headers:        TIdSipHeaders;
-    ExpiresHeaders: TIdSipExpiresHeaders;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestCurrentExpires;
-  end;
-
   TestTIdSipContacts = class(TTestCase)
   private
     Headers:  TIdSipHeaders;
@@ -455,6 +476,17 @@ type
   published
     procedure TestCreateOnEmptySet;
     procedure TestCurrentContact;
+  end;
+
+  TestTIdSipExpiresHeaders = class(TTestCase)
+  private
+    Headers:        TIdSipHeaders;
+    ExpiresHeaders: TIdSipExpiresHeaders;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCurrentExpires;
   end;
 
   TestTIdSipRoutePath = class(TTestCase)
@@ -504,17 +536,21 @@ begin
   Result.AddTest(TestTIdSipDateHeader.Suite);
   Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
+  Result.AddTest(TestTIdSipNumericHeader.Suite);
+  Result.AddTest(TestTIdSipProxyAuthenticateHeader.Suite);
+  Result.AddTest(TestTIdSipProxyAuthorizationHeader.Suite);
   Result.AddTest(TestTIdSipRouteHeader.Suite);
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
-  Result.AddTest(TestTIdSipNumericHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
-  Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
+  Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
+  Result.AddTest(TestTIdSipWWWAuthenticateHeader.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipContacts.Suite);
+  Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
 end;
@@ -1388,6 +1424,22 @@ begin
               'DigestUri');
 end;
 
+procedure TestTIdSipAuthorizationHeader.TestGetValue;
+begin
+  Self.A.AuthorizationScheme := 'foo';
+  Self.A.Nonce := 'aefbb';
+  Self.A.Algorithm := 'sha1-512';
+  Self.A.Realm := 'tessier-ashpool.co.luna';
+  Self.A.Username := 'Wintermute';
+  Self.A.UnknownResponses['paranoid'] := '\very';
+
+  CheckEquals('foo nonce="aefbb",algorithm="sha1-512",'
+            + 'realm="tessier-ashpool.co.luna",username="Wintermute",'
+            + 'paranoid="\\very"',
+              Self.A.Value,
+              'Value');
+end;
+
 procedure TestTIdSipAuthorizationHeader.TestIsBasic;
 begin
   Self.A.AuthorizationScheme := 'foo';
@@ -1412,6 +1464,7 @@ begin
   Check(Self.A.IsDigest, DigestAuthorizationScheme);
 end;
 
+
 procedure TestTIdSipAuthorizationHeader.TestIsNonce;
 begin
   Check(Self.A.IsNonce(''), '''''');
@@ -1419,6 +1472,11 @@ begin
   Check(Self.A.IsNonce('fo\"o'), 'fo\"o');
   Check(not Self.A.IsNonce('foo\'), 'foo\');
   Check(Self.A.IsNonce('foo\\'), 'foo\\');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestName;
+begin
+  CheckEquals(AuthorizationHeader, Self.A.Name, 'Name');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestNonce;
@@ -1570,6 +1628,13 @@ begin
   CheckEquals('foo',
               Self.A.UnknownResponses['otherparam'],
               'otherparam');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestValueSingleParam;
+begin
+  Self.A.Value := 'Digest username="Alice"';
+
+  CheckEquals('Alice', Self.A.Username, 'Username');
 end;
 
 //******************************************************************************
@@ -2360,67 +2425,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipNumericHeader                                                    *
-//******************************************************************************
-//* TestTIdSipNumericHeader Public methods *************************************
-
-procedure TestTIdSipNumericHeader.SetUp;
-begin
-  inherited SetUp;
-
-  Self.N := Self.Header as TIdSipNumericHeader;
-end;
-
-//* TestTIdSipNumericHeader Protected methods **********************************
-
-function TestTIdSipNumericHeader.HeaderType: TIdSipHeaderClass;
-begin
-  Result := TIdSipNumericHeader;
-end;
-
-//* TestTIdSipNumericHeader Published methods **********************************
-
-procedure TestTIdSipNumericHeader.TestValue;
-begin
-  Self.N.Value := '0';
-  CheckEquals(0,   Self.N.NumericValue, 'NumericValue (0)');
-
-  Self.N.Value := '666';
-  CheckEquals(666, Self.N.NumericValue, 'NumericValue (666)');
-end;
-
-
-procedure TestTIdSipNumericHeader.TestValueWithMultipleTokens;
-begin
-  try
-    Self.N.Value := '1 1';
-    Fail('Failed to bail out with multiple tokens');
-  except
-    on EBadHeader do;
-  end;
-end;
-
-procedure TestTIdSipNumericHeader.TestValueWithNegativeNumber;
-begin
-  try
-    Self.N.Value := '-1';
-    Fail('Failed to bail out with negative integer');
-  except
-    on EBadHeader do;
-  end;
-end;
-
-procedure TestTIdSipNumericHeader.TestValueWithString;
-begin
-  try
-    Self.N.Value := 'one';
-    Fail('Failed to bail out with string value');
-  except
-    on EBadHeader do;
-  end;
-end;
-
-//******************************************************************************
 //* TestTIdSipMaxForwardsHeader                                                *
 //******************************************************************************
 //* TestTIdSipMaxForwardsHeader Public methods *********************************
@@ -2489,6 +2493,184 @@ begin
   except
     on EBadHeader do;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipNumericHeader                                                    *
+//******************************************************************************
+//* TestTIdSipNumericHeader Public methods *************************************
+
+procedure TestTIdSipNumericHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.N := Self.Header as TIdSipNumericHeader;
+end;
+
+//* TestTIdSipNumericHeader Protected methods **********************************
+
+function TestTIdSipNumericHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipNumericHeader;
+end;
+
+//* TestTIdSipNumericHeader Published methods **********************************
+
+procedure TestTIdSipNumericHeader.TestValue;
+begin
+  Self.N.Value := '0';
+  CheckEquals(0,   Self.N.NumericValue, 'NumericValue (0)');
+
+  Self.N.Value := '666';
+  CheckEquals(666, Self.N.NumericValue, 'NumericValue (666)');
+end;
+
+
+procedure TestTIdSipNumericHeader.TestValueWithMultipleTokens;
+begin
+  try
+    Self.N.Value := '1 1';
+    Fail('Failed to bail out with multiple tokens');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipNumericHeader.TestValueWithNegativeNumber;
+begin
+  try
+    Self.N.Value := '-1';
+    Fail('Failed to bail out with negative integer');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+procedure TestTIdSipNumericHeader.TestValueWithString;
+begin
+  try
+    Self.N.Value := 'one';
+    Fail('Failed to bail out with string value');
+  except
+    on EBadHeader do;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipProxyAuthenticateHeader                                          *
+//******************************************************************************
+//* TestTIdSipProxyAuthenticateHeader Public methods ***************************
+
+procedure TestTIdSipProxyAuthenticateHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.P := Self.Header as TIdSipProxyAuthenticateHeader;
+end;
+
+procedure TestTIdSipProxyAuthenticateHeader.TestDomain;
+var
+  Value: String;
+begin
+  Value := 'enki.org';
+  Self.P.Domain := Value;
+  CheckEquals(Value,
+              Self.P.Domain,
+              Self.ClassName + ' Domain');
+
+  Value := 'tessier-ashpool.co.luna';
+  Self.P.Domain := Value;
+  CheckEquals(Value,
+              Self.P.Domain,
+              Self.ClassName + ' Domain');
+end;
+
+procedure TestTIdSipProxyAuthenticateHeader.TestName;
+begin
+  CheckEquals(ProxyAuthenticateHeader,
+              Self.P.Name,
+              'Name');
+end;
+
+procedure TestTIdSipProxyAuthenticateHeader.TestRemoveStaleResponse;
+begin
+  Self.P.Stale := true;
+  Self.P.RemoveStaleResponse;
+  CheckEquals(0, Pos('true', Self.P.AsString), 'Stale response not removed');
+end;
+
+procedure TestTIdSipProxyAuthenticateHeader.TestStale;
+begin
+  Check(not Self.P.Stale, 'Default value');
+  Self.P.Stale := true;
+  Check(Self.P.Stale, 'Should be true');
+  Self.P.Stale := false;
+  Check(not Self.P.Stale, 'Should be false');
+end;
+
+procedure TestTIdSipProxyAuthenticateHeader.TestValue;
+begin
+  Self.P.Value := 'Digest realm="enki.org",domain="sip:hiro@enki.org",'
+                + 'nonce="123456",opaque="ich bin''s",stale="true",'
+                + 'algorithm="SHA1-1024",qop="auth",other-param="foo"';
+
+  CheckEquals('SHA1-1024',
+              Self.P.Algorithm,
+              Self.ClassName + ' Algorithm');
+  CheckEquals('Digest',
+              Self.P.AuthorizationScheme,
+              Self.ClassName + ' AuthorizationScheme');
+  CheckEquals('sip:hiro@enki.org',
+              Self.P.Domain,
+              Self.ClassName + ' Domain');
+  CheckEquals('123456',
+              Self.P.Nonce,
+              Self.ClassName + ' Nonce');
+  CheckEquals('ich bin''s',
+              Self.P.Opaque,
+              Self.ClassName + ' Opaque');
+  CheckEquals('auth',
+              Self.P.Qop,
+              Self.ClassName + ' Qop');
+  CheckEquals('enki.org',
+              Self.P.Realm,
+              Self.ClassName + ' Realm');
+  Check      (Self.P.Stale,
+              Self.ClassName + ' Stale');
+end;
+
+//* TestTIdSipProxyAuthenticateHeader Protected methods ************************
+
+function TestTIdSipProxyAuthenticateHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipProxyAuthenticateHeader;
+end;
+
+//******************************************************************************
+//* TestTIdSipProxyAuthorizationHeader                                         *
+//******************************************************************************
+
+procedure TestTIdSipProxyAuthorizationHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.P := Self.Header as  TIdSipProxyAuthorizationHeader;
+end;
+
+//* TestTIdSipProxyAuthorizationHeader Protected methods ***********************
+
+function TestTIdSipProxyAuthorizationHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipProxyAuthorizationHeader;
+end;
+
+//* TestTIdSipProxyAuthorizationHeader Published methods ***********************
+
+procedure TestTIdSipProxyAuthorizationHeader.TestName;
+begin
+  CheckEquals(ProxyAuthorizationHeader,
+              Self.P.Name,
+              'Name');
 end;
 
 //******************************************************************************
@@ -3379,14 +3561,14 @@ procedure TestTIdSipWeightedCommaSeparatedHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.W := TIdSipWeightedCommaSeparatedHeader.Create;
+  Self.W := Self.Header as TIdSipWeightedCommaSeparatedHeader;
 end;
 
-procedure TestTIdSipWeightedCommaSeparatedHeader.TearDown;
-begin
-  Self.W.Free;
+//* TestTIdSipWeightedCommaSeparatedHeader Published methods *******************
 
-  inherited TearDown;
+function TestTIdSipWeightedCommaSeparatedHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipWeightedCommaSeparatedHeader;
 end;
 
 //* TestTIdSipWeightedCommaSeparatedHeader Published methods *******************
@@ -3426,7 +3608,7 @@ begin
   CheckEquals('text/plain;q=0.7;foo=bar, text/t140', Self.W.Value, 'GetValue');
 end;
 
-procedure TestTIdSipWeightedCommaSeparatedHeader.TestSetValue;
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestValue;
 begin
   Self.W.Value := '';
   CheckEquals(0, Self.W.ValueCount, 'Empty string');
@@ -3494,6 +3676,13 @@ begin
   inherited SetUp;
 
   Self.W := Self.Header as TIdSipWWWAuthenticateHeader;
+end;
+
+procedure TestTIdSipWWWAuthenticateHeader.TestName;
+begin
+  CheckEquals(WWWAuthenticateHeader,
+              Self.W.Name,
+              'Name');
 end;
 
 //* TestTIdSipWWWAuthenticateHeader Protected methods **************************
@@ -4547,54 +4736,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipExpiresHeaders                                                   *
-//******************************************************************************
-//* TestTIdSipExpiresHeaders Public methods ************************************
-
-procedure TestTIdSipExpiresHeaders.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Headers        := TIdSipHeaders.Create;
-  Self.ExpiresHeaders := TIdSipExpiresHeaders.Create(Self.Headers);
-end;
-
-procedure TestTIdSipExpiresHeaders.TearDown;
-begin
-  Self.ExpiresHeaders.Free;
-  Self.Headers.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipExpiresHeaders Published methods *********************************
-
-procedure TestTIdSipExpiresHeaders.TestCurrentExpires;
-begin
-  CheckEquals(0,
-              Self.ExpiresHeaders.CurrentExpires,
-              'No headers');
-
-  Self.Headers.Add(ViaHeaderFull);
-  CheckEquals(0,
-              Self.ExpiresHeaders.CurrentExpires,
-              'No ExpiresHeaders');
-
-  Self.Headers.Add(ExpiresHeader).Value := '99';
-  Self.ExpiresHeaders.First;
-  CheckEquals(99,
-              Self.ExpiresHeaders.CurrentExpires,
-              'First Expires');
-
-  Self.Headers.Add(ExpiresHeader).Value := '22';
-  Self.ExpiresHeaders.First;
-  Self.ExpiresHeaders.Next;
-  CheckEquals(22,
-              Self.ExpiresHeaders.CurrentExpires,
-              'First Expires');
-end;
-
-//******************************************************************************
 //* TestTIdSipContacts                                                         *
 //******************************************************************************
 //* TestTIdSipContacts Public methods ******************************************
@@ -4671,9 +4812,57 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipRoutePath                                                           *
+//* TestTIdSipExpiresHeaders                                                   *
 //******************************************************************************
-//* TestTIdSipRoutePath Public methods ********************************************
+//* TestTIdSipExpiresHeaders Public methods ************************************
+
+procedure TestTIdSipExpiresHeaders.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers        := TIdSipHeaders.Create;
+  Self.ExpiresHeaders := TIdSipExpiresHeaders.Create(Self.Headers);
+end;
+
+procedure TestTIdSipExpiresHeaders.TearDown;
+begin
+  Self.ExpiresHeaders.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipExpiresHeaders Published methods *********************************
+
+procedure TestTIdSipExpiresHeaders.TestCurrentExpires;
+begin
+  CheckEquals(0,
+              Self.ExpiresHeaders.CurrentExpires,
+              'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  CheckEquals(0,
+              Self.ExpiresHeaders.CurrentExpires,
+              'No ExpiresHeaders');
+
+  Self.Headers.Add(ExpiresHeader).Value := '99';
+  Self.ExpiresHeaders.First;
+  CheckEquals(99,
+              Self.ExpiresHeaders.CurrentExpires,
+              'First Expires');
+
+  Self.Headers.Add(ExpiresHeader).Value := '22';
+  Self.ExpiresHeaders.First;
+  Self.ExpiresHeaders.Next;
+  CheckEquals(22,
+              Self.ExpiresHeaders.CurrentExpires,
+              'First Expires');
+end;
+
+//******************************************************************************
+//* TestTIdSipRoutePath                                                        *
+//******************************************************************************
+//* TestTIdSipRoutePath Public methods *****************************************
 
 procedure TestTIdSipRoutePath.SetUp;
 begin
@@ -4691,7 +4880,7 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipRoutePath Published methods *****************************************
+//* TestTIdSipRoutePath Published methods **************************************
 
 procedure TestTIdSipRoutePath.TestAddRoute;
 const

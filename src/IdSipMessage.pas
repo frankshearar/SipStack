@@ -221,41 +221,32 @@ type
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
-  TIdSipAuthorizationHeader = class(TIdSipHeader)
+  TIdSipHttpAuthHeader = class(TIdSipHeader)
   private
-    DigestResponses:      TStringList;
     fAuthorizationScheme: String;
-    fUnknownResponses:    TStringList;
 
-    procedure CheckDigestResponses(Responses: TStrings);
-    function  DigestResponseValue(const Name: String): String;
     function  GetAlgorithm: String;
-    function  GetCNonce: String;
-    function  GetDigestResponse: String;
-    function  GetDigestUri: String;
     function  GetNonce: String;
-    function  GetNonceCount: Cardinal;
     function  GetOpaque: String;
     function  GetQop: String;
     function  GetRealm: String;
     function  GetUnknownResponses(const Name: String): String;
-    function  GetUsername: String;
-    function  KnownResponse(const Name: String): Boolean;
     procedure ParseDigestResponses(Value: String);
     procedure SetAlgorithm(const Value: String);
-    procedure SetCNonce(const Value: String);
-    procedure SetDigestResponse(const Value: String);
-    procedure SetDigestUri(const Value: String);
     procedure SetNonce(const Value: String);
-    procedure SetNonceCount(Value: Cardinal);
     procedure SetOpaque(const Value: String);
     procedure SetQop(const Value: String);
     procedure SetRealm(const Value: String);
     procedure SetUnknownResponses(const Name: String;
                                   const Value: String);
-    procedure SetUsername(const Value: String);
   protected
-    function  GetName: String; override;
+    DigestResponses:      TStringList;
+    fUnknownResponses:    TStringList;
+
+    procedure CheckDigestResponses(Responses: TStrings); virtual;
+    function  DigestResponseValue(const Name: String): String;
+    function  GetValue: String; override;
+    function  KnownResponse(const Name: String): Boolean; virtual;
     procedure SetValue(const Value: String); override;
   public
     class function IsNonce(const Token: String): Boolean;
@@ -263,22 +254,42 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function IsBasic: Boolean;
-    function IsDigest: Boolean;
-
     property Algorithm:           String   read GetAlgorithm write SetAlgorithm;
     property AuthorizationScheme: String   read fAuthorizationScheme write fAuthorizationScheme;
-    property CNonce:              String   read GetCNonce write SetCNonce;
-    property DigestResponse:      String   read GetDigestResponse write SetDigestResponse;
-    property DigestUri:           String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
     property Nonce:               String   read GetNonce write SetNonce;
-    property NonceCount:          Cardinal read GetNonceCount write SetNonceCount;
     property Opaque:              String   read GetOpaque write SetOpaque;
     property Qop:                 String   read GetQop write SetQop;
     property Realm:               String   read GetRealm write SetRealm;
     property UnknownResponses[const Name: String]: String read GetUnknownResponses write SetUnknownResponses;
+  end;
+
+  TIdSipAuthorizationHeader = class(TIdSipHttpAuthHeader)
+  private
+    function  GetCNonce: String;
+    function  GetDigestResponse: String;
+    function  GetDigestUri: String;
+    function  GetNonceCount: Cardinal;
+    function  GetUsername: String;
+    procedure SetCNonce(const Value: String);
+    procedure SetDigestResponse(const Value: String);
+    procedure SetDigestUri(const Value: String);
+    procedure SetNonceCount(Value: Cardinal);
+    procedure SetUsername(const Value: String);
+  protected
+    procedure CheckDigestResponses(Responses: TStrings); override;
+    function  GetName: String; override;
+    function  KnownResponse(const Name: String): Boolean; override;
+  public
+    function IsBasic: Boolean;
+    function IsDigest: Boolean;
+
+    property CNonce:              String   read GetCNonce write SetCNonce;
+    property DigestResponse:      String   read GetDigestResponse write SetDigestResponse;
+    property DigestUri:           String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
+    property NonceCount:          Cardinal read GetNonceCount write SetNonceCount;
     property Username:            String   read GetUsername write SetUsername;
   end;
+
 
   TIdSipCallIdHeader = class(TIdSipHeader)
   protected
@@ -441,6 +452,27 @@ type
     procedure SetValue(const Value: String); override;
   end;
 
+  TIdSipProxyAuthenticateHeader = class(TIdSipHttpAuthHeader)
+  private
+    function  GetDomain: String;
+    function  GetStale: Boolean;
+    procedure SetDomain(const Value: String);
+    procedure SetStale(const Value: Boolean);
+  protected
+    function GetName: String; override;
+    function KnownResponse(const Name: String): Boolean; override;
+  public
+    procedure RemoveStaleResponse;
+
+    property Domain: String  read GetDomain write SetDomain;
+    property Stale:  Boolean read GetStale write SetStale;
+  end;
+
+  TIdSipProxyAuthorizationHeader = class(TIdSipAuthorizationHeader)
+  protected
+    function GetName: String; override;
+  end;
+
   TIdSipRouteHeader = class(TIdSipHeader)
   private
     fAddress:     TIdSipURI;
@@ -566,7 +598,8 @@ type
   TIdSipChallengeHeader = class(TIdSipHeader)
   end;
 
-  TIdSipWWWAuthenticateHeader = class(TIdSipHeader)
+  // We sublass TIdSipProxyAuthenticateHeader purely for code re-use
+  TIdSipWWWAuthenticateHeader = class(TIdSipProxyAuthenticateHeader)
   protected
     function GetName: String; override;
   end;
@@ -1046,7 +1079,7 @@ function IsQuoted(const S: String): Boolean;
 function LastChar(const S: String): String;
 function NeedsQuotes(Name: String): Boolean;
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
-function QuoteStringIfNecessary(const Name: String): String;
+function QuoteStringIfNecessary(const S: String): String;
 function QValueToStr(const Q: TIdSipQValue): String;
 function ShortMonthToInt(const Month: String): Integer;
 function StreamToStr(Data: TStream): String;
@@ -1198,10 +1231,10 @@ begin
   end;
 end;
 
-function QuoteStringIfNecessary(const Name: String): String;
+function QuoteStringIfNecessary(const S: String): String;
 begin
-  Result := Name;
-  if NeedsQuotes(Name) then
+  Result := S;
+  if NeedsQuotes(S) then
     Result := '"' + Result + '"'
 end;
 
@@ -2349,18 +2382,18 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipAuthorizationHeader                                                  *
+//* TIdSipHttpAuthHeader                                                       *
 //******************************************************************************
-//* TIdSipAuthorizationHeader Public methods ***********************************
+//* TIdSipHttpAuthHeader Public methods ****************************************
 
-class function TIdSipAuthorizationHeader.IsNonce(const Token: String): Boolean;
+class function TIdSipHttpAuthHeader.IsNonce(const Token: String): Boolean;
 var
   Unused: String;
 begin
   Result := DecodeQuotedStr(Token, Unused);
 end;
 
-constructor TIdSipAuthorizationHeader.Create;
+constructor TIdSipHttpAuthHeader.Create;
 begin
   inherited Create;
 
@@ -2368,7 +2401,7 @@ begin
   Self.fUnknownResponses := TStringList.Create;
 end;
 
-destructor TIdSipAuthorizationHeader.Destroy;
+destructor TIdSipHttpAuthHeader.Destroy;
 begin
   Self.fUnknownResponses.Free;
   Self.DigestResponses.Free;
@@ -2376,24 +2409,59 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipAuthorizationHeader.IsBasic: Boolean;
+//* TIdSipHttpAuthHeader Protected methods *************************************
+
+procedure TIdSipHttpAuthHeader.CheckDigestResponses(Responses: TStrings);
 begin
-  Result := IsEqual(Self.AuthorizationScheme, BasicAuthorizationScheme);
 end;
 
-function TIdSipAuthorizationHeader.IsDigest: Boolean;
+function TIdSipHttpAuthHeader.DigestResponseValue(const Name: String): String;
 begin
-  Result := IsEqual(Self.AuthorizationScheme, DigestAuthorizationScheme);
+  if (Self.DigestResponses.IndexOfName(Name) = -1) then
+    Result := ''
+  else
+    Result := Self.DigestResponses.Values[Name]
 end;
 
-//* TIdSipAuthorizationHeader Protected methods ********************************
-
-function TIdSipAuthorizationHeader.GetName: String;
+function TIdSipHttpAuthHeader.GetValue: String;
+var
+  I:     Integer;
+  Name:  String;
+  Value: String;
 begin
-  Result := AuthorizationHeader;
+  Result := Self.AuthorizationScheme + ' ';
+
+  for I := 0 to Self.DigestResponses.Count - 1 do begin
+    Name  := Self.DigestResponses.Names[I];
+    Value := Self.DigestResponses.Values[Name];
+
+    Result := Result + Name
+            + '="' + EncodeQuotedStr(Value) + '",';
+  end;
+
+  for I := 0 to Self.fUnknownResponses.Count - 1 do begin
+    Name  := Self.fUnknownResponses.Names[I];
+    Value := Self.fUnknownResponses.Values[Name];
+
+    Result := Result + Name
+            + '="' + EncodeQuotedStr(Value) + '",';
+  end;
+
+  if (LastChar(Result) = ',') then
+    Result := Copy(Result, 1, Length(Result) - 1);
 end;
 
-procedure TIdSipAuthorizationHeader.SetValue(const Value: String);
+function TIdSipHttpAuthHeader.KnownResponse(const Name: String): Boolean;
+begin
+  Result := (Name = AlgorithmParam)
+         or (Name = NonceParam)
+         or (Name = OpaqueParam)
+         or (Name = QopParam)
+         or (Name = RealmParam)
+         or (Name = UsernameParam);
+end;
+
+procedure TIdSipHttpAuthHeader.SetValue(const Value: String);
 var
   S: String;
 
@@ -2407,68 +2475,34 @@ begin
   Self.CheckDigestResponses(Self.DigestResponses);
 end;
 
-//* TIdSipAuthorizationHeader Private methods **********************************
+//* TIdSipHttpAuthHeader Private methods ***************************************
 
-procedure TIdSipAuthorizationHeader.CheckDigestResponses(Responses: TStrings);
-begin
-  if not TIdSimpleParser.IsHexNumber(Self.DigestResponse)
-    then Self.FailParse;
-end;
-
-function TIdSipAuthorizationHeader.DigestResponseValue(const Name: String): String;
-begin
-  if (Self.DigestResponses.IndexOfName(Name) = -1) then
-    Result := ''
-  else
-    Result := Self.DigestResponses.Values[Name]
-end;
-
-function TIdSipAuthorizationHeader.GetAlgorithm: String;
+function TIdSipHttpAuthHeader.GetAlgorithm: String;
 begin
   Result := Self.DigestResponseValue(AlgorithmParam);
 end;
 
-function TIdSipAuthorizationHeader.GetCNonce: String;
-begin
-  Result := Self.DigestResponseValue(CNonceParam);
-end;
-
-function TIdSipAuthorizationHeader.GetDigestResponse: String;
-begin
-  Result := Self.DigestResponseValue(DigestResponseParam);
-end;
-
-function TIdSipAuthorizationHeader.GetDigestUri: String;
-begin
-  Result := Self.DigestResponseValue(DigestUriParam);
-end;
-
-function TIdSipAuthorizationHeader.GetNonce: String;
+function TIdSipHttpAuthHeader.GetNonce: String;
 begin
   Result := Self.DigestResponseValue(NonceParam);
 end;
 
-function TIdSipAuthorizationHeader.GetNonceCount: Cardinal;
-begin
-  Result := HexToInt(Self.DigestResponseValue(NonceCountParam));
-end;
-
-function TIdSipAuthorizationHeader.GetOpaque: String;
+function TIdSipHttpAuthHeader.GetOpaque: String;
 begin
   Result := Self.DigestResponseValue(OpaqueParam);
 end;
 
-function TIdSipAuthorizationHeader.GetQop: String;
+function TIdSipHttpAuthHeader.GetQop: String;
 begin
   Result := Self.DigestResponseValue(QopParam);
 end;
 
-function TIdSipAuthorizationHeader.GetRealm: String;
+function TIdSipHttpAuthHeader.GetRealm: String;
 begin
   Result := Self.DigestResponseValue(RealmParam);
 end;
 
-function TIdSipAuthorizationHeader.GetUnknownResponses(const Name: String): String;
+function TIdSipHttpAuthHeader.GetUnknownResponses(const Name: String): String;
 begin
   if (Self.fUnknownResponses.IndexOfName(Name) = -1) then
     Result := ''
@@ -2476,32 +2510,14 @@ begin
     Result := Self.fUnknownResponses.Values[Name]
 end;
 
-function TIdSipAuthorizationHeader.GetUsername: String;
-begin
-  Result := Self.DigestResponseValue(UsernameParam);
-end;
-
-function TIdSipAuthorizationHeader.KnownResponse(const Name: String): Boolean;
-begin
-  Result := (Name = AlgorithmParam)
-         or (Name = CNonceParam)
-         or (Name = DigestResponseParam)
-         or (Name = DigestUriParam)
-         or (Name = NonceParam)
-         or (Name = NonceCountParam)
-         or (Name = OpaqueParam)
-         or (Name = QopParam)
-         or (Name = RealmParam)
-         or (Name = UsernameParam);
-end;
-
-procedure TIdSipAuthorizationHeader.ParseDigestResponses(Value: String);
+procedure TIdSipHttpAuthHeader.ParseDigestResponses(Value: String);
 var
   DecodedValue:  String;
   ResponseName:  String;
   ResponseValue: String;
 begin
   Self.DigestResponses.Clear;
+
   while (Value <> '') do begin
     ResponseValue := Fetch(Value, ',');
     ResponseName := Trim(Fetch(ResponseValue, '='));
@@ -2522,9 +2538,103 @@ begin
   end;
 end;
 
-procedure TIdSipAuthorizationHeader.SetAlgorithm(const Value: String);
+procedure TIdSipHttpAuthHeader.SetAlgorithm(const Value: String);
 begin
   Self.DigestResponses.Values[AlgorithmParam] := Value;
+end;
+
+procedure TIdSipHttpAuthHeader.SetNonce(const Value: String);
+begin
+  Self.DigestResponses.Values[NonceParam] := Value;
+end;
+
+procedure TIdSipHttpAuthHeader.SetOpaque(const Value: String);
+begin
+  Self.DigestResponses.Values[OpaqueParam] := Value;
+end;
+
+procedure TIdSipHttpAuthHeader.SetQop(const Value: String);
+begin
+  Self.DigestResponses.Values[QopParam] := Value;
+end;
+
+procedure TIdSipHttpAuthHeader.SetRealm(const Value: String);
+begin
+  Self.DigestResponses.Values[RealmParam] := Value;
+end;
+
+procedure TIdSipHttpAuthHeader.SetUnknownResponses(const Name: String;
+                                                        const Value: String);
+begin
+  Self.fUnknownResponses.Values[Name] := Value;
+end;
+
+//******************************************************************************
+//* TIdSipAuthorizationHeader                                                  *
+//******************************************************************************
+//* TIdSipAuthorizationHeader Public methods ***********************************
+
+function TIdSipAuthorizationHeader.IsBasic: Boolean;
+begin
+  Result := IsEqual(Self.AuthorizationScheme, BasicAuthorizationScheme);
+end;
+
+function TIdSipAuthorizationHeader.IsDigest: Boolean;
+begin
+  Result := IsEqual(Self.AuthorizationScheme, DigestAuthorizationScheme);
+end;
+
+//* TIdSipAuthorizationHeader Protected methods ********************************
+
+procedure TIdSipAuthorizationHeader.CheckDigestResponses(Responses: TStrings);
+begin
+  inherited CheckDigestResponses(Responses);
+
+  if (Self.DigestResponse <> '')
+    and not TIdSimpleParser.IsHexNumber(Self.DigestResponse) then
+    Self.FailParse;
+end;
+
+function TIdSipAuthorizationHeader.GetName: String;
+begin
+  Result := AuthorizationHeader;
+end;
+
+//* TIdSipAuthorizationHeader Private methods **********************************
+
+function TIdSipAuthorizationHeader.GetCNonce: String;
+begin
+  Result := Self.DigestResponseValue(CNonceParam);
+end;
+
+function TIdSipAuthorizationHeader.GetDigestResponse: String;
+begin
+  Result := Self.DigestResponseValue(DigestResponseParam);
+end;
+
+function TIdSipAuthorizationHeader.GetDigestUri: String;
+begin
+  Result := Self.DigestResponseValue(DigestUriParam);
+end;
+
+function TIdSipAuthorizationHeader.GetNonceCount: Cardinal;
+begin
+  Result := HexToInt(Self.DigestResponseValue(NonceCountParam));
+end;
+
+function TIdSipAuthorizationHeader.GetUsername: String;
+begin
+  Result := Self.DigestResponseValue(UsernameParam);
+end;
+
+function TIdSipAuthorizationHeader.KnownResponse(const Name: String): Boolean;
+begin
+  Result := inherited KnownResponse(Name)
+         or (Name = CNonceParam)
+         or (Name = DigestResponseParam)
+         or (Name = DigestUriParam)
+         or (Name = NonceCountParam)
+         or (Name = UsernameParam);
 end;
 
 procedure TIdSipAuthorizationHeader.SetCNonce(const Value: String);
@@ -2542,11 +2652,6 @@ begin
   Self.DigestResponses.Values[DigestUriParam] := Value;
 end;
 
-procedure TIdSipAuthorizationHeader.SetNonce(const Value: String);
-begin
-  Self.DigestResponses.Values[NonceParam] := Value;
-end;
-
 procedure TIdSipAuthorizationHeader.SetNonceCount(Value: Cardinal);
 var
   H: String;
@@ -2558,27 +2663,6 @@ begin
     Delete(H, 1, 1);
 
   Self.DigestResponses.Values[NonceCountParam] := H;
-end;
-
-procedure TIdSipAuthorizationHeader.SetOpaque(const Value: String);
-begin
-  Self.DigestResponses.Values[OpaqueParam] := Value;
-end;
-
-procedure TIdSipAuthorizationHeader.SetQop(const Value: String);
-begin
-  Self.DigestResponses.Values[QopParam] := Value;
-end;
-
-procedure TIdSipAuthorizationHeader.SetRealm(const Value: String);
-begin
-  Self.DigestResponses.Values[RealmParam] := Value;
-end;
-
-procedure TIdSipAuthorizationHeader.SetUnknownResponses(const Name: String;
-                                                        const Value: String);
-begin
-  Self.fUnknownResponses.Values[Name] := Value;
 end;
 
 procedure TIdSipAuthorizationHeader.SetUsername(const Value: String);
@@ -3138,6 +3222,65 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipProxyAuthenticateHeader                                              *
+//******************************************************************************
+//* TIdSipProxyAuthenticateHeader Protected methods ****************************
+
+function TIdSipProxyAuthenticateHeader.GetName: String;
+begin
+  Result := ProxyAuthenticateHeader;
+end;
+
+function TIdSipProxyAuthenticateHeader.KnownResponse(const Name: String): Boolean;
+begin
+  Result := inherited KnownResponse(Name)
+         or (Name = DomainParam)
+         or (Name = StaleParam);
+end;
+
+procedure TIdSipProxyAuthenticateHeader.RemoveStaleResponse;
+var
+  Index: Integer;
+begin
+  Index := Self.DigestResponses.IndexOfName(StaleParam);
+
+  if (Index <> -1) then
+    Self.DigestResponses.Delete(Index);
+end;
+
+//* TIdSipProxyAuthenticateHeader Private methods ******************************
+
+function TIdSipProxyAuthenticateHeader.GetDomain: String;
+begin
+  Result := Self.DigestResponseValue(DomainParam);
+end;
+
+function TIdSipProxyAuthenticateHeader.GetStale: Boolean;
+begin
+  Result := StrToBoolDef(Self.DigestResponseValue(StaleParam), false);
+end;
+
+procedure TIdSipProxyAuthenticateHeader.SetDomain(const Value: String);
+begin
+  Self.DigestResponses.Values[DomainParam] := Value;
+end;
+
+procedure TIdSipProxyAuthenticateHeader.SetStale(const Value: Boolean);
+begin
+    Self.DigestResponses.Values[StaleParam] := Lowercase(BoolToStr(Value));
+end;
+
+//******************************************************************************
+//* TIdSipProxyAuthorizationHeader                                             *
+//******************************************************************************
+//* TIdSipProxyAuthorizationHeader Protected methods ***************************
+
+function TIdSipProxyAuthorizationHeader.GetName: String;
+begin
+  Result := ProxyAuthorizationHeader;
+end;
+
+//******************************************************************************
 //* TIdSipNumericHeader                                                        *
 //******************************************************************************
 //* TIdSipNumericHeader Protected methods **************************************
@@ -3646,6 +3789,7 @@ end;
 //******************************************************************************
 //* TIdSipWWWAuthenticateHeader                                                *
 //******************************************************************************
+
 //* TIdSipWWWAuthenticateHeader Protected methods ******************************
 
 function TIdSipWWWAuthenticateHeader.GetName: String;
@@ -4283,8 +4427,16 @@ begin
 end;
 
 function TIdSipExpiresHeaders.CurrentExpires: Cardinal;
+var
+  Header: TIdSipHeader;
 begin
-  Result := (Self.CurrentHeader as TIdSipNumericHeader).NumericValue;
+  Header := Self.CurrentHeader;
+
+
+  if not Assigned(Header) then
+    Result := 0
+  else
+    Result := (Header as TIdSipNumericHeader).NumericValue;
 end;
 
 //******************************************************************************
