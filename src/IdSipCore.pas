@@ -1454,7 +1454,7 @@ type
     property UserAgent:     TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
-  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdNotification)
+  TIdSipUserAgentDroppedUnmatchedMessageMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
     fMessage:  TIdSipMessage;
@@ -3226,9 +3226,9 @@ end;
 procedure TIdSipAbstractUserAgent.NotifyOfDroppedMessage(Message: TIdSipMessage;
                                                          Receiver: TIdSipTransport);
 var
-  Notification: TIdSipUserAgentDroppedUnmatchedResponseMethod;
+  Notification: TIdSipUserAgentDroppedUnmatchedMessageMethod;
 begin
-  Notification := TIdSipUserAgentDroppedUnmatchedResponseMethod.Create;
+  Notification := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   try
     Notification.Message   := Message;
     Notification.Receiver  := Receiver;
@@ -6897,11 +6897,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipUserAgentDroppedUnmatchedResponseMethod                              *
+//* TIdSipUserAgentDroppedUnmatchedMessageMethod                               *
 //******************************************************************************
-//* TIdSipUserAgentDroppedUnmatchedResponseMethod Public methods ***************
+//* TIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ****************
 
-procedure TIdSipUserAgentDroppedUnmatchedResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipUserAgentDroppedUnmatchedMessageMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUserAgentListener).OnDroppedUnmatchedMessage(Self.UserAgent,
                                                                  Self.Message,

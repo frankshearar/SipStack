@@ -9343,9 +9343,9 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod                          *
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod                           *
 //******************************************************************************
-//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ***********
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Public methods ************
 
 procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.SetUp;
 begin
@@ -9368,7 +9368,7 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Published methods ********
+//* TestTIdSipUserAgentDroppedUnmatchedMessageMethod Published methods *********
 
 procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TestRun;
 var
