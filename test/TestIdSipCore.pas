@@ -149,11 +149,13 @@ type
 
   TestTIdSipUserAgent = class(TTestCaseTU,
                               IIdObserver,
+                              IIdSipActionListener,
                               IIdSipTransportSendingListener,
                               IIdSipSessionListener,
                               IIdSipUserAgentListener)
   private
     Dlg:                 TIdSipDialog;
+    FailReason:          String;
     ID:                  TIdSipDialogID;
     InboundCallMimeType: String;
     InboundCallOffer:    String;
@@ -297,6 +299,7 @@ type
                            IIdSipActionListener)
   protected
     ActionFailed: Boolean;
+    FailReason:   String;
 
     function  CreateAction: TIdSipAction; virtual;
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -1101,6 +1104,12 @@ begin
 
   Self.DebugTimer := TIdDebugTimerQueue.Create;
   Self.Core.Timer := DebugTimer;
+
+  // Make sure we have a sane DNS setup so that actions don't terminate
+  // themselves after they try find locations to which to send their messages.
+  Self.Locator.AddA(Self.Destination.Address.Host, '127.0.0.1');
+  Self.Locator.AddA(Self.Core.From.Address.Host,   '127.0.0.1');
+  Self.Locator.AddA('localhost',                   '127.0.0.1');
 end;
 
 procedure TTestCaseTU.TearDown;
@@ -2018,6 +2027,8 @@ begin
   Self.Password            := 'mycotoxin';
   Self.TryAgain            := true;
   Self.SessionEstablished  := false;
+
+  Self.Locator.AddA(Self.Core.From.Address.Host, '127.0.0.1');
 end;
 
 procedure TestTIdSipUserAgent.TearDown;
@@ -2163,6 +2174,7 @@ end;
 procedure TestTIdSipUserAgent.OnNetworkFailure(Action: TIdSipAction;
                                                const Reason: String);
 begin
+  Self.FailReason := Reason;
 end;
 
 procedure TestTIdSipUserAgent.OnSendRequest(Request: TIdSipRequest;
@@ -2489,14 +2501,18 @@ begin
   // <---      200 OK      --->
 
   Session := Self.Core.Call(Self.Destination, '', '');
+  Session.AddSessionListener(Self);
   Session.Send;
+
+  Self.MarkSentAckCount;
   Self.ReceiveOk(Self.LastSentRequest);
+  CheckAckSent('No ACK sent: ' + Self.FailReason);
 
   Session.Terminate;
 
   // This is a bit tricky - the Transaction layer reissues the request, not the
   // Transaction-User layer. All the TU layer does is provide an authentication
-  // token.p
+  // token.
   Self.MarkSentRequestCount;
   Self.ReceiveUnauthorized(WWWAuthenticateHeader, '');
   Self.CheckRequestSent('No re-issue of a BYE');
@@ -3359,6 +3375,7 @@ var
   Session: TIdSipSession;
 begin
   Session := Self.Core.Call(Self.Destination, '', '');
+  Session.AddSessionListener(Self);
   Session.Send;
 
   Self.ReceiveTrying(Self.LastSentRequest);
@@ -3374,7 +3391,9 @@ begin
         Self.LastSentResponse.Description
       + 's make early dialogs');
 
+  Self.MarkSentAckCount;
   Self.ReceiveOk(Self.LastSentRequest);
+  CheckAckSent('No ACK sent: ' + Self.FailReason);
   Check(not Session.IsEarly,
         Self.LastSentResponse.Description
       + 's make non-early dialogs');
@@ -4031,6 +4050,7 @@ end;
 procedure TestTIdSipUserAgent.TestTerminateAllCalls;
 var
   InboundSession: TIdSipInboundSession;
+  Sess:           TIdSipSession;
 begin
   // We have:
   // * an established inbound call;
@@ -4043,6 +4063,7 @@ begin
   Self.ReceiveInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire, first INVITE');
   InboundSession := Self.Session;
+  InboundSession.AddSessionListener(Self);
   InboundSession.AcceptCall('', '');
   Self.ReceiveAck;
 
@@ -4050,10 +4071,14 @@ begin
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.ReceiveInvite;
 
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Sess := Self.Core.Call(Self.Destination, '', '');
+  Sess.AddSessionListener(Self);
+  Sess.Send;
   Self.ReceiveTrying(Self.LastSentRequest);
 
-  Self.Core.Call(Self.Destination, '', '').Send;
+  Sess := Self.Core.Call(Self.Destination, '', '');
+  Sess.AddSessionListener(Self);
+  Sess.Send;
   Self.ReceiveOk(Self.LastSentRequest);
 
   CheckEquals(4,
@@ -4166,7 +4191,8 @@ end;
 procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
                                             const Reason: String);
 begin
-end;                                            
+  Self.FailReason := Reason;
+end;
 
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
 begin
@@ -4428,11 +4454,18 @@ procedure TestLocation.TestUseCorrectTransport;
 const
   CorrectTransport = SctpTransport;
 var
-  Action: TIdSipAction;  
+  Action: TIdSipAction;
+  Domain: String;
 begin
-  Self.Locator.AddSRV(Self.Destination.Address.Host, SrvSctpPrefix, 0, 0, IdPORT_SIP, 'localhost');
-  Self.Locator.AddSRV(Self.Destination.Address.Host, SrvTcpPrefix,  1, 0, IdPORT_SIP, 'localhost');
-  Self.Locator.AddA('localhost', '127.0.0.1');
+  Self.Dispatcher.Transport.TransportType := CorrectTransport;
+
+  Domain := Self.Destination.Address.Host;
+
+  // NAPTR record points to SCTP SRV record whose target resolves to the A
+  // record.
+  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, SipSctpService, SrvSctpPrefix + Domain);
+  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
+  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
 
   Self.MarkSentRequestCount;
   Action := Self.CreateAction;
@@ -4449,7 +4482,9 @@ procedure TestLocation.TestUseTransportParam;
 begin
   Self.Destination.Address.Transport := Self.TransportParam;
 
+  Self.MarkSentRequestCount;
   Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
 
   CheckEquals(SctpTransport,
               Self.LastSentRequest.LastHop.Transport,
@@ -4458,7 +4493,9 @@ end;
 
 procedure TestLocation.TestUseUdpByDefault;
 begin
+  Self.MarkSentRequestCount;
   Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
 
   CheckEquals(UdpTransport,
               Self.LastSentRequest.LastHop.Transport,
@@ -4470,7 +4507,9 @@ begin
   Self.InviteOffer    := TIdSipTestResources.VeryLargeSDP('localhost');
   Self.InviteMimeType := SdpMimeType;
 
+  Self.MarkSentRequestCount;
   Self.CreateAction;
+  Self.CheckRequestSent('No request sent');
 
   CheckEquals(TcpTransport,
               Self.LastSentRequest.LastHop.Transport,
@@ -5051,8 +5090,11 @@ begin
   FirstInvite := TIdSipRequest.Create;
   try
     Session := Self.CreateAndEstablishSession;
+    Session.AddSessionListener(Self);
 
+    Self.MarkSentRequestCount;
     Session.Modify('', '');
+    CheckRequestSent('No modifying INVITE sent: ' + Self.FailReason);
     FirstInvite.Assign(Self.LastSentRequest);
 
     Self.MarkSentResponseCount;
@@ -6831,6 +6873,8 @@ end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveMovedPermanently;
 begin
+  Self.Locator.AddAAAA('fried.neurons.org', '::1');
+
   Self.CreateAction;
   Self.MarkSentRequestCount;
   Self.ReceiveMovedPermanently('sip:case@fried.neurons.org');
@@ -7226,6 +7270,8 @@ begin
   Self.Invite.ContentType   := SdpMimeType;
   Self.Invite.Body          := Self.SimpleSdp.AsString;
   Self.Invite.ContentLength := Length(Self.SimpleSdp.AsString);
+
+  Self.Locator.AddA(Self.Invite.RequestUri.Host, '127.0.0.1');
 end;
 
 procedure TestTIdSipInboundSession.TearDown;
@@ -7869,6 +7915,10 @@ begin
   Self.OnEndedSessionFired    := false;
   Self.OnModifiedSessionFired := false;
   Self.RemoteDesc             := '';
+
+  // DNS entries for redirected domains, etc.
+  Self.Locator.AddA('bar.org',   '127.0.0.1');
+  Self.Locator.AddA('quaax.org', '127.0.0.1');
 end;
 
 //* TestTIdSipOutboundSession Protectedivate methods ***************************
@@ -8246,11 +8296,12 @@ begin
   Session := Self.CreateAction as TIdSipSession;
 
   Response := Self.Core.CreateResponse(Self.LastSentRequest,
-                                       SipRinging);
+                                       SIPOK);
   try
     Response.FirstContact.Address.Scheme := SipsScheme;
-    Response.StatusCode := SIPOK;
+    Self.MarkSentAckCount;
     Self.ReceiveResponse(Response);
+    CheckAckSent('No ACK sent: ' + Self.FailReason);
 
     Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
   finally
@@ -8452,14 +8503,14 @@ begin
 
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
-  CheckRequestSent('No redirected INVITE #1 sent');
+  CheckRequestSent('No redirected INVITE #1 sent: ' + Self.FailReason);
   CheckEquals('sip:foo@bar.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #1');
 
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily('sip:baz@quaax.org');
-  CheckRequestSent('No redirected INVITE #2 sent');
+  CheckRequestSent('No redirected INVITE #2 sent: ' + Self.FailReason);
   CheckEquals('sip:baz@quaax.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #2');
@@ -8469,7 +8520,7 @@ procedure TestTIdSipOutboundSession.TestEmptyTargetSetMeansTerminate;
 begin
   Self.ReceiveMovedTemporarily('sip:foo@bar.org');
   Self.ReceiveForbidden;
-  Check(Self.OnEndedSessionFired, 'Session didn''t end');
+  Check(Self.OnEndedSessionFired, 'Session didn''t end: ' + Self.FailReason);
 end;
 
 procedure TestTIdSipOutboundSession.TestGlobalFailureEndsSession;
@@ -8592,7 +8643,7 @@ end;
 
 procedure TestTIdSipOutboundSession.TestReceive3xxSendsNewInvite;
 const
-  NewAddress = 'sip:foo';
+  NewAddress = 'sip:foo@bar.org';
 var
   OriginalInvite: TIdSipRequest;
 begin
@@ -8603,7 +8654,7 @@ begin
     Self.MarkSentRequestCount;
     Self.ReceiveMovedPermanently(NewAddress);
 
-    CheckRequestSent('Session didn''t send a new INVITE');
+    CheckRequestSent('Session didn''t send a new INVITE: ' + Self.FailReason);
   finally
     OriginalInvite.Free;
   end;
@@ -8627,7 +8678,7 @@ begin
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily(Contact);
 
-  CheckRequestSent('No new INVITE sent');
+  CheckRequestSent('No new INVITE sent: ' + Self.FailReason);
   CheckEquals(InviteCount,
               Self.Core.InviteCount,
               'The Core should have one new INVITE and have destroyed one old one');
@@ -8715,7 +8766,7 @@ begin
   Self.MarkSentRequestCount;
   Self.ReceiveMovedTemporarily(Contact);
 
-  CheckRequestSent('No new INVITE sent');
+  CheckRequestSent('No new INVITE sent: ' + Self.FailReason);
   CheckEquals(InviteCount,
               Self.Core.InviteCount,
               'The Core should have one new INVITE and have destroyed one old one');
@@ -8770,7 +8821,7 @@ begin
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
-              'Session didn''t attempt to contact all Contacts');
+              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 
   Self.MarkSentRequestCount;
   Self.ReceiveOkFrom(Self.SentRequestAt(SecondRedirect), Contacts[1]);
@@ -8815,7 +8866,7 @@ begin
   // ARG! Why do they make Length return an INTEGER? And WHY Abs() too?
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
-              'Session didn''t attempt to contact all Contacts');
+              'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;
@@ -8843,7 +8894,7 @@ begin
   Self.ReceiveMovedTemporarily(Contacts);
 
   Check(Self.SentRequestCount >= 3,
-        'Not enough requests sent: 1 + 2 INVITEs');
+        'Not enough requests sent: 1 + 2 INVITEs: ' + Self.FailReason);
 
   Self.ReceiveTrying(Self.SentRequestAt(1));
   Self.ReceiveTrying(Self.SentRequestAt(2));
