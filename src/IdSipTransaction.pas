@@ -746,16 +746,17 @@ begin
   // the Transport layer.
 
   MsgLen := Length(Msg.AsString);
-  RewrittenVia := (MsgLen > MaximumUDPMessageSize) and (Msg.LastHop.Transport = sttUDP);
+  // TODO: Add a
+  RewrittenVia := (MsgLen > MaximumUDPMessageSize) and (Msg.LastHop.Transport = UdpTransport);
 
   if RewrittenVia then
-    Msg.LastHop.Transport := sttTCP;
+    Msg.LastHop.Transport := TcpTransport;
 
   try
     Self.FindAppropriateTransport(Msg).Send(Msg);
   except
     on EIdSipTransport do begin
-      Msg.LastHop.Transport := sttUDP;
+      Msg.LastHop.Transport := UdpTransport;
 
       // If this too raises an EIdSipTransport exception, the transaction will
       // receive the exception and handle it accordingly.
@@ -826,7 +827,7 @@ function TIdSipTransactionDispatcher.WillUseReliableTranport(R: TIdSipMessage): 
 begin
   Assert(R.Path.Length > 0, AtLeastOneVia);
 
-  Result := R.LastHop.Transport <> sttUDP;
+  Result := R.LastHop.Transport <> UdpTransport;
 
 //  Result := Self.FindAppropriateTransport(R).IsReliable;
 end;
@@ -854,7 +855,7 @@ begin
       Result := Self.TransportAt(I)
     else
       raise EUnknownTransport.Create(Format(CantFindTransport,
-                                            [TransportToStr(Msg.LastHop.Transport)]));
+                                            [Msg.LastHop.Transport]));
   finally
     Self.TransportLock.Release;
   end;

@@ -93,7 +93,7 @@ type
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
-    class function TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
+    class function TransportFor(const Transport: String): TIdSipTransportClass;
 
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -102,7 +102,7 @@ type
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTimeout: Cardinal; virtual;
-    function  GetTransportType: TIdSipTransportType; virtual; abstract;
+    function  GetTransportType: String; virtual; abstract;
     function  IsNull: Boolean; virtual;
     function  IsReliable: Boolean; virtual;
     function  IsSecure: Boolean; virtual;
@@ -152,7 +152,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  GetTransportType: TIdSipTransportType; override;
+    function  GetTransportType: String; override;
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -176,7 +176,7 @@ type
     function  ServerType: TIdSipTcpServerClass; override;
   public
     function DefaultPort: Cardinal; override;
-    function GetTransportType: TIdSipTransportType; override;
+    function GetTransportType: String; override;
     function IsSecure: Boolean; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
@@ -189,7 +189,7 @@ type
   // for the SIP stack.
   TIdSipSCTPTransport = class(TIdSipTransport)
   public
-    function GetTransportType: TIdSipTransportType; override;
+    function GetTransportType: String; override;
   end;
 
   // I implement the User Datagram Protocol (RFC 768) connections for the SIP
@@ -212,7 +212,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  GetTransportType: TIdSipTransportType; override;
+    function  GetTransportType: String; override;
     function  IsReliable: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
@@ -229,7 +229,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function GetTransportType: TIdSipTransportType; override;
+    function GetTransportType: String; override;
     function IsNull: Boolean; override;
   end;
 
@@ -327,17 +327,16 @@ uses
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
-class function TIdSipTransport.TransportFor(TT: TIdSipTransportType): TIdSipTransportClass;
+class function TIdSipTransport.TransportFor(const Transport: String): TIdSipTransportClass;
 begin
-  case TT of
-    sttSCTP: Result := TIdSipSCTPTransport;
-    sttTCP:  Result := TIdSipTCPTransport;
-    sttTLS:  Result := TIdSipTLSTransport;
-    sttUDP:  Result := TIdSipUDPTransport;
-    sttNULL: Result := TIdSipNullTransport;
+  // TODO change this to look up in a registry
+       if (Transport = NullTransport) then Result := TIdSipNullTransport
+  else if (Transport = SctpTransport) then Result := TIdSipSCTPTransport
+  else if (Transport = TcpTransport)  then Result := TIdSipTCPTransport
+  else if (Transport = TlsTransport)  then Result := TIdSipTLSTransport
+  else if (Transport = UdpTransport)  then Result := TIdSipUDPTransport
   else
-    raise EUnknownTransport.Create('TIdSipTransport.TransportFor');
-  end;
+    raise EUnknownTransport.Create('TIdSipTransport.TransportFor: ' + Transport);
 end;
 
 constructor TIdSipTransport.Create;
@@ -696,9 +695,9 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipTCPTransport.GetTransportType: TIdSipTransportType;
+function TIdSipTCPTransport.GetTransportType: String;
 begin
-  Result := sttTCP;
+  Result := TcpTransport;
 end;
 
 procedure TIdSipTCPTransport.Start;
@@ -860,9 +859,9 @@ begin
   Result := IdPORT_SIPS;
 end;
 
-function TIdSipTLSTransport.GetTransportType: TIdSipTransportType;
+function TIdSipTLSTransport.GetTransportType: String;
 begin
-  Result := sttTLS;
+  Result := TlsTransport;
 end;
 
 function TIdSipTLSTransport.IsSecure: Boolean;
@@ -943,9 +942,9 @@ end;
 //******************************************************************************
 //* TIdSipSCTPTransport Public methods *****************************************
 
-function TIdSipSCTPTransport.GetTransportType: TIdSipTransportType;
+function TIdSipSCTPTransport.GetTransportType: String;
 begin
-  Result := sttSCTP;
+  Result := SctpTransport;
 end;
 
 //******************************************************************************
@@ -967,9 +966,9 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipUDPTransport.GetTransportType: TIdSipTransportType;
+function TIdSipUDPTransport.GetTransportType: String;
 begin
-  Result := sttUDP;
+  Result := UdpTransport;
 end;
 
 function TIdSipUDPTransport.IsReliable: Boolean;
@@ -1098,9 +1097,9 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipNullTransport.GetTransportType: TIdSipTransportType;
+function TIdSipNullTransport.GetTransportType: String;
 begin
-  Result := sttNULL;
+  Result := NullTransport;
 end;
 
 function TIdSipNullTransport.IsNull: Boolean;

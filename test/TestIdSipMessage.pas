@@ -21,6 +21,7 @@ type
     procedure TestFirstChar;
     procedure TestIsEqual;
     procedure TestLastChar;
+    procedure TestParamToTransport;
     procedure TestShortMonthToInt;
     procedure TestWithoutFirstAndLastChars;
   end;
@@ -350,6 +351,14 @@ begin
   CheckEquals('b', LastChar('ab'), 'ab');
 end;
 
+procedure TestFunctions.TestParamToTransport;
+begin
+  CheckEquals(SctpTransport, ParamToTransport(TransportParamSCTP), TransportParamSCTP);
+  CheckEquals(TcpTransport,  ParamToTransport(TransportParamTCP),  TransportParamTCP);
+  CheckEquals(TlsTransport,  ParamToTransport(TransportParamTLS),  TransportParamTLS);
+  CheckEquals(UdpTransport,  ParamToTransport(TransportParamUDP),  TransportParamUDP);
+end;
+
 procedure TestFunctions.TestShortMonthToInt;
 var
   I: Integer;
@@ -466,7 +475,7 @@ begin
 
   CheckEquals(1,                  Msg.Path.Length,              'Path.Length');
   CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
-  Check      (sttTCP =            Msg.LastHop.Transport,        'LastHop.Transport');
+  CheckEquals(TcpTransport,       Msg.LastHop.Transport,        'LastHop.Transport');
   CheckEquals('gw1.leo-ix.org',   Msg.LastHop.SentBy,           'LastHop.SentBy');
   CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');

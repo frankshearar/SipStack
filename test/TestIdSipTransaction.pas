@@ -644,7 +644,7 @@ begin
   Self.Core.Dispatcher := Self.D;
 
   Self.MockTransport := TIdSipMockTransport.Create;
-  Self.MockTransport.TransportType := sttTCP;
+  Self.MockTransport.TransportType := TcpTransport;
 
   Self.D.AddTransport(Self.MockTransport);
 
@@ -1361,7 +1361,7 @@ begin
   // cf RFC 3261, section 17.1.1
 
   // Timer A only has meaning when using an unreliable transport
-  Self.Invite.LastHop.Transport    := sttUDP;
+  Self.Invite.LastHop.Transport    := UdpTransport;
   Self.MockTransport.TransportType := Self.Invite.LastHop.Transport;
 
   Tran := Self.D.AddClientTransaction(Self.Invite) as TIdSipClientInviteTransaction;
@@ -1446,7 +1446,7 @@ begin
   // cf RFC 3261, section 17.1.2
 
   // Timer E only has meaning when using an unreliable transport
-  Self.Options.LastHop.Transport   := sttUDP;
+  Self.Options.LastHop.Transport   := UdpTransport;
   Self.MockTransport.TransportType := Self.Options.LastHop.Transport;
 
   Tran := Self.D.AddClientTransaction(Self.Options) as TIdSipClientNonInviteTransaction;
@@ -1531,7 +1531,7 @@ begin
   // cf RFC 3261, section 17.2.1
 
   // Timer G only has meaning when using an unreliable transport.
-  Self.Invite.LastHop.Transport    := sttUDP;
+  Self.Invite.LastHop.Transport    := UdpTransport;
   Self.MockTransport.TransportType := Self.Invite.LastHop.Transport;
 
   Tran := Self.D.AddServerTransaction(Self.Invite,
@@ -1695,7 +1695,7 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendRequestOverTcp;
 begin
-  Self.MockTransport.TransportType := sttTCP;
+  Self.MockTransport.TransportType := TcpTransport;
 
   Self.MarkSentRequestCount;
 
@@ -1707,7 +1707,7 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendRequestOverTls;
 begin
-  Self.MockTransport.TransportType := sttTLS;
+  Self.MockTransport.TransportType := TlsTransport;
 
   Self.MarkSentRequestCount;
 
@@ -1730,8 +1730,8 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendMessageButNoAppropriateTransport;
 begin
-  Self.Response200.LastHop.Transport := sttTCP;
-  Self.MockTransport.TransportType   := sttSCTP;
+  Self.Response200.LastHop.Transport := TcpTransport;
+  Self.MockTransport.TransportType   := SctpTransport;
 
   try
     Self.D.Send(Self.Response200);
@@ -1749,7 +1749,7 @@ var
 begin
   UdpTran := TIdSipMockTransport.Create;
   try
-    UdpTran.TransportType := sttUDP;
+    UdpTran.TransportType := UdpTransport;
 
     Self.D.AddTransport(UdpTran);
 
@@ -1774,12 +1774,12 @@ var
   UdpResponseCount: Cardinal;
   UdpTran:          TIdSipMockTransport;
 begin
-  Self.MockTransport.TransportType := sttTCP;
+  Self.MockTransport.TransportType := TcpTransport;
   Self.MockTransport.FailWith      := EIdConnectTimeout;
 
   UdpTran := TIdSipMockTransport.Create;
   try
-    UdpTran.TransportType := sttUDP;
+    UdpTran.TransportType := UdpTransport;
 
     Self.D.AddTransport(UdpTran);
 
@@ -1807,18 +1807,18 @@ var
   UdpRequestCount: Cardinal;
   UdpTran:         TIdSipMockTransport;
 begin
-  Self.MockTransport.TransportType := sttTCP;
+  Self.MockTransport.TransportType := TcpTransport;
 
   UdpTran := TIdSipMockTransport.Create;
   try
-    UdpTran.TransportType := sttUDP;
+    UdpTran.TransportType := UdpTransport;
 
     Self.D.AddTransport(UdpTran);
 
     TcpRequestCount := Self.SentRequestCount;
     UdpRequestCount := UdpTran.SentRequestCount;
 
-    Self.TranRequest.LastHop.Transport := sttUDP;
+    Self.TranRequest.LastHop.Transport := UdpTransport;
     while (Length(Self.TranRequest.AsString) < MaximumUDPMessageSize) do
       Self.TranRequest.AddHeader(SubjectHeaderFull).Value := 'That is not dead which can eternal lie, '
                                                            + 'and with strange aeons even death may die.';
@@ -2483,7 +2483,7 @@ begin
   Self.MockDispatcher.Timer := Self.DebugTimer;
 
   Self.MockTransport := Self.MockDispatcher.Transport;
-  Self.MockTransport.TransportType := sttUDP;
+  Self.MockTransport.TransportType := UdpTransport;
   Self.MockTransport.HostName      := 'gw1.leo-ix.org';
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
@@ -2892,8 +2892,8 @@ begin
   // messages. Hence we terminate it.
   Self.Terminate(Self.Tran);
 
-  Self.MockTransport.TransportType := sttTLS;
-  Self.Request.LastHop.Transport := sttTLS;
+  Self.MockTransport.TransportType := TlsTransport;
+  Self.Request.LastHop.Transport := TlsTransport;
 
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
                                       Self.Request) as TIdSipServerInviteTransaction;
@@ -4178,8 +4178,8 @@ begin
   // Hack: we terminate Self.Tran so it doesn't keep sending INVITEs
   Self.Terminate(Self.Tran);
 
-  Self.MockTransport.TransportType := sttTCP;
-  Self.Request.LastHop.Transport := sttTCP;
+  Self.MockTransport.TransportType := TcpTransport;
+  Self.Request.LastHop.Transport := TcpTransport;
 
   Self.MockTransport.ResetSentRequestCount;
   Tran := Self.TransactionType.Create(Self.MockDispatcher,

@@ -29,7 +29,7 @@ type
     fPort:              Cardinal;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
-    fTransportType:     TIdSipTransportType;
+    fTransportType:     String;
     fWriteLog:          Boolean;
 
     procedure DispatchRequest(R: TidSipRequest);
@@ -54,7 +54,7 @@ type
 
     procedure FireOnRequest(R: TIdSipRequest);
     procedure FireOnResponse(R: TIdSipResponse);
-    function  GetTransportType: TIdSipTransportType; override;
+    function  GetTransportType: String; override;
     function  IsReliable: Boolean; override;
     function  IsSecure: Boolean; override;
     function  LastRequest: TIdSipRequest;
@@ -75,7 +75,7 @@ type
     property LastACK:           TIdSipRequest       read fLastACK;
     property SentRequestCount:  Cardinal            read fSentRequestCount;
     property SentResponseCount: Cardinal            read fSentResponseCount;
-    property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
+    property TransportType:     String              read fTransportType write fTransportType;
     property WriteLog:          Boolean             read fWriteLog write SetWriteLog;
   end;
 
@@ -153,19 +153,19 @@ begin
   end;
 end;
 
-function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
+function TIdSipMockTransport.GetTransportType: String;
 begin
   Result := Self.TransportType;
 end;
 
 function TIdSipMockTransport.IsReliable: Boolean;
 begin
-  Result := Self.TransportType <> sttUDP;
+  Result := Self.TransportType <> UdpTransport;
 end;
 
 function TIdSipMockTransport.IsSecure: Boolean;
 begin
-  Result := Self.TransportType = sttTLS;
+  Result := Self.TransportType = TlsTransport;
 end;
 
 function TIdSipMockTransport.LastRequest: TIdSipRequest;

@@ -17,8 +17,6 @@ uses
 
 type
   TIdSipQValue = 0..1000;
-  TIdSipTransportType = (sttSCTP, sttTCP, sttTLS, sttUDP, sttNULL);
-
   TIdSipChars = set of Char;
 
 type
@@ -639,7 +637,7 @@ type
     fSentBy:     String;
     fSipVersion: String;
     fPort:       Cardinal;
-    fTransport:  TIdSipTransportType;
+    fTransport:  String;
 
     procedure AssertBranchWellFormed;
     procedure AssertMaddrWellFormed;
@@ -661,13 +659,13 @@ type
     procedure Parse(const Value: String); override;
   public
     procedure Assign(Src: TPersistent); override;
-    function  DefaultPortForTransport(T: TIdSipTransportType): Cardinal;
+    function  DefaultPortForTransport(const Transport: String): Cardinal;
     function  HasBranch: Boolean;
     function  HasMaddr: Boolean;
     function  HasReceived: Boolean;
     function  HasRport: Boolean;
     function  IsDefaultPortForTransport(Port: Cardinal;
-                                        T: TIdSipTransportType): Boolean;
+                                        const Transport: String): Boolean;
     function  IsRFC3261Branch: Boolean;
 
     property Branch:     String              read GetBranch write SetBranch;
@@ -677,7 +675,7 @@ type
     property Received:   String              read GetReceived write SetReceived;
     property Rport:      Cardinal            read GetRport write SetRport;
     property SipVersion: String              read fSipVersion write fSipVersion;
-    property Transport:  TIdSipTransportType read fTransport write fTransport;
+    property Transport:  String              read fTransport write fTransport;
     property TTL:        Byte                read GetTTL write SetTTL;
   end;
 
@@ -1244,6 +1242,7 @@ function IsEqual(const S1, S2: String): Boolean;
 function IsQuoted(const S: String): Boolean;
 function LastChar(const S: String): String;
 function NeedsQuotes(Name: String): Boolean;
+function ParamToTransport(const TransportParam: String): String;
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
 function ReadDigit(var Src: String): String;
 function QuoteStringIfNecessary(const S: String): String;
@@ -1252,8 +1251,6 @@ function ShortMonthToInt(const Month: String): Integer;
 function StreamToStr(Data: TStream): String;
 function StrToQValue(const S: String): TIdSipQValue;
 function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
-function StrToTransport(const S: String): TIdSipTransportType;
-function TransportToStr(const T: TIdSipTransportType): String;
 function WithoutFirstAndLastChars(const S: String): String;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
@@ -1735,6 +1732,11 @@ begin
   end;
 end;
 
+function ParamToTransport(const TransportParam: String): String;
+begin
+  Result := Uppercase(TransportParam);
+end;
+
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
 var
   Name: String;
@@ -1897,29 +1899,6 @@ begin
   except
     on EConvertError do
       Result := DefaultValue;
-  end;
-end;
-
-function StrToTransport(const S: String): TIdSipTransportType;
-begin
-       if IsEqual(S, NullTransport) then Result := sttNULL
-  else if IsEqual(S, SctpTransport) then Result := sttSCTP
-  else if IsEqual(S, TcpTransport)  then Result := sttTCP
-  else if IsEqual(S, TlsTransport)  then Result := sttTLS
-  else if IsEqual(S, UdpTransport)  then Result := sttUDP
-  else raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipTransportType']));
-end;
-
-function TransportToStr(const T: TIdSipTransportType): String;
-begin
-  case T of
-    sttNULL: Result := NullTransport;
-    sttSCTP: Result := SctpTransport;
-    sttTCP:  Result := TcpTransport;
-    sttTLS:  Result := TlsTransport;
-    sttUDP:  Result := UdpTransport;
- else
-    raise EConvertError.Create(Format(ConvertErrorMsg, ['unknown TIdSipTransportType', 'String']));
   end;
 end;
 
@@ -4399,9 +4378,9 @@ begin
     inherited Assign(Src);
 end;
 
-function TIdSipViaHeader.DefaultPortForTransport(T: TIdSipTransportType): Cardinal;
+function TIdSipViaHeader.DefaultPortForTransport(const Transport: String): Cardinal;
 begin
-  if (T = sttTLS) then
+  if (Transport = TlsTransport) then
     Result := IdPort_SIPS
   else
     Result := IdPORT_SIP;
@@ -4428,9 +4407,9 @@ begin
 end;
 
 function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
-                                                   T: TIdSipTransportType): Boolean;
+                                                   const Transport: String): Boolean;
 begin
-  Result := ((T = sttTLS) and (Port = IdPORT_SIPS))
+  Result := ((Transport = TlsTransport) and (Port = IdPORT_SIPS))
          or (Port = IdPORT_SIP);
 end;
 
@@ -4448,7 +4427,7 @@ end;
 
 function TIdSipViaHeader.GetValue: String;
 begin
-  Result := Self.SipVersion + '/' + TransportToStr(Self.Transport)
+  Result := Self.SipVersion + '/' + Self.Transport
           + ' ' + Self.SentBy;
 
   if not Self.IsDefaultPortForTransport(Self.Port, Self.Transport) then
@@ -4479,7 +4458,7 @@ begin
   if not TIdSipParser.IsTransport(Token) then
     Self.FailParse(InvalidSentProtocol);
 
-  Self.Transport := StrToTransport(Token);
+  Self.Transport := Token;
 
   Token := Trim(Fetch(S, ';'));
   Self.SentBy := Fetch(Token, ':');
@@ -7358,12 +7337,7 @@ end;
 
 class function TIdSipParser.IsTransport(const Token: String): Boolean;
 begin
-  try
-    StrToTransport(Token);
-    Result := true;
-  except
-    Result := false;
-  end;
+  Result := Self.IsToken(Token)
 end;
 
 class function TIdSipParser.IsWord(const Token: String): Boolean;

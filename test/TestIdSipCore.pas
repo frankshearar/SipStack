@@ -1040,7 +1040,7 @@ begin
   Self.Destination.Value := 'sip:franks@localhost';
 
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.Dispatcher.Transport.TransportType := sttTCP;
+  Self.Dispatcher.Transport.TransportType := TcpTransport;
 
   Self.Core := TIdSipUserAgent.Create;
   Self.Core.Dispatcher := Self.Dispatcher;
@@ -2087,8 +2087,9 @@ begin
               'New requests MUST have a Via header; cf. RFC 3261 section 8.1.1.7');
   Check(Request.LastHop.HasBranch,
         'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
-  Check(sttTCP = Request.LastHop.Transport,
-        'TCP should be the default transport');
+  CheckEquals(TcpTransport,
+              Request.LastHop.Transport,
+              'TCP should be the default transport');
 end;
 
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
@@ -2797,8 +2798,9 @@ begin
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
     Request := Self.Core.CreateRequest(Dest);
     try
-      Check(Request.LastHop.Transport = sttUDP,
-            'UDP transport not specified');
+      CheckEquals(UdpTransport,
+                  Request.LastHop.Transport,
+                  'UDP transport not specified');
     finally
       Request.Free;
     end;
@@ -2806,20 +2808,21 @@ begin
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
     Request := Self.Core.CreateRequest(Dest);
     try
-      Check(Request.LastHop.Transport = sttTCP,
-            'TCP transport not specified');
+      CheckEquals(TcpTransport,
+                  Request.LastHop.Transport,
+                  'TCP transport not specified');
     finally
       Request.Free;
     end;
 
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=foo';
+    Request := Self.Core.CreateRequest(Dest);
     try
-      Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=foo';
-      Request := Self.Core.CreateRequest(Dest);
-      CheckNull(Request,
-                'Return value not FreeAndNil''d');
-      Fail('Failed to bail out on unknown transport');
-    except
-      on EConvertError do;
+      CheckEquals('FOO',
+                  Request.LastHop.Transport,
+                  'foo transport not specified');
+    finally
+      Request.Free;
     end;
   finally
     Dest.Free;
@@ -3910,16 +3913,22 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestViaMatchesTransportParameter;
+const
+  Transports: array[1..5] of String = (NullTransport,
+                                       SctpTransport,
+                                       TcpTransport,
+                                       TlsTransport,
+                                       UdpTransport);
 var
-  Trans: TIdSipTransportType;
+  Trans: Integer;
 begin
-  for Trans := Low(TIdSipTransportType) to High(TIdSipTransportType) do begin
-    Self.Dispatcher.Transport.TransportType := Trans;
-    Self.Destination.Address.Transport := TransportToStr(Trans);
+  for Trans := Low(Transports) to High(Transports) do begin
+    Self.Dispatcher.Transport.TransportType := Transports[Trans];
+    Self.Destination.Address.Transport := Transports[Trans];
     Self.Core.Call(Self.Destination, '', '').Send;
 
-    CheckEquals(TransportToStr(Trans),
-                TransportToStr(Self.LastSentRequest.LastHop.Transport),
+    CheckEquals(Transports[Trans],
+                Self.LastSentRequest.LastHop.Transport,
                 'Transport parameter = '
               + Self.Destination.Address.Transport);
   end;
@@ -7693,7 +7702,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatcher.Transport.TransportType := sttTLS;
+  Self.Dispatcher.Transport.TransportType := TlsTransport;
 
   Self.Destination.Address.Scheme := SipsScheme;
   Session := Self.CreateAction as TIdSipSession;
@@ -7716,7 +7725,7 @@ var
   Session:    TIdSipSession;
 begin
   Self.MarkSentRequestCount;
-  Self.Dispatcher.Transport.TransportType := sttTCP;
+  Self.Dispatcher.Transport.TransportType := TcpTransport;
   Self.Destination.Address.Scheme := SipsScheme;
 
   Session := Self.CreateAction as TIdSipSession;
@@ -7734,7 +7743,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Self.Dispatcher.Transport.TransportType := sttTCP;
+  Self.Dispatcher.Transport.TransportType := TcpTransport;
 
   Session := Self.CreateAction as TIdSipSession;
 

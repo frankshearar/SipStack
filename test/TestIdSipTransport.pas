@@ -1022,10 +1022,11 @@ end;
 
 procedure TestTIdSipTransport.TestTransportFor;
 begin
-  CheckEquals(TIdSipTCPTransport,  TIdSipTransport.TransportFor(sttTCP),  'TCP');
-  CheckEquals(TIdSipTLSTransport,  TIdSipTransport.TransportFor(sttTLS),  'TLS');
-  CheckEquals(TIdSipUDPTransport,  TIdSipTransport.TransportFor(sttUDP),  'UDP');
-  CheckEquals(TIdSipSCTPTransport, TIdSipTransport.TransportFor(sttSCTP), 'SCTP');
+  // TODO: use transport registry
+  CheckEquals(TIdSipTCPTransport,  TIdSipTransport.TransportFor(TcpTransport),  'TCP');
+  CheckEquals(TIdSipTLSTransport,  TIdSipTransport.TransportFor(TlsTransport),  'TLS');
+  CheckEquals(TIdSipUDPTransport,  TIdSipTransport.TransportFor(UdpTransport),  'UDP');
+  CheckEquals(TIdSipSCTPTransport, TIdSipTransport.TransportFor(SctpTransport), 'SCTP');
 end;
 
 procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
@@ -1382,7 +1383,9 @@ end;
 
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
-  Check(Self.HighPortTransport.GetTransportType = sttTCP, 'Transport type');
+  CheckEquals(TcpTransport,
+              Self.HighPortTransport.GetTransportType,
+              'Transport type');
 end;
 
 procedure TestTIdSipTCPTransport.TestIsReliable;
@@ -1477,7 +1480,9 @@ end;
 
 procedure TestTIdSipTLSTransport.TestGetTransportType;
 begin
-  Check(sttTLS = Self.HighPortTransport.GetTransportType, 'Transport type');
+  CheckEquals(TlsTransport,
+              Self.HighPortTransport.GetTransportType,
+              'Transport type');
 end;
 
 procedure TestTIdSipTLSTransport.TestIsReliable;
@@ -1713,7 +1718,9 @@ end;
 
 procedure TestTIdSipUDPTransport.TestGetTransportType;
 begin
-  Check(Self.HighPortTransport.GetTransportType = sttUDP, 'Transport type');
+  CheckEquals(UdpTransport,
+              Self.HighPortTransport.GetTransportType,
+              'Transport type');
 end;
 
 procedure TestTIdSipUDPTransport.TestIsReliable;

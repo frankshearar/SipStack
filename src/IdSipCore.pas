@@ -2595,9 +2595,6 @@ begin
     Result.CSeq.SequenceNo := Self.NextInitialSequenceNo;
 
     Self.AddLocalHeaders(Result);
-
-    if Dest.Address.HasParameter(TransportParam) then
-      Result.LastHop.Transport := StrToTransport(Dest.Address.ParamValue(TransportParam));
   except
     FreeAndNil(Result);
 
@@ -2912,9 +2909,11 @@ begin
 
 //  Transport := TransportParamUDP;
 
-  OutboundRequest.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' ' + Self.HostName;
-
-  OutboundRequest.LastHop.Branch := Self.NextBranch;
+  OutboundRequest.AddHeader(ViaHeaderFull);
+  OutboundRequest.LastHop.SipVersion := SipVersion;
+  OutboundRequest.LastHop.Transport  := ParamToTransport(Transport);
+  OutboundRequest.LastHop.SentBy     := Self.HostName;
+  OutboundRequest.LastHop.Branch     := Self.NextBranch;
 
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;

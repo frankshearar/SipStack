@@ -340,8 +340,8 @@ end;
 procedure TestTIdSipParser.TestIsTransport;
 begin
   Check(not TIdSipParser.IsTransport(''),     '''''');
-  Check(not TIdSipParser.IsTransport('a'),     'a');
   Check(not TIdSipParser.IsTransport('tcp;'), 'tcp;');
+  Check(    TIdSipParser.IsTransport('a'),     'a');  
   Check(    TIdSipParser.IsTransport('tcp'),  'tcp');
   Check(    TIdSipParser.IsTransport('TCP'),  'TCP');
   Check(    TIdSipParser.IsTransport('udp'),  'udp');
@@ -572,7 +572,7 @@ begin
     Via0 := Req.Path.Items[0] as TIdSipViaHeader;
     CheckEquals('Via',              Via0.Name,             'LastHop.Name');
     CheckEquals('SIP/2.0',          Via0.SipVersion,       'LastHop.SipVersion');
-    Check      (sttTCP =            Via0.Transport,        'LastHop.Transport');
+    CheckEquals(TcpTransport,       Via0.Transport,        'LastHop.Transport');
     CheckEquals('gw1.leo-ix.org',   Via0.SentBy,           'LastHop.SentBy');
     CheckEquals(5061,               Via0.Port,             'LastHop.Port');
     CheckEquals('z9hG4bK776asdhds', Via0.Params['branch'], 'LastHop.Params[''branch'']');
@@ -586,7 +586,7 @@ begin
     Via1 := Req.Path.Items[1] as TIdSipViaHeader;
     CheckEquals('Via',                   Via1.Name,             'Via1.Name');
     CheckEquals('SIP/3.0',               Via1.SipVersion,       'Via1.SipVersion');
-    Check      (sttTLS =                 Via1.Transport,        'Via1.Transport');
+    CheckEquals(TlsTransport,            Via1.Transport,        'Via1.Transport');
     CheckEquals('gw5.cust1.leo_ix.org',  Via1.SentBy,           'Via1.SentBy');
     CheckEquals(IdPORT_SIPS,             Via1.Port,             'Via1.Port');
     CheckEquals('z9hG4bK776aheh',        Via1.Params['branch'], 'Via1.Params[''branch'']');
@@ -773,7 +773,7 @@ begin
 
   CheckEquals(1,                  Msg.Path.Length,              'Path.Length');
   CheckEquals('SIP/2.0',          Msg.LastHop.SipVersion,       'LastHop.SipVersion');
-  Check      (sttTCP =            Msg.LastHop.Transport,        'LastHop.Transport');
+  CheckEquals(TcpTransport,       Msg.LastHop.Transport,        'LastHop.Transport');
   CheckEquals('gw1.leo-ix.org',   Msg.LastHop.SentBy,           'LastHop.SentBy');
   CheckEquals(IdPORT_SIP,         Msg.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.LastHop.Params['branch'], 'LastHop.Params[''branch'']');

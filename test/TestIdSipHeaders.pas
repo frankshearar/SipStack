@@ -25,8 +25,6 @@ type
     procedure TestReadDigit;
     procedure TestStrToQValue;
     procedure TestStrToQValueDef;
-    procedure TestStrToTransport;
-    procedure TestTransportToStr;
     procedure TestWithoutFirstAndLastChars;
   end;
 
@@ -894,29 +892,6 @@ end;
 procedure TestFunctions.TestStrToQValueDef;
 begin
   CheckEquals(666, StrToQValueDef('', 666), '''''');
-end;
-
-procedure TestFunctions.TestStrToTransport;
-begin
-  Check(sttSCTP = StrToTransport('SCTP'), 'SCTP');
-  Check(sttTCP  = StrToTransport('TCP'),  'TCP');
-  Check(sttTLS  = StrToTransport('TLS'),  'TLS');
-  Check(sttUDP  = StrToTransport('UDP'),  'UDP');
-
-  try
-    StrToTransport('not a transport');
-    Fail('Failed to bail out on an unknown transport type');
-  except
-    on EConvertError do;
-  end;
-end;
-
-procedure TestFunctions.TestTransportToStr;
-var
-  T: TIdSipTransportType;
-begin
-  for T := Low(TIdSipTransportType) to High(TIdSipTransportType) do
-    Check(T = StrToTransport(TransportToStr(T)), 'Ord(T) = ' + IntToStr(Ord(T)));
 end;
 
 procedure TestFunctions.TestWithoutFirstAndLastChars;
@@ -3655,12 +3630,12 @@ begin
     Self.V.SentBy     := '127.0.0.1';
     Self.V.Port       := 5060;
     Self.V.SipVersion := 'SIP/2.0';
-    Self.V.Transport  := sttSCTP;
+    Self.V.Transport  := SctpTransport;
 
     Hop2.SentBy     := '127.0.0.1';
     Hop2.Port       := 5060;
     Hop2.SipVersion := 'SIP/2.0';
-    Hop2.Transport  := sttSCTP;
+    Hop2.Transport  := SctpTransport;
 
     Check(V.Equals(Hop2), 'V.Equals(Hop2)');
     Check(Hop2.Equals(V), 'Hop2.Equals(V)');
@@ -3686,7 +3661,7 @@ begin
     Check(Self.V.Equals(Hop2), 'V.Equals(Hop2); SipVersion reset');
     Check(Hop2.Equals(Self.V), 'Hop2.Equals(V); SipVersion reset');
 
-    Self.V.Transport := sttTCP;
+    Self.V.Transport := TcpTransport;
     Check(not Self.V.Equals(Hop2), 'V.Equals(Hop2); Transport');
     Check(not Hop2.Equals(Self.V), 'Hop2.Equals(V); Transport');
   finally
@@ -3778,35 +3753,35 @@ begin
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '1: Parameters');
   CheckEquals(IdPORT_SIP,    Self.V.Port,           '1: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '1: SipVersion');
-  Check      (sttUDP =       Self.V.Transport,      '1: Transport');
+  CheckEquals(UdpTransport,  Self.V.Transport,      '1: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
   CheckEquals('',              Self.V.ParamsAsString, '2: Parameters');
   CheckEquals(IdPORT_SIPS,     Self.V.Port,           '2: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '2: SipVersion');
-  Check      (sttTLS =         Self.V.Transport,      '2: Transport');
+  CheckEquals(TlsTransport,    Self.V.Transport,      '2: Transport');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1:666;tag=heehee';
   CheckEquals('127.0.0.1',   Self.V.SentBy,         '3: SentBy');
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '3: Parameters');
   CheckEquals(666,           Self.V.Port,           '3: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '3: SipVersion');
-  Check      (sttUDP =       Self.V.Transport,      '3: Transport');
+  CheckEquals(UdpTransport,  Self.V.Transport,      '3: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1:666;haha=heehee';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '4: SentBy');
   CheckEquals(';haha=heehee',  Self.V.ParamsAsString, '4: Parameters');
   CheckEquals(666,             Self.V.Port,           '4: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '4: SipVersion');
-  Check      (sttTLS =         Self.V.Transport,      '4: Transport');
+  CheckEquals(TlsTransport,    Self.V.Transport,      '4: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1:666 '#13#10' ; haha=heehee';
   CheckEquals('127.0.0.1',     Self.V.SentBy,         '5: SentBy');
   CheckEquals(';haha=heehee',  Self.V.ParamsAsString, '5: Parameters');
   CheckEquals(666,             Self.V.Port,           '5: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '5: SipVersion');
-  Check      (sttTLS =         Self.V.Transport,      '5: Transport');
+  CheckEquals(TlsTransport,    Self.V.Transport,      '5: Transport');
 end;
 
 procedure TestTIdSipViaHeader.TestValueTorture;
@@ -5720,10 +5695,10 @@ begin
 
   Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
 
-  Hop.SentBy       := '127.0.0.1';
+  Hop.SentBy     := '127.0.0.1';
   Hop.Port       := 5060;
   Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttSCTP;
+  Hop.Transport  := SctpTransport;
 
   CheckEquals(1, Self.Path.Length, 'Has no hops after Add');
 
@@ -5731,7 +5706,7 @@ begin
   CheckEquals('127.0.0.1',   Self.Path.LastHop.SentBy,     'SentBy');
   CheckEquals(5060,          Self.Path.LastHop.Port,       'Port');
   CheckEquals('SIP/2.0',     Self.Path.LastHop.SipVersion, 'SipVersion');
-  Check      (sttSCTP =      Self.Path.LastHop.Transport,  'Transport');
+  CheckEquals(SctpTransport, Self.Path.LastHop.Transport,  'Transport');
 end;
 
 procedure TestTIdSipViaPath.TestClear;
