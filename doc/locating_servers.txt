@@ -1,0 +1,165 @@
+Here are flow charts illustrating the three core algorithms of RFC 3263 for stateful entities:
+
+SELECTING A TRANSPORT FOR A REQUEST
+===================================
+
+         Target URI
+             |
+             V
++-----------------------------+            +=========================+
+| URI has a transport param?  |--- yes --->| The transport parameter |
++-----------------------------+            +=========================+
+             |
+             no
+             |
+             V
++-----------------------------+            +=========================+
+|  URI host part numeric ?    |--- yes --->|    TransportFromUri     |
++-----------------------------+            +=========================+
+             |
+             no
+             |
+             V
++-----------------------------+            +=========================+
+|   URI has explicit port?    |--- yes --->|    TransportFromUri     |
++-----------------------------+            +=========================+
+             |
+             no
+             |
+             V
++-----------------------------+            +========================+
+| Lookup NAPTR on URI host    |            | Select a transport you |
+| part. Remove irrelevant     |--- yes --->| like.                  |
+| entries. Any records found? |            +========================+
++-----------------------------+
+             |
+             no
+             |
+             V
++-----------------------------+            +========================+
+| SRV lookups on transports   |            | Select a transport you |
+| you support. Any records    |--- yes --->| like.                  |
+| found?                      |            +========================+
++-----------------------------+
+             |
+             no
+             |
+             V
++=============================+
+|      TransportFromUri       |
++=============================+
+
+
+
+TransportFromUri
+================
+
+  Target URI
+      |
+      V
++------------+            +=====+
+| SIPS URI?  |--- yes --->| TLS |
++------------+            +=====+
+      |
+      no
+      |
+      V
+   +=====+
+   | UDP |
+   +=====+
+
+
+
+SELECTING IP ADDRESSES AND PORTS FOR SENDING REQUESTS
+=====================================================
+   Target URI
+        |
+        V
++-----------------+             +---------------+             +=====================+
+| URI is numeric? | --- yes --->| URI has port? | --- yes --->| Use URI host & port |
++-----------------+             +---------------+             +=====================+
+        |                              |
+        no                             no                     +===========================================+
+        |                              +--------------------->| Use URI host & default port for transport |
+        V                                                     +===========================================+
++-----------------+             +==========================+
+|  URI has port?  | --- yes --->| A/AAAA lookup, with port |
++-----------------+             +==========================+
+        |
+        no
+        |
+        V
++------------------------------+             +-------------------------------+            +==================================+ 
+| Have NAPTR records from 4.1? | --- yes --->| SRV lookups on NAPTR records. | --- yes -->| Iterate over SRV's name records, |
++------------------------------+             | Any records found?            |            | using transport's default port.  |
+        |                                    +-------------------------------+            +==================================+
+        no                                              |
+        |                                               no
+        |                                               |
+        |                                               V
+        |                                    +===============================+
+        |                                    | A/AAAA lookup, with transport |
+        |                                    | default port                  |
+        |                                    +===============================+
+        V
++-------------------------------+             +-------------------------------+            +==================================+ 
+| Transport manually specified? | --- yes --->| SRV lookups on that transport | --- yes -->| Iterate over SRV's name records, |
++-------------------------------+             | Any records found?            |            | using transport's default port.  |
+        |                                     +-------------------------------+            +==================================+
+        no                                              | 
+        |                                               no
+        |                                               |
+        |                                               V
+        |                                    +===============================+
+        |                                    | A/AAAA lookup, with transport |
+        |                                    | default port                  |
+        |                                    +===============================+
+        V
++----------------------------+            +==================================+
+| SRV lookups on transports  |--- yes --->| Iterate over SRV's name records, |
+| you support. Any records   |            | using transport's default port.  |
+| found?                     |            +==================================+
++----------------------------+
+        |
+        no
+        |
+        V
++===============================+
+| A/AAAA lookup, with transport |
+| default port                  |
++===============================+
+
+ELECTING IP ADDRESSES AND PORTS FOR SENDING RESPONSES
+======================================================
+
+sent-by from topmost Via
+           |
+           V
++-------------------------+             +-------------------+            +==========================+
+| sent-by has numeric IP? |--- yes ---> | sent-by has port? |--- yes --->| Use transport from Via + |
++-------------------------+             +-------------------+            | numeric address + port   |
+           |                                      |                      +==========================+
+           no                                     no
+           |                                      |                      +=====================================+
+           |                                      +--------------------->| Use transport from Via + numeric    |
+           V                                                             | address + transport's default port  |
++-------------------------+            +==========================+      +=====================================+
+|    sent-by has port?    |--- yes --->| Use transport from Via + |
++-------------------------+            | A/AAAA lookup, with port |
+           |                           +==========================+
+           no
+           |
+           V
++----------------------------+            +===============================+
+| SRV lookup on sent-by. Any |--- yes --->| Iterate over SRV records; use |
+| records found?             |            | transport from Via +          |
++----------------------------+            | transport's default port      |
+           |                              +===============================+
+           no
+           |
+           V
++===============================+
+| Use transport from Via;       | (NOTE: This step is not in RFC 3263!)
+| A/AAAA lookup, with transport |
+| default port                  |
++===============================+
