@@ -77,6 +77,20 @@ type
     procedure TestWaitForEarliestEvent;
   end;
 
+  TestTIdDebugTimerQueue = class(TTestCase)
+  private
+    Timer:     TIdDebugTimerQueue;
+    WaitEvent: TEvent;
+
+    procedure OnTimer(Sender: TObject);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCount;
+    procedure TestEventAt;
+  end;
+
 const
   ShortTimeout = 10;
   LongTimeout  = 10*ShortTimeout;
@@ -91,6 +105,7 @@ begin
   Result := TTestSuite.Create('IdRTPTimerQueue unit tests');
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdTimerQueue.Suite);
+  Result.AddTest(TestTIdDebugTimerQueue.Suite);
 end;
 
 //******************************************************************************
@@ -505,6 +520,78 @@ begin
   finally
     Self.Lock.Release;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdDebugTimerQueue                                                     *
+//******************************************************************************
+//* TestTIdDebugTimerQueue Public methods **************************************
+
+procedure TestTIdDebugTimerQueue.SetUp;
+begin
+  inherited SetUp;
+
+  Self.WaitEvent := TSimpleEvent.Create;
+  Self.Timer     := TIdDebugTimerQueue.Create(false);
+end;
+
+procedure TestTIdDebugTimerQueue.TearDown;
+begin
+  Self.Timer.Terminate;
+  Self.WaitEvent.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdDebugTimerQueue Private methods *************************************
+
+procedure TestTIdDebugTimerQueue.OnTimer(Sender: TObject);
+begin
+  // Do nothing.
+end;
+
+//* TestTIdDebugTimerQueue Published methods ***********************************
+
+procedure TestTIdDebugTimerQueue.TestCount;
+var
+  I: Integer;
+begin
+  for I := 1 to 10 do begin
+    Self.Timer.AddEvent(1000, Self.OnTimer, nil);
+
+    CheckEquals(I, Self.Timer.EventCount, IntToStr(I) + 'th AddEvent');
+  end;
+end;
+
+procedure TestTIdDebugTimerQueue.TestEventAt;
+var
+  Callback: TNotifyEvent;
+begin
+  Callback := Self.OnTimer;
+
+  try
+    Self.Timer.EventAt(0);
+  except
+    on EListError do;
+  end;
+
+  Self.Timer.AddEvent(1000, Self.OnTimer, nil);
+  Check(Assigned(Self.Timer.EventAt(0)),
+        'EventAt returned nil for an existing event (0)');
+  CheckEquals(TIdNotifyEventWait.ClassName,
+              Self.Timer.EventAt(0).ClassName,
+              'Unexpected event (0)');
+  Check(Self.Timer.EventAt(0).MatchEvent(@Callback),
+        'Wrong timer (0)');
+
+  Self.Timer.AddEvent(1000, Self.WaitEvent, nil);
+  Check(Assigned(Self.Timer.EventAt(1)),
+        'EventAt returned nil for an existing event (1)');
+  CheckEquals(TIdEventWait.ClassName,
+              Self.Timer.EventAt(1).ClassName,
+              'Unexpected event (1)');
+  Check(Self.Timer.EventAt(1).MatchEvent(Self.WaitEvent),
+        'Wrong timer (1)');
 end;
 
 initialization

@@ -60,8 +60,6 @@ type
   //  adds or removes events. Or when something's Terminated me.
   TIdTimerQueue = class(TIdBaseThread)
   private
-    EventList: TObjectList;
-    Lock:      TCriticalSection;
     WaitEvent: TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
@@ -73,6 +71,9 @@ type
     function  ShortestWait: Cardinal;
     procedure TriggerEarliestEvent;
   protected
+    EventList: TObjectList;
+    Lock:      TCriticalSection;
+
     procedure Run; override;
   public
     constructor Create(ACreateSuspended: Boolean = True); override;
@@ -89,6 +90,12 @@ type
     procedure RemoveEvent(Event: TEvent); overload;
     procedure RemoveEvent(Event: TNotifyEvent); overload;
     procedure Terminate; override;
+  end;
+
+  TIdDebugTimerQueue = class(TIdTimerQueue)
+  public
+    function EventAt(Index: Integer): TIdWait;
+    function EventCount: Integer;
   end;
 
 // Math and conversion functions
@@ -362,6 +369,31 @@ begin
     end;
     
     Self.WaitEvent.ResetEvent;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+//******************************************************************************
+//* TIdDebugTimerQueue                                                         *
+//******************************************************************************
+//* TIdDebugTimerQueue Public methods ******************************************
+
+function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
+begin
+  Self.Lock.Acquire;
+  try
+    Result := (Self.EventList[Index]) as TIdWait;
+  finally
+    Self.Lock.Release;
+  end;
+end;
+
+function TIdDebugTimerQueue.EventCount: Integer;
+begin
+  Self.Lock.Acquire;
+  try
+    Result := Self.EventList.Count;
   finally
     Self.Lock.Release;
   end;
