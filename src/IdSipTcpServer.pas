@@ -73,15 +73,15 @@ type
     procedure UnlockList;
   end;
 
-  // ReadBodyTimeout = 0 implies that we never timeout the body wait. We do not
+  // ReadBodyTimeout = -1 implies that we never timeout the body wait. We do not
   // recommend this. ReadBodyTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
     ConnectionMap:      TIdSipConnectionTableLock;
-    fConnectionTimeout: Cardinal;
-    fReadBodyTimeout:   Cardinal;
+    fConnectionTimeout: Integer;
+    fReadBodyTimeout:   Integer;
     Notifier:           TIdSipServerNotifier;
 
     procedure AddConnection(Connection: TIdTCPConnection;
@@ -117,14 +117,17 @@ type
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure SendResponse(Response: TIdSipResponse);
   published
-    property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
+    property ConnectionTimeout: Integer read fConnectionTimeout write fConnectionTimeout;
     property DefaultPort default IdPORT_SIP;
-    property ReadBodyTimeout:   Cardinal read fReadBodyTimeout write fReadBodyTimeout;
+    property ReadBodyTimeout:   Integer read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
 
 implementation
+
+uses
+  IdException;
 
 //******************************************************************************
 //* TIdSipConnectionTableEntry                                                 *
@@ -356,16 +359,19 @@ function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
   Msg:          TIdSipMessage;
   Parser:       TIdSipParser;
-  Reason:       String;
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStream;
+  ConnTimedOut: Boolean;
 begin
-  Result := true;
+  ConnTimedOut := false;
+  Result       := true;
 
   ReceivedFrom.PeerIP   := AThread.Connection.Socket.Binding.PeerIP;
   ReceivedFrom.PeerPort := AThread.Connection.Socket.Binding.PeerPort;
 
   while AThread.Connection.Connected do begin
+    AThread.Connection.ReadTimeout := Self.ReadBodyTimeout;
+
     S := Self.ReadMessage(AThread.Connection);
     try
       Parser := TIdSipParser.Create;
@@ -376,32 +382,26 @@ begin
         try
           Msg := Parser.ParseAndMakeMessage;
           try
-            if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
-              Msg.ContentLength := 0;
-
-            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
-
-            if Msg.HasInvalidSyntax then begin
-              Reason := Msg.ParseFailReason;
-
-              Self.ReturnBadRequest(AThread.Connection,
-                                    Msg as TIdSipRequest,
-                                    Reason);
-              AThread.Connection.DisconnectSocket;
-
-              Self.Notifier.NotifyListenersOfMalformedMessage(StreamToStr(S),
-                                                              Reason);
-            end
-            else begin
-              if Msg.IsRequest then begin
-                Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-                Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
-                                                       ReceivedFrom);
-              end
-              else
-                Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
-                                                        ReceivedFrom);
+            try
+              Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+            except
+              on EIdReadTimeout do
+                ConnTimedOut := true;
+              on EIdConnClosedGracefully do
+                ConnTimedOut := true;
             end;
+
+            if Msg.IsRequest then begin
+              // If Self.ReadBody closes the connection, we don't want to AddConnection!
+              if not ConnTimedOut then
+                Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+                
+              Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
+                                                     ReceivedFrom);
+            end
+            else
+              Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
+                                                      ReceivedFrom);
           finally
             Msg.Free;
           end;
@@ -460,9 +460,11 @@ function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection;
 var
   Timer: TIdSipTcpConnectionCutter;
 begin
+{
   if (Self.ReadBodyTimeout > 0) then begin
     Timer := TIdSipTcpConnectionCutter.Create(true);
     try
+      Timer.Connection      := Connection;
       Timer.FreeOnTerminate := true;
       Timer.OnException     := Self.OnException;
       Timer.OnTimer         := Self.OnReadBodyTimeout;
@@ -471,7 +473,7 @@ begin
       Timer.Free;
     end;
   end;
-
+}
   Result := Connection.ReadString(Message.ContentLength);
 end;
 

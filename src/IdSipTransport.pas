@@ -75,6 +75,8 @@ type
                                ReceivedFrom: TIdSipConnectionBindings); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
+    procedure ReturnBadRequest(Request: TIdSipRequest;
+                               Target: TIdSipConnectionBindings); virtual; abstract;
     procedure SendRequest(R: TIdSipRequest); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
@@ -185,6 +187,8 @@ type
     function  GetPort: Cardinal; override;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings); override;
+    procedure ReturnBadRequest(Request: TIdSipRequest;
+                               Target: TIdSipConnectionBindings); override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
   public
@@ -385,11 +389,7 @@ end;
 procedure TIdSipTransport.Send(Msg: TIdSipMessage);
 begin
   try
-    // What dork thought of using Integer for Length? (a) it doesn't work
-    // for strings longer than 2B (don't get me started!), and (b) what does a
-    // string with length -1 look like?
-    // Hence the stupid (and erroneous) typecast.
-    Assert(Msg.ContentLength = Cardinal(Length(Msg.Body)),
+    Assert(Msg.ContentLength = Length(Msg.Body),
            'Content-Length MUST equal length of body');
     Msg.Accept(Self);
   except
@@ -531,6 +531,13 @@ end;
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
+  if Request.HasInvalidSyntax then begin
+    Self.NotifyTransportListenersOfRejectedMessage(Request.AsString,
+                                                   Request.ParseFailReason);
+    Self.ReturnBadRequest(Request, ReceivedFrom);
+    Exit;
+  end;
+
   // cf. RFC 3261 section 18.2.1
   if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
     or (Request.LastHop.SentBy <> ReceivedFrom.PeerIP) then
@@ -545,6 +552,13 @@ end;
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
+  if Response.HasInvalidSyntax then begin
+    Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
+                                                   Response.ParseFailReason);
+    // Drop the malformed response.                                               
+    Exit;
+  end;
+
   // cf. RFC 3261 section 18.1.2
 
   if Self.SentByIsRecognised(Response.LastHop) then begin
@@ -958,6 +972,23 @@ begin
   end;
 
   inherited OnReceiveRequest(Request, ReceivedFrom);
+end;
+
+procedure TIdSipUDPTransport.ReturnBadRequest(Request: TIdSipRequest;
+                                              Target: TIdSipConnectionBindings);
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipResponse.InResponseTo(Request, SIPBadRequest);
+  try
+    Res.StatusText := Request.ParseFailReason;
+
+    Self.Transport.Send(Target.PeerIP,
+                        Target.PeerPort,
+                        Res.AsString);
+  finally
+    Res.Free;
+  end;
 end;
 
 procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest);

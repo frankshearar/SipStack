@@ -16,7 +16,10 @@ uses
   IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
-  TIdSipTransportSubclass = class(TIdSipTcpTransport)   
+  TIdSipTransportSubclass = class(TIdSipTcpTransport)
+  protected
+    procedure ReturnBadRequest(Request: TIdSipRequest;
+                               Target: TIdSipConnectionBindings); override;
   public
     procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
     procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
@@ -74,6 +77,7 @@ type
     CheckingResponseEvent: TTestIdSipResponseEvent;
     HighPortTransport:     TIdSipTransport;
     LowPortTransport:      TIdSipTransport;
+    Parser:                TIdSipParser;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
     RecvdRequest:          TIdSipRequest;
@@ -88,12 +92,18 @@ type
                                       R: TIdSipResponse);
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
                                                     R: TIdSipResponse);
+    procedure CheckForBadRequest(Sender: TObject;
+                                 R: TIdSipResponse);
+    procedure CheckForSIPVersionNotSupported(Sender: TObject;
+                                             R: TIdSipResponse);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                                     Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject;
                                            Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
                                            Request: TIdSipRequest);
+    procedure CheckResponse(Response: TIdSipResponse;
+                            ExpectedStatusCode: Cardinal);
     procedure CheckSendRequestFromNonStandardPort(Sender: TObject;
                                                   R: TIdSipRequest);
     procedure CheckSendRequestTopVia(Sender: TObject;
@@ -119,8 +129,11 @@ type
                                 const Reason: String);
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest);
+    procedure SendFromLowTransport(Msg: String); virtual;
     procedure SendMessage(Msg: String); virtual; abstract;
     procedure SendOkResponse(Transport: TIdSipTransport);
+    procedure SetEvent(Sender: TObject;
+                       R: TIdSipResponse);
     function  TransportType: TIdSipTransportClass; virtual;
   public
     procedure SetUp; override;
@@ -144,6 +157,15 @@ type
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
     procedure TestSendResponseWithReceivedParam;
+    procedure TestTortureTest16;
+    procedure TestTortureTest17;
+    procedure TestTortureTest19;
+    procedure TestTortureTest21;
+    procedure TestTortureTest22;
+    procedure TestTortureTest23;
+    procedure TestTortureTest35;
+    procedure TestTortureTest40;
+    procedure TestTortureTest41;
     procedure TestUseRport;
   end;
 
@@ -357,6 +379,13 @@ begin
   inherited NotifyTransportSendingListeners(Response);
 end;
 
+//* TIdSipTransportSubclass Protected methods **********************************
+
+procedure TIdSipTransportSubclass.ReturnBadRequest(Request: TIdSipRequest;
+                                                   Target: TIdSipConnectionBindings);
+begin
+end;
+
 //******************************************************************************
 //* TestTIdSipTransportEventNotifications                                      *
 //******************************************************************************
@@ -567,6 +596,8 @@ begin
   Self.LowPortTransport.Port     := Self.DefaultPort;
   Self.LowPortTransport.Start;
 
+  Self.Parser := TIdSipParser.Create;
+
   Self.Request  := TIdSipTestResources.CreateLocalLoopRequest;
   Self.Request.LastHop.SentBy  := Self.LowPortTransport.Address;
   Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
@@ -588,6 +619,7 @@ begin
   Self.RecvdRequest.Free;
   Self.Response.Free;
   Self.Request.Free;
+  Self.Parser.Free;
 
   Self.LowPortTransport.Stop;
   Self.HighPortTransport.Stop;
@@ -637,6 +669,18 @@ begin
   Self.ReceivedResponse := true;
 end;
 
+procedure TestTIdSipTransport.CheckForBadRequest(Sender: TObject;
+                                                 R: TIdSipResponse);
+begin
+  Self.CheckResponse(R, SIPBadRequest);
+end;
+
+procedure TestTIdSipTransport.CheckForSIPVersionNotSupported(Sender: TObject;
+                                                             R: TIdSipResponse);
+begin
+  Self.CheckResponse(R, SIPSIPVersionNotSupported);
+end;
+
 procedure TestTIdSipTransport.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                                                     Request: TIdSipRequest);
 begin
@@ -668,6 +712,22 @@ begin
           Self.HighPortTransport.ClassName
         + ': Received param appended by transport layer');
 
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTransport.CheckResponse(Response: TIdSipResponse;
+                                            ExpectedStatusCode: Cardinal);
+begin
+  try
+    CheckEquals(ExpectedStatusCode,
+                Response.StatusCode,
+                'Wrong Status-Code');
     Self.ThreadEvent.SetEvent;
   except
     on E: Exception do begin
@@ -764,7 +824,7 @@ begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
       Self.ExceptionMessage := E.Message;
     end;
-  end;          
+  end;
 end;
 
 function TestTIdSipTransport.DefaultPort: Cardinal;
@@ -815,11 +875,31 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.SendFromLowTransport(Msg: String);
+var
+  Req: TIdSipRequest;
+begin
+  if (Pos('%s', Msg) > 0) then
+    Msg := StringReplace(Msg,
+                         '%s',
+                         Self.HighPortTransport.Address
+                       + ':'
+                       + IntToStr(Self.HighPortTransport.Port), [rfReplaceAll]);
+
+  Self.SendMessage(Msg);
+end;
+
 procedure TestTIdSipTransport.SendOkResponse(Transport: TIdSipTransport);
 begin
   Self.Response.StatusCode := SIPOK;
 
   Transport.Send(Self.Response);
+end;
+
+procedure TestTIdSipTransport.SetEvent(Sender: TObject;
+                                       R: TIdSipResponse);
+begin
+  Self.ThreadEvent.SetEvent;
 end;
 
 function TestTIdSipTransport.TransportType: TIdSipTransportClass;
@@ -1049,6 +1129,11 @@ var
   HighPortListener: TIdSipTestTransportListener;
   LowPortListener:  TIdSipTestTransportListener;
 begin
+  // Send a response from HighPortTransport to LowPortTransport. Add listeners
+  // to the two transports and check that only LowPortTransport received the
+  // response.
+  Self.CheckingResponseEvent := Self.SetEvent;
+
   HighPortListener := TIdSipTestTransportListener.Create;
   try
     Self.HighPortTransport.AddTransportListener(HighPortListener);
@@ -1062,7 +1147,7 @@ begin
 
           // It's not perfect, but anyway. We need to wait long enough for
           // LowPortTransport to get its response.
-          IdGlobal.Sleep(500);
+          Self.WaitForSignaled;
 
           Check(LowPortListener.ReceivedResponse
                 and not HighPortListener.ReceivedResponse,
@@ -1083,6 +1168,96 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransport.TestTortureTest16;
+begin
+  // Content-Length much larger than message body
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest16);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest17;
+begin
+  // Negative Content-Length
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest17);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest19;
+begin
+  // Unterminated quote in To
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest19);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest21;
+begin
+  // Request-URI in <>
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest21);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest22;
+begin
+  // Illegal LWS within the Request-URI.
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest22);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest23;
+begin
+  // Illegal >1 SP between elements of the Request-Line.
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest23);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest35;
+begin
+  // Illegal >1 SP between elements of the Request-Line.
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest35);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest40;
+begin
+  // Illegal >1 SP between elements of the Request-Line.
+
+  Self.CheckingResponseEvent := Self.CheckForBadRequest;
+  Self.SendFromLowTransport(TortureTest40);
+
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestTortureTest41;
+begin
+  // Unknown SIP-Version.
+
+  Self.CheckingResponseEvent := Self.CheckForSIPVersionNotSupported;
+  Self.SendFromLowTransport(TortureTest40);
+
+  Self.WaitForSignaled;
+end;
+
 procedure TestTIdSipTransport.TestUseRport;
 begin
   Self.ExceptionMessage := 'Waiting for rport request';
@@ -1091,7 +1266,6 @@ begin
   Self.LowPortTransport.Send(Self.Request);
 
   Self.WaitForSignaled;
-
 end;
 
 //******************************************************************************
