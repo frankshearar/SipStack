@@ -147,6 +147,7 @@ type
     procedure TestInResponseToSipsRequestUri;
     procedure TestInResponseToTryingWithTimestamps;
     procedure TestInResponseToWithContact;
+    procedure TestIsAuthenticationChallenge;
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
@@ -2101,6 +2102,42 @@ begin
     end;
   finally
     P.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsAuthenticationChallenge;
+var
+  I: Integer;
+begin
+  for I := 100 to 400 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsAuthenticationChallenge,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  Self.Response.StatusCode := 401;
+  Check(Self.Response.IsAuthenticationChallenge,
+        IntToStr(Self.Response.StatusCode)
+      + ' ' + Self.Response.StatusText);
+
+  for I := 402 to 406 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsAuthenticationChallenge,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  Self.Response.StatusCode := 407;
+  Check(Self.Response.IsAuthenticationChallenge,
+        IntToStr(Self.Response.StatusCode)
+      + ' ' + Self.Response.StatusText);
+
+  for I := 408 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsAuthenticationChallenge,
+          IntToStr(I)
+        + ' ' + Self.Response.StatusText);
   end;
 end;
 

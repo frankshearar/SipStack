@@ -939,6 +939,7 @@ type
     function  HasAuthenticationInfo: Boolean;
     function  HasProxyAuthenticate: Boolean;
     function  HasWWWAuthenticate: Boolean;
+    function  IsAuthenticationChallenge: Boolean;
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
     function  IsProvisional: Boolean;
@@ -5369,6 +5370,12 @@ end;
 function TIdSipResponse.HasWWWAuthenticate: Boolean;
 begin
   Result := Self.HasHeader(WWWAuthenticateHeader);
+end;
+
+function TIdSipResponse.IsAuthenticationChallenge: Boolean;
+begin
+  Result := (Self.StatusCode = SIPUnauthorized)
+         or (Self.StatusCode = SIPProxyAuthenticationRequired);
 end;
 
 function TIdSipResponse.IsFinal: Boolean;
