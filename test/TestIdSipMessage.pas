@@ -40,8 +40,11 @@ type
     procedure TestClearHeaders;
     procedure TestFirstContact;
     procedure TestFirstHeader;
+    procedure TestHasExpiry;
     procedure TestHeaderCount;
     procedure TestLastHop;
+    procedure TestMinimumExpiry;
+    procedure TestMinimumExpiryNoExpires;
     procedure TestReadBody;
     procedure TestReadBodyWithZeroContentLength;
     procedure TestRemoveHeader;
@@ -390,6 +393,28 @@ begin
         'Wrong result returned for first Route of two');
 end;
 
+procedure TestTIdSipMessage.TestHasExpiry;
+begin
+  Self.Msg.ClearHeaders;
+  Check(not Self.Msg.HasExpiry, 'No headers');
+
+  Self.Msg.AddHeader(ExpiresHeader);
+  Check(Self.Msg.HasExpiry, 'Expires header');
+
+  Self.Msg.ClearHeaders;
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org';
+  Check(not Self.Msg.HasExpiry,
+        'Contact with no Expires parameter or Expires header');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org;expires=10';
+  Check(Self.Msg.HasExpiry,
+        'No Expires header and Contact with Expires parameter');
+
+  Self.Msg.AddHeader(ExpiresHeader);
+  Check(Self.Msg.HasExpiry,
+        'Expires header and Contact with Expires parameter');
+end;
+
 procedure TestTIdSipMessage.TestHeaderCount;
 begin
   Self.Msg.ClearHeaders;
@@ -405,6 +430,41 @@ begin
 
   Self.Msg.AddHeader(ViaHeaderFull);
   Check(Self.Msg.LastHop = Self.Msg.Path.LastHop, 'Unexpected return');
+end;
+
+procedure TestTIdSipMessage.TestMinimumExpiry;
+var
+  Expires: TIdSipExpiresHeaders;
+begin
+  Self.Msg.ClearHeaders;
+  CheckEquals(0, Self.Msg.MinimumExpiry, 'No headers');
+
+  Self.Msg.AddHeader(ExpiresHeader).Value := '10';
+  CheckEquals(10, Self.Msg.MinimumExpiry, 'An Expiry header');
+
+  Self.Msg.AddHeader(ExpiresHeader).Value := '9';
+  CheckEquals(9, Self.Msg.MinimumExpiry, 'Two Expiry headers');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org';
+  CheckEquals(9, Self.Msg.MinimumExpiry, 'Two Expiry headers + Contact');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org;expires=10';
+  CheckEquals(9, Self.Msg.MinimumExpiry, 'Two Expiry headers + two Contacts');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org;expires=8';
+  CheckEquals(8, Self.Msg.MinimumExpiry, 'Two Expiry headers + three Contacts');
+end;
+
+procedure TestTIdSipMessage.TestMinimumExpiryNoExpires;
+begin
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org;expires=10';
+  CheckEquals(10, Self.Msg.MinimumExpiry, 'One Contact');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org;expires=8';
+  CheckEquals(8, Self.Msg.MinimumExpiry, 'Two Contacts');
+
+  Self.Msg.AddHeader(ContactHeaderFull).Value := 'sip:case@fried.neurons.org;expires=22';
+  CheckEquals(8, Self.Msg.MinimumExpiry, 'Three Contacts');
 end;
 
 procedure TestTIdSipMessage.TestReadBody;

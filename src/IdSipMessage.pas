@@ -32,6 +32,9 @@ type
     function  GetCSeq: TIdSipCSeqHeader;
     function  GetFrom: TIdSipFromHeader;
     function  GetTo: TIdSipToHeader;
+    function  Minimum(A, B: Cardinal): Cardinal;
+    function  MinimumContactExpiry: Cardinal;
+    function  MinimumExpiresHeader: Cardinal;
     procedure SetCallID(const Value: String);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
     procedure SetContentLength(Value: Cardinal);
@@ -55,8 +58,10 @@ type
     procedure ClearHeaders;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
+    function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
-    function  HeaderCount: Integer;    
+    function  HeaderCount: Integer;
+    function  MinimumExpiry: Cardinal;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
@@ -413,6 +418,26 @@ begin
   Result := Self.Headers[HeaderName];
 end;
 
+function TIdSipMessage.HasExpiry: Boolean;
+var
+  Contacts: TIdSipContacts;
+begin
+  Result := Self.HasHeader(ExpiresHeader);
+
+  if not Result then begin
+    Contacts := TIdSipContacts.Create(Self.Headers);
+    try
+      Contacts.First;
+      while Contacts.HasNext and not Result do begin
+        Result := Result or Contacts.CurrentHeader.HasParam(ExpiresParam);
+        Contacts.Next;
+      end;
+    finally
+      Contacts.Free;
+    end;
+  end;
+end;
+
 function TIdSipMessage.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.Headers.HasHeader(HeaderName);
@@ -421,6 +446,16 @@ end;
 function TIdSipMessage.HeaderCount: Integer;
 begin
   Result := Self.Headers.Count;
+end;
+
+function TIdSipMessage.MinimumExpiry: Cardinal;
+begin
+  if not Self.HasExpiry then
+    Result := 0
+  else begin
+    Result := Self.Minimum(Self.MinimumContactExpiry,
+                           Self.MinimumExpiresHeader)
+  end;
 end;
 
 function TIdSipMessage.LastHop: TIdSipViaHeader;
@@ -495,6 +530,56 @@ end;
 function TIdSipMessage.GetTo: TIdSipToHeader;
 begin
   Result := Self.FirstHeader(ToHeaderFull) as TIdSipToHeader;
+end;
+
+function TIdSipMessage.Minimum(A, B: Cardinal): Cardinal;
+begin
+  // We can't use Min() because that takes two Integers.
+  if (A < B) then
+    Result := A
+  else
+    Result := B;
+end;
+
+function TIdSipMessage.MinimumContactExpiry: Cardinal;
+var
+  Contacts: TIdSipContacts;
+begin
+  Result := High(Result);
+  Contacts := TIdSipContacts.Create(Self.Headers);
+  try
+    if not Contacts.IsEmpty then begin
+      Contacts.First;
+
+      while Contacts.HasNext do begin
+        if Contacts.CurrentContact.WillExpire then
+          Result := Self.Minimum(Result, Contacts.CurrentContact.Expires);
+        Contacts.Next;
+      end;
+    end;
+  finally
+    Contacts.Free;
+  end;
+end;
+
+function TIdSipMessage.MinimumExpiresHeader: Cardinal;
+var
+  Expires: TIdSipExpiresHeaders;
+begin
+  Result := High(Result);
+  Expires := TIdSipExpiresHeaders.Create(Self.Headers);
+  try
+    if not Expires.IsEmpty then begin
+      Expires.First;
+
+      while Expires.HasNext do begin
+        Result := Self.Minimum(Result, Expires.CurrentExpires);
+        Expires.Next;
+      end;
+    end;
+  finally
+    Expires.Free;
+  end;
 end;
 
 procedure TIdSipMessage.SetCallID(const Value: String);
