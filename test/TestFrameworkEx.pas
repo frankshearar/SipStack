@@ -122,7 +122,7 @@ end;
 
 procedure TThreadingTestCase.WaitForSignaled;
 begin
-  Self.WaitForSignaled(Self.ThreadEvent);
+  Self.WaitForSignaled(Self.ThreadEvent, Self.ExceptionMessage);
 end;
 
 procedure TThreadingTestCase.WaitForSignaled(Event: TEvent);
