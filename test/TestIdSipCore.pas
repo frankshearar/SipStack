@@ -4325,7 +4325,7 @@ begin
 
   Check(Response.HasHeader(WarningHeader),
         'No Warning header');
-  CheckEquals(Self.Core.Hostname + ':5060',
+  CheckEquals(Self.Core.Hostname,
               Response.FirstWarning.Agent,
               'Warning warn-agent');
 end;
