@@ -1323,7 +1323,7 @@ function DateTimeToNTPSeconds(DT: TDateTime): Cardinal;
 var
   Days: Cardinal;
 begin
-  if (DT < 2) then
+  if (DT < JanOne1900) then
     raise EConvertError.Create(NTPNegativeTimeError);
 
   Days := Trunc(DT) - JanOne1900;
@@ -1337,7 +1337,7 @@ end;
 // timestamp?
 function DateTimeToNTPTimestamp(DT: TDateTime): TIdNTPTimestamp;
 begin
-  if (DT < 2) then
+  if (DT < JanOne1900) then
     raise EConvertError.Create(NTPNegativeTimeError);
 
   Result.IntegerPart    := DateTimeToNTPSeconds(DT);
