@@ -1026,7 +1026,7 @@ begin
 
   UTF8 := #$E6#$97#$A5#$E6#$9C#$AC#$E8#$AA#$9E;
   UTF16 := WideChar($65E5);
-  UTF16 := UTF16 + WideChar($672C) +WideChar($8A9E);
+  UTF16 := UTF16 + WideChar($672C) + WideChar($8A9E);
   CheckEqualsW(UTF8,
                UTF16LEToUTF8(UTF16),
                '"nihongo" in kanji');
