@@ -637,10 +637,11 @@ type
 
   TIdSipViaHeader = class(TIdSipHeader)
   private
-    fSentBy:     String;
-    fSipVersion: String;
-    fPort:       Cardinal;
-    fTransport:  String;
+    fSentBy:         String;
+    fSipVersion:     String;
+    fPort:           Cardinal;
+    fTransport:      String;
+    PortIsSpecified: Boolean;
 
     procedure AssertBranchWellFormed;
     procedure AssertMaddrWellFormed;
@@ -4396,10 +4397,11 @@ begin
     // avoid the parse checking that the setters normally do. For instance,
     // a blank or RFC 2543 style branch is invalid in RFC 3261, but we still
     // need to be able to work with the (malformed) Via.
-    fSentBy     := V.SentBy;
-    fSipVersion := V.SipVersion;
-    fPort       := V.Port;
-    fTransport  := V.Transport;
+    fSentBy              := V.SentBy;
+    fSipVersion          := V.SipVersion;
+    fPort                := V.Port;
+    fTransport           := V.Transport;
+    Self.PortIsSpecified := V.PortIsSpecified;
 
     // And we use the usual way of setting everything else.
     Self.Parameters := V.Parameters;
@@ -4460,7 +4462,8 @@ begin
   Result := Self.SipVersion + '/' + Self.Transport
           + ' ' + Self.SentBy;
 
-  if not Self.IsDefaultPortForTransport(Self.Port, Self.Transport) then
+  if Self.PortIsSpecified or not Self.IsDefaultPortForTransport(Self.Port,
+                                                                Self.Transport) then
     Result := Result + ':' + IntToStr(Self.Port);
 end;
 
@@ -4470,6 +4473,8 @@ var
   S:     String;
 begin
   inherited Parse(Value);
+
+  Self.PortIsSpecified := false;
 
   Self.AssertBranchWellFormed;
   Self.AssertReceivedWellFormed;
@@ -4498,6 +4503,7 @@ begin
   else begin
     try
       Self.Port := StrToInt(Token);
+      Self.PortIsSpecified := true;
     except
       on EConvertError do
         Self.FailParse(InvalidNumber);

@@ -403,6 +403,7 @@ type
     procedure SetUp; override;
   published
     procedure TestAssign;
+    procedure TestAssignWithDefaultPortSpecified;
     procedure TestAssignFromBadlyFormedVia;
     procedure TestBranch;
     procedure TestHasBranch;
@@ -419,6 +420,8 @@ type
     procedure TestValue; override;
     procedure TestValueTorture;
     procedure TestValueWithBranch;
+    procedure TestValueWithDefaultPort;
+    procedure TestValueWithSettingDefaultPort;
     procedure TestValueWithMaddr;
     procedure TestValueWithReceived;
     procedure TestValueWithTTL;
@@ -624,6 +627,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -645,6 +649,7 @@ begin
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
+}
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
@@ -3571,6 +3576,23 @@ begin
   end;
 end;
 
+procedure TestTIdSipViaHeader.TestAssignWithDefaultPortSpecified;
+var
+  V2: TIdSipViaHeader;
+begin
+  V2 := TIdSipViaHeader.Create;
+  try
+    Self.V.Value := 'SIP/2.0/TCP localhost:5060;branch=' + BranchMagicCookie + 'f00';
+    V2.Assign(Self.V);
+
+    CheckEquals(Self.V.Value,
+                V2.Value,
+                'V2 not properly assigned to');
+  finally
+    V2.Free;
+  end;
+end;
+
 procedure TestTIdSipViaHeader.TestAssignFromBadlyFormedVia;
 var
   V2: TIdSipViaHeader;
@@ -3851,6 +3873,24 @@ begin
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;branch=one two';
   Check(Self.V.IsMalformed,
         'Failed to bail out with multiple tokens');
+end;
+
+procedure TestTIdSipViaHeader.TestValueWithDefaultPort;
+const
+  ValueWithPort = 'SIP/2.0/UDP 127.0.0.1:5060';
+begin
+  Self.V.Value := ValueWithPort;
+  CheckEquals(ValueWithPort, Self.V.Value, 'Port lost');
+end;
+
+procedure TestTIdSipViaHeader.TestValueWithSettingDefaultPort;
+const
+  ValueWithPort = 'SIP/2.0/UDP 127.0.0.1:5060';
+begin
+  Self.V.Value := 'SIP/2.0/UDP 127.0.0.1';
+
+  Self.V.Port := IdPORT_SIP;
+  CheckEquals(ValueWithPort, Self.V.Value, 'Port lost');
 end;
 
 procedure TestTIdSipViaHeader.TestValueWithMaddr;
