@@ -2431,6 +2431,7 @@ begin
       Fail('Wildcard Contact headers make no sense in a response that sets up '
          + 'a dialog');
     except
+      on EBadHeader do;
     end;
   finally
     C.Free;
@@ -2447,7 +2448,7 @@ begin
     Self.Core.From := F;
 
     Check(Self.Core.From.Equals(F),
-                'From not set');
+          'From not set');
   finally
     F.Free;
   end;
