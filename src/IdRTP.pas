@@ -1393,6 +1393,9 @@ end;
 // multiplication (e.g., $7f000000 * 2) you will get an EIntOverflow.
 function MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
 asm
+  // The sole raison d'etre for this method is the broken assembly generated
+  // by Delphi 6 when multiplying cardinals = imul is a SIGNED multiply, so
+  // $40000000 * 2 = $80000000 which is out of range FOR A SIGNED INTEGER. 
   mul edx
   jno @end
   call System.@IntOver
