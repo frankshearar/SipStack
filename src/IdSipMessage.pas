@@ -1408,8 +1408,7 @@ begin
 
   Result := QuoteStringIfNecessary(Result);
 
-  URI := Self.Address.URI;
-  URI := '<' + URI + '>';
+  URI := '<' + Self.Address.URI + '>';
 
   if (Result = '') then
     Result := URI

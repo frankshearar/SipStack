@@ -3264,17 +3264,20 @@ begin
   // MemProof thinks this is a memory leak. It's not. Self.Headers owns the
   // object and frees it.
   Route := TIdSipRouteHeader.Create;
+  try
+    CheckEquals(2, Self.Filter.Count, 'Count with two headers');
 
-  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+    Self.Filter.Add(Route);
+    CheckEquals(3, Self.Filter.Count, 'Count after Add');
 
-  Self.Filter.Add(Route);
-  CheckEquals(3, Self.Filter.Count, 'Count after Add');
+    Self.Filter.Remove(Self.Filter.Items[2]);
+    CheckEquals(2, Self.Filter.Count, 'Count after Remove');
 
-  Self.Filter.Remove(Self.Filter.Items[2]);
-  CheckEquals(2, Self.Filter.Count, 'Count after Remove');
-
-  Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
-  CheckEquals(2, Self.Filter.Count, 'Count after Remove''ing a non-Route header');
+    Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
+    CheckEquals(2, Self.Filter.Count, 'Count after Remove''ing a non-Route header');
+  finally
+    Route.Free;
+  end;
 end;
 
 //******************************************************************************
