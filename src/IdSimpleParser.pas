@@ -47,13 +47,14 @@ type
   protected
     procedure ResetCurrentLine;
   public
-    class function  IsAlphaNumeric(const Token: String): Boolean;
-    class function  IsByte(const Token: String): Boolean;
-    class function  IsDigit(C: Char): Boolean;
-    class function  IsFQDN(const Token: String): Boolean;
-    class function  IsHexNumber(const Number: String): Boolean;
-    class function  IsLetter(C: Char): Boolean;
-    class function  IsNumber(const Number: String): Boolean;
+    class function IsAlphaNumeric(const Token: String): Boolean;
+    class function IsByte(const Token: String): Boolean;
+    class function IsDigit(C: Char): Boolean;
+    class function IsFQDN(const Token: String): Boolean;
+    class function IsHexNumber(const Number: String): Boolean;
+    class function IsLetter(C: Char): Boolean;
+    class function IsNumber(const Number: String): Boolean;
+    
     constructor Create; virtual;
 
     function  CurrentLine: Cardinal;
