@@ -454,7 +454,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -474,9 +473,8 @@ begin
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
-}
   Result.AddTest(TestTIdFilteredRTPPeer.Suite);
-//  Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
+  Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
 //******************************************************************************
