@@ -118,8 +118,6 @@ constructor TIdSipMockSession.Create(UA: TIdSipUserAgentCore);
 begin
   inherited Create(UA);
 
-  Self.CreateInternal;
-
   Self.fResponseResent := false;
   Self.SetIsInboundCall(false);
 end;

@@ -3,15 +3,28 @@ unit IdDTMFPanel;
 interface
 
 uses
-  Classes, ExtCtrls, IdRTP, IdRTPTimerQueue, IdSdp, IdSocketHandle, StdCtrls;
+  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdRTPTimerQueue, IdSdp,
+  IdSocketHandle, StdCtrls;
 
 type
-  TColourButton = class(TButton)
+  TIdColourButton = class(TPanel)
+  private
+    OrigColour: TColor;
+  protected
+    procedure MouseDown(Button: TMouseButton;
+                        Shift: TShiftState;
+                        X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton;
+                      Shift: TShiftState;
+                      X, Y: Integer); override;
   public
-    property Color;
+    constructor Create(AOwner: TComponent); override;
+
+    procedure EndFlash;
+    procedure Flash;
   end;
 
-  TIdDTMFButtonArray = array[DTMF0..DTMFFlash] of TColourButton;
+  TIdDTMFButtonArray = array[DTMF0..DTMFFlash] of TIdColourButton;
 
   // Still needs: flashing of buttons; maybe playing of tones, too, on receipt
   // of DTMF
@@ -24,9 +37,9 @@ type
     fProcessor:       TIdSDPPayloadProcessor;
     Timer:            TIdRTPTimerQueue;
 
-    procedure AddRow(Buttons: array of TColourButton);
+    procedure AddRow(Buttons: array of TPanel);
     function  CreateButton(Name: String;
-                           Event: TNotifyEvent): TColourButton;
+                           Event: TNotifyEvent): TIdColourButton;
     procedure ResizeButtons;
     procedure DoOnResize(Sender: TObject);
     procedure Flash(Event: TIdRTPTelephoneEventPayload);
@@ -51,6 +64,7 @@ type
     procedure SendDTMFHash(Sender: TObject);
     procedure SendDTMFStar(Sender: TObject);
     procedure SetProcessor(Value: TIdSDPPayloadProcessor);
+
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -61,7 +75,55 @@ type
 implementation
 
 uses
-  Graphics, SysUtils;
+  SysUtils;
+
+//*****************************************************************************
+//* TIdColourButton                                                           *
+//*****************************************************************************
+//* TIdColourButton Public methods ********************************************
+
+constructor TIdColourButton.Create(AOwner: TComponent);
+begin
+  inherited Create(Aowner);
+
+  Self.BevelOuter := bvRaised;
+  Self.BevelInner := bvRaised;
+  Self.OrigColour := Self.Color;
+end;
+
+procedure TIdColourButton.EndFlash;
+begin
+  Self.Color      := Self.OrigColour;
+  Self.BevelInner := bvRaised;
+  Self.BevelOuter := bvRaised;
+end;
+
+procedure TIdColourButton.Flash;
+begin
+  Self.BevelInner := bvLowered;
+  Self.BevelOuter := bvLowered;
+  Self.Color      := clGreen; //Self.Color xor clWhite;
+end;
+
+//* TIdColourButton Protected methods *****************************************
+
+procedure TIdColourButton.MouseDown(Button: TMouseButton;
+                                    Shift: TShiftState;
+                                    X, Y: Integer);
+begin
+  inherited MouseDown(Button, Shift, X, Y);
+
+  Self.Flash;
+end;
+
+procedure TIdColourButton.MouseUp(Button: TMouseButton;
+                                  Shift: TShiftState;
+                                  X, Y: Integer);
+begin
+  inherited MouseUp(Button, Shift, X, Y);
+
+  Self.EndFlash;
+end;
 
 //*****************************************************************************
 //* TIdDTMFPanel                                                              *
@@ -115,7 +177,7 @@ end;
 
 //* TIdDTMFPanel Private methods ***********************************************
 
-procedure TIdDTMFPanel.AddRow(Buttons: array of TColourButton);
+procedure TIdDTMFPanel.AddRow(Buttons: array of TPanel);
 var
   I:      Integer;
   XCoord: Integer;
@@ -133,15 +195,15 @@ begin
   end;
 
   // Adjust the last button to take up all remaining horizontal space
-  Buttons[High(Buttons)].Width := Self.Width - Buttons[High(Buttons)].Left + 1;
+  Buttons[High(Buttons)].Width := Self.Width - Buttons[High(Buttons)].Left;
 
   Inc(Self.CurrentRowHeight, Buttons[High(Buttons)].Height - 1);
 end;
 
 function TIdDTMFPanel.CreateButton(Name: String;
-                                   Event: TNotifyEvent): TColourButton;
+                                   Event: TNotifyEvent): TIdColourButton;
 begin
-  Result := TColourButton.Create(nil);
+  Result := TIdColourButton.Create(nil);
   Result.Caption := Name;
   Result.OnClick := Event;
 end;
@@ -171,7 +233,7 @@ begin
 
   // Adjust the last row to take up all remaining vertical space
   if (Self.Buttons[DTMFFlash].Top + Self.Buttons[DTMFFlash].Height < Self.Height) then
-    Self.Buttons[DTMFFlash].Height := Self.Height - Self.Buttons[DTMFFlash].Top + 1;
+    Self.Buttons[DTMFFlash].Height := Self.Height - Self.Buttons[DTMFFlash].Top;
 
   Self.Constraints.MinHeight := 5*13;
   Self.Constraints.MinWidth  := 4*10;
@@ -183,20 +245,15 @@ begin
 end;
 
 procedure TIdDTMFPanel.Flash(Event: TIdRTPTelephoneEventPayload);
-var
-  Button: TColourButton;
 begin
   // We've received a DTMF event. Make the appropriate button flash
   // for the specified amount of time.
-  Button := Self.Buttons[Event.Event];
-  Button.Color := clBlack xor clWhite;
+  Self.Buttons[Event.Event].Flash;
 
   // wait Duration milliseconds
 
   if Event.IsEnd then
-    Button.Color := clBlack xor clWhite;
-  // what do we do if the ending packet (IsEnd is true after a series of
-  // non-end) never arrives? Time out when? 
+    Self.Buttons[Event.Event].EndFlash;
 end;
 
 procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;

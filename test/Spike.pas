@@ -179,14 +179,13 @@ begin
   Self.Media      := TIdSdpPayloadProcessor.Create;
   Self.Media.Host := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.Media.AddDataListener(Self);
-  Self.UpperDTMFPanel.Processor := Self.Media;
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
   Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
-  Self.UA.UserAgentName := 'X-Lite build 1086';
+  Self.UA.UserAgentName := '';
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -322,6 +321,7 @@ begin
   end;
   Self.StopReadingData;
   Session.PayloadProcessor.RemoveDataListener(Self.UpperDTMFPanel);
+  Self.UpperDTMFPanel.Processor := nil;
 end;
 
 procedure TrnidSpike.OnException(E: Exception;
@@ -343,14 +343,32 @@ begin
 end;
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
+var
+  Address: String;
+  SDP:     String;
 begin
   if (Session.Invite.ContentLength > 0) then
     Self.StartReadingData(Session.Invite.Body);
 
+  Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
+
+  SDP := 'v=0'#13#10
+       + 'o=franks 123456 123456 IN IP4 ' + Address + #13#10
+       + 's=-'#13#10
+       + 'c=IN IP4 ' + Address + #13#10
+       + 't=0 0'#13#10
+       + 'm=audio 8000 RTP/AVP 0'#13#10
+       + 'm=audio 8002 RTP/AVP 96'#13#10
+       + 'a=rtpmap:96 telephone-event/8000'#13#10
+       + 'a=fmtp:101 0-16'#13#10
+       + 'm=text 8004 RTP/AVP 97'#13#10
+       + 'a=rtpmap:97 T140/1000'#13#10;
+
   Session.AddSessionListener(Self);
-  Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
+  Session.AcceptCall(SDP, SdpMimeType);
 
   Session.PayloadProcessor.AddDataListener(Self.UpperDTMFPanel);
+  Self.UpperDTMFPanel.Processor := Session.PayloadProcessor;
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -496,6 +514,7 @@ procedure TrnidSpike.InviteClick(Sender: TObject);
 var
   Address: String;
   SDP:     String;
+  Session: TIdSipSession;
   Target:  TIdSipToHeader;
 begin
   Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
@@ -519,9 +538,13 @@ begin
 
     Self.StartReadingData(SDP);
 
-    Self.UA.Call(Target,
-                 SDP,
-                 SdpMimeType).AddSessionListener(Self);
+    Session := Self.UA.Call(Target,
+                            SDP,
+                            SdpMimeType);
+
+    Session.AddSessionListener(Self);
+    Session.PayloadProcessor.AddDataListener(Self.UpperDTMFPanel);
+    Self.UpperDTMFPanel.Processor := Session.PayloadProcessor;
   finally
     Target.Free;
   end;

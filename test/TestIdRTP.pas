@@ -105,11 +105,13 @@ type
     procedure TestPrintOnDuration;
     procedure TestPrintOnEvent;
     procedure TestPrintOnIsEnd;
+    procedure TestPrintOnReadFromSymmetry;
     procedure TestPrintOnReservedBit;
     procedure TestPrintOnVolume;
     procedure TestReadFromDuration;
     procedure TestReadFromEvent;
     procedure TestReadFromIsEnd;
+    procedure TestReadFromPrintOnSymmetry;
     procedure TestReadFromReservedBit;
     procedure TestReadFromVolume;
   end;
@@ -1720,6 +1722,35 @@ begin
   end;
 end;
 
+procedure TestTIdRTPTelephoneEventPayload.TestPrintOnReadFromSymmetry;
+var
+  NewPacket: TIdRTPTelephoneEventPayload;
+  OutStream: TStringStream;
+begin
+  Self.Packet.Event     := DTMF5;
+  Self.Packet.Duration  := 100;
+  Self.Packet.StartTime := Now;
+
+  OutStream := TStringStream.Create('');
+  try
+    Self.Packet.PrintOn(OutStream);
+    OutStream.Seek(0, soFromBeginning);
+
+    NewPacket := TIdRTPTelephoneEventPayload.Create(TelephoneEventEncodingName);
+    try
+      NewPacket.ReadFrom(OutStream);
+
+      CheckEquals(Self.Packet.Event, NewPacket.Event, 'Event');
+      CheckEquals(Self.Packet.Duration, NewPacket.Duration, 'Duration');
+      CheckEquals(Self.Packet.StartTime, NewPacket.StartTime, OneSecond, 'StartTime');
+    finally
+      NewPacket.Free;
+    end;
+  finally
+    OutStream.Free;
+  end;
+end;
+
 procedure TestTIdRTPTelephoneEventPayload.TestPrintOnReservedBit;
 var
   S: TStringStream;
@@ -1804,6 +1835,26 @@ begin
     Check(not Self.Packet.IsEnd, 'IsEnd set');
   finally
     S.Free;
+  end;
+end;
+
+procedure TestTIdRTPTelephoneEventPayload.TestReadFromPrintOnSymmetry;
+var
+  InStream:   TStringStream;
+  OutStream: TStringStream;
+begin
+  InStream := TStringStream.Create(#$00#$20#$CA#$FE);
+  try
+    OutStream := TStringStream.Create('');
+    try
+      Self.Packet.ReadFrom(InStream);
+      Self.Packet.PrintOn(OutStream);
+      CheckEquals(InStream.DataString, OutStream.DataString, 'Stream');
+    finally
+      OutStream.Free;
+    end;
+  finally
+    InStream.Free;
   end;
 end;
 

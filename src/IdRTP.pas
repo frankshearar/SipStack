@@ -1786,6 +1786,7 @@ var
 begin
   WriteByte(Dest, Self.Event);
 
+  // RFC 2833 says that senders MUST NOT set the reserved bit.
   B := Self.Volume;
   if Self.IsEnd then
     B := B or $80;

@@ -3,7 +3,7 @@ unit IdSipDialog;
 interface
 
 uses
-  Contnrs, IdSipDialogID, IdSipMessage, SyncObjs;
+  Contnrs, IdSipDialogID, IdSipMessage, IdSipTransport, SyncObjs;
 
 type
   TIdSipDialog = class;
@@ -52,6 +52,13 @@ type
     property CanBeEstablished: Boolean       read fCanBeEstablished;
     property InitialRequest:   TIdSipRequest read fInitialRequest;
   public
+    class function CreateInboundDialog(Request: TIdSipRequest;
+                                       Response: TIdSipResponse;
+                                       Transport: TIdSipTransport): TIdSipDialog;
+    class function CreateOutboundDialog(Request: TIdSipRequest;
+                                        Response: TIdSipResponse;
+                                        Transport: TIdSipTransport): TIdSipDialog;
+
     constructor Create(DialogID: TIdSipDialogID;
                        LocalSequenceNo: Cardinal;
                        RemoteSequenceNo: Cardinal;
@@ -126,6 +133,58 @@ uses
 //* TIdSipDialog                                                               *
 //******************************************************************************
 //* TIdSipDialog Public methods ************************************************
+
+class function TIdSipDialog.CreateInboundDialog(Request: TIdSipRequest;
+                                                Response: TIdSipResponse;
+                                                Transport: TIdSipTransport): TIdSipDialog;
+var
+  ID: TIdSipDialogID;
+begin
+  try
+    ID := TIdSipDialogID.Create(Response.CallID,
+                                Response.ToHeader.Tag,
+                                Request.From.Tag);
+    try
+      Result := TIdSipDialog.Create(ID,
+                                    0,
+                                    Request.CSeq.SequenceNo,
+                                    Request.ToHeader.Address,
+                                    Request.From.Address,
+                                    Request.FirstContact.Address,
+                                    Transport.IsSecure and (Request.HasSipsUri),
+                                    Request.Route);
+    finally
+      ID.Free;
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+class function TIdSipDialog.CreateOutboundDialog(Request: TIdSipRequest;
+                                                 Response: TIdSipResponse;
+                                                 Transport: TIdSipTransport): TIdSipDialog;
+var
+  ID: TIdSipDialogID;
+begin
+  ID := TIdSipDialogID.Create(Request.CallID,
+                              Request.From.Tag,
+                              Response.ToHeader.Tag);
+  try
+    Result := TIdSipDialog.Create(ID,
+                                  Request.CSeq.SequenceNo,
+                                  0,
+                                  Request.From.Address,
+                                  Request.ToHeader.Address,
+                                  Response.FirstContact.Address,
+                                  Transport.IsSecure and Request.FirstContact.HasSipsUri,
+                                  Request.Route);
+  finally
+    ID.Free;
+  end;
+end;
 
 constructor TIdSipDialog.Create(DialogID: TIdSipDialogID;
                                 LocalSequenceNo: Cardinal;

@@ -229,13 +229,14 @@ type
   private
     Destination: TIdSipToHeader;
     Dispatcher:  TIdSipMockTransactionDispatcher;
-    Session:     TIdSipSession;
-    ToTag:       String;        
+    Session:     TIdSipInboundSession;
+    ToTag:       String;
     UA:          TIdSipUserAgentCore;
   private
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure SimulateRemoteInvite;
     procedure SimulateRemoteOK;
     procedure SimulateRemoteRinging;
     procedure SimulateRemoteTrying;
@@ -244,6 +245,7 @@ type
     procedure TearDown; override;
   published
     procedure TestOutboundCallAndByeToXlite;
+    procedure TestSimultaneousInAndOutboundCall;
   end;
 
   TestTIdSipSessionTimer = class(TTestCase)
@@ -310,14 +312,12 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-//  Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
   Result.AddTest(TestTIdSipSession.Suite);
-{
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipSessionTimer.Suite);
   Result.AddTest(TestTIdSipRegistration.Suite);
-}
 end;
 
 //******************************************************************************
@@ -2751,6 +2751,7 @@ begin
   Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
+  Self.UA.Contact.Address.Uri := 'sip:vitaly@chernobyl.org';
 
   Self.ToTag := 'faketag';
 end;
@@ -2774,6 +2775,24 @@ end;
 procedure TestBugHunt.OnInboundCall(Session: TIdSipInboundSession);
 begin
   Self.Session := Session;
+end;
+
+procedure TestBugHunt.SimulateRemoteInvite;
+var
+  OurTo:   TIdSipToHeader;
+  Request: TIdSipRequest;
+begin
+  OurTo := Self.UA.Contact.AsToHeader;
+  try
+    Request := Self.UA.CreateInvite(OurTo, '', '');
+    try
+      Self.Dispatcher.Transport.FireOnRequest(Request);
+    finally
+      Request.Free;
+    end;
+  finally
+    OurTo.Free;
+  end;
 end;
 
 procedure TestBugHunt.SimulateRemoteOK;
@@ -2818,24 +2837,26 @@ end;
 //* TestBugHunt Published methods **********************************************
 
 procedure TestBugHunt.TestOutboundCallAndByeToXlite;
+var
+  Session: TIdSipSession;
 begin
-  Self.Session := Self.UA.Call(Self.Destination, '', '');
+  Session := Self.UA.Call(Self.Destination, '', '');
 
   Self.SimulateRemoteTrying;
-  Check(not Self.Session.DialogEstablished,
+  Check(not Session.DialogEstablished,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's don''t make dialogs');
 
   Self.SimulateRemoteRinging;
-  Check(Self.Session.DialogEstablished,
+  Check(Session.DialogEstablished,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's with To tags make dialogs');
-  Check(Self.Session.Dialog.IsEarly,
+  Check(Session.Dialog.IsEarly,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's make early dialogs');
 
   Self.SimulateRemoteOK;
-  Check(not Self.Session.Dialog.IsEarly,
+  Check(not Session.Dialog.IsEarly,
         Self.Dispatcher.Transport.LastResponse.Description
       + 's make non-early dialogs');
 
@@ -2846,6 +2867,20 @@ begin
   Self.UA.HangUpAllCalls;
   Check(Self.Dispatcher.Transport.LastRequest.IsBye,
         'Must send a BYE to terminate an established session');
+end;
+
+procedure TestBugHunt.TestSimultaneousInAndOutboundCall;
+begin
+  Self.UA.AddUserAgentListener(Self);
+  Self.UA.Call(Self.Destination, '', '');
+  Self.SimulateRemoteTrying;
+  Self.SimulateRemoteRinging;
+
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'TU not informed of inbound call');
+  
+  Self.Session.AcceptCall('', '');
+  CheckEquals(2, Self.UA.SessionCount, 'Session count');
 end;
 
 //******************************************************************************
@@ -2859,7 +2894,7 @@ begin
 
   Self.UA      := TIdSipUserAgentCore.Create;
   Self.Session := TIdSipMockSession.Create(UA);
-  Self.Timer := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
+  Self.Timer   := TIdSipSessionTimer.Create(Self.Session, DefaultT1, DefaultT2);
 end;
 
 procedure TestTIdSipSessionTimer.TearDown;
