@@ -72,14 +72,14 @@ type
                         Binding: TIdSocketHandle);
     procedure OnNewSession(Session: TIdSipSession);
     procedure OnPlaybackStopped(Origin: TAudioData);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transport: TIdSipTransport);
-    procedure OnSendRequest(const Request: TIdSipRequest;
-                            const Transport: TIdSipTransport);
-    procedure OnSendResponse(const Response: TIdSipResponse;
-                             const Transport: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transport: TIdSipTransport);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Transport: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Transport: TIdSipTransport);
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure StartReadingData(const SDP: String);
@@ -333,26 +333,26 @@ begin
   Self.StopEvent.SetEvent;
 end;
 
-procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;
-                                      const Transport: TIdSipTransport);
+procedure TrnidSpike.OnReceiveRequest(Request: TIdSipRequest;
+                                      Transport: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
-procedure TrnidSpike.OnReceiveResponse(const Response: TIdSipResponse;
-                                       const Transport: TIdSipTransport);
+procedure TrnidSpike.OnReceiveResponse(Response: TIdSipResponse;
+                                       Transport: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpike.OnSendRequest(const Request: TIdSipRequest;
-                                   const Transport: TIdSipTransport);
+procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
+                                   Transport: TIdSipTransport);
 begin
   Self.LogMessage(Request);
 end;
 
-procedure TrnidSpike.OnSendResponse(const Response: TIdSipResponse;
-                                    const Transport: TIdSipTransport);
+procedure TrnidSpike.OnSendResponse(Response: TIdSipResponse;
+                                    Transport: TIdSipTransport);
 begin
   Self.LogMessage(Response);
 end;

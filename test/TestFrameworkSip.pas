@@ -110,10 +110,10 @@ type
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transport: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transport: TIdSipTransport);
   public
     constructor Create;
 
@@ -127,10 +127,10 @@ type
     fSentRequest:  Boolean;
     fSentResponse: Boolean;
 
-    procedure OnSendRequest(const Request: TIdSipRequest;
-                            const Transport: TIdSipTransport);
-    procedure OnSendResponse(const Response: TIdSipResponse;
-                             const Transport: TIdSipTransport);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Transport: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Transport: TIdSipTransport);
   public
     constructor Create;
 
@@ -341,14 +341,14 @@ end;
 
 //* TIdSipTestTransportListener Private methods ********************************
 
-procedure TIdSipTestTransportListener.OnReceiveRequest(const Request: TIdSipRequest;
-                                                       const Transport: TIdSipTransport);
+procedure TIdSipTestTransportListener.OnReceiveRequest(Request: TIdSipRequest;
+                                                       Transport: TIdSipTransport);
 begin
   Self.fReceivedRequest := true;
 end;
 
-procedure TIdSipTestTransportListener.OnReceiveResponse(const Response: TIdSipResponse;
-                                                        const Transport: TIdSipTransport);
+procedure TIdSipTestTransportListener.OnReceiveResponse(Response: TIdSipResponse;
+                                                        Transport: TIdSipTransport);
 begin
   Self.fReceivedResponse := true;
 end;
@@ -369,14 +369,14 @@ end;
 //* TIdSipTestTransportSendingListener Private methods *************************
 
 
-procedure TIdSipTestTransportSendingListener.OnSendRequest(const Request: TIdSipRequest;
-                                                           const Transport: TIdSipTransport);
+procedure TIdSipTestTransportSendingListener.OnSendRequest(Request: TIdSipRequest;
+                                                           Transport: TIdSipTransport);
 begin
   Self.fSentRequest := true;
 end;
 
-procedure TIdSipTestTransportSendingListener.OnSendResponse(const Response: TIdSipResponse;
-                                                            const Transport: TIdSipTransport);
+procedure TIdSipTestTransportSendingListener.OnSendResponse(Response: TIdSipResponse;
+                                                            Transport: TIdSipTransport);
 begin
   Self.fSentResponse := true;
 end;

@@ -28,14 +28,14 @@ type
     SentResponse:     Boolean;
     Transport:        TIdSipTransportSubclass;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transport: TIdSipTransport);
-    procedure OnSendRequest(const Request: TIdSipRequest;
-                            const Transport: TIdSipTransport);
-    procedure OnSendResponse(const Response: TIdSipResponse;
-                             const Transport: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transport: TIdSipTransport);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Transport: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Transport: TIdSipTransport);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -83,10 +83,10 @@ type
     procedure CheckSendRequestTopVia(Sender: TObject;
                                      R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transport: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transport: TIdSipTransport);
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest);
     procedure SendOkResponse(Transport: TIdSipTransport);
@@ -246,16 +246,16 @@ end;
 
 //* TestTIdSipTransportEventNotifications Private methods **********************
 
-procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(const Request: TIdSipRequest;
-                                                                 const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnReceiveRequest(Request: TIdSipRequest;
+                                                                 Transport: TIdSipTransport);
 begin
   Self.ReceivedRequest := true;
   Check(Self.Request = Request,     'Request not correct');
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-procedure TestTIdSipTransportEventNotifications.OnReceiveResponse(const Response: TIdSipResponse;
-                                                                  const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnReceiveResponse(Response: TIdSipResponse;
+                                                                  Transport: TIdSipTransport);
 begin
   Self.ReceivedResponse := true;
 
@@ -263,16 +263,16 @@ begin
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-procedure TestTIdSipTransportEventNotifications.OnSendRequest(const Request: TIdSipRequest;
-                                                              const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnSendRequest(Request: TIdSipRequest;
+                                                              Transport: TIdSipTransport);
 begin
   Self.SentRequest := true;
   Check(Self.Request = Request,     'Request not correct');
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-procedure TestTIdSipTransportEventNotifications.OnSendResponse(const Response: TIdSipResponse;
-                                                               const Transport: TIdSipTransport);
+procedure TestTIdSipTransportEventNotifications.OnSendResponse(Response: TIdSipResponse;
+                                                               Transport: TIdSipTransport);
 begin
   Self.SentResponse := true;
 
@@ -562,8 +562,8 @@ begin
   Result := IdPORT_SIP;
 end;
 
-procedure TestTIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const Transport: TIdSipTransport);
+procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                               Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Transport, Request);
@@ -571,8 +571,8 @@ begin
 //  Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const Transport: TIdSipTransport);
+procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
+                                                Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Transport, Response);

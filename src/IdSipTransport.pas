@@ -15,20 +15,20 @@ type
   // I listen for incoming messages.
   IIdSipTransportListener = interface
     ['{D3F0A0D5-A4E9-42BD-B337-D5B3C652F340}']
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Transport: TIdSipTransport);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Transport: TIdSipTransport);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Transport: TIdSipTransport);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Transport: TIdSipTransport);
   end;
 
   // I listen for when messages are sent, rather than received. I'm most useful
   // as a logger/debugging tool.
   IIdSipTransportSendingListener = interface
     ['{2E451F5D-5053-4A2C-BE5F-BB68E5CB3A6D}']
-    procedure OnSendRequest(const Request: TIdSipRequest;
-                            const Transport: TIdSipTransport);
-    procedure OnSendResponse(const Response: TIdSipResponse;
-                             const Transport: TIdSipTransport);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Transport: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Transport: TIdSipTransport);
   end;
 
   TIdSipTransport = class(TIdInterfacedObject,

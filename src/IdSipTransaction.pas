@@ -100,10 +100,10 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
 
     // IIdSipTransportListener
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const Receiver: TIdSipTransport); overload;
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const Receiver: TIdSipTransport); overload;
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport); overload;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport); overload;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -697,14 +697,14 @@ procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransactio
 begin
 end;
 
-procedure TIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
-                                                       const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
+                                                       Receiver: TIdSipTransport);
 begin
   Self.DeliverToTransaction(Request, Receiver);
 end;
 
-procedure TIdSipTransactionDispatcher.OnReceiveResponse(const Response: TIdSipResponse;
-                                                        const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
+                                                        Receiver: TIdSipTransport);
 begin
   Self.DeliverToTransaction(Response, Receiver);
 end;

@@ -152,10 +152,10 @@ type
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
     procedure OnNewSession(Session: TIdSipSession);
-    procedure OnSendRequest(const Request: TIdSipRequest;
-                            const Transport: TIdSipTransport);
-    procedure OnSendResponse(const Response: TIdSipResponse;
-                             const Transport: TIdSipTransport);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Transport: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Transport: TIdSipTransport);
     procedure SimulateRemoteAccept(Invite: TIdSipRequest);
     procedure SimulateRemoteRinging(Invite: TIdSipRequest);
     procedure SimulateRemoteTryingWithNoToTag(Invite: TIdSipRequest);
@@ -1980,13 +1980,13 @@ begin
   Self.Session.AddSessionListener(Self);
 end;
 
-procedure TestTIdSipSession.OnSendRequest(const Request: TIdSipRequest;
-                                          const Transport: TIdSipTransport);
+procedure TestTIdSipSession.OnSendRequest(Request: TIdSipRequest;
+                                          Transport: TIdSipTransport);
 begin
 end;
 
-procedure TestTIdSipSession.OnSendResponse(const Response: TIdSipResponse;
-                                           const Transport: TIdSipTransport);
+procedure TestTIdSipSession.OnSendResponse(Response: TIdSipResponse;
+                                           Transport: TIdSipTransport);
 begin
   if (Response.StatusCode = SIPRequestTerminated) then
     Self.SentRequestTerminated := true;
