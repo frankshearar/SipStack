@@ -894,7 +894,6 @@ type
     Agent:                      IIdAbstractRTPPeer;
     BaseTime:                   TDateTime;
     BaseTimestamp:              Cardinal; // in clock rate ticks
-    DataListenerLock:           TCriticalSection;
     fSyncSrcID:                 Cardinal;
     fAssumedMTU:                Cardinal;
     fAvgRTCPSize:               Cardinal;
@@ -4512,8 +4511,6 @@ begin
   Self.MinimumRTCPSendInterval := Self.DefaultMinimumRTCPSendInterval;
   Self.NoDataSent     := true;
 
-  Self.DataListenerLock := TCriticalSection.Create;
-
   Self.MemberLock := TCriticalSection.Create;
   Self.Members    := TIdRTPMemberTable.Create;
 
@@ -4530,9 +4527,9 @@ destructor TIdRTPSession.Destroy;
 begin
   Self.Timer.Free;
   Self.TransmissionLock.Free;
+
   Self.Members.Free;
   Self.MemberLock.Free;
-  Self.DataListenerLock.Free;
   Self.Agent := nil;
 
   inherited Destroy;
