@@ -422,6 +422,9 @@ procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
+  Assert(not Request.HasInvalidSyntax,
+         'A Transport must NEVER send invalid requests up the stack');
+
   Notification := TIdSipTransportReceiveRequestMethod.Create;
   try
     Notification.Receiver := Self;
@@ -437,6 +440,9 @@ procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse);
 var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
+  Assert(not Response.HasInvalidSyntax,
+         'A Transport must NEVER send invalid responses up the stack');
+
   Notification := TIdSipTransportReceiveResponseMethod.Create;
   try
     Notification.Receiver := Self;
