@@ -275,11 +275,11 @@ type
 
     procedure ChangeToConfirmed(R: TIdSipRequest;
                                 T: TIdSipTransport);
-    function  Create100Response(R: TIdSipRequest): TIdSipResponse;
+    function  CreateTryingResponse(R: TIdSipRequest): TIdSipResponse;
     procedure ScheduleTimerG;
     procedure ScheduleTimerH;
     procedure ScheduleTimerI;
-    procedure TrySend100Response(R: TIdSipRequest);
+    procedure TrySendTryingResponse(R: TIdSipRequest);
     procedure TrySendLastResponse(R: TIdSipRequest);
   protected
     procedure ChangeToCompleted; override;
@@ -1480,7 +1480,7 @@ begin
   if Self.FirstTime then begin
     Self.FirstTime := false;
 
-    Self.TrySend100Response(Self.InitialRequest);
+    Self.TrySendTryingResponse(Self.InitialRequest);
 
     Self.ChangeToProceeding(R, T);
   end else begin
@@ -1542,7 +1542,7 @@ begin
   Self.ScheduleTimerI;
 end;
 
-function TIdSipServerInviteTransaction.Create100Response(R: TIdSipRequest): TIdSipResponse;
+function TIdSipServerInviteTransaction.CreateTryingResponse(R: TIdSipRequest): TIdSipResponse;
 begin
   Result := TIdSipResponse.Create;
   try
@@ -1583,11 +1583,11 @@ begin
                                 Self.InitialRequest.Copy);
 end;
 
-procedure TIdSipServerInviteTransaction.TrySend100Response(R: TIdSipRequest);
+procedure TIdSipServerInviteTransaction.TrySendTryingResponse(R: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.Create100Response(Self.InitialRequest);
+  Response := Self.CreateTryingResponse(Self.InitialRequest);
   try
     Self.TrySendResponse(Response);
   finally
