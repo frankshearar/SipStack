@@ -76,7 +76,7 @@ begin
   // We copy the list because the observers could choose to remove themselves
   // as listeners from Self.
 
-  Self.ObserverLock.Create;
+  Self.ObserverLock.Acquire;
   try
     Copy := TList.Create;
     try
