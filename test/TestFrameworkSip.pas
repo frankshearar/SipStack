@@ -51,7 +51,7 @@ type
   public
     constructor Create;
 
-    procedure OnChanged(const Observed: TObject);
+    procedure OnChanged(Observed: TObject);
 
     property Changed: Boolean read fChanged;
   end;
@@ -242,7 +242,7 @@ begin
   Self.fChanged := false;
 end;
 
-procedure TIdSipTestObserver.OnChanged(const Observed: TObject);
+procedure TIdSipTestObserver.OnChanged(Observed: TObject);
 begin
   Self.fChanged := true;
 end;

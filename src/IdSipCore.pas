@@ -36,7 +36,7 @@ type
   // the Observed, but c'est la vie.
   IIdSipObserver = interface
     ['{665CFE94-8EFD-4710-A5CC-ED01BCF7961E}']
-    procedure OnChanged(const Observed: TObject);
+    procedure OnChanged(Observed: TObject);
   end;
 
   // I am the protocol of things that listen for Sessions:

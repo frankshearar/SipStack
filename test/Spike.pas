@@ -63,7 +63,7 @@ type
     UDPByteCount: Integer;
 
     procedure LogMessage(const Msg: TIdSipMessage);
-    procedure OnChanged(const Observed: TObject);
+    procedure OnChanged(Observed: TObject);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
@@ -282,7 +282,7 @@ begin
   Self.Log.Lines.Add('----');
 end;
 
-procedure TrnidSpike.OnChanged(const Observed: TObject);
+procedure TrnidSpike.OnChanged(Observed: TObject);
 begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
 end;
