@@ -12,7 +12,7 @@ unit BasicClient;
 interface
 
 uses
-  Forms, IdRTPDiagnostics, StdCtrls, Controls, ExtCtrls, Classes;
+  Classes, Controls, ExtCtrls, Forms, IdRTPDiagnostics, StdCtrls;
 
 type
   TfmBasicClient = class(TForm)
