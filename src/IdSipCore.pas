@@ -1745,7 +1745,7 @@ begin
   try
     Response.StatusText := Reason;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -1769,7 +1769,7 @@ begin
   try
     Response.AddHeader(Self.AuthenticationHeader).Value := Self.AuthenticationHeaderValue;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -1815,7 +1815,7 @@ begin
   try
     Response.StatusText := BadAuthorizationTokens;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -2858,7 +2858,7 @@ var
 begin
   Response := Self.CreateResponse(Request, Reason);
   try
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3266,7 +3266,7 @@ begin
   try
     Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3281,7 +3281,7 @@ begin
     Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
     Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3295,7 +3295,7 @@ begin
   try
     Response.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3309,7 +3309,7 @@ begin
   try
     Response.AddHeader(AcceptEncodingHeader).Value := '';
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3325,7 +3325,7 @@ begin
   try
     Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3339,7 +3339,7 @@ begin
   try
     Response.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
 
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -3351,7 +3351,7 @@ var
 begin
   Response := Self.CreateResponse(Request, SIPSIPVersionNotSupported);
   try
-    Self.Dispatcher.SendResponse(Response);
+    Self.SendResponse(Response);
   finally
     Response.Free;
   end;
