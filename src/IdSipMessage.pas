@@ -3,8 +3,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipHeaders,
-  IdSipInterfacedObject, SyncObjs, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdInterfacedObject,
+  IdSimpleParser, IdSipHeaders, SyncObjs, SysUtils;
 
 type
   TIdSipRequest = class;

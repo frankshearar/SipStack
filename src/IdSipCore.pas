@@ -22,9 +22,8 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdSipHeaders,
-  IdSipInterfacedObject, IdSipMessage, IdSipTimer, IdSipTransaction,
-  IdSipTransport, SyncObjs;
+  Classes, Contnrs, IdSipDialog, IdException, IdInterfacedObject, IdSipHeaders,
+  IdSipMessage, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
 
 type
   TIdSipSession = class;
@@ -58,7 +57,7 @@ type
   // TODO: there's redundance with this Hostname, and the Hostnames of the
   // transports attached to this core. It's not clear how to set up the
   // hostnames and bindings of the stack.
-  TIdSipAbstractCore = class(TIdSipInterfacedObject,
+  TIdSipAbstractCore = class(TIdInterfacedObject,
                              IIdSipUnhandledMessageListener)
   private
     fDispatcher: TIdSipTransactionDispatcher;
@@ -244,7 +243,7 @@ type
   // destroy me, and your reference to me will no longer be valid. The same
   // thing goes for when I notify you that I have terminated via
   // OnEndedSession.
-  TIdSipSession = class(TIdSipInterfacedObject,
+  TIdSipSession = class(TIdInterfacedObject,
                         IIdSipTransactionListener)
   private
     fCore:               TIdSipUserAgentCore;

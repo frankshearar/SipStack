@@ -5,6 +5,7 @@ uses
   GuiTestRunner,
   TextTestRunner,
   audioclasses in 'src\audioclasses.pas',
+  IdInterfacedObject in 'src\IdInterfacedObject.pas',  
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
@@ -16,7 +17,6 @@ uses
   IdSipDialog in 'src\IdSipDialog.pas',
   IdSipDialogID in 'src\IdSipDialogID.pas',
   IdSipHeaders in 'src\IdSipHeaders.pas',
-  IdSipInterfacedObject in 'src\IdSipInterfacedObject.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',
@@ -71,7 +71,6 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-//  Forms.Application.CreateForm(TIdSpikeT140, IdSpikeT140);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

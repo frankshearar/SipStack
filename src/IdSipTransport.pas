@@ -3,7 +3,7 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdSipHeaders, IdSipInterfacedObject,
+  Classes, Contnrs, IdException, IdSipHeaders, IdInterfacedObject,
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpClient,
   IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, IdTCPClient, IdTCPServer,
   IdThread, SyncObjs, SysUtils;
@@ -31,7 +31,7 @@ type
                              const Transport: TIdSipTransport);
   end;
 
-  TIdSipTransport = class(TIdSipInterfacedObject,
+  TIdSipTransport = class(TIdInterfacedObject,
                           IIdSipMessageVisitor,
                           IIdSipMessageListener)
   private

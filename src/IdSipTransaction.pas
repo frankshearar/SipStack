@@ -3,7 +3,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  Classes, Contnrs, IdSipInterfacedObject, IdSipMessage, IdSipTimer,
+  Classes, Contnrs, IdInterfacedObject, IdSipMessage, IdSipTimer,
   IdSipTransport, SyncObjs;
 
 const
@@ -57,7 +57,7 @@ type
   // transactions.
   //
   // I do not manage any transports that may be given to me.
-  TIdSipTransactionDispatcher = class(TIdSipInterfacedObject,
+  TIdSipTransactionDispatcher = class(TIdInterfacedObject,
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
@@ -135,7 +135,7 @@ type
   // Dispatcher immediately destroys me. Therefore, be sure that if you call
   // TrySendRequest it is the last call in a method as I could be dead before
   // the next line of the method is reached!
-  TIdSipTransaction = class(TIdSipInterfacedObject)
+  TIdSipTransaction = class(TIdInterfacedObject)
   private
     fInitialRequest:  TIdSipRequest;
     fState:           TIdSipTransactionState;

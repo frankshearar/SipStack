@@ -3,7 +3,7 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdRTP, IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
+  Classes, IdInterfacedObject, IdRTP, IdSdp, IdSipHeaders, IdSipMessage,
   IdSipCore, IdSipTcpClient, IdSipTcpServer, IdSipTransaction, IdSipTransport,
   IdSocketHandle, TestFrameworkEx;
 
@@ -12,7 +12,7 @@ type
     procedure CheckEquals(Expected, Received: TIdSipURI; Message: String); overload;
   end;
 
-  TIdSipTestDataListener = class(TIdSipInterfacedObject,
+  TIdSipTestDataListener = class(TIdInterfacedObject,
                                  IIdRtpDataListener)
   private
     fNewData:    Boolean;
@@ -28,7 +28,7 @@ type
     property NewUdpData: Boolean read fNewUdpData;
   end;
 
-  TIdSipTestMessageListener = class(TIdSipInterfacedObject,
+  TIdSipTestMessageListener = class(TIdInterfacedObject,
                                     IIdSipMessageListener)
   private
     fReceivedRequest:  Boolean;
@@ -45,7 +45,7 @@ type
     property ReceivedResponse: Boolean read fReceivedResponse;
   end;
 
-  TIdSipTestObserver = class(TIdSipInterfacedObject, IIdSipObserver)
+  TIdSipTestObserver = class(TIdInterfacedObject, IIdSipObserver)
   private
     fChanged: Boolean;
   public
@@ -56,7 +56,7 @@ type
     property Changed: Boolean read fChanged;
   end;
 
-  TIdSipTestSessionListener = class(TIdSipInterfacedObject,
+  TIdSipTestSessionListener = class(TIdInterfacedObject,
                                     IIdSipSessionListener)
   private
     fEndedSession:       Boolean;
@@ -78,7 +78,7 @@ type
     property NewSession:         Boolean read fNewSession;
   end;
 
-  TIdSipTestTransactionListener = class(TIdSipInterfacedObject, IIdSipTransactionListener)
+  TIdSipTestTransactionListener = class(TIdInterfacedObject, IIdSipTransactionListener)
   private
     fFailReason:       String;
     fReceivedRequest:  Boolean;
@@ -103,7 +103,7 @@ type
     property Terminated:       Boolean read fTerminated;
   end;
 
-  TIdSipTestTransportListener = class(TIdSipInterfacedObject,
+  TIdSipTestTransportListener = class(TIdInterfacedObject,
                                       IIdSipTransportListener)
   private
     fReceivedRequest:  Boolean;
@@ -120,7 +120,7 @@ type
     property ReceivedResponse: Boolean read fReceivedResponse;
   end;
 
-  TIdSipTestTransportSendingListener = class(TIdSipInterfacedObject,
+  TIdSipTestTransportSendingListener = class(TIdInterfacedObject,
                                              IIdSipTransportSendingListener)
   private
     fSentRequest:  Boolean;
@@ -137,7 +137,7 @@ type
     property SentResponse: Boolean read fSentResponse;
   end;
 
-  TIdSipTestUnhandledMessageListener = class(TIdSipInterfacedObject,
+  TIdSipTestUnhandledMessageListener = class(TIdInterfacedObject,
                                              IIdSipUnhandledMessageListener)
   private
     fReceivedUnhandledRequest:  Boolean;

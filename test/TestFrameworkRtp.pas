@@ -3,7 +3,7 @@ unit TestFrameworkRtp;
 interface
 
 uses
-  Classes, Contnrs, IdRTP, IdSipInterfacedObject, SyncObjs, SysUtils,
+  Classes, Contnrs, IdRTP, IdInterfacedObject, SyncObjs, SysUtils,
   TestFrameworkEx;
 
 type
@@ -12,7 +12,7 @@ type
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
   end;
 
-  TIdMockRTPPeer = class(TIdSipInterfacedObject,
+  TIdMockRTPPeer = class(TIdInterfacedObject,
                          IIdAbstractRTPPeer)
   private
     fLastRTP:   TIdRTPPacket;

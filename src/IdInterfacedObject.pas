@@ -1,10 +1,10 @@
-unit IdSipInterfacedObject;
+unit IdInterfacedObject;
 
 interface
 
 type
   // I AM NOT a reference-counted object, nor are any of my subclasses.
-  TIdSipInterfacedObject = class(TObject)
+  TIdInterfacedObject = class(TObject)
   protected
     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
     function _AddRef: Integer; stdcall;
@@ -14,11 +14,11 @@ type
 implementation
 
 //******************************************************************************
-//* TIdSipInterfacedObject                                                     *
+//* TIdInterfacedObject                                                        *
 //******************************************************************************
-//* TIdSipInterfacedObject Public methods **************************************
+//* TIdInterfacedObject Public methods *****************************************
 
-function TIdSipInterfacedObject.QueryInterface(const IID: TGUID; out Obj): HResult;
+function TIdInterfacedObject.QueryInterface(const IID: TGUID; out Obj): HResult;
 begin
   if GetInterface(IID, Obj) then
     Result := S_OK
@@ -26,12 +26,12 @@ begin
     Result := E_NOINTERFACE;
 end;
 
-function TIdSipInterfacedObject._AddRef: Integer;
+function TIdInterfacedObject._AddRef: Integer;
 begin
   Result := -1;
 end;
 
-function TIdSipInterfacedObject._Release: Integer;
+function TIdInterfacedObject._Release: Integer;
 begin
   Result := -1;
 end;
