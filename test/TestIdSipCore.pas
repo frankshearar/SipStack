@@ -65,6 +65,7 @@ type
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestAuthenticateWithNoAttachedAuthenticator;
+    procedure TestCleanOutTerminatedActions;
     procedure TestRejectMalformedAuthorizedRequest;
     procedure TestRejectUnauthorizedRequest;
   end;
@@ -1038,6 +1039,22 @@ begin
   Self.Core.RequireAuthentication := true;
   Self.Invite.AddHeader(AuthorizationHeader);
   Self.SimulateRemoteInvite;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestCleanOutTerminatedActions;
+var
+  Session: TIdSipSession;
+begin
+  // This test doesn't really tell us much, just that CleanOutTerminatedActions
+  // doesn't blow up when Core has terminated an unterminated actions.
+
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+  Check(Session.DialogEstablished, 'Dialog not established for session');
+  Self.SimulateRemoteBye(Session.Dialog);
+
+  Self.Core.Call(Self.Destination, '', '');
+  Self.Core.CleanOutTerminatedActions;
 end;
 
 procedure TestTIdSipAbstractUserAgent.TestRejectMalformedAuthorizedRequest;
@@ -3662,11 +3679,7 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestCancelNotifiesSession;
-var
-  SessionCount: Integer;
 begin
-  SessionCount := Self.Core.SessionCount;
-
   Self.SimulateRemoteCancel;
 
   Check(Self.OnEndedSessionFired,

@@ -365,6 +365,7 @@ type
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
+    procedure CleanOutTerminatedActions;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
@@ -1684,6 +1685,23 @@ function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
 begin
   Result := Self.AddOutboundSession;
   Result.Call(Dest, InitialOffer, MimeType);
+end;
+
+procedure TIdSipUserAgentCore.CleanOutTerminatedActions;
+var
+  I: Integer;
+begin
+  Self.ActionLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Actions.Count) do
+      if Self.ActionAt(I).IsTerminated then
+        Self.Actions.Delete(I)
+      else
+        Inc(I);
+  finally
+    Self.ActionLock.Release;
+  end;
 end;
 
 function TIdSipUserAgentCore.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
