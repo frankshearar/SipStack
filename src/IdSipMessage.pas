@@ -144,6 +144,7 @@ type
 
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
+    function  Description: String;
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
@@ -980,6 +981,11 @@ begin
 
   Self.StatusCode := R.StatusCode;
   Self.StatusText := R.StatusText;
+end;
+
+function TIdSipResponse.Description: String;
+begin
+  Result := IntToStr(Self.StatusCode) + ' ' + Self.StatusText;
 end;
 
 function TIdSipResponse.IsEqualTo(Msg: TIdSipMessage): Boolean;
