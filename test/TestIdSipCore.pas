@@ -95,7 +95,6 @@ type
                                 Invite: TIdSipRequest);
     procedure SimulateRemoteAck(Response: TIdSipResponse);
     procedure SimulateRemoteBye(Dialog: TIdSipDialog);
-    procedure SimulateRemoteOptions;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -132,7 +131,6 @@ type
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
     procedure TestNotificationOfNewSession;
-    procedure TestOptions;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
@@ -335,10 +333,14 @@ type
   end;
 
   TestTIdSipInboundOptions = class(TestTIdSipAction)
+  private
+    procedure SimulateRemoteOptions;
   published
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
     procedure TestIsSession; override;
+    procedure TestOptions;
+    procedure TestOptionsWhenDoNotDisturb;
   end;
 
   TestTIdSipOutboundOptions = class(TestTIdSipAction)
@@ -1089,24 +1091,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.SimulateRemoteOptions;
-var
-  Options: TIdSipRequest;
-  Temp:    String;
-begin
-  Options := Self.Core.CreateOptions(Self.Destination);
-  try
-    // Swop To & From because this comes from the network
-    Temp := Options.From.FullValue;
-    Options.From.Value := Options.ToHeader.FullValue;
-    Options.ToHeader.Value := Temp;
-
-    Self.Dispatcher.Transport.FireOnRequest(Options);
-  finally
-    Options.Free;
-  end;
-end;
-
 //* TestTIdSipUserAgentCore Published methods **********************************
 
 procedure TestTIdSipUserAgentCore.TestAddObserver;
@@ -1618,7 +1602,6 @@ begin
   CheckEquals(SessionCount,
               Self.Core.SessionCount,
               'New session created despite Do Not Disturb');
-
 end;
 
 procedure TestTIdSipUserAgentCore.TestFork;
@@ -1764,50 +1747,6 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Self.OnInboundCallFired, 'UI not notified of new session');
-end;
-
-procedure TestTIdSipUserAgentCore.TestOptions;
-var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
-begin
-  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
-  Self.SimulateRemoteOptions;
-
-  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
-        'No response sent');
-
-  Response := Self.Dispatcher.Transport.LastResponse;
-  Check(Response.HasHeader(AllowHeader),
-        'No Allow header');
-  CheckEquals(Self.Core.AllowedMethods,
-              Response.FirstHeader(AllowHeader).FullValue,
-              'Allow header');
-
-
-  Check(Response.HasHeader(AcceptHeader),
-        'No Accept header');
-  CheckEquals(Self.Core.AllowedContentTypes,
-              Response.FirstHeader(AcceptHeader).FullValue,
-              'Accept header');
-
-  Check(Response.HasHeader(AcceptEncodingHeader),
-        'No Accept-Encoding header');
-  CheckEquals(Self.Core.AllowedEncodings,
-              Response.FirstHeader(AcceptEncodingHeader).FullValue,
-              'Accept-Encoding header');
-
-  Check(Response.HasHeader(AcceptLanguageHeader),
-        'No Accept-Language header');
-  CheckEquals(Self.Core.AllowedLanguages,
-              Response.FirstHeader(AcceptLanguageHeader).FullValue,
-              'Accept-Language header');
-
-  Check(Response.HasHeader(SupportedHeaderFull),
-        'No Supported header');
-  CheckEquals(Self.Core.AllowedExtensions,
-              Response.FirstHeader(SupportedHeaderFull).FullValue,
-              'Supported header value');
 end;
 
 procedure TestTIdSipUserAgentCore.TestReceiveByeForUnmatchedDialog;
@@ -3706,7 +3645,27 @@ end;
 //******************************************************************************
 //* TestTIdSipInboundOptions                                                   *
 //******************************************************************************
-//* TestTIdSipInboundOptions Public methods ************************************
+//* TestTIdSipInboundOptions Private methods ***********************************
+
+procedure TestTIdSipInboundOptions.SimulateRemoteOptions;
+var
+  Options: TIdSipRequest;
+  Temp:    String;
+begin
+  Options := Self.Core.CreateOptions(Self.Destination);
+  try
+    // Swop To & From because this comes from the network
+    Temp := Options.From.FullValue;
+    Options.From.Value := Options.ToHeader.FullValue;
+    Options.ToHeader.Value := Temp;
+
+    Self.Dispatcher.Transport.FireOnRequest(Options);
+  finally
+    Options.Free;
+  end;
+end;
+
+//* TestTIdSipInboundOptions Published methods *********************************
 
 procedure TestTIdSipInboundOptions.TestIsOptions;
 var
@@ -3745,6 +3704,69 @@ begin
   finally
     Action.Free;
   end;
+end;
+
+procedure TestTIdSipInboundOptions.TestOptions;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteOptions;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  Check(Response.HasHeader(AllowHeader),
+        'No Allow header');
+  CheckEquals(Self.Core.AllowedMethods,
+              Response.FirstHeader(AllowHeader).FullValue,
+              'Allow header');
+
+
+  Check(Response.HasHeader(AcceptHeader),
+        'No Accept header');
+  CheckEquals(Self.Core.AllowedContentTypes,
+              Response.FirstHeader(AcceptHeader).FullValue,
+              'Accept header');
+
+  Check(Response.HasHeader(AcceptEncodingHeader),
+        'No Accept-Encoding header');
+  CheckEquals(Self.Core.AllowedEncodings,
+              Response.FirstHeader(AcceptEncodingHeader).FullValue,
+              'Accept-Encoding header');
+
+  Check(Response.HasHeader(AcceptLanguageHeader),
+        'No Accept-Language header');
+  CheckEquals(Self.Core.AllowedLanguages,
+              Response.FirstHeader(AcceptLanguageHeader).FullValue,
+              'Accept-Language header');
+
+  Check(Response.HasHeader(SupportedHeaderFull),
+        'No Supported header');
+  CheckEquals(Self.Core.AllowedExtensions,
+              Response.FirstHeader(SupportedHeaderFull).FullValue,
+              'Supported header value');
+end;
+
+procedure TestTIdSipInboundOptions.TestOptionsWhenDoNotDisturb;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Core.DoNotDisturb := true;
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteOptions;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPTemporarilyUnavailable,
+              Response.StatusCode,
+              'Do Not Disturb');
 end;
 
 //******************************************************************************
