@@ -63,6 +63,8 @@ type
     procedure TearDown; override;
   published
     procedure TestAddRemoveCount;
+    procedure TestAssign;
+    procedure TestAssignNonList;
     procedure TestNotify;
     procedure TestListenerRaisesException;
     procedure TestListSwallowsExpectedExceptions;
@@ -72,7 +74,7 @@ type
 implementation
 
 uses
-  Dialogs;
+  Classes;
 
 function Suite: ITestSuite;
 begin
@@ -180,9 +182,59 @@ begin
   end;
 end;
 
+procedure TestTIdNotificationList.TestAssign;
+var
+  F1, F2:    TIdFoo;
+  BarCaller: TIdCallBar;
+  Other:     TIdNotificationList;
+begin
+  Other := TIdNotificationList.Create;
+  try
+    F1 := TIdFoo.Create;
+    try
+      F2 := TIdFoo.Create;
+      try
+        Self.List.AddListener(F1);
+        Self.List.AddListener(F2);
+
+        Other.Assign(Self.List);
+
+        BarCaller := TIdCallBar.Create;
+        try
+          Other.Notify(BarCaller);
+        finally
+          BarCaller.Free;
+        end;
+
+        Check(F1.BarCalled, 'Method not invoked on F1');
+        Check(F2.BarCalled, 'Method not invoked on F2');
+      finally
+        F2.Free;
+      end;
+    finally
+      F1.Free;
+    end;
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdNotificationList.TestAssignNonList;
+var
+  P: TPersistent;
+begin
+  P := TPersistent.Create;
+  try
+    Self.ExpectedException := EConvertError;
+    Self.List.Assign(P);
+  finally
+    P.Free;
+  end;
+end;
+
 procedure TestTIdNotificationList.TestNotify;
 var
-  F1, F2: TIdFoo;
+  F1, F2:    TIdFoo;
   BarCaller: TIdCallBar;
 begin
   F1 := TIdFoo.Create;

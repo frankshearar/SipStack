@@ -27,7 +27,7 @@ type
   // I provide a storage space for listeners, and you use Notify to make me
   // iterate over my contained listeners, passing each item to the
   // TIdMethod.
-  TIdNotificationList = class(TObject)
+  TIdNotificationList = class(TPersistent)
   private
     ExpectedExceptions:     TList;
     ExpectedExceptionsLock: TCriticalSection;
@@ -41,6 +41,7 @@ type
     destructor  Destroy; override;
 
     procedure AddExpectedException(ExceptionType: TClass);
+    procedure Assign(Src: TPersistent); override;
     procedure AddListener(const L: IInterface);
     function  Count: Integer;
     procedure Notify(Method: TIdMethod);
@@ -106,6 +107,32 @@ begin
   finally
     Self.ExpectedExceptionsLock.Release;
   end;
+end;
+
+procedure TIdNotificationList.Assign(Src: TPersistent);
+var
+  I:     Integer;
+  Other: TIdNotificationList;
+begin
+  if (Src is TIdNotificationList) then begin
+    Other := Src as TIdNotificationList;
+    Self.Lock.Acquire;
+    try
+      Self.List.Clear;
+
+      Other.Lock.Acquire;
+      try
+        for I := 0 to Other.List.Count - 1 do
+          Self.List.Add(Other.List[I]);
+      finally
+        Other.Lock.Release;
+      end;
+    finally
+      Self.Lock.Release;
+    end
+  end
+  else
+    inherited Assign(Src);
 end;
 
 procedure TIdNotificationList.AddListener(const L: IInterface);
