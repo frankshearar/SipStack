@@ -240,6 +240,7 @@ type
     procedure TestLast;
     procedure TestListStoresCopiesNotReferences;
     procedure TestSecondLast;
+    procedure TestThirdLast;
   end;
 
   TestTIdSipResponseList = class(TTestCase)
@@ -3519,6 +3520,46 @@ begin
     CheckEquals(MethodInvite,
                 Self.List.SecondLast.Method,
                 'List with three Requests');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestThirdLast;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodOptions;
+
+    Check(nil = Self.List.ThirdLast,
+          'Empty list');
+
+    Self.List.AddCopy(Request);
+
+    Check(nil = Self.List.ThirdLast,
+          'Non-empty list');
+
+    Request.Method := MethodInvite;
+    Self.List.AddCopy(Request);
+
+    Check(nil = Self.List.ThirdLast,
+         'List with two Requests');
+
+    Request.Method := MethodRegister;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodOptions,
+                Self.List.ThirdLast.Method,
+                'List with three Requests');
+
+    Request.Method := MethodCancel;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodInvite,
+                Self.List.ThirdLast.Method,
+                'List with four Requests');
   finally
     Request.Free;
   end;

@@ -60,6 +60,7 @@ type
     function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     procedure RaiseException(E: ExceptClass);
+    function  RequestAt(Index: Integer): TIdSipRequest;
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
     procedure ResetSentResponseCount;
@@ -67,6 +68,7 @@ type
     function  SecondLastResponse: TIdSipResponse;
     procedure Start; override;
     procedure Stop; override;
+    function  ThirdLastRequest: TIdSipRequest;
 
     property ACKCount:          Cardinal            read fACKCount;
     property FailWith:          ExceptClass         read fFailWith write fFailWith;
@@ -167,6 +169,11 @@ begin
   raise E.Create('TIdSipMockTransport');
 end;
 
+function TIdSipMockTransport.RequestAt(Index: Integer): TIdSipRequest;
+begin
+  Result := Self.fRequests.Items[Index];
+end;
+
 procedure TIdSipMockTransport.ResetACKCount;
 begin
   Self.fACKCount := 0;
@@ -198,6 +205,11 @@ end;
 
 procedure TIdSipMockTransport.Stop;
 begin
+end;
+
+function TIdSipMockTransport.ThirdLastRequest: TIdSipRequest;
+begin
+  Result := Self.fRequests.ThirdLast;
 end;
 
 //* TIdSipMockTransport Protected methods **************************************

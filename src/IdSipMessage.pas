@@ -1147,6 +1147,9 @@ type
   TIdSipRequestList = class(TObject)
   private
     List: TObjectList;
+
+    function FromTheFront(Offset: Integer): TIdSipRequest;
+    function GetItems(Index: Integer): TIdSipRequest;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -1158,6 +1161,9 @@ type
     function  IsEmpty: Boolean;
     function  Last: TIdSipRequest;
     function  SecondLast: TIdSipRequest;
+    function  ThirdLast: TIdSipRequest;
+
+    property Items[Index: Integer]: TIdSipRequest read GetItems; default;
   end;
 
   TIdSipResponseList = class(TObject)
@@ -1621,6 +1627,9 @@ implementation
 
 uses
   IdGlobal, IdSipDialog, IdUnicode;
+
+const
+  OffsetMustBeNonNegative = 'Offset must be greater or equal to zero';
 
 // class variables
 var
@@ -7122,10 +7131,7 @@ end;
 
 function TIdSipRequestList.First: TIdSipRequest;
 begin
-  if Self.IsEmpty then
-    Result := nil
-  else
-    Result := Self.List[0] as TIdSipRequest;
+  Result := Self.Items[0] as TIdSipRequest;
 end;
 
 function TIdSipRequestList.IsEmpty: Boolean;
@@ -7135,18 +7141,34 @@ end;
 
 function TIdSipRequestList.Last: TIdSipRequest;
 begin
-  if Self.IsEmpty then
-    Result := nil
-  else
-    Result := Self.List[Self.List.Count - 1] as TIdSipRequest;
+  Result := Self.FromTheFront(0);
 end;
 
 function TIdSipRequestList.SecondLast: TIdSipRequest;
 begin
-  if (Self.Count < 2) then
+  Result := Self.FromTheFront(1);
+end;
+
+function TIdSipRequestList.ThirdLast: TIdSipRequest;
+begin
+  Result := Self.FromTheFront(2);
+end;
+
+//* TIdSipRequestList Public methods *******************************************
+
+function TIdSipRequestList.FromTheFront(Offset: Integer): TIdSipRequest;
+begin
+  Assert(Offset >= 0, OffsetMustBeNonNegative);
+
+  Result := Self.Items[Self.List.Count - Offset - 1];
+end;
+
+function TIdSipRequestList.GetItems(Index: Integer): TIdSipRequest;
+begin
+  if (Index <0) or (Index >= Self.Count) then
     Result := nil
   else
-    Result := Self.List[Self.List.Count - 2] as TIdSipRequest;
+    Result := Self.List[Index] as TidSipRequest;
 end;
 
 //******************************************************************************
