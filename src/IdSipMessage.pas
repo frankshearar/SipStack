@@ -28,7 +28,7 @@ type
     LocalPort: Integer;
     PeerIP:    String;
     PeerPort:  Integer;
-  end;  
+  end;
 
   IIdSipMessageListener = interface
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
@@ -61,32 +61,53 @@ type
   TIdUri = class(TObject)
   private
     fScheme: String;
+  protected
+    procedure SetScheme(const Value: String); virtual;
   public
     function AsString: String; virtual;
     function IsSipUri: Boolean; virtual;
 
-    property Scheme: String read fScheme write fScheme;
+    property Scheme: String read fScheme write SetScheme;
   end;
 
   TIdSipRouteHeader = class;
 
+  TIdSipHostAndPort = class(TObject)
+  private
+    fDefaultPort:     Cardinal;
+    fHost:            String;
+    fPort:            Cardinal;
+    fPortIsSpecified: Boolean;
+
+    function  GetValue: String;
+    procedure SetPort(const Value: Cardinal);
+    procedure SetValue(Value: String);
+  public
+    class function CouldContainIPv6Reference(const Token: String): Boolean;
+
+    property DefaultPort:     Cardinal read fDefaultPort write fDefaultPort;
+    property Host:            String   read fHost write fHost;
+    property Port:            Cardinal read fPort write SetPort;
+    property PortIsSpecified: Boolean  read fPortIsSpecified write fPortIsSpecified;
+    property Value:           String   read GetValue write SetValue;
+  end;
+
   TIdSipUri = class(TIdUri)
   private
     fHeaders:         TIdSipHeaders;
-    fHost:            String;
     fPassword:        String;
-    fPort:            Cardinal;
-    fPortIsSpecified: Boolean;
     fUsername:        String;
+    HostAndPort:      TIdSipHostAndPort;
     Parameters:       TStrings;
 
     class function IsEscapedOrInSet(const Token: String;
                                     AcceptableChars: TIdSipChars): Boolean;
 
-    function  CouldContainIPv6Reference(const Token: String): Boolean;
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
+    function  GetHost: String;
     function  GetMaddr: String;
     function  GetMethod: String;
+    function  GetPort: Cardinal;
     function  GetTransport: String;
     function  GetTTL: Cardinal;
     function  GetUri: String;
@@ -104,6 +125,7 @@ type
     procedure ParseParams(ParamList: String);
     procedure ParseUserInfo(UserInfo: String);
     procedure Reset;
+    procedure SetHost(const Value: String);
     procedure SetMaddr(const Value: String);
     procedure SetMethod(const Value: String);
     procedure SetPort(const Value: Cardinal);
@@ -112,6 +134,8 @@ type
     procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
     function  UnidirectionalParameterCompare(ThisUri, ThatUri: TIdSipUri): Boolean;
+  protected
+    procedure SetScheme(const Value: String); override;
   public
     class function CreateUri(URI: String = ''): TIdUri;
     class function Decode(const Src: String): String;
@@ -155,11 +179,11 @@ type
     function  UserIsPhoneNumber: Boolean;
 
     property Headers:       TIdSipHeaders read fHeaders;
-    property Host:          String        read fHost write fHost;
+    property Host:          String        read GetHost write SetHost;
     property Maddr:         String        read GetMaddr write SetMaddr;
     property Method:        String        read GetMethod write SetMethod;
     property Password:      String        read fPassword write fPassword;
-    property Port:          Cardinal      read fPort write SetPort;
+    property Port:          Cardinal      read GetPort write SetPort;
     property Transport:     String        read GetTransport write SetTransport;
     property TTL:           Cardinal      read GetTTL write SetTTL;
     property Uri:           String        read GetUri write SetUri;
@@ -638,33 +662,37 @@ type
 
   TIdSipViaHeader = class(TIdSipHeader)
   private
-    fSentBy:         String;
-    fSipVersion:     String;
-    fPort:           Cardinal;
-    fTransport:      String;
-    PortIsSpecified: Boolean;
+    fSipVersion: String;
+    fTransport:  String;
+    HostAndPort: TIdSipHostAndPort;
 
     procedure AssertBranchWellFormed;
     procedure AssertMaddrWellFormed;
     procedure AssertReceivedWellFormed;
     procedure AssertTTLWellFormed;
-    function  CouldContainIPv6Reference(const Token: String): Boolean;
     function  GetBranch: String;
     function  GetMaddr: String;
+    function  GetPort: Cardinal;
     function  GetReceived: String;
     function  GetRport: Cardinal;
+    function  GetSentBy: String;
     function  GetTTL: Byte;
     procedure SetBranch(const Value: String);
     procedure SetMaddr(const Value: String);
     procedure SetPort(Value: Cardinal);
     procedure SetReceived(const Value: String);
     procedure SetRport(Value: Cardinal);
+    procedure SetSentBy(const Value: String);
+    procedure SetTransport(const Value: String);
     procedure SetTTL(Value: Byte);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
+    constructor Create; override;
+    destructor  Destroy; override;
+
     procedure Assign(Src: TPersistent); override;
     function  AsUri: String;
     function  DefaultPortForTransport(const Transport: String): Cardinal;
@@ -678,29 +706,35 @@ type
     procedure RemoveBranch;
 
     property Branch:     String              read GetBranch write SetBranch;
-    property SentBy:     String              read fSentBy write fSentBy;
+    property SentBy:     String              read GetSentBy write SetSentBy;
     property Maddr:      String              read GetMaddr write SetMaddr;
-    property Port:       Cardinal            read fPort write SetPort;
+    property Port:       Cardinal            read GetPort write SetPort;
     property Received:   String              read GetReceived write SetReceived;
     property Rport:      Cardinal            read GetRport write SetRport;
     property SipVersion: String              read fSipVersion write fSipVersion;
-    property Transport:  String              read fTransport write fTransport;
+    property Transport:  String              read fTransport write SetTransport;
     property TTL:        Byte                read GetTTL write SetTTL;
   end;
 
   TIdSipWarningHeader = class(TIdSipHeader)
   private
-    fAgent: String;
-    fCode:  Cardinal;
-    fText:  String;
+    fCode:       Cardinal;
+    fText:       String;
+    HostAndPort: TIdSipHostAndPort;
+
+    function  GetAgent: String;
+    procedure SetAgent(const Value: String);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
     procedure Parse(const Value: String); override;
   public
-    class function IsHostPort(const Token: String): Boolean;
+    class function IsHostPort(Token: String): Boolean;
 
-    property Agent: String   read fAgent write fAgent;
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Agent: String   read GetAgent write SetAgent;
     property Code:  Cardinal read fCode write fCode;
     property Text:  String   read fText write fText;
   end;
@@ -1952,6 +1986,64 @@ begin
          or (Lowercase(Self.Scheme) = SipsScheme);
 end;
 
+//* TIdUri Protected methods ***************************************************
+
+procedure TIdUri.SetScheme(const Value: String);
+begin
+  Self.fScheme := Value;
+end;
+
+//******************************************************************************
+//* TIdSipHostAndPort                                                          *
+//******************************************************************************
+
+class function TIdSipHostAndPort.CouldContainIPv6Reference(const Token: String): Boolean;
+begin
+  Result := (Token <> '') and (Token[1] = '[');
+end;
+
+//* TIdSipHostAndPort Private methods TIdSipHostAndPort
+
+function TIdSipHostAndPort.GetValue: String;
+begin
+  Result := Self.Host;
+
+  if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
+    Result := Result + ':' + IntToStr(Self.Port);
+end;
+
+procedure TIdSipHostAndPort.SetPort(const Value: Cardinal);
+begin
+  Self.fPort           := Value;
+  Self.PortIsSpecified := true;
+end;
+
+procedure TIdSipHostAndPort.SetValue(Value: String);
+begin
+  Self.PortIsSpecified := false;
+
+  if Self.CouldContainIPv6Reference(Value) then begin
+    // Re-add the ']' eaten by Fetch
+    Self.Host := Fetch(Value, ']') + ']';
+
+    // Eat up to the real host:port delimiter
+    Fetch(Value, ':');
+  end
+  else begin
+    // A numeric IPv4 address or a domain name
+    Self.Host := Fetch(Value, ':');
+  end;
+
+  if (Value = '') then begin
+    Self.Port := Self.DefaultPort;
+    Self.PortIsSpecified := false;
+  end
+  else begin
+    Self.Port := StrToIntDef(Value, Self.DefaultPort);
+    Self.PortIsSpecified := true;
+  end;
+end;
+
 //******************************************************************************
 //* TIdSipUri                                                                  *
 //******************************************************************************
@@ -2059,14 +2151,16 @@ constructor TIdSipUri.Create(URI: String = '');
 begin
   inherited Create;
 
-  Self.fHeaders   := TIdSipHeaders.Create;
-  Self.Parameters := TStringList.Create;
+  Self.fHeaders    := TIdSipHeaders.Create;
+  Self.HostAndPort := TIdSipHostAndPort.Create;
+  Self.Parameters  := TStringList.Create;
   Self.Parse(Uri);
 end;
 
 destructor TIdSipUri.Destroy;
 begin
   Self.Parameters.Free;
+  Self.HostAndPort.Free;
   Self.Headers.Free;
 
   inherited Destroy;
@@ -2219,7 +2313,7 @@ end;
 
 function TIdSipUri.PortIsSpecified: Boolean;
 begin
-  Result := Self.fPortIsSpecified;
+  Result := Self.HostAndPort.PortIsSpecified;
 end;
 
 procedure TIdSipUri.RemoveParameter(const Name: String);
@@ -2241,6 +2335,18 @@ end;
 function TIdSipUri.UserIsPhoneNumber: Boolean;
 begin
   Result := IsEqual(Self.UserParameter, UserParamPhone);
+end;
+
+//* TIdSipUri Protected methods ************************************************
+
+procedure TIdSipUri.SetScheme(const Value: String);
+begin
+  inherited SetScheme(Value);
+
+  if (Self.Scheme = SipsScheme) then
+    Self.HostAndPort.DefaultPort := IdPORT_SIPS
+  else
+    Self.HostAndPort.DefaultPort := IdPORT_SIP;
 end;
 
 //* TIdSipUri Private methods **************************************************
@@ -2272,11 +2378,6 @@ begin
   end;
 end;
 
-function TIdSipUri.CouldContainIPv6Reference(const Token: String): Boolean;
-begin
-  Result := (Token <> '') and (Token[1] = '[');
-end;
-
 function TIdSipUri.EqualParameters(const Uri: TIdSipUri): Boolean;
 begin
   Result := (Self.HasParameter(TransportParam) = Uri.HasParameter(TransportParam))
@@ -2296,6 +2397,11 @@ begin
           and Self.UnidirectionalParameterCompare(Uri, Self);
 end;
 
+function TIdSipUri.GetHost: String;
+begin
+  Result := Self.HostAndPort.Host;
+end;
+
 function TIdSipUri.GetMaddr: String;
 begin
   Result := Self.ParamValue(MaddrParam);
@@ -2304,6 +2410,11 @@ end;
 function TIdSipUri.GetMethod: String;
 begin
   Result := Self.ParamValue(MethodParam);
+end;
+
+function TIdSipUri.GetPort: Cardinal;
+begin
+  Result := Self.HostAndPort.Port;
 end;
 
 function TIdSipUri.GetTransport: String;
@@ -2335,13 +2446,7 @@ begin
       Result := Result + '@';
     end;
 
-    if TIdIPAddressParser.IsIPv6Address(Self.Host) then
-      Result := Result + '[' + Self.Host + ']'
-    else
-      Result := Result + Self.Host;
-
-    if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
-      Result := Result + ':' + IntToStr(Self.Port);
+    Result := Result + Self.HostAndPort.Value;
 
     Result := Result + Self.ParamsAsString + Self.HeadersAsString;
   end;
@@ -2477,31 +2582,7 @@ end;
 
 procedure TIdSipUri.ParseHost(HostAndPort: String);
 begin
-  if Self.CouldContainIPv6Reference(HostAndPort) then begin
-    Self.Host := Fetch(HostAndPort, ']');
-
-    // Get rid of the [ we just ate.
-    Self.Host := Copy(Self.Host, 2, Length(Self.Host));
-
-    // And then eat up to the real host:port delimiter
-    Fetch(HostAndPort, ':');
-  end
-  else begin
-    // A numeric IPv4 address or a domain name
-    Self.Host := Fetch(HostAndPort, ':');
-  end;
-
-  if (HostAndPort = '') then begin
-    if Self.IsSecure then
-      Self.Port := IdPORT_SIPS
-    else
-      Self.Port := IdPORT_SIP;
-    Self.fPortIsSpecified := false;
-  end
-  else begin
-    Self.Port := StrToIntDef(HostAndPort, IdPORT_SIP);
-    Self.fPortIsSpecified := true;
-  end;
+  Self.HostAndPort.Value := HostAndPort;
 end;
 
 procedure TIdSipUri.ParseParams(ParamList: String);
@@ -2533,7 +2614,12 @@ begin
   Self.Scheme    := '';
   Self.Username  := '';
 
-  Self.fPortIsSpecified := false;
+  Self.HostAndPort.PortIsSpecified := false;  
+end;
+
+procedure TIdSipUri.SetHost(const Value: String);
+begin
+  Self.HostAndPort.Host := Value;
 end;
 
 procedure TIdSipUri.SetMaddr(const Value: String);
@@ -2548,8 +2634,7 @@ end;
 
 procedure TIdSipUri.SetPort(const Value: Cardinal);
 begin
-  Self.fPort            := Value;
-  Self.fPortIsSpecified := true;
+  Self.HostAndPort.Port := Value;
 end;
 
 procedure TIdSipUri.SetTransport(const Value: String);
@@ -4423,6 +4508,20 @@ end;
 //******************************************************************************
 //* TIdSipViaHeader Public methods *********************************************
 
+constructor TIdSipViaHeader.Create;
+begin
+  inherited Create;
+
+  Self.HostAndPort := TIdSipHostAndPort.Create;
+end;
+
+destructor TIdSipViaHeader.Destroy;
+begin
+  Self.HostAndPort.Free;
+
+  inherited Destroy;
+end;
+
 procedure TIdSipViaHeader.Assign(Src: TPersistent);
 var
   V: TIdSipViaHeader;
@@ -4434,11 +4533,12 @@ begin
     // avoid the parse checking that the setters normally do. For instance,
     // a blank or RFC 2543 style branch is invalid in RFC 3261, but we still
     // need to be able to work with the (malformed) Via.
-    fSentBy              := V.SentBy;
-    fSipVersion          := V.SipVersion;
-    fPort                := V.Port;
-    fTransport           := V.Transport;
-    Self.PortIsSpecified := V.PortIsSpecified;
+    Self.SentBy          := V.SentBy;
+    Self.SipVersion      := V.SipVersion;
+    Self.Port            := V.Port;
+    Self.Transport       := V.Transport;
+
+    Self.HostAndPort.PortIsSpecified := V.HostAndPort.PortIsSpecified;
 
     // And we use the usual way of setting everything else.
     Self.Parameters := V.Parameters;
@@ -4455,10 +4555,7 @@ begin
   else
     Result := SipScheme;
 
-  Result := Result + ':' + Self.SentBy;
-
-  if Self.PortIsSpecified then
-    Result := Result + ':' + IntToStr(Self.Port);
+  Result := Result + Self.HostAndPort.Value;
 end;
 
 function TIdSipViaHeader.DefaultPortForTransport(const Transport: String): Cardinal;
@@ -4518,16 +4615,9 @@ end;
 
 function TIdSipViaHeader.GetValue: String;
 begin
-  Result := Self.SipVersion + '/' + Self.Transport + ' ';
+  Result := Self.SipVersion + '/' + Self.Transport
+          + ' ' + Self.HostAndPort.Value;
 
-  if TIdIPAddressParser.IsIPv6Address(Self.SentBy) then
-    Result := Result + '[' + Self.SentBy + ']'
-  else
-    Result := Result + Self.SentBy;
-
-  if Self.PortIsSpecified or not Self.IsDefaultPortForTransport(Self.Port,
-                                                                Self.Transport) then
-    Result := Result + ':' + IntToStr(Self.Port);
 end;
 
 procedure TIdSipViaHeader.Parse(const Value: String);
@@ -4558,36 +4648,7 @@ begin
 
   Token := Trim(Fetch(S, ';'));
 
-  if Self.CouldContainIPv6Reference(Token) then begin
-    Self.SentBy := Fetch(Token, ']');
-
-    // Get rid of the [ we just ate.
-    Self.SentBy := Copy(Self.SentBy, 2, Length(Self.SentBy));
-
-    // And then eat up to the real host:port delimiter
-    Fetch(Token, ':');
-  end
-  else begin
-    // A numeric IPv4 address or a domain name
-    Self.SentBy := Fetch(Token, ':');
-  end;
-
-  if (Token = '') then begin
-    Self.Port := Self.DefaultPortForTransport(Self.Transport);
-    Self.PortIsSpecified := false;
-  end
-  else begin
-    try
-      Self.Port := StrToInt(Token);
-      Self.PortIsSpecified := true;
-    except
-      on EConvertError do
-        Self.FailParse(InvalidNumber);
-      on ERangeError do
-        Self.FailParse(InvalidNumber);
-      else raise;
-    end;
-  end;
+  Self.HostAndPort.Value := Token;
 end;
 
 //* TIdSipViaHeader Private methods ********************************************
@@ -4625,11 +4686,6 @@ begin
   end;
 end;
 
-function TIdSipViaHeader.CouldContainIPv6Reference(const Token: String): Boolean;
-begin
-  Result := (Token <> '') and (Token[1] = '[');
-end;
-
 function TIdSipViaHeader.GetBranch: String;
 begin
   if Self.HasParam(BranchParam) then
@@ -4646,6 +4702,11 @@ begin
     Result := '';
 end;
 
+function TIdSipViaHeader.GetPort: Cardinal;
+begin
+  Result := Self.HostAndPort.Port;
+end;
+
 function TIdSipViaHeader.GetReceived: String;
 begin
   if Self.HasParam(ReceivedParam) then
@@ -4660,6 +4721,11 @@ begin
     Result := StrToIntDef(Self.Params[RPortParam], 0)
   else
     Result := 0;
+end;
+
+function TIdSipViaHeader.GetSentBy: String;
+begin
+  Result := Self.HostAndPort.Host;
 end;
 
 function TIdSipViaHeader.GetTTL: Byte;
@@ -4686,8 +4752,7 @@ end;
 
 procedure TIdSipViaHeader.SetPort(Value: Cardinal);
 begin
-  Self.fPort           := Value;
-  Self.PortIsSpecified := true;
+  Self.HostAndPort.Port := Value;
 end;
 
 procedure TIdSipViaHeader.SetReceived(const Value: String);
@@ -4702,6 +4767,18 @@ begin
   Self.Params[RportParam] := IntToStr(Value);
 end;
 
+procedure TIdSipViaHeader.SetSentBy(const Value: String);
+begin
+  Self.HostAndPort.Host := Value;
+end;
+
+procedure TIdSipViaHeader.SetTransport(const Value: String);
+begin
+  Self.fTransport := Value;
+
+  Self.HostAndPort.DefaultPort := Self.DefaultPortForTransport(Value)
+end;
+
 procedure TIdSipViaHeader.SetTTL(Value: Byte);
 begin
   Self.Params[TTLParam] := IntToStr(Value);
@@ -4711,14 +4788,40 @@ end;
 //* TIdSipWarningHeader                                                        *
 //******************************************************************************
 
-class function TIdSipWarningHeader.IsHostPort(const Token: String): Boolean;
+class function TIdSipWarningHeader.IsHostPort(Token: String): Boolean;
 var
-  Colon: Integer;
+  HP: TIdSipHostAndPort;
 begin
-  Colon := IndyPos(':', Token);
+  try
+    HP := TIdSipHostAndPort.Create;
+    try
+      HP.Value := Token;
+    finally
+      HP.Free;
+    end;
 
-  Result := TIdSipParser.IsToken(Copy(Token, 1, Colon - 1))
-        and TIdSipParser.IsNumber(Copy(Token, Colon + 1, Length(Token)));
+    Result := TIdIPAddressParser.IsIPv4Address(HP.Host)
+           or TIdIPAddressParser.IsIPv6Address(HP.Host)
+  except
+    on EBadHeader do
+      Result := false;
+    on EConvertError do
+      Result := false;
+  end;
+end;
+
+constructor TIdSipWarningHeader.Create;
+begin
+  inherited Create;
+
+  Self.HostAndPort := TIdSipHostAndPort.Create;
+end;
+
+destructor TIdSipWarningHeader.Destroy;
+begin
+  Self.HostAndPort.Free;
+
+  inherited Destroy;
 end;
 
 //* TIdSipWarningHeader Protected methods **************************************
@@ -4766,9 +4869,7 @@ begin
 
   // warn-agent
   Token := Fetch(S, ' ');
-  if not TIdSipParser.IsToken(Token) and not Self.IsHostPort(Token) then
-    Self.FailParse(InvalidWarnAgent);
-  Self.Agent := Token;
+  Self.HostAndPort.Value := Token;
 
   // warn-text
   if not TIdSipParser.IsQuotedString(S) then
@@ -4776,6 +4877,18 @@ begin
 
   DecodeQuotedStr(Copy(S, 2, Length(S) - 2), S);
   Self.Text := S;
+end;
+
+//* TIdSipWarningHeader Private methods **************************************&&
+
+function TIdSipWarningHeader.GetAgent: String;
+begin
+  Result := Self.HostAndPort.Value;
+end;
+
+procedure TIdSipWarningHeader.SetAgent(const Value: String);
+begin
+  Self.HostAndPort.Value := Value;
 end;
 
 //******************************************************************************

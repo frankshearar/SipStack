@@ -15,6 +15,25 @@ uses
   IdSipMessage, TestFramework;
 
 type
+  TestTIdSipHostAndPort = class(TTestCase)
+  private
+    HP:   TIdSipHostAndPort;
+    Port: Cardinal;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestSetValueHost;
+    procedure TestSetValueHostWithDefaultPort;
+    procedure TestSetValueHostWithPort;
+    procedure TestSetValueIPv4Address;
+    procedure TestSetValueIPv4AddressWithDefaultPort;
+    procedure TestSetValueIPv4AddressWithPort;
+    procedure TestSetValueIPv6Address;
+    procedure TestSetValueIPv6AddressWithDefaultPort;
+    procedure TestSetValueIPv6AddressWithPort;
+  end;
+
   TestTIdSipUri = class(TTestCase)
   private
     EqualityA: TIdSipUri;
@@ -125,8 +144,186 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipUri unit tests');
+  Result.AddTest(TestTIdSipHostAndPort.Suite);
   Result.AddTest(TestTIdSipUri.Suite);
 //  Result.AddTest(TestTIdSipsUri.Suite);
+end;
+
+//******************************************************************************
+//* TestTIdSipHostAndPort                                                      *
+//******************************************************************************
+//* TestTIdSipHostAndPort Public methods ***************************************
+
+procedure TestTIdSipHostAndPort.SetUp;
+begin
+  inherited SetUp;
+
+  Self.HP := TIdSipHostAndPort.Create;
+  Self.HP.DefaultPort := 1234;
+
+  Self.Port := Self.HP.DefaultPort + 100;
+end;
+
+procedure TestTIdSipHostAndPort.TearDown;
+begin
+  Self.HP.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipHostAndPort Published methods ************************************
+
+procedure TestTIdSipHostAndPort.TestSetValueHost;
+begin
+  Self.HP.Value := 'foo.com';
+
+  CheckEquals('foo.com',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(not Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('foo.com',
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueHostWithDefaultPort;
+begin
+  Self.HP.Value := 'foo.com:' + IntToStr(Self.HP.DefaultPort);
+
+  CheckEquals('foo.com',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('foo.com:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueHostWithPort;
+begin
+  Self.HP.Value := 'foo.com:' + IntToStr(Self.Port);
+
+  CheckEquals('foo.com',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.Port,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('foo.com:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv4Address;
+begin
+  Self.HP.Value := '127.0.0.1';
+
+  CheckEquals('127.0.0.1',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(not Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('127.0.0.1',
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv4AddressWithDefaultPort;
+begin
+  Self.HP.Value := '127.0.0.1:' + IntToStr(Self.HP.DefaultPort);
+
+  CheckEquals('127.0.0.1',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('127.0.0.1:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv4AddressWithPort;
+begin
+  Self.HP.Value := '127.0.0.1:' + IntToStr(Self.Port);
+
+  CheckEquals('127.0.0.1',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.Port,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('127.0.0.1:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv6Address;
+begin
+  Self.HP.Value := '[1::127.0.0.1]';
+
+  CheckEquals('[1::127.0.0.1]',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(not Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('[1::127.0.0.1]',
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv6AddressWithDefaultPort;
+begin
+  Self.HP.Value := '[1::127.0.0.1]:' + IntToStr(Self.HP.DefaultPort);
+
+  CheckEquals('[1::127.0.0.1]',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.HP.DefaultPort,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('[1::127.0.0.1]:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueIPv6AddressWithPort;
+begin
+  Self.HP.Value := '[1::127.0.0.1]:' + IntToStr(Self.Port);
+
+  CheckEquals('[1::127.0.0.1]',
+              Self.HP.Host,
+              'Host');
+  CheckEquals(Self.Port,
+              Self.HP.Port,
+              'Port');
+  Check(Self.HP.PortIsSpecified,
+              'PortIsSpecified');
+  CheckEquals('[1::127.0.0.1]:' + IntToStr(Self.HP.Port),
+              Self.HP.Value,
+              'GetValue');
 end;
 
 //******************************************************************************
@@ -1172,7 +1369,7 @@ procedure TestTIdSipUri.TestSetUriWithIPv6;
 begin
   Self.Uri.Uri := 'sip:[2002:DEAD:BEEF:1::1]:15060';
 
-  CheckEquals('2002:DEAD:BEEF:1::1',
+  CheckEquals('[2002:DEAD:BEEF:1::1]',
               Self.Uri.Host,
               'Host');
   CheckEquals(15060,

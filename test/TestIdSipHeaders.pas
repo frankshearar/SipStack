@@ -403,7 +403,6 @@ type
   published
     procedure TestAssign;
     procedure TestAssignWithDefaultPortSpecified;
-    procedure TestAssignFromBadlyFormedVia;
     procedure TestBranch;
     procedure TestHasBranch;
     procedure TestHasMaddr;
@@ -438,9 +437,9 @@ type
     procedure SetUp; override;
   published
     procedure TestGetValue;
-    procedure TestIsHostPort;
     procedure TestName;
     procedure TestValue; override;
+    procedure TestSetValueIPv6;
     procedure TestSetValueMalformed;
     procedure TestSetValuePortSpecified;
   end;
@@ -3585,21 +3584,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipViaHeader.TestAssignFromBadlyFormedVia;
-var
-  V2: TIdSipViaHeader;
-begin
-  V2 := TIdSipViaHeader.Create;
-  try
-    Self.V.Branch := BranchMagicCookie + 'f00';
-    V2.Assign(Self.V);
-    Check(V2.Equals(Self.V), 'V2 not properly assigned to');
-    CheckEquals(Self.V.Branch, V2.Branch, 'Branch');
-  finally
-    V2.Free;
-  end;
-end;
-
 procedure TestTIdSipViaHeader.TestBranch;
 begin
   Self.V.Branch := BranchMagicCookie;
@@ -3894,20 +3878,20 @@ end;
 
 procedure TestTIdSipViaHeader.TestValueWithIPv6NumericAddress;
 const
-  IPv6 = '2002:DEAD:BEEF:1::1';
+  IPv6 = '[2002:DEAD:BEEF:1::1]';
 begin
-  Self.V.Value := 'SIP/2.0/UDP [' + IPv6 + ']';
+  Self.V.Value := 'SIP/2.0/UDP ' + IPv6;
 
   CheckEquals(IPv6, Self.V.SentBy, 'IPv6 sent-by');
 end;
 
 procedure TestTIdSipViaHeader.TestValueWithIPv6NumericAddressAndPort;
 const
-  IPv6 = '2002:DEAD:BEEF:1::1';
+  IPv6 = '[2002:DEAD:BEEF:1::1]';
 var
   Value: String;
 begin
-  Value := 'SIP/2.0/UDP [' + IPv6 + ']:' + IntToStr(IdPORT_SIP);
+  Value := 'SIP/2.0/UDP ' + IPv6 + ':' + IntToStr(IdPORT_SIP);
   Self.V.Value := Value;
 
   CheckEquals(IPv6, Self.V.SentBy, 'IPv6 sent-by');
@@ -4024,25 +4008,6 @@ begin
               'Value');
 end;
 
-procedure TestTIdSipWarningHeader.TestIsHostPort;
-begin
-  Check(not TIdSipWarningHeader.IsHostPort(''),
-        'Empty string');
-  Check(not TIdSipWarningHeader.IsHostPort('foo'),
-        'foo');
-  Check(not TIdSipWarningHeader.IsHostPort('foo:bar'),
-        'foo:bar');
-
-  Check(TIdSipWarningHeader.IsHostPort('foo:0'),
-        'foo:0');
-  Check(TIdSipWarningHeader.IsHostPort('foo:25'),
-        'foo:25');
-  Check(TIdSipWarningHeader.IsHostPort('foo:65535'),
-        'foo:65535');
-  Check(TIdSipWarningHeader.IsHostPort('foo:65536'),
-        'foo:65536');
-end;
-
 procedure TestTIdSipWarningHeader.TestName;
 begin
   CheckEquals(WarningHeader, Self.W.Name, 'Name');
@@ -4060,6 +4025,15 @@ begin
   CheckEquals('I dont know what message goes here',
               Self.W.Text,
               'Text');
+end;
+
+procedure TestTIdSipWarningHeader.TestSetValueIPv6;
+begin
+  Self.W.Value := '301 [1::127.0.0.1] "Not much"';
+
+  CheckEquals(301,              Self.W.Code,  'Code');
+  CheckEquals('[1::127.0.0.1]', Self.W.Agent, 'Agent');
+  CheckEquals('Not much',       Self.W.Text,  'Text');
 end;
 
 procedure TestTIdSipWarningHeader.TestSetValueMalformed;
