@@ -3992,6 +3992,9 @@ var
   I:   Integer;
   SDP: TIdSdpPayload;
 begin
+  // We don't need to know the MIME type: this is an SDP multimedia session,
+  // ergo we simply assume that RemoteSessionDesc contains application/sdp.
+
   // According to RFC 3264, the answer must have the same number of media
   // descriptions as an offer. Thus, (regardless of whether RemoteSessionDesc
   // contains an offer or an answer), RemoteSessionDesc must contain the same
