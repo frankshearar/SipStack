@@ -596,6 +596,8 @@ type
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
+    class function IsHostPort(const Token: String): Boolean;
+
     property Agent: String   read fAgent write fAgent;
     property Code:  Cardinal read fCode write fCode;
     property Text:  String   read fText write fText;
@@ -3770,6 +3772,16 @@ end;
 //******************************************************************************
 //* TIdSipWarningHeader                                                        *
 //******************************************************************************
+
+class function TIdSipWarningHeader.IsHostPort(const Token: String): Boolean;
+var
+  Colon: Integer;
+begin
+  Colon := Pos(':', Token);
+
+  Result := true;
+end;
+
 //* TIdSipWarningHeader Protected methods **************************************
 
 function TIdSipWarningHeader.GetName: String;
@@ -3806,7 +3818,7 @@ begin
 
   // warn-agent
   Token := Fetch(S, ' ');
-  if not TIdSipParser.IsToken(Token) then
+  if not TIdSipParser.IsToken(Token) and not Self.IsHostPort(Token) then
     Self.FailParse;
   Self.Agent := Token;
 
