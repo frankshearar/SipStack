@@ -3,7 +3,7 @@ unit TestIdSipParser;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, TestFramework, TestFrameworkEx;
+  Classes, IdSipMessage, TestFramework, TestFrameworkEx;
 
 type
   TestFunctions = class(TTestCase)
@@ -44,6 +44,10 @@ type
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
+    procedure TestParseAndMakeRequest;
+    procedure TestParseAndMakeRequestFromAResponseString;
+    procedure TestParseAndMakeResponse;
+    procedure TestParseAndMakeResponseFromString;
     procedure TestParseExtensiveRequest;
     procedure TestParseReallyLongViaHeader;
     procedure TestParseRequest;
@@ -89,7 +93,7 @@ type
 implementation
 
 uses
-  DateUtils, IdSimpleParser, SysUtils, TestMessages;
+  DateUtils, IdSipConsts, IdSimpleParser, IdSipHeaders, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -462,6 +466,86 @@ begin
     end;
   finally
     Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeRequest;
+var
+  Req: TIdSipRequest;
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(BasicRequest);
+  try
+    Self.P.Source := Str;
+
+    Req := Self.P.ParseAndMakeRequest;
+    try
+      Self.CheckBasicRequest(Req);
+    finally
+      Req.Free;
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeRequestFromAResponseString;
+var
+  Req: TIdSipRequest;
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/;2.0 200 OK'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+
+    try
+      Req := Self.P.ParseAndMakeRequest;
+      try
+        Self.CheckBasicRequest(Req);
+      finally
+        Req.Free;
+      end;
+
+      Fail('Failed to bail out creating a request from a malformed response');
+    except
+      on EBadRequest do;
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeResponse;
+var
+  Res: TIdSipResponse;
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(BasicResponse);
+  try
+    Self.P.Source := Str;
+
+    Res := Self.P.ParseAndMakeResponse;
+    try
+      Self.CheckBasicResponse(Res);
+    finally
+      Res.Free;
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseAndMakeResponseFromString;
+var
+  R: TIdSipResponse;
+begin
+  R := Self.P.ParseAndMakeResponse(BasicResponse);
+  try
+    CheckBasicResponse(R, false);
+    CheckEquals(BasicBody, R.Body, 'Body should be set from a string');
+  finally
+    R.Free;
   end;
 end;
 

@@ -3,8 +3,8 @@ unit TestIdSipTcpServer;
 interface
 
 uses
-  IdSipMessage, IdSipParser, IdSipTcpServer, IdTCPClient, IdTCPServer, SyncObjs,
-  SysUtils, TestFrameworkEx;
+  IdSipMessage, IdSipTcpServer, IdTCPClient, IdTCPServer, SyncObjs, SysUtils,
+  TestFrameworkEx;
 
 type
   TestTIdSipTcpServer = class(TThreadingTestCase)
@@ -16,15 +16,15 @@ type
     Server:            TIdSipTcpServer;
 
     procedure CheckMultipleMessages(AThread: TIdPeerThread;
-                                    AMessage: TIdSipMessage);
+                              const Request: TIdSipRequest);
     procedure CheckMethodEvent(AThread: TIdPeerThread;
-                               AMessage: TIdSipMessage);
+                               const Request: TIdSipRequest);
     procedure CheckReceivedParamDifferentIPv4SentBy(AThread: TIdPeerThread;
-                                                    AMessage: TIdSipMessage);
+                                              const Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(AThread: TIdPeerThread;
-                                 AMessage: TIdSipMessage);
+                                     const Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(AThread: TIdPeerThread;
-                                 AMessage: TIdSipMessage);
+                                     const Request: TIdSipRequest);
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
     procedure CheckTortureTest22;
@@ -76,7 +76,7 @@ const
 implementation
 
 uses
-  Classes, IdSimpleParser, TestFramework, TestMessages;
+  Classes, IdSipConsts, IdSimpleParser, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -120,7 +120,7 @@ end;
 //* TestTIdSipTcpServer Private methods ****************************************
 
 procedure TestTIdSipTcpServer.CheckMultipleMessages(AThread: TIdPeerThread;
-                                                    AMessage: TIdSipMessage);
+                                              const Request: TIdSipRequest);
 begin
   try
     Inc(Self.MethodCallCount);
@@ -137,14 +137,10 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckMethodEvent(AThread: TIdPeerThread;
-                                               AMessage: TIdSipMessage);
-var
-  Request: TIdSipRequest;
+procedure TestTIdSipTcpServer.CheckMethodEvent(      AThread: TIdPeerThread;
+                                               const Request: TIdSipRequest);
 begin
   try
-    Request := AMessage as TIdSipRequest;
-
     CheckEquals('INVITE',                               Request.Method,        'Method');
     CheckEquals('sip:wintermute@tessier-ashpool.co.lu', Request.RequestUri,    'RequestUri');
     CheckEquals('SIP/2.0',                              Request.SIPVersion,    'SipVersion');
@@ -176,16 +172,16 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckReceivedParamDifferentIPv4SentBy(AThread: TIdPeerThread;
-                                                                    AMessage: TIdSipMessage);
+                                                              const Request: TIdSipRequest);
 begin
-  Self.CheckReceivedParamFQDNSentBy(AThread, AMessage);
+  Self.CheckReceivedParamFQDNSentBy(AThread, Request);
 end;
 
 procedure TestTIdSipTcpServer.CheckReceivedParamFQDNSentBy(AThread: TIdPeerThread;
-                                                 AMessage: TIdSipMessage);
+                                                     const Request: TIdSipRequest);
 begin
   try
-    CheckNotEquals('', AMessage.Path.LastHop.Received, 'Received param not appended by transport layer');
+    CheckNotEquals('', Request.Path.LastHop.Received, 'Received param not appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -197,10 +193,10 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckReceivedParamIPv4SentBy(AThread: TIdPeerThread;
-                                                           AMessage: TIdSipMessage);
+                                                     const Request: TIdSipRequest);
 begin
   try
-    CheckEquals('', AMessage.Path.LastHop.Received, 'Received param appended by transport layer');
+    CheckEquals('', Request.Path.LastHop.Received, 'Received param appended by transport layer');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -393,7 +389,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestLeadingEmptyLines;
 begin
-  Server.OnMethod := Self.CheckMethodEvent;
+  Self.Server.OnRequest := Self.CheckMethodEvent;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(#13#10#13#10#13#10
@@ -407,7 +403,7 @@ procedure TestTIdSipTcpServer.TestMalformedRequest;
 var
   Expected: TStrings;
   Received: TStrings;
-  Temp:     TIdSipMessage;
+  Temp:     TIdSipResponse;
   P:        TIdSipParser;
 begin
   // For the weak of eyes - the SIP-Version is malformed. Spot the semicolon.
@@ -419,8 +415,12 @@ begin
   try
     P := TIdSipParser.Create;
     try
-      Temp := P.MakeBadRequestResponse(Format(InvalidSipVersion, ['SIP/;2.0']));
+      Temp := TIdSipResponse.Create;
       try
+        Temp.StatusCode := SIPBadRequest;
+        Temp.StatusText := Format(InvalidSipVersion, ['SIP/;2.0']);
+        Temp.SipVersion := SipVersion;
+
         Expected.Text := Temp.AsString;
       finally
         Temp.Free;
@@ -444,7 +444,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestMethodEvent;
 begin
-  Server.OnMethod := Self.CheckMethodEvent;
+  Server.OnRequest := Self.CheckMethodEvent;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
@@ -455,7 +455,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestMultipleMessages;
 begin
-  Server.OnMethod := Self.CheckMultipleMessages;
+  Server.OnRequest := Self.CheckMultipleMessages;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN])
@@ -469,7 +469,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamDifferentIPv4SentBy;
 begin
-  Server.OnMethod := Self.CheckReceivedParamDifferentIPv4SentBy;
+  Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaDifferentIP]));
@@ -480,7 +480,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamFQDNSentBy;
 begin
-  Server.OnMethod := Self.CheckReceivedParamFQDNSentBy;
+  Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
@@ -491,7 +491,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestReceivedParamIPv4SentBy;
 begin
-  Server.OnMethod := Self.CheckReceivedParamIPv4SentBy;
+  Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaIP]));

@@ -3,8 +3,8 @@ unit Spike;
 interface
 
 uses
-  Classes, Controls, Forms, IdSipMessage, IdSipParser, IdSipTcpServer,
-  IdSipUdpServer, IdTCPServer, StdCtrls, ExtCtrls;
+  Classes, Controls, Forms, IdSipMessage, IdSipTcpServer, IdSipUdpServer,
+  IdTCPServer, StdCtrls, ExtCtrls;
 
 type
   TrnidSpike = class(TForm)
@@ -15,10 +15,8 @@ type
     TcpServer: TIdSipTcpServer;
     UdpServer: TIdSipUdpServer;
 
-    procedure OnMethod(AThread: TIdPeerThread;
-                       AMessage: TIdSipMessage);
-    procedure OnRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure OnResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure OnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure OnUdpRequest(Sender: TObject; const Request: TIdSipRequest);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -42,12 +40,11 @@ begin
 
   Self.UdpServer := TIdSipUdpServer.Create(nil);
 
-  Self.UdpServer.OnRequest  := Self.OnRequest;
-  Self.UdpServer.OnResponse := Self.OnResponse;
+  Self.UdpServer.OnRequest  := Self.OnUdpRequest;
   Self.UdpServer.Active     := true;
 
   Self.TcpServer := TIdSipTcpServer.Create(nil);
-  Self.TcpServer.OnMethod := Self.OnMethod;
+  Self.TcpServer.OnRequest  := Self.OnTcpRequest;
 end;
 
 destructor TrnidSpike.Destroy;
@@ -60,23 +57,16 @@ end;
 
 //* TrnidSpike Private methods *************************************************
 
-procedure TrnidSpike.OnMethod(AThread: TIdPeerThread;
-                              AMessage: TIdSipMessage);
+procedure TrnidSpike.OnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
-  Self.Log.Lines.Add('=== TCP message ===');
-  Self.Log.Lines.Add(AMessage.AsString);
-end;
-
-procedure TrnidSpike.OnRequest(Sender: TObject; const Request: TIdSipRequest);
-begin
-  Self.Log.Lines.Add('=== UDP Request ===');
+  Self.Log.Lines.Add('=== TCP Request ===');
   Self.Log.Lines.Add(Request.AsString);
 end;
 
-procedure TrnidSpike.OnResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TrnidSpike.OnUdpRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
-  Self.Log.Lines.Add('=== UDP Response ===');
-  Self.Log.Lines.Add(Response.AsString);
+  Self.Log.Lines.Add('=== UDP Request ===');
+  Self.Log.Lines.Add(Request.AsString);
 end;
 
 procedure TrnidSpike.ServerTypeClick(Sender: TObject);

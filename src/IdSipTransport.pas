@@ -3,24 +3,14 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, IdSipTcpServer, IdSipUdpServer,
+  Classes, IdSipConsts, IdSipMessage, IdSipTcpServer, IdSipUdpServer,
   IdTCPClient, IdTCPServer, IdUDPClient, IdUDPServer, SysUtils;
 
 type
-(*
-  IIdSipMessageListener = interface
-  ['{DFB6D261-16DE-4387-BD92-A01689D1851C}']
-    procedure ProcessRequest(const R: TIdSipRequest);
-    procedure ProcessResponse(const R: TIdSipResponse);
-  end;
-*)
   TIdSipNotifyEvent = TNotifyEvent;
   TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
   TIdSipRequestEvent = procedure(Sender: TObject; const R: TIdSipRequest) of object;
 
-  // todo:
-  // * 18.1.1 - if the MTU of a message is too big then the message must be
-  //   sent using something like TCP, and the message altered appropriately
   TIdSipAbstractTransport = class(TObject)
   private
     fOnRequest:  TIdSipRequestEvent;
@@ -49,8 +39,8 @@ type
   private
     Transport: TIdSipTcpServer;
 
-    procedure DoOnMethod(AThread: TIdPeerThread;
-                         AMessage: TIdSipMessage);
+    procedure DoOnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
   public
     constructor Create(const Port: Cardinal = IdPORT_SIP); override;
     destructor  Destroy; override;
@@ -114,7 +104,7 @@ const
 implementation
 
 uses
-  IdURI;
+  IdSipTcpClient, IdURI;
 
 //******************************************************************************
 //* TIdSipAbstractTransport                                                    *
@@ -171,7 +161,7 @@ begin
 
   Self.Transport := TIdSipTcpServer.Create(nil);
   Self.Transport.DefaultPort := Port;
-  Self.Transport.OnMethod := Self.DoOnMethod;
+  Self.Transport.OnRequest   := Self.DoOnTcpRequest;
 end;
 
 destructor TIdSipTcpTransport.Destroy;
@@ -183,15 +173,16 @@ end;
 
 procedure TIdSipTcpTransport.SendRequest(const R: TIdSipRequest);
 var
-  Client: TIdTcpClient;
+  Client: TIdSipTcpClient;
   Host:   String;
   Port:   Cardinal;
 begin
-  Client := TIdTcpClient.Create(nil);
+  Client := TIdSipTcpClient.Create(nil);
   try
     Self.ExtractHostAndPort(R.RequestUri, Host, Port);
     Client.Host := Host;
     Client.Port := Port;
+    Client.OnResponse := Self.DoOnTcpResponse;
 
     Client.Connect(DefaultTimeout);
     try
@@ -220,13 +211,14 @@ end;
 
 //* TIdSipTcpTransport Private methods *****************************************
 
-procedure TIdSipTcpTransport.DoOnMethod(AThread: TIdPeerThread;
-                                        AMessage: TIdSipMessage);
+procedure TIdSipTcpTransport.DoOnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
-  if AMessage is TIdSipRequest then
-    Self.OnRequest(Self, AMessage as TIdSipRequest)
-  else if AMessage is TIdSipResponse then
-    Self.OnResponse(Self, AMessage as TIdSipResponse);
+  Self.DoOnRequest(Request);
+end;
+
+procedure TIdSipTcpTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
+begin
+  Self.DoOnResponse(Response);
 end;
 
 //******************************************************************************
@@ -241,7 +233,6 @@ begin
   Self.Transport := TIdSipUdpServer.Create(nil);
   Self.Transport.DefaultPort := Port;
   Self.Transport.OnRequest   := Self.DoOnReceiveRequest;
-  Self.Transport.OnResponse  := Self.DoOnReceiveResponse;
 end;
 
 destructor TIdSipUdpTransport.Destroy;
@@ -253,9 +244,13 @@ end;
 
 procedure TIdSipUdpTransport.SendRequest(const R: TIdSipRequest);
 var
-  Client: TIdUdpClient;
-  Host:   String;
-  Port:   Cardinal;
+  Client:                TIdUdpClient;
+  Host:                  String;
+  P:                     TIdSipParser;
+  Port:                  Cardinal;
+  ReceivedFinalResponse: Boolean;
+  Reply:                 String;
+  Response:              TIdSipResponse;
 begin
   Client := TIdUdpClient.Create(nil);
   try
@@ -264,6 +259,30 @@ begin
     Client.Port := Port;
 
     Client.Send(R.AsString);
+
+    // Todo: this is ugly and crap.
+    P := TIdSipParser.Create;
+    try
+      ReceivedFinalResponse := false;
+      while not ReceivedFinalResponse do begin
+        Reply := Client.ReceiveString(DefaultTimeout);
+
+        if (Reply <> '') then begin
+          Response := P.ParseAndMakeResponse(Reply);
+          try
+            ReceivedFinalResponse := Response.IsFinal;
+
+            Self.DoOnReceiveResponse(Self, Response);
+          finally
+            Response.Free;
+          end;
+        end
+        else
+          ReceivedFinalResponse := Reply = '';
+      end;
+    finally
+      P.Free;
+    end;
   finally
     Client.Free;
   end;

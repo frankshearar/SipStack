@@ -3,7 +3,7 @@ unit IdSipTcpClient;
 interface
 
 uses
-  IdSipMessage, IdTCPClient, IdSipUdpServer;
+  IdSipMessage, IdTCPClient, IdSipTcpServer;
 
 type
   // todo:
@@ -11,19 +11,19 @@ type
   // * keep the connection alive for "long enough"
   TIdSipTcpClient = class(TIdTCPClient)
   private
-    fOnResponse: TIdSipResponseEvent;
+    fOnResponse: TIdSipTcpResponseEvent;
     procedure DoOnResponse(const R: TIdSipResponse);
     procedure ReadResponses;
   public
     procedure Send(const Request: TIdSipRequest);
 
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property OnResponse: TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
   end;
 
 implementation
 
 uses
-  Classes, IdSipParser;
+  Classes;
 
 //******************************************************************************
 //* TIdSipTcpClient                                                            *
@@ -40,8 +40,8 @@ end;
 
 procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse);
 begin
-      if Assigned(Self.OnResponse) then
-        Self.OnResponse(Self, R);
+  if Assigned(Self.OnResponse) then
+    Self.OnResponse(Self, R);
 end;
 
 procedure TIdSipTcpClient.ReadResponses;

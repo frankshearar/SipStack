@@ -3,12 +3,10 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, IdSipTimer, IdTCPConnection, IdTCPServer;
+  Classes, IdSipConsts, IdSipMessage, IdSipTimer, IdTCPConnection,
+  IdTCPServer;
 
 type
-  TIdSipTcpMessageEvent = procedure(AThread: TIdPeerThread;
-                                    AMessage: TIdSipMessage) of object;
-
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
   private
     fConnection: TIdTCPConnection;
@@ -16,17 +14,19 @@ type
     property Connection: TIdTCPConnection read fConnection write fConnection;
   end;
 
+  TIdSipTcpRequestEvent = procedure(AThread: TIdPeerThread; const Request: TIdSipRequest) of object;
+  TIdSipTcpResponseEvent = procedure(ASender: TObject; const Response: TIdSipResponse) of object;
+
   // ReadBodyTimeout = 0 implies that we never timeout the body wait. This is
   // not recommended. ReadBodyTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
-    fOnMethod:        TIdSipTcpMessageEvent;
+    fOnRequest:       TIdSipTcpRequestEvent;
     fReadBodyTimeout: Cardinal;
 
-    procedure DoOnMethod(AThread: TIdPeerThread;
-                         AMessage: TIdSipMessage);
+    procedure DoOnRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
@@ -38,8 +38,8 @@ type
     constructor Create(AOwner: TComponent); override;
   published
     property DefaultPort default IdPORT_SIP;
-    property OnMethod:        TIdSipTcpMessageEvent read fOnMethod write fOnMethod;
-    property ReadBodyTimeout: Cardinal              read fReadBodyTimeout write fReadBodyTimeout;
+    property OnRequest:       TIdSipTcpRequestEvent  read fOnRequest write fOnRequest;
+    property ReadBodyTimeout: Cardinal               read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
 implementation
@@ -63,7 +63,7 @@ end;
 
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
-  Msg:    TIdSipMessage;
+  Req:    TIdSipRequest;
   Parser: TIdSipParser;
   S:      TStream;
 begin
@@ -77,27 +77,24 @@ begin
         Parser.Source := S;
 
         try
-          Msg := Parser.ParseAndMakeMessage;
+          Req := Parser.ParseAndMakeRequest;
           try
-            if not Msg.Headers.HasHeader(ContentLengthHeaderFull) then
-              Msg.ContentLength := 0;
-            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+            if not Req.Headers.HasHeader(ContentLengthHeaderFull) then
+              Req.ContentLength := 0;
+            Req.Body := Self.ReadBody(AThread.Connection, Req);
 
-            if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
-              or (Msg.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
-              Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
+            if TIdSipParser.IsFQDN(Req.Path.LastHop.SentBy)
+              or (Req.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
+              Req.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
-            Self.DoOnMethod(AThread, Msg)
+            Self.DoOnRequest(AThread, Req)
           finally
-            Msg.Free;
+            Req.Free;
           end;
         except
           on E: EBadRequest do begin
             Self.ReturnBadRequest(AThread.Connection, E.Message, Parser);
             AThread.Connection.DisconnectSocket;
-          end;
-          on EBadResponse do begin
-            // tear down the connection?
           end;
         end;
       finally
@@ -111,11 +108,10 @@ end;
 
 //* TIdSipTcpServer Private methods ********************************************
 
-procedure TIdSipTcpServer.DoOnMethod(AThread: TIdPeerThread;
-                                     AMessage: TIdSipMessage);
+procedure TIdSipTcpServer.DoOnRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
-  if Assigned(Self.OnMethod) then
-    Self.OnMethod(AThread, AMessage);
+  if Assigned(Self.OnRequest) then
+    Self.OnRequest(AThread, Request);
 end;
 
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
@@ -162,10 +158,13 @@ end;
 
 procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
 var
-  Msg: TIdSipMessage;
+  Msg: TIdSipResponse;
 begin
-  Msg := Parser.MakeBadRequestResponse(Reason);
+  Msg := TIdSipResponse.Create;
   try
+    Msg.StatusCode := SIPBadRequest;
+    Msg.StatusText := Reason;
+    Msg.SipVersion := SipVersion;
     Self.WriteMessage(Connection, Msg);
   finally
     Msg.Free;

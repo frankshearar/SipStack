@@ -1,10 +1,9 @@
-unit TestIdTcpClient;
+unit TestIdSipTcpClient;
 
 interface
 
 uses
-  IdSipMessage, IdSipParser, IdSipTcpClient, IdSipTcpServer, IdTCPServer,
-  TestFrameworkEx;
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, TestFrameworkEx;
 
 type
   TestTIdSipTcpClient = class(TThreadingTestCase)
@@ -17,10 +16,10 @@ type
 
     procedure CheckReceiveOkResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject; const Response: TIdSipResponse);
-    procedure CheckSendInvite(AThread: TIdPeerThread; AMessage: TIdSipMessage);
-    procedure CheckSendTwoInvites(AThread: TIdPeerThread; AMessage: TIdSipMessage);
-    procedure SendOkResponse(AThread: TIdPeerThread; AMessage: TIdSipMessage);
-    procedure SendProvisionalAndOkResponse(AThread: TIdPeerThread; AMessage: TIdSipMessage);
+    procedure CheckSendInvite(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure CheckSendTwoInvites(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure SendProvisionalAndOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -38,7 +37,7 @@ const
 implementation
 
 uses
-  Classes, SyncObjs, SysUtils, TestFramework, TestMessages;
+  Classes, IdSipConsts, SyncObjs, SysUtils, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -130,16 +129,10 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendInvite(AThread: TIdPeerThread; AMessage: TIdSipMessage);
-var
-  R: TIdSipRequest;
+procedure TestTIdSipTcpClient.CheckSendInvite(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
   try
-    CheckEquals(TIdSipRequest.ClassName, AMessage.ClassName, 'Unexpected message type');
-
-    R := AMessage as TIdSipRequest;
-
-    CheckEquals(MethodInvite, R.Method, 'Incorrect method');
+    CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
 
     AThread.Connection.Write(BasicResponse);
 
@@ -152,7 +145,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendTwoInvites(AThread: TIdPeerThread; AMessage: TIdSipMessage);
+procedure TestTIdSipTcpClient.CheckSendTwoInvites(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
   try
     Inc(Self.InviteCount);
@@ -169,12 +162,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.SendOkResponse(AThread: TIdPeerThread; AMessage: TIdSipMessage);
+procedure TestTIdSipTcpClient.SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
   AThread.Connection.Write(BasicResponse);
 end;
 
-procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(AThread: TIdPeerThread; AMessage: TIdSipMessage);
+procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
 begin
   AThread.Connection.Write(StringReplace(BasicResponse, '486 Busy Here', '100 Trying', []));
   Sleep(500);
@@ -197,7 +190,7 @@ end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponse;
 begin
-  Self.Server.OnMethod   := Self.SendOkResponse;
+  Self.Server.OnRequest  := Self.SendOkResponse;
   Self.Client.OnResponse := Self.CheckReceiveOkResponse;
 
   Self.Client.Connect(DefaultTimeout);
@@ -209,7 +202,7 @@ end;
 
 procedure TestTIdSipTcpClient.TestReceiveProvisionalAndOkResponse;
 begin
-  Self.Server.OnMethod   := Self.SendProvisionalAndOkResponse;
+  Self.Server.OnRequest  := Self.SendProvisionalAndOkResponse;
   Self.Client.OnResponse := Self.CheckReceiveProvisionalAndOkResponse;
 
   Self.Client.Connect(DefaultTimeout);
@@ -223,7 +216,7 @@ end;
 
 procedure TestTIdSipTcpClient.TestSendInvite;
 begin
-  Self.Server.OnMethod := Self.CheckSendInvite;
+  Self.Server.OnRequest := Self.CheckSendInvite;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
@@ -234,7 +227,7 @@ end;
 
 procedure TestTIdSipTcpClient.TestSendTwoInvites;
 begin
-  Self.Server.OnMethod := Self.CheckSendTwoInvites;
+  Self.Server.OnRequest := Self.CheckSendTwoInvites;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);

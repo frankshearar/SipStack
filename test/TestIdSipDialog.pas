@@ -62,7 +62,7 @@ type
 implementation
 
 uses
-  Classes, IdSipParser, SysUtils, TestMessages, TypInfo;
+  Classes, IdSipConsts, IdSipHeaders, SysUtils, TestMessages, TypInfo;
 
 function DialogStateToStr(const S: TIdSipDialogState): String;
 begin

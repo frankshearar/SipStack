@@ -3,7 +3,7 @@ unit IdSipDialog;
 interface
 
 uses
-  IdURI, IdSipMessage;
+  IdURI, IdSipMessage, IdSipHeaders;
 
 type
   TIdSipDialogState = (sdsNotInitialised, sdsEarly, sdsConfirmed);
@@ -105,7 +105,7 @@ type
 implementation
 
 uses
-  IdSipParser, IdSipRandom, SysUtils;
+  IdSipConsts, IdSipRandom, SysUtils;
 
 //******************************************************************************
 //* TIdSipDialogID                                                             *

@@ -3,7 +3,7 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipMessage, TestFramework, TestFrameworkEx;
+  IdSipHeaders, IdSipMessage, TestFramework, TestFrameworkEx;
 
 type
   TestFunctions = class(TTestCase)
@@ -298,6 +298,7 @@ type
     procedure TestIsVia;
     procedure TestIsWarning;
     procedure TestRemove;
+    procedure TestRemoveAll;
     procedure TestSetMaxForwards;
     procedure TestValues;
   end;
@@ -315,6 +316,7 @@ type
     procedure TestIsEmpty;
     procedure TestItems;
     procedure TestRemove;
+    procedure TestRemoveAll;
   end;
 
   TestTIdSipViaPath = class(TTestCase)
@@ -366,7 +368,7 @@ type
 implementation
 
 uses
-  Classes, IdSipParser, SysUtils, TestMessages;
+  Classes, IdSipConsts, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -3270,6 +3272,17 @@ begin
   CheckEquals(Self.H.Items[1].AsString, Z.AsString, 'Wrong header removed (1)');
 end;
 
+procedure TestTIdSipHeaders.TestRemoveAll;
+begin
+  Self.H.Add('Foo');
+  Self.H.Add('Bar');
+  Self.H.Add('Foo');
+
+  Self.H.RemoveAll('foo');
+  CheckEquals(1, Self.H.Count, 'Header count');
+  CheckEquals('Bar', Self.H.Items[0].Name, 'Wrong headers removed');
+end;
+
 procedure TestTIdSipHeaders.TestSetMaxForwards;
 begin
   Self.H.Headers[MaxForwardsHeader].Value := '1';
@@ -3409,6 +3422,12 @@ begin
   finally
     Route.Free;
   end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestRemoveAll;
+begin
+  Self.Filter.RemoveAll;
+  CheckEquals(0, Self.Filter.Count, 'Route headers not removed');
 end;
 
 //******************************************************************************

@@ -3,8 +3,7 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, IdSipUdpServer, IdUDPClient, SysUtils,
-  TestFrameworkEx;
+  Classes, IdSipMessage, IdSipUdpServer, IdUDPClient, SysUtils, TestFrameworkEx;
 
 type
   TestTIdSipUdpServer = class(TThreadingTestCase)
@@ -13,6 +12,7 @@ type
     Parser: TIdSipParser;
     Server: TIdSipUdpServer;
 
+    procedure CheckMalformedRequestResponse(const Msg, ExpectedError: String);
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
@@ -66,7 +66,8 @@ const
 implementation
 
 uses
-  IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework, TestMessages;
+  IdSipConsts, IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework,
+  TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -112,6 +113,38 @@ begin
 end;
 
 //* TestTIdSipUdpServer Private methods *****************************************
+
+procedure TestTIdSipUdpServer.CheckMalformedRequestResponse(const Msg, ExpectedError: String);
+var
+  Expected: TStrings;
+  Received: TStrings;
+  Message:  TIdSipResponse;
+begin
+  Expected := TStringList.Create;
+  try
+    Message := TIdSipResponse.Create;
+    try
+      Message.StatusCode := SIPBadRequest;
+      Message.StatusText := ExpectedError;
+      Message.SipVersion := SipVersion;
+
+      Expected.Text := Message.AsString;
+    finally
+      Message.Free;
+    end;
+
+    Received := TStringList.Create;
+    try
+      Received.Text := Msg;
+
+      CheckEquals(Expected, Received, 'Malformed request');
+    finally
+      Received.Free;
+    end;
+  finally
+    Expected.Free;
+  end;
+end;
 
 procedure TestTIdSipUdpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
@@ -353,56 +386,41 @@ end;
 //* TestTIdSipUdpServer Published methods ***************************************
 
 procedure TestTIdSipUdpServer.TestMalformedRequest;
-var
-  Expected: TStrings;
-  Received: TStrings;
-  Msg:      TIdSipMessage;
 begin
   // note the semicolon in the SIP-version
-  Client.Send('INVITE sip:tentacleface@rlyeh.org.au SIP/;2.0'#13#10
-            + 'To: "Cthulhu" <tentacleface@rlyeh.org.au>'#13#10
-            + 'From: "Great Old Ones" <greatoldones@outerdarkness.lu>'#13#10
-            + 'CSeq: 0 INVITE'#13#10
-            + 'Call-ID: 0'#13#10
-            + 'Max-Forwards: 5'#13#10
-            + 'Via: SIP/2.0/UDP 127.0.0.1:5060'#13#10
-            + #13#10);
+  Self.Client.Send('INVITE sip:tentacleface@rlyeh.org.au SIP/;2.0'#13#10
+                 + 'To: "Cthulhu" <tentacleface@rlyeh.org.au>'#13#10
+                 + 'From: "Great Old Ones" <greatoldones@outerdarkness.lu>'#13#10
+                 + 'CSeq: 0 INVITE'#13#10
+                 + 'Call-ID: 0'#13#10
+                 + 'Max-Forwards: 5'#13#10
+                 + 'Via: SIP/2.0/UDP 127.0.0.1:5060'#13#10
+                 + #13#10);
 
-  Expected := TStringList.Create;
-  try
-    Msg := Parser.MakeBadRequestResponse(Format(InvalidSipVersion, ['SIP/;2.0']));
-    try
-      Expected.Text := Msg.AsString;
-    finally
-      Msg.Free;
-    end;
-
-    Received := TStringList.Create;
-    try
-      Received.Text := Client.ReceiveString(DefaultTimeout);
-
-      CheckEquals(Expected, Received, 'Malformed request');
-    finally
-      Received.Free;
-    end;
-  finally
-    Expected.Free;
-  end;
+  Self.CheckMalformedRequestResponse(Client.ReceiveString(DefaultTimeout),
+                                     Format(InvalidSipVersion, ['SIP/;2.0']));
 end;
 
 procedure TestTIdSipUdpServer.TestMalformedResponse;
+var
+  Method: String;
 begin
-  Client.Send('SIP/;2.0 200 OK'#13#10
-            + #13#10);
+  Method := 'SIP/;2.0';
 
-  CheckEquals('', Client.ReceiveString(DefaultTimeout), 'Response to a malformed response');
+  // Note the semicolon in the SIP-version. Note, too, how this response is
+  // treated as a REQUEST.
+  Self.Client.Send(Method + ' 200 OK'#13#10
+                 + #13#10);
+
+  Self.CheckMalformedRequestResponse(Client.ReceiveString(DefaultTimeout),
+                                     Format(MalformedToken, ['Method', Method]));
 end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamDifferentIPv4SentBy;
 begin
-  Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
+  Self.Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
 
-  Client.Send(Format(BasicRequest, [ViaDifferentIP]));
+  Self.Client.Send(Format(BasicRequest, [ViaDifferentIP]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
@@ -410,9 +428,9 @@ end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamFQDNSentBy;
 begin
-  Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
+  Self.Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
 
-  Client.Send(Format(BasicRequest, [ViaFQDN]));
+  Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
@@ -420,9 +438,9 @@ end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamIPv4SentBy;
 begin
-  Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
+  Self.Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
 
-  Client.Send(Format(BasicRequest, [ViaIP]));
+  Self.Client.Send(Format(BasicRequest, [ViaIP]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
@@ -430,9 +448,9 @@ end;
 
 procedure TestTIdSipUdpServer.TestRequest;
 begin
-  Server.OnRequest := Self.CheckRequest;
+  Self.Server.OnRequest := Self.CheckRequest;
 
-  Client.Send(Format(BasicRequest, [ViaFQDN]));
+  Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
 
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);

@@ -7,10 +7,10 @@ uses
   IdURI;
 
 type
-  TIdNtpTimestamp = Int64;
+  TIdNtpTimestamp     = Int64;
   TIdSdpBandwidthType = (btConferenceTotal, btApplicationSpecific, btRS, btRR);
-  TIdSdpKeyType = (ktClear, ktBase64, ktURI, ktPrompt);
-  TIdSdpMediaType = (mtAudio, mtVideo, mtApplication, mtData, mtControl);
+  TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
+  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl);
 
   TIdSdpAttribute = class(TObject)
   private
@@ -125,6 +125,7 @@ type
 
   TIdSdpRepeats = class;
   TIdSdpZoneAdjustments = class;
+  
   TIdSdpTime = class(TObject)
   private
     fEndTime:         TIdNtpTimestamp;

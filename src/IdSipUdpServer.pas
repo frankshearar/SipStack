@@ -3,7 +3,7 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipParser, IdSocketHandle, IdUDPServer, IdSipTcpServer;
+  Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer;
 
 type
   TPeerInfo = record
@@ -17,10 +17,8 @@ type
   TIdSipUdpServer = class(TIdUDPServer)
   private
     fOnRequest:  TIdSipRequestEvent;
-    fOnResponse: TIdSipResponseEvent;
     Parser:      TIdSipParser;
     procedure DoOnRequest(const Request: TIdSipRequest);
-    procedure DoOnResponse(const Response: TIdSipResponse);
 
     procedure SendBadRequestResponse(PeerInfo: TPeerInfo;
                                      const Reason: String;
@@ -31,8 +29,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
   published
-    property OnRequest:  TIdSipRequestEvent read fOnRequest write fOnRequest;
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property OnRequest: TIdSipRequestEvent read fOnRequest write fOnRequest;
   end;
 
 implementation
@@ -66,7 +63,7 @@ end;
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
   RemainingBytes: Cardinal;
-  Msg:            TIdSipMessage;
+  Req:            TIdSipRequest;
   PeerInfo:       TPeerInfo;
 begin
   inherited DoUDPRead(AData, ABinding);
@@ -78,36 +75,31 @@ begin
 
   // what happens if the message is malformed?!
   try
-    Msg := Self.Parser.ParseAndMakeMessage;
+    Req := Self.Parser.ParseAndMakeRequest;
     try
       RemainingBytes := AData.Size - AData.Position;
       // Yes, typecasting an Integer to a Cardinal is not clever. However, the
       // Abs() ensures that Length(Msg.Body) >= 0 and so we can rest in peace
       // knowing we shan't cause an overflow. And we just the compiler warning
       // about comparing signed and unsigned types.
-      if Msg.HasHeader(ContentLengthHeaderFull) and
-        (RemainingBytes <> Msg.ContentLength) then
-        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
+      if Req.HasHeader(ContentLengthHeaderFull) and
+        (RemainingBytes <> Req.ContentLength) then
+        raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Req.ContentLength]));
 
-      Msg.ReadBody(Self.Parser.Source);
+      Req.ReadBody(Self.Parser.Source);
 
-      if (Msg is TIdSipRequest) then begin
-        if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
-          or (Msg.Path.LastHop.SentBy <> ABinding.IP) then
-          Msg.Path.LastHop.Received := ABinding.IP;
+      if TIdSipParser.IsFQDN(Req.Path.LastHop.SentBy)
+        or (Req.Path.LastHop.SentBy <> ABinding.IP) then
+        Req.Path.LastHop.Received := ABinding.IP;
 
-        Self.DoOnRequest(Msg as TIdSipRequest);
-      end
-      else
-        Self.DoOnResponse(Msg as TIdSipResponse);
+      Self.DoOnRequest(Req);
     finally
-      Msg.Free;
+      Req.Free;
     end;
   except
     on E: EBadRequest do begin
       Self.SendBadRequestResponse(PeerInfo, E.Message, Parser);
     end;
-    on E: EBadResponse do;
   end;
 end;
 
@@ -119,20 +111,18 @@ begin
     Self.OnRequest(Self, Request);
 end;
 
-procedure TIdSipUdpServer.DoOnResponse(const Response: TIdSipResponse);
-begin
-  if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, Response);
-end;
-
 procedure TIdSipUdpServer.SendBadRequestResponse(PeerInfo: TPeerInfo;
                                                  const Reason: String;
                                                  Parser: TIdSipParser);
 var
-  Msg: TIdSipMessage;
+  Msg: TIdSipResponse;
 begin
-  Msg := Parser.MakeBadRequestResponse(Reason);
+  Msg := TIdSipResponse.Create;
   try
+    Msg.StatusCode := SIPBadRequest;
+    Msg.StatusText := Reason;
+    Msg.SipVersion := SipVersion;
+
     Self.Send(PeerInfo.PeerIP, PeerInfo.PeerPort, Msg.AsString);
   finally
     Msg.Free;
