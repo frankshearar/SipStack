@@ -166,10 +166,10 @@ begin
   inherited Create;
 
   Self.ResetSentRequestCount;
-  Self.fBindings    := TIdSocketHandles.Create(nil);
-  Self.fLastACK     := TIdSipRequest.Create;
-  Self.fRequests    := TIdSipRequestList.Create;
-  Self.fResponses   := TIdSipResponseList.Create;
+  Self.fBindings  := TIdSocketHandles.Create(nil);
+  Self.fLastACK   := TIdSipRequest.Create;
+  Self.fRequests  := TIdSipRequestList.Create;
+  Self.fResponses := TIdSipResponseList.Create;
 
   GAllTransports.Add(Self);
 end;
