@@ -3460,12 +3460,17 @@ begin
     Check(EventCount < DebugTimer.EventCount,
           Session.ClassName + ': no timer added');
 
-    LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-    Check(LatestEvent.MatchEvent(@Event),
-          Session.ClassName + ': Wrong notify event');
-    Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
-                             Session.ClassName + ': Bad wait time (was '
-                           + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
+    DebugTimer.LockTimer;
+    try
+      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
+      Check(LatestEvent.MatchEvent(@Event),
+            Session.ClassName + ': Wrong notify event');
+      Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
+                               Session.ClassName + ': Bad wait time (was '
+                             + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
+    finally
+      DebugTimer.UnlockTimer;
+    end;
   finally
     Self.Core.Timer := nil;
     DebugTimer.Terminate;
