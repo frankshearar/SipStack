@@ -2422,14 +2422,16 @@ end;
 
 function TIdSipAbstractUserAgent.HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
 begin
-  Result := Request.HasHeader(ContentLanguageHeader)
-       and (Self.AllowedLanguageList.IndexOf(Request.FirstHeader(ContentLanguageHeader).Value) = ItemNotFoundIndex);
+  Result := Self.ListHasUnknownValue(Request,
+                                     Self.AllowedLanguageList,
+                                     ContentLanguageHeader);
 end;
 
 function TIdSipAbstractUserAgent.HasUnknownContentType(Request: TIdSipRequest): Boolean;
 begin
-  Result := Request.HasHeader(ContentTypeHeaderFull)
-       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = ItemNotFoundIndex);
+  Result := Self.ListHasUnknownValue(Request,
+                                     Self.AllowedContentTypeList,
+                                     ContentTypeHeaderFull);
 end;
 
 function TIdSipAbstractUserAgent.InviteCount: Integer;
