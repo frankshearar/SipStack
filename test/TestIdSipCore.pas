@@ -7395,11 +7395,10 @@ end;
 
 procedure TestTIdSipOutboundSession.TestCall;
 var
-  Invite:       TIdSipRequest;
-  Response:     TIdSipResponse;
-  SessCount:    Integer;
-  Session:      TIdSipSession;
-  TranCount:    Integer;
+  Invite:    TIdSipRequest;
+  SessCount: Integer;
+  Session:   TIdSipSession;
+  TranCount: Integer;
 begin
   Self.MarkSentRequestCount;
   SessCount    := Self.Core.SessionCount;
@@ -7418,40 +7417,28 @@ begin
               Self.Core.SessionCount,
               'no new session created');
 
-  Response := Self.Core.CreateResponse(Invite, SIPRinging);
-  try
-    Self.ReceiveResponse(Response);
+  Self.ReceiveRinging(Invite);
 
-    Check(Session.IsEarly,
-          'Dialog in incorrect state: should be Early');
-    Check(Session.DialogEstablished,
-          'Dialog not established');
-    Check(not Session.Dialog.IsSecure,
-          'Dialog secure when TLS not used');
+  Check(Session.IsEarly,
+        'Dialog in incorrect state: should be Early');
+  Check(Session.DialogEstablished,
+        'Dialog not established');
+  Check(not Session.Dialog.IsSecure,
+        'Dialog secure when TLS not used');
 
-    CheckEquals(Response.CallID,
-                Session.Dialog.ID.CallID,
-                'Dialog''s Call-ID');
-    CheckEquals(Response.From.Tag,
-                Session.Dialog.ID.LocalTag,
-                'Dialog''s Local Tag');
-    CheckEquals(Response.ToHeader.Tag,
-                Session.Dialog.ID.RemoteTag,
-                'Dialog''s Remote Tag');
-  finally
-    Response.Free;
-  end;
+  CheckEquals(Self.Dispatcher.Transport.LastResponse.CallID,
+              Session.Dialog.ID.CallID,
+              'Dialog''s Call-ID');
+  CheckEquals(Self.Dispatcher.Transport.LastResponse.From.Tag,
+              Session.Dialog.ID.LocalTag,
+              'Dialog''s Local Tag');
+  CheckEquals(Self.Dispatcher.Transport.LastResponse.ToHeader.Tag,
+              Session.Dialog.ID.RemoteTag,
+              'Dialog''s Remote Tag');
 
-  Response := Self.Core.CreateResponse(Invite, SIPOK);
-  try
-    Response.ToHeader.Tag := Self.LastSentResponse.ToHeader.Tag;
-    Response.From.Tag     := Self.LastSentResponse.From.Tag;
-    Self.ReceiveResponse(Response);
+  Self.ReceiveOk(Invite);
 
-    Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
-  finally
-    Response.Free;
-  end;
+  Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
 end;
 
 procedure TestTIdSipOutboundSession.TestCallRemoteRefusal;
