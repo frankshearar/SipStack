@@ -300,7 +300,8 @@ end;
 function TIdSipDialog.Copy: TIdSipDialog;
 begin
   Result := TIdSipDialog.Create(Self);
-  // TODO: This is mildly evil!
+  // TODO: This is mildly evil! We're editing the private variable of Result,
+  // even though we're nice enough to do so through a setter.
   Result.SetIsEarly(Self.IsEarly);
 end;
 
