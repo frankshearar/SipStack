@@ -125,9 +125,12 @@ type
   public
     constructor Create; virtual;
 
-    procedure FindServersFor(AddressOfRecord: TIdSipUri; Result: TIdSipLocations); overload;
-    procedure FindServersFor(const AddressOfRecord: String; Result: TIdSipLocations); overload;
-    procedure FindServersFor(Response: TIdSipResponse; Result: TIdSipLocations); overload;
+    procedure FindServersFor(AddressOfRecord: TIdSipUri;
+                             Result: TIdSipLocations); overload;
+    procedure FindServersFor(const AddressOfRecord: String;
+                             Result: TIdSipLocations); overload;
+    procedure FindServersFor(Response: TIdSipResponse;
+                             Result: TIdSipLocations); overload;
     procedure ResolveNameRecords(const DomainName: String;
                                  Result: TIdDomainNameRecords); virtual;
     procedure ResolveNAPTR(TargetUri: TIdUri;
