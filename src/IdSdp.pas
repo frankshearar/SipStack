@@ -442,7 +442,8 @@ type
     function  MediaDescriptionCount: Integer;
     function  MimeType: String;
     procedure PrintOn(Dest: TStream);
-    procedure ReadFrom(Src: TStream);
+    procedure ReadFrom(Src: TStream); overload;
+    procedure ReadFrom(Src: String); overload;
 
     property Attributes:       TIdSdpAttributes       read GetAttributes;
     property Bandwidths:       TIdSdpBandwidths       read GetBandwidths;
@@ -2256,6 +2257,18 @@ begin
     P.Parse(Self);
   finally
     P.Free;
+  end;
+end;
+
+procedure TIdSdpPayload.ReadFrom(Src: String);
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(Src);
+  try
+    Self.ReadFrom(S);
+  finally
+    S.Free;
   end;
 end;
 

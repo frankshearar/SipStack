@@ -330,6 +330,8 @@ type
     procedure TestPrintOnWithPhoneNumber;
     procedure TestPrintOnWithTimes;
     procedure TestPrintOnWithUri;
+    procedure TestReadFromString;
+    procedure TestReadFromStringEmpty;
   end;
 
   TestTIdSdpParser = class(TTestCase)
@@ -566,7 +568,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -588,7 +589,6 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
-}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 end;
@@ -3598,6 +3598,36 @@ begin
                 'PrintOn');
   finally
     S.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestReadFromString;
+var
+  Other: TIdSdpPayload;
+  Src:   TStringStream;
+begin
+  Src := TStringStream.Create(MinimumPayload);
+  try
+    Other := TIdSdpPayload.CreateFrom(Src);
+    try
+      Self.Payload.ReadFrom(Src.DataString);
+      Check(Self.Payload.Equals(Other),
+            'ReadFrom(String) gives different result to ReadFrom(Stream)');
+    finally
+      Other.Free;
+    end;
+  finally
+    Src.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayload.TestReadFromStringEmpty;
+begin
+  try
+    Self.Payload.ReadFrom('');
+    Fail('Failed to bail out on empty input stream');
+  except
+    on EParserError do;
   end;
 end;
 
