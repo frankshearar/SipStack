@@ -1305,7 +1305,7 @@ begin
 
       Routes := TIdSipHeadersFilter.Create(Self.Request.Headers, RouteHeader);
       try
-        Check(Expected.IsEqualTo(Routes),
+        Check(Expected.Equals(Routes),
         'Routes not split into separate headers');
       finally
         Routes.Free;

@@ -195,7 +195,7 @@ begin
   I := 0;
   Count := Self.List.Count;
   while (I < Count)
-    and not (Self.List[I] as TIdSipConnectionTableEntry).Request.IsEqualTo(Request) do
+    and not (Self.List[I] as TIdSipConnectionTableEntry).Request.Equals(Request) do
     Inc(I);
 
   if (I < Count) then

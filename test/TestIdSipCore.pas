@@ -721,7 +721,7 @@ begin
 
   Check(Request.HasHeader(ContactHeaderFull), 'No Contact header added');
   Contact := Request.FirstContact;
-  Check(Contact.IsEqualTo(Self.Core.Contact), 'Contact header incorrectly set');
+  Check(Contact.Equals(Self.Core.Contact), 'Contact header incorrectly set');
 
   CheckEquals(Request.From.DisplayName,
               Self.Core.From.DisplayName,
@@ -1720,7 +1720,7 @@ begin
     C.Value := 'sip:case@fried.neurons.org';
     Self.Core.Contact := C;
 
-    Check(Self.Core.Contact.IsEqualTo(C),
+    Check(Self.Core.Contact.Equals(C),
                 'Contact not set');
   finally
     C.Free;
@@ -1771,7 +1771,7 @@ begin
     F.Value := 'sip:case@fried.neurons.org';
     Self.Core.From := F;
 
-    Check(Self.Core.From.IsEqualTo(F),
+    Check(Self.Core.From.Equals(F),
                 'From not set');
   finally
     F.Free;
@@ -3039,7 +3039,7 @@ begin
               Request.RequestUri.Uri,
               'Request-URI');
   CheckEquals(MethodRegister, Request.Method, 'Method');
-  Check(Request.Contacts.IsEqualTo(Self.Contacts),
+  Check(Request.Contacts.Equals(Self.Contacts),
         'Bindings');
 end;
 

@@ -43,7 +43,7 @@ type
     procedure TestGetSetParam;
     procedure TestHasParam;
     procedure TestIndexOfParam;
-    procedure TestIsEqualTo;
+    procedure TestEquals;
     procedure TestParamCount;
     procedure TestParamsAsString;
     procedure TestValueParameterClearing;
@@ -86,7 +86,7 @@ type
   public
     procedure SetUp; override;
   published
-    procedure TestIsEqualTo;
+    procedure TestEquals;
     procedure TestValue; override;
     procedure TestValueWithParams;
   end;
@@ -275,8 +275,8 @@ type
     procedure TestHasReceived;
     procedure TestHasRport;
     procedure TestIsRFC3261Branch;
-    procedure TestIsEqualTo;
-    procedure TestIsEqualToBranchIsCaseInsensitive;
+    procedure TestEquals;
+    procedure TestEqualsBranchIsCaseInsensitive;
     procedure TestMaddr;
     procedure TestName;
     procedure TestReceived;
@@ -327,9 +327,9 @@ type
     procedure TestCount;
     procedure TestFirst;
     procedure TestIsEmpty;
-    procedure TestIsEqualToFilter;
-    procedure TestIsEqualToHeaders;
-    procedure TestIsEqualToOrderIrrelevant;
+    procedure TestEqualsFilter;
+    procedure TestEqualsHeaders;
+    procedure TestEqualsOrderIrrelevant;
     procedure TestItems;
     procedure TestIteratorVisitsAllHeaders;
     procedure TestRemove;
@@ -853,7 +853,7 @@ begin
   CheckEquals(1, Self.H.IndexOfParam('ttl'),    'Index of 2nd param');
 end;
 
-procedure TestTIdSipHeader.TestIsEqualTo;
+procedure TestTIdSipHeader.TestEquals;
 var
   Header: TIdSipHeader;
 begin
@@ -863,23 +863,23 @@ begin
   try
     Header.Name  := Self.H.Name;
     Header.Value := Self.H.FullValue;
-    Check(Self.H.IsEqualTo(Header), 'H = Header');
-    Check(Header.IsEqualTo(Self.H), 'Header = H');
+    Check(Self.H.Equals(Header), 'H = Header');
+    Check(Header.Equals(Self.H), 'Header = H');
 
     Header.Name  := Self.H.Name;
     Header.Value := Uppercase(Self.H.FullValue);
-    Check(Self.H.IsEqualTo(Header), 'H = Header, uppercase(value)');
-    Check(Header.IsEqualTo(Self.H), 'Header = H, uppercase(value)');
+    Check(Self.H.Equals(Header), 'H = Header, uppercase(value)');
+    Check(Header.Equals(Self.H), 'Header = H, uppercase(value)');
 
     Header.Name  := 'X-Different-Header';
     Header.Value := Self.H.FullValue;
-    Check(not Self.H.IsEqualTo(Header), 'H <> Header, name');
-    Check(not Header.IsEqualTo(Self.H), 'Header <> H, name');
+    Check(not Self.H.Equals(Header), 'H <> Header, name');
+    Check(not Header.Equals(Self.H), 'Header <> H, name');
 
     Header.Name  := Self.H.Name;
     Header.Value := 'wombat' + Self.H.ParamsAsString;
-    Check(not Self.H.IsEqualTo(Header), 'H <> Header, value');
-    Check(not Header.IsEqualTo(Self.H), 'Header <> H, value');
+    Check(not Self.H.Equals(Header), 'H <> Header, value');
+    Check(not Header.Equals(Self.H), 'Header <> H, value');
   finally
     Header.Free;
   end;
@@ -1226,7 +1226,7 @@ end;
 
 //* TestTIdSipCallIDHeader Published methods ***********************************
 
-procedure TestTIdSipCallIDHeader.TestIsEqualTo;
+procedure TestTIdSipCallIDHeader.TestEquals;
 var
   CallID: TIdSipCallIDHeader;
   H:      TIdSipHeader;
@@ -1236,16 +1236,16 @@ begin
     Self.C.Value := 'fdjhasdfa';
 
     CallID.Value := Self.C.Value;
-    Check(Self.C.IsEqualTo(CallID), 'C = CallID');
-    Check(CallID.IsEqualTo(Self.C), 'CallID = C');
+    Check(Self.C.Equals(CallID), 'C = CallID');
+    Check(CallID.Equals(Self.C), 'CallID = C');
 
     CallID.Value := Uppercase(Self.C.Value);
-    Check(not Self.C.IsEqualTo(CallID), 'C <> CallID, case-sensitive');
-    Check(not CallID.IsEqualTo(Self.C), 'CallID <> C, case-sensitive');
+    Check(not Self.C.Equals(CallID), 'C <> CallID, case-sensitive');
+    Check(not CallID.Equals(Self.C), 'CallID <> C, case-sensitive');
 
     CallID.Value := Self.C.Value + Self.C.Value;
-    Check(not Self.C.IsEqualTo(CallID), 'C <> CallID, different value');
-    Check(not CallID.IsEqualTo(Self.C), 'CallID <> C, different value');
+    Check(not Self.C.Equals(CallID), 'C <> CallID, different value');
+    Check(not CallID.Equals(Self.C), 'CallID <> C, different value');
   finally
     CallID.Free;
   end;
@@ -1255,8 +1255,8 @@ begin
     H.Name := Self.C.Name;
     H.Value := Self.C.Value;
 
-    Check(H.IsEqualTo(Self.C), 'H = C');
-    Check(H.IsEqualTo(Self.C), 'C = H');
+    Check(H.Equals(Self.C), 'H = C');
+    Check(H.Equals(Self.C), 'C = H');
   finally
     H.Free;
   end;
@@ -1881,10 +1881,10 @@ begin
   From := TIdSipFromToHeader.Create;
   try
     From.Value := 'sip:wintermute@tessier-ashpool.co.luna';
-    Check(not Self.F.IsEqualTo(From), 'different URI');
+    Check(not Self.F.Equals(From), 'different URI');
 
     From.Value := 'sips:case@fried.neurons.org';
-    Check(not Self.F.IsEqualTo(From), 'same user but different scheme; hence different URI');
+    Check(not Self.F.Equals(From), 'same user but different scheme; hence different URI');
   finally
     From.Free;
   end;
@@ -1899,16 +1899,16 @@ begin
   From := TIdSipFromToHeader.Create;
   try
     From.Value := 'Case <sip:case@fried.neurons.org>';
-    Check(Self.F.IsEqualTo(From), 'Identical headers');
+    Check(Self.F.Equals(From), 'Identical headers');
 
     From.Value := '"Caseless Ammo" <sip:case@fried.neurons.org>';
-    Check(Self.F.IsEqualTo(From), 'Different display names');
+    Check(Self.F.Equals(From), 'Different display names');
 
     From.Value := 'sip:case@fried.neurons.org';
-    Check(Self.F.IsEqualTo(From), 'No display name');
+    Check(Self.F.Equals(From), 'No display name');
 
     From.Value := 'sip:case@fried.neurons.org;tag=1';
-    Check(not Self.F.IsEqualTo(From), 'One has a tag, the other not');
+    Check(not Self.F.Equals(From), 'One has a tag, the other not');
   finally
     From.Free;
   end;
@@ -1923,14 +1923,14 @@ begin
   From := TIdSipFromToHeader.Create;
   try
     From.Value := 'sip:case@fried.neurons.org;x-extend=00;tag=1234';
-    Check(Self.F.IsEqualTo(From), 'No display name, extension param');
+    Check(Self.F.Equals(From), 'No display name, extension param');
 
     From.Value := 'sip:case@fried.neurons.org;tag=1234;x-extend=00';
-    Check(Self.F.IsEqualTo(From),
+    Check(Self.F.Equals(From),
           'No display name, extension param; order is irrelevant');
 
     From.Value := 'sip:case@fried.neurons.org;tag=1235';
-    Check(not Self.F.IsEqualTo(From), 'different tags');
+    Check(not Self.F.Equals(From), 'different tags');
   finally
     From.Free;
   end;
@@ -2524,7 +2524,7 @@ begin
   try
     Self.V.Value := 'SIP/7.0/SCTP localhost;branch=' + BranchMagicCookie + 'f00';
     V2.Assign(Self.V);
-    Check(V2.IsEqualTo(Self.V), 'V2 not properly assigned to');
+    Check(V2.Equals(Self.V), 'V2 not properly assigned to');
   finally
     V2.Free;
   end;
@@ -2538,7 +2538,7 @@ begin
   try
     Self.V.Branch := BranchMagicCookie + 'f00';
     V2.Assign(Self.V);
-    Check(V2.IsEqualTo(Self.V), 'V2 not properly assigned to');
+    Check(V2.Equals(Self.V), 'V2 not properly assigned to');
     CheckEquals(Self.V.Branch, V2.Branch, 'Branch');
   finally
     V2.Free;
@@ -2615,7 +2615,7 @@ begin
   Check(Self.V.IsRFC3261Branch, 'RFC 3261 magic cookie + ''1234''');
 end;
 
-procedure TestTIdSipViaHeader.TestIsEqualTo;
+procedure TestTIdSipViaHeader.TestEquals;
 var
   Hop2: TIdSipViaHeader;
 begin
@@ -2631,39 +2631,39 @@ begin
     Hop2.SipVersion := 'SIP/2.0';
     Hop2.Transport  := sttSCTP;
 
-    Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2)');
-    Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V)');
+    Check(V.Equals(Hop2), 'V.Equals(Hop2)');
+    Check(Hop2.Equals(V), 'Hop2.Equals(V)');
 
     Self.V.SentBy := '127.0.0.2';
-    Check(not Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host');
-    Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Host');
+    Check(not Self.V.Equals(Hop2), 'V.Equals(Hop2); Host');
+    Check(not Hop2.Equals(Self.V), 'Hop2.Equals(V); Host');
     Self.V.SentBy := '127.0.0.1';
-    Check(Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host reset');
-    Check(Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Host reset');
+    Check(Self.V.Equals(Hop2), 'V.Equals(Hop2); Host reset');
+    Check(Hop2.Equals(Self.V), 'Hop2.Equals(V); Host reset');
 
     Self.V.Port := 111;
-    Check(not Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Port');
-    Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Port');
+    Check(not Self.V.Equals(Hop2), 'V.Equals(Hop2); Port');
+    Check(not Hop2.Equals(Self.V), 'Hop2.Equals(V); Port');
     Self.V.Port := 5060;
-    Check(Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Port reset');
-    Check(Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Port reset');
+    Check(Self.V.Equals(Hop2), 'V.Equals(Hop2); Port reset');
+    Check(Hop2.Equals(Self.V), 'Hop2.Equals(V); Port reset');
 
     Self.V.SipVersion := 'xxx';
-    Check(not Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); SipVersion');
-    Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); SipVersion');
+    Check(not Self.V.Equals(Hop2), 'V.Equals(Hop2); SipVersion');
+    Check(not Hop2.Equals(Self.V), 'Hop2.Equals(V); SipVersion');
     Self.V.SipVersion := 'SIP/2.0';
-    Check(Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); SipVersion reset');
-    Check(Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); SipVersion reset');
+    Check(Self.V.Equals(Hop2), 'V.Equals(Hop2); SipVersion reset');
+    Check(Hop2.Equals(Self.V), 'Hop2.Equals(V); SipVersion reset');
 
     Self.V.Transport := sttTCP;
-    Check(not Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Transport');
-    Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Transport');
+    Check(not Self.V.Equals(Hop2), 'V.Equals(Hop2); Transport');
+    Check(not Hop2.Equals(Self.V), 'Hop2.Equals(V); Transport');
   finally
     Hop2.Free;
   end;
 end;
 
-procedure TestTIdSipViaHeader.TestIsEqualToBranchIsCaseInsensitive;
+procedure TestTIdSipViaHeader.TestEqualsBranchIsCaseInsensitive;
 var
   Via: TIdSipViaHeader;
 begin
@@ -2674,8 +2674,8 @@ begin
 
     Via.Branch := Uppercase(Via.Branch);
 
-    Check(Self.V.IsEqualTo(Via), 'V = Via');
-    Check(Via.IsEqualTo(Self.V), 'Via = V');
+    Check(Self.V.Equals(Via), 'V = Via');
+    Check(Via.Equals(Self.V), 'Via = V');
   finally
     Via.Free;
   end;
@@ -3189,7 +3189,7 @@ begin
   Check(Self.Filter.IsEmpty, 'IsEmpty after Headers.Clear');
 end;
 
-procedure TestTIdSipHeadersFilter.TestIsEqualToFilter;
+procedure TestTIdSipHeadersFilter.TestEqualsFilter;
 var
   H: TIdSipHeaders;
   F: TIdSipHeadersFilter;
@@ -3200,19 +3200,19 @@ begin
   try
     F := TIdSipHeadersFilter.Create(H, RouteHeader);
     try
-      Check(Self.Filter.IsEqualTo(F), 'Empty path = Empty path');
+      Check(Self.Filter.Equals(F), 'Empty path = Empty path');
 
       H.Add(F.HeaderName).Value := '<127.0.0.1:1>';
 
-      Check(not Self.Filter.IsEqualTo(F), 'Empty path <> non-empty path');
+      Check(not Self.Filter.Equals(F), 'Empty path <> non-empty path');
 
       H.Add(RouteHeader).Value := '<127.0.0.1:2>';
 
       Self.Filter.Add(F);
-      Check(Self.Filter.IsEqualTo(F), 'Identical paths');
+      Check(Self.Filter.Equals(F), 'Identical paths');
 
       Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
-      Check(not Self.Filter.IsEqualTo(F), 'Last header differs');
+      Check(not Self.Filter.Equals(F), 'Last header differs');
     finally
       F.Free;
     end;
@@ -3221,7 +3221,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipHeadersFilter.TestIsEqualToHeaders;
+procedure TestTIdSipHeadersFilter.TestEqualsHeaders;
 var
   H: TIdSipHeaders;
 begin
@@ -3229,25 +3229,25 @@ begin
 
   H := TIdSipHeaders.Create;
   try
-    Check(Self.Filter.IsEqualTo(H), 'Empty set = Empty set');
+    Check(Self.Filter.Equals(H), 'Empty set = Empty set');
 
     H.Add(RouteHeader).Value := '<127.0.0.1:1>';
 
-    Check(not Self.Filter.IsEqualTo(H), 'Empty set <> non-empty set');
+    Check(not Self.Filter.Equals(H), 'Empty set <> non-empty set');
 
     H.Add(RouteHeader).Value := '<127.0.0.1:2>';
 
     Self.Filter.Add(H);
-    Check(Self.Filter.IsEqualTo(H), 'Identical sets');
+    Check(Self.Filter.Equals(H), 'Identical sets');
 
     Self.Filter.Items[Self.Filter.Count - 1].Value := '<127.0.0.1:1>';
-    Check(not Self.Filter.IsEqualTo(H), 'Last header differs');
+    Check(not Self.Filter.Equals(H), 'Last header differs');
   finally
     H.Free;
   end;
 end;
 
-procedure TestTIdSipHeadersFilter.TestIsEqualToOrderIrrelevant;
+procedure TestTIdSipHeadersFilter.TestEqualsOrderIrrelevant;
 var
   H: TIdSipHeaders;
 begin
@@ -3260,7 +3260,7 @@ begin
 
     H.AddInReverseOrder(Self.Filter);
 
-    Check(Self.Filter.IsEqualTo(H),
+    Check(Self.Filter.Equals(H),
           'Identical sets but in reverse order');
   finally
     H.Free;
@@ -3299,7 +3299,7 @@ begin
     Expected.Add(RouteHeader).Value := 'localhost <sip:127.0.0.1>;foo=bar';
     Expected.Add(RouteHeader).Value := '<sip:127.0.0.2>;foo=bar';
     Expected.Add(RouteHeader).Value := '<sip:127.0.0.3>;foo=bar';
-    Check(Expected.IsEqualTo(Self.Headers), 'Not all (Route) headers visited');
+    Check(Expected.Equals(Self.Headers), 'Not all (Route) headers visited');
   finally
     Expected.Free;
   end;
@@ -3422,7 +3422,7 @@ begin
     Self.H.Add(NewHeaders);
     CheckEquals(NewHeaders.Count, Self.H.Count, 'Count after Add(Headers)');
 
-    Check(Self.H.IsEqualTo(NewHeaders), 'Headers weren''t properly added');
+    Check(Self.H.Equals(NewHeaders), 'Headers weren''t properly added');
   finally
     NewHeaders.Free;
   end;
@@ -3455,7 +3455,7 @@ begin
         Expected.Add(ContentLanguageHeader).Value := 'es';
         Expected.Add(ContentLanguageHeader).Value := 'fr';
 
-        Check(Self.H.IsEqualTo(Expected), 'Filter doesn''t filter properly');
+        Check(Self.H.Equals(Expected), 'Filter doesn''t filter properly');
       finally
         Expected.Free;
       end;
@@ -3851,7 +3851,7 @@ begin
   try
     Received := Self.H.GetAllButFirst;
     try
-      Check(Expected.IsEqualTo(Received),
+      Check(Expected.Equals(Received),
             'Incorrect headers returned, empty list');
     finally
       Received.Free;
@@ -3866,7 +3866,7 @@ begin
 
     Received := Self.H.GetAllButFirst;
     try
-      Check(Expected.IsEqualTo(Received),
+      Check(Expected.Equals(Received),
             'Incorrect headers returned, nonempty list');
     finally
       Received.Free;
@@ -4385,7 +4385,7 @@ begin
 
     Received := Self.Routes.GetAllButFirst;
     try
-      Check(Expected.IsEqualTo(Received), 'Unexpected header set returned');
+      Check(Expected.Equals(Received), 'Unexpected header set returned');
     finally
       Received.Free;
     end;

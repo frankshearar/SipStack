@@ -15,10 +15,10 @@ type
   published
     procedure TestCreationFromParameters;
     procedure TestCreationFromDialogID;
-    procedure TestIsEqualToSameID;
-    procedure TestIsEqualToDifferentCallID;
-    procedure TestIsEqualToDifferentLocalTag;
-    procedure TestIsEqualToDifferentRemoteTag;
+    procedure TestEqualsSameID;
+    procedure TestEqualsDifferentCallID;
+    procedure TestEqualsDifferentLocalTag;
+    procedure TestEqualsDifferentRemoteTag;
   end;
 
 implementation
@@ -65,25 +65,25 @@ var
 begin
   Dlg := TIdSipDialogID.Create(Self.ID);
   try
-    Check(Dlg.IsEqualTo(Self.ID), 'Dialog IDs not equal');
+    Check(Dlg.Equals(Self.ID), 'Dialog IDs not equal');
   finally
     Dlg.Free;
   end;
 end;
 
-procedure TestTIdSipDialogID.TestIsEqualToSameID;
+procedure TestTIdSipDialogID.TestEqualsSameID;
 var
   D: TIdSipDialogID;
 begin
   D := TIdSipDialogID.Create(Self.ID);
   try
-    Check(D.IsEqualTo(Self.ID), 'Same Dialog ID');
+    Check(D.Equals(Self.ID), 'Same Dialog ID');
   finally
     D.Free;
   end;
 end;
 
-procedure TestTIdSipDialogID.TestIsEqualToDifferentCallID;
+procedure TestTIdSipDialogID.TestEqualsDifferentCallID;
 var
   D: TIdSipDialogID;
 begin
@@ -91,13 +91,13 @@ begin
                              Self.ID.LocalTag,
                              Self.ID.RemoteTag);
   try
-    Check(not D.IsEqualTo(Self.ID), 'Different Call-ID');
+    Check(not D.Equals(Self.ID), 'Different Call-ID');
   finally
     D.Free;
   end;
 end;
 
-procedure TestTIdSipDialogID.TestIsEqualToDifferentLocalTag;
+procedure TestTIdSipDialogID.TestEqualsDifferentLocalTag;
 var
   D: TIdSipDialogID;
 begin
@@ -105,13 +105,13 @@ begin
                              Self.ID.LocalTag + '1',
                              Self.ID.RemoteTag);
   try
-    Check(not D.IsEqualTo(Self.ID), 'Different Local Tag');
+    Check(not D.Equals(Self.ID), 'Different Local Tag');
   finally
     D.Free;
   end;
 end;
 
-procedure TestTIdSipDialogID.TestIsEqualToDifferentRemoteTag;
+procedure TestTIdSipDialogID.TestEqualsDifferentRemoteTag;
 var
   D: TIdSipDialogID;
 begin
@@ -119,7 +119,7 @@ begin
                              Self.ID.LocalTag,
                              Self.ID.RemoteTag + '1');
   try
-    Check(not D.IsEqualTo(Self.ID), 'Different Remote Tag');
+    Check(not D.Equals(Self.ID), 'Different Remote Tag');
   finally
     D.Free;
   end;

@@ -148,7 +148,7 @@ var
 begin
   D := TIdSipDialog.Create(Self.Dlg);
   try
-    Check(Self.Dlg.ID.IsEqualTo(D.ID),
+    Check(Self.Dlg.ID.Equals(D.ID),
           'ID');
     CheckEquals(Self.Dlg.LocalSequenceNo,
                 D.LocalSequenceNo,
@@ -167,7 +167,7 @@ begin
                 'RemoteTarget');
     Check(Self.Dlg.IsSecure = D.IsSecure,
           'IsSecure');
-    Check(Self.Dlg.RouteSet.IsEqualTo(D.RouteSet),
+    Check(Self.Dlg.RouteSet.Equals(D.RouteSet),
           'RouteSet');
   finally
     D.Free;
@@ -241,7 +241,7 @@ begin
 
     Routes := TIdSipRoutePath.Create(R.Headers);
     try
-      Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
+      Check(Routes.Equals(Self.Dlg.RouteSet),
             'Route headers not set to the Dialog route set');
     finally
       Routes.Free;
@@ -281,7 +281,7 @@ begin
       try
         DlgRoutes.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.URI + '>';
 
-        Check(DlgRoutes.IsEqualTo(Routes), 'Routes not added correctly');
+        Check(DlgRoutes.Equals(Routes), 'Routes not added correctly');
       finally
         DlgRoutes.Free;
       end;
@@ -336,7 +336,7 @@ end;
 
 procedure TestTIdSipDialog.TestDialogID;
 begin
-  Check(Self.Dlg.ID.IsEqualTo(Self.ID), 'Dialog ID not set');
+  Check(Self.Dlg.ID.Equals(Self.ID), 'Dialog ID not set');
   CheckEquals(Self.LocalSequenceNo,
               Self.Dlg.LocalSequenceNo,
               'Local Sequence number not set');
@@ -602,7 +602,7 @@ begin
       // This is a sneaky test - we're implicitly testing that the list
       // COPIED Dlg. If a reference to Dlg was stored then this would
       // access violate because we'd have a dangling pointer.
-      Check(ID.IsEqualTo(Self.D.Items[0].ID), 'IDs not equal');
+      Check(ID.Equals(Self.D.Items[0].ID), 'IDs not equal');
     finally
       RouteSet.Free;
     end;
@@ -623,8 +623,8 @@ begin
       Self.D.Add(Dlg);
       Self.D.Add(Dlg2);
 
-      Check(Dlg.ID.IsEqualTo(Self.D.DialogAt(Self.ID).ID), 'Returned dialog is not Dlg');
-      Check(Dlg2.ID.IsEqualTo(Self.D.DialogAt(ID2).ID),    'Returned dialog is not Dlg2');
+      Check(Dlg.ID.Equals(Self.D.DialogAt(Self.ID).ID), 'Returned dialog is not Dlg');
+      Check(Dlg2.ID.Equals(Self.D.DialogAt(ID2).ID),    'Returned dialog is not Dlg2');
     finally
       Dlg2.Free;
     end;
@@ -645,9 +645,9 @@ begin
       Self.D.Add(Dlg);
       Self.D.Add(Dlg2);
 
-      Check(Dlg.ID.IsEqualTo(Self.D.DialogAt(Self.ID.CallID, Self.ID.LocalTag, Self.ID.RemoteTag).ID),
+      Check(Dlg.ID.Equals(Self.D.DialogAt(Self.ID.CallID, Self.ID.LocalTag, Self.ID.RemoteTag).ID),
             'Returned dialog is not Dlg');
-      Check(Dlg2.ID.IsEqualTo(Self.D.DialogAt(ID2.CallID, ID2.LocalTag, ID2.RemoteTag).ID),
+      Check(Dlg2.ID.Equals(Self.D.DialogAt(ID2.CallID, ID2.LocalTag, ID2.RemoteTag).ID),
             'Returned dialog is not Dlg2');
     finally
       Dlg2.Free;

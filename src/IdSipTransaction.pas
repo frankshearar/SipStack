@@ -936,9 +936,9 @@ end;
 
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
 begin
-  Result := Request.From.IsEqualTo(Self.InitialRequest.From)
+  Result := Request.From.Equals(Self.InitialRequest.From)
     and (Request.CallID = Self.InitialRequest.CallID)
-    and (Request.CSeq.IsEqualTo(Self.InitialRequest.CSeq))
+    and (Request.CSeq.Equals(Self.InitialRequest.CSeq))
     and not Self.Match(Request);
 end;
 
@@ -1495,7 +1495,7 @@ end;
 
 procedure TIdSipServerInviteTransaction.TrySendResponse(R: TIdSipResponse);
 begin
-  if (not R.IsEqualTo(Self.LastResponseSent)) then
+  if (not R.Equals(Self.LastResponseSent)) then
     Self.LastResponseSent.Assign(R);
 
   inherited TrySendResponse(R);

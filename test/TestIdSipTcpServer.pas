@@ -173,7 +173,7 @@ begin
       E := TIdSipConnectionTableEntry.Create(Conn, Req);
       try
         Check(Conn = E.Connection,      'Connection not set');
-        Check(Req.IsEqualTo(E.Request), 'Request not set');
+        Check(Req.Equals(E.Request), 'Request not set');
       finally
         E.Free;
       end;
@@ -443,7 +443,7 @@ begin
       Expected.Add(ContentTypeHeaderFull).Value   := 'text/plain';
       Expected.Add(ContentLengthHeaderFull).Value := '29';
 
-      Check(Expected.IsEqualTo(Request.Headers), 'Headers');
+      Check(Expected.Equals(Request.Headers), 'Headers');
     finally
       Expected.Free;
     end;

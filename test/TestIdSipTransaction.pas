@@ -1679,9 +1679,9 @@ begin
   CheckEquals(Self.Request.CallID,
               R.CallID,
               'Call-ID');
-  Check(Self.Request.CSeq.IsEqualTo(R.CSeq),
+  Check(Self.Request.CSeq.Equals(R.CSeq),
               'CSeq');
-  Check(R.Path.IsEqualTo(Self.Request.Path),
+  Check(R.Path.Equals(Self.Request.Path),
               'Via path differs');
   CheckEquals(Self.Request.ToHeader.Address,
               R.ToHeader.Address,
@@ -1952,7 +1952,7 @@ begin
                 'Response not sent to re-received initial request');
 
     SecondResponse := Self.MockDispatcher.Transport.LastResponse;
-    Check(FirstResponse.IsEqualTo(SecondResponse),
+    Check(FirstResponse.Equals(SecondResponse),
           'Different response sent to initial request retransmission');
   finally
     FirstResponse.Free;
@@ -1999,13 +1999,13 @@ begin
     CheckEquals(R.CallID,
                 Self.Request.CallID,
                 'Call-ID headers must match');
-    Check(R.CSeq.IsEqualTo(Self.Request.CSeq),
+    Check(R.CSeq.Equals(Self.Request.CSeq),
                 'CSeq headers must match');
-    Check(R.From.IsEqualTo(Self.Request.From),
+    Check(R.From.Equals(Self.Request.From),
                 'From headers must match');
-    Check(R.ToHeader.IsEqualTo(Self.Request.ToHeader),
+    Check(R.ToHeader.Equals(Self.Request.ToHeader),
                 'To headers must match');
-    Check(R.Path.IsEqualTo(Self.Request.Path),
+    Check(R.Path.Equals(Self.Request.Path),
                 'Via headers must match and have identical order');
   finally
     Tran.Free;
@@ -2403,7 +2403,7 @@ begin
                 'Response not sent to re-received initial request');
 
     SecondResponse := Self.MockDispatcher.Transport.LastResponse;
-    Check(FirstResponse.IsEqualTo(SecondResponse),
+    Check(FirstResponse.Equals(SecondResponse),
           'Different response sent to initial request retransmission');
   finally
     FirstResponse.Free;
@@ -2429,7 +2429,7 @@ begin
                 'Response not sent to re-received initial request');
 
     SecondResponse := Self.MockDispatcher.Transport.LastResponse;
-    Check(FirstResponse.IsEqualTo(SecondResponse),
+    Check(FirstResponse.Equals(SecondResponse),
           'Different response sent to initial request retransmission');
   finally
     FirstResponse.Free;
@@ -2559,13 +2559,13 @@ begin
   CheckEquals(Self.Request.SipVersion, Ack.SipVersion, 'SIP-Version');
   CheckEquals(Self.Request.RequestUri, Ack.RequestUri, 'Request-URI');
   CheckEquals(Self.Request.CallID,     Ack.CallID,     'Call-ID');
-  Check(Self.Request.From.IsEqualTo(Ack.From),
+  Check(Self.Request.From.Equals(Ack.From),
         'From');
-  Check(R.ToHeader.IsEqualTo(Ack.ToHeader),
+  Check(R.ToHeader.Equals(Ack.ToHeader),
         'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  Check(Self.Request.LastHop.IsEqualTo(Ack.LastHop),
+  Check(Self.Request.LastHop.Equals(Ack.LastHop),
         'Topmost Via');
 
   Check(Ack.HasHeader(MaxForwardsHeader),

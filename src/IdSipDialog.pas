@@ -464,7 +464,7 @@ begin
     Result := nil;
     I := 0;
     while (I < Self.List.Count) and not Assigned(Result) do
-      if Self.Items[I].ID.IsEqualTo(ID) then
+      if Self.Items[I].ID.Equals(ID) then
         Result := Self.Items[I]
       else
         Inc(I);

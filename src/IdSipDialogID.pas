@@ -14,7 +14,7 @@ type
                        const RemoteTag: String); overload;
     constructor Create(ID: TIdSipDialogID); overload;
 
-    function IsEqualTo(ID: TIdSipDialogID): Boolean;
+    function Equals(ID: TIdSipDialogID): Boolean;
 
     property CallID:    String read fCallID;
     property LocalTag:  String read fLocalTag;
@@ -48,7 +48,7 @@ begin
   fRemoteTag := ID.RemoteTag;
 end;
 
-function TIdSipDialogID.IsEqualTo(ID: TIdSipDialogID): Boolean;
+function TIdSipDialogID.Equals(ID: TIdSipDialogID): Boolean;
 begin
   Result := (Self.CallID    = ID.CallID)
         and (Self.LocalTag  = ID.LocalTag)

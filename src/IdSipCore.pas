@@ -1532,7 +1532,7 @@ begin
       I := 0;
       while (I < Self.Sessions.Count) and not Assigned(Result) do begin
         Session := Self.Sessions[I] as TIdSipSession;
-        if Session.IsEstablished and Session.Dialog.ID.IsEqualTo(DialogID) then
+        if Session.IsEstablished and Session.Dialog.ID.Equals(DialogID) then
           Result := Session
         else
           Inc(I);

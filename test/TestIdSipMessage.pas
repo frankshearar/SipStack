@@ -21,7 +21,7 @@ type
     function FirstLine: String; override;
     function MatchRequest(Request: TIdSipRequest): Boolean; override;
   public
-    function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
+    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
   end;
@@ -91,14 +91,14 @@ type
     procedure TestIsAck;
     procedure TestIsBye;
     procedure TestIsCancel;
-    procedure TestIsEqualToComplexMessages;
-    procedure TestIsEqualToDifferentHeaders;
-    procedure TestIsEqualToDifferentMethod;
-    procedure TestIsEqualToDifferentRequestUri;
-    procedure TestIsEqualToDifferentSipVersion;
-    procedure TestIsEqualToFromAssign;
-    procedure TestIsEqualToResponse;
-    procedure TestIsEqualToTrivial;
+    procedure TestEqualsComplexMessages;
+    procedure TestEqualsDifferentHeaders;
+    procedure TestEqualsDifferentMethod;
+    procedure TestEqualsDifferentRequestUri;
+    procedure TestEqualsDifferentSipVersion;
+    procedure TestEqualsFromAssign;
+    procedure TestEqualsResponse;
+    procedure TestEqualsTrivial;
     procedure TestIsInvite;
     procedure TestIsRegister;
     procedure TestIsRequest;
@@ -127,13 +127,13 @@ type
     procedure TestInResponseToSipsRequestUri;
     procedure TestInResponseToTryingWithTimestamps;
     procedure TestInResponseToWithContact;
-    procedure TestIsEqualToComplexMessages;
-    procedure TestIsEqualToDifferentHeaders;
-    procedure TestIsEqualToDifferentSipVersion;
-    procedure TestIsEqualToDifferentStatusCode;
-    procedure TestIsEqualToDifferentStatusText;
-    procedure TestIsEqualToRequest;
-    procedure TestIsEqualToTrivial;
+    procedure TestEqualsComplexMessages;
+    procedure TestEqualsDifferentHeaders;
+    procedure TestEqualsDifferentSipVersion;
+    procedure TestEqualsDifferentStatusCode;
+    procedure TestEqualsDifferentStatusText;
+    procedure TestEqualsRequest;
+    procedure TestEqualsTrivial;
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
@@ -265,7 +265,7 @@ end;
 //******************************************************************************
 //* TIdSipTrivialMessage Public methods ****************************************
 
-function TIdSipTrivialMessage.IsEqualTo(Msg: TIdSipMessage): Boolean;
+function TIdSipTrivialMessage.Equals(Msg: TIdSipMessage): Boolean;
 begin
   Result := false;
 end;
@@ -368,7 +368,7 @@ begin
     Headers.Add(UserAgentHeader).Value := '3';
 
     Self.Msg.AddHeaders(Headers);
-    Self.Msg.Headers.IsEqualTo(Headers);
+    Self.Msg.Headers.Equals(Headers);
   finally
     Headers.Free;
   end;
@@ -670,7 +670,7 @@ begin
     try
       Self.Msg.Contacts := C;
 
-      Check(Self.Msg.Contacts.IsEqualTo(C), 'Path not correctly set');
+      Check(Self.Msg.Contacts.Equals(C), 'Path not correctly set');
     finally
       C.Free;
     end;
@@ -713,7 +713,7 @@ begin
 
     Self.Msg.CSeq := C;
 
-    Check(Self.Msg.CSeq.IsEqualTo(C), 'CSeq not set');
+    Check(Self.Msg.CSeq.Equals(C), 'CSeq not set');
   finally
     C.Free;
   end;
@@ -752,7 +752,7 @@ begin
     try
       Self.Msg.Path := P;
 
-      Check(Self.Msg.Path.IsEqualTo(P), 'Path not correctly set');
+      Check(Self.Msg.Path.Equals(P), 'Path not correctly set');
     finally
       P.Free;
     end;
@@ -883,7 +883,7 @@ begin
 
   Ack := Self.Request.AckFor(Self.Response);
   try
-    Check(Self.Request.Route.IsEqualTo(Ack.Route),
+    Check(Self.Request.Route.Equals(Ack.Route),
           'Route path');
   finally
     Ack.Free;
@@ -920,7 +920,7 @@ begin
     CheckEquals(R.Method,        Self.Request.Method,        'Method');
     CheckEquals(R.RequestUri,    Self.Request.RequestUri,    'Request-URI');
 
-    Check(R.Headers.IsEqualTo(Self.Request.Headers),
+    Check(R.Headers.Equals(Self.Request.Headers),
           'Headers not assigned properly');
   finally
     R.Free;
@@ -1004,12 +1004,12 @@ begin
     CheckEquals(Self.Request.CallID,
                 Cancel.CallID,
                 'Call-ID header');
-    Check(Self.Request.ToHeader.IsEqualTo(Cancel.ToHeader),
+    Check(Self.Request.ToHeader.Equals(Cancel.ToHeader),
           'To header');
     CheckEquals(Self.Request.CSeq.SequenceNo,
                 Cancel.CSeq.SequenceNo,
                 'CSeq numerical portion');
-    Check(Self.Request.From.IsEqualTo(Cancel.From),
+    Check(Self.Request.From.Equals(Cancel.From),
           'From header');
     CheckEquals(1,
                 Cancel.Path.Length,
@@ -1069,7 +1069,7 @@ begin
 
   Cancel := Self.Request.CreateCancel;
   try
-    Check(Self.Request.Route.IsEqualTo(Cancel.Route),
+    Check(Self.Request.Route.Equals(Cancel.Route),
           'Route headers not copied');
   finally
     Cancel.Free;
@@ -1175,20 +1175,20 @@ begin
   Check(not Self.Request.IsCancel, 'XXX');
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToComplexMessages;
+procedure TestTIdSipRequest.TestEqualsComplexMessages;
 var
   R: TIdSipRequest;
 begin
   R := TIdSipTestResources.CreateBasicRequest;
   try
-    Check(Self.Request.IsEqualTo(R), 'Request = R');
-    Check(R.IsEqualTo(Self.Request), 'R = Request');
+    Check(Self.Request.Equals(R), 'Request = R');
+    Check(R.Equals(Self.Request), 'R = Request');
   finally
     R.Free
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToDifferentHeaders;
+procedure TestTIdSipRequest.TestEqualsDifferentHeaders;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -1198,8 +1198,8 @@ begin
     try
       R1.AddHeader(ViaHeaderFull);
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1208,7 +1208,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToDifferentMethod;
+procedure TestTIdSipRequest.TestEqualsDifferentMethod;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -1219,8 +1219,8 @@ begin
       R1.Method := MethodInvite;
       R2.Method := MethodOptions;
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1229,7 +1229,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToDifferentRequestUri;
+procedure TestTIdSipRequest.TestEqualsDifferentRequestUri;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -1240,8 +1240,8 @@ begin
       R1.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.luna';
       R1.RequestUri.URI := 'sip:case@fried.neurons.org';
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1250,7 +1250,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToDifferentSipVersion;
+procedure TestTIdSipRequest.TestEqualsDifferentSipVersion;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -1261,8 +1261,8 @@ begin
       R1.SIPVersion := 'SIP/2.0';
       R2.SIPVersion := 'SIP/2.1';
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1271,7 +1271,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToFromAssign;
+procedure TestTIdSipRequest.TestEqualsFromAssign;
 var
   Req: TIdSipRequest;
 begin
@@ -1279,14 +1279,14 @@ begin
   try
     Req.Assign(Self.Request);
 
-    Check(Req.IsEqualTo(Self.Request), 'Assigned = Original');
-    Check(Self.Request.IsEqualTo(Req), 'Original = Assigned');
+    Check(Req.Equals(Self.Request), 'Assigned = Original');
+    Check(Self.Request.Equals(Req), 'Original = Assigned');
   finally
     Req.Free;
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToResponse;
+procedure TestTIdSipRequest.TestEqualsResponse;
 var
   Req: TIdSipRequest;
   Res: TIdSipResponse;
@@ -1295,7 +1295,7 @@ begin
   try
     Res := TIdSipResponse.Create;
     try
-      Check(not Req.IsEqualTo(Res), 'Req <> Res');
+      Check(not Req.Equals(Res), 'Req <> Res');
     finally
       Res.Free;
     end;
@@ -1304,7 +1304,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestIsEqualToTrivial;
+procedure TestTIdSipRequest.TestEqualsTrivial;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -1312,8 +1312,8 @@ begin
   try
     R2 := TIdSipRequest.Create;
     try
-      Check(R1.IsEqualTo(R2), 'R1 = R2');
-      Check(R2.IsEqualTo(R1), 'R2 = R1');
+      Check(R1.Equals(R2), 'R1 = R2');
+      Check(R2.Equals(R1), 'R2 = R1');
     finally
       R2.Free;
     end;
@@ -1436,7 +1436,7 @@ begin
     try
       Self.Request.RecordRoute := P;
 
-      Check(Self.Request.RecordRoute.IsEqualTo(P), 'Path not correctly set');
+      Check(Self.Request.RecordRoute.Equals(P), 'Path not correctly set');
     finally
       P.Free;
     end;
@@ -1460,7 +1460,7 @@ begin
     try
       Self.Request.Route := P;
 
-      Check(Self.Request.Route.IsEqualTo(P), 'Path not correctly set');
+      Check(Self.Request.Route.Equals(P), 'Path not correctly set');
     finally
       P.Free;
     end;
@@ -1515,7 +1515,7 @@ begin
     CheckEquals(R.StatusCode,    Self.Response.StatusCode,    'Status-Code');
     CheckEquals(R.StatusText,    Self.Response.StatusText,    'Status-Text');
 
-    Check(R.Headers.IsEqualTo(Self.Response.Headers),
+    Check(R.Headers.Equals(Self.Response.Headers),
           'Headers not assigned properly');
   finally
     R.Free;
@@ -1621,7 +1621,7 @@ begin
     try
       ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
       try
-        Check(ResponseRecordRoutes.IsEqualTo(RequestRecordRoutes),
+        Check(ResponseRecordRoutes.Equals(RequestRecordRoutes),
               'Record-Route header sets mismatch');
       finally
         ResponseRecordRoutes.Free;
@@ -1701,11 +1701,11 @@ begin
       end;
 
       CheckEquals(SIPOK, Response.StatusCode,           'StatusCode mismatch');
-      Check(Response.CSeq.IsEqualTo(Self.Request.CSeq), 'Cseq header mismatch');
-      Check(Response.From.IsEqualTo(Self.Request.From), 'From header mismatch');
-      Check(Response.Path.IsEqualTo(Self.Request.Path), 'Via headers mismatch');
+      Check(Response.CSeq.Equals(Self.Request.CSeq), 'Cseq header mismatch');
+      Check(Response.From.Equals(Self.Request.From), 'From header mismatch');
+      Check(Response.Path.Equals(Self.Request.Path), 'Via headers mismatch');
 
-      Check(Request.ToHeader.IsEqualTo(Response.ToHeader),
+      Check(Request.ToHeader.Equals(Response.ToHeader),
             'To header mismatch');
 
       Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
@@ -1717,7 +1717,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToComplexMessages;
+procedure TestTIdSipResponse.TestEqualsComplexMessages;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1725,8 +1725,8 @@ begin
   try
     R2 := TIdSipTestResources.CreateLocalLoopResponse;
     try
-      Check(R1.IsEqualTo(R2), 'R1 = R2');
-      Check(R2.IsEqualTo(R1), 'R2 = R1');
+      Check(R1.Equals(R2), 'R1 = R2');
+      Check(R2.Equals(R1), 'R2 = R1');
     finally
       R2.Free;
     end;
@@ -1735,7 +1735,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToDifferentHeaders;
+procedure TestTIdSipResponse.TestEqualsDifferentHeaders;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1745,8 +1745,8 @@ begin
     try
       R1.AddHeader(ViaHeaderFull);
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1755,7 +1755,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToDifferentSipVersion;
+procedure TestTIdSipResponse.TestEqualsDifferentSipVersion;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1766,8 +1766,8 @@ begin
       R1.SIPVersion := 'SIP/2.0';
       R2.SIPVersion := 'SIP/2.1';
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1776,7 +1776,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToDifferentStatusCode;
+procedure TestTIdSipResponse.TestEqualsDifferentStatusCode;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1787,8 +1787,8 @@ begin
       R1.StatusCode := SIPOK;
       R2.StatusCode := SIPTrying;
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1797,7 +1797,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToDifferentStatusText;
+procedure TestTIdSipResponse.TestEqualsDifferentStatusText;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1808,8 +1808,8 @@ begin
       R1.StatusText := RSSIPOK;
       R2.StatusText := RSSIPTrying;
 
-      Check(not R1.IsEqualTo(R2), 'R1 <> R2');
-      Check(not R2.IsEqualTo(R1), 'R2 <> R1');
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
@@ -1818,7 +1818,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToRequest;
+procedure TestTIdSipResponse.TestEqualsRequest;
 var
   Req: TIdSipRequest;
   Res: TIdSipResponse;
@@ -1827,7 +1827,7 @@ begin
   try
     Res := TIdSipResponse.Create;
     try
-      Check(not Res.IsEqualTo(Req), 'Res <> Req');
+      Check(not Res.Equals(Req), 'Res <> Req');
     finally
       Res.Free;
     end;
@@ -1836,7 +1836,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestIsEqualToTrivial;
+procedure TestTIdSipResponse.TestEqualsTrivial;
 var
   R1, R2: TIdSipResponse;
 begin
@@ -1844,8 +1844,8 @@ begin
   try
     R2 := TIdSipResponse.Create;
     try
-      Check(R1.IsEqualTo(R2), 'R1 = R2');
-      Check(R2.IsEqualTo(R1), 'R2 = R1');
+      Check(R1.Equals(R2), 'R1 = R2');
+      Check(R2.Equals(R1), 'R2 = R1');
     finally
       R2.Free;
     end;

@@ -166,7 +166,7 @@ type
     function  HasParam(Name: String): Boolean;
     function  IndexOfParam(Name: String): Integer;
     function  IsContact: Boolean; virtual;
-    function  IsEqualTo(Header: TIdSipHeader): Boolean; virtual;
+    function  Equals(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
 
@@ -209,7 +209,7 @@ type
   protected
     procedure SetValue(const Value: String); override;
   public
-    function IsEqualTo(Header: TIdSipHeader): Boolean; override;
+    function Equals(Header: TIdSipHeader): Boolean; override;
   end;
 
   TIdSipCommaSeparatedHeader = class(TIdSipHeader)
@@ -339,7 +339,7 @@ type
     procedure SetValue(const Value: String); override;
   public
     function HasTag: Boolean;
-    function IsEqualTo(Header: TIdSipHeader): Boolean; override;
+    function Equals(Header: TIdSipHeader): Boolean; override;
 
     property Tag: String read GetTag write SetTag;
   end;
@@ -522,7 +522,7 @@ type
     procedure First; virtual; abstract;
     function  HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
     function  HasNext: Boolean; virtual; abstract;
-    function  IsEqualTo(OtherHeaders: TIdSipHeaderList): Boolean;
+    function  Equals(OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsEmpty: Boolean;
     procedure Next; virtual; abstract;
     procedure Remove(Header: TIdSipHeader); virtual; abstract;
@@ -717,7 +717,7 @@ type
     function  HasHeader(const HeaderName: String): Boolean;
     function  HeaderCount: Integer;
     function  QuickestExpiry: Cardinal;
-    function  IsEqualTo(Msg: TIdSipMessage): Boolean; virtual; abstract;
+    function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
     function  MalformedException: EBadMessageClass; virtual; abstract;
@@ -774,7 +774,7 @@ type
     function  IsAck: Boolean;
     function  IsBye: Boolean;
     function  IsCancel: Boolean;
-    function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
+    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
@@ -809,7 +809,7 @@ type
     procedure Assign(Src: TPersistent); override;
     function  Description: String;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
-    function  IsEqualTo(Msg: TIdSipMessage): Boolean; override;
+    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
     function  IsProvisional: Boolean;
@@ -1445,12 +1445,12 @@ begin
 
   Result := Result
         and (Lowercase(Self.Host) = Lowercase(Uri.Host))
-        and (Self.Port = Uri.Port)
+        and (Self.Port            = Uri.Port)
         and (Self.PortIsSpecified = Uri.PortIsSpecified)
-        and (Self.Username = Uri.Username)
-        and (Self.Password = Uri.Password)
+        and (Self.Username        = Uri.Username)
+        and (Self.Password        = Uri.Password)
         and Self.EqualParameters(Uri)
-        and Self.Headers.IsEqualTo(Uri.Headers);
+        and Self.Headers.Equals(Uri.Headers);
 end;
 
 procedure TIdSipUri.EraseUserInfo;
@@ -1951,7 +1951,7 @@ begin
   Result := TIdSipHeaders.IsContact(Self.Name);
 end;
 
-function TIdSipHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
+function TIdSipHeader.Equals(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Self.AsString, Header.AsString);
 end;
@@ -2222,7 +2222,7 @@ end;
 //******************************************************************************
 //* TIdSipCallIdHeader Public methods ******************************************
 
-function TIdSipCallIdHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
+function TIdSipCallIdHeader.Equals(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Header.Name, Self.Name)
         and (Self.Value = Header.Value);
@@ -2682,7 +2682,7 @@ begin
   Result := Self.IndexOfParam(TagParam) <> -1;
 end;
 
-function TIdSipFromToHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
+function TIdSipFromToHeader.Equals(Header: TIdSipHeader): Boolean;
 var
   From: TIdSipFromToHeader;
 begin
@@ -3389,7 +3389,7 @@ begin
   end;
 end;
 
-function TIdSipHeaderList.IsEqualTo(OtherHeaders: TIdSipHeaderList): Boolean;
+function TIdSipHeaderList.Equals(OtherHeaders: TIdSipHeaderList): Boolean;
   procedure DumpHeaders(Headers: TIdSipHeaderList; List: TStringList);
   begin
     Headers.First;
@@ -4505,7 +4505,7 @@ begin
   Result := Self.Method = MethodCancel;
 end;
 
-function TIdSipRequest.IsEqualTo(Msg: TIdSipMessage): Boolean;
+function TIdSipRequest.Equals(Msg: TIdSipMessage): Boolean;
 var
   Request: TIdSipRequest;
 begin
@@ -4515,7 +4515,7 @@ begin
     Result := (Self.SIPVersion     = Request.SIPVersion)
           and (Self.Method         = Request.Method)
           and (Self.RequestUri.URI = Request.RequestUri.URI)
-          and (Self.Headers.IsEqualTo(Request.Headers));
+          and (Self.Headers.Equals(Request.Headers));
   end
   else
     Result := false;
@@ -4593,14 +4593,14 @@ begin
          and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
          and (Self.From.Tag = InitialRequest.From.Tag)
          and (Self.CallID = InitialRequest.CallID)
-         and  Self.CSeq.IsEqualTo(InitialRequest.CSeq)
-         and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
+         and  Self.CSeq.Equals(InitialRequest.CSeq)
+         and  Self.LastHop.Equals(InitialRequest.LastHop)
   else if Self.IsAck then
     Result := RequestUri.Equals(InitialRequest.RequestUri)
          and (Self.From.Tag = InitialRequest.From.Tag)
          and (Self.CallID = InitialRequest.CallID)
          and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo)
-         and  Self.LastHop.IsEqualTo(InitialRequest.LastHop)
+         and  Self.LastHop.Equals(InitialRequest.LastHop)
   else
     Result := false;
 end;
@@ -4746,7 +4746,7 @@ begin
   Result := Self.FirstHeader(UnsupportedHeader) as TIdSipCommaSeparatedHeader;
 end;
 
-function TIdSipResponse.IsEqualTo(Msg: TIdSipMessage): Boolean;
+function TIdSipResponse.Equals(Msg: TIdSipMessage): Boolean;
 var
   Response: TIdSipResponse;
 begin
@@ -4756,7 +4756,7 @@ begin
     Result := (Self.SIPVersion = Response.SipVersion)
           and (Self.StatusCode = Response.StatusCode)
           and (Self.StatusText = Response.StatusText)
-          and (Self.Headers.IsEqualTo(Response.Headers));
+          and (Self.Headers.Equals(Response.Headers));
   end
   else
     Result := false;
