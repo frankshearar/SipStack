@@ -1008,6 +1008,8 @@ type
     fRoute:      TIdSipRoutePath;
 
     function  CSeqMatchesMethod: Boolean;
+    function  FindAuthorizationHeader(const Realm: String;
+                                      const HeaderType: String): TIdSipHeader;
     function  GetMaxForwards: Byte;
     function  MatchSipRFC2543Request(InitialRequest: TIdSipRequest;
                                      UseCSeqMethod: Boolean): Boolean;
@@ -1031,6 +1033,7 @@ type
     function  AckFor(Response: TIdSipResponse): TIdSipRequest;
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
+    function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
@@ -1053,6 +1056,7 @@ type
     function  MalformedException: EBadMessageClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  MatchCancel(Cancel: TIdSipRequest): Boolean;
+    function  ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
     function  RequiresResponse: Boolean;
 
     property MaxForwards: Byte            read GetMaxForwards write SetMaxForwards;
@@ -5776,6 +5780,12 @@ begin
   Self.RequestUri := R.RequestUri;
 end;
 
+function TIdSipRequest.AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
+begin
+  Result := Self.FindAuthorizationHeader(Realm,
+                                         AuthorizationHeader) as TIdSipAuthorizationHeader;
+end;
+
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
   Assert(Self.IsInvite, 'Only INVITE requests may be CANCELled');
@@ -5951,6 +5961,12 @@ begin
   Result := Cancel.MatchRequest(Self, false);
 end;
 
+function TIdSipRequest.ProxyAuthorizationFor(const Realm: String): TIdSipProxyAuthorizationHeader;
+begin
+  Result := Self.FindAuthorizationHeader(Realm,
+                                         ProxyAuthorizationHeader) as TIdSipProxyAuthorizationHeader;
+end;
+
 function TIdSipRequest.RequiresResponse: Boolean;
 begin
   Result := not Self.IsAck;
@@ -6065,6 +6081,24 @@ end;
 function TIdSipRequest.CSeqMatchesMethod: Boolean;
 begin
   Result := Self.CSeq.Method = Self.Method;
+end;
+
+function TIdSipRequest.FindAuthorizationHeader(const Realm: String;
+                                               const HeaderType: String): TIdSipHeader;
+var
+  RealmString: String;
+begin
+  Result := nil;
+  RealmString := RealmParam + '="' + Lowercase(Realm) + '"';
+
+  Self.Headers.First;
+
+  while Self.Headers.HasNext and not Assigned(Result) do
+    if    IsEqual(Self.Headers.CurrentHeader.Name, HeaderType)
+      and (IndyPos(RealmString, Lowercase(Self.Headers.CurrentHeader.Value)) > 0) then
+      Result := Self.Headers.CurrentHeader as TIdSipAuthorizationHeader
+    else
+      Self.Headers.Next;
 end;
 
 function TIdSipRequest.GetMaxForwards: Byte;

@@ -115,6 +115,7 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestAsStringNoMaxForwardsSet;
+    procedure TestAuthorizationFor;
     procedure TestCopy;
     procedure TestCreateCancel;
     procedure TestCreateCancelANonInviteRequest;
@@ -159,6 +160,7 @@ type
     procedure TestParseLeadingBlankLines;
     procedure TestParseMalformedRequestLine;
     procedure TestParseWithRequestUriInAngleBrackets;
+    procedure TestProxyAuthorizationFor;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetRoute;
@@ -1398,6 +1400,28 @@ begin
         'No Max-Forwards header');
 end;
 
+procedure TestTIdSipRequest.TestAuthorizationFor;
+var
+  Auth1:     TIdSipHeader;
+  Auth2:     TIdSipHeader;
+  ProxyAuth: TIdSipHeader;
+begin
+  ProxyAuth := Self.Request.AddHeader(ProxyAuthorizationHeader);
+  Auth1     := Self.Request.AddHeader(AuthorizationHeader);
+  Auth2     := Self.Request.AddHeader(AuthorizationHeader);
+
+  ProxyAuth.Value := 'Digest realm="Auth1"';
+  Auth1.Value     := 'Digest realm="Auth1"';
+  Auth2.Value     := 'Digest realm="Auth2"';
+
+  CheckNull(Self.Request.AuthorizationFor('Unknown realm'),
+            'Unknown realm');
+  Check(Auth1 = Self.Request.AuthorizationFor('Auth1'),
+        'Auth1');
+  Check(Auth2 = Self.Request.AuthorizationFor('Auth2'),
+        'Auth2');
+end;
+
 procedure TestTIdSipRequest.TestCopy;
 var
   Cancel: TIdSipRequest;
@@ -2260,6 +2284,28 @@ begin
   finally
     R.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestProxyAuthorizationFor;
+var
+  Auth:       TIdSipHeader;
+  ProxyAuth1: TIdSipHeader;
+  ProxyAuth2: TIdSipHeader;
+begin
+  Auth       := Self.Request.AddHeader(AuthorizationHeader);
+  ProxyAuth1 := Self.Request.AddHeader(ProxyAuthorizationHeader);
+  ProxyAuth2 := Self.Request.AddHeader(ProxyAuthorizationHeader);
+
+  Auth.Value       := 'Digest realm="ProxyAuth1"';  
+  ProxyAuth1.Value := 'Digest realm="ProxyAuth1"';
+  ProxyAuth2.Value := 'Digest realm="ProxyAuth2"';
+
+  CheckNull(Self.Request.ProxyAuthorizationFor('Unknown realm'),
+            'Unknown realm');
+  Check(ProxyAuth1 = Self.Request.ProxyAuthorizationFor('ProxyAuth1'),
+        'ProxyAuth1');
+  Check(ProxyAuth2 = Self.Request.ProxyAuthorizationFor('ProxyAuth2'),
+        'ProxyAuth2');
 end;
 
 procedure TestTIdSipRequest.TestRequiresResponse;
