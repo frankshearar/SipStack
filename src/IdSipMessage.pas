@@ -282,6 +282,7 @@ type
   public
     function IsBasic: Boolean;
     function IsDigest: Boolean;
+    function NC: String;
 
     property CNonce:     String   read GetCNonce write SetCNonce;
     property Response:   String   read GetResponse write SetResponse;
@@ -2595,6 +2596,12 @@ end;
 function TIdSipAuthorizationHeader.IsDigest: Boolean;
 begin
   Result := IsEqual(Self.AuthorizationScheme, DigestAuthorizationScheme);
+end;
+
+function TIdSipAuthorizationHeader.NC: String;
+begin
+  // The encoded "nc" parameter
+  Result := Self.DigestResponses.Values[NonceCountParam];
 end;
 
 //* TIdSipAuthorizationHeader Protected methods ********************************

@@ -99,6 +99,7 @@ type
     procedure TestIsBasic;
     procedure TestIsDigest;
     procedure TestName; virtual;
+    procedure TestNC;
     procedure TestNonce;
     procedure TestIsNonce;
     procedure TestNonceCount;
@@ -1478,6 +1479,24 @@ end;
 procedure TestTIdSipAuthorizationHeader.TestName;
 begin
   CheckEquals(AuthorizationHeader, Self.A.Name, 'Name');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestNC;
+begin
+  Self.A.NonceCount := $f00f;
+  CheckEquals('0000f00f',
+              Self.A.NC,
+              'f00f');
+
+  Self.A.NonceCount := $decafbad;
+  CheckEquals('decafbad',
+              Self.A.NC,
+              'decafbad');
+
+  Self.A.NonceCount := $0;
+  CheckEquals('00000000',
+              Self.A.NC,
+              '0');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestNonce;

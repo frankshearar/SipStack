@@ -52,6 +52,8 @@ const
   LooseRoutableParam         = 'lr';
   MaddrParam                 = 'maddr';
   MaxForwardsHeader          = 'Max-Forwards';
+  MD5Name                    = 'MD5';
+  MD5SessionName             = 'MD5-sess';
   MethodAck                  = 'ACK';
   MethodBye                  = 'BYE';
   MethodCancel               = 'CANCEL';
@@ -69,6 +71,8 @@ const
   ProxyAuthenticateHeader    = 'Proxy-Authenticate';
   ProxyAuthorizationHeader   = 'Proxy-Authorization';
   ProxyRequireHeader         = 'Proxy-Require';
+  QopAuth                    = 'auth';
+  QopAuthInt                 = 'auth-int';
   QopParam                   = 'qop';
   QParam                     = 'q';
   RealmParam                 = 'realm';
