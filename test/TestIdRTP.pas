@@ -3,7 +3,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdRTP, TestFramework, TestFrameworkSip;
+  IdRTP, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
