@@ -239,7 +239,6 @@ begin
     Self.Client.Send(BasicResponse);
 
     Self.WaitForSignaled;
-    
     Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
   finally
     Listener.Free;
