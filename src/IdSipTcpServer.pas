@@ -12,7 +12,7 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, Contnrs, IdNotification, IdSipConsts, IdSipMessage,
+  Classes, Contnrs, IdNotification, IdSipConsts, IdSipLocator, IdSipMessage,
   IdSipServerNotifier, IdSipTcpClient, IdTCPConnection, IdTCPServer, SyncObjs,
   SysUtils;
 
@@ -96,7 +96,8 @@ type
     function  DefaultTimeout: Cardinal; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
-    procedure SendResponse(Response: TIdSipResponse);
+    procedure SendResponse(Response: TIdSipResponse;
+                           Dest: TIdSipLocation);
   published
     property ConnectionTimeout: Integer read fConnectionTimeout write fConnectionTimeout;
     property ReadTimeout:       Integer read fReadTimeout write fReadTimeout;
@@ -292,7 +293,8 @@ begin
   Self.Notifier.RemoveMessageListener(Listener);
 end;
 
-procedure TIdSipTcpServer.SendResponse(Response: TIdSipResponse);
+procedure TIdSipTcpServer.SendResponse(Response: TIdSipResponse;
+                                       Dest: TIdSipLocation);
 var
   Connection:  TIdTCPConnection;
   Table:       TIdSipConnectionTable;
@@ -305,14 +307,8 @@ begin
     if Assigned(Connection) and Connection.Connected then
       Connection.Write(Response.AsString)
     else begin
-      if Response.LastHop.HasReceived then begin
-        Destination.PeerIP   := Response.LastHop.Received;
-        Destination.PeerPort := Response.LastHop.Port;
-      end
-      else begin
-        Destination.PeerIP   := Response.LastHop.SentBy;
-        Destination.PeerPort := Response.LastHop.Port;
-      end;
+      Destination.PeerIP   := Dest.IPAddress;
+      Destination.PeerPort := Dest.Port;
 
       Self.SendResponseTo(Response, Destination);
     end;

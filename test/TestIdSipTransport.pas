@@ -179,8 +179,10 @@ type
     procedure TestSendRequest;
     procedure TestSendRequestFromNonStandardPort;
     procedure TestSendRequestTopVia;
+    procedure TestSendRequestUsesDestinationLocation;
     procedure TestSendResponse;
     procedure TestSendResponseFromNonStandardPort;
+    procedure TestSendResponseUsesDestinationLocation;
     procedure TestSendResponseWithReceivedParam;
     procedure TestTortureTest16;
     procedure TestTortureTest17;
@@ -222,12 +224,9 @@ type
     procedure TestIsSecure;
   end;
 
-  TestTIdSipUDPTransport = class(TestTIdSipTransport,
-                                 IIdSipMessageListener)
+  TestTIdSipUDPTransport = class(TestTIdSipTransport)
   private
-    MaddrTransport:  TIdSipTransport;
-    RPort:           Cardinal;
-    RPortEvent:      TEvent;
+    RPort: Cardinal;
 
     procedure CheckMessageWithTrailingGarbage(Sender: TObject;
                                               R: TIdSipRequest);
@@ -235,36 +234,23 @@ type
                                       R: TIdSipRequest);
     procedure CheckLeaveNonRportRequestsUntouched(Sender: TObject;
                                                   R: TIdSipRequest);
-    procedure CheckMaddrUser(Sender: TObject;
-                             R: TIdSipResponse);
     procedure CheckMissingContentLength(Sender: TObject;
                                         R: TIdSipRequest);
     procedure NoteSourcePort(Sender: TObject;
                              R: TIdSipRequest);
-    procedure OnMalformedMessage(const Msg: String;
-                                 const Reason: String);
-    procedure OnReceiveRequest(Request: TIdSipRequest;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(Response: TIdSipResponse;
-                                ReceivedFrom: TIdSipConnectionBindings);
   protected
     procedure CheckServerOnPort(const Host: String;
                                 Port: Cardinal;
                                 const Msg: String); override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
     procedure TestLeaveNonRportRequestsUntouched;
-    procedure TestMaddrUsed;
     procedure TestMessageWithTrailingGarbage;
     procedure TestMissingContentLength;
-    procedure TestRespectRport;
     procedure TestRportParamFilledIn;
     procedure TestRportListening;
   end;
@@ -375,7 +361,7 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
-//  Result.AddTest(TestTIdSipMockTransport.Suite);
+  Result.AddTest(TestTIdSipMockTransport.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveResponseMethod.Suite);
@@ -804,8 +790,8 @@ begin
 
   Self.HighPortTransport := Self.TransportType.Create;
   Self.ConfigureTransport(Self.HighPortTransport,
-                          IndyGetHostName,
-                          GStack.LocalAddress,
+                          'localhost',
+                          '127.0.0.1',
                           Self.DefaultPort + 10000);
   Self.HighPortTransport.Start;
 
@@ -831,6 +817,7 @@ begin
 
   Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
   Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
+  Self.Response.LastHop.Port      := Self.HighPortTransport.Port;
 
   Self.RecvdRequest := TIdSipRequest.Create;
 
@@ -1372,6 +1359,16 @@ begin
   Self.WaitForSignaled;
 end;
 
+procedure TestTIdSipTransport.TestSendRequestUsesDestinationLocation;
+begin
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
+  Self.Request.RequestUri.Port := Self.Request.RequestUri.Port + 1;
+  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
+
+  Self.WaitForSignaled;
+end;
+
 procedure TestTIdSipTransport.TestSendResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
@@ -1391,6 +1388,19 @@ begin
   Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
   Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTransport.TestSendResponseUsesDestinationLocation;
+begin
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
+
+  Self.Response.LastHop.Port := Self.Response.LastHop.Port + 1;
+  Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
+
+  Self.WaitForSignaled;
+
+  Check(Self.ReceivedResponse,
+        Self.HighPortTransport.ClassName + ': Response not received');
 end;
 
 procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
@@ -1705,29 +1715,6 @@ end;
 //******************************************************************************
 //* TestTIdSipUDPTransport                                                     *
 //******************************************************************************
-//* TestTIdSipUDPTransport Public methods **************************************
-
-procedure TestTIdSipUDPTransport.SetUp;
-begin
-  inherited SetUp;
-
-  Self.MaddrTransport := Self.TransportType.Create;
-  Self.MaddrTransport.AddTransportListener(Self);
-  Self.MaddrTransport.HostName := 'localhost';
-  Self.MaddrTransport.Address  := '127.0.0.2';
-  Self.MaddrTransport.Port     := IdPORT_SIP;
-
-  Self.RPortEvent := TSimpleEvent.Create;
-end;
-
-procedure TestTIdSipUDPTransport.TearDown;
-begin
-  Self.RPortEvent.Free;
-  Self.MaddrTransport.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdSipUDPTransport Protected methods ***********************************
 
 procedure TestTIdSipUDPTransport.CheckServerOnPort(const Host: String;
@@ -1812,21 +1799,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUDPTransport.CheckMaddrUser(Sender: TObject;
-                                                R: TIdSipResponse);
-begin
-  try
-    Check(Sender = Self.MaddrTransport,
-          'An unexpected transport received the response');
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
 procedure TestTIdSipUDPTransport.CheckMissingContentLength(Sender: TObject;
                                                            R: TIdSipRequest);
 begin
@@ -1851,30 +1823,6 @@ begin
   try
     Self.RPort := R.LastHop.RPort;
     Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipUDPTransport.OnMalformedMessage(const Msg: String;
-                                                    const Reason: String);
-begin
-end;
-
-procedure TestTIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
-                                                  ReceivedFrom: TIdSipConnectionBindings);
-begin
-end;
-
-procedure TestTIdSipUDPTransport.OnReceiveResponse(Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
-begin
-  try
-    Self.RPort := ReceivedFrom.PeerPort;
-    Self.RPortEvent.SetEvent;
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -1912,22 +1860,6 @@ begin
   Self.WaitForSignaled;  
 
   CheckEquals(0, Self.RPort, 'rport value');
-end;
-
-procedure TestTIdSipUDPTransport.TestMaddrUsed;
-begin
-  Self.CheckingResponseEvent := Self.CheckMaddrUser;
-  Self.MaddrTransport.Start;
-  try
-    Self.Response.LastHop.Maddr  := Self.MaddrTransport.Address;
-    Self.Response.LastHop.SentBy := Self.MaddrTransport.Address;
-
-    Self.LowPortTransport.Send(Self.Response, Self.HighPortLocation);
-
-    Self.WaitForSignaled;
-  finally
-    Self.MaddrTransport.Stop;
-  end;
 end;
 
 procedure TestTIdSipUDPTransport.TestMessageWithTrailingGarbage;
@@ -1982,41 +1914,6 @@ begin
                  + 'foofoo');
 
   Self.WaitForSignaled;
-end;
-
-procedure TestTIdSipUDPTransport.TestRespectRport;
-var
-  Server: TIdSipUdpServer;
-begin
-  // If we get a request with an rport param (which MUST be empty!) then we
-  // should send our responses back to the server at received:rport.
-
-  // What should happen is that:
-  // 1. Server sends a request to Self.HighPortTransport
-  // 2. HighPortTransport (because of Self.ReturnResponse) sends back a 200 OK
-  // 3. Server receives this response and sets Self.RPortEvent
-
-  Self.CheckingRequestEvent := Self.ReturnResponse;
-
-  Self.Request.LastHop.Params[RPortParam] := '';
-
-  Server := TIdSipUdpServer.Create(nil);
-  try
-    Server.AddMessageListener(Self);
-    Server.DefaultPort := 5000; // some arbitrary value
-    Server.Active      := true;
-
-    Self.Response.LastHop.Received := Self.HighPortTransport.Address;
-    Self.Response.LastHop.Rport    := Server.DefaultPort;
-
-    Server.Send(Self.HighPortTransport.Address,
-                Self.HighPortTransport.Port,
-                Self.Request.AsString);
-
-    Self.WaitForSignaled(Self.RPortEvent);
-  finally
-    Server.Free;
-  end;
 end;
 
 procedure TestTIdSipUDPTransport.TestRportParamFilledIn;

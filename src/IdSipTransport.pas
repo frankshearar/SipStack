@@ -888,8 +888,8 @@ begin
 
   Client := Self.AddClient;
 
-  Client.Host        := R.RequestUri.Host;
-  Client.Port        := R.RequestUri.Port;
+  Client.Host        := Dest.IPAddress;
+  Client.Port        := Dest.Port;
   Client.ReadTimeout := Self.Timeout;
 
   // Race condition here? Connect, but during the send the client disconnects?
@@ -902,7 +902,7 @@ procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse;
 begin
   inherited SendResponse(R, Dest);
 
-  Self.Transport.SendResponse(R);
+  Self.Transport.SendResponse(R, Dest);
 end;
 
 function TIdSipTCPTransport.ServerType: TIdSipTcpServerClass;
@@ -1189,8 +1189,8 @@ procedure TIdSipUDPTransport.SendRequest(R: TIdSipRequest;
 begin
   inherited SendRequest(R, Dest);
 
-  Self.Transport.Send(R.RequestUri.Host,
-                      R.RequestUri.Port,
+  Self.Transport.Send(Dest.IPAddress,
+                      Dest.Port,
                       R.AsString);
 end;
 
@@ -1203,8 +1203,8 @@ begin
   // TODO: this isn't quite right. We have to send the response
   // from the ip/port that the request was received on.
 
-  Self.Transport.Send(R.LastHop.RoutingAddress,
-                      R.LastHop.RoutingPort,
+  Self.Transport.Send(Dest.IPAddress,
+                      Dest.Port,
                       R.AsString);
 end;
 
