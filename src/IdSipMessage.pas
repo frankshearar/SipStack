@@ -1144,6 +1144,22 @@ type
     property StatusText: String  read fStatusText write fStatusText;
   end;
 
+  TIdSipRequestList = class(TObject)
+  private
+    List: TObjectList;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure AddCopy(Request: TIdSipRequest);
+    function  Count: Integer;
+    procedure Delete(Index: Integer);
+    function  First: TIdSipRequest;
+    function  IsEmpty: Boolean;
+    function  Last: TIdSipRequest;
+    function  SecondLast: TIdSipRequest;
+  end;
+
   TIdSipResponseList = class(TObject)
   private
     List: TObjectList;
@@ -7057,6 +7073,80 @@ begin
   else
     Self.StatusText := RSSIPUnknownResponseCode;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipRequestList                                                          *
+//******************************************************************************
+//* TIdSipRequestList Public methods *******************************************
+
+constructor TIdSipRequestList.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdSipRequestList.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipRequestList.AddCopy(Request: TIdSipRequest);
+var
+  Copy: TIdSipRequest;
+begin
+  Copy := TIdSipRequest.Create;
+  try
+    Copy.Assign(Request);
+    Self.List.Add(Copy);
+  except
+    if (Self.List.IndexOf(Copy) <> -1) then
+      Self.List.Remove(Copy)
+    else
+      Copy.Free;
+  end;
+end;
+
+function TIdSipRequestList.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+procedure TIdSipRequestList.Delete(Index: Integer);
+begin
+  Self.List.Delete(Index);
+end;
+
+function TIdSipRequestList.First: TIdSipRequest;
+begin
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.List[0] as TIdSipRequest;
+end;
+
+function TIdSipRequestList.IsEmpty: Boolean;
+begin
+  Result := Self.Count = 0;
+end;
+
+function TIdSipRequestList.Last: TIdSipRequest;
+begin
+  if Self.IsEmpty then
+    Result := nil
+  else
+    Result := Self.List[Self.List.Count - 1] as TIdSipRequest;
+end;
+
+function TIdSipRequestList.SecondLast: TIdSipRequest;
+begin
+  if (Self.Count < 2) then
+    Result := nil
+  else
+    Result := Self.List[Self.List.Count - 2] as TIdSipRequest;
 end;
 
 //******************************************************************************

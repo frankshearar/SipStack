@@ -226,6 +226,22 @@ type
     procedure TestParseLeadingBlankLines;
   end;
 
+  TestTIdSipRequestList = class(TTestCase)
+  private
+    List: TIdSipRequestList;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestDelete;
+    procedure TestFirst;
+    procedure TestIsEmpty;
+    procedure TestLast;
+    procedure TestListStoresCopiesNotReferences;
+    procedure TestSecondLast;
+  end;
+
   TestTIdSipResponseList = class(TTestCase)
   private
     List: TIdSipResponseList;
@@ -274,6 +290,7 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
+  Result.AddTest(TestTIdSipRequestList.Suite);
   Result.AddTest(TestTIdSipResponseList.Suite);
 end;
 
@@ -3305,6 +3322,205 @@ begin
     Self.CheckBasicResponse(Res);
   finally
     Res.Free;
+  end;
+end;
+
+//******************************************************************************
+ //* TestTIdSipRequestList                                                     *
+//******************************************************************************
+//* TestTIdSipRequestList Public methods ***************************************
+
+procedure TestTIdSipRequestList.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List := TIdSipRequestList.Create;
+end;
+
+procedure TestTIdSipRequestList.TearDown;
+begin
+  Self.List.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipRequestList Published methods ************************************
+
+procedure TestTIdSipRequestList.TestAddAndCount;
+var
+  Request: TIdSipRequest;
+begin
+  CheckEquals(0, Self.List.Count, 'Empty list');
+
+  Request := TIdSipRequest.Create;
+  try
+    Self.List.AddCopy(Request);
+    CheckEquals(1, Self.List.Count, 'One Request');
+
+    Self.List.AddCopy(Request);
+    CheckEquals(2, Self.List.Count, 'Two Requests');
+
+    Self.List.AddCopy(Request);
+    CheckEquals(3, Self.List.Count, 'Three Requests');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestDelete;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodInvite;
+    Self.List.AddCopy(Request);
+
+    Request.Method := MethodOptions;
+    Self.List.AddCopy(Request);
+
+    Self.List.Delete(0);
+
+    CheckEquals(1,
+                Self.List.Count,
+                'Nothing deleted');
+    CheckEquals(MethodOptions,
+                Self.List.First.Method,
+                'Wrong Request deleted');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestFirst;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodInvite;
+
+    Check(nil = Self.List.First,
+          'Empty list');
+
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodInvite,
+                Self.List.First.Method,
+                'Non-empty list');
+
+    Request.Method := MethodOptions;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodInvite,
+                Self.List.First.Method,
+                'List with multiple Requests');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestIsEmpty;
+var
+  Request: TIdSipRequest;
+begin
+  Check(Self.List.IsEmpty, 'Empty list');
+
+  Request := TIdSipRequest.Create;
+  try
+    Self.List.AddCopy(Request);
+    Check(not Self.List.IsEmpty, 'Non-empty list');
+  finally
+    Request.Free;
+  end;
+
+  Self.List.Delete(0);
+  Check(Self.List.IsEmpty, 'Empty list after Delete');
+end;
+
+procedure TestTIdSipRequestList.TestLast;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodInvite;
+
+    Check(nil = Self.List.First,
+          'Empty list');
+
+    Self.List.AddCopy(Request);
+
+    CheckEquals(Request.Method,
+                Self.List.First.Method,
+                'Non-empty list');
+
+    Request.Method := MethodOptions;
+
+    Self.List.AddCopy(Request);
+
+    CheckEquals(Request.Method,
+                Self.List.Last.Method,
+                'List with multiple Requests');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestListStoresCopiesNotReferences;
+var
+  OriginalMethod: String;
+  Request:        TIdSipRequest;
+begin
+  OriginalMethod := MethodInvite;
+
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := OriginalMethod;
+
+    Self.List.AddCopy(Request);
+
+    Request.Method := MethodOptions;
+
+    CheckEquals(OriginalMethod,
+                Self.List.First.Method,
+                'List copy got mutated');
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TestTIdSipRequestList.TestSecondLast;
+var
+  Request: TIdSipRequest;
+begin
+  Request := TIdSipRequest.Create;
+  try
+    Request.Method := MethodOptions;
+
+    Check(nil = Self.List.SecondLast,
+          'Empty list');
+
+    Self.List.AddCopy(Request);
+
+    Check(nil = Self.List.SecondLast,
+          'Non-empty list');
+
+    Request.Method := MethodInvite;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodOptions,
+                Self.List.SecondLast.Method,
+                'List with two Requests');
+
+    Request.Method := MethodRegister;
+    Self.List.AddCopy(Request);
+
+    CheckEquals(MethodInvite,
+                Self.List.SecondLast.Method,
+                'List with three Requests');
+  finally
+    Request.Free;
   end;
 end;
 

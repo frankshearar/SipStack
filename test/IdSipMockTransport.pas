@@ -24,7 +24,7 @@ type
     fBindings:          TIdSocketHandles;
     fFailWith:          ExceptClass;
     fLastACK:           TIdSipRequest;
-    fLastRequest:       TIdSipRequest;
+    fRequests:          TIdSipRequestList;
     fResponses:         TIdSipResponseList;
     fPort:              Cardinal;
     fSentRequestCount:  Cardinal;
@@ -57,11 +57,13 @@ type
     function  GetTransportType: TIdSipTransportType; override;
     function  IsReliable: Boolean; override;
     function  IsSecure: Boolean; override;
+    function  LastRequest: TIdSipRequest;
     function  LastResponse: TIdSipResponse;
     procedure RaiseException(E: ExceptClass);
     procedure ResetACKCount;
     procedure ResetSentRequestCount;
     procedure ResetSentResponseCount;
+    function  SecondLastRequest: TIdSipRequest;
     function  SecondLastResponse: TIdSipResponse;
     procedure Start; override;
     procedure Stop; override;
@@ -69,7 +71,6 @@ type
     property ACKCount:          Cardinal            read fACKCount;
     property FailWith:          ExceptClass         read fFailWith write fFailWith;
     property LastACK:           TIdSipRequest       read fLastACK;
-    property LastRequest:       TIdSipRequest       read fLastRequest;
     property SentRequestCount:  Cardinal            read fSentRequestCount;
     property SentResponseCount: Cardinal            read fSentResponseCount;
     property TransportType:     TIdSipTransportType read fTransportType write fTransportType;
@@ -100,7 +101,7 @@ begin
   Self.ResetSentRequestCount;
   Self.fBindings    := TIdSocketHandles.Create(nil);
   Self.fLastACK     := TIdSipRequest.Create;
-  Self.fLastRequest := TIdSipRequest.Create;
+  Self.fRequests    := TIdSipRequestList.Create;
   Self.fResponses   := TIdSipResponseList.Create;
 
   GAllTransports.Add(Self);
@@ -111,7 +112,7 @@ begin
   GAllTransports.Remove(Self);
 
   Self.fResponses.Free;
-  Self.LastRequest.Free;
+  Self.fRequests.Free;
   Self.LastACK.Free;
   Self.Bindings.Free;
 
@@ -122,7 +123,7 @@ procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 begin
   Self.Log(R.AsString, dirIn);
 
-  Self.LastRequest.Assign(R);
+  Self.fRequests.AddCopy(R);
 
   Self.NotifyTransportListeners(R);
 end;
@@ -151,9 +152,14 @@ begin
   Result := Self.TransportType = sttTLS;
 end;
 
+function TIdSipMockTransport.LastRequest: TIdSipRequest;
+begin
+  Result := Self.fRequests.Last;
+end;
+
 function TIdSipMockTransport.LastResponse: TIdSipResponse;
 begin
-  Result := Self.fResponses.Last; 
+  Result := Self.fResponses.Last;
 end;
 
 procedure TIdSipMockTransport.RaiseException(E: ExceptClass);
@@ -174,6 +180,11 @@ end;
 procedure TIdSipMockTransport.ResetSentResponseCount;
 begin
   Self.fSentResponseCount := 0;
+end;
+
+function TIdSipMockTransport.SecondLastRequest: TIdSipRequest;
+begin
+  Result := Self.fRequests.SecondLast;
 end;
 
 function TIdSipMockTransport.SecondLastResponse: TIdSipResponse;
@@ -217,6 +228,7 @@ begin
   inherited SendRequest(R);
 
   Self.Log(R.AsString, dirOut);
+  Self.fRequests.AddCopy(R);
 
   if R.IsAck then begin
     Self.LastACK.Assign(R);
