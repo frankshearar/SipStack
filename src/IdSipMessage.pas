@@ -984,7 +984,7 @@ type
 
     procedure Accept(Visitor: IIdSipMessageVisitor); virtual;
     function  AddHeader(const HeaderName: String): TIdSipHeader; overload;
-    procedure AddHeader(Header: TIdSipHeader); overload;
+    procedure AddHeader(Copy: TIdSipHeader); overload;
     procedure AddHeaders(Headers: TIdSipHeaderList);
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
@@ -5618,12 +5618,12 @@ end;
 
 function TIdSipMessage.AddHeader(const HeaderName: String): TIdSipHeader;
 begin
-  Result := Self.Headers.Add(HeaderName)
+  Result := Self.Headers.Add(HeaderName);
 end;
 
-procedure TIdSipMessage.AddHeader(Header: TIdSipHeader);
+procedure TIdSipMessage.AddHeader(Copy: TIdSipHeader);
 begin
-  Self.Headers.Add(Header);
+  Self.Headers.Add(Copy);
 end;
 
 procedure TIdSipMessage.AddHeaders(Headers: TIdSipHeaderList);
