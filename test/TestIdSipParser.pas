@@ -616,7 +616,7 @@ begin
     CheckEquals('CSeq: 314159 INVITE',
                 Self.Request.FirstHeader(CSeqHeader).AsString,
                 'CSeq');
-    CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 GMT',
+    CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 +0000',
                 Self.Request.FirstHeader(DateHeader).AsString,
                 'Date');
     CheckEquals('Error-Info: <http://www.error.com/info/bloop.wav>',

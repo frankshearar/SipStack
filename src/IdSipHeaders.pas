@@ -192,6 +192,7 @@ type
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
+    function AsAddressOfRecord: String;
     function HasSipsUri: Boolean;
 
     property DisplayName: String read fDisplayName write fDisplayName;
@@ -266,6 +267,7 @@ type
     procedure SetQ(Value: TIdSipQValue);
   protected
     function  GetName: String; override;
+    function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     procedure RemoveExpires;
@@ -504,6 +506,7 @@ type
     function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
     procedure Add(Header: TIdSipHeader); overload; virtual; abstract;
     procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
+    function  AsString: String;
     procedure Clear; virtual; abstract;
     function  Count: Integer; virtual; abstract;
     function  CurrentHeader: TIdSipHeader; virtual; abstract;
@@ -579,7 +582,6 @@ type
     procedure Add(Header: TIdSipHeader); overload; override;
     procedure Add(Headers: TIdSipHeaderList); overload; override;
     procedure AddInReverseOrder(Headers: TIdSipHeadersFilter);
-    function  AsString: String;
     procedure Clear; override;
     function  CurrentHeader: TIdSipHeader; override;
     procedure Delete(I: Integer);
@@ -758,11 +760,11 @@ begin
         Fraction := Fraction + '0';
 
       Val(Fraction, F, E);
-      Malformed := Malformed or (E <> 0) or (F > 1000);
+      Malformed := Malformed or (E <> 0) or (F > High(TIdSipQValue));
     end;
 
-    Q := 1000*I + Trunc(F);
-    Malformed := Malformed or (Q > 1000);
+    Q := High(TIdSipQValue)*I + Trunc(F);
+    Malformed := Malformed or (Q > High(TIdSipQValue));
   end;
 
   if Malformed then
@@ -1722,6 +1724,11 @@ end;
 //******************************************************************************
 //* TIdSipAddressHeader Public methods *****************************************
 
+function TIdSipAddressHeader.AsAddressOfRecord: String;
+begin
+  Result := Self.Address.CanonicaliseAsAddressOfRecord;
+end;
+
 function TIdSipAddressHeader.HasSipsUri: Boolean;
 begin
   Result := Self.Address.IsSecure;
@@ -2043,12 +2050,20 @@ begin
   Result := ContactHeaderFull;
 end;
 
+function TIdSipContactHeader.GetValue: String;
+begin
+  if Self.IsWildCard then
+    Result := ContactWildCard
+  else
+    Result := inherited GetValue;
+end;
+
 procedure TIdSipContactHeader.SetValue(const Value: String);
 var
   S: String;
 begin
   S := Value;
-  Self.IsWildCard := Fetch(S, ';') = '*';
+  Self.IsWildCard := Fetch(S, ';') = ContactWildCard;
 
   if Self.IsWildCard then
     Self.ParseParameters(Value, Self.Parameters)
@@ -2086,6 +2101,7 @@ end;
 //******************************************************************************
 //* TIdSipContentDispositionHeader                                             *
 //******************************************************************************
+//* TIdSipContentDispositionHeader Public methods ******************************
 
 function TIdSipContentDispositionHeader.IsSession: Boolean;
 begin
@@ -2187,7 +2203,8 @@ end;
 
 function TIdSipDateHeader.GetValue: String;
 begin
-  Result := inherited GetValue;
+//  Result := inherited GetValue;
+  Result := Self.Time.GetAsRFC822;
 end;
 
 procedure TIdSipDateHeader.SetValue(const Value: String);
@@ -2913,6 +2930,17 @@ begin
   Result := Trim(Fetch(Header, ':'));
 end;
 
+function TIdSipHeaderList.AsString: String;
+begin
+  Result := '';
+  Self.First;
+
+  while Self.HasNext do begin
+    Result := Result + Self.CurrentHeader.AsString + EOL;
+    Self.Next;
+  end;
+end;
+
 function TIdSipHeaderList.HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
 begin
   Result := Self.Count = OtherHeaders.Count;
@@ -3281,15 +3309,6 @@ var
 begin
   for I := Headers.Count - 1 downto 0 do
     Self.Add(Headers.Items[I]);
-end;
-
-function TIdSipHeaders.AsString: String;
-var
-  I: Integer;
-begin
-  Result := '';
-  for I := 0 to Self.Count - 1 do
-    Result := Result + (Self.List[I] as TIdSipHeader).AsString + EOL;
 end;
 
 procedure TIdSipHeaders.Clear;

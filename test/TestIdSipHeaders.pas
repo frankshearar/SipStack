@@ -58,6 +58,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestAsAddressOfRecord;
     procedure TestAsString;
     procedure TestHasSipsUri;
     procedure TestSetAddress;
@@ -113,6 +114,7 @@ type
     procedure TestName;
     procedure TestGetSetExpires;
     procedure TestGetSetQ;
+    procedure TestGetValueWithStar;
     procedure TestRemoveExpires;
     procedure TestValue; override;
     procedure TestValueWithExpires;
@@ -155,6 +157,7 @@ type
     procedure TearDown; override;
   published
     procedure TestName;
+    procedure TestGetValue;
     procedure TestValueAbsoluteTime;
     procedure TestValueMalformedAbsoluteTime;
     procedure TestValueRelativeTime;
@@ -922,6 +925,14 @@ end;
 
 //* TestTIdSipAddressHeader Published methods **********************************
 
+procedure TestTIdSipAddressHeader.TestAsAddressOfRecord;
+begin
+  Self.A.Value := '"Hiro Protagonist Security Associates" <sip:hiro@enki.org>';
+  CheckEquals(Self.A.AsAddressOfRecord,
+              Self.A.Address.CanonicaliseAsAddressOfRecord,
+              'AsAddressOfRecord');
+end;
+
 procedure TestTIdSipAddressHeader.TestAsString;
 begin
   Self.A.Name := ToHeaderFull;
@@ -1397,6 +1408,12 @@ begin
   CheckEquals(666, Self.C.Q, '666');
 end;
 
+procedure TestTIdSipContactHeader.TestGetValueWithStar;
+begin
+  Self.C.Value := ContactWildCard;
+  CheckEquals(ContactWildCard, Self.C.Value, 'Value with star');
+end;
+
 procedure TestTIdSipContactHeader.TestRemoveExpires;
 begin
   Self.C.RemoveExpires;
@@ -1527,10 +1544,13 @@ end;
 procedure TestTIdSipContactHeader.TestValueWithStar;
 begin
   Self.C.Value := '*';
-  Check(Self.C.IsWildCard, 'IsWildCard');
+  Check(Self.C.IsWildCard, '*');
+
+  Self.C.Value := ContactWildCard;
+  Check(Self.C.IsWildCard, 'ContactWildCard');
 
   Self.C.Value := '*;q=0.1';
-  Check(Self.C.IsWildCard, 'IsWildCard');
+  Check(Self.C.IsWildCard, '*;q=0.1');
   CheckEquals(100, Self.C.Q, 'QValue');
 end;
 
@@ -1714,6 +1734,17 @@ begin
 
   Self.D.Name := 'foo';
   CheckEquals(DateHeader, Self.D.Name, 'Name after set');
+end;
+
+procedure TestTIdSipDateHeader.TestGetValue;
+var
+  DT: TDateTime;
+begin
+  DT := EncodeDate(1990, 12, 13) + EncodeTime(10, 22, 33, 44);
+  Self.D.Time.SetFromTDateTime(DT);
+  CheckEquals('Thu, 13 Dec 1990 10:22:33 +0000',
+              Self.D.Value,
+              'Value must derive from the Time property');
 end;
 
 procedure TestTIdSipDateHeader.TestValueAbsoluteTime;

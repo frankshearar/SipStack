@@ -24,13 +24,19 @@ type
 
     procedure CheckResponse(Received: TIdSipContacts;
                             const Msg: String);
+    procedure CheckServerReturned(ExpectedStatusCode: Cardinal;
+                                  const Msg: String);
+    procedure CheckServerReturnedOK(const Msg: String);
     procedure SimulateRemoteRequest;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestComplicatedRegistration;
     procedure TestDatabaseUpdatesBindings;
     procedure TestDatabaseGetsExpiry;
+    procedure TestFailedBindingsFor;
+    procedure TestFailedRemoveAll;
     procedure TestInvalidAddressOfRecord;
     procedure TestOKResponseContainsAllBindings;
     procedure TestReceiveInvite;
@@ -42,19 +48,25 @@ type
     procedure TestReceiveWildcardWithNonzeroExpiration;
     procedure TestRegisterAddsBindings;
     procedure TestRegisterAddsMultipleBindings;
+    procedure TestUnauthorizedUser;
   end;
 
   TIdSipMockBindingDatabase = class(TIdSipAbstractBindingDatabase)
   private
-    BindingStore:    TStrings;
-    fFailAddBinding: Boolean;
-    fFailIsValid:    Boolean;
+    BindingStore:       TStrings;
+    fAuthorized:        Boolean;
+    fFailAddBinding:    Boolean;
+    fFailBindingsFor:   Boolean;
+    fFailIsValid:       Boolean;
+    fFailRemoveBinding: Boolean;
 
     procedure DeleteBinding(Index: Integer);
     function  GetBindings(Index: Integer): TIdRegistrarBinding;
+    function  IndexOfBinding(const AddressOfRecord: String;
+                             Contact: TIdSipContactHeader): Integer;
   protected
     function  AddBinding(const AddressOfRecord: String;
-                         Contact: TIdSipUri;
+                         Contact: TIdSipContactHeader;
                          const CallID: String;
                          SequenceNo: Cardinal;
                          ExpiryTime: TDateTime): Boolean; override;
@@ -68,13 +80,18 @@ type
     destructor  Destroy; override;
 
     function  BindingCount: Integer;
-    procedure BindingsFor(Request: TIdSipRequest;
-                          Contacts: TIdSipContacts); override;
+    function  BindingsFor(Request: TIdSipRequest;
+                          Contacts: TIdSipContacts): Boolean; override;
+    function  IsAuthorized(User: TIdSipAddressHeader): Boolean; override;
     function  IsValid(Request: TIdSipRequest): Boolean; override;
     function  RemoveBinding(Request: TIdSipRequest;
                             Contact: TIdSipContactHeader): Boolean; override;
+
+    property Authorized:               Boolean             read fAuthorized write fAuthorized;
     property Bindings[Index: Integer]: TIdRegistrarBinding read GetBindings;
     property FailAddBinding:           Boolean             read fFailAddBinding write fFailAddBinding;
+    property FailBindingsFor:          Boolean             read fFailBindingsFor write fFailBindingsFor;
+    property FailRemoveBinding:        Boolean             read fFailRemoveBinding write fFailRemoveBinding;
     property FailIsValid:              Boolean             read fFailIsValid write fFailIsValid;
   end;
 
@@ -97,10 +114,10 @@ type
     procedure TestAddBindingWithNoExpiries;
     procedure TestAddBindingWithZeroExpiresRemovesBinding;
     procedure TestAddExistingBindingOutOfOrderSeqNo;
-    procedure TestMayRemoveBinding;
-    procedure TestMayRemoveBindingEarlySeqNo;
-    procedure TestMayRemoveBindingDifferentCallID;
-    procedure TestRemoveAllBindingsWithBadRequest;
+    procedure TestNotOutOfOrder;
+    procedure TestNotOutOfOrderEarlySeqNo;
+    procedure TestNotOutOfOrderDifferentCallID;
+    procedure TestRemoveAllBindings;
   end;
 
   TestTIdSipMockBindingDatabase = class(TTestCase)
@@ -117,8 +134,11 @@ type
     procedure TestAddBindings;
     procedure TestBindingsFor;
     procedure TestBindingsForClearsList;
+    procedure TestIsAuthorized;
     procedure TestIsValid;
     procedure TestFailAddBinding;
+    procedure TestFailBindingsFor;
+    procedure TestFailRemoveBinding;
     procedure TestRemoveAllBindings;
     procedure TestRemoveBinding;
     procedure TestRemoveBindingWhenNotPresent;
@@ -132,9 +152,9 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipRegistrar unit tests');
-//  Result.AddTest(TestTIdSipRegistrar.Suite);
+  Result.AddTest(TestTIdSipRegistrar.Suite);
   Result.AddTest(TestTIdSipAbstractBindingDatabase.Suite);
-//  Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
+  Result.AddTest(TestTIdSipMockBindingDatabase.Suite);
 end;
 
 //******************************************************************************
@@ -217,6 +237,24 @@ begin
   end;
 end;
 
+procedure TestTIdSipRegistrar.CheckServerReturned(ExpectedStatusCode: Cardinal;
+                                                  const Msg: String);
+begin
+  Check(Self.Dispatch.Transport.SentResponseCount > 0,
+        Msg + ': No responses ever sent');
+  CheckEquals(ExpectedStatusCode,
+              Self.Dispatch.Transport.LastResponse.StatusCode,
+              Msg
+            + ': Status code of last response ('
+            + Self.Dispatch.Transport.LastResponse.StatusText
+            + ')');
+end;
+
+procedure TestTIdSipRegistrar.CheckServerReturnedOK(const Msg: String);
+begin
+  Self.CheckServerReturned(SIPOK, Msg);
+end;
+
 procedure TestTIdSipRegistrar.SimulateRemoteRequest;
 begin
   Self.Dispatch.Transport.FireOnRequest(Self.Request);
@@ -224,18 +262,65 @@ end;
 
 //* TestTIdSipRegistrar Published methods **************************************
 
+procedure TestTIdSipRegistrar.TestComplicatedRegistration;
+var
+  Bindings: TIdSipContacts;
+begin
+  // This plays with a mis-ordered request.
+  // We register 'sip:wintermute@talking-head.tessier-ashpool.co.luna' with CSeq 999
+  // We register 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna' with CSeq 1001
+  // We try to remove all registrations with CSeq 1000
+  // We expect to see only the talking-head-2. (The remove-all is out of
+  // order only with respect to the talking-head-2 URI.
+
+  Self.Request.FirstContact.Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+  Self.Request.CSeq.SequenceNo    := 999;
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturnedOK('Step 1: registering <sip:wintermute@talking-head.tessier-ashpool.co.luna>');
+
+  Self.Request.FirstContact.Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna';
+  Self.Request.CSeq.SequenceNo    := 1001;
+  Self.Request.LastHop.Branch     := Self.Request.LastHop.Branch + '1';
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturnedOK('Step 2: registering <sip:wintermute@talking-head-2.tessier-ashpool.co.luna>');
+
+  Self.Request.FirstContact.IsWildCard := true;
+  Self.Request.FirstContact.Expires    := 0;        
+  Self.Request.CSeq.SequenceNo    := 1000;
+  Self.Request.LastHop.Branch     := Self.Request.LastHop.Branch + '1';
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturnedOK('Step 3: unregistering everything, out-of-order');
+
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.DB.BindingsFor(Self.Request, Bindings);
+    Bindings.First;
+    Check(not Bindings.IsEmpty, 'All bindings were removed');
+    Bindings.CurrentContact.RemoveExpires;
+    CheckEquals('sip:wintermute@talking-head-2.tessier-ashpool.co.luna',
+                Bindings.CurrentContact.Address.Uri,
+                'Wrong binding removed');
+  finally
+    Bindings.Free;
+  end;
+end;
+
 procedure TestTIdSipRegistrar.TestDatabaseUpdatesBindings;
 var
   Contacts: TIdSipContacts;
 begin
-  Fail('What''s this supposed to do? How''s it supposed to behave?');
+  Self.Request.FirstContact.Expires := Self.Registrar.MinimumExpiryTime + 1;
   Self.SimulateRemoteRequest;
-  Self.Request.FirstContact.Value := 'sip:wintermute@neuromancer.tessier-ashpool.co.luna';
+  Self.CheckServerReturnedOK('First registration');
+  Self.Request.FirstContact.Expires := Self.Registrar.MinimumExpiryTime + 100;
+  Self.Request.CSeq.Increment;
   Self.SimulateRemoteRequest;
+  Self.CheckServerReturnedOK('Second registration');
 
   Contacts := TIdSipContacts.Create;
   try
     Self.Registrar.BindingDB.BindingsFor(Self.Request, Contacts);
+    Check(not Contacts.IsEmpty, 'No contacts? Binding deleted?');
     Contacts.First;
     CheckEquals(Self.Request.FirstContact.Address.Uri,
                 Contacts.CurrentContact.Address.Uri,
@@ -252,9 +337,7 @@ begin
   Self.FirstContact.Expires := Self.Registrar.MinimumExpiryTime + 1;
   Expiry := Now + OneSecond*Self.FirstContact.Expires;
   Self.SimulateRemoteRequest;
-  CheckEquals(SIPOK,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Attempted registration');
+  Self.CheckServerReturnedOK('Attempted registration');
 
   CheckEquals(1, Self.DB.BindingCount, 'Binding not added');
 
@@ -262,22 +345,45 @@ begin
   // to take into account heavy CPU loads. Besides, what's 200ms between
   // friends?
   CheckEquals(Expiry,
-              Self.DB.Binding(Self.Request.RequestUri.CanonicaliseAsAddressOfRecord,
-                              Self.FirstContact.Address.CanonicaliseAsAddressOfRecord).ValidUntil,
+              Self.DB.Binding(Self.Request.AddressOfRecord,
+                              Self.FirstContact.AsAddressOfRecord).ValidUntil,
               200*OneMillisecond,
               'Binding won''t expire at right time');
+end;
+
+procedure TestTIdSipRegistrar.TestFailedBindingsFor;
+begin
+  Self.DB.FailBindingsFor := true;
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturned(SIPInternalServerError,
+                           'BindingsFor failed');
+end;
+
+procedure TestTIdSipRegistrar.TestFailedRemoveAll;
+begin
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturnedOK('Registration');
+
+  // We must change the branch or the UAS will think we want to send the
+  // request to the old REGISTER transaction, which we don't. That
+  // transaction's still alive because its Timer J hasn't fired - that's
+  // usually a 32 second wait.
+  Self.Request.LastHop.Branch := Self.Request.LastHop.Branch + '1';
+  Self.Request.CSeq.Increment;
+  Self.Request.FirstContact.Value := '*;expires=0';
+  Self.DB.FailRemoveBinding := true;
+
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturned(SIPInternalServerError,
+                           'Binding database failed during removal of bindings');
 end;
 
 procedure TestTIdSipRegistrar.TestInvalidAddressOfRecord;
 begin
   Self.DB.FailIsValid := true;
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPNotFound,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Response code');
+  Self.CheckServerReturned(SIPNotFound,
+                           'Invalid address-of-record');
 end;
 
 procedure TestTIdSipRegistrar.TestOKResponseContainsAllBindings;
@@ -286,9 +392,7 @@ var
 begin
   Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@talking-head-2.tessier-ashpool.co.luna';
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
+  Self.CheckServerReturnedOK('Adding binding');
 
   Bindings := TIdSipContacts.Create;
   try
@@ -297,18 +401,17 @@ begin
   finally
     Bindings.Free;
   end;
+
+  Check(Self.Dispatch.Transport.LastResponse.HasHeader(DateHeader),
+        'Registrars SHOULD put a Date header in a 200 OK');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveInvite;
 begin
   Self.Request.Method := MethodInvite;
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPMethodNotAllowed,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Response code');
+  Self.CheckServerReturned(SIPMethodNotAllowed,
+                           'INVITE');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveRegister;
@@ -328,13 +431,9 @@ var
 begin
   Self.Request.AddHeader(ExpiresHeader).Value := IntToStr(Self.Registrar.MinimumExpiryTime - 1);
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
+  Self.CheckServerReturned(SIPIntervalTooBrief,
+                           'Expires header value too low');
   Response := Self.Dispatch.Transport.LastResponse;
-  CheckEquals(SIPIntervalTooBrief,
-              Response.StatusCode,
-              'Expires header value too low');
   Check(Response.HasHeader(MinExpiresHeader),
         MinExpiresHeader + ' missing');
   CheckEquals(Self.Registrar.MinimumExpiryTime,
@@ -343,15 +442,20 @@ begin
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveExpireParamTooShort;
+var
+  Response: TIdSipResponse;
 begin
   Self.FirstContact.Expires := Self.Registrar.MinimumExpiryTime - 1;
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPIntervalTooBrief,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Expires param value too low');
+  Self.CheckServerReturned(SIPIntervalTooBrief,
+                           'Expires param value too low');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  Check(Response.HasHeader(MinExpiresHeader),
+        MinExpiresHeader + ' missing');
+  CheckEquals(Self.Registrar.MinimumExpiryTime,
+              Response.FirstMinExpires.NumericValue,
+              MinExpiresHeader + ' value');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveWildcard;
@@ -363,12 +467,7 @@ begin
   Self.FirstContact.Value := Self.ExpireAll;
   Self.SimulateRemoteRequest;
 
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPOK,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Wildcard contact');
+  Self.CheckServerReturnedOK('Wildcard contact');
 
   CheckEquals(0, Self.DB.BindingCount, 'No bindings removed');
 end;
@@ -378,12 +477,8 @@ begin
   Self.FirstContact.Value := Self.ExpireAll;
   Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:hiro@enki.org';
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPBadRequest,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Wildcard contact with another contact');
+  Self.CheckServerReturned(SIPBadRequest,
+                           'Wildcard contact with another contact');
 end;
 
 procedure TestTIdSipRegistrar.TestReceiveWildcardWithNonzeroExpiration;
@@ -391,12 +486,8 @@ begin
   Self.FirstContact.Value := Self.ExpireAll;
   Self.FirstContact.Expires := 1;
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPBadRequest,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Wildcard contact with non-zero expires');
+  Self.CheckServerReturned(SIPBadRequest,
+                           'Wildcard contact with non-zero expires');
 end;
 
 procedure TestTIdSipRegistrar.TestRegisterAddsBindings;
@@ -404,12 +495,7 @@ var
   Bindings: TIdSipContacts;
 begin
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPOK,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Request rejected');
+  Self.CheckServerReturnedOK('Registration');
 
   Bindings := TIdSipContacts.Create;
   try
@@ -433,12 +519,7 @@ begin
   Self.Request.AddHeader(ContactHeaderFull).Value := SecondBinding;
 
   Self.SimulateRemoteRequest;
-  CheckEquals(1,
-              Self.Dispatch.Transport.SentResponseCount,
-              'No response sent');
-  CheckEquals(SIPOK,
-              Self.Dispatch.Transport.LastResponse.StatusCode,
-              'Request rejected');
+  Self.CheckServerReturnedOK('Registration of multiple bindings');
 
   Bindings := TIdSipContacts.Create;
   try
@@ -456,6 +537,14 @@ begin
   end;
 end;
 
+procedure TestTIdSipRegistrar.TestUnauthorizedUser;
+begin
+  Self.DB.Authorized := false;
+  Self.SimulateRemoteRequest;
+  Self.CheckServerReturned(SIPForbidden,
+                           'Unauthorized user''s request not rejected');
+end;
+
 //******************************************************************************
 //* TIdSipMockBindingDatabase                                                  *
 //******************************************************************************
@@ -467,8 +556,11 @@ begin
 
   Self.BindingStore := TStringList.Create;
 
-  Self.FailAddBinding := false;
-  Self.FailIsValid    := false;
+  Self.Authorized        := true;
+  Self.FailAddBinding    := false;
+  Self.FailBindingsFor   := false;
+  Self.FailIsValid       := false;
+  Self.FailRemoveBinding := false;
 end;
 
 destructor TIdSipMockBindingDatabase.Destroy;
@@ -488,8 +580,8 @@ begin
   Result := Self.BindingStore.Count;
 end;
 
-procedure TIdSipMockBindingDatabase.BindingsFor(Request: TIdSipRequest;
-                                                Contacts: TIdSipContacts);
+function TIdSipMockBindingDatabase.BindingsFor(Request: TIdSipRequest;
+                                               Contacts: TIdSipContacts): Boolean;
 var
   AddressOfRecord: String;
   ContactValue:    String;
@@ -497,7 +589,7 @@ var
 begin
   Contacts.Clear;
 
-  AddressOfRecord := Request.RequestUri.CanonicaliseAsAddressOfRecord;
+  AddressOfRecord := Request.AddressOfRecord;
 
   for I := 0 to Self.BindingStore.Count - 1 do
     if IsEqual(Self.BindingStore[I], AddressOfRecord) then begin
@@ -511,6 +603,13 @@ begin
 
       Contacts.Add(ContactHeaderFull).Value := ContactValue;
     end;
+
+  Result := not Self.FailBindingsFor;
+end;
+
+function TIdSipMockBindingDatabase.IsAuthorized(User: TIdSipAddressHeader): Boolean;
+begin
+  Result := Self.Authorized;
 end;
 
 function TIdSipMockBindingDatabase.IsValid(Request: TIdSipRequest): Boolean;
@@ -520,27 +619,17 @@ end;
 
 function TIdSipMockBindingDatabase.RemoveBinding(Request: TIdSipRequest;
                                                  Contact: TIdSipContactHeader): Boolean;
-var
-  AddressOfRecord: String;
-  I: Integer;
 begin
-  AddressOfRecord := Request.RequestUri.CanonicaliseAsAddressOfRecord;
+  Self.DeleteBinding(Self.IndexOfBinding(Request.AddressOfRecord,
+                                         Contact));
 
-  I := 0;
-  while (I < Self.BindingCount)
-    and not IsEqual(Self.BindingStore[I], AddressOfRecord)
-    and not (Self.Bindings[I].Uri = Contact.Address.CanonicaliseAsAddressOfRecord) do
-    Inc(I);
-
-  if (I < Self.BindingCount) then
-    Self.DeleteBinding(I);
-  Result := true;
+  Result := not Self.FailRemoveBinding;
 end;
 
 //* TIdSipMockBindingDatabase Protected methods ********************************
 
 function TIdSipMockBindingDatabase.AddBinding(const AddressOfRecord: String;
-                                              Contact: TIdSipUri;
+                                              Contact: TIdSipContactHeader;
                                               const CallID: String;
                                               SequenceNo: Cardinal;
                                               ExpiryTime: TDateTime): Boolean;
@@ -548,7 +637,7 @@ var
   Index:      Integer;
   NewBinding: TIdRegistrarBinding;
 begin
-  NewBinding := TIdRegistrarBinding.Create(Contact.CanonicaliseAsAddressOfRecord,
+  NewBinding := TIdRegistrarBinding.Create(Contact.AsAddressOfRecord,
                                            CallID,
                                            SequenceNo,
                                            Now + OneSecond*ExpiryTime);
@@ -600,13 +689,28 @@ end;
 
 procedure TIdSipMockBindingDatabase.DeleteBinding(Index: Integer);
 begin
-  Self.BindingStore.Objects[Index].Free;
-  Self.BindingStore.Delete(Index);
+  if (Index >= 0) then begin
+    Self.BindingStore.Objects[Index].Free;
+    Self.BindingStore.Delete(Index);
+  end;
 end;
 
 function TIdSipMockBindingDatabase.GetBindings(Index: Integer): TIdRegistrarBinding;
 begin
   Result := Self.BindingStore.Objects[Index] as TIdRegistrarBinding;
+end;
+
+function TIdSipMockBindingDatabase.IndexOfBinding(const AddressOfRecord: String;
+                                                  Contact: TIdSipContactHeader): Integer;
+begin
+  Result := 0;
+  while (Result < Self.BindingCount)
+    and not IsEqual(Self.BindingStore[Result], AddressOfRecord)
+    and not (Self.Bindings[Result].Uri = Contact.AsAddressOfRecord) do
+    Inc(Result);
+
+  if (Result >= Self.BindingCount) then
+    Result := -1;
 end;
 
 //******************************************************************************
@@ -672,7 +776,7 @@ var
   Contacts:        TIdSipContacts;
   OriginalContact: String;
 begin
-  OriginalContact := Self.Request.FirstContact.Address.CanonicaliseAsAddressOfRecord;
+  OriginalContact := Self.Request.FirstContact.AsAddressOfRecord;
   Self.DB.AddBindings(Self.Request);
 
   Self.Request.FirstContact.Value := 'sip:wintermute@neuromancer.tessier-ashpool.co.luna';
@@ -688,14 +792,14 @@ begin
 
     Contacts.First;
     CheckEquals(OriginalContact,
-                Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord,
+                Contacts.CurrentContact.AsAddressOfRecord,
                 'Original binding removed');
 
     Check(Contacts.HasNext,
           'New binding not added');
     Contacts.Next;
     CheckEquals(Self.Request.FirstContact.Value,
-                Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord,
+                Contacts.CurrentContact.AsAddressOfRecord,
                 'New binding corrupted');
   finally
     Contacts.Free;
@@ -760,40 +864,59 @@ begin
         'Out-of-order request not ignored (earlier CSeq no)');
 end;
 
-procedure TestTIdSipAbstractBindingDatabase.TestMayRemoveBinding;
+procedure TestTIdSipAbstractBindingDatabase.TestNotOutOfOrder;
 begin
   Self.DB.AddBindings(Self.Request);
-  Self.Request.CSeq.SequenceNo := Self.Request.CSeq.SequenceNo + 1;
-  Check(Self.DB.MayRemoveBinding(Self.Request,
-                                 Self.Request.FirstContact),
+  Self.Request.CSeq.Increment;
+  Check(Self.DB.NotOutOfOrder(Self.Request,
+                              Self.Request.FirstContact),
         'Normal behaviour');
 end;
 
-procedure TestTIdSipAbstractBindingDatabase.TestMayRemoveBindingEarlySeqNo;
+procedure TestTIdSipAbstractBindingDatabase.TestNotOutOfOrderEarlySeqNo;
 begin
   Self.DB.AddBindings(Self.Request);
   Self.Request.CSeq.SequenceNo := Self.Request.CSeq.SequenceNo - 1;
-  Check(not Self.DB.MayRemoveBinding(Self.Request,
-                                     Self.Request.FirstContact),
+  Check(not Self.DB.NotOutOfOrder(Self.Request,
+                                  Self.Request.FirstContact),
         'Same Call-ID, early sequence no');
 end;
 
-procedure TestTIdSipAbstractBindingDatabase.TestMayRemoveBindingDifferentCallID;
+procedure TestTIdSipAbstractBindingDatabase.TestNotOutOfOrderDifferentCallID;
 begin
   Self.DB.AddBindings(Self.Request);
   Self.Request.CallID := Self.Request.CallID + '1';
-  Check(Self.DB.MayRemoveBinding(Self.Request,
-                                 Self.Request.FirstContact),
+  Check(Self.DB.NotOutOfOrder(Self.Request,
+                              Self.Request.FirstContact),
         'Different Call-ID');
 end;
 
-procedure TestTIdSipAbstractBindingDatabase.TestRemoveAllBindingsWithBadRequest;
+procedure TestTIdSipAbstractBindingDatabase.TestRemoveAllBindings;
+var
+  Bindings:        TIdSipContacts;
+  OriginalRequest: TIdSipRequest;
 begin
-  Self.DB.AddBindings(Self.Request);
-  Self.Request.FirstContact.Expires := 0;
-  Self.Request.FirstContact.IsWildCard := true;
-  Check(not Self.DB.RemoveAllBindings(Self.Request),
-        'Notification of failure');
+  OriginalRequest := TIdSipRequest.Create;
+  try
+    OriginalRequest.Assign(Self.Request);
+
+    Self.DB.AddBindings(Self.Request);
+    Self.Request.CSeq.Increment;
+    Self.Request.FirstContact.Expires := 0;
+    Self.Request.FirstContact.IsWildCard := true;
+    Check(Self.DB.RemoveAllBindings(Self.Request),
+          'Notification of failure');
+
+    Bindings := TIdSipContacts.Create;
+    try
+      Self.DB.BindingsFor(OriginalRequest, Bindings);
+      Check(Bindings.IsEmpty, 'Bindings not deleted');
+    finally
+      Bindings.Free;
+    end;
+  finally
+    OriginalRequest.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -808,14 +931,16 @@ begin
   Self.DB := TIdSipMockBindingDatabase.Create;
 
   Self.CasesAOR := TIdSipRequest.Create;
-  Self.CasesAOR.Method := MethodRegister;
-  Self.CasesAOR.RequestUri.Uri := 'sip:case@fried.neurons.org';
+  Self.CasesAOR.Method         := MethodRegister;
+  Self.CasesAOR.ToHeader.Value := 'sip:case@fried.neurons.org';
+  Self.CasesAOR.RequestUri.Uri := 'sip:fried.neurons.org';
   Self.CaseContact := Self.CasesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
   Self.CaseContact.Value := 'Case <' + Self.CasesAOR.RequestUri.Uri + '>';
 
   Self.WintermutesAOR := TIdSipRequest.Create;
-  Self.WintermutesAOR.Method := MethodRegister;
-  Self.WintermutesAOR.RequestUri.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.WintermutesAOR.Method         := MethodRegister;
+  Self.WintermutesAOR.ToHeader.Value := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.WintermutesAOR.RequestUri.Uri := 'sip:tessier-ashpool.co.luna';
   Self.Wintermute := Self.WintermutesAOR.AddHeader(ContactHeaderFull) as TIdSipContactHeader;
   Self.Wintermute.Value := 'Wintermute <' + Self.WintermutesAOR.RequestUri.Uri + '>';
 end;
@@ -868,6 +993,8 @@ begin
   Bindings := TIdSipContacts.Create;
   try
     Self.DB.BindingsFor(Self.WintermutesAOR, Bindings);
+    //Writeln;
+    //Writeln(Bindings.AsString);
     CheckEquals(2, Bindings.Count, 'Wrong number of bindings');
   finally
     Bindings.Free;
@@ -893,6 +1020,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipMockBindingDatabase.TestIsAuthorized;
+begin
+  Self.DB.Authorized := true;
+  Check(Self.DB.IsAuthorized(Self.CaseContact), 'Authorized');
+  Self.DB.Authorized := false;
+  Check(not Self.DB.IsAuthorized(Self.CaseContact), 'not Authorized');
+end;
+
+
 procedure TestTIdSipMockBindingDatabase.TestIsValid;
 begin
   Self.DB.FailIsValid := true;
@@ -914,6 +1050,40 @@ begin
   Self.DB.FailAddBinding := true;
   Check(not Self.DB.AddBindings(Self.WintermutesAOR),
         'AddBindings succeeded');
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestFailBindingsFor;
+var
+  Bindings: TIdSipContacts;
+begin
+  Bindings := TIdSipContacts.Create;
+  try
+    Self.DB.FailBindingsFor := false;
+    Check(Self.DB.BindingsFor(Self.CasesAOR, Bindings),
+          'BindingsFor failed');
+
+    Self.DB.FailBindingsFor := true;
+    Check(not Self.DB.BindingsFor(Self.CasesAOR, Bindings),
+          'BindingsFor succeeded');
+  finally
+    Bindings.Free;
+  end;
+end;
+
+procedure TestTIdSipMockBindingDatabase.TestFailRemoveBinding;
+begin
+  Self.DB.FailRemoveBinding := false;
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.WintermutesAOR.CSeq.Increment;
+  Check(Self.DB.RemoveAllBindings(Self.WintermutesAOR),
+        'RemoveAllBindings failed');
+
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.DB.AddBindings(Self.WintermutesAOR);
+  Self.WintermutesAOR.CSeq.Increment;
+  Self.DB.FailRemoveBinding := true;
+  Check(not Self.DB.RemoveAllBindings(Self.WintermutesAOR),
+        'RemoveAllBindings succeeded');
 end;
 
 procedure TestTIdSipMockBindingDatabase.TestRemoveAllBindings;
