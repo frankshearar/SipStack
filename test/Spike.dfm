@@ -1,8 +1,8 @@
 object rnidSpike: TrnidSpike
   Left = 277
-  Top = 188
+  Top = 167
   Width = 928
-  Height = 480
+  Height = 505
   Caption = 'rnidSpike'
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -16,25 +16,25 @@ object rnidSpike: TrnidSpike
   PixelsPerInch = 96
   TextHeight = 13
   object Splitter1: TSplitter
-    Left = 547
+    Left = 535
     Top = 0
     Width = 5
-    Height = 453
+    Height = 478
     Cursor = crHSplit
     Align = alRight
   end
   object IOPanel: TPanel
-    Left = 552
+    Left = 540
     Top = 0
-    Width = 368
-    Height = 453
+    Width = 380
+    Height = 478
     Align = alRight
     BevelOuter = bvNone
     TabOrder = 0
     object InputSplitter: TSplitter
       Left = 0
       Top = 169
-      Width = 368
+      Width = 380
       Height = 5
       Cursor = crVSplit
       Align = alTop
@@ -42,7 +42,7 @@ object rnidSpike: TrnidSpike
     object UpperInput: TPanel
       Left = 0
       Top = 0
-      Width = 368
+      Width = 380
       Height = 169
       Align = alTop
       BevelOuter = bvNone
@@ -59,7 +59,7 @@ object rnidSpike: TrnidSpike
       object InputText: TMemo
         Left = 5
         Top = 0
-        Width = 363
+        Width = 375
         Height = 169
         Align = alClient
         TabOrder = 0
@@ -69,8 +69,8 @@ object rnidSpike: TrnidSpike
     object LowerInput: TPanel
       Left = 0
       Top = 174
-      Width = 368
-      Height = 279
+      Width = 380
+      Height = 304
       Align = alClient
       BevelOuter = bvNone
       TabOrder = 1
@@ -78,7 +78,7 @@ object rnidSpike: TrnidSpike
         Left = 0
         Top = 0
         Width = 5
-        Height = 279
+        Height = 304
         Cursor = crHSplit
         Color = clBtnFace
         ParentColor = False
@@ -86,26 +86,27 @@ object rnidSpike: TrnidSpike
       object OutputText: TMemo
         Left = 5
         Top = 0
-        Width = 363
-        Height = 279
+        Width = 375
+        Height = 304
         Align = alClient
         TabOrder = 0
       end
     end
   end
-  object Panel3: TPanel
+  object DebugPanel: TPanel
     Left = 0
     Top = 0
-    Width = 547
-    Height = 453
+    Width = 535
+    Height = 478
     Align = alClient
     BevelOuter = bvNone
+    Constraints.MinWidth = 535
     TabOrder = 1
     object Log: TMemo
       Left = 0
-      Top = 89
-      Width = 547
-      Height = 364
+      Top = 128
+      Width = 535
+      Height = 350
       Align = alClient
       ScrollBars = ssVertical
       TabOrder = 0
@@ -113,52 +114,66 @@ object rnidSpike: TrnidSpike
     object Panel1: TPanel
       Left = 0
       Top = 0
-      Width = 547
-      Height = 89
+      Width = 535
+      Height = 128
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
       object Label1: TLabel
-        Left = 368
-        Top = 26
+        Left = 448
+        Top = 2
         Width = 71
         Height = 13
         Caption = 'Session Count:'
       end
       object SessionCounter: TLabel
-        Left = 442
-        Top = 26
+        Left = 522
+        Top = 2
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label2: TLabel
-        Left = 387
-        Top = 42
+        Left = 467
+        Top = 18
         Width = 50
         Height = 13
         Caption = 'RTP bytes'
       end
       object RTPDataCount: TLabel
-        Left = 442
-        Top = 42
+        Left = 522
+        Top = 18
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label3: TLabel
-        Left = 385
-        Top = 58
+        Left = 465
+        Top = 34
         Width = 51
         Height = 13
         Caption = 'UDP bytes'
       end
       object UDPDataCount: TLabel
-        Left = 442
-        Top = 58
+        Left = 522
+        Top = 34
         Width = 6
         Height = 13
         Caption = '0'
+      end
+      object Label4: TLabel
+        Left = 34
+        Top = 75
+        Width = 40
+        Height = 14
+        Caption = 'Contact:'
+      end
+      object Label5: TLabel
+        Left = 241
+        Top = 52
+        Width = 49
+        Height = 13
+        Caption = 'Base Port:'
       end
       object TargetUri: TEdit
         Left = 76
@@ -166,7 +181,7 @@ object rnidSpike: TrnidSpike
         Width = 290
         Height = 21
         TabOrder = 0
-        Text = 'sip:fasil01@193.116.120.160'
+        Text = 'sip:frank@roke.angband.za.org'
       end
       object Invite: TButton
         Left = 0
@@ -187,8 +202,8 @@ object rnidSpike: TrnidSpike
         OnClick = ByeClick
       end
       object BasePort: TEdit
-        Left = 445
-        Top = 1
+        Left = 292
+        Top = 49
         Width = 74
         Height = 21
         TabOrder = 3
@@ -214,13 +229,34 @@ object rnidSpike: TrnidSpike
         OnClick = UnregisterClick
       end
       object Options: TButton
-        Left = 74
-        Top = 48
+        Left = 368
+        Top = 24
         Width = 75
         Height = 25
         Caption = 'Options'
         TabOrder = 6
         OnClick = OptionsClick
+      end
+      object UseAsProxy: TCheckBox
+        Left = 80
+        Top = 52
+        Width = 97
+        Height = 17
+        Caption = 'Use as proxy'
+        Checked = True
+        State = cbChecked
+        TabOrder = 7
+        OnClick = UseAsProxyClick
+      end
+      object UseLooseRouting: TCheckBox
+        Left = 164
+        Top = 52
+        Width = 50
+        Height = 17
+        Caption = 'Use lr'
+        Checked = True
+        State = cbChecked
+        TabOrder = 8
       end
     end
   end
@@ -230,7 +266,17 @@ object rnidSpike: TrnidSpike
     Width = 290
     Height = 21
     TabOrder = 2
-    Text = 'sip:193.116.120.160'
+    Text = 'sip:roke.angband.za.org'
+    OnChange = RegistrarUriChange
+  end
+  object ContactUri: TEdit
+    Left = 76
+    Top = 73
+    Width = 290
+    Height = 21
+    TabOrder = 3
+    Text = 'sip:80.168.138.82'
+    OnChange = ContactUriChange
   end
   object UiTimer: TTimer
     Enabled = False

@@ -11,6 +11,7 @@ uses
 type
   TrnidSpike = class(TForm,
                      IIdRTPDataListener,
+                     IIdRTPListener,
                      IIdObserver,
                      IIdSipOptionsListener,
                      IIdSipRegistrationListener,
@@ -21,7 +22,7 @@ type
     UiTimer: TTimer;
     Splitter1: TSplitter;
     IOPanel: TPanel;
-    Panel3: TPanel;
+    DebugPanel: TPanel;
     Log: TMemo;
     Panel1: TPanel;
     Label1: TLabel;
@@ -46,6 +47,11 @@ type
     Unregister: TButton;
     Register: TButton;
     Options: TButton;
+    UseAsProxy: TCheckBox;
+    ContactUri: TEdit;
+    Label4: TLabel;
+    Label5: TLabel;
+    UseLooseRouting: TCheckBox;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -57,6 +63,9 @@ type
     procedure FormResize(Sender: TObject);
     procedure UnregisterClick(Sender: TObject);
     procedure OptionsClick(Sender: TObject);
+    procedure ContactUriChange(Sender: TObject);
+    procedure UseAsProxyClick(Sender: TObject);
+    procedure RegistrarUriChange(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -66,6 +75,7 @@ type
     DataStore:      TStream;
     Dispatch:       TIdSipTransactionDispatcher;
     DTMFPanel:      TIdDTMFPanel;
+    Gateway:        String; // the IP of the NATting gateway
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     RTPByteCount:   Integer;
@@ -101,6 +111,10 @@ type
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdSocketHandle);
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
     procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transport: TIdSipTransport);
@@ -118,7 +132,7 @@ type
                         Response: TIdSipResponse); overload;
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
-    procedure StartReadingData(const SDP: String);
+    procedure ResetCounters;
     procedure StartTransports;
     procedure StopReadingData;
     procedure StopTransports;
@@ -154,6 +168,9 @@ var
   From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
+
+//  Self.Gateway := GStack.LocalAddress;
+  Self.Gateway := '80.168.137.82';
 
   Self.Transports := TObjectList.Create(true);
   Self.RunningPort := IdPORT_SIP;
@@ -199,6 +216,7 @@ begin
   Self.UA.AddObserver(Self);
   Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
   Self.UA.UserAgentName := '';
+  Self.UA.AddAllowedMethod(MethodRegister);
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -228,11 +246,9 @@ begin
                 + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Bindings[0].Port) + ') - '
                 + 'kill it and restart this');
   end;
-
-  Self.UA.From.Value := 'sip:rnid01@193.116.120.160';
-  Self.UA.Contact.Value := Self.UA.From.Value;
-  Self.UA.HasProxy := true;
-  Self.UA.Proxy.Uri := 'sip:193.116.120.160';
+  Self.UA.From.Value := 'sip:rnid01@' + Self.Gateway;
+  Self.UA.HasProxy := Self.UseAsProxy.Checked;
+  Self.UA.Proxy.Uri := Self.RegistrarUri.Text + ';lr';
 end;
 
 destructor TrnidSpike.Destroy;
@@ -271,16 +287,16 @@ var
 begin
   Result := TransportType.Create(IdPORT_SIP);
   Self.Transports.Add(Result);
-  Result.UseRport := true;
+  Result.HostName := Self.Gateway;
 
   if (GStack.LocalAddress <> LocalHostName) then begin
     Binding      := Result.Bindings.Add;
     Binding.IP   := GStack.LocalAddress;
     Binding.Port := RunningPort;
-    Result.HostName := Binding.IP;
-  end
-  else
-    Result.HostName := LocalHostName;
+//    Result.HostName := Binding.IP;
+  end;
+//  else
+//   Result.HostName := LocalHostName;
 
   Binding      := Result.Bindings.Add;
   Binding.IP   := LocalHostName;
@@ -355,6 +371,7 @@ begin
   finally
     Self.Lock.Release;
   end;
+
   Self.AudioPlayer.Stop;
   Self.StopReadingData;
   Session.PayloadProcessor.RemoveDataListener(Self);
@@ -366,6 +383,7 @@ end;
 procedure TrnidSpike.OnException(E: Exception;
                                  const Reason: String);
 begin
+
   Self.Lock.Acquire;
   try
     Self.Log.Lines.Add('Exception ' + E.ClassName + ': ' + E.Message
@@ -391,19 +409,18 @@ procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
 var
   Address: String;
 begin
-  if (Session.CurrentRequest.ContentLength > 0) then
-    Self.StartReadingData(Session.CurrentRequest.Body);
+  Self.ResetCounters;
 
-  Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
+  Session.AcceptCall(Self.LocalSDP(Self.Gateway),
+                     SdpMimeType);
 
-  Session.AddSessionListener(Self);
-  Session.AcceptCall(Self.LocalSDP(Address), SdpMimeType);
   Self.AudioPlayer.Play(AnyAudioDevice);
-
   Session.PayloadProcessor.AddRTPListener(Self.HistListener);
-  Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
-  Self.DTMFPanel.Processor := Session.PayloadProcessor;
+  Session.PayloadProcessor.AddRTPListener(Self);
   Session.PayloadProcessor.AddDataListener(Self);
+  Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
+
+  Self.DTMFPanel.Processor := Session.PayloadProcessor;
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -426,6 +443,22 @@ begin
   end
   else if (Data is TIdRTPT140Payload) then begin
     Self.ProcessText((Data as TIdRTPT140Payload).Block);
+  end;
+end;
+
+procedure TrnidSpike.OnRTCP(Packet: TIdRTCPPacket;
+                            Binding: TIdSocketHandle);
+begin
+end;
+
+procedure TrnidSpike.OnRTP(Packet: TIdRTPPacket;
+                           Binding: TIdSocketHandle);
+begin
+  Self.CounterLock.Acquire;
+  try
+    Inc(Self.RTPByteCount, Packet.Payload.Length);
+  finally
+    Self.CounterLock.Release;
   end;
 end;
 
@@ -462,6 +495,7 @@ end;
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
                                    Transport: TIdSipTransport);
 begin
+  Request.LastHop.SentBy := Self.Gateway;
   Self.LogMessage(Request, false);
 end;
 
@@ -483,39 +517,37 @@ end;
 
 procedure TrnidSpike.ProcessPCM(Data: TStream);
 begin
-  Self.Lock.Acquire;
+  Self.AudioPlayer.Lock;
   try
-    Inc(Self.RTPByteCount, Data.Size);
-
-    Self.AudioPlayer.Lock;
-    try
-      if Assigned(Self.DataStore) then begin
-        Self.DataStore.Seek(0, soFromEnd);
-        Self.DataStore.CopyFrom(Data, 0);
-      end;
-    finally
-      Self.AudioPlayer.UnLock;
+    if Assigned(Self.DataStore) then begin
+      Self.DataStore.Seek(0, soFromEnd);
+      Self.DataStore.CopyFrom(Data, 0);
     end;
   finally
-    Self.Lock.Release;
+    Self.AudioPlayer.UnLock;
   end;
 end;
 
 procedure TrnidSpike.ProcessText(Text: String);
 begin
-  Self.Lock.Acquire;
+  Self.TextLock.Acquire;
   try
-    Self.OutputText.Text := Self.OutputText.Text + Text; 
+    Self.OutputText.Text := Self.OutputText.Text + Text;
   finally
-    Self.Lock.Release;
-  end;
+    Self.TextLock.Release;
+ end;
 end;
 
-procedure TrnidSpike.StartReadingData(const SDP: String);
+procedure TrnidSpike.ResetCounters;
 begin
-  Self.Invite.Enabled := false;
-  Self.RTPByteCount   := 0;
-  Self.UDPByteCount   := 0;
+  Self.CounterLock.Acquire;
+  try
+    Self.Invite.Enabled := false;
+    Self.RTPByteCount   := 0;
+    Self.UDPByteCount   := 0;
+  finally
+    Self.CounterLock.Release;
+  end;
 end;
 
 procedure TrnidSpike.StartTransports;
@@ -549,27 +581,25 @@ end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
 var
-  Address: String;
-  SDP:     String;
   Session: TIdSipSession;
   Target:  TIdSipToHeader;
 begin
-  Address := (Self.Transports[0] as TIdSipTransport).Bindings[0].IP;
-
   Target := TIdSipToHeader.Create;
   try
     Target.Address.Uri := Self.TargetUri.Text;
 
-    SDP := Self.LocalSDP(Address);
-    Self.StartReadingData(SDP);
+    Self.ResetCounters;
 
     Session := Self.UA.Call(Target,
-                            SDP,
+                            Self.LocalSDP(Self.Gateway),
                             SdpMimeType);
 
     Session.AddSessionListener(Self);
+    Self.AudioPlayer.Play(AnyAudioDevice);
+    Session.PayloadProcessor.AddRTPListener(Self.HistListener);
     Session.PayloadProcessor.AddDataListener(Self.DTMFPanel);
     Self.DTMFPanel.Processor := Session.PayloadProcessor;
+    Session.PayloadProcessor.AddDataListener(Self);
   finally
     Target.Free;
   end;
@@ -582,12 +612,12 @@ end;
 
 procedure TrnidSpike.UiTimerTimer(Sender: TObject);
 begin
-  Self.Lock.Acquire;
+  Self.CounterLock.Acquire;
   try
     RTPDataCount.Caption := IntToStr(Self.RTPByteCount);
     UDPDataCount.Caption := IntToStr(Self.UDPByteCount);
   finally
-    Self.Lock.Release;
+    Self.CounterLock.Release;
   end;
 end;
 
@@ -677,11 +707,33 @@ var
 begin
   Dest := TIdSipAddressHeader.Create;
   try
-    Dest.Value := Self.RegistrarUri.Text;
+    Dest.Value := Self.TargetUri.Text;
     Self.UA.QueryOptions(Dest).AddListener(Self);
   finally
     Dest.Free;
   end;
+end;
+
+procedure TrnidSpike.ContactUriChange(Sender: TObject);
+begin
+  Self.UA.Contact.Value := Self.ContactUri.Text;
+end;
+
+procedure TrnidSpike.UseAsProxyClick(Sender: TObject);
+begin
+  Self.UA.HasProxy := Self.UseAsProxy.Checked;
+end;
+
+procedure TrnidSpike.RegistrarUriChange(Sender: TObject);
+var
+  Uri: String;
+begin
+  Uri := Self.RegistrarUri.Text;
+
+  if Self.UseLooseRouting.Checked then
+    Uri := Uri + ';lr';
+
+  Self.UA.Proxy.Uri := Uri;
 end;
 
 end.
