@@ -6006,6 +6006,7 @@ begin
       Self.InitialInvite := nil;
       Self.MarkAsTerminated;
       Self.NotifyOfEndedSession(Reason);
+      Exit;
     end;
 
     Self.RemoveFinishedRedirectedInvite(InviteAgent);

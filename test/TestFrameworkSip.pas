@@ -263,7 +263,7 @@ type
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
+                             const Reason: String); virtual;
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -281,6 +281,18 @@ type
     property Redirect:                Boolean             read fRedirect;
     property ReasonParam:             String              read fReasonParam;
     property SessionParam:            TIdSipSession       read fSessionParam;
+  end;
+
+  TIdSipTestSessionListenerEndedCounter = class(TIdSipTestSessionListener)
+  private
+    fEndedNotificationCount: Integer;
+  public
+    constructor Create; override;
+
+    procedure OnEndedSession(Session: TIdSipSession;
+                             const Reason: String); override;
+
+    property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
 
   TIdSipTestTransactionListener = class(TIdSipMockListener,
@@ -962,6 +974,25 @@ begin
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestSessionListener.OnNewSession');
+end;
+
+//******************************************************************************
+//* TIdSipTestSessionListenerEndedCounter                                      *
+//******************************************************************************
+//* TIdSipTestSessionListenerEndedCounter Public methods ***********************
+
+constructor TIdSipTestSessionListenerEndedCounter.Create;
+begin
+  inherited Create;
+
+  Self.fEndedNotificationCount := 0;
+end;
+
+procedure TIdSipTestSessionListenerEndedCounter.OnEndedSession(Session: TIdSipSession;
+                                                               const Reason: String);
+begin
+  inherited OnEndedSession(Session, Reason);
+  Inc(Self.fEndedNotificationCount);
 end;
 
 //******************************************************************************

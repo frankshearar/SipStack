@@ -635,6 +635,7 @@ type
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
     procedure TestReceive3xxWithNoContacts;
+    procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestRedirectAndAccept;
     procedure TestTerminateUnestablishedSession;
@@ -7246,6 +7247,25 @@ begin
           'Session didn''t end despite a redirect with no Contact headers');
   finally
     Redirect.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestReceiveFailureResponseNotifiesOnce;
+var
+  L:       TIdSipTestSessionListenerEndedCounter;
+  Session: TIdSipOutboundSession;
+begin
+  Session := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
+  L := TIdSipTestSessionListenerEndedCounter.Create;
+  try
+    Session.AddSessionListener(L);
+    Session.Send;
+
+    Self.ReceiveResponse(SIPDecline);
+
+    CheckEquals(1, L.EndedNotificationCount, 'Not notified only once');
+  finally
+    L.Free;
   end;
 end;
 
