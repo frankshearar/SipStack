@@ -37,6 +37,24 @@ type
     procedure TearDown; override;
   end;
 
+  TestTIdSipAbstractUserAgent = class(TTestCase)
+  private
+    Dispatch: TIdSipMockTransactionDispatcher;
+    UA:       TIdSipAbstractUserAgent;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAllowedContentType;
+    procedure TestAddAllowedContentTypeMalformed;
+    procedure TestAddAllowedLanguage;
+    procedure TestAddAllowedLanguageLanguageAlreadyPresent;
+    procedure TestAddAllowedMethod;
+    procedure TestAddAllowedMethodMethodAlreadyPresent;
+    procedure TestAddAllowedScheme;
+    procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+  end;
+
   TestTIdSipUserAgentCore = class(TTestCaseTU,
                                   IIdSipSessionListener)
   private
@@ -66,14 +84,6 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestAddAllowedContentType;
-    procedure TestAddAllowedContentTypeMalformed;
-    procedure TestAddAllowedLanguage;
-    procedure TestAddAllowedLanguageLanguageAlreadyPresent;
-    procedure TestAddAllowedMethod;
-    procedure TestAddAllowedMethodMethodAlreadyPresent;
-    procedure TestAddAllowedScheme;
-    procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestAddObserver;
     procedure TestAddSessionListener;
     procedure TestContentTypeDefault;
@@ -354,6 +364,188 @@ begin
   Msg.ContentLength := 0;
 end;
 
+procedure TestTIdSipAbstractUserAgent.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+  Self.UA := TIdSipAbstractUserAgent.Create;
+  Self.UA.Dispatcher := Self.Dispatch;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TearDown;
+begin
+  Self.UA.Free;
+  Self.Dispatch.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipAbstractUserAgent Published methods ******************************
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentType;
+var
+  ContentTypes: TStrings;
+begin
+  ContentTypes := TStringList.Create;
+  try
+    Self.UA.AddAllowedContentType(PlainTextMimeType);
+
+    ContentTypes.CommaText := Self.UA.AllowedContentTypes;
+
+    CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
+
+    CheckEquals(SdpMimeType,       ContentTypes[0], SdpMimeType);
+    CheckEquals(PlainTextMimeType, ContentTypes[1], PlainTextMimeType);
+  finally
+    ContentTypes.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentTypeMalformed;
+var
+  ContentTypes: String;
+begin
+  ContentTypes := Self.UA.AllowedContentTypes;
+  Self.UA.AddAllowedContentType(' ');
+  CheckEquals(ContentTypes,
+              Self.UA.AllowedContentTypes,
+              'Malformed Content-Type was allowed');
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedLanguage;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.UA.AddAllowedLanguage('en');
+    Self.UA.AddAllowedLanguage('af');
+
+    Languages.CommaText := Self.UA.AllowedLanguages;
+
+    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
+
+    CheckEquals('en', Languages[0], 'en first');
+    CheckEquals('af', Languages[1], 'af second');
+  finally
+    Languages.Free;
+  end;
+
+  try
+    Self.UA.AddAllowedLanguage(' ');
+    Fail('Failed to forbid adding a malformed language ID');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedLanguageLanguageAlreadyPresent;
+var
+  Languages: TStrings;
+begin
+  Languages := TStringList.Create;
+  try
+    Self.UA.AddAllowedLanguage('en');
+    Self.UA.AddAllowedLanguage('en');
+
+    Languages.CommaText := Self.UA.AllowedLanguages;
+
+    CheckEquals(1, Languages.Count, 'en was re-added');
+  finally
+    Languages.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedMethod;
+var
+  Methods: TStrings;
+begin
+  Methods := TStringList.Create;
+  try
+    Self.UA.AddAllowedMethod(MethodOptions);
+
+    Methods.CommaText := Self.UA.AllowedMethods;
+
+    CheckEquals(4, Methods.Count, 'Number of allowed methods');
+
+    CheckEquals(MethodBye,     Methods[0], 'BYE first');
+    CheckEquals(MethodCancel,  Methods[1], 'CANCEL second');
+    CheckEquals(MethodInvite,  Methods[2], 'INVITE third');
+    CheckEquals(MethodOptions, Methods[3], 'OPTIONS fourth');
+  finally
+    Methods.Free;
+  end;
+
+  try
+    Self.UA.AddAllowedMethod(' ');
+    Fail('Failed to forbid adding a non-token Method');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedMethodMethodAlreadyPresent;
+var
+  Methods: TStrings;
+  MethodCount: Cardinal;
+begin
+  Methods := TStringList.Create;
+  try
+    Methods.CommaText := Self.UA.AllowedMethods;
+    MethodCount := Methods.Count;
+
+    Self.UA.AddAllowedMethod(MethodInvite);
+    Methods.CommaText := Self.UA.AllowedMethods;
+
+    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedScheme;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.UA.AddAllowedScheme(SipsScheme);
+
+    Schemes.CommaText := Self.UA.AllowedSchemes;
+
+    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
+
+    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
+    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
+  finally
+    Schemes.Free;
+  end;
+
+  try
+    Self.UA.AddAllowedScheme(' ');
+    Fail('Failed to forbid adding a malformed URI scheme');
+  except
+    on EIdException do;
+  end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestAddAllowedSchemeSchemeAlreadyPresent;
+var
+  Schemes: TStrings;
+begin
+  Schemes := TStringList.Create;
+  try
+    Self.UA.AddAllowedScheme(SipScheme);
+
+    Schemes.CommaText := Self.UA.AllowedSchemes;
+
+    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
+  finally
+    Schemes.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TestTIdSipUserAgentCore                                                    *
 //******************************************************************************
@@ -530,169 +722,6 @@ begin
 end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedContentType;
-var
-  ContentTypes: TStrings;
-begin
-  ContentTypes := TStringList.Create;
-  try
-    Self.Core.AddAllowedContentType(PlainTextMimeType);
-
-    ContentTypes.CommaText := Self.Core.AllowedContentTypes;
-
-    CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
-
-    CheckEquals(SdpMimeType,       ContentTypes[0], SdpMimeType);
-    CheckEquals(PlainTextMimeType, ContentTypes[1], PlainTextMimeType);
-  finally
-    ContentTypes.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedContentTypeMalformed;
-var
-  ContentTypes: String;
-begin
-  ContentTypes := Self.Core.AllowedContentTypes;
-  Self.Core.AddAllowedContentType(' ');
-  CheckEquals(ContentTypes,
-              Self.Core.AllowedContentTypes,
-              'Malformed Content-Type was allowed');
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
-var
-  Languages: TStrings;
-begin
-  Languages := TStringList.Create;
-  try
-    Self.Core.AddAllowedLanguage('en');
-    Self.Core.AddAllowedLanguage('af');
-
-    Languages.CommaText := Self.Core.AllowedLanguages;
-
-    CheckEquals(2, Languages.Count, 'Number of allowed Languages');
-
-    CheckEquals('en', Languages[0], 'en first');
-    CheckEquals('af', Languages[1], 'af second');
-  finally
-    Languages.Free;
-  end;
-
-  try
-    Self.Core.AddAllowedLanguage(' ');
-    Fail('Failed to forbid adding a malformed language ID');
-  except
-    on EIdException do;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedLanguageLanguageAlreadyPresent;
-var
-  Languages: TStrings;
-begin
-  Languages := TStringList.Create;
-  try
-    Self.Core.AddAllowedLanguage('en');
-    Self.Core.AddAllowedLanguage('en');
-
-    Languages.CommaText := Self.Core.AllowedLanguages;
-
-    CheckEquals(1, Languages.Count, 'en was re-added');
-  finally
-    Languages.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedMethod;
-var
-  Methods: TStrings;
-begin
-  Methods := TStringList.Create;
-  try
-    Self.Core.AddAllowedMethod(MethodOptions);
-
-    Methods.CommaText := Self.Core.AllowedMethods;
-
-    CheckEquals(4, Methods.Count, 'Number of allowed methods');
-
-    CheckEquals(MethodBye,     Methods[0], 'BYE first');
-    CheckEquals(MethodCancel,  Methods[1], 'CANCEL second');
-    CheckEquals(MethodInvite,  Methods[2], 'INVITE third');
-    CheckEquals(MethodOptions, Methods[3], 'OPTIONS fourth');
-  finally
-    Methods.Free;
-  end;
-
-  try
-    Self.Core.AddAllowedMethod(' ');
-    Fail('Failed to forbid adding a non-token Method');
-  except
-    on EIdException do;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedMethodMethodAlreadyPresent;
-var
-  Methods: TStrings;
-  MethodCount: Cardinal;
-begin
-  Methods := TStringList.Create;
-  try
-    Methods.CommaText := Self.Core.AllowedMethods;
-    MethodCount := Methods.Count;
-
-    Self.Core.AddAllowedMethod(MethodInvite);
-    Methods.CommaText := Self.Core.AllowedMethods;
-
-    CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
-  finally
-    Methods.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedScheme;
-var
-  Schemes: TStrings;
-begin
-  Schemes := TStringList.Create;
-  try
-    Self.Core.AddAllowedScheme(SipsScheme);
-
-    Schemes.CommaText := Self.Core.AllowedSchemes;
-
-    CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
-
-    CheckEquals(SipScheme,  Schemes[0], 'SIP first');
-    CheckEquals(SipsScheme, Schemes[1], 'SIPS second');
-  finally
-    Schemes.Free;
-  end;
-
-  try
-    Self.Core.AddAllowedScheme(' ');
-    Fail('Failed to forbid adding a malformed URI scheme');
-  except
-    on EIdException do;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestAddAllowedSchemeSchemeAlreadyPresent;
-var
-  Schemes: TStrings;
-begin
-  Schemes := TStringList.Create;
-  try
-    Self.Core.AddAllowedScheme(SipScheme);
-
-    Schemes.CommaText := Self.Core.AllowedSchemes;
-
-    CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
-  finally
-    Schemes.Free;
-  end;
-end;
 
 procedure TestTIdSipUserAgentCore.TestAddObserver;
 var

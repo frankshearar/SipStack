@@ -90,49 +90,18 @@ type
     property HostName:   String                      read fHostName write fHostName;
   end;
 
-  // I (usually) represent a human being in the SIP network. I:
-  // * inform any listeners when new sessions become established, modified or
-  //   terminated;
-  // * allow my users to make outgoing "calls";
-  // * clean up established Sessions
-  TIdSipUserAgentCore = class(TIdSipAbstractCore)
+  TIdSipAbstractUserAgent = class(TIdSipAbstractCore)
   private
     BranchLock:              TCriticalSection;
     fAllowedContentTypeList: TStrings;
     fAllowedLanguageList:    TStrings;
     fAllowedMethodList:      TStrings;
     fAllowedSchemeList:      TStrings;
-    fContact:                TIdSipContactHeader;
     fFrom:                   TIdSipFromHeader;
     fLastBranch:             Cardinal;
     fUserAgentName:          String;
-    ObserverLock:            TCriticalSection;
-    Observers:               TList;
-    SessionListenerLock:     TCriticalSection;
-    SessionListeners:        TList;
-    SessionLock:             TCriticalSection;
-    Sessions:                TObjectList;
 
-    function  AddInboundSession(Invite: TIdSipRequest;
-                                Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport): TIdSipSession;
-    function  AddOutboundSession: TIdSipSession;
-    function  FindSession(const Msg: TIdSipMessage): TIdSipSession;
-    function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
-    procedure NotifyOfNewSession(Session: TIdSipSession);
-    procedure NotifyOfChange;
-    procedure ProcessAck(Ack: TIdSipRequest;
-                         Transaction: TIdSipTransaction;
-                         Receiver: TIdSipTransport);
-    procedure ProcessInvite(Invite: TIdSipRequest;
-                            Transaction: TIdSipTransaction;
-                            Receiver: TIdSipTransport);
-    procedure RejectBadRequest(Request: TIdSipRequest;
-                               const Reason: String;
-                               Transaction: TIdSipTransaction);
-    procedure RejectRequestBadExtension(Request: TIdSipRequest;
-                                        Transaction: TIdSipTransaction);
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest;
                                             Transaction: TIdSipTransaction);
     procedure RejectRequestUnknownContentEncoding(Request: TIdSipRequest;
@@ -144,11 +113,10 @@ type
     procedure RejectUnsupportedSipVersion(Request: TIdSipRequest;
                                           Transaction: TIdSipTransaction);
     procedure ResetLastBranch;
-    procedure SendByeToAppropriateSession(Bye: TIdSipRequest;
-                                          Transaction: TIdSipTransaction;
-                                          Receiver: TIdSipTransport);
-    procedure SetContact(Value: TIdSipContactHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
+  protected
+    procedure RejectRequestBadExtension(Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction);
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
     property AllowedLanguageList:    TStrings read fAllowedLanguageList;
@@ -162,12 +130,76 @@ type
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
-    procedure AddObserver(const Listener: IIdSipObserver);
-    procedure AddSessionListener(const Listener: IIdSipSessionListener);
     function  AllowedContentTypes: String;
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
+    function  CreateRequest(Dest: TIdSipToHeader): TIdSipRequest; overload; override;
+    function  HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
+    function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
+    function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
+    function  IsExtensionAllowed(const Extension: String): Boolean;
+    function  IsMethodAllowed(const Method: String): Boolean;
+    function  IsSchemeAllowed(const Scheme: String): Boolean;
+    function  NextBranch: String;
+    function  NextTag: String;
+    procedure ReceiveRequest(Request: TIdSipRequest;
+                             Transaction: TIdSipTransaction;
+                             Receiver: TIdSipTransport); override;
+    procedure RejectRequest(Request: TIdSipRequest;
+                            Reason: Cardinal;
+                            Transaction: TIdSipTransaction;
+                            Receiver: TIdSipTransport);
+
+    property From:          TIdSipFromHeader read GetFrom write SetFrom;
+    property UserAgentName: String           read fUserAgentName write fUserAgentName;
+  end;
+
+  // I (usually) represent a human being in the SIP network. I:
+  // * inform any listeners when new sessions become established, modified or
+  //   terminated;
+  // * allow my users to make outgoing "calls";
+  // * clean up established Sessions
+  TIdSipUserAgentCore = class(TIdSipAbstractUserAgent)
+  private
+    fContact:            TIdSipContactHeader;
+    ObserverLock:        TCriticalSection;
+    Observers:           TList;
+    SessionListenerLock: TCriticalSection;
+    SessionListeners:    TList;
+    SessionLock:         TCriticalSection;
+    Sessions:            TObjectList;
+
+    function  AddInboundSession(Invite: TIdSipRequest;
+                                Transaction: TIdSipTransaction;
+                                Receiver: TIdSipTransport): TIdSipSession;
+    function  AddOutboundSession: TIdSipSession;
+    function  DefaultFrom: String;
+    function  DefaultHostName: String;
+    function  DefaultUserAgent: String;
+    function  FindSession(const Msg: TIdSipMessage): TIdSipSession;
+    function  GetContact: TIdSipContactHeader;
+    procedure NotifyOfNewSession(Session: TIdSipSession);
+    procedure NotifyOfChange;
+    procedure ProcessAck(Ack: TIdSipRequest;
+                         Transaction: TIdSipTransaction;
+                         Receiver: TIdSipTransport);
+    procedure ProcessInvite(Invite: TIdSipRequest;
+                            Transaction: TIdSipTransaction;
+                            Receiver: TIdSipTransport);
+    procedure RejectBadRequest(Request: TIdSipRequest;
+                               const Reason: String;
+                               Transaction: TIdSipTransaction);
+    procedure SendByeToAppropriateSession(Bye: TIdSipRequest;
+                                          Transaction: TIdSipTransaction;
+                                          Receiver: TIdSipTransport);
+    procedure SetContact(Value: TIdSipContactHeader);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure AddObserver(const Listener: IIdSipObserver);
+    procedure AddSessionListener(const Listener: IIdSipSessionListener);
     function  Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipSession;
@@ -180,28 +212,13 @@ type
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
-    function  DefaultFrom: String;
-    function  DefaultHostName: String;
-    function  DefaultUserAgent: String;
     procedure ReceiveRequest(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction;
                              Receiver: TIdSipTransport); override;
     procedure ReceiveResponse(Response: TIdSipResponse;
                               Transaction: TIdSipTransaction;
                               Receiver: TIdSipTransport); override;
-    function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
-    function  HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
-    function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
-    function  IsExtensionAllowed(const Extension: String): Boolean;
-    function  IsMethodAllowed(const Method: String): Boolean;
-    function  IsSchemeAllowed(const Scheme: String): Boolean;
-    function  NextBranch: String;
     function  NextInitialSequenceNo: Cardinal;
-    function  NextTag: String;
-    procedure RejectRequest(Request: TIdSipRequest;
-                            Reason: Cardinal;
-                            Transaction: TIdSipTransaction;
-                            Receiver: TIdSipTransport);
     procedure RemoveObserver(const Listener: IIdSipObserver);
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     procedure RemoveSession(Session: TIdSipSession);
@@ -210,8 +227,6 @@ type
     function  Username: String;
 
     property Contact:       TIdSipContactHeader read GetContact write SetContact;
-    property From:          TIdSipFromHeader    read GetFrom write SetFrom;
-    property UserAgentName: String              read fUserAgentName write fUserAgentName;
   end;
 
   // As per section 13.3.1.4 of RFC 3261, a Session will resend a 2xx response
@@ -386,6 +401,363 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipAbstractUserAgent                                                    *
+//******************************************************************************
+//* TIdSipAbstractUserAgent Public methods *************************************
+
+constructor TIdSipAbstractUserAgent.Create;
+begin
+  inherited Create;
+
+  Self.fAllowedMethodList := TStringList.Create;
+  Self.fAllowedSchemeList := TStringList.Create;
+
+  Self.BranchLock := TCriticalSection.Create;
+  Self.ResetLastBranch;
+end;
+
+destructor TIdSipAbstractUserAgent.Destroy;
+begin
+  Self.BranchLock.Free;
+  Self.AllowedSchemeList.Free;
+  Self.AllowedMethodList.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipAbstractUserAgent.AddAllowedContentType(const MimeType: String);
+begin
+  if (Trim(MimeType) <> '') then begin
+    if (Self.AllowedContentTypeList.IndexOf(MimeType) = -1) then
+      Self.AllowedContentTypeList.Add(MimeType);
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.AddAllowedLanguage(const LanguageID: String);
+begin
+  if (Trim(LanguageID) = '') then
+    raise EIdSipBadSyntax.Create('Not a valid language identifier');
+
+  if (Self.AllowedLanguageList.IndexOf(LanguageID) = -1) then
+    Self.AllowedLanguageList.Add(LanguageID);
+end;
+
+procedure TIdSipAbstractUserAgent.AddAllowedMethod(const Method: String);
+begin
+  if not TIdSipParser.IsToken(Method) then
+    raise EIdSipBadSyntax.Create('Not a token');
+
+  if (Self.AllowedMethodList.IndexOf(Method) = -1) then
+    Self.AllowedMethodList.Add(Method);
+end;
+
+procedure TIdSipAbstractUserAgent.AddAllowedScheme(const Scheme: String);
+begin
+  if not TIdSipParser.IsScheme(Scheme) then
+    raise EIdSipBadSyntax.Create('Not a valid scheme');
+
+  if (Self.AllowedSchemeList.IndexOf(Scheme) = -1) then
+    Self.AllowedSchemeList.Add(Scheme);
+end;
+
+function TIdSipAbstractUserAgent.AllowedContentTypes: String;
+begin
+  Result := Self.AllowedContentTypeList.CommaText;
+end;
+
+function TIdSipAbstractUserAgent.AllowedLanguages: String;
+begin
+  Result := Self.AllowedLanguageList.CommaText;
+end;
+
+function TIdSipAbstractUserAgent.AllowedMethods: String;
+begin
+  Result := Self.AllowedMethodList.CommaText;
+end;
+
+function TIdSipAbstractUserAgent.AllowedSchemes: String;
+begin
+  Result := Self.AllowedSchemeList.CommaText;
+end;
+
+function TIdSipAbstractUserAgent.CreateRequest(Dest: TIdSipToHeader): TIdSipRequest;
+var
+  Transport: String;
+begin
+  Result := TIdSipRequest.Create;
+  try
+    Result.RequestUri := Dest.Address;
+
+    Result.CallID      := Self.NextCallID;
+    Result.From        := Self.From;
+    Result.From.Tag    := Self.NextTag;
+    Result.MaxForwards := Result.DefaultMaxForwards;
+    Result.ToHeader    := Dest;
+
+    // The transport must be discovered using RFC 3263
+    // TODO: Lies. Pure hack to get X-Lite talking
+    if (Pos(TransportParam, Dest.AsString) > 0) then
+      Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
+    else
+      Transport := TransportParamTCP;
+
+    Result.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' localhost';
+    Result.LastHop.Branch := Self.NextBranch;
+
+    if (Self.UserAgentName <> '') then
+      Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.HasHeader(ContentEncodingHeaderFull);
+end;
+
+function TIdSipAbstractUserAgent.HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.HasHeader(ContentLanguageHeader)
+       and (Self.AllowedLanguageList.IndexOf(Request.FirstHeader(ContentLanguageHeader).Value) = -1);
+end;
+
+function TIdSipAbstractUserAgent.HasUnknownContentType(Request: TIdSipRequest): Boolean;
+begin
+  Result := Request.HasHeader(ContentTypeHeaderFull)
+       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = -1);
+end;
+
+function TIdSipAbstractUserAgent.IsExtensionAllowed(const Extension: String): Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipAbstractUserAgent.IsMethodAllowed(const Method: String): Boolean;
+begin
+  Result := Self.AllowedMethodList.IndexOf(Method) >= 0;
+end;
+
+function TIdSipAbstractUserAgent.IsSchemeAllowed(const Scheme: String): Boolean;
+begin
+  Result := Self.AllowedSchemeList.IndexOf(Scheme) >= 0;
+end;
+
+function TIdSipAbstractUserAgent.NextBranch: String;
+begin
+  Self.BranchLock.Acquire;
+  try
+    // TODO
+    // This is a CRAP way to generate a branch.
+    // cf. RFC 3261 section 8.1.1.7
+    // While this (almost) satisfies the uniqueness constraint (the branch is
+    // unique for the lifetime of the instantiation of the UA), it just
+    // seems sensible to generate an unguessable branch.
+    Result := BranchMagicCookie + IntToStr(Self.fLastBranch);
+
+    Inc(Self.fLastBranch);
+  finally
+    Self.BranchLock.Release;
+  end;
+end;
+
+function TIdSipAbstractUserAgent.NextTag: String;
+begin
+  // TODO
+  // This is a CRAP way to generate a tag.
+  // cf. RFC 3261 section 19.3
+  Result := IntToHex(TIdRandomNumber.NextCardinal, 8)
+          + IntToHex(TIdRandomNumber.NextCardinal, 8);
+end;
+
+procedure TIdSipAbstractUserAgent.ReceiveRequest(Request: TIdSipRequest;
+                                                 Transaction: TIdSipTransaction;
+                                                 Receiver: TIdSipTransport);
+begin
+  if (Request.SIPVersion <> SipVersion) then begin
+    Self.RejectUnsupportedSipVersion(Request, Transaction);
+  end;
+
+  // cf RFC 3261 section 8.2
+  // inspect the method - 8.2.1
+  if not Request.IsAck and not Self.IsMethodAllowed(Request.Method) then begin
+    Self.RejectRequestMethodNotAllowed(Request, Transaction);
+    Exit;
+  end;
+
+  // inspect the headers - 8.2.2
+
+  // To & Request-URI - 8.2.2.1
+  if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then begin
+    Self.RejectRequest(Request, SIPUnsupportedURIScheme, Transaction, Receiver);
+    Exit;
+  end;
+
+  // Merged requests - 8.2.2.2
+  if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then begin
+    Self.RejectRequest(Request, SIPLoopDetected, Transaction, Receiver);
+    Exit;
+  end;
+
+  // Require - 8.2.2.3
+  if Request.HasHeader(RequireHeader) then begin
+    Self.RejectRequestBadExtension(Request, Transaction);
+    Exit;
+  end;
+
+  // Content processing - 8.2.3
+  if Self.HasUnknownContentEncoding(Request) then begin
+    Self.RejectRequestUnknownContentEncoding(Request, Transaction);
+    Exit;
+  end;
+
+  if Self.HasUnknownContentLanguage(Request) then begin
+    Self.RejectRequestUnknownContentLanguage(Request, Transaction);
+    Exit;
+  end;
+
+  if Self.HasUnknownContentType(Request) then begin
+    Self.RejectRequestUnknownContentType(Request, Transaction);
+    Exit;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequest(Request: TIdSipRequest;
+                                                Reason: Cardinal;
+                                                Transaction: TIdSipTransaction;
+                                                Receiver: TIdSipTransport);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, Reason);
+  try
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//* TIdSipAbstractUserAgent Protected methods **********************************
+
+procedure TIdSipAbstractUserAgent.RejectRequestBadExtension(Request: TIdSipRequest;
+                                                            Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPBadExtension);
+  try
+    Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//* TIdSipAbstractUserAgent Private methods ************************************
+
+function TIdSipAbstractUserAgent.GetFrom: TIdSipFromHeader;
+begin
+  if not Assigned(fFrom) then
+    fFrom := TIdSipFromHeader.Create;
+
+  Result := fFrom;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestMethodNotAllowed(Request: TIdSipRequest;
+                                                                Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPMethodNotAllowed);
+  try
+    Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
+    Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnknownContentEncoding(Request: TIdSipRequest;
+                                                                      Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
+  try
+    Response.AddHeader(AcceptEncodingHeader).Value := '';
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnknownContentLanguage(Request: TIdSipRequest;
+                                                                      Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
+  try
+    Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnknownContentType(Request: TIdSipRequest;
+                                                                  Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
+  try
+    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.RejectUnsupportedSipVersion(Request: TIdSipRequest;
+                                                              Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPSIPVersionNotSupported);
+  try
+    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.ResetLastBranch;
+begin
+  Self.BranchLock.Acquire;
+  try
+    Self.fLastBranch := 0;
+  finally
+    Self.BranchLock.Release;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
+begin
+  Self.From.Assign(Value);
+end;
+
+//******************************************************************************
 //* TIdSipUserAgentCore                                                        *
 //******************************************************************************
 //* TIdSipUserAgentCore Public methods *****************************************
@@ -394,7 +766,6 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
-  Self.BranchLock          := TCriticalSection.Create;
   Self.ObserverLock        := TCriticalSection.Create;
   Self.Observers           := TList.Create;
   Self.SessionListenerLock := TCriticalSection.Create;
@@ -402,11 +773,8 @@ begin
   Self.SessionLock         := TCriticalSection.Create;
   Self.Sessions            := TObjectList.Create;
 
-  Self.ResetLastBranch;
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
-  Self.fAllowedMethodList      := TStringList.Create;
-  Self.fAllowedSchemeList      := TStringList.Create;
 
   Self.AddAllowedContentType(SdpMimeType);
   Self.AddAllowedMethod(MethodBye);
@@ -422,8 +790,6 @@ end;
 
 destructor TIdSipUserAgentCore.Destroy;
 begin
-  Self.AllowedSchemeList.Free;
-  Self.AllowedMethodList.Free;
   Self.AllowedLanguageList.Free;
   Self.AllowedContentTypeList.Free;
   Self.Contact.Free;
@@ -434,44 +800,8 @@ begin
   Self.SessionListenerLock.Free;
   Self.Observers.Free;
   Self.ObserverLock.Free;
-  Self.BranchLock.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipUserAgentCore.AddAllowedContentType(const MimeType: String);
-begin
-  if (Trim(MimeType) <> '') then begin
-    if (Self.AllowedContentTypeList.IndexOf(MimeType) = -1) then
-      Self.AllowedContentTypeList.Add(MimeType);
-  end;
-end;
-
-procedure TIdSipUserAgentCore.AddAllowedLanguage(const LanguageID: String);
-begin
-  if (Trim(LanguageID) = '') then
-    raise EIdSipBadSyntax.Create('Not a valid language identifier');
-
-  if (Self.AllowedLanguageList.IndexOf(LanguageID) = -1) then
-    Self.AllowedLanguageList.Add(LanguageID);
-end;
-
-procedure TIdSipUserAgentCore.AddAllowedMethod(const Method: String);
-begin
-  if not TIdSipParser.IsToken(Method) then
-    raise EIdSipBadSyntax.Create('Not a token');
-
-  if (Self.AllowedMethodList.IndexOf(Method) = -1) then
-    Self.AllowedMethodList.Add(Method);
-end;
-
-procedure TIdSipUserAgentCore.AddAllowedScheme(const Scheme: String);
-begin
-  if not TIdSipParser.IsScheme(Scheme) then
-    raise EIdSipBadSyntax.Create('Not a valid scheme');
-
-  if (Self.AllowedSchemeList.IndexOf(Scheme) = -1) then
-    Self.AllowedSchemeList.Add(Scheme);
 end;
 
 procedure TIdSipUserAgentCore.AddObserver(const Listener: IIdSipObserver);
@@ -492,26 +822,6 @@ begin
   finally
     Self.SessionListenerLock.Release;
   end;
-end;
-
-function TIdSipUserAgentCore.AllowedContentTypes: String;
-begin
-  Result := Self.AllowedContentTypeList.CommaText;
-end;
-
-function TIdSipUserAgentCore.AllowedLanguages: String;
-begin
-  Result := Self.AllowedLanguageList.CommaText;
-end;
-
-function TIdSipUserAgentCore.AllowedMethods: String;
-begin
-  Result := Self.AllowedMethodList.CommaText;
-end;
-
-function TIdSipUserAgentCore.AllowedSchemes: String;
-begin
-  Result := Self.AllowedSchemeList.CommaText;
 end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipToHeader;
@@ -578,40 +888,13 @@ begin
 end;
 
 function TIdSipUserAgentCore.CreateRequest(Dest: TIdSipToHeader): TIdSipRequest;
-var
-  Transport: String;
 begin
-  Result := TIdSipRequest.Create;
-  try
-    Result.RequestUri := Dest.Address;
+  Result := inherited CreateRequest(Dest);
 
-    if Dest.HasSipsUri then
-      Self.Contact.Address.Scheme := SipsScheme;
+  Result.AddHeader(Self.Contact);
 
-    Result.AddHeader(Self.Contact);
-    Result.CallID      := Self.NextCallID;
-    Result.From        := Self.From;
-    Result.From.Tag    := Self.NextTag;
-    Result.MaxForwards := Result.DefaultMaxForwards;
-    Result.ToHeader    := Dest;
-
-    // The transport must be discovered using RFC 3263
-    // TODO: Lies. Pure hack to get X-Lite talking
-    if (Pos(TransportParam, Dest.AsString) > 0) then
-      Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
-    else
-      Transport := TransportParamTCP;
-
-    Result.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' localhost';
-    Result.LastHop.Branch := Self.NextBranch;
-
-    if (Self.UserAgentName <> '') then
-      Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
+  if Dest.HasSipsUri then
+    (Result.FirstHeader(ContactHeaderFull) as TIdSipContactHeader).Address.Scheme := SipsScheme;
 end;
 
 function TIdSipUserAgentCore.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
@@ -739,71 +1022,11 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.DefaultFrom: String;
-begin
-  Result := 'unknown <sip:unknown@' + Self.HostName + '>';
-end;
-
-function TIdSipUserAgentCore.DefaultHostName: String;
-begin
-  Result := 'localhost';
-end;
-
-function TIdSipUserAgentCore.DefaultUserAgent: String;
-begin
-  Result := 'Indy SIP/2.0 Server v0.1';
-end;
-
 procedure TIdSipUserAgentCore.ReceiveRequest(Request: TIdSipRequest;
                                              Transaction: TIdSipTransaction;
                                              Receiver: TIdSipTransport);
 begin
-  if (Request.SIPVersion <> SipVersion) then begin
-    Self.RejectUnsupportedSipVersion(Request, Transaction);
-  end;
-
-  // cf RFC 3261 section 8.2
-  // inspect the method - 8.2.1
-  if not Request.IsAck and not Self.IsMethodAllowed(Request.Method) then begin
-    Self.RejectRequestMethodNotAllowed(Request, Transaction);
-    Exit;
-  end;
-
-  // inspect the headers - 8.2.2
-
-  // To & Request-URI - 8.2.2.1
-  if not Self.IsSchemeAllowed(Request.RequestUri.Scheme) then begin
-    Self.RejectRequest(Request, SIPUnsupportedURIScheme, Transaction, Receiver);
-    Exit;
-  end;
-
-  // Merged requests - 8.2.2.2
-  if not Request.ToHeader.HasTag and Self.Dispatcher.LoopDetected(Request) then begin
-    Self.RejectRequest(Request, SIPLoopDetected, Transaction, Receiver);
-    Exit;
-  end;
-
-  // Require - 8.2.2.3
-  if Request.HasHeader(RequireHeader) then begin
-    Self.RejectRequestBadExtension(Request, Transaction);
-    Exit;
-  end;
-
-  // Content processing - 8.2.3
-  if Self.HasUnknownContentEncoding(Request) then begin
-    Self.RejectRequestUnknownContentEncoding(Request, Transaction);
-    Exit;
-  end;
-
-  if Self.HasUnknownContentLanguage(Request) then begin
-    Self.RejectRequestUnknownContentLanguage(Request, Transaction);
-    Exit;
-  end;
-
-  if Self.HasUnknownContentType(Request) then begin
-    Self.RejectRequestUnknownContentType(Request, Transaction);
-    Exit;
-  end;
+  inherited ReceiveRequest(Request, Transaction, Receiver);
 
   // Processing the request - 8.2.5
   if Request.IsInvite then begin
@@ -844,83 +1067,9 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.HasHeader(ContentLanguageHeader)
-       and (Self.AllowedLanguageList.IndexOf(Request.FirstHeader(ContentLanguageHeader).Value) = -1);
-end;
-
-function TIdSipUserAgentCore.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.HasHeader(ContentEncodingHeaderFull);
-end;
-
-function TIdSipUserAgentCore.HasUnknownContentType(Request: TIdSipRequest): Boolean;
-begin
-  Result := Request.HasHeader(ContentTypeHeaderFull)
-       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = -1);
-end;
-
-function TIdSipUserAgentCore.IsExtensionAllowed(const Extension: String): Boolean;
-begin
-  Result := false;
-end;
-
-function TIdSipUserAgentCore.IsMethodAllowed(const Method: String): Boolean;
-begin
-  Result := Self.AllowedMethodList.IndexOf(Method) >= 0;
-end;
-
-function TIdSipUserAgentCore.IsSchemeAllowed(const Scheme: String): Boolean;
-begin
-  Result := Self.AllowedSchemeList.IndexOf(Scheme) >= 0;
-end;
-
-function TIdSipUserAgentCore.NextBranch: String;
-begin
-  Self.BranchLock.Acquire;
-  try
-    // TODO
-    // This is a CRAP way to generate a branch.
-    // cf. RFC 3261 section 8.1.1.7
-    // While this (almost) satisfies the uniqueness constraint (the branch is
-    // unique for the lifetime of the instantiation of the UA), it just
-    // seems sensible to generate an unguessable branch.
-    Result := BranchMagicCookie + IntToStr(Self.fLastBranch);
-
-    Inc(Self.fLastBranch);
-  finally
-    Self.BranchLock.Release;
-  end;
-end;
-
 function TIdSipUserAgentCore.NextInitialSequenceNo: Cardinal;
 begin
   Result := TIdRandomNumber.NextCardinal($80000000 - 1);
-end;
-
-function TIdSipUserAgentCore.NextTag: String;
-begin
-  // TODO
-  // This is a CRAP way to generate a tag.
-  // cf. RFC 3261 section 19.3
-  Result := IntToHex(TIdRandomNumber.NextCardinal, 8)
-          + IntToHex(TIdRandomNumber.NextCardinal, 8);
-end;
-
-procedure TIdSipUserAgentCore.RejectRequest(Request: TIdSipRequest;
-                                            Reason: Cardinal;
-                                            Transaction: TIdSipTransaction;
-                                            Receiver: TIdSipTransport);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, Reason);
-  try
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
 end;
 
 procedure TIdSipUserAgentCore.RemoveObserver(const Listener: IIdSipObserver);
@@ -1034,6 +1183,21 @@ begin
   end;
 end;
 
+function TIdSipUserAgentCore.DefaultFrom: String;
+begin
+  Result := 'unknown <sip:unknown@' + Self.HostName + '>';
+end;
+
+function TIdSipUserAgentCore.DefaultHostName: String;
+begin
+  Result := 'localhost';
+end;
+
+function TIdSipUserAgentCore.DefaultUserAgent: String;
+begin
+  Result := 'Indy SIP/2.0 Server v0.1';
+end;
+
 function TIdSipUserAgentCore.FindSession(const Msg: TIdSipMessage): TIdSipSession;
 var
   DialogID: TIdSipDialogID;
@@ -1074,14 +1238,6 @@ begin
     fContact := TIdSipContactHeader.Create;
 
   Result := fContact;
-end;
-
-function TIdSipUserAgentCore.GetFrom: TIdSipFromHeader;
-begin
-  if not Assigned(fFrom) then
-    fFrom := TIdSipFromHeader.Create;
-
-  Result := fFrom;
 end;
 
 procedure TIdSipUserAgentCore.NotifyOfNewSession(Session: TIdSipSession);
@@ -1158,107 +1314,6 @@ begin
   end;
 end;
 
-procedure TIdSipUserAgentCore.RejectRequestBadExtension(Request: TIdSipRequest;
-                                                        Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPBadExtension);
-  try
-    Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.RejectRequestMethodNotAllowed(Request: TIdSipRequest;
-                                                            Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPMethodNotAllowed);
-  try
-    Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
-    Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.RejectRequestUnknownContentEncoding(Request: TIdSipRequest;
-                                                                  Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
-  try
-    Response.AddHeader(AcceptEncodingHeader).Value := '';
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.RejectRequestUnknownContentLanguage(Request: TIdSipRequest;
-                                                                  Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
-  try
-    Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.RejectRequestUnknownContentType(Request: TIdSipRequest;
-                                                              Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPUnsupportedMediaType);
-  try
-    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.RejectUnsupportedSipVersion(Request: TIdSipRequest;
-                                                          Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPSIPVersionNotSupported);
-  try
-    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
-
-    Transaction.SendResponse(Response);
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.ResetLastBranch;
-begin
-  Self.BranchLock.Acquire;
-  try
-    Self.fLastBranch := 0;
-  finally
-    Self.BranchLock.Release;
-  end;
-end;
-
 procedure TIdSipUserAgentCore.SendByeToAppropriateSession(Bye: TIdSipRequest;
                                                           Transaction: TIdSipTransaction;
                                                           Receiver: TIdSipTransport);
@@ -1285,11 +1340,6 @@ begin
          'A wildcard Contact header may not be used here');
 
   Self.Contact.Assign(Value);
-end;
-
-procedure TIdSipUserAgentCore.SetFrom(Value: TIdSipFromHeader);
-begin
-  Self.From.Assign(Value);
 end;
 
 //******************************************************************************
