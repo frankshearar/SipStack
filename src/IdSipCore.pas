@@ -605,6 +605,7 @@ type
     function  IsInboundCall: Boolean; override;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RejectCallBusy;
+    procedure Ring;
     procedure ResendLastResponse; virtual;
     procedure Terminate; override;
     procedure TimeOut;
@@ -3112,6 +3113,19 @@ begin
   end;
 
   Self.NotifyOfEndedSession(BusyHere);
+end;
+
+procedure TIdSipInboundSession.Ring;
+var
+  RingingResponse: TIdSipResponse;
+begin
+  RingingResponse := TIdSipResponse.InResponseTo(Self.CurrentRequest,
+                                                 SIPRinging);
+  try
+    Self.SendResponse(RingingResponse);
+  finally
+    RingingResponse.Free;
+  end;
 end;
 
 procedure TIdSipInboundSession.ResendLastResponse;

@@ -250,6 +250,7 @@ type
     procedure TestReceiveOutOfOrderReInvite;
     procedure TestReceiveReInvite;
     procedure TestRejectCallBusy;
+    procedure TestRing;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
     procedure TestTerminateUnestablishedSession;
@@ -3074,6 +3075,20 @@ begin
               'Wrong response sent');
 
   Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+end;
+
+procedure TestTIdSipInboundSession.TestRing;
+var
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.Session.Ring;
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+  CheckEquals(SIPRinging,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'Wrong response sent');
 end;
 
 procedure TestTIdSipInboundSession.TestRemoveSessionListener;
