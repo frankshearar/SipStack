@@ -30,9 +30,12 @@ type
     Request:    TIdSipRequest;
     Response:   TIdSipResponse;
 
-    procedure CheckBasicMessage(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
-    procedure CheckBasicRequest(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
-    procedure CheckBasicResponse(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+    procedure CheckBasicMessage(Msg: TIdSipMessage;
+                                CheckBody: Boolean = true);
+    procedure CheckBasicRequest(Msg: TIdSipMessage;
+                                CheckBody: Boolean = true);
+    procedure CheckBasicResponse(Msg: TIdSipMessage;
+                                 CheckBody: Boolean = true);
     procedure CheckParserError(const RawMessage, Reason: String);
     procedure CheckTortureTest(const RequestStr, ExpectedExceptionMsg: String);
   public
@@ -196,17 +199,17 @@ end;
 
 procedure TestTIdSipParser.SetUp;
 begin
-  P := TIdSipParser.Create;
+  Self.P := TIdSipParser.Create;
 
-  Request := TIdSipRequest.Create;
-  Response := TIdSipResponse.Create;
+  Self.Request := TIdSipRequest.Create;
+  Self.Response := TIdSipResponse.Create;
 end;
 
 procedure TestTIdSipParser.TearDown;
 begin
-  Request.Free;
-  Response.Free;
-  P.Free;
+  Self.Request.Free;
+  Self.Response.Free;
+  Self.P.Free;
 end;
 
 //* TestTIdSipParser Published methods *****************************************
@@ -222,9 +225,9 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
-    CheckEquals(29, Request.ContentLength, 'ContentLength');
+    CheckEquals(29, Self.Request.ContentLength, 'ContentLength');
   finally
     Str.Free;
   end;
@@ -623,7 +626,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
     CheckEquals('Accept: text/t140, text/plain;q=0.7;foo=bar, text/xml',
                 Self.Request.FirstHeader(AcceptHeader).AsString,
@@ -689,8 +692,8 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
-    Self.CheckBasicRequest(Request);
+    Self.P.ParseRequest(Self.Request);
+    Self.CheckBasicRequest(Self.Request);
   finally
     Str.Free;
   end;
@@ -704,7 +707,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Failed to bail out on parsing an empty string');
   finally
@@ -729,9 +732,9 @@ begin
                             + #13#10);
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Request.FirstHeader(FromHeaderFull).AsString,
+                Self.Request.FirstHeader(FromHeaderFull).AsString,
                 'From header');
   finally
     Str.Free;
@@ -766,7 +769,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Failed to bail out');
   finally
@@ -787,7 +790,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Failed to bail out on a Bad Request');
   finally
@@ -804,7 +807,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Malformed start line (too many spaces between Method and Request-URI) parsed without error');
   finally
@@ -816,7 +819,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Malformed start line (no spaces between Method and Request-URI) parsed without error');
   finally
@@ -828,7 +831,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Malformed start line (no Method) parsed without error');
   finally
@@ -840,7 +843,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Malformed start line (no Request-URI, no SIP-Version) parsed without error');
   finally
@@ -851,7 +854,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Malformed start line (malformed SIP-Version) parsed without error');
   finally
@@ -871,9 +874,9 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
-    CheckEquals(4,  Request.ContentLength, 'ContentLength');
-    CheckEquals('', Request.Body,          'Body');
+    Self.P.ParseRequest(Self.Request);
+    CheckEquals(4,  Self.Request.ContentLength, 'ContentLength');
+    CheckEquals('', Self.Request.Body,          'Body');
 
     CheckEquals(Length('I am a message. Hear me roar!'),
                 Str.Read(LeftOvers, Length(Leftovers)),
@@ -1055,11 +1058,11 @@ begin
                             + 'I am a message. Hear me roar!');
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
-    CheckEquals(2, Request.Path.Length, 'Path.Length');
+    CheckEquals(2, Self.Request.Path.Length, 'Path.Length');
 
-    Via0 := Request.Path.Items[0] as TIdSipViaHeader;
+    Via0 := Self.Request.Path.Items[0] as TIdSipViaHeader;
     CheckEquals('Via',              Via0.Name,             'LastHop.Name');
     CheckEquals('SIP/2.0',          Via0.SipVersion,       'LastHop.SipVersion');
     Check      (sttTCP =            Via0.Transport,        'LastHop.Transport');
@@ -1098,7 +1101,7 @@ begin
   Str := TStringStream.Create('INVITE sip:wintermute@tessier ashpool.co.lu SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-     Self.P.ParseRequest(Request);
+     Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
                 'Malformed start line (Request-URI has spaces) parsed without error');
   finally
@@ -1113,7 +1116,7 @@ begin
   Str := TStringStream.Create('INVITE <sip:wintermute@tessier-ashpool.co.luna> SIP/2.0'#13#10);
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
                 'Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
   finally
@@ -1128,7 +1131,7 @@ begin
   Str := TStringStream.Create(#13#10#13#10 + BasicRequest);
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
     Self.CheckBasicRequest(Request);
   finally
@@ -1147,7 +1150,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
           'Failed to bail out');
   finally
@@ -1215,16 +1218,11 @@ begin
   try
     Self.P.Source := Str;
 
-//    try
-      Self.P.ParseResponse(Response);
+    Self.P.ParseResponse(Self.Response);
 
-      CheckEquals('', Response.SipVersion, 'Sip-Version');
-      CheckEquals(0,  Response.StatusCode, 'Status-Code');
-      CheckEquals('', Response.StatusText, 'Status-Text');
-//      Fail('Failed to bail out on parsing an empty string');
-//    except
-//      on EBadResponse do;
-//    end;
+    CheckEquals('', Self.Response.SipVersion, 'Sip-Version');
+    CheckEquals(0,  Self.Response.StatusCode, 'Status-Code');
+    CheckEquals('', Self.Response.StatusText, 'Status-Text');
   finally
     Str.Free;
   end;
@@ -1245,17 +1243,17 @@ begin
                           + #13#10);
   try
     Self.P.Source := Str;
-    Self.P.ParseResponse(Response);
+    Self.P.ParseResponse(Self.Response);
 
-    CheckEquals('SIP/2.0', Response.SipVersion, 'SipVersion');
-    CheckEquals(200,       Response.StatusCode, 'StatusCode');
-    CheckEquals('OK',      Response.StatusText, 'StatusTest');
+    CheckEquals('SIP/2.0', Self.Response.SipVersion, 'SipVersion');
+    CheckEquals(200,       Self.Response.StatusCode, 'StatusCode');
+    CheckEquals('OK',      Self.Response.StatusText, 'StatusTest');
 
     CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
-                Response.FirstHeader(FromHeaderFull).AsString,
+                Self.Response.From.AsString,
                 'From header');
     CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
-                Response.FirstHeader(ToHeaderFull).AsString,
+                Self.Response.ToHeader.AsString,
                 'To header');
   finally
     Str.Free;
@@ -1458,9 +1456,9 @@ begin
   Str := TStringStream.Create(#13#10#13#10 + BasicResponse);
   try
     Self.P.Source := Str;
-    Self.P.ParseResponse(Response);
+    Self.P.ParseResponse(Self.Response);
 
-    Self.CheckBasicResponse(Response);
+    Self.CheckBasicResponse(Self.Response);
   finally
     Str.Free;
   end;
@@ -1476,8 +1474,8 @@ begin
                                             [rfReplaceAll]));
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
-    CheckEquals(29, Request.ContentLength, 'ContentLength');
+    Self.P.ParseRequest(Self.Request);
+    CheckEquals(29, Self.Request.ContentLength, 'ContentLength');
   finally
     Str.Free;
   end;
@@ -1490,74 +1488,74 @@ begin
   Str := TStringStream.Create(TortureTest1);
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     
-    CheckEquals('INVITE',                              Request.Method,         'Method');
-    CheckEquals('SIP/2.0',                             Request.SipVersion,     'SipVersion');
-    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Request.RequestUri.URI, 'RequestUri');
-    CheckEquals(6,                                     Request.MaxForwards,    'MaxForwards');
-    CheckEquals('0ha0isndaksdj@10.1.1.1',              Request.CallID,         'CallID');
+    CheckEquals('INVITE',                              Self.Request.Method,         'Method');
+    CheckEquals('SIP/2.0',                             Self.Request.SipVersion,     'SipVersion');
+    CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com', Self.Request.RequestUri.URI, 'RequestUri');
+    CheckEquals(6,                                     Self.Request.MaxForwards,    'MaxForwards');
+    CheckEquals('0ha0isndaksdj@10.1.1.1',              Self.Request.CallID,         'CallID');
 
     CheckEquals('',
-                Request.ToHeader.DisplayName,
+                Self.Request.ToHeader.DisplayName,
                 'ToHeader.DisplayName');
     CheckEquals('sip:vivekg@chair.dnrc.bell-labs.com',
-                Request.ToHeader.Address.URI,
+                Self.Request.ToHeader.Address.URI,
                 'ToHeader.Address.URI');
     CheckEquals(';tag=1918181833n',
-                Request.ToHeader.ParamsAsString,
+                Self.Request.ToHeader.ParamsAsString,
                 'ToHeader.ParamsAsString');
 
     CheckEquals('J Rosenberg \"',
-                Request.From.DisplayName,
+                Self.Request.From.DisplayName,
                 'From.DisplayName');
     CheckEquals('sip:jdrosen@lucent.com',
-                Request.From.Address.URI,
+                Self.Request.From.Address.URI,
                 'From.Address.URI');
     CheckEquals(';tag=98asjd8',
-                Request.From.ParamsAsString,
+                Self.Request.From.ParamsAsString,
                 'From.ParamsAsString');
 
     CheckEquals(3, Request.Path.Length, 'Path.Length');
 
     CheckEquals('To: sip:vivekg@chair.dnrc.bell-labs.com;tag=1918181833n',
-                Request.HeaderAt(0).AsString,
+                Self.Request.HeaderAt(0).AsString,
                 'To header');
     CheckEquals('From: "J Rosenberg \\\"" <sip:jdrosen@lucent.com>;tag=98asjd8',
-                Request.HeaderAt(1).AsString,
+                Self.Request.HeaderAt(1).AsString,
                 'From header');
     CheckEquals('Max-Forwards: 6',
-                Request.HeaderAt(2).AsString,
+                Self.Request.HeaderAt(2).AsString,
                 'Max-Forwards header');
     CheckEquals('Call-ID: 0ha0isndaksdj@10.1.1.1',
-                Request.HeaderAt(3).AsString,
+                Self.Request.HeaderAt(3).AsString,
                 'Call-ID header');
     CheckEquals('CSeq: 8 INVITE',
-                Request.HeaderAt(4).AsString,
+                Self.Request.HeaderAt(4).AsString,
                 'CSeq header');
     CheckEquals('Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw',
-                Request.HeaderAt(5).AsString,
+                Self.Request.HeaderAt(5).AsString,
                 'Via header #1');
     CheckEquals('Subject: ',
-                Request.HeaderAt(6).AsString,
+                Self.Request.HeaderAt(6).AsString,
                 'Subject header');
     CheckEquals('NewFangledHeader: newfangled value more newfangled value',
-                Request.HeaderAt(7).AsString,
+                Self.Request.HeaderAt(7).AsString,
                 'NewFangledHeader');
     CheckEquals('Content-Type: application/sdp',
-                Request.HeaderAt(8).AsString,
+                Self.Request.HeaderAt(8).AsString,
                 'Content-Type');
     CheckEquals('Via: SIP/2.0/TCP 1192.168.156.222;branch=9ikj8',
-                Request.HeaderAt(9).AsString,
+                Self.Request.HeaderAt(9).AsString,
                 'Via header #2');
     CheckEquals('Via: SIP/2.0/UDP 192.168.255.111;hidden',
-                Request.HeaderAt(10).AsString,
+                Self.Request.HeaderAt(10).AsString,
                 'Via header #3');
     CheckEquals('Contact: "Quoted string \"\"" <sip:jdrosen@bell-labs.com>;newparam=newvalue;secondparam=secondvalue;q=0.33',
-                Request.HeaderAt(11).AsString,
+                Self.Request.HeaderAt(11).AsString,
                 'Contact header #1');
     CheckEquals('Contact: tel:4443322',
-                Request.HeaderAt(12).AsString,
+                Self.Request.HeaderAt(12).AsString,
                 'Contact header #2');
   finally
     Str.Free;
@@ -1617,10 +1615,10 @@ begin
   Str := TStringStream.Create(TortureTest24);
   try
     Self.P.Source := Str;
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
 
     CheckEquals('sip:sip%3Auser%40example.com@company.com;other-param=summit',
-                Request.RequestUri.URI,
+                Self.Request.RequestUri.URI,
                 'Request-URI');
   finally
     Str.Free;
@@ -1643,7 +1641,8 @@ end;
 
 //* TestTIdSipParser Private methods *******************************************
 
-procedure TestTIdSipParser.CheckBasicMessage(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+procedure TestTIdSipParser.CheckBasicMessage(Msg: TIdSipMessage;
+                                             CheckBody: Boolean = true);
 begin
   CheckEquals('SIP/2.0',                              Msg.SIPVersion,              'SipVersion');
   CheckEquals(29,                                     Msg.ContentLength,           'ContentLength');
@@ -1685,7 +1684,8 @@ begin
     CheckEquals('', Msg.Body, 'message-body');
 end;
 
-procedure TestTIdSipParser.CheckBasicRequest(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+procedure TestTIdSipParser.CheckBasicRequest(Msg: TIdSipMessage;
+                                             CheckBody: Boolean = true);
 begin
   CheckEquals(TIdSipRequest.Classname, Msg.ClassName, 'Class type');
 
@@ -1701,7 +1701,8 @@ begin
   Self.CheckBasicMessage(Msg, CheckBody);
 end;
 
-procedure TestTIdSipParser.CheckBasicResponse(const Msg: TIdSipMessage; const CheckBody: Boolean = true);
+procedure TestTIdSipParser.CheckBasicResponse(Msg: TIdSipMessage;
+                                              CheckBody: Boolean = true);
 begin
   CheckEquals(TIdSipResponse.Classname, Msg.ClassName, 'Class type');
 
@@ -1726,7 +1727,7 @@ begin
   try
     Self.P.Source := Str;
 
-    Self.P.ParseRequest(Request);
+    Self.P.ParseRequest(Self.Request);
     Check(Self.Request.HasInvalidSyntax,
                 'Failed to bail out of a bad request');
   finally
