@@ -341,6 +341,7 @@ const
 function DomainNameSort(Item1, Item2: Pointer): Integer;
 function NaptrSort(Item1, Item2: Pointer): Integer;
 function NaptrServiceToTransport(const NaptrService: String): String;
+function NaptrServiceIsSecure(NaptrService: String): Boolean;
 function SrvSort(Item1, Item2: Pointer): Integer;
 
 implementation
@@ -391,22 +392,25 @@ begin
     Result := A.Order - B.Order;
 
   if (Result = 0) then begin
-    AIsSecure := IndyPos(NaptrSipsService, A.Service) > 0;
-    BIsSecure := IndyPos(NaptrSipsService, B.Service) > 0;
-
     // If the A and B have the Protocol, prefer the one that
     // uses a secure Transport. Thus,
     //   SIP+D2T < SIP+D2U;
     //   SIPS+D2T < SIP+D2T
 
-    raise Exception.Create('Read the comment above'); 
+    AIsSecure := NaptrServiceIsSecure(A.Service);
+    BIsSecure := NaptrServiceIsSecure(B.Service);
 
-    if (A.Service < B.Service) then
-      Result := -1
-    else if (A.Service > B.Service) then
-      Result := 1
-    else
-      Result := 0;
+    if AIsSecure xor BIsSecure then begin
+      if AIsSecure then
+        Result := -1
+      else
+        Result := 1;
+    end else begin
+      if (A.Service < B.Service) then
+        Result := -1
+      else if (A.Service > B.Service) then
+        Result := 1;
+    end;
   end;
 
   if (Result = 0) then
@@ -426,6 +430,15 @@ begin
     Result := SctpTransport
   else
     raise Exception.Create('Don''t know what transport to use for a NAPTR service ''' + NaptrService + '''');
+end;
+
+function NaptrServiceIsSecure(NaptrService: String): Boolean;
+var
+  Service:  String;
+begin
+  Service := Fetch(NaptrService, NaptrDelimiter);
+
+  Result := IsEqual(NaptrSipsService, Service);
 end;
 
 function SrvSort(Item1, Item2: Pointer): Integer;

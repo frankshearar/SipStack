@@ -15,6 +15,11 @@ uses
   Classes, IdSipLocator, IdSipMessage, IdSipMockLocator, TestFramework;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestNaptrServiceIsSecure;
+  end;
+
   TestTIdSipLocation = class(TTestCase)
   private
     Address:   String;
@@ -215,6 +220,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipLocator unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipLocation.Suite);
   Result.AddTest(TestTIdSipLocations.Suite);
   Result.AddTest(TestTIdSipAbstractLocator.Suite);
@@ -225,6 +231,19 @@ begin
   Result.AddTest(TestTIdNaptrRecords.Suite);
   Result.AddTest(TestTIdSrvRecord.Suite);
   Result.AddTest(TestTIdSrvRecords.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Public methods ***********************************************
+
+procedure TestFunctions.TestNaptrServiceIsSecure;
+begin
+  Check(NaptrServiceIsSecure('SIPS+D2T'),    'SIPS+D2T');
+  Check(NaptrServiceIsSecure('SIPS+D2S'),    'SIPS+D2S');
+  Check(not NaptrServiceIsSecure('SIP+D2T'), 'SIP+D2T');
+  Check(not NaptrServiceIsSecure('SIP+D2U'), 'SIP+D2U');
 end;
 
 //******************************************************************************
