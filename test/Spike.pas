@@ -23,7 +23,7 @@ interface
 
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
-  IdObservable, IdRTPDiagnostics, IdRTP, IdSdp, IdSipCore, IdSipMockLocator,
+  IdObservable, IdRTPDiagnostics, IdRTP, IdSdp, IdSipCore, IdSipIndyLocator,
   IdSipMessage, IdSipTransaction, IdSipTransport, IdSocketHandle, IdTimerQueue,
   StdCtrls, SyncObjs, SysUtils;
 
@@ -78,6 +78,8 @@ type
     Answer: TButton;
     Edit1: TEdit;
     Label7: TLabel;
+    FromUri: TEdit;
+    Label8: TLabel;
     procedure ByeClick(Sender: TObject);
     procedure InviteClick(Sender: TObject);
     procedure UiTimerTimer(Sender: TObject);
@@ -93,6 +95,7 @@ type
     procedure PasswordChange(Sender: TObject);
     procedure HostNameChange(Sender: TObject);
     procedure AnswerClick(Sender: TObject);
+    procedure FromUriChange(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -105,7 +108,7 @@ type
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     LatestSession:  TIdSipSession;
-    Locator:        TIdSipMockLocator;
+    Locator:        TIdSipIndyLocator;
     RTPByteCount:   Integer;
     RTPProfile:     TIdRTPProfile;
     RunningPort:    Cardinal;
@@ -126,7 +129,7 @@ type
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
-                                        var TryAgain: Boolean); 
+                                        var TryAgain: Boolean);
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
@@ -141,7 +144,7 @@ type
                         const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String); 
+                        const Reason: String);
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
@@ -245,7 +248,9 @@ begin
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
   Self.Dispatch.Timer := Self.Timer;
 
-  Self.Locator := TIdSipMockLocator.Create;
+  Self.Locator := TIdSipIndyLocator.Create;
+  Self.Locator.NameServer := '62.241.160.200';
+  Self.Locator.Port := 53;
 
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
@@ -267,7 +272,7 @@ begin
                 + 'kill it and restart this');
   end;
   Self.UA.Contact.Value := Self.ContactUri.Text;
-  Self.UA.From.Value    := Self.ContactUri.Text;
+  Self.UA.From.Value    := Self.FromUri.Text;
   Self.UA.HasProxy      := Self.UseAsProxy.Checked;
   Self.UA.Proxy.Uri     := Self.TargetUri.Text + ';lr';
 
@@ -434,12 +439,33 @@ end;
 procedure TrnidSpike.OnNetworkFailure(Action: TIdSipAction;
                                       const Reason: String);
 begin
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('|||| ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
+
+    Self.Log.Lines.Add(Reason);
+  finally
+    Self.Lock.Release;
+  end;
+
+  if (Action = Self.LatestSession) then begin
+    Self.Answer.Enabled := false;
+    Self.StopReadingData;
+  end;
 end;
 
 procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts;
                                const Reason: String);
 begin
+  Self.Lock.Acquire;
+  try
+    Self.Log.Lines.Add('|||| ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
+
+    Self.Log.Lines.Add(Reason);
+  finally
+    Self.Lock.Release;
+  end;
 end;
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
@@ -774,7 +800,6 @@ end;
 procedure TrnidSpike.ContactUriChange(Sender: TObject);
 begin
   Self.UA.Contact.Value := Self.ContactUri.Text;
-  Self.UA.From.Value    := Self.ContactUri.Text;
 end;
 
 procedure TrnidSpike.UseAsProxyClick(Sender: TObject);
@@ -843,6 +868,11 @@ begin
 
     (Self.LatestSession as TIdSipInboundSession).AcceptCall(Answer, SdpMimeType);
   end;
+end;
+
+procedure TrnidSpike.FromUriChange(Sender: TObject);
+begin
+  Self.UA.From.Value := Self.FromUri.Text;
 end;
 
 end.

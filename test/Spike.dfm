@@ -197,6 +197,13 @@ object rnidSpike: TrnidSpike
         Height = 13
         Caption = 'Proxy:'
       end
+      object Label8: TLabel
+        Left = 369
+        Top = 76
+        Width = 26
+        Height = 13
+        Caption = 'From:'
+      end
       object TargetUri: TEdit
         Left = 76
         Top = 1
@@ -263,10 +270,10 @@ object rnidSpike: TrnidSpike
       object ContactUri: TEdit
         Left = 77
         Top = 73
-        Width = 289
+        Width = 142
         Height = 21
         TabOrder = 9
-        Text = 'sip:franks@80.168.137.82'
+        Text = 'sip:frank@angband.za.org'
         OnChange = ContactUriChange
       end
       object HostName: TEdit
@@ -335,6 +342,15 @@ object rnidSpike: TrnidSpike
         Height = 21
         TabOrder = 13
         OnChange = HostNameChange
+      end
+      object FromUri: TEdit
+        Left = 224
+        Top = 73
+        Width = 142
+        Height = 21
+        TabOrder = 14
+        Text = 'sip:frank@angband.za.org'
+        OnChange = FromUriChange
       end
     end
   end
