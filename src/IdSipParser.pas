@@ -77,6 +77,23 @@ type
     property SequenceNo: Cardinal read fSequenceNo write fSequenceNo;
   end;
 
+  TIdSipDateHeader = class(TIdSipHeader)
+  private
+    fIsRelativeTime: Boolean;
+    fRelativeTime:   Cardinal;
+    fAbsoluteTime:   TDateTime;
+
+    procedure SetAbsoluteTime(Value: String);
+    procedure SetRelativeTime(const Value: String);
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
+    property IsRelativeTime: Boolean   read fIsRelativeTime write fIsRelativeTime;
+    property RelativeTime:   Cardinal  read fRelativeTime write fRelativeTime;
+    property AbsoluteTime:   TDateTime read fAbsoluteTime write fAbsoluteTime;
+  end;
+
   TIdSipNumericHeader = class(TIdSipHeader)
   private
     fNumericValue: Cardinal;
@@ -841,6 +858,50 @@ begin
     raise EBadHeader.Create(Self.Name);
 
     Self.Method := Token;
+end;
+
+//******************************************************************************
+//* TIdSipDateHeader                                                           *
+//******************************************************************************
+//* TIdSipDateHeader Protected methods *****************************************
+
+function TIdSipDateHeader.GetValue: String;
+begin
+  Result := inherited GetValue;
+end;
+
+procedure TIdSipDateHeader.SetValue(const Value: String);
+begin
+  inherited SetValue(Value);
+
+  if TIdSipParser.IsNumber(Value) then
+    Self.SetRelativeTime(Value)
+  else
+    Self.SetAbsoluteTime(Value);
+end;
+
+//* TIdSipDateHeader Private methods *******************************************
+
+procedure TIdSipDateHeader.SetAbsoluteTime(Value: String);
+begin
+  fIsRelativeTime := false;
+
+  
+end;
+
+procedure TIdSipDateHeader.SetRelativeTime(const Value: String);
+var
+  N: Cardinal;
+  E: Integer;
+begin
+  fIsRelativeTime := true;
+
+  Val(Value, N, E);
+  if (E <> 0) then
+    raise EBadHeader.Create(Self.Name);
+
+  fRelativeTime := N;
+  fAbsoluteTime := 0;
 end;
 
 //******************************************************************************

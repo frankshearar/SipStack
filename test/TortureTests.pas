@@ -57,6 +57,27 @@ const
                + 'm=video 3227 RTP/AVP 31'#13#10
                + 'a=rtpmap:31 LPC';
 
+  //   This message contains an Expires header which has illegal values for
+  //   a number of components, but otherwise is syntactically correct.
+  TortureTest13 = 'INVITE sip:user@company.com SIP/2.0'#13#10
+                + 'Via: SIP/2.0/UDP 135.180.130.133;branch=z9hG4bKkdjuw'#13#10
+                + 'Max-Forwards: 88'#13#10
+                + 'CSeq: 0 INVITE'#13#10
+                + 'Call-ID: 98asdh@10.1.1.2'#13#10
+                + 'Expires: Thu, 44 Dec 19999 16:00:00 EDT'#13#10
+                + 'From: sip:caller@university.edu;tag=3651'#13#10
+                + 'To: sip:user@company.com'#13#10
+                + 'Content-Type: application/sdp'#13#10
+                + #13#10
+                + 'v=0'#13#10
+                + 'o=mhandley 29739 7272939 IN IP4 126.5.4.3'#13#10
+                + 's=-'#13#10
+                + 'c=IN IP4 135.180.130.88'#13#10
+                + 't=0 0'#13#10
+                + 'm=audio 492170 RTP/AVP 0 12'#13#10
+                + 'm=video 3227 RTP/AVP 31'#13#10
+                + 'a=rtpmap:31 LPC';
+
   //   This is a request with an unterminated quote in the display name of
   //   the To field.
   //
