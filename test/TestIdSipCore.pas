@@ -3,7 +3,7 @@ unit TestIdSipCore;
 interface
 
 uses
-  Classes, IdRTPClient, IdSdpParser, IdSimpleParser, IdSipCore, IdSipDialog,
+  Classes, IdRTPClient, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockTransactionDispatcher,
   IdSipTransaction, IdSipTransport, TestFramework, TestFrameworkSip;
 

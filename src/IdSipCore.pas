@@ -23,8 +23,8 @@ interface
 
 uses
   Classes, Contnrs, IdSipDialog, IdException, IdRTP, IdRTPClient, IdRTPServer,
-  IdSdpParser, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
-  IdSipTransaction, IdSipTransport, IdSocketHandle, IdUri, SyncObjs;
+  IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage, IdSipTransaction,
+  IdSipTransport, IdSocketHandle, IdUri, SyncObjs;
 
 type
   TIdSipSession = class;

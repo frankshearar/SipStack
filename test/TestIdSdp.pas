@@ -1,9 +1,9 @@
-unit TestIdSdpParser;
+unit TestIdSdp;
 
 interface
 
 uses
-  Classes, IdSdpParser, TestFramework;
+  Classes, IdSdp, TestFramework;
 
 type
   TestFunctions = class(TTestCase)

@@ -1,4 +1,4 @@
-unit IdSdpParser;
+unit IdSdp;
 
 interface
 

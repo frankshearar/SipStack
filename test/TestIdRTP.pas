@@ -167,12 +167,12 @@ type
 implementation
 
 uses
-  Classes, IdRtpServer, IdSdpParser, SysUtils;
+  Classes, IdRtpServer, IdSdp, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
-{
+
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
@@ -180,7 +180,6 @@ begin
   Result.AddTest(TestTIdRTPProfile.Suite);
   Result.AddTest(TestTIdAudioVisualProfile.Suite);
   Result.AddTest(TestTIdRTPHeaderExtension.Suite);
-}
   Result.AddTest(TestTIdRTPPacket.Suite);
   Result.AddTest(TestTIdRTCPByePacket.Suite);
 end;
