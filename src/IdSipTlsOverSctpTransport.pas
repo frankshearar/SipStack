@@ -11,6 +11,7 @@ type
   // TLS over TCP is the only secure transport.
   TIdSipTlsOverSctpTransport = class(TIdSipSctpTransport)
   public
+    class function DefaultPort: Cardinal; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
 
@@ -20,7 +21,12 @@ type
 implementation
 
 uses
-  IdSipDns;
+  IdSipConsts, IdSipDns;
+
+class function TIdSipTlsOverSctpTransport.DefaultPort: Cardinal;
+begin
+  Result := IdPORT_SIPS;
+end;
 
 class function TIdSipTlsOverSctpTransport.IsSecure: Boolean;
 begin

@@ -95,6 +95,7 @@ type
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
+    class function  DefaultPort: Cardinal; virtual;
     class procedure InsecureTransports(Result: TStrings);
     class function  IsSecure: Boolean; virtual;
     class function  SrvPrefix: String; virtual;
@@ -110,7 +111,6 @@ type
 
     procedure AddTransportListener(const Listener: IIdSipTransportListener);
     procedure AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
-    function  DefaultPort: Cardinal; virtual;
     function  DefaultTimeout: Cardinal; virtual;
     function  GetTransportType: String; virtual; abstract;
     function  IsNull: Boolean; virtual;
@@ -186,10 +186,10 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); override;
     function  ServerType: TIdSipTcpServerClass; override;
   public
+    class function DefaultPort: Cardinal; override;
     class function IsSecure: Boolean; override;
     class function SrvPrefix: String; override;
 
-    function DefaultPort: Cardinal; override;
     function GetTransportType: String; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
@@ -336,6 +336,11 @@ var
 //******************************************************************************
 //* TIdSipTransport Public methods *********************************************
 
+class function TIdSipTransport.DefaultPort: Cardinal;
+begin
+  Result := IdPORT_SIP;
+end;
+
 class procedure TIdSipTransport.InsecureTransports(Result: TStrings);
 var
   I: Integer;
@@ -428,11 +433,6 @@ end;
 procedure TIdSipTransport.AddTransportSendingListener(const Listener: IIdSipTransportSendingListener);
 begin
   Self.TransportSendingListeners.AddListener(Listener);
-end;
-
-function TIdSipTransport.DefaultPort: Cardinal;
-begin
-  Result := IdPORT_SIP;
 end;
 
 function TIdSipTransport.DefaultTimeout: Cardinal;
@@ -925,6 +925,11 @@ end;
 //******************************************************************************
 //* TIdSipTLSTransport Public methods ******************************************
 
+class function TIdSipTLSTransport.DefaultPort: Cardinal;
+begin
+  Result := IdPORT_SIPS;
+end;
+
 class function TIdSipTLSTransport.IsSecure: Boolean;
 begin
   Result := true;
@@ -933,11 +938,6 @@ end;
 class function TIdSipTLSTransport.SrvPrefix: String;
 begin
   Result := SrvTlsPrefix;
-end;
-
-function TIdSipTLSTransport.DefaultPort: Cardinal;
-begin
-  Result := IdPORT_SIPS;
 end;
 
 function TIdSipTLSTransport.GetTransportType: String;
