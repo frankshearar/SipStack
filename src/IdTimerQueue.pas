@@ -92,8 +92,8 @@ type
   end;
 
 // Math and conversion functions
-function  AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
-function  AddModuloWord(Addend, Augend: Word): Word;
+function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
+function AddModuloWord(Addend, Augend: Word): Word;
 
 implementation
 
