@@ -38,6 +38,7 @@ type
     procedure TearDown; override;
   published
     procedure TestAddLocation;
+    procedure TestAddLocationsFromNames;
     procedure TestCount;
     procedure TestIsEmpty;
   end;
@@ -328,6 +329,41 @@ begin
   CheckEquals(Transport, Self.Locs.First.Transport, 'Transport');
   CheckEquals(Address,   Self.Locs.First.Address,   'Address');
   CheckEquals(Port,      Self.Locs.First.Port,      'Port');
+end;
+
+procedure TestTIdSipLocations.TestAddLocationsFromNames;
+const
+  Transport = TcpTransport;
+  Port      = IdPORT_SIP;
+var
+  I:     Integer;
+  Names: TIdDomainNameRecords;
+begin
+  Names := TIdDomainNameRecords.Create;
+  try
+    Names.Add(DnsAAAARecord, 'foo.com', '::1');
+    Names.Add(DnsARecord,    'bar.com', '127.0.0.1');
+
+    for I := 0 to Min(Names.Count, Self.Locs.Count) - 1 do begin
+      CheckEquals(Transport,
+                  Self.Locs[I].Transport,
+                  IntToStr(I) + 'th location transport');
+      CheckEquals(Names[I].IPAddress,
+                  Self.Locs[I].Address,
+                  IntToStr(I) + 'th location address');
+      CheckEquals(Port,
+                  Self.Locs[I].Port,
+                  IntToStr(I) + 'th location port');
+    end;
+
+    Self.Locs.AddLocationsFromNames(Transport, Port, Names);
+
+    CheckEquals(Names.Count,
+                Self.Locs.Count,
+                'Number of records');
+  finally
+    Names.Free;
+  end;
 end;
 
 procedure TestTIdSipLocations.TestCount;

@@ -83,10 +83,15 @@ type
     function  IsEmpty: Boolean;
   end;
 
+  TIdDomainNameRecords = class;
+
   TIdSipLocations = class(TIdBaseList)
   private
     function GetLocation(Index: Integer): TIdSipLocation;
   public
+    procedure AddLocationsFromNames(const Transport: String;
+                                    Port: Cardinal;
+                                    Names: TIdDomainNameRecords);
     procedure AddLocation(const Transport: String;
                           const Address: String;
                           Port: Cardinal);
@@ -95,7 +100,6 @@ type
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
 
-  TIdDomainNameRecords = class;
   TIdNaptrRecord = class;
   TIdNaptrRecords = class;
   TIdSrvRecord = class;
@@ -108,10 +112,6 @@ type
   private
     procedure AddLocationsFrom(Srv: TIdSrvRecords;
                                Result: TIdSipLocations);
-    procedure AddLocationsFromNames(const Transport: String;
-                                    Port: Cardinal;
-                                    Names: TIdDomainNameRecords;
-                                    Result: TIdSipLocations);
     procedure AddNameRecordsTo(Locations: TIdSipLocations;
                                const Transport: String;
                                NameRecords: TIdDomainNameRecords;
@@ -187,7 +187,10 @@ type
   private
     function GetItems(Index: Integer): TIdDomainNameRecord;
   public
-    procedure Add(Copy: TIdDomainNameRecord);
+    procedure Add(Copy: TIdDomainNameRecord); overload;
+    procedure Add(const RecordType: String;
+                  const Domain: String;
+                  const IPAddress: String); overload;
     function  Copy: TIdDomainNameRecords;
     procedure Sort;
 
@@ -491,6 +494,16 @@ end;
 //******************************************************************************
 //* TIdSipLocations Public methods *********************************************
 
+procedure TIdSipLocations.AddLocationsFromNames(const Transport: String;
+                                                Port: Cardinal;
+                                                Names: TIdDomainNameRecords);
+var
+  I: Integer;
+begin
+  for I := 0 to Names.Count - 1 do
+    Self.AddLocation(Transport, Names[I].IPAddress, Port);
+end;
+
 procedure TIdSipLocations.AddLocation(const Transport: String;
                                       const Address: String;
                                       Port: Cardinal);
@@ -635,10 +648,9 @@ begin
     try
       Self.ResolveNameRecords(Response.LastHop.SentBy, Names);
 
-      Self.AddLocationsFromNames(Response.LastHop.Transport,
-                                 Response.LastHop.Port,
-                                 Names,
-                                 Result);
+      Result.AddLocationsFromNames(Response.LastHop.Transport,
+                                   Response.LastHop.Port,
+                                   Names);
     finally
       Names.Free;
     end;
@@ -814,17 +826,6 @@ begin
                          Srv[I].Port);
 end;
 
-procedure TIdSipAbstractLocator.AddLocationsFromNames(const Transport: String;
-                                                      Port: Cardinal;
-                                                      Names: TIdDomainNameRecords;
-                                                      Result: TIdSipLocations);
-var
-  I: Integer;
-begin
-  for I := 0 to Names.Count - 1 do
-    Result.AddLocation(Transport, Names[I].IPAddress, Port);
-end;
-
 procedure TIdSipAbstractLocator.AddNameRecordsTo(Locations: TIdSipLocations;
                                                  const Transport: String;
                                                  NameRecords: TIdDomainNameRecords;
@@ -995,6 +996,16 @@ end;
 procedure TIdDomainNameRecords.Add(Copy: TIdDomainNameRecord);
 begin
   Self.List.Add(Copy.Copy);
+end;
+
+procedure TIdDomainNameRecords.Add(const RecordType: String;
+                                   const Domain: String;
+                                   const IPAddress: String);
+var
+  NewRec: TIdDomainNameRecord;
+begin
+  NewRec := TIdDomainNameRecord.Create(RecordType, Domain, IPAddress);
+  Self.List.Add(NewRec);
 end;
 
 function TIdDomainNameRecords.Copy: TIdDomainNameRecords;
