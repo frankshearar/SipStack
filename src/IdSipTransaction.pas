@@ -147,7 +147,7 @@ type
                                  const T: TIdSipTransport); overload;
     procedure ChangeToTerminated; overload;
     procedure ChangeToTerminated(const R: TIdSipResponse;
-                                 const T: TIdSipTransport); overload;
+                                 const T: TIdSipTransport); overload; virtual;
     procedure DoOnFail(const Reason: String); virtual;
     procedure NotifyOfFailure(const Reason: String);
     procedure NotifyOfTermination;
@@ -271,6 +271,8 @@ type
     procedure ChangeToCompleted(const R: TIdSipResponse;
                                 const T: TIdSipTransport); override;
     procedure ChangeToProceeding; override;
+    procedure ChangeToTerminated(const R: TIdSipResponse;
+                                 const T: TIdSipTransport); overload; override;
   public
     constructor Create(const Dispatcher: TIdSipTransactionDispatcher;
                        const InitialRequest: TIdSipRequest;
@@ -1356,6 +1358,14 @@ begin
   Self.TimerB.Stop;
 end;
 
+procedure TIdSipClientInviteTransaction.ChangeToTerminated(const R: TIdSipResponse;
+                                                           const T: TIdSipTransport);
+begin
+  Self.TrySendACK(R);
+
+  inherited ChangeToTerminated(R, T);
+end;
+
 function TIdSipClientInviteTransaction.CreateACK(const R: TIdSipResponse): TIdSipRequest;
 var
   Routes: TIdSipHeadersFilter;
@@ -1367,6 +1377,7 @@ begin
     Result.SIPVersion      := Self.InitialRequest.SIPVersion;
     Result.CallID          := Self.InitialRequest.CallID;
     Result.From            := Self.InitialRequest.From;
+    Result.MaxForwards     := Result.DefaultMaxForwards;
     Result.ToHeader        := R.ToHeader;
     Result.Path.Add(Self.InitialRequest.LastHop);
     Result.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo;
