@@ -109,6 +109,7 @@ type
     RunningPort:    Cardinal;
     SendBuffer:     String;
     StopEvent:      TEvent;
+    Timer:          TIdTimerQueue;
     Transports:     TObjectList;
     UA:             TIdSipUserAgent;
     UDPByteCount:   Integer;
@@ -194,6 +195,8 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   Self.Transports := TObjectList.Create(true);
   Self.RTPProfile := TIdAudioVisualProfile.Create;
   Self.RunningPort := IdPORT_SIP;
@@ -232,12 +235,14 @@ begin
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
+  Self.Dispatch.Timer := Self.Timer;
 
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
   Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
+  Self.UA.Timer := Self.Timer;
   Self.UA.UserAgentName := '';
   Self.UA.AddModule(TIdSipRegisterModule);
 
@@ -285,6 +290,8 @@ begin
   Self.RTPProfile.Free;
 
   Self.Transports.Free;
+
+  Self.Timer.Terminate;
 
   inherited Destroy;
 end;
