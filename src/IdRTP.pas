@@ -1228,6 +1228,7 @@ const
   InterleavedT140MimeType     = AudioMediaType + '/' + T140Encoding;
   RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncoding;
   T140MimeType                = TextMediaType + '/' + T140Encoding;
+  T140RecommendedBufferTime   = 300;
 
 // From RFC 2833
 const
