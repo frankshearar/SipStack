@@ -18,6 +18,7 @@ type
     fCanBeEstablished:   Boolean;
     fID:                 TIdSipDialogID;
     fInitialRequest:     TIdSipRequest;
+    fInitialResponse:     TIdSipResponse;
     fIsSecure:           Boolean;
     fLocalSequenceNo:    Cardinal;
     fLocalURI:           TIdSipURI;
@@ -30,7 +31,9 @@ type
     LocalSequenceNoLock: TCriticalSection;
 
     function  GetIsEarly: Boolean;
-    procedure CreateInternal(DialogID: TIdSipDialogID;
+    procedure CreateInternal(Request: TIdSipRequest;
+                             Response: TIdSipResponse;
+                             DialogID: TIdSipDialogID;
                              LocalSequenceNo: Cardinal;
                              RemoteSequenceNo: Cardinal;
                              const LocalUri: String;
@@ -49,8 +52,9 @@ type
     procedure SetRemoteTarget(Value: TIdSipURI);
     procedure SetState(Value: TIdSipDialogState);
 
-    property CanBeEstablished: Boolean       read fCanBeEstablished;
-    property InitialRequest:   TIdSipRequest read fInitialRequest;
+    property CanBeEstablished: Boolean        read fCanBeEstablished;
+    property InitialRequest:   TIdSipRequest  read fInitialRequest;
+    property InitialResponse:  TIdSipResponse read fInitialResponse;
   public
     class function CreateInboundDialog(Request: TIdSipRequest;
                                        Response: TIdSipResponse;
@@ -59,7 +63,9 @@ type
                                         Response: TIdSipResponse;
                                         UsingSecureTransport: Boolean): TIdSipDialog;
 
-    constructor Create(DialogID: TIdSipDialogID;
+    constructor Create(Request: TIdSipRequest;
+                       Response: TIdSipResponse;
+                       DialogID: TIdSipDialogID;
                        LocalSequenceNo: Cardinal;
                        RemoteSequenceNo: Cardinal;
                        LocalUri,
@@ -67,7 +73,9 @@ type
                        RemoteTarget: TIdSipURI;
                        IsSecure: Boolean;
                        RouteSet: TIdSipHeaderList); overload;
-    constructor Create(DialogID: TIdSipDialogID;
+    constructor Create(Request: TIdSipRequest;
+                       Response: TIdSipResponse;
+                       DialogID: TIdSipDialogID;
                        LocalSequenceNo: Cardinal;
                        RemoteSequenceNo: Cardinal;
                        const LocalUri: String;
@@ -146,7 +154,9 @@ begin
                                 Response.ToHeader.Tag,
                                 Request.From.Tag);
     try
-      Result := TIdSipDialog.Create(ID,
+      Result := TIdSipDialog.Create(Request,
+                                    Response,
+                                    ID,
                                     0,
                                     Request.CSeq.SequenceNo,
                                     Request.ToHeader.Address,
@@ -179,7 +189,9 @@ begin
     try
       RouteSet.AddInReverseOrder(Response.RecordRoute);
 
-      Result := TIdSipDialog.Create(ID,
+      Result := TIdSipDialog.Create(Request,
+                                    Response,
+                                    ID,
                                     Request.CSeq.SequenceNo,
                                     0,
                                     Request.From.Address,
@@ -195,7 +207,9 @@ begin
   end;
 end;
 
-constructor TIdSipDialog.Create(DialogID: TIdSipDialogID;
+constructor TIdSipDialog.Create(Request: TIdSipRequest;
+                                Response: TIdSipResponse;
+                                DialogID: TIdSipDialogID;
                                 LocalSequenceNo: Cardinal;
                                 RemoteSequenceNo: Cardinal;
                                 LocalUri,
@@ -206,7 +220,9 @@ constructor TIdSipDialog.Create(DialogID: TIdSipDialogID;
 begin
   inherited Create;
 
-  Self.CreateInternal(DialogID,
+  Self.CreateInternal(Request,
+                      Response,
+                      DialogID,
                       LocalSequenceNo,
                       RemoteSequenceNo,
                       LocalUri.URI,
@@ -216,7 +232,9 @@ begin
                       RouteSet);
 end;
 
-constructor TIdSipDialog.Create(DialogID: TIdSipDialogID;
+constructor TIdSipDialog.Create(Request: TIdSipRequest;
+                                Response: TIdSipResponse;
+                                DialogID: TIdSipDialogID;
                                 LocalSequenceNo: Cardinal;
                                 RemoteSequenceNo: Cardinal;
                                 const LocalUri: String;
@@ -227,7 +245,9 @@ constructor TIdSipDialog.Create(DialogID: TIdSipDialogID;
 begin
   inherited Create;
 
-  Self.CreateInternal(DialogID,
+  Self.CreateInternal(Request,
+                      Response,
+                      DialogID,
                       LocalSequenceNo,
                       RemoteSequenceNo,
                       LocalUri,
@@ -241,7 +261,9 @@ constructor TIdSipDialog.Create(Dialog: TIdSipDialog);
 begin
   inherited Create;
 
-  Self.CreateInternal(Dialog.ID,
+  Self.CreateInternal(Dialog.InitialRequest,
+                      Dialog.InitialResponse,
+                      Dialog.ID,
                       Dialog.LocalSequenceNo,
                       Dialog.RemoteSequenceNo,
                       Dialog.LocalUri.URI,
@@ -259,6 +281,8 @@ begin
   Self.LocalUri.Free;
   Self.ID.Free;
   Self.LocalSequenceNoLock.Free;
+  Self.InitialResponse.Free;
+  Self.InitialRequest.Free;
 
   inherited Destroy;
 end;
@@ -279,6 +303,21 @@ begin
 
   Result.CSeq.Method     := MethodAck;
   Result.CSeq.SequenceNo := Self.LocalSequenceNo;
+
+  Result.AddHeader(Self.InitialRequest.LastHop);
+  // We create an ACK as an in-dialog request. Further, an ACK to a 2xx
+  // _cannot_ match a transaction since the 2xx _terminated_ the transaction.
+  // Therefore we use a completely new branch/transaction ID.
+  Result.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
+
+  if (Self.InitialRequest.ContentLength > 0) then begin
+    Result.ContentLength := Self.InitialRequest.ContentLength;
+    Result.Body          := Self.InitialRequest.Body;
+    Result.ContentType   := Self.InitialRequest.ContentType;
+
+    if Self.InitialRequest.HasHeader(ContentDispositionHeader) then
+      Result.ContentDisposition := Self.InitialRequest.ContentDisposition;
+  end;
 
   if Self.RouteSet.IsEmpty then begin
     Result.RequestUri := Self.RemoteTarget;
@@ -439,7 +478,9 @@ end;
 
 //* TIdSipDialog Private methods ***********************************************
 
-procedure TIdSipDialog.CreateInternal(DialogID: TIdSipDialogID;
+procedure TIdSipDialog.CreateInternal(Request: TIdSipRequest;
+                                      Response: TIdSipResponse;
+                                      DialogID: TIdSipDialogID;
                                       LocalSequenceNo: Cardinal;
                                       RemoteSequenceNo: Cardinal;
                                       const LocalUri: String;
@@ -448,6 +489,12 @@ procedure TIdSipDialog.CreateInternal(DialogID: TIdSipDialogID;
                                       IsSecure: Boolean;
                                       RouteSet: TIdSipHeaderList);
 begin
+  Self.fInitialRequest  := TIdSipRequest.Create;
+  Self.fInitialResponse := TIdSipResponse.Create;
+
+  Self.InitialRequest.Assign(Request);
+  Self.InitialResponse.Assign(Response);
+
   Self.LocalSequenceNoLock := TCriticalSection.Create;
 
   fID := TIdSipDialogID.Create(DialogID);
