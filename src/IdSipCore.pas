@@ -3636,30 +3636,37 @@ var
 begin
   Inc(Self.NonceCount);
   Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
-
-  ChallengeHeader := Self.AuthenticateHeader(Challenge);
-
-  ReAttempt := Self.CreateNewAttempt(Challenge);
   try
-    ReAttempt.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
+    ChallengeHeader := Self.AuthenticateHeader(Challenge);
 
-    Self.UA.Keyring.AddKey(ChallengeHeader, ReAttempt.RequestUri.AsString, Username, Password);
-    RealmInfo := Self.UA.Keyring.Find(ChallengeHeader.Realm,
-                                      ReAttempt.RequestUri.AsString);
-
-    AuthHeader := RealmInfo.CreateAuthorization(ChallengeHeader,
-                                                Self.Method,
-                                                Self.InitialRequest.Body);
+    ReAttempt := Self.CreateNewAttempt(Challenge);
     try
-      ReAttempt.AddHeader(AuthHeader);
-    finally
-      AuthHeader.Free;
-    end;
+      ReAttempt.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
 
-    Self.InitialRequest.Assign(ReAttempt);
-    Self.SendRequest(ReAttempt);
+      Self.UA.Keyring.AddKey(ChallengeHeader,
+                             ReAttempt.RequestUri.AsString,
+                             Username);
+      RealmInfo := Self.UA.Keyring.Find(ChallengeHeader.Realm,
+                                        ReAttempt.RequestUri.AsString);
+
+      AuthHeader := RealmInfo.CreateAuthorization(ChallengeHeader,
+                                                  Self.Method,
+                                                  Self.InitialRequest.Body,
+                                                  Password);
+      try
+        ReAttempt.AddHeader(AuthHeader);
+      finally
+        AuthHeader.Free;
+      end;
+
+      Self.InitialRequest.Assign(ReAttempt);
+      Self.SendRequest(ReAttempt);
+    finally
+      ReAttempt.Free;
+    end;
   finally
-    ReAttempt.Free;
+    // Clear the memory containing the password as a security measure.
+    FillChar(Password, Length(Password), 0);
   end;
 end;
 
