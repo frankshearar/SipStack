@@ -1937,7 +1937,8 @@ begin
     Result := 0;
 
     for I := 0 to Self.Actions.Count - 1 do
-      if (Self.ActionAt(I).Method = MethodName)
+      if not Self.ActionAt(I).IsSession
+        and (Self.ActionAt(I).Method = MethodName)
         and not Self.ActionAt(I).IsTerminated then Inc(Result);
   finally
     Self.ActionLock.Release;
