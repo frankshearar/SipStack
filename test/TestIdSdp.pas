@@ -5165,6 +5165,7 @@ var
 begin
   Host := '127.0.0.1';
   Port := 8000;
+  Self.Proc.AddDataListener(Self);
   Self.Proc.StartListening('v=0'#13#10
                          + 'o=wintermute 1 1 IN IP4 127.0.0.1'#13#10
                          + 's=-'#13#10
