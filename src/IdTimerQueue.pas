@@ -90,6 +90,9 @@ implementation
 uses
   IdGlobal, IdRTP, SysUtils;
 
+const
+  DefaultSleepTime = 10000;
+
 //******************************************************************************
 //* TIdWait                                                                    *
 //******************************************************************************
@@ -152,6 +155,8 @@ begin
   Self.EventList := TObjectList.Create(true);
   Self.Lock      := TCriticalSection.Create;
   Self.WaitEvent := TSimpleEvent.Create;
+
+  Self.FreeOnTerminate := true;
 
   inherited Create(ACreateSuspended);
 end;
@@ -222,10 +227,10 @@ end;
 
 procedure TIdTimerQueue.Run;
 begin
-  while not Self.Stopped do begin
+  while not Self.Terminated do begin
     Self.WaitEvent.WaitFor(Self.ShortestWait);
 
-    if not Self.Stopped then
+    if not Self.Terminated then
       Self.TriggerEarliestEvent;
   end;
 end;
@@ -294,7 +299,7 @@ begin
     Self.Lock.Release;
   end;
   Self.WaitEvent.SetEvent;
-end;  
+end;
 
 function TIdTimerQueue.ShortestWait: Cardinal;
 var
@@ -306,7 +311,7 @@ begin
     if Assigned(NextEvent) then
       Result := NextEvent.TimeToWait
     else
-      Result := 10000;
+      Result := DefaultSleepTime;
   finally
     Self.Lock.Release;
   end;
@@ -321,6 +326,7 @@ begin
     NextEvent := Self.EarliestEvent;
     if Assigned(NextEvent) and NextEvent.Due then begin
       NextEvent.Trigger;
+
       Self.EventList.Remove(NextEvent);
     end;
     

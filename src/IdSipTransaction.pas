@@ -1432,8 +1432,7 @@ end;
 
 destructor TIdSipServerInviteTransactionTimer.Destroy;
 begin
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
+  Self.Timer.Terminate;
 
   inherited Destroy;
 end;
@@ -1882,8 +1881,7 @@ end;
 
 destructor TIdSipClientInviteTransactionTimer.Destroy;
 begin
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
+  Self.Timer.Terminate;
 
   Self.Lock.Free;
 
@@ -2264,8 +2262,8 @@ end;
 
 destructor TIdSipClientNonInviteTransactionTimer.Destroy;
 begin
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
+  Self.Timer.Terminate;
+  
   Self.Lock.Free;
 
   inherited Destroy;

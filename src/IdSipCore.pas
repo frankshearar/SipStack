@@ -29,6 +29,11 @@ unit IdSipCore;
 //   certain situations where polymorphism can't cut it, the Visitor pattern.
 // * TObjectLists always manage the lifetime of the objects they contain. Except
 //   in the case of Transports in the Dispatcher.
+// * Threads belong to the process in which they run. It doesn't really make sense
+//   for us to refer to a class that instantiates a thread as the thread's owner,
+//   so
+//   (a) all threads should FreeOnTerminate, and
+//   (b) all classes that instantiate threads should not free the threads.
 
 interface
 

@@ -178,8 +178,7 @@ begin
   for I := Low(Self.Buttons) to High(Self.Buttons) do
     Self.Buttons[I].Free;
 
-  Self.Timer.TerminateAndWaitFor;
-  Self.Timer.Free;
+  Self.Timer.Terminate;
 
   inherited Destroy;
 end;

@@ -4595,7 +4595,7 @@ end;
 
 destructor TIdRTPSession.Destroy;
 begin
-  Self.Timer.Free;
+  Self.Timer.Terminate;
   Self.TransmissionLock.Free;
 
   Self.MemberLock.Acquire;
