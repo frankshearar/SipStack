@@ -237,8 +237,8 @@ type
   private
     ClientInviteTran: TIdSipClientInviteTransaction;
 
-    procedure CheckACK(Sender: TObject;
-                       R: TIdSipResponse);
+    procedure CheckACK(Ack: TIdSipRequest;
+                       Response: TIdSipResponse);
     procedure MoveToCompletedState(Tran: TIdSipTransaction);
     procedure MoveToProceedingState(Tran: TIdSipTransaction);
   protected
@@ -2746,20 +2746,16 @@ end;
 
 //* TestTIdSipClientInviteTransaction Private methods **************************
 
-procedure TestTIdSipClientInviteTransaction.CheckACK(Sender: TObject;
-                                                     R: TIdSipResponse);
-var
-  Ack: TIdSipRequest;
+procedure TestTIdSipClientInviteTransaction.CheckACK(Ack: TIdSipRequest;
+                                                     Response: TIdSipResponse);
 begin
-  Ack := Self.MockDispatcher.Transport.LastACK;
-
   CheckEquals(MethodAck,               Ack.Method,     'Method');
   CheckEquals(Self.Request.SipVersion, Ack.SipVersion, 'SIP-Version');
   CheckEquals(Self.Request.RequestUri, Ack.RequestUri, 'Request-URI');
   CheckEquals(Self.Request.CallID,     Ack.CallID,     'Call-ID');
   Check(Self.Request.From.Equals(Ack.From),
         'From');
-  Check(R.ToHeader.Equals(Ack.ToHeader),
+  Check(Response.ToHeader.Equals(Ack.ToHeader),
         'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
@@ -2767,7 +2763,7 @@ begin
         'Topmost Via');
 
   Check(Ack.HasHeader(MaxForwardsHeader),
-        'Max-Forwards header is mandatory');      
+        'Max-Forwards header is mandatory');
 
   CheckEquals(Self.Request.CSeq.SequenceNo,
               Ack.CSeq.SequenceNo,
@@ -2818,17 +2814,24 @@ end;
 //* TestTIdSipClientInviteTransaction Published methods ************************
 
 procedure TestTIdSipClientInviteTransaction.TestACK;
+var
+  AckCount: Cardinal;
 begin
   Self.Tran.InitialRequest.AddHeader(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
   Self.Tran.InitialRequest.AddHeader(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
+  AckCount := Self.MockDispatcher.Transport.ACKCount;
 
   Self.MoveToProceedingState(Self.Tran);
-  Self.CheckReceiveResponse := Self.CheckACK;
   Self.MoveToCompletedState(Self.Tran);
 
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
               'Sent ack');
+
+  Check(AckCount < Self.MockDispatcher.Transport.ACKCount,
+        'No ACK sent');
+  Self.CheckACK(Self.MockDispatcher.Transport.LastACK,
+                Self.Response);
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestInitialState;

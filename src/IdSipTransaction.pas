@@ -2004,9 +2004,11 @@ begin
   // to itsTerminated.
 
   Self.SetState(itsCompleted);
-  Self.TrySendACK(R);
+
   if FirstResponse then
     Self.NotifyOfResponse(R, T);
+
+  Self.TrySendACK(R);
 end;
 
 //* TIdSipClientInviteTransaction Private methods ******************************
