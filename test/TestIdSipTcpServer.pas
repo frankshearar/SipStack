@@ -79,8 +79,8 @@ type
     Client:                 TIdTcpClient;
     ClientReceivedResponse: Boolean;
     ConnectionDropped:      Boolean;
-    LocalAddressServer:     TIdSipTcpServer;
-    LocalHostServer:        TIdSipTcpServer;
+    HighPortServer:         TIdSipTcpServer;
+    LowPortServer:          TIdSipTcpServer;
     MethodCallCount:        Cardinal;
     Parser:                 TIdSipParser;
     ServerReceivedResponse: Boolean;
@@ -312,48 +312,48 @@ var
 begin
   inherited SetUp;
 
-  Self.Client             := TIdTcpClient.Create(nil);
-  Self.Parser             := TIdSipParser.Create;
-  Self.LocalAddressServer := Self.ServerType.Create(nil);
-  Self.LocalHostServer    := Self.ServerType.Create(nil);
-  Self.SipClient          := Self.SipClientType.Create(nil);
+  Self.Client         := TIdTcpClient.Create(nil);
+  Self.Parser         := TIdSipParser.Create;
+  Self.HighPortServer := Self.ServerType.Create(nil);
+  Self.LowPortServer  := Self.ServerType.Create(nil);
+  Self.SipClient      := Self.SipClientType.Create(nil);
 
   Self.Client.Host := LocalHost;
-  Self.Client.Port := LocalHostServer.DefaultPort;
+  Self.Client.Port := LowPortServer.DefaultPort;
 
   Self.ClientReceivedResponse := false;
   Self.ConnectionDropped      := false;
   Self.MethodCallCount        := 0;
   Self.ServerReceivedResponse := false;
 
-  LocalHostServer.Bindings.Clear;
-  Binding := LocalHostServer.Bindings.Add;
+  LowPortServer.Bindings.Clear;
+  Binding := LowPortServer.Bindings.Add;
   Binding.IP   := LocalHost;
   Binding.Port := IdPORT_SIP;
 
-  Self.LocalAddressServer.Bindings.Clear;
-  Binding := Self.LocalAddressServer.Bindings.Add;
+  Self.HighPortServer.Bindings.Clear;
+  Binding := Self.HighPortServer.Bindings.Add;
   Binding.IP   := GStack.LocalAddress;
-  Binding.Port := IdPORT_SIP;
+  Binding.Port := IdPORT_SIP + 10000;
 
-  Self.LocalHostServer.Active := true;
-  Self.LocalAddressServer.Active := true;
+  Self.LowPortServer.Active  := true;
+  Self.HighPortServer.Active := true;
 
-  Self.LocalHostServer.AddMessageListener(Self);
-  Self.LocalAddressServer.AddMessageListener(Self);
+  Self.LowPortServer.AddMessageListener(Self);
+  Self.HighPortServer.AddMessageListener(Self);
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
-  Self.LocalAddressServer.RemoveMessageListener(Self);
-  Self.LocalHostServer.RemoveMessageListener(Self);
+  Self.HighPortServer.RemoveMessageListener(Self);
+  Self.LowPortServer.RemoveMessageListener(Self);
 
-  Self.LocalAddressServer.Active := false;
-  Self.LocalHostServer.Active := false;
+  Self.HighPortServer.Active := false;
+  Self.LowPortServer.Active := false;
 
   Self.SipClient.Free;
-  Self.LocalHostServer.Free;
-  Self.LocalAddressServer.Free;
+  Self.LowPortServer.Free;
+  Self.HighPortServer.Free;
   Self.Parser.Free;
   Self.Client.Free;
 
@@ -682,7 +682,7 @@ begin
   Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
   try
     Response.StatusCode := SIPOK;
-    LocalHostServer.SendResponse(Response);
+    LowPortServer.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -692,7 +692,7 @@ end;
 
 procedure TestTIdSipTcpServer.TestAddMessageListener;
 begin
-  // SetUp already adds Self as a listener to LocalHostServer
+  // SetUp already adds Self as a listener to LowPortServer
   Self.CheckingRequestEvent := Self.AcknowledgeEvent;
 
   Self.Client.Connect(DefaultTimeout);
@@ -712,7 +712,7 @@ begin
   try
     SipClient.OnResponse := Self.CheckInternalServerError;
     SipClient.Host       := '127.0.0.1';
-    SipClient.Port       := LocalHostServer.DefaultPort;
+    SipClient.Port       := LowPortServer.DefaultPort;
     SipClient.Timeout    := 1000;
 
     SipClient.Connect;
@@ -746,8 +746,8 @@ begin
 
   Listener := TIdSipTestMessageListener.Create;
   try
-    Self.LocalHostServer.AddMessageListener(Listener);
-    Self.LocalHostServer.AddMessageListener(Self);
+    Self.LowPortServer.AddMessageListener(Listener);
+    Self.LowPortServer.AddMessageListener(Self);
 
     Self.Client.Connect(DefaultTimeout);
     Self.Client.Write(BasicRequest);
@@ -768,8 +768,8 @@ begin
 
   Listener := TIdSipTestMessageListener.Create;
   try
-    Self.LocalHostServer.AddMessageListener(Listener);
-    Self.LocalHostServer.AddMessageListener(Self);
+    Self.LowPortServer.AddMessageListener(Listener);
+    Self.LowPortServer.AddMessageListener(Self);
 
     Self.Client.Connect(DefaultTimeout);
     Self.Client.Write(BasicResponse);
@@ -875,8 +875,8 @@ end;
 
 procedure TestTIdSipTcpServer.TestRemoveMessageListener;
 begin
-//  Self.LocalAddressServer.AddMessageListener(Self);
-  Self.LocalAddressServer.RemoveMessageListener(Self);
+//  Self.HighPortServer.AddMessageListener(Self);
+  Self.HighPortServer.RemoveMessageListener(Self);
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(BasicRequest);
@@ -913,7 +913,7 @@ begin
     Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
     try
       Response.StatusCode := SIPOK;
-      Self.LocalHostServer.SendResponse(Response);
+      Self.LowPortServer.SendResponse(Response);
     finally
       Response.Free;
     end;
@@ -930,24 +930,28 @@ end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnectionReceivedParam;
 var
-  LocalAddressListener: TIdSipTestMessageListener;
-  LocalHostListener:    TIdSipTestMessageListener;
-  Request:              TIdSipRequest;
-  Response:             TIdSipResponse;
+  HighPortListener: TIdSipTestMessageListener;
+  LowPortListener:  TIdSipTestMessageListener;
+  Request:          TIdSipRequest;
+  Response:         TIdSipResponse;
 begin
-  LocalAddressListener := TIdSipTestMessageListener.Create;
+  Assert(Assigned(GStack) and (GStack.LocalAddress <> '127.0.0.1'),
+         'This test cannot work on a machine with only one network interface. '
+       + 'Please make sure it''s got a NIC and that NIC has an IP');
+
+  HighPortListener := TIdSipTestMessageListener.Create;
   try
-    LocalHostListener := TIdSipTestMessageListener.Create;
+    LowPortListener := TIdSipTestMessageListener.Create;
     try
-      Self.LocalAddressServer.AddMessageListener(LocalAddressListener);
+      Self.HighPortServer.AddMessageListener(HighPortListener);
       try
-        Self.LocalHostServer.AddMessageListener(LocalHostListener);
+        Self.LowPortServer.AddMessageListener(LowPortListener);
         try
           Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
           try
             Self.SipClient.OnResponse := Self.ClientOnResponseDownClosedConnection;
-            Self.SipClient.Host       := '127.0.0.1';
-            Self.SipClient.Port       := IdPORT_SIP;
+            Self.SipClient.Host       := Self.HighPortServer.Bindings[0].IP;
+            Self.SipClient.Port       := Self.HighPortServer.Bindings[0].Port;
             Self.SipClient.Timeout    := 100;
 
             Self.SipClient.Connect;
@@ -964,30 +968,31 @@ begin
 
             Response := Self.Parser.ParseAndMakeResponse(LocalLoopResponse);
             try
-              Response.LastHop.Received := GStack.LocalAddress;
+              Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
+              Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
               Response.StatusCode       := SIPOK;
-              Self.LocalHostServer.SendResponse(Response);
+              Self.LowPortServer.SendResponse(Response);
             finally
               Response.Free;
             end;
 
-            Check(LocalAddressListener.ReceivedResponse
-                  and not LocalHostListener.ReceivedResponse,
+            Check(HighPortListener.ReceivedResponse
+                  and not LowPortListener.ReceivedResponse,
                   'Wrong server received response');
           finally
             Request.Free;
           end;
         finally
-          Self.LocalHostServer.RemoveMessageListener(LocalHostListener);
+          Self.LowPortServer.RemoveMessageListener(LowPortListener);
         end;
       finally
-        Self.LocalAddressServer.RemoveMessageListener(LocalAddressListener);
+        Self.HighPortServer.RemoveMessageListener(HighPortListener);
       end;
     finally
-      LocalHostListener.Free;
+      LowPortListener.Free;
     end;
   finally
-    LocalAddressListener.Free;
+    HighPortListener.Free;
   end;
 end;
 
@@ -1029,8 +1034,8 @@ end;
 
 procedure TestTIdSipTcpServer.TestTortureTest16;
 begin
-  LocalHostServer.OnDisconnect := Self.OnServerDisconnect;
-  LocalHostServer.ReadBodyTimeout := 50;
+  LowPortServer.OnDisconnect := Self.OnServerDisconnect;
+  LowPortServer.ReadBodyTimeout := 50;
 
   Self.Client.Connect(DefaultTimeout);
 

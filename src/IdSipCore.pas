@@ -22,9 +22,9 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdRTP, IdRTPClient, IdRTPServer,
-  IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage, IdSipTransaction,
-  IdSipTransport, IdSocketHandle, IdUri, SyncObjs;
+  Classes, Contnrs, IdSipDialog, IdException, IdSipHeaders,
+  IdSipInterfacedObject, IdSipMessage, IdSipTransaction, IdSipTransport,
+  SyncObjs;
 
 type
   TIdSipSession = class;
@@ -56,6 +56,9 @@ type
     procedure OnNewSession(const Session: TIdSipSession);
   end;
 
+  // TODO: there's redundance with this Hostname, and the Hostnames of the
+  // transports attached to this core. It's not clear how to set up the
+  // hostnames and bindings of the stack.
   TIdSipAbstractCore = class(TIdSipInterfacedObject,
                              IIdSipUnhandledMessageListener)
   private
@@ -91,24 +94,25 @@ type
   // I am a User Agent. I (usually) represent a human being in the SIP network.
   // It is my responsibility to:
   // * inform any listeners when new sessions are established, modified or ended;
-  // * allow my users to accept incoming "calls", make outgoing "calls";
+  // * allow my users to make outgoing "calls";
   // * clean up Sessions that are established
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
-    BranchLock:           TCriticalSection;
-    fAllowedLanguageList: TStrings;
-    fAllowedMethodList:   TStrings;
-    fAllowedSchemeList:   TStrings;
-    fContact:             TIdSipContactHeader;
-    fFrom:                TIdSipFromHeader;
-    fLastBranch:          Cardinal;
-    fUserAgentName:       String;
-    ObserverLock:         TCriticalSection;
-    Observers:            TList;
-    SessionListenerLock:  TCriticalSection;
-    SessionListeners:     TList;
-    SessionLock:          TCriticalSection;
-    Sessions:             TObjectList;
+    BranchLock:              TCriticalSection;
+    fAllowedContentTypeList: TStrings;
+    fAllowedLanguageList:    TStrings;
+    fAllowedMethodList:      TStrings;
+    fAllowedSchemeList:      TStrings;
+    fContact:                TIdSipContactHeader;
+    fFrom:                   TIdSipFromHeader;
+    fLastBranch:             Cardinal;
+    fUserAgentName:          String;
+    ObserverLock:            TCriticalSection;
+    Observers:               TList;
+    SessionListenerLock:     TCriticalSection;
+    SessionListeners:        TList;
+    SessionLock:             TCriticalSection;
+    Sessions:                TObjectList;
 
     function  AddInboundSession(const Invite: TIdSipRequest;
                                 const Transaction: TIdSipTransaction;
@@ -144,18 +148,21 @@ type
     procedure SetContact(const Value: TIdSipContactHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
 
-    property AllowedLanguageList: TStrings read fAllowedLanguageList;
-    property AllowedMethodList:   TStrings read fAllowedMethodList;
-    property AllowedSchemeList:   TStrings read fAllowedSchemeList;
+    property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
+    property AllowedLanguageList:    TStrings read fAllowedLanguageList;
+    property AllowedMethodList:      TStrings read fAllowedMethodList;
+    property AllowedSchemeList:      TStrings read fAllowedSchemeList;
   public
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure AddAllowedContentType(const MimeType: String);
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
     procedure AddObserver(const Listener: IIdSipObserver);
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
+    function  AllowedContentTypes: String;
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
@@ -224,7 +231,6 @@ type
     IsInboundCall:       Boolean;
     OpenTransactionLock: TCriticalSection;
     OpenTransactions:    TList;
-    Processor:           TIdSipSdpPayloadProcessor;
     SessionListenerLock: TCriticalSection;
     SessionListeners:    TList;
 
@@ -235,7 +241,6 @@ type
     function  CreateOutboundDialog(const Response: TIdSipResponse;
                                    const Receiver: TIdSipTransport): TIdSipDialog;
     function  DialogEstablished: Boolean;
-    function  GetProfile: TIdRTPProfile;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEndedSession;
@@ -250,15 +255,12 @@ type
                                 const Transaction: TIdSipTransaction;
                                 const Receiver: TIdSipTransport);
     procedure OnTerminated(const Transaction: TIdSipTransaction);
-    procedure ProcessInviteBody(const Invite: TIdSipRequest;
-                                const Receiver: TIdSipTransport);
     procedure RejectRequest(const Request: TIdSipRequest;
                             const Transaction: TIdSipTransaction);
     procedure RemoveTransaction(const Transaction: TIdSipTransaction);
     procedure TerminateOpenTransaction(const Transaction: TIdSipTransaction);
 
     property Core:          TIdSipUserAgentCore read fCore;
-    property Invite:        TIdSipRequest       read fInvite;
     property IsEstablished: Boolean             read fIsEstablished write fIsEstablished;
   public
     constructor Create(const UA: TIdSipUserAgentCore); overload;
@@ -268,8 +270,7 @@ type
                        const Receiver: TIdSipTransport); overload;
     destructor  Destroy; override;
 
-    procedure AcceptCall;
-    procedure AddDataListener(const Listener: IIdSipDataListener);
+    procedure AcceptCall(const Offer, ContentType: String);
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
     procedure Call(const Dest: TIdSipToHeader;
@@ -279,12 +280,11 @@ type
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transaction: TIdSipTransaction;
                                const Receiver: TIdSipTransport);
-    procedure RemoveDataListener(const Listener: IIdSipDataListener);
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
     property Dialog:       TIdSipDialog  read fDialog;
+    property Invite:       TIdSipRequest read fInvite;
     property IsTerminated: Boolean       read fIsTerminated;
-    property Profile:      TIdRTPProfile read GetProfile;
   end;
 
   EIdSipBadSyntax = class(EIdException);
@@ -299,7 +299,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSimpleParser, IdSipConsts, IdSipDialogID,
+  IdGlobal, IdSdp, IdSimpleParser, IdSipConsts, IdSipDialogID,
   IdSipRandom, IdStack, SysUtils, IdUDPServer;
 
 //******************************************************************************
@@ -358,10 +358,12 @@ begin
   Self.Sessions            := TObjectList.Create;
 
   Self.ResetLastBranch;
-  Self.fAllowedLanguageList := TStringList.Create;
-  Self.fAllowedMethodList := TStringList.Create;
-  Self.fAllowedSchemeList := TStringList.Create;
+  Self.fAllowedContentTypeList := TStringList.Create;
+  Self.fAllowedLanguageList    := TStringList.Create;
+  Self.fAllowedMethodList      := TStringList.Create;
+  Self.fAllowedSchemeList      := TStringList.Create;
 
+  Self.AddAllowedContentType(SdpMimeType);
   Self.AddAllowedMethod(MethodBye);
   Self.AddAllowedMethod(MethodCancel);
   Self.AddAllowedMethod(MethodInvite);
@@ -378,6 +380,7 @@ begin
   Self.AllowedSchemeList.Free;
   Self.AllowedMethodList.Free;
   Self.AllowedLanguageList.Free;
+  Self.AllowedContentTypeList.Free;
   Self.Contact.Free;
   Self.From.Free;
   Self.Sessions.Free;
@@ -389,6 +392,14 @@ begin
   Self.BranchLock.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipUserAgentCore.AddAllowedContentType(const MimeType: String);
+begin
+  if (Trim(MimeType) <> '') then begin
+    if (Self.AllowedContentTypeList.IndexOf(MimeType) = -1) then
+      Self.AllowedContentTypeList.Add(MimeType);
+  end;
 end;
 
 procedure TIdSipUserAgentCore.AddAllowedLanguage(const LanguageID: String);
@@ -436,6 +447,11 @@ begin
   finally
     Self.SessionListenerLock.Release;
   end;
+end;
+
+function TIdSipUserAgentCore.AllowedContentTypes: String;
+begin
+  Result := Self.AllowedContentTypeList.CommaText;
 end;
 
 function TIdSipUserAgentCore.AllowedLanguages: String;
@@ -653,7 +669,7 @@ end;
 
 function TIdSipUserAgentCore.DefaultFrom: String;
 begin
-  Result := 'unknown <sip:unknown@' + Self.DefaultHostName + '>';
+  Result := 'unknown <sip:unknown@' + Self.HostName + '>';
 end;
 
 function TIdSipUserAgentCore.DefaultHostName: String;
@@ -733,7 +749,7 @@ begin
   else if Request.IsCancel then
     raise Exception.Create('Handling CANCELs not implemented yet');
 
-  // Generating the response - 8.2.6
+  // Generating the response - 8.2.6 - is handled by a TIdSipSession
 end;
 
 procedure TIdSipUserAgentCore.ReceiveResponse(const Response: TIdSipResponse;
@@ -757,7 +773,7 @@ end;
 function TIdSipUserAgentCore.HasUnknownContentType(const Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentTypeHeaderFull)
-       and (Request.FirstHeader(ContentTypeHeaderFull).Value <> SdpMimeType);
+       and (Self.AllowedContentTypeList.IndexOf(Request.FirstHeader(ContentTypeHeaderFull).Value) = -1);
 end;
 
 function TIdSipUserAgentCore.IsExtensionAllowed(const Extension: String): Boolean;
@@ -860,8 +876,8 @@ end;
 
 procedure TIdSipUserAgentCore.TerminateAllSessions;
 var
-  I: Integer;
   CopyOfSessions: TObjectList;
+  I:              Integer;
 begin
   CopyOfSessions := TObjectList.Create(false);
   try
@@ -931,7 +947,7 @@ end;
 function TIdSipUserAgentCore.FindSession(const Msg: TIdSipMessage): TIdSipSession;
 var
   DialogID: TIdSipDialogID;
-  I:           Integer;
+  I:        Integer;
 begin
   Result := nil;
   DialogID := TIdSipDialogID.Create(Msg.CallID,
@@ -1185,7 +1201,6 @@ begin
 
   Self.CreateInternal(UA);
   Self.Invite.Assign(Invite);
-  Self.ProcessInviteBody(Self.Invite, Receiver);
 
   Self.IsInboundCall    := true;
   Self.InitialTran      := InitialTransaction;
@@ -1199,8 +1214,6 @@ begin
   Self.SessionListeners.Free;
   Self.SessionListenerLock.Free;
 
-  Self.Processor.Free;
-
   Self.OpenTransactions.Free;
   Self.OpenTransactionLock.Free;
 
@@ -1209,18 +1222,23 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipSession.AcceptCall;
+procedure TIdSipSession.AcceptCall(const Offer, ContentType: String);
 var
+  HostName: String;
   Response: TIdSipResponse;
 begin
   if Self.IsInboundCall then begin
+    if Assigned(GStack) then
+      HostName := GStack.LocalAddress
+    else
+      HostName := 'localhost';
+
     Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
     try
-      Self.Processor.Username := Self.Core.Username;
-      Response.Body := Self.Processor.LocalSessionDescription;
+      Response.Body := Offer;
 
       Response.ContentLength := Length(Response.Body);
-      Response.ContentType   := SdpMimeType;
+      Response.ContentType   := ContentType;
       Response.ToHeader.Tag  := Self.Core.NextTag;
 
       if not Self.DialogEstablished then begin
@@ -1236,11 +1254,6 @@ begin
       Response.Free;
     end;
   end;
-end;
-
-procedure TIdSipSession.AddDataListener(const Listener: IIdSipDataListener);
-begin
-  Self.Processor.AddDataListener(Listener);
 end;
 
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
@@ -1326,11 +1339,6 @@ begin
   end;
 end;
 
-procedure TIdSipSession.RemoveDataListener(const Listener: IIdSipDataListener);
-begin
-  Self.Processor.RemoveDataListener(Listener);
-end;
-
 procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
 begin
   Self.SessionListenerLock.Acquire;
@@ -1370,15 +1378,13 @@ end;
 
 procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore);
 begin
-  Self.fCore         := UA;
+  Self.fCore := UA;
 
   Self.fInvite       := TIdSipRequest.Create;
   Self.IsEstablished := false;
 
   Self.OpenTransactionLock := TCriticalSection.Create;
   Self.OpenTransactions    := TList.Create;
-
-  Self.Processor := TIdSipSdpPayloadProcessor.Create;
 
   Self.SessionListenerLock := TCriticalSection.Create;
   Self.SessionListeners    := TList.Create;
@@ -1451,11 +1457,6 @@ end;
 function TIdSipSession.DialogEstablished: Boolean;
 begin
   Result := Assigned(Self.fDialog);
-end;
-
-function TIdSipSession.GetProfile: TIdRTPProfile;
-begin
-  Result := Self.Processor.Profile;
 end;
 
 procedure TIdSipSession.MarkAsTerminated;
@@ -1543,14 +1544,6 @@ begin
 
   if Self.IsTerminated then
     Self.NotifyOfEndedSession;
-end;
-
-procedure TIdSipSession.ProcessInviteBody(const Invite: TIdSipRequest;
-                                          const Receiver: TIdSipTransport);
-begin
-  if (Invite.ContentType = SdpMimeType) then begin
-    Self.Processor.Process(Invite.Body);
-  end;
 end;
 
 procedure TIdSipSession.RejectRequest(const Request: TIdSipRequest;

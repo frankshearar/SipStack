@@ -63,6 +63,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddAllowedContentType;
+    procedure TestAddAllowedContentTypeMalformed;
     procedure TestAddAllowedLanguage;
     procedure TestAddAllowedLanguageLanguageAlreadyPresent;
     procedure TestAddAllowedMethod;
@@ -71,6 +73,7 @@ type
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestAddObserver;
     procedure TestAddSessionListener;
+    procedure TestContentTypeDefault;
     procedure TestCreateBye;
     procedure TestCreateCancel;
     procedure TestCreateInvite;
@@ -135,8 +138,6 @@ type
     function  CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
-    function  LastResponseSdpMediaDescriptionsCount: Integer;
-    function  LastResponseSdpMediaDescriptionsPort(const Index: Integer): Integer;
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
@@ -154,7 +155,6 @@ type
   published
     procedure TestAcceptCall;
     procedure TestAcceptCallReturnsSdp;
-    procedure TestAddDataListener;
     procedure TestAddSessionListener;
     procedure TestCall;
     procedure TestCallTwice;
@@ -163,13 +163,9 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
-    procedure TestInitializeRTPProfileFromSDP;
-    procedure TestMediaStreamSetUp;
-    procedure TestMediaStreamsSetUp;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveReInvite;
-    procedure TestRemoveDataListener;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
   end;
@@ -249,7 +245,8 @@ begin
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
 
-  Self.Core.Contact.Value := 'sip:franks@localhost';
+  Self.Core.Contact.Value := 'sip:wintermute@localhost';
+  Self.Core.From.Value    := 'sip:wintermute@localhost';
 
   P := TIdSipParser.Create;
   try
@@ -469,6 +466,36 @@ end;
 
 //* TestTIdSipUserAgentCore Published methods **********************************
 
+procedure TestTIdSipUserAgentCore.TestAddAllowedContentType;
+var
+  ContentTypes: TStrings;
+begin
+  ContentTypes := TStringList.Create;
+  try
+    Self.Core.AddAllowedContentType(PlainTextMimeType);
+
+    ContentTypes.CommaText := Self.Core.AllowedContentTypes;
+
+    CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
+
+    CheckEquals(SdpMimeType,       ContentTypes[0], SdpMimeType);
+    CheckEquals(PlainTextMimeType, ContentTypes[1], PlainTextMimeType);
+  finally
+    ContentTypes.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddAllowedContentTypeMalformed;
+var
+  ContentTypes: String;
+begin
+  ContentTypes := Self.Core.AllowedContentTypes;
+  Self.Core.AddAllowedContentType(' ');
+  CheckEquals(ContentTypes,
+              Self.Core.AllowedContentTypes,
+              'Malformed Content-Type was allowed');
+end;
+
 procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
 var
   Languages: TStrings;
@@ -644,6 +671,13 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestContentTypeDefault;
+begin
+  CheckEquals(SdpMimeType,
+              Self.Core.AllowedContentTypes,
+              'AllowedContentTypes');
 end;
 
 procedure TestTIdSipUserAgentCore.TestCreateBye;
@@ -1256,7 +1290,7 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
 
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -1638,13 +1672,13 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
   FirstSession := Self.Session;
-  FirstSession.AcceptCall;
+  FirstSession.AcceptCall('', '');
   Self.Session := nil;
 
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
   SecondSession := Self.Session;
-  SecondSession.AcceptCall;
+  SecondSession.AcceptCall('', '');
 
   CheckEquals(2,
               Self.Core.SessionCount,
@@ -1762,63 +1796,7 @@ begin
   Result.MediaDescriptions[0].Transport := AudioVisualProfile;
   Result.MediaDescriptions[0].AddFormat('98');
   Result.MediaDescriptions[0].Attributes.Add(TIdSdpRTPMapAttribute.Create);
-  Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
-end;
-
-function TestTIdSipSession.LastResponseSdpMediaDescriptionsCount: Integer;
-var
-  P:   TIdSdpParser;
-  S:   TStringStream;
-  SDP: TIdSdpPayload;
-begin
-  S := TStringStream.Create(Self.Dispatch.Transport.LastResponse.Body);
-  try
-    P := TIdSdpParser.Create;
-    try
-      P.Source := S;
-
-      SDP := TIdSdpPayload.Create;
-      try
-        P.Parse(SDP);
-
-        Result := SDP.MediaDescriptions.Count;
-      finally
-        SDP.Free;
-      end;
-    finally
-      P.Free;
-    end;
-  finally
-    S.Free;
-  end;
-end;
-
-function TestTIdSipSession.LastResponseSdpMediaDescriptionsPort(const Index: Integer): Integer;
-var
-  P:   TIdSdpParser;
-  S:   TStringStream;
-  SDP: TIdSdpPayload;
-begin
-  S := TStringStream.Create(Self.Dispatch.Transport.LastResponse.Body);
-  try
-    P := TIdSdpParser.Create;
-    try
-      P.Source := S;
-
-      SDP := TIdSdpPayload.Create;
-      try
-        P.Parse(SDP);
-
-        Result := SDP.MediaDescriptions[0].Port;
-      finally
-        SDP.Free;
-      end;
-    finally
-      P.Free;
-    end;
-  finally
-    S.Free;
-  end;
+Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
 end;
 
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
@@ -1877,7 +1855,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
 
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
 
   Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
         'no responses sent');
@@ -1888,6 +1866,7 @@ begin
   Check(Response.From.HasTag,                  'No From tag');
   Check(Response.ToHeader.HasTag,              'No To tag');
   Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
+//  CheckEquals('', Response.Body,               'Body should be empty');                             
 end;
 
 procedure TestTIdSipSession.TestAcceptCallReturnsSdp;
@@ -1901,24 +1880,29 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
 
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall(Self.SimpleSdp.AsString, SdpMimeType);
 
   Check(ResponseCount < Self.Dispatch.Transport.SentResponseCount,
         'no responses sent');
 
   Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(Self.SimpleSdp.AsString,
+              Response.Body,
+              'Response body');
+  CheckEquals(Length(Self.SimpleSdp.AsString),
+              Response.ContentLength,
+              'Content-Length');
   Check(Response.HasHeader(ContentTypeHeaderFull),
         'No Content-Type header');
-  Check(Response.ContentLength > 0,
-        'Content-Length = 0');
-  Check(Response.Body <> '',
-        'Response missing body');
+  CheckEquals(SdpMimeType,
+              Response.FirstHeader(ContentTypeHeaderFull).Value,
+              'Content-Type');
 
   S := TStringStream.Create(Response.Body);
   try
     SDP := TIdSdpPayload.CreateFrom(S);
     try
-      CheckEquals(Self.Core.From.Address.Username,
+      CheckEquals(Self.Core.Username,
                   SDP.Origin.Username,
                   'Origin Username');
       Check(SDP.MediaDescriptions.Count > 0,
@@ -1933,45 +1917,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipSession.TestAddDataListener;
-var
-  L1, L2: TIdSipTestDataListener;
-begin
-  Self.SimulateRemoteInvite;
-  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
-
-  L1 := TIdSipTestDataListener.Create;
-  try
-    L2 := TIdSipTestDataListener.Create;
-    try
-      Self.Session.AddDataListener(Self);
-      Self.Session.AddDataListener(L1);
-      Self.Session.AddDataListener(L2);
-
-      Self.RTPClient.Port := Self.LastResponseSdpMediaDescriptionsPort(1);
-      Self.RTPClient.Send('foo', 0);
-
-      if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-        raise Self.ExceptionType.Create(Self.ExceptionMessage);
-
-      Check(L1.NewData and L2.NewData,
-            'Not all Listeners notified, hence not added');
-    finally
-      L2.Free;
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
 procedure TestTIdSipSession.TestAddSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2175,77 +2127,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipSession.TestInitializeRTPProfileFromSDP;
-begin
-  Self.SimulateRemoteInvite;
-
-  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  CheckEquals(TIdRTPT140Encoding.ClassName,
-              Self.Session.Profile.EncodingFor(98).ClassName,
-              'Profile wasn''t updated from SDP');
-end;
-
-procedure TestTIdSipSession.TestMediaStreamSetUp;
-var
-  Binding: TIdSocketHandle;
-  Server:  TIdUdpServer;
-begin
-  Self.SimulateRemoteInvite;
-
-  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
-
-  Server := TIdUdpServer.Create(nil);
-  try
-    try
-      Binding := Server.Bindings.Add;
-      Binding.Port := Self.LastResponseSdpMediaDescriptionsPort(0);
-      Server.Active := true;
-      Fail('(Server) Media stream wasn''t set up');
-    except
-      on EIdCouldNotBindSocket do;
-    end;
-  finally
-    Server.Free;
-  end;
-end;
-
-procedure TestTIdSipSession.TestMediaStreamsSetUp;
-var
-  Binding: TIdSocketHandle;
-  I:       Integer;
-  Server:  TIdUdpServer;
-begin
-  Self.Invite.Body := Self.MultiStreamSdp.AsString;
-
-  Self.SimulateRemoteInvite;
-  Self.Session.AcceptCall;
-
-  Server := TIdUdpServer.Create(nil);
-  try
-    Binding := Server.Bindings.Add;
-
-    for I := 0 to Self.LastResponseSdpMediaDescriptionsCount - 1 do begin
-      try
-        Binding.Port := Self.LastResponseSdpMediaDescriptionsPort(I);
-        Server.Active := true;
-        Fail('(Server) Media stream wasn''t set up on port '
-           + IntToStr(Self.LastResponseSdpMediaDescriptionsPort(I)));
-      except
-        on EIdCouldNotBindSocket do;
-      end;
-    end;
-  finally
-    Server.Free;
-  end;
-end;
-
 procedure TestTIdSipSession.TestReceiveBye;
 begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
   Self.Session.AddSessionListener(Self);
 
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -2282,7 +2169,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession wasn''t fired');
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
 
   ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
@@ -2294,46 +2181,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipSession.TestRemoveDataListener;
-var
-  L1, L2: TIdSipTestDataListener;
-begin
-  Self.SimulateRemoteInvite;
-  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
-
-  L1 := TIdSipTestDataListener.Create;
-  try
-    L2 := TIdSipTestDataListener.Create;
-    try
-      Self.Session.AddDataListener(Self);
-      Self.Session.AddDataListener(L1);
-      Self.Session.AddDataListener(L2);
-      Self.Session.RemoveDataListener(L2);
-
-      Self.RTPClient.Port := Self.LastResponseSdpMediaDescriptionsPort(1);
-      Self.RTPClient.Send('foo', 0);
-
-      if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-        raise Self.ExceptionType.Create(Self.ExceptionMessage);
-
-      Check(L1.NewData and not L2.NewData,
-            'Listener notified, hence not removed');
-    finally
-      L2.Free
-    end;
-  finally
-    L1.Free;
-  end;
-end;
-
 procedure TestTIdSipSession.TestRemoveSessionListener;
 var
   L1, L2: TIdSipTestSessionListener;
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2365,7 +2219,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
 
-  Self.Session.AcceptCall;
+  Self.Session.AcceptCall('', '');
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,

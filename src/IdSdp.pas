@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdRTP,
-  IdRTPServer, IdSimpleParser, IdSocketHandle, IdURI, SyncObjs;
+  IdRTPServer, IdSimpleParser, IdSocketHandle, IdUDPServer, IdURI, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
@@ -398,11 +398,12 @@ type
     procedure OnNewUdpData(const Data: TStream);
   end;
 
-  TIdSipSdpPayloadProcessor = class(TObject)
+  TIdSdpPayloadProcessor = class(TObject)
   private
     DataListeners:    TList;
     DataListenerLock: TCriticalSection;
     fBasePort:        Integer;
+    fHost:            String;
     fUsername:        String;
     fProfile:         TIdRTPProfile;
     RTPClients:       TObjectList;
@@ -420,6 +421,7 @@ type
     procedure OnReceiveUDP(Sender: TObject;
                            AData: TStream;
                            ABinding: TIdSocketHandle);
+    function  RTCPAt(const Index: Integer): TIdUDPServer;
     function  ServerAt(const Index: Integer): TIdRTPServer;
     procedure SetUpMediaStreams(const RemoteDescription: TIdSdpPayload);
     procedure SetUpSingleStream(const Address: String;
@@ -430,12 +432,16 @@ type
 
     procedure AddDataListener(const Listener: IIdSipDataListener);
     function  DefaultBasePort: Integer;
+    function  DefaultHost: String;
     function  DefaultUsername: String;
+    function  MediaType: String;
     procedure Process(const RemoteSessionDescription: String);
     function  LocalSessionDescription: String;
     procedure RemoveDataListener(const Listener: IIdSipDataListener);
+    procedure StopListening;
 
     property BasePort: Integer       read fBasePort write fBasePort;
+    property Host:     String        read fHost write fHost;
     property Profile:  TIdRTPProfile read fProfile;
     property Username: String        read fUsername write fUsername;
   end;
@@ -464,15 +470,16 @@ const
 
   // MIME types etc
 const
-  SdpMimeType = 'application/sdp';  
+  PlainTextMimeType = 'text/plain';
+  SdpMimeType       = 'application/sdp';  
 
 // for IdAssignedNumbers
 const
   // IANA assigned bwtype
-  Id_SDP_ConferenceTotal = 'CT';
+  Id_SDP_ConferenceTotal     = 'CT';
   Id_SDP_ApplicationSpecific = 'AS';
-  Id_SDP_RS = 'RS';
-  Id_SDP_RR = 'RR';
+  Id_SDP_RS                  = 'RS';
+  Id_SDP_RR                  = 'RR';
   // IANA assigned nettype
   Id_SDP_IN = 'IN';
   // IANA assigned addrtype
@@ -527,7 +534,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdGlobal, IdRTPClient, IdUDPServer, SysUtils;
+  IdGlobal, IdRTPClient, SysUtils;
 
 //******************************************************************************
 //* Unit public functions and procedures                                       *
@@ -1774,19 +1781,24 @@ var
 begin
   Self.AssertHeaderOrder;
   Self.ParseHeader(Name, Value);
+  OriginalValue := Value;
 
   BW := TIdSdpBandwidth.Create;
   try
     Token := Fetch(Value, ':');
 
     if not Self.IsBandwidthType(Token) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
+      raise EParser.Create(Format(MalformedToken, [RSSDPBandwidthName, OriginalValue]));
 
     BW.BandwidthType := StrToBandwidthType(Token);
 
-    if not Self.IsNumber(Value) then
-      raise EParser.Create(Format(MalformedToken, [RSSDPConnectionName, OriginalValue]));
-    BW.Bandwidth := StrToInt(Value);
+    // We should just be able to take the rest of the string. However, as of
+    // this change, there's at least one SIP stack that uses a space in the
+    // bandwidth. Bastards.
+    Token := Fetch(Value, ' ');
+    if not Self.IsNumber(Token) then
+      raise EParser.Create(Format(MalformedToken, [RSSDPBandwidthName, OriginalValue]));
+    BW.Bandwidth := StrToInt(Token);
 
     Bandwidths.Add(BW);
   except
@@ -2290,11 +2302,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipSdpPayloadProcessor                                                  *
+//* TIdSdpPayloadProcessor                                                     *
 //******************************************************************************
-//* TIdSipSdpPayloadProcessor Public methods ***********************************
+//* TIdSdpPayloadProcessor Public methods **************************************
 
-constructor TIdSipSdpPayloadProcessor.Create;
+constructor TIdSdpPayloadProcessor.Create;
 begin
   Self.BasePort := Self.DefaultBasePort;
   Self.Username := Self.DefaultUsername;
@@ -2310,7 +2322,7 @@ begin
   Self.fProfile := TIdAudioVisualProfile.Create;
 end;
 
-destructor TIdSipSdpPayloadProcessor.Destroy;
+destructor TIdSdpPayloadProcessor.Destroy;
 begin
   Self.Profile.Free;
 
@@ -2325,7 +2337,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipSdpPayloadProcessor.AddDataListener(const Listener: IIdSipDataListener);
+procedure TIdSdpPayloadProcessor.AddDataListener(const Listener: IIdSipDataListener);
 begin
   Self.DataListenerLock.Acquire;
   try
@@ -2335,21 +2347,33 @@ begin
   end;
 end;
 
-function TIdSipSdpPayloadProcessor.DefaultBasePort: Integer;
+function TIdSdpPayloadProcessor.DefaultBasePort: Integer;
 begin
   Result := 8000;
 end;
 
-function TIdSipSdpPayloadProcessor.DefaultUsername: String;
+function TIdSdpPayloadProcessor.DefaultHost: String;
+begin
+  Result := 'localhost';
+end;
+
+function TIdSdpPayloadProcessor.DefaultUsername: String;
 begin
   Result := 'unknown';
 end;
 
-procedure TIdSipSdpPayloadProcessor.Process(const RemoteSessionDescription: String);
+function TIdSdpPayloadProcessor.MediaType: String;
+begin
+  Result := SdpMimeType;
+end;
+
+procedure TIdSdpPayloadProcessor.Process(const RemoteSessionDescription: String);
 var
   S:   TStringStream;
   SDP: TIdSdpPayload;
 begin
+  Self.StopListening;
+  
   S := TStringStream.Create(RemoteSessionDescription);
   try
     SDP := TIdSdpPayload.CreateFrom(S);
@@ -2364,14 +2388,14 @@ begin
   end;
 end;
 
-function TIdSipSdpPayloadProcessor.LocalSessionDescription: String;
+function TIdSdpPayloadProcessor.LocalSessionDescription: String;
 var
   I: Integer;
 begin
   Result := 'v=0'#13#10
-          + 'o=unknown 1 1 IN IP4 wsfrank'#13#10
+          + 'o=' + Self.Username + ' 1 1 IN IP4 ' + Self.Host + #13#10
           + 's=-'#13#10
-          + 'c=IN IP4 wsfrank'#13#10;
+          + 'c=IN IP4 ' + Self.Host + #13#10;
 
   Self.RTPLock.Acquire;
   try
@@ -2390,7 +2414,7 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.RemoveDataListener(const Listener: IIdSipDataListener);
+procedure TIdSdpPayloadProcessor.RemoveDataListener(const Listener: IIdSipDataListener);
 begin
   Self.DataListenerLock.Acquire;
   try
@@ -2400,9 +2424,24 @@ begin
   end;
 end;
 
-//* TIdSipSdpPayloadProcessor Public methods ***********************************
+procedure TIdSdpPayloadProcessor.StopListening;
+var
+  I: Integer;
+begin
+  Self.RTPLock.Acquire;
+  try
+    for I := 0 to Self.RTPServers.Count - 1 do begin
+      Self.ServerAt(I).Active := false;
+      Self.RTCPAt(I).Active   := false;
+    end;
+  finally
+    Self.RTPLock.Release;
+  end;
+end;
 
-procedure TIdSipSdpPayloadProcessor.ActivateServerOnFreePort(const Server: TIdRTPServer);
+//* TIdSdpPayloadProcessor Public methods **************************************
+
+procedure TIdSdpPayloadProcessor.ActivateServerOnFreePort(const Server: TIdRTPServer);
 var
   Binding:  TIdSocketHandle;
   Bound:    Boolean;
@@ -2427,7 +2466,7 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.AddRTCPServer(const RTP: TIdRTPServer);
+procedure TIdSdpPayloadProcessor.AddRTCPServer(const RTP: TIdRTPServer);
 var
   NewRTCPServer: TIdUDPServer;
   I:             Integer;
@@ -2450,7 +2489,7 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.NotifyOfNewData(Data: TStream);
+procedure TIdSdpPayloadProcessor.NotifyOfNewData(Data: TStream);
 var
   I: Integer;
 begin
@@ -2463,7 +2502,7 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.NotifyOfNewUdpData(Data: TStream);
+procedure TIdSdpPayloadProcessor.NotifyOfNewUdpData(Data: TStream);
 var
   I: Integer;
 begin
@@ -2476,7 +2515,7 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.OnReceiveRTP(Sender: TObject;
+procedure TIdSdpPayloadProcessor.OnReceiveRTP(Sender: TObject;
                                                  APacket: TIdRTPPacket;
                                                  ABinding: TIdSocketHandle);
 var
@@ -2491,19 +2530,24 @@ begin
   end;
 end;
 
-procedure TIdSipSdpPayloadProcessor.OnReceiveUDP(Sender: TObject;
+procedure TIdSdpPayloadProcessor.OnReceiveUDP(Sender: TObject;
                                                  AData: TStream;
                                                  ABinding: TIdSocketHandle);
 begin
   Self.NotifyOfNewUdpData(AData);
 end;
 
-function TIdSipSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
+function TIdSdpPayloadProcessor.RTCPAt(const Index: Integer): TIdUDPServer;
+begin
+  Result := Self.RTPServers[Index] as TIdUDPServer;
+end;
+
+function TIdSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
 begin
   Result := Self.RTPServers[Index] as TIdRTPServer;
 end;
 
-procedure TIdSipSdpPayloadProcessor.SetUpMediaStreams(const RemoteDescription: TIdSdpPayload);
+procedure TIdSdpPayloadProcessor.SetUpMediaStreams(const RemoteDescription: TIdSdpPayload);
 var
   I: Integer;
 begin
@@ -2512,7 +2556,7 @@ begin
                            RemoteDescription.MediaDescriptions[I].Port);
 end;
 
-procedure TIdSipSdpPayloadProcessor.SetUpSingleStream(const Address: String;
+procedure TIdSdpPayloadProcessor.SetUpSingleStream(const Address: String;
                                                       const Port: Cardinal);
 var
   NewClient: TIdRTPClient;

@@ -17,6 +17,7 @@ type
     procedure TestReadCardinal;
     procedure TestReadRemainderOfStream;
     procedure TestReadRemainderOfStreamLong;
+    procedure TestReadString;
     procedure TestReadWord;
     procedure TestWriteCardinal;
     procedure TestWriteWord;
@@ -32,19 +33,40 @@ type
     procedure TestAsString;
     procedure TestCreate;
     procedure TestCreateEncoding;
+    procedure TestCreateEncodingT140;
+    procedure TestCreateEncodingTelephoneEvent;
     procedure TestCreateFromEncoding;
     procedure TestClone;
     procedure TestIsNull;
   end;
 
-  TestTIdRTPT140Encoding = class(TTestCase)
+  TTestCaseEncoding = class(TTestCase)
   private
-    Encoding: TIdRTPT140Encoding;
+    Encoding: TIdRTPEncoding;
+
+    function EncodingType: TIdRTPEncodingClass; virtual; abstract;
+    function EncodingName: String; virtual; abstract;
+    function EncodingClockRate: Cardinal; virtual;
+    function EncodingParameters: String; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestClone;
+    procedure TestCreatePayload;
+  end;
+
+  TestTIdRTPT140Encoding = class(TTestCaseEncoding)
+  private
+    function EncodingType: TIdRTPEncodingClass; override;
+    function EncodingName: String; override;
+    function EncodingClockRate: Cardinal; override;
+  end;
+
+  TestTIdRTPTelephoneEventEncoding = class(TTestCaseEncoding)
+  private
+    function EncodingType: TIdRTPEncodingClass; override;
+    function EncodingName: String; override;
   end;
 
   TestTIdRTPNullEncoding = class(TTestCase)
@@ -70,6 +92,20 @@ type
   published
     procedure TestReadFrom;
     procedure TestPrintOn;
+  end;
+
+  TestTIdTelephoneEventPayload = class(TTestCase)
+  private
+    Packet: TIdTelephoneEventPayload;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestReadFromDuration;
+    procedure TestReadFromEvent;
+    procedure TestReadFromIsEnd;
+    procedure TestReadFromReservedBit;
+    procedure TestReadFromVolume;
   end;
 
   TestTIdRTPProfile = class(TTestCase)
@@ -176,6 +212,9 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
+  Result.AddTest(TestTIdRTPT140Encoding.Suite);
+  Result.AddTest(TestTIdRTPTelephoneEventEncoding.Suite);
+  Result.AddTest(TestTIdTelephoneEventPayload.Suite);
   Result.AddTest(TestTIdT140Payload.Suite);
   Result.AddTest(TestTIdRTPProfile.Suite);
   Result.AddTest(TestTIdAudioVisualProfile.Suite);
@@ -315,6 +354,24 @@ begin
   end;
 end;
 
+procedure TestFunctions.TestReadString;
+var
+  S:   String;
+  Src: TStringStream;
+begin
+  Src := TStringStream.Create('onetwothree');
+  try
+    S := ReadString(Src, 3);
+    CheckEquals('one', S, 'First read');
+    S := ReadString(Src, 3);
+    CheckEquals('two', S, 'Second read');
+    S := ReadString(Src, 1000);
+    CheckEquals('three', S, 'Third read');
+  finally
+    Src.Free;
+  end;
+end;
+
 procedure TestFunctions.TestReadWord;
 var
   S: TStringStream;
@@ -408,6 +465,23 @@ procedure TestTIdRTPEncoding.TestCreateEncoding;
 var
   Enc: TIdRTPEncoding;
 begin
+  Enc := TIdRTPEncoding.CreateEncoding('1015/8000/1');
+  try
+    CheckEquals(TIdRTPEncoding.ClassName,
+                Enc.ClassName,
+                'Encoding type');
+    CheckEquals('1015', Enc.Name,       'Name');
+    CheckEquals(8000,   Enc.ClockRate,  'Clock rate');
+    CheckEquals('1',    Enc.Parameters, 'Parameters');
+  finally
+    Enc.Free;
+  end;
+end;
+
+procedure TestTIdRTPEncoding.TestCreateEncodingT140;
+var
+  Enc: TIdRTPEncoding;
+begin
   Enc := TIdRTPEncoding.CreateEncoding('t140/1000/1');
   try
     CheckEquals(TIdRTPT140Encoding.ClassName,
@@ -416,6 +490,23 @@ begin
     CheckEquals(T140Encoding,  Enc.Name,       'Name');
     CheckEquals(T140ClockRate, Enc.ClockRate,  'Clock rate');
     CheckEquals('1',           Enc.Parameters, 'Parameters');
+  finally
+    Enc.Free;
+  end;
+end;
+
+procedure TestTIdRTPEncoding.TestCreateEncodingTelephoneEvent;
+var
+  Enc: TIdRTPEncoding;
+begin
+  Enc := TIdRTPEncoding.CreateEncoding('telephone-event/8000');
+  try
+    CheckEquals(TIdRTPTelephoneEventEncoding.ClassName,
+                Enc.ClassName,
+                'Encoding type');
+    CheckEquals(TelephoneEventEncoding, Enc.Name,       'Name');
+    CheckEquals(8000,                   Enc.ClockRate,  'Clock rate');
+    CheckEquals('',                     Enc.Parameters, 'Parameters');
   finally
     Enc.Free;
   end;
@@ -453,32 +544,47 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPT140Encoding                                                     *
+//* TTestCaseEncoding                                                          *
 //******************************************************************************
-//* TestTIdRTPT140Encoding Public methods **************************************
-//* TestTIdRTPT140Encoding Published methods ***********************************
+//* TTestCaseEncoding Public methods *******************************************
 
-procedure TestTIdRTPT140Encoding.SetUp;
+procedure TTestCaseEncoding.SetUp;
 begin
   inherited SetUp;
 
-  Self.Encoding := TIdRTPT140Encoding.Create(T140Encoding, T140ClockRate, '');
+  Self.Encoding := Self.EncodingType.Create(Self.EncodingName,
+                                            Self.EncodingClockRate,
+                                            Self.EncodingParameters);
 end;
 
-procedure TestTIdRTPT140Encoding.TearDown;
+procedure TTestCaseEncoding.TearDown;
 begin
   Self.Encoding.Free;
 
   inherited TearDown;
 end;
 
-procedure TestTIdRTPT140Encoding.TestClone;
+//* TTestCaseEncoding Public methods *******************************************
+
+function TTestCaseEncoding.EncodingClockRate: Cardinal;
+begin
+  Result := 8000;
+end;
+
+function TTestCaseEncoding.EncodingParameters: String;
+begin
+  Result := '';
+end;
+
+//* TTestCaseEncoding Published methods ****************************************
+
+procedure TTestCaseEncoding.TestClone;
 var
   Enc: TIdRTPEncoding;
 begin
   Enc := Self.Encoding.Clone;
   try
-    CheckEquals(TIdRTPT140Encoding.ClassName,
+    CheckEquals(Self.EncodingType.ClassName,
                 Enc.ClassName,
                 'Type');
     CheckEquals(Self.Encoding.Name,
@@ -493,6 +599,55 @@ begin
   finally
     Enc.Free;
   end;
+end;
+
+procedure TTestCaseEncoding.TestCreatePayload;
+var
+  Payload: TIdRTPPayload;
+begin
+  Payload := Self.Encoding.CreatePayload;
+  try
+    CheckEquals(Self.Encoding.PayloadType.ClassName,
+                Payload.ClassName,
+                'Payload type');
+  finally
+    Payload.Free
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdRTPT140Encoding                                                     *
+//******************************************************************************
+//* TestTIdRTPT140Encoding Private methods *************************************
+
+function TestTIdRTPT140Encoding.EncodingType: TIdRTPEncodingClass;
+begin
+  Result := TIdRTPT140Encoding;
+end;
+
+function TestTIdRTPT140Encoding.EncodingName: String;
+begin
+  Result := T140Encoding;
+end;
+
+function TestTIdRTPT140Encoding.EncodingClockRate: Cardinal;
+begin
+  Result := T140ClockRate;
+end;
+
+//******************************************************************************
+//* TestTIdRTPTelephoneEventEncoding                                           *
+//******************************************************************************
+//* TestTIdRTPTelephoneEventEncoding Private methods ***************************
+
+function TestTIdRTPTelephoneEventEncoding.EncodingType: TIdRTPEncodingClass;
+begin
+  Result := TIdRTPTelephoneEventEncoding;
+end;
+
+function TestTIdRTPTelephoneEventEncoding.EncodingName: String;
+begin
+  Result := TelephoneEventEncoding;
 end;
 
 //******************************************************************************
@@ -617,6 +772,114 @@ begin
                 'PrintOn');
   finally
     S.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdTelephoneEventPayload                                               *
+//******************************************************************************
+//* TestTIdTelephoneEventPayload Public methods ********************************
+
+procedure TestTIdTelephoneEventPayload.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Packet := TIdTelephoneEventPayload.Create;
+end;
+
+procedure TestTIdTelephoneEventPayload.TearDown;
+begin
+  Self.Packet.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdTelephoneEventPayload Published methods *****************************
+
+procedure TestTIdTelephoneEventPayload.TestReadFromDuration;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00#$00#$CA#$FE);
+  try
+    Self.Packet.ReadFrom(S);
+    CheckEquals($CAFE,
+                Self.Packet.Duration, 'Duration');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestReadFromEvent;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$BE#$EF);
+  try
+    Self.Packet.ReadFrom(S);
+    CheckEquals($BE, Self.Packet.Event, 'Event');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestReadFromIsEnd;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00#$80);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.IsEnd, 'IsEnd not set');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(not Self.Packet.IsEnd, 'IsEnd set');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestReadFromReservedBit;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(#$00#$40);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(Self.Packet.ReservedBit, 'ReservedBit not set');
+  finally
+    S.Free;
+  end;
+
+  S := TStringStream.Create(#$00#$00);
+  try
+    Self.Packet.ReadFrom(S);
+    Check(not Self.Packet.ReservedBit, 'ReservedBit set');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdTelephoneEventPayload.TestReadFromVolume;
+var
+  S: TStringStream;
+  V: TIdTelephoneEventVolume;
+begin
+  for V := Low(TIdTelephoneEventVolume) to High(TIdTelephoneEventVolume) do begin
+    S := TStringStream.Create(#$00 + Chr($C0 or V));
+    try
+      Self.Packet.ReadFrom(S);
+      CheckEquals(V,
+                  Self.Packet.Volume,
+                  'Volume at -' + IntToStr(V - 1) + ' dBm0');
+    finally
+      S.Free;
+    end;
   end;
 end;
 

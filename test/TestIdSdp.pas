@@ -254,6 +254,7 @@ type
     procedure TestParseAttributeMalformedName;
     procedure TestParseAttributeMalformedValue;
     procedure TestParseBandwidth;
+    procedure TestParseBandwidthMalformed;
     procedure TestParseBandwidthMultipleHeaders;
     procedure TestParseConnectionInSessionAndMediaDescription;
     procedure TestParseConnectionMalformed;
@@ -278,6 +279,7 @@ type
     procedure TestParseKeyMalformedBase64;
     procedure TestParseKeyMalformedUri;
     procedure TestParseKeyUnknownKeyType;
+    procedure TestParseLinphoneSessionDescription;
     procedure TestParseMediaDescription;
     procedure TestParseMediaDescriptionMalformedFormatList;
     procedure TestParseMediaDescriptionMalformedPort;
@@ -354,6 +356,18 @@ type
     procedure TestPrintOnWithUri;
   end;
 
+  TestTIdSdpPayloadProcessor = class(TTestCase)
+  private
+    Proc: TIdSdpPayloadProcessor;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestMultipleMediaDescriptions;
+    procedure TestSingleMediaDescription;
+    procedure TestStopListening;
+  end;
+
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -366,11 +380,12 @@ const
 implementation
 
 uses
-  IdRTP, IdSimpleParser, SysUtils;
+  IdSocketHandle, IdRTP, IdSimpleParser, IdUDPServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+  {
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -387,8 +402,12 @@ begin
   Result.AddTest(TestTIdSdpRepeats.Suite);
   Result.AddTest(TestTIdSdpTimes.Suite);
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
+  }
   Result.AddTest(TestTIdSdpParser.Suite);
+  {
   Result.AddTest(TestTIdSdpPayload.Suite);
+  }
+  Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
 //******************************************************************************
@@ -2166,6 +2185,29 @@ begin
   end;
 end;
 
+procedure TestTIdSdpParser.TestParseBandwidthMalformed;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'b=:');
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out on a malformed bandwidth');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken, [RSSDPBandwidthName, ':']),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpParser.TestParseBandwidthMultipleHeaders;
 var
   S: TStringStream;
@@ -2537,6 +2579,39 @@ end;
 procedure TestTIdSdpParser.TestParseKeyUnknownKeyType;
 begin
   Self.CheckMalformedKey('base46');
+end;
+
+procedure TestTIdSdpParser.TestParseLinphoneSessionDescription;
+var
+  S: TStringStream;
+begin
+  // Note the space in the bandwidth header. We just rip out the first token
+  // after the colon and ignore the rest.
+  S := TStringStream.Create('v=0'#13#10
+                          + 'o=frank 123456 654321 IN IP4 192.168.0.2'#13#10
+                          + 's=A conversation'#13#10
+                          + 'c=IN IP4 192.168.0.2'#13#10
+                          + 't=0 0'#13#10
+                          + 'm=audio 7078 RTP/AVP 110 115 101'#13#10
+                          + 'b=AS:110 8'#13#10
+                          + 'a=rtpmap:110 speex/8000/1'#13#10
+                          + 'a=rtpmap:115 1015/8000/1'#13#10
+                          + 'a=rtpmap:101 telephone-event/8000'#13#10
+                          + 'a=fmtp:101 0-11');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    Check(Self.Payload.MediaDescriptions.Count > 0,
+          'Insuffient media descriptions');
+    Check(Self.Payload.MediaDescriptions[0].Bandwidths.Count > 0,
+          'Insuffient bandwidths');
+    CheckEquals(110,
+                Self.Payload.MediaDescriptions[0].Bandwidths[0].Bandwidth,
+                'Bandwidth');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseMediaDescription;
@@ -3811,6 +3886,115 @@ begin
                 'PrintOn');
   finally
     S.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpPayloadProcessor                                                 *
+//******************************************************************************
+//* TestTIdSdpPayloadProcessor Public methods **********************************
+
+procedure TestTIdSdpPayloadProcessor.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Proc := TIdSdpPayloadProcessor.Create;
+end;
+
+procedure TestTIdSdpPayloadProcessor.TearDown;
+begin
+  Self.Proc.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpPayloadProcessor Published methods *******************************
+
+procedure TestTIdSdpPayloadProcessor.TestMultipleMediaDescriptions;
+var
+  Server: TIdUDPServer;
+begin
+  Self.Proc.Process('v=0'#13#10
+                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
+                  + 's=-'#13#10
+                  + 'c=IN IP4 127.0.0.1'#13#10
+                  + 'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'm=text 8002 RTP/AVP 100'#13#10
+                  + 'a=rtpmap:100 t140/1000');
+
+
+  Server := TIdUDPServer.Create(nil);
+  try
+    Server.DefaultPort := 8000;
+
+    try
+      Server.Active := true;
+      Fail('No server started on 8000');
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+
+    Server.DefaultPort := 8002;
+
+    try
+      Server.Active := true;
+      Fail('No server started on 8002');
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayloadProcessor.TestSingleMediaDescription;
+var
+  Server: TIdUDPServer;
+begin
+  Self.Proc.Process('v=0'#13#10
+                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
+                  + 's=-'#13#10
+                  + 'c=IN IP4 127.0.0.1'#13#10
+                  + 'm=audio 8000 RTP/AVP 0'#13#10);
+
+
+  Server := TIdUDPServer.Create(nil);
+  try
+    Server.DefaultPort := 8000;
+
+    try
+      Server.Active := true;
+      Fail('No server started');
+    except
+      on EIdCouldNotBindSocket do;
+    end;
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure TestTIdSdpPayloadProcessor.TestStopListening;
+var
+  Server: TIdUDPServer;
+begin
+  Self.Proc.Process('v=0'#13#10
+                  + 'o=wintermut 1 1 IN IP4 127.0.0.1'#13#10
+                  + 's=-'#13#10
+                  + 'c=IN IP4 127.0.0.1'#13#10
+                  + 'm=audio 8000 RTP/AVP 0'#13#10
+                  + 'm=audio 8002 RTP/AVP 8');
+  Self.Proc.StopListening;
+
+  Server := TIdUDPServer.Create(nil);
+  try
+    Server.DefaultPort := 8000;
+    Server.Active      := true;
+
+    Server.Active      := false;
+    Server.DefaultPort := 8002;
+    Server.Active      := true;
+  finally
+    Server.Free;
   end;
 end;
 

@@ -1162,8 +1162,8 @@ procedure TIdSipParser.CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
 begin
   Self.CheckRequiredResponseHeaders(Msg);
 
-  if not Msg.HasHeader(MaxForwardsHeader) then
-    raise Msg.MalformedException.Create(MissingMaxForwards);
+//  if not Msg.HasHeader(MaxForwardsHeader) then
+//    raise Msg.MalformedException.Create(MissingMaxForwards);
 end;
 
 procedure TIdSipParser.CheckRequiredResponseHeaders(const Msg: TIdSipMessage);

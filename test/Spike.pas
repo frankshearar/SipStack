@@ -34,7 +34,9 @@ type
     DataStore:    TStream;
     Dispatch:     TIdSipTransactionDispatcher;
     Lock:         TCriticalSection;
-    Transport:    TIdSipTransport;
+    Media:        TIdSdpPayloadProcessor;
+    TransportTCP: TIdSipTransport;
+    TransportUDP: TIdSipTransport;
     UA:           TIdSipUserAgentCore;
 
     procedure LogMessage(const Msg: TIdSipMessage);
@@ -67,7 +69,8 @@ implementation
 {$R *.dfm}
 
 uses
-  IdGlobal, IdSipConsts, IdSipHeaders, IdSocketHandle, IdStack, SysUtils;
+  Dialogs, IdGlobal, IdSipConsts, IdSipHeaders, IdSocketHandle, IdStack,
+  SysUtils;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -86,27 +89,40 @@ begin
   Self.DataStore := TFileStream.Create('..\etc\dump.wav', fmCreate or fmShareDenyWrite);
   Self.Lock      := TCriticalSection.Create;
 
-  Self.Transport := TIdSipUdpTransport.Create(IdPORT_SIP);
-  Binding := Self.Transport.Bindings.Add;
+  Self.TransportUDP := TIdSipUdpTransport.Create(IdPORT_SIP);
+  Binding := Self.TransportUDP.Bindings.Add;
   Binding.IP := GStack.LocalAddress;
   Binding.Port := IdPORT_SIP;
-  Self.Transport.HostName := Binding.IP;
+  Self.TransportUDP.HostName := Binding.IP;
 
-  Self.Transport.AddTransportListener(Self);
-  Self.Transport.AddTransportSendingListener(Self);
+  Self.TransportTCP := TIdSipTcpTransport.Create(IdPORT_SIP);
+  Binding := Self.TransportTCP.Bindings.Add;
+  Binding.IP := Self.TransportUDP.HostName;
+  Binding.Port := IdPORT_SIP;
+  Self.TransportTCP.HostName := Self.TransportUDP.HostName;
+
+  Self.Media := TIdSdpPayloadProcessor.Create;
+  Self.Media.Host := Self.TransportUDP.HostName;
+  Self.Media.AddDataListener(Self);
+
+  Self.TransportUDP.AddTransportListener(Self);
+  Self.TransportUDP.AddTransportSendingListener(Self);
+  Self.TransportTCP.AddTransportListener(Self);
+  Self.TransportTCP.AddTransportSendingListener(Self);
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
-  Self.Dispatch.AddTransport(Self.Transport);
+  Self.Dispatch.AddTransport(Self.TransportUDP);
+  Self.Dispatch.AddTransport(Self.TransportTCP);
 
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddSessionListener(Self);
   Self.UA.AddObserver(Self);
-  Self.UA.HostName := Self.Transport.HostName;
+  Self.UA.HostName := Self.TransportUDP.HostName;
   Self.UA.UserAgentName := 'X-Lite build 1086';
 
   Contact := TIdSipContactHeader.Create;
   try
-    Contact.Value := 'sip:franks@' + Self.Transport.HostName;
+    Contact.Value := 'sip:franks@' + Self.TransportUDP.HostName;
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -114,23 +130,32 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@' + Self.Transport.HostName;
+    From.Value := 'sip:franks@' + Self.TransportUDP.HostName;
     Self.UA.From := From;
   finally
     From.Free;
   end;
 
-  Self.Transport.Start;
+  try
+    Self.TransportUDP.Start;
+    Self.TransportTCP.Start;
+  except
+    on EIdCouldNotBindSocket do
+      ShowMessage('Something''s hogged the SIP port (5060) - '
+                + 'kill it and restart this');
+  end;
 end;
 
 destructor TrnidSpike.Destroy;
 begin
-  Self.Transport.Stop;
+  Self.TransportUDP.Stop;
 
   Self.UA.Free;
   Self.Dispatch.Free;
-  Self.Transport.Free;
-
+  Self.Media.Free;
+  Self.TransportUDP.Free;
+  Self.TransportTCP.Free;
+  Self.Lock.Free;
   Self.DataStore.Free;
 
   inherited Destroy;
@@ -186,8 +211,10 @@ end;
 
 procedure TrnidSpike.OnNewSession(const Session: TIdSipSession);
 begin
-  Session.AcceptCall;
-  Session.AddDataListener(Self);
+  if (Session.Invite.ContentLength > 0) then
+    Self.Media.Process(Session.Invite.Body);
+
+  Session.AcceptCall(Self.Media.LocalSessionDescription, Self.Media.MediaType);
 end;
 
 procedure TrnidSpike.OnReceiveRequest(const Request: TIdSipRequest;

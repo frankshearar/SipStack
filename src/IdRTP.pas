@@ -6,14 +6,18 @@ uses
   Classes, SysUtils;
 
 type
-  TIdCardinalArray   = array of Cardinal;
-  TIdNTPTimestamp    = Cardinal;
-  TIdRTCPSourceCount = 0..31;
-  TIdRTPCsrcCount    = 0..15;
-  TIdRTPPayloadType  = 0..127;
-  TIdRTPSequenceNo   = Word;
-  TIdRTPVersion      = 0..3;
-  TIdT140BlockCount  = Word;
+  TIdCardinalArray        = array of Cardinal;
+  TIdTelephoneEventVolume = 0..63;
+  TIdNTPTimestamp         = Cardinal;
+  TIdRTCPSourceCount      = 0..31;
+  TIdRTPCsrcCount         = 0..15;
+  TIdRTPPayloadType       = 0..127;
+  TIdRTPSequenceNo        = Word;
+  TIdRTPVersion           = 0..3;
+  TIdT140BlockCount       = Word;
+
+  TIdRTPPayload = class;
+  TIdRTPPayloadClass = class of TIdRTPPayload;
 
   // I am an Encoding. I am described in an SDP payload (RFC 2327),
   // and instantiated by things that need to describe these sorts
@@ -33,9 +37,11 @@ type
 
     function AsString: String; virtual;
     function Clone: TIdRTPEncoding; virtual;
+    function CreatePayload: TIdRTPPayload; virtual;
     function IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
     function IsNull: Boolean; virtual;
     function IsReserved: Boolean; virtual;
+    function PayloadType: TIdRTPPayloadClass; virtual;
 
     property ClockRate:  Cardinal read fClockRate;
     property Name:       String   read fName;
@@ -44,7 +50,15 @@ type
 
   TIdRTPEncodingClass = class of TIdRTPEncoding;
 
-  TIdRTPT140Encoding = class(TIdRTPEncoding);
+  TIdRTPT140Encoding = class(TIdRTPEncoding)
+  public
+    function PayloadType: TIdRTPPayloadClass; override;
+  end;
+
+  TIdRTPTelephoneEventEncoding = class(TIdRTPEncoding)
+  public
+    function PayloadType: TIdRTPPayloadClass; override;
+  end;
 
   // I am the Null Encoding. I represent the fact that there is no defined
   // encoding.
@@ -97,6 +111,18 @@ type
     function IsNull: Boolean; override;
   end;
 
+  // I am the Raw payload. That means that my content is completely unparsed.
+  // I'm mostly a fallback case for a malconfigured RTP server.
+  TIdRawPayload = class(TIdRTPPayload)
+  private
+    fData: String;
+  public
+    procedure ReadFrom(Src: TStream); override;
+    procedure PrintOn(Dest: TStream); override;
+
+    property Data: String read fData write fData;
+  end;
+
   // I am a T.140 payload, as defined in RFC 2793 (and the bis draft)
   TIdT140Payload = class(TIdRTPPayload)
   private
@@ -110,16 +136,23 @@ type
     property BlockCount: TIdT140BlockCount read fBlockCount write fBlockCount;
   end;
 
-  // I am the Raw payload. That means that my content is completely unparsed.
-  // I'm mostly a fallback case for a malconfigured RTP server.
-  TIdRawPayload = class(TIdRTPPayload)
+  // I represent DTMF signals and such, as defined in RFC 2833
+  TIdTelephoneEventPayload = class(TIdRTPPayload)
   private
-    fData: String;
+    fDuration:    Word;
+    fEvent:       Byte;
+    fIsEnd:       Boolean;
+    fReservedBit: Boolean;
+    fVolume:      TIdTelephoneEventVolume;
   public
     procedure ReadFrom(Src: TStream); override;
     procedure PrintOn(Dest: TStream); override;
 
-    property Data: String read fData write fData;
+    property Duration:    Word                    read fDuration write fDuration;
+    property Event:       Byte                    read fEvent write fEvent;
+    property IsEnd:       Boolean                 read fIsEnd write fIsEnd;
+    property ReservedBit: Boolean                 read fReservedBit write fReservedBit;
+    property Volume:      TIdTelephoneEventVolume read fVolume write fVolume;
   end;
 
   TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPEncoding;
@@ -296,6 +329,7 @@ function NtoHS(Value: Word): Cardinal;
 
 function  ReadCardinal(Src: TStream): Cardinal;
 function  ReadRemainderOfStream(Src: TStream): String;
+function  ReadString(Src: TStream; const Length: Cardinal): String;
 function  ReadWord(Src: TStream): Word;
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 procedure WriteWord(Dest: TStream; Value: Word);
@@ -324,13 +358,35 @@ const
   PCMMuLawEncoding            = 'PCMU';
   PCMALawEncoding             = 'PCMA';
   QCELPEncoding               = 'QCELP';
+  RedundancyEncoding          = 'RED';
+  TelephoneEventEncoding      = 'telephone-event';
   RedundancyEncodingParameter = 'red';
   T140ClockRate               = 1000;
   T140Encoding                = 't140';
 
-  InterleavedT140MimeType = 'audio/t140';
-  RedundantT140MimeType   = 'text/RED';
-  T140MimeType            = 'text/t140';
+  TelephoneEventMimeType  = 'audio/' + TelephoneEventEncoding;
+  InterleavedT140MimeType = 'audio/' + T140Encoding;
+  RedundantT140MimeType   = 'text/' + RedundancyEncoding;
+  T140MimeType            = 'text/' + T140Encoding;
+
+  DTMF0     = 0;
+  DTMF1     = 1;
+  DTMF2     = 2;
+  DTMF3     = 3;
+  DTMF4     = 4;
+  DTMF5     = 5;
+  DTMF6     = 6;
+  DTMF7     = 7;
+  DTMF8     = 8;
+  DTMF9     = 9;
+  DTMFStar  = 10;
+  DTMFHash  = 11;
+  DTMFA     = 12;
+  DTMFB     = 13;
+  DTMFC     = 14;
+  DTMFD     = 15;
+  DTMFFlash = 16;
+
 
   RTCPSenderReport       = 200;
   RTCPReceiverReport     = 201;
@@ -419,6 +475,25 @@ begin
   until (Read < BufLen);
 end;
 
+function ReadString(Src: TStream; const Length: Cardinal): String;
+const
+  BufLen = 100;
+var
+  Buf:   array[1..100] of Char;
+  Read:  Integer;
+  Total: Cardinal;
+begin
+  FillChar(Buf, System.Length(Buf), 0);
+  Result := '';
+
+  Total := 0;
+  repeat
+    Read := Src.Read(Buf, Min(BufLen, Length));
+    Inc(Total, Read);
+    Result := Result + Copy(Buf, 1, Read);
+  until (Total >= Length) or (Read = 0);
+end;
+
 function ReadWord(Src: TStream): Word;
 begin
   Src.Read(Result, SizeOf(Result));
@@ -453,9 +528,17 @@ begin
   Parameters := Value;
 
   if (Name = T140Encoding) then
-    Result := TIdRTPT140Encoding.Create(Name, ClockRate, Parameters)
+    Result := TIdRTPT140Encoding.Create(Name,
+                                        ClockRate,
+                                        Parameters)
+  else if (Name = TelephoneEventEncoding) then
+    Result := TIdRTPTelephoneEventEncoding.Create(Name,
+                                                  ClockRate,
+                                                  Parameters)
   else
-    Result := TIdRTPEncoding.Create(Name, ClockRate, Parameters);
+    Result := TIdRTPEncoding.Create(Name,
+                                    ClockRate,
+                                    Parameters);
 end;
 
 constructor TIdRTPEncoding.Create(const Name: String;
@@ -491,6 +574,11 @@ begin
   Result := TIdRTPEncodingClass(Self.ClassType).Create(Self);
 end;
 
+function TIdRTPEncoding.CreatePayload: TIdRTPPayload;
+begin
+  Result := Self.PayloadType.Create;
+end;
+
 function TIdRTPEncoding.IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
 begin
   Result := (Self.Name = OtherEncoding.Name)
@@ -506,6 +594,31 @@ end;
 function TIdRTPEncoding.IsReserved: Boolean;
 begin
   Result := false;
+end;
+
+function TIdRTPEncoding.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdRawPayload;
+end;
+
+//******************************************************************************
+//* TIdRTPT140Encoding                                                         *
+//******************************************************************************
+//* TIdRTPT140Encoding Public methods ******************************************
+
+function TIdRTPT140Encoding.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdT140Payload;
+end;
+
+//******************************************************************************
+//* TIdRTPTelephoneEventEncoding                                               *
+//******************************************************************************
+//* TIdRTPTelephoneEventEncoding Public methods ********************************
+
+function TIdRTPTelephoneEventEncoding.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdTelephoneEventPayload;
 end;
 
 //******************************************************************************
@@ -583,6 +696,8 @@ begin
     Result := TIdRawPayload.Create
   else if (Encoding.Name = T140Encoding) then
     Result := TIdT140Payload.Create
+  else if (Encoding.Name = TelephoneEventEncoding) then
+    Result := TIdTelephoneEventPayload.Create
   else
     Result := TIdRawPayload.Create;
 end;
@@ -632,6 +747,21 @@ begin
 end;
 
 //******************************************************************************
+//* TIdRawPayload                                                              *
+//******************************************************************************
+//* TIdRawPayload Public methods ***********************************************
+
+procedure TIdRawPayload.ReadFrom(Src: TStream);
+begin
+  Self.Data := ReadRemainderOfStream(Src);
+end;
+
+procedure TIdRawPayload.PrintOn(Dest: TStream);
+begin
+  Dest.Write(PChar(Self.Data)^, Length(Self.Data));
+end;
+
+//******************************************************************************
 //* TIdT140Payload                                                             *
 //******************************************************************************
 //* TIdT140Payload Public methods **********************************************
@@ -652,18 +782,27 @@ begin
 end;
 
 //******************************************************************************
-//* TIdRawPayload                                                              *
+//* TIdTelephoneEventPayload                                                   *
 //******************************************************************************
-//* TIdRawPayload Public methods ***********************************************
+//* TIdTelephoneEventPayload Public methods ***********************************
 
-procedure TIdRawPayload.ReadFrom(Src: TStream);
+procedure TIdTelephoneEventPayload.ReadFrom(Src: TStream);
+var
+  B: Byte;
 begin
-  Self.Data := ReadRemainderOfStream(Src);
+  Src.Read(B, 1);
+  Self.Event := B;
+
+  Src.Read(B, 1);
+  Self.IsEnd       := B and $80 <> 0;
+  Self.ReservedBit := B and $40 <> 0;
+  Self.Volume      := B and $3F;
+
+  Self.Duration := ReadWord(Src);
 end;
 
-procedure TIdRawPayload.PrintOn(Dest: TStream);
+procedure TIdTelephoneEventPayload.PrintOn(Dest: TStream);
 begin
-  Dest.Write(PChar(Self.Data)^, Length(Self.Data));
 end;
 
 //******************************************************************************
@@ -1108,7 +1247,6 @@ procedure TIdRTCPByePacket.ReadFrom(Src: TStream);
 var
   B: Byte;
   I: Integer;
-  S: PChar;
 begin
   Src.Read(B, 1);
   Self.Version    := B and $C0 shr 6;
@@ -1126,13 +1264,7 @@ begin
 
   Self.ReasonLength := ReadWord(Src);
 
-  S := AllocMem(Self.ReasonLength);
-  try
-    Src.Read(S^, Self.ReasonLength);
-    Self.Reason := S;
-  finally
-    FreeMem(S);
-  end;
+  Self.Reason := ReadString(Src, Self.ReasonLength);
 end;
 
 //* TIdRTCPByePacket Protected methods *****************************************
