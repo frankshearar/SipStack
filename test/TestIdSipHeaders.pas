@@ -122,6 +122,7 @@ type
     procedure TestUsername;
     procedure TestValue; override;
     procedure TestValueQuotedNonceCount;
+    procedure TestValueQuotedQop;
     procedure TestValueSingleParam;
   end;
 
@@ -1561,12 +1562,17 @@ begin
   Self.A.Nonce := 'aefbb';
   Self.A.NonceCount := $f00f;
   Self.A.Algorithm := 'sha1-512';
+  Self.A.Qop := QopAuth;
   Self.A.Realm := 'tessier-ashpool.co.luna';
   Self.A.Username := 'Wintermute';
   Self.A.UnknownResponses['paranoid'] := '\very';
 
-  CheckEquals('foo nonce="aefbb",nc=0000f00f,algorithm="sha1-512",'
-            + 'realm="tessier-ashpool.co.luna",username="Wintermute",'
+  CheckEquals('foo nonce="aefbb",'
+            + 'nc=0000f00f,'
+            + 'algorithm="sha1-512",'
+            + 'qop=auth,'
+            + 'realm="tessier-ashpool.co.luna",'
+            + 'username="Wintermute",'
             + 'paranoid="\\very"',
               Self.A.Value,
               'Value');
@@ -1734,7 +1740,7 @@ begin
                 + 'nc=8f, '
                 + 'opaque="aaaabbbb", '
                 + 'otherparam=foo,'
-                + 'qop=" token",'
+                + 'qop=token,'
                 + 'uri="tel://112", '
                 + 'response="7587245234b3434cc3412213e5f113a5432"';
 
@@ -1760,7 +1766,7 @@ begin
   CheckEquals('aaaabbbb',
               Self.A.Opaque,
               'Opaque');
-  CheckEquals(' token',
+  CheckEquals('token',
               Self.A.Qop,
               'Qop');
   CheckEquals('atlanta.com',
@@ -1785,6 +1791,19 @@ begin
   CheckEquals(IntToHex($f00f, 8),
               IntToHex(Self.A.NonceCount, 8),
               'Quoted NonceCount param');
+end;
+
+procedure TestTIdSipAuthorizationHeader.TestValueQuotedQop;
+begin
+  // RFC 2617 section 3.2.1 tells us that we mustn't quote the qop param.
+  // However, it seems likely that at least some servers will quote the value.
+  // And it causes no harm for us to accept these quoted values.
+
+  Self.A.Value := 'Digest qop="' + QopAuth + '"';
+
+  CheckEquals(QopAuth,
+              Self.A.Qop,
+              'Quoted qop param');
 end;
 
 procedure TestTIdSipAuthorizationHeader.TestValueSingleParam;

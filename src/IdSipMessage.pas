@@ -2704,7 +2704,10 @@ end;
 
 function TIdSipHttpAuthHeader.QuoteIfNecessary(const ParamName, ParamValue: String): String;
 begin
-  Result := '"' + EncodeQuotedStr(ParamValue) + '"';
+  if IsEqual(ParamName, QopParam) then
+    Result := ParamValue
+  else
+    Result := '"' + EncodeQuotedStr(ParamValue) + '"';
 end;
 
 //* TIdSipHttpAuthHeader Private methods ***************************************
