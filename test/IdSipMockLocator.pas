@@ -74,9 +74,9 @@ begin
 end;
 
 //******************************************************************************
-//* TIdNaptrRec                                                             *
+//* TIdNaptrRec                                                                *
 //******************************************************************************
-//* TIdNaptrRec Public methods **********************************************
+//* TIdNaptrRec Public methods *************************************************
 
 constructor TIdNaptrRec.Create(const Key: String;
                                   Order: Word;
