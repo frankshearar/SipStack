@@ -12,7 +12,7 @@ unit TestIdSipHeaders;
 interface
 
 uses
-  IdSipMessage, TestFramework, TestFrameworkEx;
+  IdSipMessage, TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -27,7 +27,7 @@ type
     procedure TestStrToQValueDef;
   end;
 
-  THeaderTestCase = class(TThreadingTestCase)
+  THeaderTestCase = class(TTestCaseSip)
   protected
     Header: TIdSipHeader;
     function HeaderType: TIdSipHeaderClass; virtual;
@@ -613,7 +613,7 @@ type
     procedure TestGetAllButFirst;
   end;
 
-  TestTIdSipViaPath = class(TTestCase)
+  TestTIdSipViaPath = class(TTestCaseSip)
   private
     Headers: TIdSipHeaders;
     Path:    TIdSipViaPath;
@@ -630,8 +630,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdUnicode, SysUtils,
-  TestFrameworkSip;
+  Classes, IdSipConsts, IdSipMockTransport, IdSipTransport, IdUnicode, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -3551,20 +3550,12 @@ begin
 
   Self.V := TIdSipViaHeader.Create;
 
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
-  TIdSipTransport.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
   TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
 end;
 
 procedure TestTIdSipViaHeader.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(UdpTransport);
-  TIdSipTransport.UnregisterTransport(TlsTransport);
   TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
-  TIdSipTransport.UnregisterTransport(TcpTransport);
-  TIdSipTransport.UnregisterTransport(SctpTransport);
 
   inherited TearDown;
 end;
@@ -5909,14 +5900,10 @@ begin
 
   Self.Headers := TIdSipHeaders.Create;
   Self.Path := TIdSipViaPath.Create(Self.Headers);
-
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
 end;
 
 procedure TestTIdSipViaPath.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(SctpTransport);
-
   Self.Path.Free;
   Self.Headers.Free;
 

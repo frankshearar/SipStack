@@ -13,7 +13,7 @@ interface
 
 uses
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPClient, IdTCPConnection,
-  IdTCPServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  IdTCPServer, SyncObjs, SysUtils, TestFramework, TestFrameworkSip;
 
 type
   TIdTcpClientClass = class of TIdTcpClient;
@@ -23,7 +23,7 @@ type
     procedure TestCreate;
   end;
 
-  TestTIdSipConnectionTable = class(TTestCase)
+  TestTIdSipConnectionTable = class(TTestCaseSip)
   private
     Conn:    TIdTCPConnection;
     NewConn: TIdTCPConnection;
@@ -48,7 +48,7 @@ type
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest) of object;
 
-  TestTIdSipTcpServer = class(TThreadingTestCase, IIdSipMessageListener)
+  TestTIdSipTcpServer = class(TTestCaseSip, IIdSipMessageListener)
   private
     NotifiedMalformedMessage: Boolean;
 
@@ -140,7 +140,7 @@ implementation
 
 uses
   Classes, IdGlobal, IdSocketHandle, IdSipConsts, IdSimpleParser, IdStack,
-  TestFrameworkSip, TestMessages;
+  TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -162,7 +162,7 @@ begin
     try
       E := TIdSipConnectionTableEntry.Create(Conn, Req);
       try
-        Check(Conn = E.Connection,      'Connection not set');
+        Check(Conn = E.Connection,   'Connection not set');
         Check(Req.Equals(E.Request), 'Request not set');
       finally
         E.Free;

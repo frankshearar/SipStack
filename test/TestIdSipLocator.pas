@@ -13,10 +13,10 @@ interface
 
 uses
   Classes, IdSipDns, IdSipLocator, IdSipMessage, IdSipMockLocator,
-  TestFramework;
+  TestFramework, TestFrameworkSip;
 
 type
-  TestTIdSipLocation = class(TTestCase)
+  TestTIdSipLocation = class(TTestCaseSip)
   private
     Address:   String;
     Loc:       TIdSipLocation;
@@ -44,7 +44,7 @@ type
     procedure TestIsEmpty;
   end;
 
-  TLocatorTest = class(TTestCase)
+  TLocatorTest = class(TTestCaseSip)
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -137,8 +137,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipMockTransport, IdSipTransport, Math, SysUtils,
-  TestFrameworkSip;
+  IdSipConsts, IdSipMockTransport, IdSipTransport, Math, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -163,12 +162,10 @@ begin
   Self.Transport := TcpTransport;
 
   Self.Loc := TIdSipLocation.Create(Self.Transport, Self.Address, Self.Port);
-  TIdSipTransport.RegisterTransport(Self.Transport, TIdSipMockTcpTransport);
 end;
 
 procedure TestTIdSipLocation.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(Self.Transport);
   Self.Loc.Free;
 
   inherited TearDown;
@@ -326,20 +323,12 @@ procedure TLocatorTest.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransport.RegisterTransport(SctpTransport,        TIdSipMockSctpTransport);
-  TIdSipTransport.RegisterTransport(TcpTransport,         TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(TlsTransport,         TIdSipMockTlsTransport);
   TIdSipTransport.RegisterTransport(TlsOverSctpTransport, TIdSipMockTlsOverSctpTransport);
-  TIdSipTransport.RegisterTransport(UdpTransport,         TIdSipMockUdpTransport);
 end;
 
 procedure TLocatorTest.TearDown;
 begin
-  TIdSipTransport.UnregisterTransport(SctpTransport);
-  TIdSipTransport.UnregisterTransport(TcpTransport);
-  TIdSipTransport.UnregisterTransport(TlsTransport);
   TIdSipTransport.UnregisterTransport(TlsOverSctpTransport);
-  TIdSipTransport.UnregisterTransport(UdpTransport);
 
   inherited TearDown;
 end;

@@ -13,10 +13,10 @@ interface
 
 uses
   Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdUDPClient, SysUtils,
-  TestFrameworkEx;
+  TestFrameworkSip;
 
 type
-  TestTIdSipUdpServer = class(TThreadingTestCase,
+  TestTIdSipUdpServer = class(TTestCaseSip,
                               IIdSipMessageListener)
   private
     CheckReceivedRequest:     TIdSipRequestEvent;
@@ -74,14 +74,14 @@ const
                + 'I am a message. Hear me roar!';
   ViaFQDN        = 'gw1.leo-ix.org';
   ViaIP          = '127.0.0.1';
-  ViaDifferentIP = '196.25.1.1';             
+  ViaDifferentIP = '196.25.1.1';
   DefaultTimeout = 5000;
 
 implementation
 
 uses
   IdSipConsts, IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework,
-  TestFrameworkSip, TestMessages;
+  TestMessages;
 
 function Suite: ITestSuite;
 begin

@@ -12,7 +12,7 @@ unit TestIdSipParser;
 interface
 
 uses
-  Classes, IdSipMessage, TestFramework, TestFrameworkEx;
+  Classes, IdSipMessage, TestFramework, TestFrameworkSip;
 
 type
   TestFunctions = class(TTestCase)
@@ -22,7 +22,7 @@ type
     procedure TestShortMonthToInt;
   end;
 
-  TestTIdSipParser = class(TTestCase)
+  TestTIdSipParser = class(TTestCaseSip)
   private
     P:          TIdSipParser;
     Request:    TIdSipRequest;
@@ -160,6 +160,8 @@ end;
 
 procedure TestTIdSipParser.SetUp;
 begin
+  inherited SetUp;
+
   Self.P := TIdSipParser.Create;
 
   Self.Request := TIdSipRequest.Create;
@@ -171,6 +173,8 @@ begin
   Self.Request.Free;
   Self.Response.Free;
   Self.P.Free;
+
+  inherited TearDown;
 end;
 
 //* TestTIdSipParser Published methods *****************************************

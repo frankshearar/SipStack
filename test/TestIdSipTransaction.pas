@@ -1957,9 +1957,6 @@ procedure TestLocation.SetUp;
 begin
   inherited SetUp;
 
-  TIdSipTransport.RegisterTransport(IdSipMessage.TcpTransport, TIdSipMockTcpTransport);
-  TIdSipTransport.RegisterTransport(IdSipMessage.UdpTransport, TIdSipMockUdpTransport);
-
   Self.L := TIdSipMockLocator.Create;
 
   Self.TcpTransport := TIdSipMockTcpTransport.Create;
@@ -1988,9 +1985,6 @@ begin
   Self.UdpTransport.Free;
   Self.TcpTransport.Free;
   Self.L.Free;
-
-  TIdSipTransport.UnregisterTransport(IdSipMessage.TcpTransport);
-  TIdSipTransport.UnregisterTransport(IdSipMessage.UdpTransport);
 
   inherited TearDown;
 end;

@@ -13,13 +13,13 @@ interface
 
 uses
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, SysUtils,
-  TestFrameworkEx;
+  TestFrameworkSip;
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest) of object;
 
-  TestTIdSipTcpClient = class(TThreadingTestCase, IIdSipMessageListener)
+  TestTIdSipTcpClient = class(TTestCaseSip, IIdSipMessageListener)
   private
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
@@ -79,7 +79,7 @@ implementation
 
 uses
   Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, TestFramework,
-  TestFrameworkSip, TestMessages;
+  TestMessages;
 
 function Suite: ITestSuite;
 begin

@@ -12,12 +12,13 @@ unit TestIdSipRegistration;
 interface
 
 uses
-  IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase, TestFramework;
+  IdSipMessage, IdSipRegistration, IdSipMockBindingDatabase, TestFramework,
+  TestFrameworkSip;
 
 type
   // We test binding rules here. We test those things that could cause a
   // binding removal to fail and other such situations.
-  TestTIdSipAbstractBindingDatabase = class(TTestCase)
+  TestTIdSipAbstractBindingDatabase = class(TTestCaseSip)
   private
     DB:      TIdSipAbstractBindingDatabase;
     Request: TIdSipRequest;
@@ -70,7 +71,7 @@ type
 implementation
 
 uses
-  DateUtils, IdSipConsts, SysUtils, TestFrameworkSip;
+  DateUtils, IdSipConsts, SysUtils;
 
 function Suite: ITestSuite;
 begin

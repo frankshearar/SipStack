@@ -346,7 +346,6 @@ type
                         Response: TIdSipResponse);
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAllLocationsFail;
     procedure TestLooseRoutingProxy;
@@ -4322,15 +4321,6 @@ begin
   Self.InviteOffer    := '';
   Self.NetworkFailure := false;
   Self.TransportParam := SctpTransport;
-
-  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipSctpTransport);
-end;
-
-procedure TestLocation.TearDown;
-begin
-  TIdSipTransport.UnregisterTransport(SctpTransport);
-
-  inherited TearDown;
 end;
 
 //* TestLocation Private methods ***********************************************
@@ -4470,28 +4460,23 @@ var
   Action: TIdSipAction;
   Domain: String;
 begin
-  TIdSipTransport.RegisterTransport(CorrectTransport, TIdSipMockSctpTransport);
-  try
-    Domain := Self.Destination.Address.Host;
+  Domain := Self.Destination.Address.Host;
 
-    // NAPTR record points to SCTP SRV record whose target resolves to the A
-    // record.
-    Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
-    Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
-    Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
+  // NAPTR record points to SCTP SRV record whose target resolves to the A
+  // record.
+  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
+  Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
+  Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
 
-    Self.MarkSentRequestCount;
-    Action := Self.CreateAction;
+  Self.MarkSentRequestCount;
+  Action := Self.CreateAction;
 
-    CheckRequestSent('No request sent');
-    CheckEquals(CorrectTransport,
-                Self.LastSentRequest.LastHop.Transport,
-                'Incorrect transport');
-    Check(Self.LastSentRequest.Equals(Action.InitialRequest),
-          'Action''s InitialRequest not updated to the latest attempt');
-  finally
-    TIdSipTransport.UnregisterTransport(CorrectTransport);
-  end;
+  CheckRequestSent('No request sent');
+  CheckEquals(CorrectTransport,
+              Self.LastSentRequest.LastHop.Transport,
+              'Incorrect transport');
+  Check(Self.LastSentRequest.Equals(Action.InitialRequest),
+        'Action''s InitialRequest not updated to the latest attempt');
 end;
 
 procedure TestLocation.TestUseTransportParam;

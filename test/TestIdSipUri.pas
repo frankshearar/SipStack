@@ -12,7 +12,7 @@ unit TestIdSipUri;
 interface
 
 uses
-  IdSipMessage, TestFramework;
+  IdSipMessage, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipHostAndPort = class(TTestCase)
@@ -45,7 +45,7 @@ type
     procedure TestIsSipsUri;
   end;
 
-  TestTIdSipUri = class(TTestCase)
+  TestTIdSipUri = class(TTestCaseSip)
   private
     EqualityA: TIdSipUri;
     EqualityB: TIdSipUri;

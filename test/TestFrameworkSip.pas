@@ -37,6 +37,8 @@ type
     procedure CheckEquals(Expected,
                           Received: TIdSipHeadersFilter;
                           const Msg: String); overload;
+    procedure SetUp; override;
+    procedure TearDown; override;
   end;
 
   TIdSipExceptionRaisingHeader = class(TIdSipHeader)
@@ -469,7 +471,7 @@ type
   private
     fExecuted: Boolean;
   public
-    constructor Create; 
+    constructor Create;
 
     procedure Execute(Action: TIdSipAction); override;
 
@@ -487,7 +489,7 @@ const
 implementation
 
 uses
-  IdSipConsts;
+  IdSipConsts, IdSipMockTransport;
 
 //******************************************************************************
 //* TIdSipTestResources                                                        *
@@ -609,6 +611,26 @@ begin
   CheckEquals(Expected.Count,
               Received.Count,
               Msg + ': Number of headers');
+end;
+
+procedure TTestCaseSip.SetUp;
+begin
+  inherited SetUp;
+
+  TIdSipTransport.RegisterTransport(SctpTransport, TIdSipMockSctpTransport);
+  TIdSipTransport.RegisterTransport(TcpTransport,  TIdSipMockTcpTransport);
+  TIdSipTransport.RegisterTransport(TlsTransport,  TIdSipMockTlsTransport);
+  TIdSipTransport.RegisterTransport(UdpTransport,  TIdSipMockUdpTransport);
+end;
+
+procedure TTestCaseSip.TearDown;
+begin
+  TIdSipTransport.UnregisterTransport(UdpTransport);
+  TIdSipTransport.UnregisterTransport(TlsTransport);
+  TIdSipTransport.UnregisterTransport(TcpTransport);
+  TIdSipTransport.UnregisterTransport(SctpTransport);
+
+  inherited TearDown;
 end;
 
 //******************************************************************************
