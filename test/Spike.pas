@@ -120,10 +120,14 @@ type
     function  Address: String;
     function  LocalSDP(const Address: String): String;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String); overload;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse;
                                         var Username: String;
-                                        var Password: String);
+                                        var Password: String); overload;
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
@@ -347,6 +351,15 @@ begin
   finally
     Self.Lock.Release;
   end;
+end;
+
+procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                               Challenge: TIdSipResponse;
+                                               var Username: String;
+                                               var Password: String);
+begin
+  Username := UserAgent.Contact.Address.Username;
+  Password := Self.Password.Text;
 end;
 
 procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;

@@ -12,7 +12,7 @@ unit TestIdSipTransaction;
 interface
 
 uses
-  IdSipCore, IdSipDialog, IdSipMessage, IdSipMockCore,
+  IdSipAuthentication, IdSipCore, IdSipDialog, IdSipMessage, IdSipMockCore,
   IdSipMockTransactionDispatcher, IdSipMockTransport, IdSipTransaction,
   IdSipTransport, TestFramework, TestFrameworkSip;
 
@@ -43,36 +43,70 @@ type
   end;
 
   TestTIdSipTransactionDispatcher = class(TMessageCountingTestCase,
-                                          IIdSipTransactionListener)
+                                          IIdSipTransactionListener,
+                                          IIdSipTransactionDispatcherListener)
   private
+    AckCount:               Cardinal;
     Core:                   TIdSipMockCore;
     D:                      TIdSipTransactionDispatcher;
     Invite:                 TIdSipRequest;
     OnReceiveResponseFired: Boolean;
     OnTerminatedFired:      Boolean;
     Options:                TIdSipRequest;
+    Password:               String;
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
+    RequestCount:           Cardinal;
     Response200:            TIdSipResponse;
     TranRequest:            TIdSipRequest;
+    Username:               String;
 
+    procedure CheckAuthentication(const AuthenticationHeaderName: String;
+                                  const AuthorizationHeaderName: String;
+                                  const QopType: String);
+    procedure CheckAuthenticationOf(Request: TIdSipRequest;
+                                    const AuthenticationHeaderName: String;
+                                    const AuthorizationHeaderName: String;
+                                    const QopType: String);
+    procedure CheckAuthenticationReattempt(InitialAttempt,
+                                           ReAttempt: TIdSipRequest;
+                                           const AuthenticationHeaderName: String;
+                                           const AuthorizationHeaderName: String;
+                                           const MsgPrefix: String);
     function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
     function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
+    function  LastSentRequest: TIdSipRequest;
+    procedure MarkSentRequestCount;
     procedure MoveTranToCompleted(Tran: TIdSipClientTransaction); overload;
     procedure MoveTranToCompleted(Tran: TIdSipServerTransaction); overload;
     procedure MoveTranToConfirmed(Tran: TIdSipServerInviteTransaction);
+    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Transaction: TIdSipTransaction;
-                               Receiver: TIdSipTransport);
+                               Receiver: TIdSipTransport); overload;
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               Receiver: TIdSipTransport); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transaction: TIdSipTransaction;
-                                Receiver: TIdSipTransport);
+                                Receiver: TIdSipTransport); overload;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                Receiver: TIdSipTransport); overload;
     procedure OnTerminated(Transaction: TIdSipTransaction);
+    procedure ReceiveUnauthorized(const AuthHeaderName: String;
+                                  const Qop: String);
+    function  SentAckCount: Cardinal;
+    function  SentRequestCount: Cardinal;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    procedure CheckAckSent(const Msg: String);
+    procedure CheckRequestSent(const Msg: String);
   published
     procedure TestAckDoesntCreateATransaction;
     procedure TestAckForInviteWontCreateTransaction;
@@ -80,6 +114,9 @@ type
     procedure TestAddAndCountTransport;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
+    procedure TestAuthentication;
+    procedure TestAuthenticationQopAuth;
+    procedure TestAuthenticationQopAuthInt;
     procedure TestClearTransports;
     procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
@@ -99,6 +136,9 @@ type
     procedure TestOnServerInviteTransactionTimerI;
     procedure TestOnServerNonInviteTransactionTimerJ;
     procedure TestLoopDetected;
+    procedure TestProxyAuthentication;
+    procedure TestProxyAuthenticationQopAuth;
+    procedure TestProxyAuthenticationQopAuthInt;
     procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverTcp;
@@ -374,7 +414,7 @@ type
     procedure TestTransportErrorInTryingState;
   end;
 
-  TUnhandledMessageListenerMethodTestCase = class(TTestCase)
+  TTransactionDispatcherListenerMethodTestCase = class(TTestCase)
   protected
     Receiver: TIdSipTransport;
   public
@@ -382,9 +422,28 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipUnhandledMessageListenerReceiveRequestMethod = class(TUnhandledMessageListenerMethodTestCase)
+  TestTIdSipTransactionDispatcherAuthenticationChallengeMethod = class(TTransactionDispatcherListenerMethodTestCase)
   private
-    Method:  TIdSipUnhandledMessageListenerReceiveRequestMethod;
+    Dispatcher:  TIdSipMockTransactionDispatcher;
+    L1:          TIdSipTestTransactionDispatcherListener;
+    L2:          TIdSipTestTransactionDispatcherListener;
+    Method:      TIdSipTransactionDispatcherAuthenticationChallengeMethod;
+    Response:    TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestFirstListenerDoesntSetPassword;
+    procedure TestFirstListenerSetsPassword;
+    procedure TestFirstListenerDoesntSetUsername;
+    procedure TestFirstListenerSetsUsername;
+    procedure TestNoListenerSetsPassword;
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TTransactionDispatcherListenerMethodTestCase)
+  private
+    Method:  TIdSipTransactionDispatcherListenerReceiveRequestMethod;
     Request: TIdSipRequest;
   public
     procedure SetUp; override;
@@ -393,9 +452,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipUnhandledMessageListenerReceiveResponseMethod = class(TUnhandledMessageListenerMethodTestCase)
+  TestTIdSipTransactionDispatcherListenerReceiveResponseMethod = class(TTransactionDispatcherListenerMethodTestCase)
   private
-    Method:   TIdSipUnhandledMessageListenerReceiveResponseMethod;
+    Method:   TIdSipTransactionDispatcherListenerReceiveResponseMethod;
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
@@ -470,8 +529,9 @@ begin
   Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveRequestMethod.Suite);
-  Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
@@ -575,6 +635,7 @@ begin
   Self.Core := TIdSipMockCore.Create;
 
   Self.D := TIdSipTransactionDispatcher.Create;
+  Self.D.AddTransactionDispatcherListener(Self);
 
   Self.Core.Dispatcher := Self.D;
 
@@ -607,6 +668,8 @@ begin
 
   Self.OnReceiveResponseFired := false;
   Self.OnTerminatedFired      := false;
+  Self.Password               := 'mycotoxin';
+  Self.Username               := 'case';
 end;
 
 procedure TestTIdSipTransactionDispatcher.TearDown;
@@ -625,7 +688,123 @@ begin
   inherited TearDown;
 end;
 
+procedure TestTIdSipTransactionDispatcher.CheckAckSent(const Msg: String);
+begin
+  Check(Self.AckCount < Self.SentACKCount,
+        Msg);
+end;
+
+procedure TestTIdSipTransactionDispatcher.CheckRequestSent(const Msg: String);
+begin
+  Check(Self.RequestCount < Self.SentRequestCount, Msg);
+end;
+
 //* TestTIdSipTransactionDispatcher Private methods ****************************
+
+procedure TestTIdSipTransactionDispatcher.CheckAuthentication(const AuthenticationHeaderName: String;
+                                                              const AuthorizationHeaderName: String;
+                                                              const QopType: String);
+begin
+  Self.CheckAuthenticationOf(Self.Options, AuthenticationHeaderName, AuthorizationHeaderName, QopType);
+  Self.CheckAuthenticationOf(Self.Invite,  AuthenticationHeaderName, AuthorizationHeaderName, QopType);
+end;
+
+procedure TestTIdSipTransactionDispatcher.CheckAuthenticationOf(Request: TIdSipRequest;
+                                                                const AuthenticationHeaderName: String;
+                                                                const AuthorizationHeaderName: String;
+                                                                const QopType: String);
+var
+  InitialRequest: TIdSipRequest;
+  ReAttempt:      TIdSipRequest;
+  Tran:           TIdSipTransaction;
+begin
+  Tran := Self.D.AddClientTransaction(Request);
+  Tran.SendRequest;
+
+  InitialRequest := TIdSipRequest.Create;
+  try
+    InitialRequest.Assign(Tran.InitialRequest);
+    Self.MarkSentRequestCount;
+
+    Self.ReceiveUnauthorized(AuthenticationHeaderName, QopType);
+    CheckRequestSent(Self.ClassName + ': qop=' + QopType + ': no re-issue of '
+                   + InitialRequest.Method + ' request');
+
+    ReAttempt := Self.LastSentRequest;
+
+    Self.CheckAuthenticationReattempt(InitialRequest,
+                                      ReAttempt,
+                                      AuthenticationHeaderName,
+                                      AuthorizationHeaderName,
+                                      Self.ClassName + ': qop=' + QopType + ':');
+  finally
+    InitialRequest.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.CheckAuthenticationReattempt(InitialAttempt,
+                                                                       ReAttempt: TIdSipRequest;
+                                                                       const AuthenticationHeaderName: String;
+                                                                       const AuthorizationHeaderName: String;
+                                                                       const MsgPrefix: String);
+var
+  A1:               String;
+  A2:               String;
+  Algo:             TIdAlgorithmFunction;
+  Auth:             TIdSipAuthorizationHeader;
+  Challenge:        TIdSipAuthenticateHeader;
+  Digest:           TIdRequestDigestFunction;
+  ExpectedResponse: String;
+  Qop:              TIdQopFunction;
+begin
+  Challenge := Self.MockTransport.LastResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
+  Auth      := ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader;
+
+  CheckEquals(InitialAttempt.CSeq.SequenceNo + 1,
+              ReAttempt.CSeq.SequenceNo,
+              MsgPrefix + ' Re-' + InitialAttempt.Method + ' CSeq sequence number');
+  CheckEquals(InitialAttempt.Method,
+              ReAttempt.Method,
+              MsgPrefix + ' Method of new attempt');
+  CheckEquals(InitialAttempt.RequestUri.Uri,
+              ReAttempt.RequestUri.Uri,
+              Self.ClassName + ': Re-' + InitialAttempt.Method + ' Request-URI');
+  Check(ReAttempt.HasHeader(AuthorizationHeaderName),
+        MsgPrefix + ' No ' + AuthorizationHeaderName + ' header in re-' + InitialAttempt.Method);
+
+  CheckEquals(Challenge.AuthorizationScheme,
+              Auth.AuthorizationScheme,
+              MsgPrefix + ' No authorization scheme set');
+
+  CheckEquals(Challenge.Nonce,
+              Auth.Nonce,
+              MsgPrefix + ' Nonce');
+
+  CheckEquals(Challenge.Realm,
+              Auth.Realm,
+              MsgPrefix + ' Realm');
+
+  CheckEquals(ReAttempt.RequestUri.AsString,
+              Auth.DigestUri,
+              MsgPrefix + ' URI');
+
+  CheckEquals(Self.Username,
+              Auth.Username,
+              MsgPrefix + ' Username');
+
+  Algo   := A1For(Auth.Algorithm);
+  Digest := RequestDigestFor(Auth.Qop);
+  Qop    := A2For(Auth.Qop);
+
+  A1 := Algo(Auth, Self.Password);
+  A2 := Qop(Auth, ReAttempt.Method, ReAttempt.Body);
+
+  ExpectedResponse := Digest(A1, A2, Auth);
+
+  CheckEquals(ExpectedResponse,
+              Auth.Response,
+              MsgPrefix + ' Response');
+end;
 
 function TestTIdSipTransactionDispatcher.CreateAck(Response: TIdSipResponse): TIdSipRequest;
 begin
@@ -642,6 +821,16 @@ begin
   finally
     UA.Free;
   end;
+end;
+
+function TestTIdSipTransactionDispatcher.LastSentRequest: TIdSipRequest;
+begin
+  Result := Self.MockTransport.LastRequest;
+end;
+
+procedure TestTIdSipTransactionDispatcher.MarkSentRequestCount;
+begin
+  Self.RequestCount := Self.SentRequestCount;
 end;
 
 procedure TestTIdSipTransactionDispatcher.MoveTranToCompleted(Tran: TIdSipClientTransaction);
@@ -688,6 +877,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipTransactionDispatcher.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                                                    Challenge: TIdSipResponse;
+                                                                    var Username: String;
+                                                                    var Password: String);
+begin
+  Password := Self.Password;
+  Username := Self.Username;
+end;
+
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
                                                  const Reason: String);
 begin
@@ -701,6 +899,12 @@ begin
   // Do nothing
 end;
 
+procedure TestTIdSipTransactionDispatcher.OnReceiveRequest(Request: TIdSipRequest;
+                                                           Receiver: TIdSipTransport);
+begin
+  // Do nothing
+end;
+
 procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                             Transaction: TIdSipTransaction;
                                                             Receiver: TIdSipTransport);
@@ -709,10 +913,49 @@ begin
   Self.OnReceiveResponseFired := true;
 end;
 
+procedure TestTIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
+                                                            Receiver: TIdSipTransport);
+begin
+  // Do nothing
+end;
+
 procedure TestTIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
 begin
   Check(not Transaction.IsClient, 'Client tran got the response - from the TU!');
   Self.OnTerminatedFired := true;
+end;
+
+procedure TestTIdSipTransactionDispatcher.ReceiveUnauthorized(const AuthHeaderName: String;
+                                                              const Qop: String);
+var
+  Auth:      TIdSipAuthenticateHeader;
+  Challenge: TIdSipResponse;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+                                           SIPUnauthorized);
+  try
+    Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
+    Auth.AuthorizationScheme := DigestAuthorizationScheme;
+    Auth.Realm               := 'SFTF';
+    Auth.Nonce               := '5369704365727434313433';
+    Auth.Qop                 := Qop;
+
+    Challenge.AddHeader(AuthenticationInfoHeader);
+
+    Self.MockTransport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
+function TestTIdSipTransactionDispatcher.SentAckCount: Cardinal;
+begin
+  Result := Self.MockTransport.ACKCount;
+end;
+
+function TestTIdSipTransactionDispatcher.SentRequestCount: Cardinal;
+begin
+  Result := Self.MockTransport.SentRequestCount;
 end;
 
 //* TestTIdSipTransactionDispatcher Published methods **************************
@@ -759,7 +1002,7 @@ procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
 var
   Ack:          TIdSipRequest;
   RemoteDialog: TIdSipDialog;
-  Listener:     TIdSipTestUnhandledMessageListener;
+  Listener:     TIdSipTestTransactionDispatcherListener;
   Tran:         TIdSipTransaction;
 begin
   RemoteDialog := TIdSipDialog.CreateOutboundDialog(Self.Invite,
@@ -770,9 +1013,9 @@ begin
     try
       Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
 
-      Listener := TIdSipTestUnhandledMessageListener.Create;
+      Listener := TIdSipTestTransactionDispatcherListener.Create;
       try
-        Self.D.AddUnhandledMessageListener(Listener);
+        Self.D.AddTransactionDispatcherListener(Listener);
 
         Tran.SendResponse(Self.Response200);
 
@@ -842,6 +1085,21 @@ begin
   CheckEquals(TranCount + 1,
               Self.D.TransactionCount,
               'Transaction wasn''t added');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAuthentication;
+begin
+  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, '');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAuthenticationQopAuth;
+begin
+  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, QopAuth);
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAuthenticationQopAuthInt;
+begin
+  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, QopAuthInt);
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearTransports;
@@ -924,13 +1182,13 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionRequests;
 var
-  Listener: TIdSipTestUnhandledMessageListener;
+  Listener: TIdSipTestTransactionDispatcherListener;
 begin
   Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
 
-  Listener := TIdSipTestUnhandledMessageListener.Create;
+  Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
-    Self.D.AddUnhandledMessageListener(Listener);
+    Self.D.AddTransactionDispatcherListener(Listener);
     Self.MockTransport.FireOnRequest(Self.Invite);
 
     Check(not Listener.ReceivedUnhandledRequest,
@@ -942,13 +1200,13 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestDispatcherDoesntGetTransactionResponses;
 var
-  Listener: TIdSipTestUnhandledMessageListener;
+  Listener: TIdSipTestTransactionDispatcherListener;
 begin
   Self.D.AddClientTransaction(Self.Invite);
 
-  Listener := TIdSipTestUnhandledMessageListener.Create;
+  Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
-    Self.D.AddUnhandledMessageListener(Listener);
+    Self.D.AddTransactionDispatcherListener(Listener);
     Self.MockTransport.FireOnResponse(Self.ReceivedResponse);
 
     Check(not Listener.ReceivedUnhandledResponse,
@@ -1290,6 +1548,27 @@ begin
   Check(Self.D.LoopDetected(Self.Invite),
         'Loop should be detected - same From tag, Call-ID, CSeq but no match '
       + '(differing branch)');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestProxyAuthentication;
+begin
+  Self.CheckAuthentication(ProxyAuthenticateHeader,
+                           ProxyAuthorizationHeader,
+                           '');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestProxyAuthenticationQopAuth;
+begin
+  Self.CheckAuthentication(ProxyAuthenticateHeader,
+                           ProxyAuthorizationHeader,
+                           QopAuth);
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestProxyAuthenticationQopAuthInt;
+begin
+  Self.CheckAuthentication(ProxyAuthenticateHeader,
+                           ProxyAuthorizationHeader,
+                           QopAuthInt);
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendAckWontCreateTransaction;
@@ -2116,7 +2395,7 @@ begin
   Self.TransactionProceeding := false;
   Self.TransactionTerminated := false;
 
-  Self.FailMsg := '';
+  Self.FailMsg  := '';
 end;
 
 procedure TTestTransaction.TearDown;
@@ -4691,18 +4970,18 @@ begin
 end;
 
 //******************************************************************************
-//* TUnhandledMessageListenerMethodTestCase                                    *
+//* TTransactionDispatcherListenerMethodTestCase                               *
 //******************************************************************************
-//* TUnhandledMessageListenerMethodTestCase Public methods *********************
+//* TTransactionDispatcherListenerMethodTestCase Public methods ****************
 
-procedure TUnhandledMessageListenerMethodTestCase.SetUp;
+procedure TTransactionDispatcherListenerMethodTestCase.SetUp;
 begin
   inherited SetUp;
 
   Self.Receiver := TIdSipNullTransport.Create;
 end;
 
-procedure TUnhandledMessageListenerMethodTestCase.TearDown;
+procedure TTransactionDispatcherListenerMethodTestCase.TearDown;
 begin
   Self.Receiver.Free;
 
@@ -4710,22 +4989,150 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod                     *
+//* TestTIdSipTransactionDispatcherAuthenticationChallengeMethod               *
 //******************************************************************************
-//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod Public methods ******
+//* TestTIdSipTransactionDispatcherAuthenticationChallengeMethod Public methods
 
-procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.SetUp;
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipTransactionDispatcherAuthenticationChallengeMethod.Create;
+  Self.Method.Response   := Self.Response;
+  Self.Method.Dispatcher := Self.Dispatcher;
+
+  Self.L1 := TIdSipTestTransactionDispatcherListener.Create;
+  Self.L2 := TIdSipTestTransactionDispatcherListener.Create;
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TearDown;
+begin
+  Self.L2.Free;
+  Self.L1.Free;
+  Self.Method.Free;
+  Self.Response.Free;
+  Self.Dispatcher.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionDispatcherAuthenticationChallengeMethod Published methods
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerDoesntSetPassword;
+begin
+  Self.L2.Password := 'foo';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L2.Password,
+              Self.Method.FirstPassword,
+              '2nd listener didn''t set password');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerSetsPassword;
+begin
+  Self.L1.Password := 'foo';
+  Self.L2.Password := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'Returned password not 1st listener''s');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerDoesntSetUsername;
+begin
+  Self.L2.Username := 'foo';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L2.Username,
+              Self.Method.FirstUsername,
+              '2nd listener didn''t set Username');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestFirstListenerSetsUsername;
+begin
+  Self.L1.Username := 'foo';
+  Self.L2.Username := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'Returned Username not 1st listener''s');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestRun;
+begin
+  Self.L1.Password := 'foo';
+  Self.L1.Username := 'foo';
+  Self.L2.Password := 'bar';
+  Self.L2.Username := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Check(Self.L1.AuthenticationChallenge,
+        'L1 not notified');
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'L1 gives us the first password');
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'L1 gives us the first username');
+
+  Self.Method.Run(Self.L2);
+  Check(Self.L2.AuthenticationChallenge,
+        'L2 not notified');
+
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'We ignore L2''s password');
+
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'We ignore L2''s username');
+end;
+
+procedure TestTIdSipTransactionDispatcherAuthenticationChallengeMethod.TestNoListenerSetsPassword;
+begin
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals('',
+              Self.Method.FirstPassword,
+              'Something other than the listeners set the password');
+
+  CheckEquals('',
+              Self.Method.FirstUsername,
+              'Something other than the listeners set the username');
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionDispatcherListenerReceiveRequestMethod                *
+//******************************************************************************
+//* TestTIdSipTransactionDispatcherListenerReceiveRequestMethod Public methods *
+
+procedure TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Request := TIdSipRequest.Create;
 
-  Self.Method := TIdSipUnhandledMessageListenerReceiveRequestMethod.Create;
+  Self.Method := TIdSipTransactionDispatcherListenerReceiveRequestMethod.Create;
   Self.Method.Receiver := Self.Receiver;
   Self.Method.Request  := Self.Request;
 end;
 
-procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.TearDown;
+procedure TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Request.Free;
@@ -4733,13 +5140,13 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod Published methods ***
+//* TestTIdSipTransactionDispatcherListenerReceiveRequestMethod Published methods
 
-procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.TestRun;
+procedure TestTIdSipTransactionDispatcherListenerReceiveRequestMethod.TestRun;
 var
-  Listener: TIdSipTestUnhandledMessageListener;
+  Listener: TIdSipTestTransactionDispatcherListener;
 begin
-  Listener := TIdSipTestUnhandledMessageListener.Create;
+  Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
     Self.Method.Run(Listener);
 
@@ -4755,22 +5162,22 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod                    *
+//* TestTIdSipTransactionDispatcherListenerReceiveResponseMethod               *
 //******************************************************************************
-//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod Public methods *****
+//* TestTIdSipTransactionDispatcherListenerReceiveResponseMethod Public methods
 
-procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.SetUp;
+procedure TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.SetUp;
 begin
   inherited SetUp;
 
   Self.Response := TIdSipResponse.Create;
 
-  Self.Method := TIdSipUnhandledMessageListenerReceiveResponseMethod.Create;
+  Self.Method := TIdSipTransactionDispatcherListenerReceiveResponseMethod.Create;
   Self.Method.Receiver := Self.Receiver;
   Self.Method.Response  := Self.Response;
 end;
 
-procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.TearDown;
+procedure TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.TearDown;
 begin
   Self.Method.Free;
   Self.Response.Free;
@@ -4778,13 +5185,13 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod Published methods **
+//* TestTIdSipTransactionDispatcherListenerReceiveResponseMethod Published methods
 
-procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.TestRun;
+procedure TestTIdSipTransactionDispatcherListenerReceiveResponseMethod.TestRun;
 var
-  Listener: TIdSipTestUnhandledMessageListener;
+  Listener: TIdSipTestTransactionDispatcherListener;
 begin
-  Listener := TIdSipTestUnhandledMessageListener.Create;
+  Listener := TIdSipTestTransactionDispatcherListener.Create;
   try
     Self.Method.Run(Listener);
 

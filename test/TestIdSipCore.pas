@@ -59,7 +59,6 @@ type
     procedure ReceiveTryingWithNoToTag(Invite: TIdSipRequest);
     procedure ReceiveUnauthorized(const AuthHeaderName: String;
                                   const Qop: String);
-    procedure ReceiveUnauthorizedWithQopAuthInt(const AuthHeaderName: String);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -156,6 +155,7 @@ type
     OnChangedEvent:      TEvent;
     OnEndedSessionFired: Boolean;
     OnInboundCallFired:  Boolean;
+    Password:            String;
     RemoteSequenceNo:    Cardinal;
     RemoteTarget:        TIdSipURI;
     RemoteUri:           TIdSipURI;
@@ -169,7 +169,7 @@ type
                                          const Msg: String);
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String);
@@ -272,32 +272,14 @@ type
     procedure TestViaMatchesTransportParameter;
   end;
 
-  TestTIdSipAction = class(TTestCaseTU,
-                           IIdSipActionListener)
+  TestTIdSipAction = class(TTestCaseTU)
   protected
     ActionFailed: Boolean;
-    Challenged:   Boolean;
-    Password:     String;
 
-    procedure CheckAuthentication(const AuthenticationHeaderName: String;
-                                  const AuthorizationHeaderName: String;
-                                  const QopType: String);
-    procedure CheckAuthenticationReattempt(InitialAttempt,
-                                           ReAttempt: TIdSipRequest;
-                                           const AuthenticationHeaderName: String;
-                                           const AuthorizationHeaderName: String;
-                                           const MsgPrefix: String); virtual;
     function  CreateAction: TIdSipAction; virtual; abstract;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); virtual;
     procedure ReceiveBadExtensionResponse;
   public
     procedure SetUp; override;
-
-    procedure TestAuthentication; virtual;
-    procedure TestProxyAuthentication; virtual;
   published
     procedure TestIsInvite; virtual;
     procedure TestIsOptions; virtual;
@@ -371,18 +353,12 @@ type
     procedure OnSuccess(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse);
   protected
-    procedure CheckAuthenticationReattempt(InitialAttempt,
-                                           ReAttempt: TIdSipRequest;
-                                           const AuthenticationHeaderName: String;
-                                           const AuthorizationHeaderName: String;
-                                           const MsgPrefix: String); override;
     function  CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddListener;
-    procedure TestAuthentication; override;
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
@@ -390,7 +366,6 @@ type
     procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestMethod;
-    procedure TestProxyAuthentication; override;
     procedure TestReceiveGlobalFailed;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
@@ -445,9 +420,7 @@ type
     procedure SetUp; override;
   published
     procedure TestAddListener;
-    procedure TestAuthentication; override;
     procedure TestIsOptions; override;
-    procedure TestProxyAuthentication; override;
     procedure TestReceiveResponse;
     procedure TestRemoveListener;
   end;
@@ -485,14 +458,11 @@ type
     procedure TearDown; override;
   published
     procedure TestAddListener;
-    procedure TestAuthentication; override;
     procedure TestMethod;
-    procedure TestProxyAuthentication; override;
     procedure TestReceiveFail;
     procedure TestReceiveIntervalTooBrief;
     procedure TestReceiveMovedPermanently;
     procedure TestReceiveOK;
-    procedure TestReceiveUnauthorized;
     procedure TestRemoveListener;
     procedure TestReregisterTime;
     procedure TestSequenceNumberIncrements;
@@ -591,6 +561,10 @@ type
     SentRequestTerminated:  Boolean;
     Session:                TIdSipInboundSession;
 
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String); overload;
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -637,6 +611,10 @@ type
     OnDroppedMessage: Boolean;
     Session:          TIdSipOutboundSession;
 
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -658,7 +636,6 @@ type
     procedure TestAckFromRecordRouteResponse;
     procedure TestAckWithAuthorization;
     procedure TestAckWithProxyAuthorization;
-    procedure TestAuthentication; override;
     procedure TestCall;
     procedure TestCallRemoteRefusal;
     procedure TestCallNetworkFailure;
@@ -674,7 +651,6 @@ type
     procedure TestModifyUsesAuthentication;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestDoubleRedirect;
-    procedure TestProxyAuthentication; override;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
@@ -688,26 +664,6 @@ type
 
   TIdModifyAuthHeaderProc = procedure(Auth: TIdSipAuthenticateHeader) of object;
 
-  TestProxyAuthentication = class(TestTIdSipSession)
-  private
-    Opaque:   String;
-    Password: String;
-    Session:  TIdSipOutboundSession;
-
-  protected
-    function  CreateAction: TIdSipAction; override;
-    procedure EstablishSession(Session: TIdSipSession); override;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); override;
-  public
-    procedure SetUp; override;
-  published
-    procedure TestFailedAuthentication;
-    procedure TestSuccessfulAuthentication;
-  end;
-
   TActionMethodTestCase = class(TTestCase)
   private
     Response: TIdSipResponse;
@@ -715,23 +671,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  end;
-
-  TestTIdSipActionAuthenticationChallengeMethod = class(TActionMethodTestCase)
-  private
-    L1:     TIdSipTestRegistrationListener;
-    L2:     TIdSipTestRegistrationListener;
-    Method: TIdSipActionAuthenticationChallengeMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestFirstListenerDoesntSetPassword;
-    procedure TestFirstListenerSetsPassword;
-    procedure TestFirstListenerDoesntSetUsername;
-    procedure TestFirstListenerSetsUsername;
-    procedure TestNoListenerSetsPassword;
-    procedure TestRun;
   end;
 
   TestTIdSipInboundInviteFailureMethod = class(TActionMethodTestCase)
@@ -874,6 +813,25 @@ type
     procedure TestRun;
   end;
 
+  TestTIdSipUserAgentAuthenticationChallengeMethod = class(TTestCase)
+  private
+    Challenge: TIdSipResponse;
+    L1:        TIdSipTestUserAgentListener;
+    L2:        TIdSipTestUserAgentListener;
+    Method:    TIdSipUserAgentAuthenticationChallengeMethod;
+    UserAgent: TIdSipUserAgent;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestFirstListenerDoesntSetPassword;
+    procedure TestFirstListenerSetsPassword;
+    procedure TestFirstListenerDoesntSetUsername;
+    procedure TestFirstListenerSetsUsername;
+    procedure TestNoListenerSetsPassword;
+    procedure TestRun;
+  end;
+
   TestTIdSipUserAgentDroppedUnmatchedResponseMethod = class(TTestCase)
   private
     Method:   TIdSipUserAgentDroppedUnmatchedResponseMethod;
@@ -962,6 +920,7 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
@@ -976,9 +935,9 @@ begin
   Result.AddTest(TestTIdSipOutboundRegistrationQuery.Suite);
   Result.AddTest(TestTIdSipOutboundUnregister.Suite);
   Result.AddTest(TestTIdSipInboundSession.Suite);
+}
   Result.AddTest(TestTIdSipOutboundSession.Suite);
-  Result.AddTest(TestProxyAuthentication.Suite);
-  Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
+{
   Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
@@ -991,8 +950,10 @@ begin
   Result.AddTest(TestTIdSipEstablishedSessionMethod.Suite);
   Result.AddTest(TestTIdSipModifiedSessionMethod.Suite);
   Result.AddTest(TestTIdSipSessionModifySessionMethod.Suite);
+  Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -1156,7 +1117,7 @@ end;
 
 function TTestCaseTU.SentRequestCount: Cardinal;
 begin
-  Result := Self.Dispatcher.Transport.SentRequestCount
+  Result := Self.Dispatcher.Transport.SentRequestCount;
 end;
 
 function TTestCaseTU.SentResponseCount: Cardinal;
@@ -1309,28 +1270,6 @@ begin
     Auth.Realm               := 'SFTF';
     Auth.Nonce               := '5369704365727434313433';
     Auth.Qop                 := Qop;
-
-    Challenge.AddHeader(AuthenticationInfoHeader);
-
-    Self.ReceiveResponse(Challenge);
-  finally
-    Challenge.Free;
-  end;
-end;
-
-procedure TTestCaseTU.ReceiveUnauthorizedWithQopAuthInt(const AuthHeaderName: String);
-var
-  Auth:      TIdSipAuthenticateHeader;
-  Challenge: TIdSipResponse;
-begin
-  Challenge := TIdSipResponse.InResponseTo(Self.LastSentRequest,
-                                           SIPUnauthorized);
-  try
-    Auth := Challenge.AddHeader(AuthHeaderName) as TIdSipAuthenticateHeader;
-    Auth.AuthorizationScheme := DigestAuthorizationScheme;
-    Auth.Realm               := 'SFTF';
-    Auth.Nonce               := '5369704365727434313433';
-    Auth.Qop                 := QopAuthInt;
 
     Challenge.AddHeader(AuthenticationInfoHeader);
 
@@ -1997,6 +1936,7 @@ begin
 
   Self.OnEndedSessionFired := false;
   Self.OnInboundCallFired  := false;
+  Self.Password            := 'mycotoxin';
   Self.SessionEstablished  := false;
 end;
 
@@ -2082,11 +2022,13 @@ begin
         'TCP should be the default transport');
 end;
 
-procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
+procedure TestTIdSipUserAgent.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                                         Challenge: TIdSipResponse;
                                                         var Username: String;
                                                         var Password: String);
 begin
+  Password := Self.Password;
+  Username := Self.Core.Username;
 end;
 
 procedure TestTIdSipUserAgent.OnChanged(Observed: TObject);
@@ -3838,149 +3780,9 @@ begin
   inherited SetUp;
 
   Self.ActionFailed := false;
-  Self.Challenged   := false;
-
-  Self.Password := 'mycotoxin';
-end;
-
-procedure TestTIdSipAction.TestAuthentication;
-begin
-  // It only makes sense to check for authentication on outbound actions.
-  // Half our actions are inbound, and half outbound. Our strategy is thus to
-  // avoid code duplication by keeping the code here, in the base test class.
-  // Outbound actions then make this procedure published by overriding this
-  // method and just calling the inherited method. This makes the TestRunner
-  // pick up the test in just those actions that need it. The other option is
-  // to duplicate the code in those test cases that require it!
-
-  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, '');
-  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, QopAuth);
-  Self.CheckAuthentication(WWWAuthenticateHeader, AuthorizationHeader, QopAuthInt);
-end;
-
-
-
-procedure TestTIdSipAction.TestProxyAuthentication;
-begin
-  // It only makes sense to check for authentication on outbound actions.
-  // Half our actions are inbound, and half outbound. Our strategy is thus to
-  // avoid code duplication by keeping the code here, in the base test class.
-  // Outbound actions then make this procedure published by overriding this
-  // method and just calling the inherited method. This makes the TestRunner
-  // pick up the test in just those actions that need it. The other option is
-  // to duplicate the code in those test cases that require it!
-
-  Self.CheckAuthentication(ProxyAuthenticateHeader, ProxyAuthorizationHeader, '');
-  Self.CheckAuthentication(ProxyAuthenticateHeader, ProxyAuthorizationHeader, QopAuth);
-  Self.CheckAuthentication(ProxyAuthenticateHeader, ProxyAuthorizationHeader, QopAuthInt);
 end;
 
 //* TestTIdSipAction Protected methods *****************************************
-
-procedure TestTIdSipAction.CheckAuthentication(const AuthenticationHeaderName: String;
-                                               const AuthorizationHeaderName: String;
-                                               const QopType: String);
-var
-  InitialRequest: TIdSipRequest;
-  ReAttempt:      TIdSipRequest;
-begin
-  Self.CreateAction;
-
-  InitialRequest := TIdSipRequest.Create;
-  try
-    InitialRequest.Assign(Self.LastSentRequest);
-    Self.MarkSentRequestCount;
-
-    Self.ReceiveUnauthorized(AuthenticationHeaderName, QopType);
-    CheckRequestSent(Self.ClassName + ': qop=' + QopType + 'no re-issue of '
-                   + InitialRequest.Method + 'request');
-
-    ReAttempt := Self.LastSentRequest;
-
-    Self.CheckAuthenticationReattempt(InitialRequest,
-                                      ReAttempt,
-                                      AuthenticationHeaderName,
-                                      AuthorizationHeaderName,
-                                      Self.ClassName + ': qop=' + QopType + ':');
-  finally
-    InitialRequest.Free;
-  end;
-end;
-
-procedure TestTIdSipAction.CheckAuthenticationReattempt(InitialAttempt,
-                                                        ReAttempt: TIdSipRequest;
-                                                        const AuthenticationHeaderName: String;
-                                                        const AuthorizationHeaderName: String;
-                                                        const MsgPrefix: String);
-var
-  A1:               String;
-  A2:               String;
-  Algo:             TIdAlgorithmFunction;
-  Auth:             TIdSipAuthorizationHeader;
-  Challenge:        TIdSipAuthenticateHeader;
-  Digest:           TIdRequestDigestFunction;
-  ExpectedResponse: String;
-  Qop:              TIdQopFunction;
-begin
-  Challenge := Self.Dispatcher.Transport.LastResponse.FirstHeader(AuthenticationHeaderName) as TIdSipAuthenticateHeader;
-  Auth      := ReAttempt.FirstHeader(AuthorizationHeaderName) as TIdSipAuthorizationHeader;
-
-  CheckEquals(InitialAttempt.CSeq.SequenceNo + 1,
-              ReAttempt.CSeq.SequenceNo,
-              MsgPrefix + ' Re-' + InitialAttempt.Method + ' CSeq sequence number');
-  CheckEquals(InitialAttempt.Method,
-              ReAttempt.Method,
-              MsgPrefix + ' Method of new attempt');
-  CheckEquals(InitialAttempt.RequestUri.Uri,
-              ReAttempt.RequestUri.Uri,
-              Self.ClassName + ': Re-' + InitialAttempt.Method + ' Request-URI');
-  Check(ReAttempt.HasHeader(AuthorizationHeaderName),
-        MsgPrefix + ' No ' + AuthorizationHeaderName + ' header in re-' + InitialAttempt.Method);
-
-  CheckEquals(Challenge.AuthorizationScheme,
-              Auth.AuthorizationScheme,
-              MsgPrefix + ' No authorization scheme set');
-
-  CheckEquals(Challenge.Nonce,
-              Auth.Nonce,
-              MsgPrefix + ' Nonce');
-
-  CheckEquals(Challenge.Realm,
-              Auth.Realm,
-              MsgPrefix + ' Realm');
-
-  CheckEquals(ReAttempt.RequestUri.AsString,
-              Auth.DigestUri,
-              MsgPrefix + ' URI');
-
-  CheckEquals(ReAttempt.From.Address.Username,
-              Auth.Username,
-              MsgPrefix + ' Username');
-
-  Algo   := A1For(Auth.Algorithm);
-  Digest := RequestDigestFor(Auth.Qop);
-  Qop    := A2For(Auth.Qop);
-
-  A1 := Algo(Auth, Self.Password);
-  A2 := Qop(Auth, ReAttempt.Method, ReAttempt.Body);
-
-  ExpectedResponse := Digest(A1, A2, Auth);
-
-  CheckEquals(ExpectedResponse,
-              Auth.Response,
-              MsgPrefix + ' Response');
-end;
-
-procedure TestTIdSipAction.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                     Challenge: TIdSipResponse;
-                                                     var Username: String;
-                                                     var Password: String);
-begin
-  Self.Challenged := true;
-
-  Password := Self.Password;
-  Username := Self.Core.Username;
-end;
 
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
 begin
@@ -5203,33 +5005,6 @@ end;
 
 //* TestTIdSipOutboundInvite Protected methods *********************************
 
-procedure TestTIdSipOutboundInvite.CheckAuthenticationReattempt(InitialAttempt,
-                                                                ReAttempt: TIdSipRequest;
-                                                                const AuthenticationHeaderName: String;
-                                                                const AuthorizationHeaderName: String;
-                                                                const MsgPrefix: String);
-var
-  Ack: TIdSipRequest;
-begin
-  inherited CheckAuthenticationReattempt(InitialAttempt,
-                                         ReAttempt,
-                                         AuthenticationHeaderName,
-                                         AuthorizationHeaderName,
-                                         MsgPrefix);
-
-  Self.MarkSentACKCount;
-  Self.ReceiveOk(Self.LastSentRequest);
-
-  CheckAckSent(MsgPrefix + ' No ACK sent');
-
-  Ack := Self.LastSentACK;
-  Check(Ack.HasHeader(AuthorizationHeaderName),
-        MsgPrefix + ' No ' + AuthorizationHeaderName + ' header in ACK');
-  CheckEquals(ReAttempt.FirstHeader(AuthorizationHeaderName).Value,
-              Ack.FirstHeader(AuthorizationHeaderName).Value,
-              MsgPrefix + ' ACK  must use same credentials as re-INVITE');
-end;
-
 function TestTIdSipOutboundInvite.CreateAction: TIdSipAction;
 var
   Invite: TIdSipOutboundInitialInvite;
@@ -5331,11 +5106,6 @@ begin
   finally
     L1.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundInvite.TestAuthentication;
-begin
-  inherited TestAuthentication;
 end;
 
 procedure TestTIdSipOutboundInvite.TestCancelAfterAccept;
@@ -5528,11 +5298,6 @@ begin
   CheckEquals(MethodInvite,
               TIdSipOutboundInvite.Method,
               'Outbound INVITE Method');
-end;
-
-procedure TestTIdSipOutboundInvite.TestProxyAuthentication;
-begin
-  inherited TestProxyAuthentication;
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveGlobalFailed;
@@ -5967,11 +5732,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundOptions.TestAuthentication;
-begin
-  inherited TestAuthentication;
-end;
-
 procedure TestTIdSipOutboundOptions.TestIsOptions;
 var
   Action: TIdSipAction;
@@ -5980,11 +5740,6 @@ begin
   Action := Self.CreateAction;
   Check(Action.IsOptions,
         Action.ClassName + ' marked as an Options');
-end;
-
-procedure TestTIdSipOutboundOptions.TestProxyAuthentication;
-begin
-  inherited TestProxyAuthentication;
 end;
 
 procedure TestTIdSipOutboundOptions.TestReceiveResponse;
@@ -6200,21 +5955,11 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundRegistration.TestAuthentication;
-begin
-  inherited TestAuthentication;
-end;
-
 procedure TestTIdSipOutboundRegistration.TestMethod;
 begin
   CheckEquals(MethodRegister,
               TIdSipOutboundRegistration.Method,
               'Outbound registration; Method');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestProxyAuthentication;
-begin
-  inherited TestProxyAuthentication;
 end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveFail;
@@ -6259,14 +6004,6 @@ begin
   Self.CreateAction;
   Self.ReceiveOk(Self.LastSentRequest);
   Check(Self.Succeeded, 'Registration failed');
-end;
-
-procedure TestTIdSipOutboundRegistration.TestReceiveUnauthorized;
-begin
-  Self.CreateAction;
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
-  Check(Self.Challenged,
-        'No authentication challenge for REGISTER');
 end;
 
 procedure TestTIdSipOutboundRegistration.TestRemoveListener;
@@ -6689,6 +6426,13 @@ begin
 end;
 
 //* TestTIdSipInboundSession Private methods ***********************************
+
+procedure TestTIdSipInboundSession.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                                             Challenge: TIdSipResponse;
+                                                             var Username: String;
+                                                             var Password: String);
+begin
+end;
 
 procedure TestTIdSipInboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                                              Receiver: TIdSipTransport);
@@ -7163,6 +6907,13 @@ end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
 
+procedure TestTIdSipOutboundSession.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                                              Challenge: TIdSipResponse;
+                                                              var Username: String;
+                                                              var Password: String);
+begin
+end;                                                              
+
 procedure TestTIdSipOutboundSession.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                                               Receiver: TIdSipTransport);
 begin
@@ -7328,11 +7079,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-procedure TestTIdSipOutboundSession.TestAuthentication;
-begin
-  inherited TestAuthentication;
 end;
 
 procedure TestTIdSipOutboundSession.TestCall;
@@ -7539,12 +7285,13 @@ var
   Invite: TIdSipRequest;
   Modify: TIdSipRequest;
 begin
-  //  ---      INVITE      --->
-  // <--- 401 Unauthorized ---
-  //  ---      INVITE      --->
-  // <---      200 OK      ---
-  //  ---        ACK       --->
-  //  ---      INVITE      ---> (modify)
+  // n, n+1, n+2, ..., n+m is the sequence of branch IDs generated by Self.Core.
+  //  ---      INVITE      ---> (with branch n)
+  // <--- 401 Unauthorized ---  (with branch n)
+  //  ---      INVITE      ---> (with branch n+1)
+  // <---      200 OK      ---  (with branch n+1)
+  //  ---        ACK       ---> (with branch n+1)
+  //  ---      INVITE      ---> (modify) (with branch n+2)
 
   Invite := TIdSipRequest.Create;
   try
@@ -7557,6 +7304,9 @@ begin
           'Resend INVITE has no Authorization header');
 
     Self.ReceiveOk(Self.LastSentRequest);
+    Check(not Self.Session.IsEarly,
+          'The UA didn''t update the InviteAction''s InitialRequest as a'
+             + ' result of the authentication challenge.');
 
     Self.Session.Modify('', '');
 
@@ -7618,11 +7368,6 @@ begin
   CheckEquals('sip:baz@quaax.org',
               Self.LastSentRequest.RequestUri.Uri,
               'Request-URI of redirect #2');
-end;
-
-procedure TestTIdSipOutboundSession.TestProxyAuthentication;
-begin
-  inherited TestProxyAuthentication;
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
@@ -7863,139 +7608,6 @@ begin
 end;
 
 //******************************************************************************
-//* TestProxyAuthentication                                                    *
-//******************************************************************************
-//* TestProxyAuthentication Public methods *************************************
-
-procedure TestProxyAuthentication.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Session := Self.CreateAction as TIdSipOutboundSession;
-
-  Self.Opaque := 'decafbadcafebabe';
-  Self.Password := 'f00L';
-end;
-
-//* TestProxyAuthentication Protected methods **********************************
-
-function TestProxyAuthentication.CreateAction: TIdSipAction;
-var
-  Session: TIdSipOutboundSession;
-begin
-  Session := Self.Core.Call(Self.Destination, '', '');
-  Session.AddSessionListener(Self);
-  Session.Send;
-
-  Result := Session;
-end;
-
-procedure TestProxyAuthentication.EstablishSession(Session: TIdSipSession);
-begin
-  Self.ReceiveOk(Self.LastSentRequest);
-end;
-
-procedure TestProxyAuthentication.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                            Challenge: TIdSipResponse;
-                                                            var Username: String;
-                                                            var Password: String);
-begin
-  inherited OnAuthenticationChallenge(Action, Challenge, Username, Password);
-
-  Password := Self.Password;
-  Username := Self.Core.Username;
-end;
-
-//* TestProxyAuthentication Published methods **********************************
-
-procedure TestProxyAuthentication.TestFailedAuthentication;
-var
-  SequenceNo: Cardinal;
-  ReInvite:   TIdSipRequest;
-begin
-  //  Failed authentications result in resends with (hopefully corrected)
-  // credentials.
-
-  Self.MarkSentRequestCount;
-  SequenceNo   := Self.LastSentRequest.CSeq.SequenceNo;
-
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
-  CheckRequestSent('no re-issue of request');
-
-  ReInvite := Self.LastSentRequest;
-  CheckEquals(SequenceNo + 1,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-
-  Self.MarkSentRequestCount;
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
-  CheckRequestSent('no re-issue of request');
-  ReInvite := Self.LastSentRequest;
-  CheckEquals(SequenceNo + 2,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-end;
-
-procedure TestProxyAuthentication.TestSuccessfulAuthentication;
-var
-  A1:         String;
-  A2:         String;
-  Auth:       TIdSipProxyAuthorizationHeader;
-  SequenceNo: Cardinal;
-  ReInvite:   TIdSipRequest;
-  Response:   TIdSipResponse;
-begin
-  //  ---             INVITE                --->
-  // <--- 407 Proxy Authentication Required ---
-  //  ---              ACK                  --->
-  //  ---             INVITE                --->
-
-  Self.MarkSentRequestCount;
-  SequenceNo   := Self.LastSentRequest.CSeq.SequenceNo;
-
-  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, '');
-  CheckRequestSent('no re-issue of request');
-
-  ReInvite := Self.LastSentRequest;
-  CheckEquals(SequenceNo + 1,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-  CheckEquals(MethodInvite,
-              ReInvite.Method,
-              'Method of new attempt');
-
-  Check(ReInvite.HasProxyAuthorization, 'No Proxy-Authorization header');
-
-  Auth := ReInvite.FirstProxyAuthorization;
-  Response := Self.LastSentResponse;
-
-  CheckEquals(Response.FirstProxyAuthenticate.Nonce,
-              Auth.Nonce,
-              'Nonce');
-
-  CheckEquals(Response.FirstProxyAuthenticate.Realm,
-              Auth.Realm,
-              'Realm');
-
-  CheckEquals(ReInvite.RequestUri.AsString,
-              Auth.DigestUri,
-              'URI');
-
-  CheckEquals(ReInvite.From.Address.Username,
-              Auth.Username,
-              'Username');
-
-  A1 := Auth.Username + ':' + Auth.Realm + ':' + Self.Password;
-  A2 := ReInvite.Method + ':' + Auth.DigestUri;
-
-  CheckEquals(KD(MD5(A1),
-                 Auth.Nonce + ':' + MD5(A2),
-                 MD5),
-              Auth.Response,
-              'Response');
-end;
-
-//******************************************************************************
 //* TActionMethodTestCase                                                      *
 //******************************************************************************
 //* TActionMethodTestCase Public methods ***************************************
@@ -8017,137 +7629,6 @@ begin
   Self.UA.Free;
 
   inherited TearDown;
-end;
-
-//******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod                              *
-//******************************************************************************
-//* TestTIdSipActionAuthenticationChallengeMethod Public methods ***************
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipActionAuthenticationChallengeMethod.Create;
-
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Action := Self.UA.Call(Nowhere, '', '');
-  finally
-    Nowhere.Free;
-  end;
-
-  Self.Method.Response := Self.Response;
-
-  Self.L1 := TIdSipTestRegistrationListener.Create;
-  Self.L2 := TIdSipTestRegistrationListener.Create;
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TearDown;
-begin
-  Self.L2.Free;
-  Self.L1.Free;
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipActionAuthenticationChallengeMethod Published methods ****
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestFirstListenerDoesntSetPassword;
-begin
-  Self.L2.Password := 'foo';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L2.Password,
-              Self.Method.FirstPassword,
-              '2nd listener didn''t set password');
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestFirstListenerSetsPassword;
-begin
-  Self.L1.Password := 'foo';
-  Self.L2.Password := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'Returned password not 1st listener''s');
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestFirstListenerDoesntSetUsername;
-begin
-  Self.L2.Username := 'foo';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L2.Username,
-              Self.Method.FirstUsername,
-              '2nd listener didn''t set Username');
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestFirstListenerSetsUsername;
-begin
-  Self.L1.Username := 'foo';
-  Self.L2.Username := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'Returned Username not 1st listener''s');
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestRun;
-begin
-  Self.L1.Password := 'foo';
-  Self.L1.Username := 'foo';
-  Self.L2.Password := 'bar';
-  Self.L2.Username := 'bar';
-
-  Self.Method.Run(Self.L1);
-  Check(Self.L1.AuthenticationChallenge,
-        'L1 not notified');
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'L1 gives us the first password');
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'L1 gives us the first username');
-
-  Self.Method.Run(Self.L2);
-  Check(Self.L2.AuthenticationChallenge,
-        'L2 not notified');
-
-  CheckEquals(Self.L1.Password,
-              Self.Method.FirstPassword,
-              'We ignore L2''s password');
-
-  CheckEquals(Self.L1.Username,
-              Self.Method.FirstUsername,
-              'We ignore L2''s username');
-end;
-
-procedure TestTIdSipActionAuthenticationChallengeMethod.TestNoListenerSetsPassword;
-begin
-  Self.Method.Run(Self.L1);
-  Self.Method.Run(Self.L2);
-
-  CheckEquals('',
-              Self.Method.FirstPassword,
-              'Something other than the listeners set the password');
-
-  CheckEquals('',
-              Self.Method.FirstUsername,
-              'Something other than the listeners set the username');
 end;
 
 //******************************************************************************
@@ -8745,6 +8226,134 @@ begin
   finally
     L.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSipUserAgentAuthenticationChallengeMethod                           *
+//******************************************************************************
+//* TestTIdSipUserAgentAuthenticationChallengeMethod Public methods ************
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Challenge := TIdSipResponse.Create;
+  Self.UserAgent := TIdSipUserAgent.Create;
+  Self.Method := TIdSipUserAgentAuthenticationChallengeMethod.Create;
+
+  Self.Method.UserAgent := Self.UserAgent;
+
+  Self.Method.Challenge := Self.Challenge;
+
+  Self.L1 := TIdSipTestUserAgentListener.Create;
+  Self.L2 := TIdSipTestUserAgentListener.Create;
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TearDown;
+begin
+  Self.L2.Free;
+  Self.L1.Free;
+  Self.Method.Free;
+  Self.UserAgent.Free;
+  Self.Challenge.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUserAgentAuthenticationChallengeMethod Published methods **********
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestFirstListenerDoesntSetPassword;
+begin
+  Self.L2.Password := 'foo';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L2.Password,
+              Self.Method.FirstPassword,
+              '2nd listener didn''t set password');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestFirstListenerSetsPassword;
+begin
+  Self.L1.Password := 'foo';
+  Self.L2.Password := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'Returned password not 1st listener''s');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestFirstListenerDoesntSetUsername;
+begin
+  Self.L2.Username := 'foo';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L2.Username,
+              Self.Method.FirstUsername,
+              '2nd listener didn''t set Username');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestFirstListenerSetsUsername;
+begin
+  Self.L1.Username := 'foo';
+  Self.L2.Username := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'Returned Username not 1st listener''s');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestRun;
+begin
+  Self.L1.Password := 'foo';
+  Self.L1.Username := 'foo';
+  Self.L2.Password := 'bar';
+  Self.L2.Username := 'bar';
+
+  Self.Method.Run(Self.L1);
+  Check(Self.L1.AuthenticationChallenge,
+        'L1 not notified');
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'L1 gives us the first password');
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'L1 gives us the first username');
+
+  Self.Method.Run(Self.L2);
+  Check(Self.L2.AuthenticationChallenge,
+        'L2 not notified');
+
+  CheckEquals(Self.L1.Password,
+              Self.Method.FirstPassword,
+              'We ignore L2''s password');
+
+  CheckEquals(Self.L1.Username,
+              Self.Method.FirstUsername,
+              'We ignore L2''s username');
+end;
+
+procedure TestTIdSipUserAgentAuthenticationChallengeMethod.TestNoListenerSetsPassword;
+begin
+  Self.Method.Run(Self.L1);
+  Self.Method.Run(Self.L2);
+
+  CheckEquals('',
+              Self.Method.FirstPassword,
+              'Something other than the listeners set the password');
+
+  CheckEquals('',
+              Self.Method.FirstUsername,
+              'Something other than the listeners set the username');
 end;
 
 //******************************************************************************

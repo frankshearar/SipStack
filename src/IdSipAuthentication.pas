@@ -575,7 +575,7 @@ begin
                                         QopData(Authorization, Method, Body),
                                         Authorization);
 
-  if Assigned(Info) then begin
+  if Assigned(Info) and Info.HasNextNonce then begin
     // Possibly authenticate the server
     Self.Nonce := Info.NextNonce;
   end;

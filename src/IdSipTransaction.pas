@@ -13,7 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdInterfacedObject, IdNotification,
-  IdSipMessage, IdSipTimer, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils;
+  IdSipAuthentication, IdSipMessage, IdSipTimer, IdSipTransport, IdTimerQueue,
+  SyncObjs, SysUtils;
 
 const
   DefaultT1    = 500;   // milliseconds
@@ -51,10 +52,15 @@ type
     procedure OnTerminated(Transaction: TIdSipTransaction);
   end;
 
+  TIdSipTransactionDispatcher = class;
   // I allow interested parties to listen for requests/responses that do not
   // match any current transactions.
-  IIdSipUnhandledMessageListener = interface
+  IIdSipTransactionDispatcherListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
+    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -73,6 +79,7 @@ type
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
   private
+    fKeyring:        TIdKeyRing;
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
@@ -84,6 +91,7 @@ type
     Transactions:    TObjectList;
     TransactionLock: TCriticalSection;
 
+    function  AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
     procedure ClientInviteTransactionTimerA(Tran: TIdSipTransaction);
     procedure ClientInviteTransactionTimerB(Tran: TIdSipTransaction);
     procedure ClientInviteTransactionTimerD(Tran: TIdSipTransaction);
@@ -103,10 +111,16 @@ type
                                         Proc: TIdSipTransactionProc);
     function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
-
+    procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
+                                              var Username: String;
+                                              var Password: String);
     procedure RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
     function  TransactionAt(Index: Cardinal): TIdSipTransaction;
     function  TransportAt(Index: Cardinal): TIdSipTransport;
+    procedure TryAgainWithAuthentication(InitialRequest: TIdSipRequest;
+                                         Challenge: TIdSipResponse;
+                                         const Username: String;
+                                         const Password: String);
   protected
     function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
     procedure NotifyListenersOfRequest(Request: TIdSipRequest;
@@ -138,7 +152,7 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
+    procedure AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure AddTransport(Transport: TIdSipTransport);
     function  AddClientTransaction(InitialRequest: TIdSipRequest): TIdSipTransaction;
     function  AddServerTransaction(InitialRequest: TIdSipRequest;
@@ -155,7 +169,7 @@ type
     procedure OnServerInviteTransactionTimerH(Event: TObject);
     procedure OnServerInviteTransactionTimerI(Event: TObject);
     procedure OnServerNonInviteTransactionTimerJ(Event: TObject);
-    procedure RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
+    procedure RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
     procedure ScheduleEvent(Event: TNotifyEvent;
                             WaitTime: Cardinal;
                             Request: TIdSipMessage);
@@ -166,6 +180,7 @@ type
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
+    property Keyring:    TIdKeyRing    read fKeyring;
     property T1Interval: Cardinal      read fT1Interval write fT1Interval;
     property T2Interval: Cardinal      read fT2Interval write fT2Interval;
     property T4Interval: Cardinal      read fT4Interval write fT4Interval;
@@ -396,16 +411,31 @@ type
     property Receiver: TIdSipTransport read fReceiver write fReceiver;
   end;
 
-  TIdSipUnhandledMessageListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipTransactionDispatcherAuthenticationChallengeMethod = class(TIdSipTransactionDispatcherMethod)
+  private
+    fDispatcher:    TIdSipTransactionDispatcher;
+    fFirstPassword: String;
+    fFirstUsername: String;
+    fChallenge:     TIdSipResponse;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Dispatcher:    TIdSipTransactionDispatcher read fDispatcher write fDispatcher;
+    property FirstPassword: String                      read fFirstPassword write fFirstPassword;
+    property FirstUsername: String                      read fFirstUsername write fFirstUsername;
+    property Challenge:     TIdSipResponse              read fChallenge write fChallenge;
+  end;
+
+  TIdSipTransactionDispatcherListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fRequest: TIdSipRequest;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Request:  TIdSipRequest read fRequest write fRequest;
+    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
-  TIdSipUnhandledMessageListenerReceiveResponseMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipTransactionDispatcherListenerReceiveResponseMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fResponse: TIdSipResponse;
   public
@@ -460,7 +490,7 @@ type
 implementation
 
 uses
-  IdException, IdSipConsts, IdSipDialogID, Math;
+  IdException, IdRandom, IdSipConsts, IdSipDialogID, Math;
 
 //******************************************************************************
 //* TIdSipTransactionDispatcher                                                *
@@ -471,6 +501,7 @@ constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
+  Self.fKeyring     := TIdKeyRing.Create;
   Self.MsgListeners := TIdNotificationList.Create;
   Self.TimerLock    := TCriticalSection.Create;
 
@@ -505,11 +536,12 @@ begin
 
   Self.TimerLock.Free;
   Self.MsgListeners.Free;
+  Self.Keyring.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipTransactionDispatcher.AddUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
+procedure TIdSipTransactionDispatcher.AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
 begin
   Self.MsgListeners.AddListener(Listener);
 end;
@@ -673,7 +705,7 @@ begin
                                  Self.ServerNonInviteTransactionTimerJ);
 end;
 
-procedure TIdSipTransactionDispatcher.RemoveUnhandledMessageListener(const Listener: IIdSipUnhandledMessageListener);
+procedure TIdSipTransactionDispatcher.RemoveTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
 begin
   Self.MsgListeners.RemoveListener(Listener);
 end;
@@ -818,9 +850,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
                                                                Receiver: TIdSipTransport);
 var
-  Notification: TIdSipUnhandledMessageListenerReceiveRequestMethod;
+  Notification: TIdSipTransactionDispatcherListenerReceiveRequestMethod;
 begin
-  Notification := TIdSipUnhandledMessageListenerReceiveRequestMethod.Create;
+  Notification := TIdSipTransactionDispatcherListenerReceiveRequestMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Request  := Request;
@@ -834,9 +866,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfResponse(Response: TIdSipResponse;
                                                                 Receiver: TIdSipTransport);
 var
-  Notification: TIdSipUnhandledMessageListenerReceiveResponseMethod;
+  Notification: TIdSipTransactionDispatcherListenerReceiveResponseMethod;
 begin
-  Notification := TIdSipUnhandledMessageListenerReceiveResponseMethod.Create;
+  Notification := TIdSipTransactionDispatcherListenerReceiveResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Response := Response;
@@ -862,8 +894,25 @@ end;
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(Response: TIdSipResponse;
                                                         Transaction: TIdSipTransaction;
                                                         Receiver: TIdSipTransport);
+var
+  Password: String;
+  Username: String;
 begin
-  Self.NotifyListenersOfResponse(Response, Receiver);
+  if (Response.StatusCode = SIPUnauthorized)
+  or (Response.StatusCode = SIPProxyAuthenticationRequired) then begin
+    Self.NotifyOfAuthenticationChallenge(Response, Username, Password);
+    try
+      Self.TryAgainWithAuthentication(Transaction.InitialRequest,
+                                      Response,
+                                      Username,
+                                      Password);
+    finally
+      // Clear the memory containing the password as a security measure.
+      FillChar(Password, Length(Password), 0);
+    end;
+  end
+  else
+    Self.NotifyListenersOfResponse(Response, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnTerminated(Transaction: TIdSipTransaction);
@@ -893,6 +942,16 @@ begin
 end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
+
+function TIdSipTransactionDispatcher.AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
+begin
+  if Challenge.HasProxyAuthenticate then
+    Result := Challenge.FirstProxyAuthenticate
+  else if Challenge.HasWWWAuthenticate then
+    Result := Challenge.FirstWWWAuthenticate
+  else
+    Result := nil;
+end;
 
 procedure TIdSipTransactionDispatcher.ClientInviteTransactionTimerA(Tran: TIdSipTransaction);
 begin
@@ -1045,6 +1104,30 @@ begin
   end;
 end;
 
+procedure TIdSipTransactionDispatcher.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
+                                                                      var Username: String;
+                                                                      var Password: String);
+var
+  Notification: TIdSipTransactionDispatcherAuthenticationChallengeMethod;
+begin
+  // We present the authentication challenge to all listeners but only accept
+  // the first listener's password. The responsibility of listener order rests
+  // firmly on your own shoulders.
+
+  Notification := TIdSipTransactionDispatcherAuthenticationChallengeMethod.Create;
+  try
+    Notification.Dispatcher := Self;
+    Notification.Challenge  := Response;
+
+    Self.MsgListeners.Notify(Notification);
+
+    Password := Notification.FirstPassword;
+    Username := Notification.FirstUsername;
+  finally
+    Notification.Free;
+  end;
+end;
+
 procedure TIdSipTransactionDispatcher.RemoveTransaction(TerminatedTransaction: TIdSipTransaction);
 begin
   // Three reasons why a transaction would terminate: one of its timers fired,
@@ -1072,6 +1155,48 @@ end;
 function TIdSipTransactionDispatcher.TransportAt(Index: Cardinal): TIdSipTransport;
 begin
   Result := Self.Transports[Index] as TIdSipTransport;
+end;
+
+procedure TIdSipTransactionDispatcher.TryAgainWithAuthentication(InitialRequest: TIdSipRequest;
+                                                                 Challenge: TIdSipResponse;
+                                                                 const Username: String;
+                                                                 const Password: String);
+var
+  AuthHeader:      TIdSipAuthorizationHeader;
+  ChallengeHeader: TIdSipAuthenticateHeader;
+  RealmInfo:       TIdRealmInfo;
+  ReAttempt:       TIdSipRequest;
+  Tran:            TIdSipTransaction;
+begin
+  ChallengeHeader := Self.AuthenticateHeader(Challenge);
+
+  ReAttempt := TIdSipRequest.Create;
+  try
+    ReAttempt.Assign(InitialRequest);
+    ReAttempt.CSeq.SequenceNo := InitialRequest.CSeq.SequenceNo + 1;
+    ReAttempt.LastHop.Branch := GRandomNumber.NextSipUserAgentBranch;
+
+    Self.Keyring.AddKey(ChallengeHeader,
+                        ReAttempt.RequestUri.AsString,
+                        Username);
+    RealmInfo := Self.Keyring.Find(ChallengeHeader.Realm,
+                                   ReAttempt.RequestUri.AsString);
+
+    AuthHeader := RealmInfo.CreateAuthorization(Challenge,
+                                                InitialRequest.Method,
+                                                InitialRequest.Body,
+                                                Password);
+    try
+      ReAttempt.AddHeader(AuthHeader);
+    finally
+      AuthHeader.Free;
+    end;
+
+    Tran := Self.AddClientTransaction(ReAttempt);
+    Tran.SendRequest;
+  finally
+    ReAttempt.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2064,24 +2189,48 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipUnhandledMessageListenerReceiveRequestMethod                         *
+//* TIdSipTransactionDispatcherAuthenticationChallengeMethod                   *
 //******************************************************************************
-//* TIdSipUnhandledMessageListenerReceiveRequestMethod Public methods **********
+//* TIdSipTransactionDispatcherAuthenticationChallengeMethod Public methods ****
 
-procedure TIdSipUnhandledMessageListenerReceiveRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionDispatcherAuthenticationChallengeMethod.Run(const Subject: IInterface);
+var
+  Password: String;
+  Username: String;
+  Listener: IIdSipTransactionDispatcherListener;
 begin
-  (Subject as IIdSipUnhandledMessageListener).OnReceiveRequest(Self.Request,
+  Listener := Subject as IIdSipTransactionDispatcherListener;
+
+  Listener.OnAuthenticationChallenge(Self.Dispatcher,
+                                     Self.Challenge,
+                                     Username,
+                                     Password);
+
+  if (Self.FirstPassword = '') then
+    Self.FirstPassword := Password;
+  if (Self.FirstUsername = '') then
+    Self.FirstUsername := Username;
+end;
+
+//******************************************************************************
+//* TIdSipTransactionDispatcherListenerReceiveRequestMethod                    *
+//******************************************************************************
+//* TIdSipTransactionDispatcherListenerReceiveRequestMethod Public methods *****
+
+procedure TIdSipTransactionDispatcherListenerReceiveRequestMethod.Run(const Subject: IInterface);
+begin
+  (Subject as IIdSipTransactionDispatcherListener).OnReceiveRequest(Self.Request,
                                                                Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipUnhandledMessageListenerReceiveResponseMethod                        *
+//* TIdSipTransactionDispatcherListenerReceiveResponseMethod                   *
 //******************************************************************************
-//* TIdSipUnhandledMessageListenerReceiveResponseMethod Public methods *********
+//* TIdSipTransactionDispatcherListenerReceiveResponseMethod Public methods ****
 
-procedure TIdSipUnhandledMessageListenerReceiveResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionDispatcherListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipUnhandledMessageListener).OnReceiveResponse(Self.Response,
+  (Subject as IIdSipTransactionDispatcherListener).OnReceiveResponse(Self.Response,
                                                                 Self.Receiver);
 end;
 

@@ -64,7 +64,7 @@ begin
 
   Self.Proxy := TIdSipProxy.Create;
   Self.Proxy.Dispatcher := Self.Dispatcher;
-  Self.Dispatcher.AddUnhandledMessageListener(Self.Proxy);
+  Self.Dispatcher.AddTransactionDispatcherListener(Self.Proxy);
 
   Self.Client := TIdSipUserAgent.Create;
   Self.ClientDispatcher := TIdSipMockTransactionDispatcher.Create;

@@ -75,7 +75,10 @@ end;
 function TIdSipMockCore.CreateResponse(Request: TIdSipRequest;
                                        ResponseCode: Cardinal): TIdSipResponse;
 begin
-  Result := nil;
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        ResponseCode);
+
+  Self.PrepareResponse(Result, Request);
 end;
 
 procedure TIdSipMockCore.Reset;

@@ -54,16 +54,8 @@ type
 
   // I provide a protocol for generic Actions.
   //
-  // You can use OnAuthenticationChallenge to authenticate to a proxy (or
-  // registrar or user agent server). Note that we cannot distinguish between
-  // (1) you contactingthe proxy/registrar for the first time and it asking
-  // for credentials, and (2) you offering invalid credentials.
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
   end;
 
   TIdSipInboundInvite = class;
@@ -143,9 +135,18 @@ type
   end;
 
   TIdSipInboundSession = class;
+  TIdSipAbstractUserAgent = class;
 
+  // You can use OnAuthenticationChallenge to authenticate to a proxy (or
+  // registrar or user agent server). Note that we cannot distinguish between
+  // (1) you contactingthe proxy/registrar for the first time and it asking
+  // for credentials, and (2) you offering invalid credentials.
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
+    procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String);
     procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(Session: TIdSipInboundSession);
@@ -176,7 +177,7 @@ type
   // transports attached to this core. It's not clear how to set up the
   // hostnames and bindings of the stack.
   TIdSipAbstractCore = class(TIdInterfacedObject,
-                             IIdSipUnhandledMessageListener)
+                             IIdSipTransactionDispatcherListener)
   private
     fAuthenticator:         TIdSipAbstractAuthenticator;
     fDispatcher:            TIdSipTransactionDispatcher;
@@ -203,6 +204,10 @@ type
     function  AuthenticationStatusCode: Cardinal; virtual;
     function  HasAuthorization(Request: TIdSipRequest): Boolean; virtual;
     procedure NotifyOfChange;
+    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String); virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -281,7 +286,6 @@ type
     function  NextSequenceNoFor(Registrar: TIdSipUri): Cardinal;
   end;
 
-  TIdSipAbstractUserAgent = class;
   TIdSipActionProc = procedure(Action: TIdSipAction) of object;
   TIdSipSessionProc = procedure(Session: TIdSipSession;
                                 Invite: TIdSipRequest) of object;
@@ -372,6 +376,9 @@ type
     function  DefaultUserAgent: String;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
+    procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
+                                              var Username: String;
+                                              var Password: String);
     procedure NotifyOfDroppedMessage(Message: TIdSipMessage;
                                      Receiver: TIdSipTransport);
     procedure OnChanged(Observed: TObject);
@@ -407,6 +414,10 @@ type
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
+    procedure OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                        Challenge: TIdSipResponse;
+                                        var Username: String;
+                                        var Password: String); override;
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; virtual;
@@ -625,10 +636,6 @@ type
     SentRequest:     Boolean;
     UA:              TIdSipAbstractUserAgent;
 
-    function  AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
-    procedure Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
-    procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
-    procedure AuthorizeAgainstUser(Challenge: TIdSipResponse);
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
   protected
@@ -638,9 +645,6 @@ type
     procedure AddListeners(Listeners: TIdNotificationList);
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
-    procedure NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                              var Username: String;
-                                              var Password: String);
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
@@ -1026,10 +1030,6 @@ type
     procedure NotifyOfEstablishedSession;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfModifySession(Modify: TIdSipInboundInvite);
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String); virtual;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog); virtual;
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -1157,19 +1157,6 @@ type
   public
     property Action:   TIdSipAction   read fAction write fAction;
     property Response: TIdSipResponse read fResponse write fResponse;
-  end;
-
-  // Ask the listeners for a username/password pair. First listener to set
-  // either Password or Username wins.
-  TIdSipActionAuthenticationChallengeMethod = class(TIdActionMethod)
-  private
-    fFirstPassword: String;
-    fFirstUsername: String;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property FirstPassword: String read fFirstPassword write fFirstPassword;
-    property FirstUsername: String read fFirstUsername write fFirstUsername;
   end;
 
   TIdSipInviteMethod = class(TIdMethod)
@@ -1301,6 +1288,23 @@ type
     procedure Run(const Subject: IInterface); override;
 
     property Modify: TIdSipInboundInvite read fModify write fModify;
+  end;
+
+  // Ask the listeners for a username/password pair. First listener to set
+  // either Password or Username wins.
+  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdActionMethod)
+  private
+    fChallenge:     TIdSipResponse;
+    fFirstPassword: String;
+    fFirstUsername: String;
+    fUserAgent:     TIdSipAbstractUserAgent;
+  public
+    procedure Run(const Subject: IInterface); override;
+
+    property Challenge:     TIdSipResponse          read fChallenge write fChallenge;
+    property FirstPassword: String                  read fFirstPassword write fFirstPassword;
+    property FirstUsername: String                  read fFirstUsername write fFirstUsername;
+    property UserAgent:     TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
   TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
@@ -1553,6 +1557,14 @@ begin
   Self.Observed.NotifyListenersOfChange(Self);
 end;
 
+procedure TIdSipAbstractCore.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                                       Challenge: TIdSipResponse;
+                                                       var Username: String;
+                                                       var Password: String);
+begin
+  // do nothing
+end;
+
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
                                               Receiver: TIdSipTransport);
 var
@@ -1671,7 +1683,7 @@ procedure TIdSipAbstractCore.SetDispatcher(Value: TIdSipTransactionDispatcher);
 begin
   fDispatcher := Value;
 
-  fDispatcher.AddUnhandledMessageListener(Self);
+  fDispatcher.AddTransactionDispatcherListener(Self);
 end;
 
 procedure TIdSipAbstractCore.SetRealm(const Value: String);
@@ -2774,6 +2786,16 @@ begin
        and (ValueList.IndexOf(Request.FirstHeader(HeaderName).Value) = ItemNotFoundIndex);
 end;
 
+procedure TIdSipAbstractUserAgent.OnAuthenticationChallenge(Dispatcher: TIdSipTransactionDispatcher;
+                                                            Challenge: TIdSipResponse;
+                                                            var Username: String;
+                                                            var Password: String);
+begin
+  inherited OnAuthenticationChallenge(Dispatcher, Challenge, Username, Password);
+
+  Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
+end;
+
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                                 Request: TIdSipRequest);
 begin
@@ -2884,6 +2906,26 @@ begin
     fFrom := TIdSipFromHeader.Create;
 
   Result := fFrom;
+end;
+
+procedure TIdSipAbstractUserAgent.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
+                                                                  var Username: String;
+                                                                  var Password: String);
+var
+  Notification: TIdSipUserAgentAuthenticationChallengeMethod;
+begin
+  Notification := TIdSipUserAgentAuthenticationChallengeMethod.Create;
+  try
+    Notification.UserAgent := Self;
+    Notification.Challenge := Response;
+
+    Self.UserAgentListeners.Notify(Notification);
+
+    Password := Notification.FirstPassword;
+    Username := Notification.FirstUsername;
+  finally
+    Notification.Free;
+  end;
 end;
 
 procedure TIdSipAbstractUserAgent.InboundSessionExpire(Action: TIdSipAction);
@@ -3522,30 +3564,6 @@ begin
   Self.fIsTerminated := true;
 end;
 
-procedure TIdSipAction.NotifyOfAuthenticationChallenge(Response: TIdSipResponse;
-                                                       var Username: String;
-                                                       var Password: String);
-var
-  Notification: TIdSipActionAuthenticationChallengeMethod;
-begin
-  // We present the authentication challenge to all listeners but only accept
-  // the first listener's password. The responsibility of listener order rests
-  // firmly on your own shoulders.
-
-  Notification := TIdSipActionAuthenticationChallengeMethod.Create;
-  try
-    Notification.Action   := Self;
-    Notification.Response := Response;
-
-    Self.Listeners.Notify(Notification);
-
-    Password := Notification.FirstPassword;
-    Username := Notification.FirstUsername;
-  finally
-    Notification.Free;
-  end;
-end;
-
 procedure TIdSipAction.NotifyOfFailure(Response: TIdSipResponse);
 begin
   // By default do nothing
@@ -3579,20 +3597,7 @@ end;
 
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
 begin
-  // We received a 401 Unauthorized or 407 Proxy Authentication Required response
-  // so we need to re-issue the INVITE with the necessary authorization details.
-  case Response.StatusCode of
-    SIPUnauthorized: begin
-      Self.AuthorizeAgainstUser(Response);
-      Result := true;
-    end;
-    SIPProxyAuthenticationRequired: begin
-      Self.AuthorizeAgainstProxy(Response);
-      Result := true;
-    end;
-  else
-    Result := false;
-  end;
+  Result := false;
 end;
 
 function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
@@ -3660,71 +3665,6 @@ begin
 end;
 
 //* TIdSipAction Private methods ***********************************************
-
-function TIdSipAction.AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
-begin
-  if Challenge.HasProxyAuthenticate then
-    Result := Challenge.FirstProxyAuthenticate
-  else if Challenge.HasWWWAuthenticate then
-    Result := Challenge.FirstWWWAuthenticate
-  else
-    Result := nil;
-end;
-
-procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
-var
-  AuthHeader:      TIdSipAuthorizationHeader;
-  ChallengeHeader: TIdSipAuthenticateHeader;
-  Password:        String;
-  RealmInfo:       TIdRealmInfo;
-  ReAttempt:       TIdSipRequest;
-  Username:        String;
-begin
-  Inc(Self.NonceCount);
-  Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
-  try
-    ChallengeHeader := Self.AuthenticateHeader(Challenge);
-
-    ReAttempt := Self.CreateNewAttempt(Challenge);
-    try
-      ReAttempt.CSeq.SequenceNo := Self.InitialRequest.CSeq.SequenceNo + 1;
-
-      Self.UA.Keyring.AddKey(ChallengeHeader,
-                             ReAttempt.RequestUri.AsString,
-                             Username);
-      RealmInfo := Self.UA.Keyring.Find(ChallengeHeader.Realm,
-                                        ReAttempt.RequestUri.AsString);
-
-      AuthHeader := RealmInfo.CreateAuthorization(Challenge,
-                                                  Self.Method,
-                                                  Self.InitialRequest.Body,
-                                                  Password);
-      try
-        ReAttempt.AddHeader(AuthHeader);
-      finally
-        AuthHeader.Free;
-      end;
-
-      Self.InitialRequest.Assign(ReAttempt);
-      Self.SendRequest(ReAttempt);
-    finally
-      ReAttempt.Free;
-    end;
-  finally
-    // Clear the memory containing the password as a security measure.
-    FillChar(Password, Length(Password), 0);
-  end;
-end;
-
-procedure TIdSipAction.AuthorizeAgainstProxy(Challenge: TIdSipResponse);
-begin
-  Self.Authorize(Challenge, true);
-end;
-
-procedure TIdSipAction.AuthorizeAgainstUser(Challenge: TIdSipResponse);
-begin
-  Self.Authorize(Challenge, false);
-end;
 
 function TIdSipAction.GetUsername: String;
 begin
@@ -5475,14 +5415,6 @@ begin
   end;
 end;
 
-procedure TIdSipSession.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                  Challenge: TIdSipResponse;
-                                                  var Username: String;
-                                                  var Password: String);
-begin
-  Self.NotifyOfAuthenticationChallenge(Challenge, Username, Password);
-end;
-
 procedure TIdSipSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                             NewDialog: TIdSipDialog);
 begin
@@ -6197,30 +6129,6 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipActionAuthenticationChallengeMethod                                  *
-//******************************************************************************
-//* TIdSipActionAuthenticationChallengeMethod Public methods *******************
-
-procedure TIdSipActionAuthenticationChallengeMethod.Run(const Subject: IInterface);
-var
-  Password: String;
-  Username: String;
-  Listener: IIdSipActionListener;
-begin
-  Listener := Subject as IIdSipActionListener;
-
-  Listener.OnAuthenticationChallenge(Self.Action,
-                                     Self.Response,
-                                     Username,
-                                     Password);
-
-  if (Self.FirstPassword = '') then
-    Self.FirstPassword := Password;
-  if (Self.FirstUsername = '') then
-    Self.FirstUsername := Username;
-end;
-
-//******************************************************************************
 //* TIdSipInboundInviteFailureMethod                                           *
 //******************************************************************************
 //* TIdSipInboundInviteFailureMethod Public methods ****************************
@@ -6359,6 +6267,30 @@ end;
 procedure TIdSipSessionModifySessionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnModifySession(Self.Modify);
+end;
+
+//******************************************************************************
+//* TIdSipUserAgentAuthenticationChallengeMethod                               (
+//******************************************************************************
+//* TIdSipUserAgentAuthenticationChallengeMethod Public methods ****************
+
+procedure TIdSipUserAgentAuthenticationChallengeMethod.Run(const Subject: IInterface);
+var
+  Password: String;
+  Username: String;
+  Listener: IIdSipUserAgentListener;
+begin
+  Listener := Subject as IIdSipUserAgentListener;
+
+  Listener.OnAuthenticationChallenge(Self.UserAgent,
+                                     Self.Challenge,
+                                     Username,
+                                     Password);
+
+  if (Self.FirstPassword = '') then
+    Self.FirstPassword := Password;
+  if (Self.FirstUsername = '') then
+    Self.FirstUsername := Username;
 end;
 
 //******************************************************************************
