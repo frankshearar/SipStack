@@ -184,6 +184,7 @@ type
 
     procedure CheckBasicResponse(Msg: TIdSipMessage;
                                  CheckBody: Boolean = true);
+    procedure TurnIntoRFC2543(Request: TIdSipRequest);
   protected
     function MessageType: TIdSipMessageClass; override;
   public
@@ -227,6 +228,13 @@ type
     procedure TestIsProvisional;
     procedure TestIsRedirect;
     procedure TestIsRequest;
+    procedure TestMatchToRFC2543DifferentCallID;
+    procedure TestMatchToRFC2543DifferentCSeqMethod;
+    procedure TestMatchToRFC2543DifferentCSeqSequenceNo;
+    procedure TestMatchToRFC2543DifferentFromTag;
+    procedure TestMatchToRFC2543DifferentToTag;
+    procedure TestMatchToRFC2543EmptyRequestPath;
+    procedure TestMatchToRFC2543EmptyResponsePath;
     procedure TestMatchToRFC2543ServerTransaction;
     procedure TestIsTrying;
     procedure TestParse;
@@ -2622,6 +2630,12 @@ begin
 
   Self.CheckBasicMessage(Msg, CheckBody);
 end;
+
+procedure TestTIdSipResponse.TurnIntoRFC2543(Request: TIdSipRequest);
+begin
+  Request.LastHop.RemoveBranch;
+end;
+
 //* TestTIdSipResponse Published methods ***************************************
 
 procedure TestTIdSipResponse.TestAssign;
@@ -2630,6 +2644,7 @@ var
 begin
   R := TIdSipResponse.Create;
   try
+    R.RequestRequestUri := Self.Request.RequestUri;
     R.SIPVersion := 'SIP/1.5';
     R.StatusCode := 101;
     R.StatusText := 'Hehaeha I''ll get back to you';
@@ -2641,6 +2656,10 @@ begin
     CheckEquals(R.SIPVersion,    Self.Response.SipVersion,    'SIP-Version');
     CheckEquals(R.StatusCode,    Self.Response.StatusCode,    'Status-Code');
     CheckEquals(R.StatusText,    Self.Response.StatusText,    'Status-Text');
+
+    CheckEquals(R.RequestRequestUri.Uri,
+                Self.Response.RequestRequestUri.Uri,
+                'RequestRequestUri');
 
     Check(R.Headers.Equals(Self.Response.Headers),
           'Headers not assigned properly');
@@ -3333,6 +3352,124 @@ end;
 procedure TestTIdSipResponse.TestIsRequest;
 begin
   Check(not Self.Response.IsRequest, 'IsRequest');
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543DifferentCallID;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.CallID := Self.Request.CallID + '1';
+
+    Check(not Self.Request.Match(Response),
+          'Response matched with different Call-ID');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543DifferentCSeqMethod;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.CSeq.Method := Self.Request.Method + '1';
+
+    Check(not Self.Request.Match(Response),
+          'Response matched with different CSeq method');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543DifferentCSeqSequenceNo;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.CSeq.Increment;
+
+    Check(not Self.Request.Match(Response),
+          'Response matched with different CSeq sequence number');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543DifferentFromTag;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.From.Tag := Self.Request.From.Tag + '1';
+
+    Check(not Self.Request.Match(Response),
+          'Response matched with different From tag');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543DifferentToTag;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+
+    Check(not Self.Request.Match(Response),
+          'Response matched with different To tag');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543EmptyRequestPath;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+  Self.Request.Path.Clear;
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Check(not Self.Request.Match(Response),
+          'Request matched despite no Via headers');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestMatchToRFC2543EmptyResponsePath;
+var
+  Response: TIdSipResponse;
+begin
+  Self.TurnIntoRFC2543(Self.Request);
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
+  try
+    Response.Path.Clear;
+    
+    Check(not Self.Request.Match(Response),
+          'Response matched despite no Via headers');
+  finally
+    Response.Free;
+  end;
 end;
 
 procedure TestTIdSipResponse.TestMatchToRFC2543ServerTransaction;

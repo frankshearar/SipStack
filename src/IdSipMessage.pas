@@ -5981,6 +5981,15 @@ end;
 function TIdSipMessage.MatchRequest(InitialRequest: TIdSipRequest;
                                     UseCSeqMethod: Boolean): Boolean;
 begin
+  // We should never enter this clause since matching messages to transactions
+  // only happens in the Transaction layer, and the Transport layer should
+  // (must!) reject malformed messages (like messages with no Via headers).
+  // Still, better safe than sorry.
+  if Self.Path.IsEmpty or InitialRequest.Path.IsEmpty then begin
+    Result := false;
+    Exit;
+  end;
+
   // cf. RFC 3261 section 17.2.3
   if Self.LastHop.IsRFC3261Branch then
     Result := Self.MatchRFC3261Request(InitialRequest, UseCSeqMethod)
@@ -6923,8 +6932,9 @@ begin
 
   R := Src as TIdSipResponse;
 
-  Self.StatusCode := R.StatusCode;
-  Self.StatusText := R.StatusText;
+  Self.RequestRequestUri := R.RequestRequestUri;
+  Self.StatusCode        := R.StatusCode;
+  Self.StatusText        := R.StatusText;
 end;
 
 function TIdSipResponse.AuthenticateHeader: TIdSipAuthenticateHeader;
