@@ -21,6 +21,7 @@ type
     fTransportType:      TIdSipTransportType;
   protected
     function  GetBindings: TIdSocketHandles; override;
+    function  GetPort: Cardinal; override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; override;
@@ -146,6 +147,11 @@ end;
 function TIdSipMockTransport.GetBindings: TIdSocketHandles;
 begin
   Result := Self.fBindings;
+end;
+
+function TIdSipMockTransport.GetPort: Cardinal;
+begin
+  Result := Self.DefaultPort;
 end;
 
 procedure TIdSipMockTransport.SendRequest(R: TIdSipRequest);

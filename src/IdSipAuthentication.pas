@@ -220,8 +220,4 @@ begin
     Result := inherited Authenticate(Request);
 end;
 
-//* TIdSipMockAuthenticator Protected methods **********************************
-
-
-
 end.
