@@ -33,6 +33,7 @@ begin
   inherited Create;
 
   Self.fTransport := TIdSipMockTransport.Create(IdPORT_SIP);
+  Self.fTransport.HostName := 'mocktransport';
 
   Self.AddTransport(Self.fTransport);
 end;
