@@ -79,6 +79,35 @@ type
     function ResolveNAPTR(const DomainName: String): TStrings; override;
   end;
 
+  // cf RFCs 2915, 3401-3
+  // I represent a single NAPTR record.
+  TIdNaptrRecord = class(TObject)
+  private
+    fFlag:       String;
+    fKey:        String; // The DDDS key
+    fOrder:      Word;
+    fRegex:      String;
+    fPreference: Word;
+    fService:    String;
+    fValue:      String; // The DDDS value (a domain name we can feed into SRV queries
+  public
+    constructor Create(const Key: String;
+                       Order: Word;
+                       Preference: Word;
+                       const Flag: String;
+                       const Service: String;
+                       const Regex: String;
+                       const Value: String);
+
+    property Flag:       String read fFlag;
+    property Key:        String read fKey;
+    property Order:      Word   read fOrder;
+    property Preference: Word   read fPreference;
+    property Regex:      String read fRegex;
+    property Service:    String read fService;
+    property Value:      String read fValue;
+  end;
+
 const
   SipSctpService = 'SIP+D2S';
   SipsTlsService = 'SIPS+D2T';
@@ -233,8 +262,32 @@ begin
 end;
 
 function TIdSipAbstractLocator.TransportFor(Uri: TIdSipUri): String;
+var
+  Target: String;
 begin
+  // RFC 3263, section 4.1
+  if Uri.TransportIsSpecified then begin
+    Result := ParamToTransport(Uri.Transport);
+    Exit;
+  end;
+
   Result := 'You''re wrong';
+
+  if Uri.HasMaddr then
+    Target := Uri.Maddr
+  else
+    Target := Uri.Host;
+
+  if TIdIPAddressParser.IsNumericAddress(Target) or Uri.PortIsSpecified then begin
+    if Uri.IsSecure then
+      Result := TcpTransport
+    else
+      Result := UdpTransport;
+
+    Exit;
+  end;
+
+  // The target's a name and the URI specifies no port
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
@@ -296,6 +349,30 @@ end;
 function TIdSipLocator.ResolveNAPTR(const DomainName: String): TStrings;
 begin
   raise Exception.Create('TIdSipLocator doesn''t know how to ResolveNAPTR');
+end;
+
+//******************************************************************************
+//* TIdNaptrRecord                                                             *
+//******************************************************************************
+//* TIdNaptrRecord Public methods **********************************************
+
+constructor TIdNaptrRecord.Create(const Key: String;
+                                  Order: Word;
+                                  Preference: Word;
+                                  const Flag: String;
+                                  const Service: String;
+                                  const Regex: String;
+                                  const Value: String);
+begin
+  inherited Create;
+
+  Self.fKey        := Key;
+  Self.fOrder      := Order;
+  Self.fPreference := Preference;
+  Self.fFlag       := Flag;
+  Self.fService    := Service;
+  Self.fRegex      := Regex;
+  Self.fValue      := Value;
 end;
 
 end.

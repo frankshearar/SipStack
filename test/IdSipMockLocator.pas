@@ -6,34 +6,12 @@ uses
   Classes, Contnrs, IdSipLocator, IdSipMessage;
 
 type
-  // cf RFCs 3401-3
-  TIdNaptrRec = class(TObject)
-  private
-    fKey:        String; // The DDDS key
-    fOrder:      Word;
-    fRegex:      String;
-    fPreference: Word;
-    fValue:      String; // The DDDS value (a domain name we can feed into SRV queries
-  public
-    constructor Create(const Key: String;
-                       Order: Word;
-                       Preference: Word;
-                       const Regex: String;
-                       const Value: String);
-
-    property Key:        String read fKey;
-    property Order:      Word   read fOrder;
-    property Preference: Word   read fPreference;
-    property Regex:      String read fRegex;
-    property Value:      String read fValue;    
-  end;
-
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
     Locations: TStrings;
     NAPTR:     TObjectList;
 
-    function  NaptrRecAt(Index: Integer): TIdNaptrRec;
+    function  NaptrRecAt(Index: Integer): TIdNaptrRecord;
     procedure FreeLocations;
     procedure ReorderNaptrRecs;
   public
@@ -47,6 +25,8 @@ type
     procedure AddNAPTR(const AddressOfRecord: String;
                        Order: Cardinal;
                        Preference: Cardinal;
+                       const Flags: String;
+                       const Service: String;
                        const DomainName: String);
 
     function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; override;
@@ -57,40 +37,20 @@ implementation
 
 function NaptrSort(Item1, Item2: Pointer): Integer;
 var
-  A: TIdNaptrRec;
-  B: TIdNaptrRec;
+  A: TIdNaptrRecord;
+  B: TIdNaptrRecord;
 begin
   // Result < 0 if Item1 is less than Item2,
   // Result = 0 if they are equal, and
   // Result > 0 if Item1 is greater than Item2.
 
-  A := TIdNaptrRec(Item1);
-  B := TIdNaptrRec(Item2);
+  A := TIdNaptrRecord(Item1);
+  B := TIdNaptrRecord(Item2);
 
   Result := A.Order - B.Order;
 
   if (Result = 0) then
     Result := A.Preference - B.Preference;
-end;
-
-//******************************************************************************
-//* TIdNaptrRec                                                                *
-//******************************************************************************
-//* TIdNaptrRec Public methods *************************************************
-
-constructor TIdNaptrRec.Create(const Key: String;
-                                  Order: Word;
-                                  Preference: Word;
-                                  const Regex: String;
-                                  const Value: String);
-begin
-  inherited Create;
-
-  Self.fKey        := Key;
-  Self.fOrder      := Order;
-  Self.fPreference := Preference;
-  Self.fRegex      := Regex;
-  Self.fValue      := Value;
 end;
 
 //******************************************************************************
@@ -130,13 +90,17 @@ end;
 procedure TIdSipMockLocator.AddNAPTR(const AddressOfRecord: String;
                                      Order: Cardinal;
                                      Preference: Cardinal;
+                                     const Flags: String;
+                                     const Service: String;
                                      const DomainName: String);
 var
-  NewNaptr: TIdNaptrRec;
+  NewNaptr: TIdNaptrRecord;
 begin
-  NewNaptr := TIdNaptrRec.Create(AddressOfRecord,
+  NewNaptr := TIdNaptrRecord.Create(AddressOfRecord,
                                  Order,
                                  Preference,
+                                 Flags,
+                                 Service,
                                  '',
                                  DomainName);
   Self.NAPTR.Add(NewNaptr);
@@ -177,9 +141,9 @@ end;
 
 //* TIdSipMockLocator Private methods ******************************************
 
-function TIdSipMockLocator.NaptrRecAt(Index: Integer): TIdNaptrRec;
+function TIdSipMockLocator.NaptrRecAt(Index: Integer): TIdNaptrRecord;
 begin
-  Result := Self.NAPTR[Index] as TIdNaptrRec;
+  Result := Self.NAPTR[Index] as TIdNaptrRecord;
 end;
 
 procedure TIdSipMockLocator.FreeLocations;

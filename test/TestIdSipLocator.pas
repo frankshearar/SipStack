@@ -62,6 +62,11 @@ type
     procedure TestNumericAddressSipsUriUsesTls;
     procedure TestNumericAddressSipsUriNonStandardPort;
     procedure TestTransportParamTakesPrecedence;
+    procedure TestTransportForWithNameAndPort;
+    procedure TestTransportForWithNameAndPortSips;
+    procedure TestTransportForWithNumericMaddr;
+    procedure TestTransportForWithNumericMaddrSips;
+    procedure TestTransportForWithTransportParam;
   end;
 
   TestTIdSipMockLocator = class(TTestCase)
@@ -78,7 +83,7 @@ type
 implementation
 
 uses
-  IdSipConsts, SysUtils;
+  Classes, IdSipConsts, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -445,6 +450,64 @@ begin
   end;
 end;
 
+procedure TestTIdSipLocator.TestTransportForWithNameAndPort;
+begin
+  Self.Target.Uri := 'sip:foo.com:5060';
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'Name:Port');
+end;
+
+procedure TestTIdSipLocator.TestTransportForWithNameAndPortSips;
+begin
+  Self.Target.Uri := 'sips:foo.com:5060';
+
+  CheckEquals(TcpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'SIPS Name:Port');
+end;
+
+procedure TestTIdSipLocator.TestTransportForWithNumericMaddr;
+begin
+  Self.Target.Uri := 'sip:foo.com;maddr=127.0.0.1';
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'Numeric IPv4 maddr');
+
+  Self.Target.Uri := 'sip:foo.com;maddr=::1';
+
+  CheckEquals(UdpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'Numeric IPv6 maddr');
+end;
+
+procedure TestTIdSipLocator.TestTransportForWithNumericMaddrSips;
+begin
+  Self.Target.Uri := 'sips:foo.com;maddr=127.0.0.1';
+
+  CheckEquals(TcpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'Numeric IPv4 maddr');
+
+  Self.Target.Uri := 'sips:foo.com;maddr=::1';
+
+  CheckEquals(TcpTransport,
+              Self.Loc.TransportFor(Self.Target),
+              'Numeric IPv6 maddr');
+end;
+
+procedure TestTIdSipLocator.TestTransportForWithTransportParam;
+begin
+  Self.TransportParam := TransportParamSCTP;
+  Self.Target.Uri := 'sip:foo.com;transport=' + Self.TransportParam;
+
+  CheckEquals(ParamToTransport(Self.TransportParam),
+              Self.Loc.TransportFor(Self.Target),
+              'Transport param ueber alles');
+end;
+
 //******************************************************************************
 //* TestTIdSipMockLocator                                                      *
 //******************************************************************************
@@ -487,10 +550,26 @@ end;
 procedure TestTIdSipMockLocator.TestResolveNAPTR;
 const
   AOR = 'bar';
+var
+  Results: TStrings;
 begin
-  Self.Loc.AddNAPTR(AOR, 10, 10, '_sip._tls.bar');
-  Self.Loc.AddNAPTR(AOR, 20, 10, '_sip._tcp.bar');
-  Self.Loc.AddNAPTR(AOR, 30, 10, '_sip._udp.bar');
+  Self.Loc.AddNAPTR(AOR,   20, 10, 's', 'SIP+D2T',  '_sip._tcp.bar');
+  Self.Loc.AddNAPTR(AOR,   10, 10, 's', 'SIPS+D2T', '_sips._tls.bar');
+  Self.Loc.AddNAPTR(AOR,   30, 10, 's', 'SIP+D2U',  '_sip._udp.bar');
+  Self.Loc.AddNAPTR('foo', 30, 10, 's', 'SIP+D2U',  '_sip._udp.foo');
+
+  Results := Self.Loc.ResolveNAPTR(AOR);
+  try
+    CheckEquals(3,
+                Results.Count,
+                'Incorrect number of results: unwanted records added?');
+
+    CheckEquals('_sips._tls.bar', Results[0], '1st record');
+    CheckEquals('_sip._tcp.bar',  Results[1], '2nd record');
+    CheckEquals('_sip._udp.bar',  Results[2], '3rd record');
+  finally
+    Results.Free;
+  end;
 end;
 
 initialization
