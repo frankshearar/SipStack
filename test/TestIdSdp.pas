@@ -5865,22 +5865,31 @@ begin
                          + 'm=text 8002 RTP/AVP 100'#13#10
                          + 'a=rtpmap:100 T140/1000'#13#10);
 
-  CheckEquals(3, Self.Proc.SessionCount, 'SessionCount');
+  CheckEquals(6, Self.Proc.SessionCount, 'SessionCount');
 
   Description := TIdSdpPayload.CreateFrom(Self.Proc.LocalSessionDescription);
   try
-    CheckEquals(3,
+    CheckEquals(6,
                 Description.MediaDescriptionCount,
                 'Number of media descriptions');
     CheckEquals(7000,
                 Description.MediaDescriptionAt(0).Port,
                 'First media description port');
-    CheckEquals(8000,
+    CheckEquals(7002,
                 Description.MediaDescriptionAt(1).Port,
                 'Second media description port');
-    CheckEquals(8002,
+    CheckEquals(7004,
                 Description.MediaDescriptionAt(2).Port,
                 'Third media description port');
+    CheckEquals(7006,
+                Description.MediaDescriptionAt(3).Port,
+                'Fourth media description port');
+    CheckEquals(8000,
+                Description.MediaDescriptionAt(4).Port,
+                'Fifth media description port');
+    CheckEquals(8002,
+                Description.MediaDescriptionAt(5).Port,
+                'Sixth media description port');
   finally
     Description.Free;
   end;
