@@ -63,12 +63,13 @@ type
     fPortIsSpecified: Boolean;
 
     function  GetValue: String;
+    procedure SetDefaultPort(const Value: Cardinal);
     procedure SetPort(const Value: Cardinal);
     procedure SetValue(Value: String);
   public
     class function CouldContainIPv6Reference(const Token: String): Boolean;
 
-    property DefaultPort:     Cardinal read fDefaultPort write fDefaultPort;
+    property DefaultPort:     Cardinal read fDefaultPort write SetDefaultPort;
     property Host:            String   read fHost write fHost;
     property Port:            Cardinal read fPort write SetPort;
     property PortIsSpecified: Boolean  read fPortIsSpecified write fPortIsSpecified;
@@ -98,7 +99,7 @@ type
 
     function AsString: String; virtual;
     function IsSipUri: Boolean; virtual;
-    function IsSipsUri: Boolean; 
+    function IsSipsUri: Boolean;
 
     property Host:   String   read GetHost write SetHost;
     property Port:   Cardinal read GetPort write SetPort;
@@ -2023,6 +2024,16 @@ begin
 
   if (Self.Port <> Self.DefaultPort) or Self.PortIsSpecified then
     Result := Result + ':' + IntToStr(Self.Port);
+end;
+
+procedure TIdSipHostAndPort.SetDefaultPort(const Value: Cardinal);
+begin
+  Self.fDefaultPort := Value;
+
+  if not Self.PortIsSpecified then begin
+    Self.Port := Self.DefaultPort;
+    Self.PortIsSpecified := false;
+  end;
 end;
 
 procedure TIdSipHostAndPort.SetPort(const Value: Cardinal);

@@ -23,6 +23,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestSetDefaultPort;
     procedure TestSetValueHost;
     procedure TestSetValueHostWithDefaultPort;
     procedure TestSetValueHostWithPort;
@@ -186,6 +187,18 @@ begin
 end;
 
 //* TestTIdSipHostAndPort Published methods ************************************
+
+procedure TestTIdSipHostAndPort.TestSetDefaultPort;
+const
+  HostOnly = 'foo.com';
+begin
+  Self.HP.Value := HostOnly;
+  Self.HP.DefaultPort := 1;
+  CheckEquals(HostOnly, Self.HP.Value, 'Default port set after value');
+
+  Self.HP.DefaultPort := 2;
+  CheckEquals(HostOnly, Self.HP.Value, 'Default port re-set');
+end;
 
 procedure TestTIdSipHostAndPort.TestSetValueHost;
 begin
