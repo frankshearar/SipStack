@@ -199,7 +199,7 @@ begin
 end;
 
 function TIdTimerQueue.Before(TimeA,
-                                 TimeB: Cardinal): Boolean;
+                              TimeB: Cardinal): Boolean;
 begin
   // You can't use Before() to determine the ordering of ticks
   // if the ticks are more than a day apart (i.e., MSecsPerDay ticks).
