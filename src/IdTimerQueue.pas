@@ -69,9 +69,12 @@ type
   //
   // WaitEvent lets me re-evaluate the shortest wait time whenever something
   //  adds or removes events. Or when something's Terminated me.
-  TIdTimerQueue = class(TIdBaseThread)
+  TIdTimerQueue = class(TObject)
   private
-    WaitEvent: TEvent;
+    fEventList:  TObjectList;
+    fLock:       TCriticalSection;
+    fTerminated: Boolean;
+    WaitEvent:   TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
                   Event: TIdWait;
@@ -82,13 +85,13 @@ type
     function  ShortestWait: Cardinal;
     procedure TriggerEarliestEvent;
   protected
-    EventList: TObjectList;
-    Lock:      TCriticalSection;
-
     function  IndexOfEvent(Event: Pointer): Integer;
-    procedure Run; override;
+
+    property EventList:  TObjectList      read fEventList;
+    property Lock:       TCriticalSection read fLock;
+    property Terminated: Boolean          read fTerminated write fTerminated;
   public
-    constructor Create(ACreateSuspended: Boolean = True); override;
+    constructor Create(CreateSuspended: Boolean = True); virtual;
     destructor  Destroy; override;
 
     procedure AddEvent(MillisecsWait: Cardinal;
@@ -101,6 +104,31 @@ type
                      TimeB: Cardinal): Boolean;
     procedure RemoveEvent(Event: TEvent); overload;
     procedure RemoveEvent(Event: TNotifyEvent); overload;
+    procedure Resume; virtual;
+    procedure Terminate; virtual;
+  end;
+
+  TIdThreadProc = procedure of object;
+
+  TIdBlockRunnerThread = class(TIdBaseThread)
+  private
+    Block: TIdThreadProc;
+  protected
+    procedure Run; override;
+  public
+    constructor Create(Block: TIdThreadProc;
+                       CreateSuspended: Boolean = True); reintroduce;
+  end;
+
+  TIdThreadedTimerQueue = class(TIdTimerQueue)
+  private
+    BlockRunner: TIdBlockRunnerThread;
+
+    procedure Run;
+  public
+    constructor Create(CreateSuspended: Boolean = True); override;
+    destructor  Destroy; override;
+
     procedure Terminate; override;
   end;
 
@@ -113,6 +141,7 @@ type
     procedure LockTimer;
     function  ScheduledEvent(Event: TEvent): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
+    procedure Terminate; override;
     procedure UnlockTimer;
   end;
 
@@ -198,19 +227,18 @@ end;
 //******************************************************************************
 //* TIdTimerQueue Public methods ***********************************************
 
-constructor TIdTimerQueue.Create(ACreateSuspended: Boolean = True);
+constructor TIdTimerQueue.Create(CreateSuspended: Boolean = True);
 begin
-  inherited Create(false);
+  inherited Create;
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
-  Self.EventList := TObjectList.Create(true);
-  Self.Lock      := TCriticalSection.Create;
-  Self.WaitEvent := TSimpleEvent.Create;
+  Self.fEventList := TObjectList.Create(true);
+  Self.fLock      := TCriticalSection.Create;
+  Self.Terminated := false;
+  Self.WaitEvent  := TSimpleEvent.Create;
 
-  Self.FreeOnTerminate := true;
-
-  if not ACreateSuspended then
+  if not CreateSuspended then
     Self.Resume;
 end;
 
@@ -230,8 +258,8 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TEvent;
-                                 Data: TObject = nil);
+                                         Event: TEvent;
+                                         Data: TObject = nil);
 var
   EventWait: TIdEventWait;
 begin
@@ -242,8 +270,8 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                 Event: TNotifyEvent;
-                                 Data: TObject = nil);
+                                         Event: TNotifyEvent;
+                                         Data: TObject = nil);
 var
   EventWait: TIdNotifyEventWait;
 begin
@@ -271,10 +299,13 @@ begin
   Self.InternalRemove(@Event);
 end;
 
+procedure TIdTimerQueue.Resume;
+begin
+end;
+
 procedure TIdTimerQueue.Terminate;
 begin
-  inherited Terminate;
-
+  Self.Terminated := true;
   Self.WaitEvent.SetEvent;
 end;
 
@@ -302,21 +333,11 @@ begin
   end;
 end;
 
-procedure TIdTimerQueue.Run;
-begin
-  while not Self.Terminated do begin
-    Self.WaitEvent.WaitFor(Self.ShortestWait);
-
-    if not Self.Terminated then
-      Self.TriggerEarliestEvent;
-  end;
-end;
-
 //* TIdTimerQueue Private methods **********************************************
 
 procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
-                            Event: TIdWait;
-                            Data: TObject);
+                                    Event: TIdWait;
+                                    Data: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -418,6 +439,67 @@ begin
 end;
 
 //******************************************************************************
+//* TIdBlockRunnerThread                                                       *
+//******************************************************************************
+//* TIdBlockRunnerThread Public methods ****************************************
+
+constructor TIdBlockRunnerThread.Create(Block: TIdThreadProc;
+                                        CreateSuspended: Boolean = True);
+begin
+  Self.Block := Block;
+  Self.FreeOnTerminate := true;
+
+  inherited Create(CreateSuspended);
+end;
+
+//* TIdBlockRunnerThread Protected methods *************************************
+
+procedure TIdBlockRunnerThread.Run;
+begin
+  if Assigned(Self.Block) then
+    Self.Block;
+end;
+
+//******************************************************************************
+//* TIdThreadedTimerQueue                                                      *
+//******************************************************************************
+//* TIdThreadedTimerQueue Public methods ***************************************
+
+constructor TIdThreadedTimerQueue.Create(CreateSuspended: Boolean = True);
+begin
+  inherited Create(CreateSuspended);
+
+  Self.BlockRunner := TIdBlockRunnerThread.Create(Self.Run, CreateSuspended);
+end;
+
+destructor TIdThreadedTimerQueue.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TIdThreadedTimerQueue.Terminate;
+begin
+  inherited Terminate;
+
+  // This just provides a spot for a bit of documentation:
+  // When you call Self.Terminate you will terminate the BlockRunner (since it
+  // references Self.Terminated), thus you don't (mustn't!)
+  // Self.BlockRunner.Terminate here.
+end;
+
+//* TIdThreadedTimerQueue Private methods **************************************
+
+procedure TIdThreadedTimerQueue.Run;
+begin
+  while not Self.Terminated do begin
+    Self.WaitEvent.WaitFor(Self.ShortestWait);
+
+    if not Self.Terminated then
+      Self.TriggerEarliestEvent;
+  end;
+end;
+
+//******************************************************************************
 //* TIdDebugTimerQueue                                                         *
 //******************************************************************************
 //* TIdDebugTimerQueue Public methods ******************************************
@@ -450,6 +532,13 @@ end;
 function TIdDebugTimerQueue.ScheduledEvent(Event: TNotifyEvent): Boolean;
 begin
   Result := Self.HasScheduledEvent(@Event);
+end;
+
+procedure TIdDebugTimerQueue.Terminate;
+begin
+  inherited Terminate;
+
+  Self.Free;
 end;
 
 procedure TIdDebugTimerQueue.UnlockTimer;

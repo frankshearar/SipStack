@@ -1229,18 +1229,20 @@ end;
 
 procedure TestTIdSipAbstractCore.TestScheduleEvent;
 var
-  T: TIdTimerQueue;
+  DebugTimer: TIdDebugTimerQueue;
+  EventCount: Integer;
 begin
-  T := TIdTimerQueue.Create;
+  DebugTimer := TIdDebugTimerQueue.Create;
   try
-    Self.Core.Timer := T;
-    Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, nil);
+    Self.Core.Timer := DebugTimer;
 
-    Self.ExceptionMessage := 'Waiting for scheduled event';
-    Self.WaitForSignaled;
-    Check(Self.ScheduledEventFired, 'Event didn''t fire');
+    EventCount := DebugTimer.EventCount;
+    Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, nil);
+    Check(EventCount < DebugTimer.EventCount,
+          'Event not scheduled');
   finally
-    T.Terminate;
+    Self.Core.Timer := nil;
+    DebugTimer.Terminate;
   end;
 end;
 
@@ -2490,11 +2492,12 @@ end;
 
 procedure TestTIdSipUserAgent.TestOutboundInviteSessionProgressResends;
 var
-  DebugTimer: TIdDebugTimerQueue;
+  DebugTimer: TIdThreadedTimerQueue;
 begin
-  DebugTimer := TIdDebugTimerQueue.Create;
+  DebugTimer := TIdThreadedTimerQueue.Create(false);
   try
     Self.Core.Timer := DebugTimer;
+
     Self.MarkSentResponseCount;
 
     // Receive an INVITE. Ring. Wait.
@@ -3211,7 +3214,6 @@ begin
   Check(Self.ActionFailed, ActionClassName + ' failure not reported');
 end;
 }
-
 //******************************************************************************
 //* TestTIdSipSession                                                          *
 //******************************************************************************
@@ -3548,7 +3550,9 @@ procedure TestTIdSipSession.TestModifyGlareInbound;
 var
   Session: TIdSipSession;
 begin
-  // Essentially, we and Remote send INVITEs simultaneously
+  // Essentially, we and Remote send INVITEs simultaneously.
+  // We send ours, and it arrives after the remote end's sent us its INVITE.
+  // When we receive its INVITE, we reject it with a 491 Request Pending.
 
   Session := Self.CreateAndEstablishSession;
   Session.Modify('', '');
@@ -3570,6 +3574,9 @@ var
   Session:       TIdSipSession;
 begin
   // Essentially, we and Remote send INVITEs simultaneously
+  // We send ours and, because the remote end's sent its before ours arrives,
+  // we receive its 491 Request Pending. We schedule a time to resend our
+  // INVITE.
 
   Event := Self.Core.OnResendReInvite;
   DebugTimer := TIdDebugTimerQueue.Create;
@@ -5935,6 +5942,7 @@ begin
   end;
 end;
 }
+
 procedure TestTIdSipInboundSession.TestRedirectCall;
 var
   Dest:         TIdSipAddressHeader;

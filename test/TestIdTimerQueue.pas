@@ -36,7 +36,7 @@ type
                        MaxWait: Cardinal);
   end;
 
-  TestTIdTimerQueue = class(TThreadingTestCase)
+  TestTIdThreadedTimerQueue = class(TThreadingTestCase)
   private
     CallbackEventOne: TEvent;
     CallbackEventTwo: TEvent;
@@ -46,7 +46,7 @@ type
     Lock:             TCriticalSection;
     Notified:         Boolean;
     OrderOfFire:      String;
-    Queue:            TIdTimerQueue;
+    Queue:            TIdThreadedTimerQueue;
     T1:               TThreadEvent;
     T2:               TThreadEvent;
 
@@ -71,6 +71,7 @@ type
     procedure TestRemoveNonExistentEventWithOtherEvents;
     procedure TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
     procedure TestRemoveNotifyEvent;
+    procedure TestResume;
     procedure TestTwoEvents;
     procedure TestTwoNotifyEvents;
     procedure TestTwoOutOfOrderEvents;
@@ -87,6 +88,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddEventWithZeroTimeToSuspendedTimer;
     procedure TestCount;
     procedure TestDebugWaitTime;
     procedure TestEventAt;
@@ -106,7 +108,7 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTPTimerQueue unit tests');
   Result.AddTest(TestFunctions.Suite);
-  Result.AddTest(TestTIdTimerQueue.Suite);
+  Result.AddTest(TestTIdThreadedTimerQueue.Suite);
   Result.AddTest(TestTIdDebugTimerQueue.Suite);
 end;
 
@@ -174,11 +176,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdTimerQueue                                                          *
+//* TestTIdThreadedTimerQueue                                                  *
 //******************************************************************************
-//* TestTIdTimerQueue Public methods *******************************************
+//* TestTIdThreadedTimerQueue Public methods ***********************************
 
-procedure TestTIdTimerQueue.SetUp;
+procedure TestTIdThreadedTimerQueue.SetUp;
 begin
   inherited SetUp;
 
@@ -194,7 +196,7 @@ begin
   Self.EventOne         := TSimpleEvent.Create;
   Self.EventTwo         := TSimpleEvent.Create;
   Self.Lock             := TCriticalSection.Create;
-  Self.Queue            := TIdTimerQueue.Create(false);
+  Self.Queue            := TIdThreadedTimerQueue.Create(false);
 
   // You set Self.EventOne. That makes Self.T1 wake up and fire
   // Self.OnEventOneSet which sets Self.CallbackEventOne. We do this complicated
@@ -212,7 +214,7 @@ begin
   Self.T2.Resume;
 end;
 
-procedure TestTIdTimerQueue.TearDown;
+procedure TestTIdThreadedTimerQueue.TearDown;
 begin
   Self.T2.Terminate;
   Self.T2.WaitFor;
@@ -232,15 +234,15 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdTimerQueue Private methods ******************************************
+//* TestTIdThreadedTimerQueue Private methods **********************************
 
-procedure TestTIdTimerQueue.CheckNotifyEvent(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.CheckNotifyEvent(Sender: TObject);
 begin
   Self.Notified := true;
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdTimerQueue.CheckNotifyEventWithData(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.CheckNotifyEventWithData(Sender: TObject);
 begin
   try
     CheckEquals(Sender.ClassName,
@@ -259,7 +261,7 @@ begin
   Self.CheckNotifyEvent(Sender);
 end;
 
-procedure TestTIdTimerQueue.NotifyEventOne(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.NotifyEventOne(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -269,7 +271,7 @@ begin
   end;
 end;
 
-procedure TestTIdTimerQueue.NotifyEventTwo(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.NotifyEventTwo(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -280,7 +282,7 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdTimerQueue.OnEventOneSet(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.OnEventOneSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -291,7 +293,7 @@ begin
   Self.CallbackEventOne.SetEvent;
 end;
 
-procedure TestTIdTimerQueue.OnEventTwoSet(Sender: TObject);
+procedure TestTIdThreadedTimerQueue.OnEventTwoSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -302,7 +304,7 @@ begin
   Self.CallbackEventTwo.SetEvent;
 end;
 
-procedure TestTIdTimerQueue.WaitForAll(Events: array of TEvent;
+procedure TestTIdThreadedTimerQueue.WaitForAll(Events: array of TEvent;
                                        Timeout: Cardinal);
 var
   I:   Integer;
@@ -319,9 +321,9 @@ begin
   end;
 end;
 
-//* TestTIdTimerQueue Published methods ****************************************
+//* TestTIdThreadedTimerQueue Published methods ********************************
 
-procedure TestTIdTimerQueue.TestBefore;
+procedure TestTIdThreadedTimerQueue.TestBefore;
 begin
   Check(    Self.Queue.Before(10, 20), '10, 20');
   Check(not Self.Queue.Before(20, 10), '20, 10');
@@ -346,7 +348,7 @@ begin
         '10, High(Cardinal) - 10');
 end;
 
-procedure TestTIdTimerQueue.TestNotifyEvent;
+procedure TestTIdThreadedTimerQueue.TestNotifyEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout, Self.CheckNotifyEvent);
 
@@ -356,7 +358,7 @@ begin
   Check(Self.Notified, 'TNotifyEvent didn''t fire');
 end;
 
-procedure TestTIdTimerQueue.TestNotifyEventWithData;
+procedure TestTIdThreadedTimerQueue.TestNotifyEventWithData;
 begin
   Self.Queue.AddEvent(ShortTimeout,
                       Self.CheckNotifyEventWithData,
@@ -369,7 +371,7 @@ begin
   Check(Self.Notified, 'TNotifyEvent didn''t fire');
 end;
 
-procedure TestTIdTimerQueue.TestOneEvent;
+procedure TestTIdThreadedTimerQueue.TestOneEvent;
 begin
   TThreadEvent.Create(Self.EventOne,
                       Self.OnEventOneSet,
@@ -382,7 +384,7 @@ begin
   Self.WaitForSignaled(Self.EventOne);
 end;
 
-procedure TestTIdTimerQueue.TestRemoveEvent;
+procedure TestTIdThreadedTimerQueue.TestRemoveEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
@@ -398,7 +400,7 @@ begin
             + Self.OrderOfFire + ')');
 end;
 
-procedure TestTIdTimerQueue.TestRemoveNonExistentEvent;
+procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
@@ -413,7 +415,7 @@ begin
             + Self.OrderOfFire + ')');
 end;
 
-procedure TestTIdTimerQueue.TestRemoveNonExistentEventWithOtherEvents;
+procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentEventWithOtherEvents;
 begin
   // This catches a bug where if there were multiple TEvents
   // and you removed a non-existent one you'd enter an infinite loop.
@@ -423,7 +425,7 @@ begin
   Self.Queue.RemoveEvent(Self.EventTwo);
 end;
 
-procedure TestTIdTimerQueue.TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
+procedure TestTIdThreadedTimerQueue.TestRemoveNonExistentNotifyEventWithOtherNotifyEvents;
 begin
   // This catches a bug where if there were multiple TNotifyEvents
   // and you removed a non-existent one you'd enter an infinite loop.
@@ -433,7 +435,7 @@ begin
   Self.Queue.RemoveEvent(Self.NotifyEventTwo);
 end;
 
-procedure TestTIdTimerQueue.TestRemoveNotifyEvent;
+procedure TestTIdThreadedTimerQueue.TestRemoveNotifyEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.CheckNotifyEvent);
   Self.Queue.AddEvent(2*ShortTimeout, Self.CheckNotifyEvent);
@@ -446,7 +448,23 @@ begin
   Check(not Self.Notified, 'TNotifyEvent wasn''t removed');
 end;
 
-procedure TestTIdTimerQueue.TestTwoEvents;
+procedure TestTIdThreadedTimerQueue.TestResume;
+var
+  NewTimer: TIdThreadedTimerQueue;
+begin
+  NewTimer := TIdThreadedTimerQueue.Create(true);
+  try
+    NewTimer.AddEvent(ShortTimeout, Self.EventOne);
+
+    NewTimer.Resume;
+
+    Self.WaitForSignaled(Self.EventOne, 'Event didn''t fire');
+  finally
+    NewTimer.Terminate;
+  end;
+end;
+
+procedure TestTIdThreadedTimerQueue.TestTwoEvents;
 begin
   TThreadEvent.Create(Self.EventOne,
                       Self.OnEventOneSet,
@@ -469,7 +487,7 @@ begin
   end;
 end;
 
-procedure TestTIdTimerQueue.TestTwoNotifyEvents;
+procedure TestTIdThreadedTimerQueue.TestTwoNotifyEvents;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.NotifyEventOne);
   Self.Queue.AddEvent(2*ShortTimeout, Self.NotifyEventTwo);
@@ -484,7 +502,7 @@ begin
   end;
 end;
 
-procedure TestTIdTimerQueue.TestTwoOutOfOrderEvents;
+procedure TestTIdThreadedTimerQueue.TestTwoOutOfOrderEvents;
 begin
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
   Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
@@ -500,7 +518,7 @@ begin
   end;
 end;
 
-procedure TestTIdTimerQueue.TestWaitForEarliestEvent;
+procedure TestTIdThreadedTimerQueue.TestWaitForEarliestEvent;
 begin
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
   Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
@@ -553,6 +571,24 @@ begin
 end;
 
 //* TestTIdDebugTimerQueue Published methods ***********************************
+
+procedure TestTIdDebugTimerQueue.TestAddEventWithZeroTimeToSuspendedTimer;
+var
+  EventCount: Integer;
+  SuspTimer:  TIdDebugTimerQueue;
+begin
+  SuspTimer := TIdDebugTimerQueue.Create(true);
+  try
+    EventCount := SuspTimer.EventCount;
+
+    SuspTimer.AddEvent(0, Self.OnTimer, nil);
+
+    Check(EventCount < SuspTimer.EventCount,
+          'SuspTimer executed scheduled event despite not running');
+  finally
+    SuspTimer.Terminate;
+  end;
+end;
 
 procedure TestTIdDebugTimerQueue.TestCount;
 var
