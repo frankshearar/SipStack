@@ -97,8 +97,8 @@ type
 
     function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
-    procedure ReceiveRequest(Request: TIdSipRequest); overload; virtual;
-    procedure ReceiveResponse(Response: TIdSipResponse); overload; virtual;
+    procedure ReceiveRequest(Request: TIdSipRequest); virtual;
+    procedure ReceiveResponse(Response: TIdSipResponse); virtual;
     function  IsNull: Boolean; virtual;
     function  IsOutOfOrder(Request: TIdSipRequest): Boolean;
     function  NextLocalSequenceNo: Cardinal;
