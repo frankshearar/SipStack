@@ -71,22 +71,22 @@ type
     Transactions:    TObjectList;
     TransactionLock: TCriticalSection;
 
-    procedure DeliverToTransaction(const Request: TIdSipRequest;
-                                   const Receiver: TIdSipTransport); overload;
-    procedure DeliverToTransaction(const Response: TIdSipResponse;
-                                   const Receiver: TIdSipTransport); overload;
-    function  FindTransaction(const R: TIdSipMessage;
+    procedure DeliverToTransaction(Request: TIdSipRequest;
+                                   Receiver: TIdSipTransport); overload;
+    procedure DeliverToTransaction(Response: TIdSipResponse;
+                                   Receiver: TIdSipTransport); overload;
+    function  FindTransaction(R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
-    function  TransactionAt(const Index: Cardinal): TIdSipTransaction;
-    function  TransportAt(const Index: Cardinal): TIdSipTransport;
+    function  TransactionAt(Index: Cardinal): TIdSipTransaction;
+    function  TransportAt(Index: Cardinal): TIdSipTransport;
   protected
-    function  FindAppropriateTransport(const Msg: TIdSipMessage): TIdSipTransport;
-    procedure NotifyListenersOfUnhandledRequest(const Request: TIdSipRequest;
-                                                const Transaction: TIdSipTransaction;
-                                                const Receiver: TIdSipTransport);
-    procedure NotifyListenersOfUnhandledResponse(const Response: TIdSipResponse;
-                                                 const Transaction: TIdSipTransaction;
-                                                 const Receiver: TIdSipTransport);
+    function  FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
+    procedure NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
+                                                Transaction: TIdSipTransaction;
+                                                Receiver: TIdSipTransport);
+    procedure NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
+                                                 Transaction: TIdSipTransaction;
+                                                 Receiver: TIdSipTransport);
 
     // IIdSipTransactionListener
     procedure OnFail(const Transaction: TIdSipTransaction;
@@ -614,7 +614,7 @@ end;
 
 //* TIdSipTransactionDispatcher Protected methods ******************************
 
-function TIdSipTransactionDispatcher.FindAppropriateTransport(const Msg: TIdSipMessage): TIdSipTransport;
+function TIdSipTransactionDispatcher.FindAppropriateTransport(Msg: TIdSipMessage): TIdSipTransport;
 var
   I: Integer;
 begin
@@ -642,9 +642,9 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(const Request: TIdSipRequest;
-                                                                        const Transaction: TIdSipTransaction;
-                                                                        const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
+                                                                        Transaction: TIdSipTransaction;
+                                                                        Receiver: TIdSipTransport);
 var
   I: Integer;
 begin
@@ -659,9 +659,9 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(const Response: TIdSipResponse;
-                                                                         const Transaction: TIdSipTransaction;
-                                                                         const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
+                                                                         Transaction: TIdSipTransaction;
+                                                                         Receiver: TIdSipTransport);
 var
   I: Integer;
 begin
@@ -711,8 +711,8 @@ end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
 
-procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Request: TIdSipRequest;
-                                                           const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.DeliverToTransaction(Request: TIdSipRequest;
+                                                           Receiver: TIdSipTransport);
 var
   Tran: TIdSipTransaction;
 begin
@@ -733,8 +733,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Response: TIdSipResponse;
-                                                           const Receiver: TIdSipTransport);
+procedure TIdSipTransactionDispatcher.DeliverToTransaction(Response: TIdSipResponse;
+                                                           Receiver: TIdSipTransport);
 var
   Tran: TIdSipTransaction;
 begin
@@ -747,7 +747,7 @@ begin
     // TODO: this is ugly and dangerous.              ^^^
 end;
 
-function TIdSipTransactionDispatcher.FindTransaction(const R: TIdSipMessage;
+function TIdSipTransactionDispatcher.FindTransaction(R: TIdSipMessage;
                                                      ClientTran: Boolean): TIdSipTransaction;
 var
   I: Integer;
@@ -767,12 +767,12 @@ begin
   end;
 end;
 
-function TIdSipTransactionDispatcher.TransactionAt(const Index: Cardinal): TIdSipTransaction;
+function TIdSipTransactionDispatcher.TransactionAt(Index: Cardinal): TIdSipTransaction;
 begin
   Result := Self.Transactions[Index] as TIdSipTransaction;
 end;
 
-function TIdSipTransactionDispatcher.TransportAt(const Index: Cardinal): TIdSipTransport;
+function TIdSipTransactionDispatcher.TransportAt(Index: Cardinal): TIdSipTransport;
 begin
   Result := Self.Transports[Index] as TIdSipTransport;
 end;
