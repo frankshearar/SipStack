@@ -176,9 +176,6 @@ const
 //* TrnidSpike Public methods **************************************************
 
 constructor TrnidSpike.Create(AOwner: TComponent);
-var
-  Contact: TIdSipContactHeader;
-  From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
 
@@ -407,8 +404,6 @@ begin
 end;                               
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
-var
-  Address: String;
 begin
   Self.ResetCounters;
 
@@ -746,7 +741,7 @@ end;
 
 procedure TrnidSpike.HostNameChange(Sender: TObject);
 var
-  I, J:    Integer;
+  I: Integer;
 begin
   Self.StopTransports;
 
