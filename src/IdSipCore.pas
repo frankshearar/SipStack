@@ -1043,33 +1043,33 @@ function TIdSipUserAgentCore.ReceiveRequest(Request: TIdSipRequest;
 begin
   Result := inherited ReceiveRequest(Request, Transaction, Receiver);
 
-  if Result then begin
-    Result := false;
+  if not Result then Exit;
+  
+  Result := false;
 
-    // Processing the request - 8.2.5
-    if Request.IsInvite then begin
-      // Section 8.1.1.8 says that a request that can start a dialog (like an
-      // INVITE), MUST contain a Contact.
-      if not Request.HasHeader(ContactHeaderFull) then begin
-        Self.RejectBadRequest(Request, MissingContactHeader, Transaction);
-        Exit;
-      end;
+  // Processing the request - 8.2.5
+  if Request.IsInvite then begin
+    // Section 8.1.1.8 says that a request that can start a dialog (like an
+    // INVITE), MUST contain a Contact.
+    if not Request.HasHeader(ContactHeaderFull) then begin
+      Self.RejectBadRequest(Request, MissingContactHeader, Transaction);
+      Exit;
+    end;
 
-      Self.ProcessInvite(Request, Transaction, Receiver);
-    end
-    else if Request.IsAck then begin
-      Self.ProcessAck(Request, Transaction, Receiver);
-    end
-    else if Request.IsBye then begin
-      Self.SendByeToAppropriateSession(Request, Transaction, Receiver);
-    end
-    else if Request.IsCancel then
-      raise Exception.Create('Handling CANCELs not implemented yet');
+    Self.ProcessInvite(Request, Transaction, Receiver);
+  end
+  else if Request.IsAck then begin
+    Self.ProcessAck(Request, Transaction, Receiver);
+  end
+  else if Request.IsBye then begin
+    Self.SendByeToAppropriateSession(Request, Transaction, Receiver);
+  end
+  else if Request.IsCancel then
+    raise Exception.Create('Handling CANCELs not implemented yet');
 
-    // TIdSipSession generates the response - 8.2.6
+  // TIdSipSession generates the response - 8.2.6
 
-    Result := true;
-  end;
+  Result := true;
 end;
 
 procedure TIdSipUserAgentCore.ReceiveResponse(Response: TIdSipResponse;
