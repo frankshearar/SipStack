@@ -64,12 +64,12 @@ type
     fDispatcher: TIdSipTransactionDispatcher;
     fHostName:   String;
 
-    procedure OnReceiveUnhandledRequest(const Request: TIdSipRequest;
-                                        const Transaction: TIdSipTransaction;
-                                        const Receiver: TIdSipTransport); overload;
-    procedure OnReceiveUnhandledResponse(const Response: TIdSipResponse;
-                                         const Transaction: TIdSipTransaction;
-                                         const Receiver: TIdSipTransport); overload;
+    procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction;
+                                        Receiver: TIdSipTransport); overload;
+    procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport); overload;
     procedure SetDispatcher(Value: TIdSipTransactionDispatcher);
   public
     constructor Create; virtual;
@@ -363,16 +363,16 @@ end;
 
 //* TIdSipAbstractCore Private methods *****************************************
 
-procedure TIdSipAbstractCore.OnReceiveUnhandledRequest(const Request: TIdSipRequest;
-                                                       const Transaction: TIdSipTransaction;
-                                                       const Receiver: TIdSipTransport);
+procedure TIdSipAbstractCore.OnReceiveUnhandledRequest(Request: TIdSipRequest;
+                                                       Transaction: TIdSipTransaction;
+                                                       Receiver: TIdSipTransport);
 begin
   Self.ReceiveRequest(Request, Transaction, Receiver);
 end;
 
-procedure TIdSipAbstractCore.OnReceiveUnhandledResponse(const Response: TIdSipResponse;
-                                                        const Transaction: TIdSipTransaction;
-                                                        const Receiver: TIdSipTransport);
+procedure TIdSipAbstractCore.OnReceiveUnhandledResponse(Response: TIdSipResponse;
+                                                        Transaction: TIdSipTransaction;
+                                                        Receiver: TIdSipTransport);
 begin
   Self.ReceiveResponse(Response, Transaction, Receiver);
 end;

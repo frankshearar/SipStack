@@ -43,12 +43,12 @@ type
 
   IIdSipUnhandledMessageListener = interface
     ['{0CB5037D-B9B3-4FB6-9201-80A0F10DB23A}']
-    procedure OnReceiveUnhandledRequest(const Request: TIdSipRequest;
-                                        const Transaction: TIdSipTransaction;
-                                        const Receiver: TIdSipTransport);
-    procedure OnReceiveUnhandledResponse(const Response: TIdSipResponse;
-                                         const Transaction: TIdSipTransaction;
-                                         const Receiver: TIdSipTransport);
+    procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
+                                        Transaction: TIdSipTransaction;
+                                        Receiver: TIdSipTransport);
+    procedure OnReceiveUnhandledResponse(Response: TIdSipResponse;
+                                         Transaction: TIdSipTransaction;
+                                         Receiver: TIdSipTransport);
   end;
 
   // I represent the single connection point between the transport layer and the
