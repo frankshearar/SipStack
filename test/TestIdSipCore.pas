@@ -149,7 +149,7 @@ type
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream;
                         const Port: Integer;
-                        const Format: TIdRTPEncoding);
+                        const Format: TIdRTPPayload);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnSendRequest(const Request: TIdSipRequest;
@@ -1945,7 +1945,7 @@ end;
 
 procedure TestTIdSipSession.OnNewData(const Data: TStream;
                                       const Port: Integer;
-                                      const Format: TIdRTPEncoding);
+                                      const Format: TIdRTPPayload);
 begin
   Self.ThreadEvent.SetEvent;
 end;

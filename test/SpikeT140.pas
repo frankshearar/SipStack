@@ -31,7 +31,7 @@ type
     PacketCounter: Cardinal;
     SendBuffer:    String;
     Server:        TIdRTPServer;
-    T140:          TIdRTPEncoding;
+    T140:          TIdRTPPayload;
     T140PT:        TIdRTPPayloadType;
 
     procedure CountUDP(Sender: TObject;
@@ -76,7 +76,7 @@ begin
 //  Self.Client.ControlPort := Self.Client.DefaultPort + 1;
 //  Self.Client.Active      := true;
 
-  Self.T140   := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  Self.T140   := TIdT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
   Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
   Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
 //  Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
@@ -131,7 +131,7 @@ procedure TIdSpikeT140.ReadRTP(Sender: TObject;
 begin
   Self.Lock.Acquire;
   try
-    if (APacket.Payload.Encoding.Name = T140Encoding) then
+    if (APacket.Payload.Name = T140Encoding) then
       Received.Text := Received.Text + (APacket.Payload as TIdT140Payload).Block;
   finally
     Self.Lock.Release;
@@ -178,7 +178,7 @@ begin
     Port := Self.RemoteHostAndPort.Text;
     Host := Fetch(Port, ':');
 
-    Payload := TIdT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT));
+    Payload := TIdT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
     try
       Payload.Block := Self.SendBuffer;
       Self.Server.Session.SendDataTo(Payload, Host, StrToInt(Port));

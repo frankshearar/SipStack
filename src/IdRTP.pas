@@ -27,7 +27,7 @@ type
 
   TIdRTPPayload = class;
   TIdRTPPayloadClass = class of TIdRTPPayload;
-
+{
   // I am an Encoding. I am described in an SDP payload (RFC 2327),
   // and instantiated by things that need to describe these sorts
   // of encodings. I am a Value Object.
@@ -50,7 +50,7 @@ type
     function AsString: String; virtual;
     function Clone: TIdRTPEncoding; virtual;
     function CreatePayload: TIdRTPPayload; virtual;
-    function IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
+    function HasSameEncoding(const OtherEncoding: TIdRTPEncoding): Boolean;
     function IsNull: Boolean; virtual;
     function IsReserved: Boolean; virtual;
     function PayloadType: TIdRTPPayloadClass; virtual;
@@ -80,7 +80,6 @@ type
                        Parameters: String = ''); overload; override;
     constructor Create(Src: TIdRTPEncoding); overload; override;
 
-    function AsString: String; override;
     function Clone: TIdRTPEncoding; override;
     function CreatePayload: TIdRTPPayload; override;
     function IsNull: Boolean; override;
@@ -95,11 +94,10 @@ type
                        Parameters: String = ''); overload; override;
     constructor Create(Src: TIdRTPEncoding); overload; override;
 
-    function AsString: String; override;
     function Clone: TIdRTPEncoding; override;
     function IsReserved: Boolean; override;
   end;
-
+}
   // I represent the payload in an RTP packet. I store a reference to an
   // encoding. I strongly suggest that you don't mix-and-match payloads and
   // encodings. An RFC 2833 payload must work with an RFC 2833 encoding, for
@@ -108,38 +106,38 @@ type
   // I offer a Flyweight Null Payload.
   TIdRTPPayload = class(TPersistent)
   private
-    fEncoding:   TIdRTPEncoding;
     fClockRate:  Cardinal;
     fParameters: String;
     fStartTime:  TDateTime;
   protected
-    function  GetName: String; virtual; abstract;
+    function  GetName: String; virtual;
     function  GetStartTime: TDateTime; virtual;
     procedure SetStartTime(const Value: TDateTime); virtual;
   public
-    class function CreateFrom(Encoding: TIdRTPEncoding;
+    class function CreateFrom(Payload: TIdRTPPayload;
                               Src: TStream): TIdRTPPayload;
+    class function CreatePayload(Name: String): TIdRTPPayload;
+    class function EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String; overload;
     class function NullPayload: TIdRTPPayload;
 
-    constructor Create(Encoding: TIdRTPEncoding); virtual;
+    constructor Create(EncodingName: String); overload; virtual;
 
     procedure Assign(Src: TPersistent); override;
     function  Clone: TIdRTPPayload;
-    function  EncodingName: String;
+    function  EncodingName: String; overload;
     function  HasKnownLength: Boolean; virtual;
     function  HasSameEncoding(Other: TIdRTPPayload): Boolean;
     function  IsNull: Boolean; virtual;
+    function  IsReserved: Boolean; virtual;
     function  Length: Cardinal; virtual;
     function  NumberOfSamples: Cardinal; virtual;
     procedure ReadFrom(Src: TStream); virtual;
     procedure PrintOn(Dest: TStream); virtual;
 
-    property Encoding:   TIdRTPEncoding read fEncoding;
-    property ClockRate:  Cardinal       read fClockRate write fClockRate;
-    property Name:       String         read GetName;
-    property Parameters: String         read fParameters write fParameters;
-//    property RawData:    String         read fRawData write fRawData; //??desired??
-    property StartTime:  TDateTime      read GetStartTime write SetStartTime;
+    property ClockRate:  Cardinal  read fClockRate write fClockRate;
+    property Name:       String    read GetName;
+    property Parameters: String    read fParameters write fParameters;
+    property StartTime:  TDateTime read GetStartTime write SetStartTime;
   end;
 
   // I represent the Null payload - a Null Object representing the absence of a
@@ -151,6 +149,15 @@ type
     procedure SetStartTime(const Value: TDateTime); override;
   public
     function IsNull: Boolean; override;
+  end;
+
+  TIdReservedPayload = class(TIdRTPPayload)
+  protected
+    function  GetName: String; override;
+    function  GetStartTime: TDateTime; override;
+    procedure SetStartTime(const Value: TDateTime); override;
+  public
+    function IsReserved: Boolean; override;
   end;
 
   // I represent a raw (i.e., unparsed) payload.
@@ -165,7 +172,7 @@ type
   protected
     function GetName: String; override;
   public
-    constructor Create(Encoding: TIdRTPEncoding); override;
+    constructor Create(EncodingName: String); overload; override;
 
     function  Length: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
@@ -182,7 +189,7 @@ type
   protected
     function GetName: String; override;
   public
-    constructor Create(Encoding: TIdRTPEncoding); override;
+    constructor Create(EncodingName: String); override;
 
     function  HasKnownLength: Boolean; override;
     function  Length: Cardinal; override;
@@ -214,7 +221,7 @@ type
     property Volume:      TIdTelephoneEventVolume read fVolume write fVolume;
   end;
 
-  TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPEncoding;
+  TIdPayloadArray = array[Low(TIdRTPPayloadType)..High(TIdRTPPayloadType)] of TIdRTPPayload;
 
   TIdRTPBasePacket = class;
 
@@ -226,15 +233,15 @@ type
   TIdRTPProfile = class(TPersistent)
   private
     Encodings:        TIdPayloadArray;
-    NullEncoding:     TIdRTPEncoding;
-    ReservedEncoding: TIdRTPEncoding;
+    NullEncoding:     TIdRTPPayload;
+    ReservedEncoding: TIdRTPPayload;
 
-    function  IndexOfEncoding(const Encoding: TIdRTPEncoding): Integer; overload;
+    function  IndexOfEncoding(const Encoding: TIdRTPPayload): Integer; overload;
     function  IndexOfEncoding(const EncodingName: String): Integer; overload;
     procedure Initialize;
     procedure RemoveEncoding(const PayloadType: TIdRTPPayloadType);
   protected
-    procedure AddEncodingAsReference(Encoding: TIdRTPEncoding;
+    procedure AddEncodingAsReference(Encoding: TIdRTPPayload;
                                      PayloadType: TIdRTPPayloadType);
 
     procedure ReservePayloadType(const PayloadType: TIdRTPPayloadType);
@@ -242,7 +249,7 @@ type
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddEncoding(Encoding: TIdRTPEncoding;
+    procedure AddEncoding(Encoding: TIdRTPPayload;
                           PayloadType: TIdRTPPayloadType); overload;
     procedure AddEncoding(Name: String;
                           ClockRate: Cardinal;
@@ -253,16 +260,16 @@ type
     procedure Clear;
     function  Count: Integer;
     function  CreatePacket(Src: TStream): TIdRTPBasePacket;
-    function  EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPEncoding; overload;
-    function  EncodingFor(EncodingName: String): TIdRTPEncoding; overload;
+    function  EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPPayload; overload;
+    function  EncodingFor(EncodingName: String): TIdRTPPayload; overload;
     function  FirstFreePayloadType: TIdRTPPayloadType;
-    function  HasEncoding(const Encoding: TIdRTPEncoding): Boolean;
+    function  HasEncoding(const Encoding: TIdRTPPayload): Boolean;
     function  HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
     function  IsFull: Boolean;
     function  IsRTCPPayloadType(const PayloadType: Byte): Boolean;
-    function  PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType; overload;
+    function  PayloadTypeFor(Encoding: TIdRTPPayload): TIdRTPPayloadType; overload;
     function  PayloadTypeFor(EncodingName: String): TIdRTPPayloadType; overload;
-    function  StreamContainsEncoding(Src: TStream): TIdRTPEncoding;
+    function  StreamContainsEncoding(Src: TStream): TIdRTPPayload;
     function  StreamContainsPayloadType(Src: TStream): TIdRTPPayloadType;
     function  TransportDesc: String; virtual;
   end;
@@ -381,7 +388,7 @@ type
     function  GetCsrcID(Index: TIdRTPCsrcCount): Cardinal;
     procedure ReadPayloadAndPadding(Src: TStream;
                                     Profile: TIdRTPProfile);
-    procedure ReplacePayload(const Encoding: TIdRTPEncoding);
+    procedure ReplacePayload(const Payload: TIdRTPPayload);
     procedure SetCsrcCount(const Value: TIdRTPCsrcCount);
     procedure SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
   public
@@ -941,6 +948,7 @@ type
 
     function  AcceptableSSRC(SSRC: Cardinal): Boolean;
     function  AddMember(SSRC: Cardinal): TIdRTPMember;
+//    function  AddReceiver(Host: String; Port: Cardinal): TIdRTPMember; // How about this to add a new receiver?
     function  AddSender(SSRC: Cardinal): TIdRTPMember;
     function  CreateNextReport: TIdCompoundRTCPPacket;
     function  DeterministicSendInterval(ForSender: Boolean): TDateTime;
@@ -1121,13 +1129,17 @@ const
   TelephoneEventEncoding = 'telephone-event';
   TelephoneEventMimeType = 'audio/' + TelephoneEventEncoding;
 
+const
+  NullEncodingName     = 'null';
+  ReservedEncodingName = 'reserved';
+
 implementation
 
 uses
   DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom;
 
 var
-  GNullEncoding: TIdRTPEncoding;
+//  GNullEncoding: TIdRTPEncoding;
   GNullPayload:  TIdRTPPayload;
 
 const
@@ -1390,7 +1402,7 @@ begin
   Value := HtoNS(Value);
   Dest.Write(Value, SizeOf(Value));
 end;
-
+{
 //******************************************************************************
 //* TIdRTPEncoding                                                             *
 //******************************************************************************
@@ -1408,12 +1420,12 @@ begin
 
   if (Lowercase(Name) = Lowercase(T140Encoding)) then
     Result := TIdT140Encoding.Create(Name,
-                                        ClockRate,
-                                        Parameters)
+                                     ClockRate,
+                                     Parameters)
   else if (Lowercase(Name) = Lowercase(TelephoneEventEncoding)) then
     Result := TIdTelephoneEventEncoding.Create(Name,
-                                                  ClockRate,
-                                                  Parameters)
+                                               ClockRate,
+                                               Parameters)
   else
     Result := TIdRTPEncoding.Create(Name,
                                     ClockRate,
@@ -1463,14 +1475,12 @@ end;
 
 function TIdRTPEncoding.CreatePayload: TIdRTPPayload;
 begin
-  Result := Self.PayloadType.Create(Self);
+  Result := TIdRTPPayload.CreatePayload(Self.AsString);
 end;
 
-function TIdRTPEncoding.IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
+function TIdRTPEncoding.HasSameEncoding(const OtherEncoding: TIdRTPEncoding): Boolean;
 begin
-  Result := (Self.Name = OtherEncoding.Name)
-        and (Self.ClockRate = OtherEncoding.ClockRate)
-        and (Self.Parameters = OtherEncoding.Parameters);
+  Result := Self.AsString = OtherEncoding.AsString;
 end;
 
 function TIdRTPEncoding.IsNull: Boolean;
@@ -1524,17 +1534,12 @@ constructor TIdRTPNullEncoding.Create(Name: String;
                                       ClockRate: Cardinal;
                                       Parameters: String = '');
 begin
-  inherited Create('', 0, '');
+  inherited Create(NullEncodingName, 0, '');
 end;
 
 constructor TIdRTPNullEncoding.Create(Src: TIdRTPEncoding);
 begin
-  inherited Create('', 0, '');
-end;
-
-function TIdRTPNullEncoding.AsString: String;
-begin
-  Result := '';
+  inherited Create(NullEncodingName, 0, '');
 end;
 
 function TIdRTPNullEncoding.Clone: TIdRTPEncoding;
@@ -1561,17 +1566,12 @@ constructor TIdRTPReservedEncoding.Create(Name: String;
                                           ClockRate: Cardinal;
                                           Parameters: String = '');
 begin
-  inherited Create('', 0, '');
+  inherited Create(NullEncodingName, 0, '');
 end;
 
 constructor TIdRTPReservedEncoding.Create(Src: TIdRTPEncoding);
 begin
-  inherited Create('', 0, '');
-end;
-
-function TIdRTPReservedEncoding.AsString: String;
-begin
-  Result := '';
+  inherited Create(ReservedEncodingName, 0, '');
 end;
 
 function TIdRTPReservedEncoding.Clone: TIdRTPEncoding;
@@ -1583,16 +1583,16 @@ function TIdRTPReservedEncoding.IsReserved: Boolean;
 begin
   Result := true;
 end;
-
+}
 //******************************************************************************
 //* TIdRTPPayload                                                              *
 //******************************************************************************
 //* TIdRTPPayload Public methods ***********************************************
 
-class function TIdRTPPayload.CreateFrom(Encoding: TIdRTPEncoding;
+class function TIdRTPPayload.CreateFrom(Payload: TIdRTPPayload;
                                         Src: TStream): TIdRTPPayload;
 begin
-  Result := Encoding.CreatePayload;
+  Result := Payload.Clone;
   try
     Result.ReadFrom(Src);
   except
@@ -1602,24 +1602,50 @@ begin
   end;
 end;
 
+class function TIdRTPPayload.CreatePayload(Name: String): TIdRTPPayload;
+var
+  EncodingName: String;
+  ClockRate:    Cardinal;
+  Parameters:   String;
+begin
+  // Name should be something like "L16/44100/2"
+  Parameters   := Name;
+  EncodingName := Fetch(Parameters, '/');
+  ClockRate    := StrToInt(Fetch(Parameters, '/'));
+
+  if (Lowercase(EncodingName) = Lowercase(T140Encoding)) then
+    Result := TIdT140Payload.Create
+  else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncoding)) then
+    Result := TIdTelephoneEventPayload.Create
+  else
+    Result := TIdRawPayload.Create(EncodingName);
+
+  Result.ClockRate  := ClockRate;
+  Result.Parameters := Parameters;
+  Result.StartTime  := Now;
+end;
+
+class function TIdRTPPayload.EncodingName(Name: String; ClockRate: Cardinal; Parameters: String = ''): String;
+begin
+  Result := Name + '/' + IntToStr(ClockRate);
+
+  if (Parameters <> '') then
+    Result := Result + '/' + Parameters;
+end;
+
 class function TIdRTPPayload.NullPayload: TIdRTPPayload;
 begin
   if not Assigned(GNullPayload) then
-    GNullPayload := TIdNullPayload.Create(TIdRTPEncoding.NullEncoding);
+    GNullPayload := TIdRTPPayload.CreatePayload(NullEncodingName + '/0');
 
   Result := GNullPayload;
 end;
 
-constructor TIdRTPPayload.Create(Encoding: TIdRTPEncoding);
+constructor TIdRTPPayload.Create(EncodingName: String);
 begin
   inherited Create;
 
-  Self.ClockRate  := Encoding.ClockRate;
-  Self.Parameters := Encoding.Parameters;
-
   Self.StartTime := Now;
-
-  fEncoding := Encoding;
 end;
 
 procedure TIdRTPPayload.Assign(Src: TPersistent);
@@ -1643,15 +1669,15 @@ end;
 
 function TIdRTPPayload.Clone: TIdRTPPayload;
 begin
-  Result := TIdRTPPayloadClass(Self.ClassType).Create(Self.Encoding);
+  Result := TIdRTPPayload.CreatePayload(Self.EncodingName);
+  Result.Assign(Self);
 end;
 
 function TIdRTPPayload.EncodingName: String;
 begin
-  Result := Self.Name + '/' + IntToStr(Self.ClockRate);
-
-  if (Self.Parameters <> '') then
-    Result := Result + '/' + Self.Parameters;
+  Result := TIdRTPPayload.EncodingName(Self.Name,
+                                       Self.ClockRate,
+                                       Self.Parameters);
 end;
 
 function TIdRTPPayload.HasKnownLength: Boolean;
@@ -1661,10 +1687,15 @@ end;
 
 function TIdRTPPayload.HasSameEncoding(Other: TIdRTPPayload): Boolean;
 begin
-  Result := true;
+  Result := Self.EncodingName = Other.EncodingName;
 end;
 
 function TIdRTPPayload.IsNull: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdRTPPayload.IsReserved: Boolean;
 begin
   Result := false;
 end;
@@ -1688,6 +1719,11 @@ begin
 end;
 
 //* TIdRTPPayload Protected methods ********************************************
+
+function TIdRTPPayload.GetName: String;
+begin
+  Result := '';
+end;
 
 function TIdRTPPayload.GetStartTime: TDateTime;
 begin
@@ -1713,7 +1749,7 @@ end;
 
 function TIdNullPayload.GetName: String;
 begin
-  Result := 'null';
+  Result := NullEncodingName;
 end;
 
 function TIdNullPayload.GetStartTime: TDateTime;
@@ -1726,15 +1762,41 @@ begin
 end;
 
 //******************************************************************************
+//* TIdReservedPayload                                                         *
+//******************************************************************************
+//* TIdReservedPayload Public methods ******************************************
+
+function TIdReservedPayload.IsReserved: Boolean;
+begin
+  Result := true;
+end;
+
+//* TIdReservedPayload Protected methods ***************************************
+
+function TIdReservedPayload.GetName: String;
+begin
+  Result := ReservedEncodingName;
+end;
+
+function TIdReservedPayload.GetStartTime: TDateTime;
+begin
+  Result := Now;
+end;
+
+procedure TIdReservedPayload.SetStartTime(const Value: TDateTime);
+begin
+end;
+
+//******************************************************************************
 //* TIdRawPayload                                                              *
 //******************************************************************************
 //* TIdRawPayload Public methods ***********************************************
 
-constructor TIdRawPayload.Create(Encoding: TIdRTPEncoding);
+constructor TIdRawPayload.Create(EncodingName: String);
 begin
-  inherited Create(Encoding);
+  inherited Create(EncodingName);
 
-  fName := Encoding.Name;
+  Self.fName := EncodingName;
 end;
 
 function TIdRawPayload.Length: Cardinal;
@@ -1769,9 +1831,9 @@ end;
 //******************************************************************************
 //* TIdT140Payload Public methods **********************************************
 
-constructor TIdT140Payload.Create(Encoding: TIdRTPEncoding);
+constructor TIdT140Payload.Create(EncodingName: String);
 begin
-  inherited Create(Encoding);
+  inherited Create(EncodingName);
 
   Self.ClockRate := T140ClockRate;
 end;
@@ -1857,8 +1919,8 @@ constructor TIdRTPProfile.Create;
 begin
   inherited Create;
 
-  Self.NullEncoding     := TIdRTPNullEncoding.Create('', 0, '');
-  Self.ReservedEncoding := TIdRTPReservedEncoding.Create('', 0, '');
+  Self.NullEncoding     := TIdNullPayload.Create('');
+  Self.ReservedEncoding := TIdReservedPayload.Create('');
   Self.Initialize;
 end;
 
@@ -1872,7 +1934,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdRTPProfile.AddEncoding(Encoding: TIdRTPEncoding;
+procedure TIdRTPProfile.AddEncoding(Encoding: TIdRTPPayload;
                                     PayloadType: TIdRTPPayloadType);
 begin
   if Encoding.IsNull then
@@ -1886,9 +1948,9 @@ procedure TIdRTPProfile.AddEncoding(Name: String;
                                     Params: String;
                                     PayloadType: TIdRTPPayloadType);
 var
-  Enc: TIdRTPEncoding;
+  Enc: TIdRTPPayload;
 begin
-  Enc := TIdRTPEncoding.Create(Name, ClockRate, Params);
+  Enc := TIdRTPPayload.Create(TIdRTPPayload.EncodingName(Name, ClockRate, Params));
   try
     Self.AddEncoding(Enc, PayloadType);
   finally
@@ -1946,19 +2008,21 @@ begin
     Result := TIdRTPPacket.Create(Self);
 end;
 
-function TIdRTPProfile.EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPEncoding;
+function TIdRTPProfile.EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPPayload;
 begin
-  Result := Self.Encodings[PayloadType] as TIdRTPEncoding;
+  Result := Self.Encodings[PayloadType] as TIdRTPPayload;
 end;
 
-function TIdRTPProfile.EncodingFor(EncodingName: String): TIdRTPEncoding;
+function TIdRTPProfile.EncodingFor(EncodingName: String): TIdRTPPayload;
 var
   I: Integer;
 begin
+  // EncodingName must be a full encoding name - T140/1000, or L16/44100/2,
+  // etc.
   Result := Self.NullEncoding;
   I := Low(Self.Encodings);
   while (I <= High(Self.Encodings)) and Result.IsNull do
-    if (Self.Encodings[I].AsString = EncodingName) then
+    if (Self.Encodings[I].EncodingName = EncodingName) then
       Result := Self.Encodings[I]
     else
       Inc(I);
@@ -1975,7 +2039,7 @@ begin
   Result := TIdRTPPayloadType(I);
 end;
 
-function TIdRTPProfile.HasEncoding(const Encoding: TIdRTPEncoding): Boolean;
+function TIdRTPProfile.HasEncoding(const Encoding: TIdRTPPayload): Boolean;
 begin
   Result := not Encoding.IsNull and (Self.IndexOfEncoding(Encoding) <> -1);
 end;
@@ -2003,14 +2067,14 @@ begin
         and (PayloadType <= RTCPApplicationDefined);
 end;
 
-function TIdRTPProfile.PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType;
+function TIdRTPProfile.PayloadTypeFor(Encoding: TIdRTPPayload): TIdRTPPayloadType;
 var
   Index: Integer;
 begin
   Index := Self.IndexOfEncoding(Encoding);
 
   if (Index = -1) then
-    raise ENoPayloadTypeFound.Create(Encoding.AsString)
+    raise ENoPayloadTypeFound.Create(Encoding.EncodingName)
   else
     Result := TIdRTPPayloadType(Index);
 end;
@@ -2027,7 +2091,7 @@ begin
     Result := TIdRTPPayloadType(Index);
 end;
 
-function TIdRTPProfile.StreamContainsEncoding(Src: TStream): TIdRTPEncoding;
+function TIdRTPProfile.StreamContainsEncoding(Src: TStream): TIdRTPPayload;
 begin
   Result := Self.EncodingFor(Self.StreamContainsPayloadType(Src));
 end;
@@ -2047,7 +2111,7 @@ end;
 
 //* TIdRTPProfile Protected methods ********************************************
 
-procedure TIdRTPProfile.AddEncodingAsReference(Encoding: TIdRTPEncoding;
+procedure TIdRTPProfile.AddEncodingAsReference(Encoding: TIdRTPPayload;
                                                PayloadType: TIdRTPPayloadType);
 begin
   if not Self.HasPayloadType(PayloadType) and not Self.HasEncoding(Encoding) then
@@ -2065,12 +2129,12 @@ end;
 
 //* TIdRTPProfile Private methods **********************************************
 
-function TIdRTPProfile.IndexOfEncoding(const Encoding: TIdRTPEncoding): Integer;
+function TIdRTPProfile.IndexOfEncoding(const Encoding: TIdRTPPayload): Integer;
 begin
   Result := 0;
 
   while (Result <= High(TIdRTPPayloadType))
-    and not Self.EncodingFor(Result).IsEqualTo(Encoding) do
+    and not Self.EncodingFor(Result).HasSameEncoding(Encoding) do
       Inc(Result);
 
   if (Result > High(TIdRTPPayloadType)) then
@@ -2082,7 +2146,7 @@ begin
   Result := 0;
 
   while (Result <= High(TIdRTPPayloadType))
-    and not (Self.EncodingFor(Result).AsString = EncodingName) do
+    and not (Self.EncodingFor(Result).EncodingName = EncodingName) do
       Inc(Result);
 
   if (Result > High(TIdRTPPayloadType)) then
@@ -2115,30 +2179,30 @@ constructor TIdAudioVisualProfile.Create;
 begin
   inherited Create;
 
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(PCMMuLawEncoding, 8000),        0);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(GSMEncoding,      8000),        3);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G723Encoding,     8000),        4);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     8000),        5);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     16000),       6);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(LPCEncoding,      8000),        7);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(PCMALawEncoding,  8000),        8);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G722Encoding,     8000),        9);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(L16Encoding,      44100, '2'), 10);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(L16Encoding,      44100, '1'), 11);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(QCELPEncoding,    8000),       12);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(CNEncoding,       8000),       13);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MPAEncoding,      90000),      14);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G728Encoding,     8000),       15);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     11025),      16);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(DVI4Encoding,     22050),      17);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(G729Encoding,     8000),       18);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(CelBEncoding,     90000),      25);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(JPEGEncoding,     90000),      26);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(NVEncoding,       90000),      28);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(H261Encoding,     90000),      31);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MPVEncoding,      90000),      32);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(MP2TEncoding,     90000),      33);
-  Self.AddEncodingAsReference(TIdRTPEncoding.Create(H263Encoding,     90000),      34);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(PCMMuLawEncoding + '/8000'),     0);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(GSMEncoding      + '/8000'),     3);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(G723Encoding     + '/8000'),     4);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(DVI4Encoding     + '/8000'),     5);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(DVI4Encoding     + '/16000'),    6);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(LPCEncoding      + '/8000'),     7);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(PCMALawEncoding  + '/8000'),     8);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(G722Encoding     + '/8000'),     9);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(L16Encoding      + '/44100/2'), 10);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(L16Encoding      + '/44100/1'), 11);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(QCELPEncoding    + '/8000'),    12);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(CNEncoding       + '/8000'),    13);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(MPAEncoding      + '/90000'),   14);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(G728Encoding     + '/8000'),    15);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(DVI4Encoding     + '/11025'),   16);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(DVI4Encoding     + '/22050'),   17);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(G729Encoding     + '/8000'),    18);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(CelBEncoding     + '/90000'),   25);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(JPEGEncoding     + '/90000'),   26);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(NVEncoding       + '/90000'),   28);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(H261Encoding     + '/90000'),   31);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(MPVEncoding      + '/90000'),   32);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(MP2TEncoding     + '/90000'),   33);
+  Self.AddEncodingAsReference(TIdRTPPayload.CreatePayload(H263Encoding     + '/90000'),   34);
 
   Self.ReserveRange(1,  2);
   Self.ReserveRange(19, 24);
@@ -2523,9 +2587,8 @@ end;
 
 procedure TIdRTPPacket.ReadPayload(Data: TIdRTPPayload);
 begin
-  Self.PayloadType := Self.Profile.PayloadTypeFor(Data.Encoding);
-  Self.ReplacePayload(Data.Encoding);
-  Self.Payload.Assign(Data);
+  Self.PayloadType := Self.Profile.PayloadTypeFor(Data.EncodingName);
+  Self.ReplacePayload(Data);
 end;
 
 function TIdRTPPacket.RealLength: Word;
@@ -2577,12 +2640,12 @@ begin
   end;
 end;
 
-procedure TIdRTPPacket.ReplacePayload(const Encoding: TIdRTPEncoding);
+procedure TIdRTPPacket.ReplacePayload(const Payload: TIdRTPPayload);
 begin
   if (Self.Payload <> TIdRTPPayload.NullPayload) then
     fPayload.Free;
 
-  fPayload := Encoding.CreatePayload;
+  fPayload := Payload.Clone;
 end;
 
 procedure TIdRTPPacket.SetCsrcCount(const Value: TIdRTPCsrcCount);
@@ -4645,7 +4708,7 @@ begin
 
   if SSRC.UpdateStatistics(RTP,
                            DateTimeToRTPTimestamp(Self.TimeOffsetFromStart(Now),
-                                                  RTP.Payload.Encoding.ClockRate)) then begin
+                                                  RTP.Payload.ClockRate)) then begin
     // Valid, in-sequence RTP can be sent up the stack
   end;
 end;
@@ -5113,7 +5176,6 @@ end;
 
 initialization
 finalization
-  GNullEncoding.Free;
-  // This turns into a dangling pointer. What makes it dangle?
+//  GNullEncoding.Free;
   GNullPayload.Free;
 end.

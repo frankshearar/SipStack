@@ -21,7 +21,7 @@ type
 
     procedure OnNewData(const Data: TStream;
                         const Port: Integer;
-                        const Format: TIdRTPEncoding);
+                        const Format: TIdRTPPayload);
     procedure OnNewUdpData(const Data: TStream);
 
     property NewData: Boolean read fNewData;
@@ -192,7 +192,7 @@ end;
 
 procedure TIdSipTestDataListener.OnNewData(const Data: TStream;
                                            const Port: Integer;
-                                           const Format: TIdRTPEncoding);
+                                           const Format: TIdRTPPayload);
 begin
   Self.fNewData := true;
 end;

@@ -791,7 +791,7 @@ procedure TestTIdSdpRTPMapAttribute.TestSetValue;
 begin
   Self.A.Value := '98 T140/1000';
 
-  CheckEquals(TIdT140Encoding.ClassName,
+  CheckEquals(TIdT140Payload.ClassName,
               Self.A.Encoding.ClassName,
               'Encoding');
   CheckEquals(T140Encoding,
@@ -2066,7 +2066,7 @@ begin
     Self.Payload.InitializeProfile(Profile);
 
     for PT := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do
-      CheckEquals(TIdRTPNullEncoding.ClassName,
+      CheckEquals(TIdNullPayload.ClassName,
                   Profile.EncodingFor(PT).ClassName,
                   'Encoding for payload type ' + IntToStr(PT));
   finally
@@ -2088,16 +2088,16 @@ begin
     Self.Payload.InitializeProfile(Profile);
 
     for PT := Low(TIdRTPPayloadType) to 97 do
-      CheckEquals(TIdRTPNullEncoding.ClassName,
+      CheckEquals(TIdNullPayload.ClassName,
                   Profile.EncodingFor(PT).ClassName,
                   'Encoding for payload type ' + IntToStr(PT));
 
-    CheckNotEquals(TIdRTPNullEncoding.ClassName,
+    CheckNotEquals(TIdNullPayload.ClassName,
                    Profile.EncodingFor(98).ClassName,
                    'Encoding for payload type 98');
 
     for PT := 99 to High(TIdRTPPayloadType) do
-      CheckEquals(TIdRTPNullEncoding.ClassName,
+      CheckEquals(TIdNullPayload.ClassName,
                   Profile.EncodingFor(PT).ClassName,
                   'Encoding for payload type ' + IntToStr(PT));
   finally

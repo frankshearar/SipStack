@@ -178,7 +178,7 @@ type
     procedure DoOnClientFinished(Sender: TObject);
     function  GetCleanerThreadPollTime: Cardinal;
     procedure RemoveClient(Client: TIdSipUdpClient);
-    procedure SendResponseNotExpectingResponses(const R: TIdSipRequest);
+    procedure SendRequestNotExpectingResponses(const R: TIdSipRequest);
     procedure SetCleanerThreadPollTime(const Value: Cardinal);
   protected
     function  GetBindings: TIdSocketHandles; override;
@@ -848,7 +848,7 @@ begin
   inherited SendRequest(R);
 
   if not R.RequiresResponse then
-    Self.SendResponseNotExpectingResponses(R)
+    Self.SendRequestNotExpectingResponses(R)
   else begin
     // Really, this we expect this behaviour from an RFC 3581 compliant agent.
     // X-Lite behaves in a braindead fashion though, and assumes blithely that
@@ -972,7 +972,7 @@ begin
   end;
 end;
 
-procedure TIdSipUDPTransport.SendResponseNotExpectingResponses(const R: TIdSipRequest);
+procedure TIdSipUDPTransport.SendRequestNotExpectingResponses(const R: TIdSipRequest);
 var
   Client: TIdUdpClient;
 begin

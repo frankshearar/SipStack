@@ -45,9 +45,9 @@ type
   TIdSdpRTPMapAttribute = class(TIdSdpAttribute)
   private
     fPayloadType: TIdRTPPayloadType;
-    fEncoding:    TIdRTPEncoding;
+    fEncoding:    TIdRTPPayload;
 
-    procedure SetEncoding(const Value: TIdRTPEncoding);
+    procedure SetEncoding(const Value: TIdRTPPayload);
   protected
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
@@ -58,7 +58,7 @@ type
     function IsRTPMap: Boolean; override;
 
     property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
-    property Encoding:    TIdRTPEncoding    read fEncoding;
+    property Encoding:    TIdRTPPayload     read fEncoding;
   end;
 
   TIdSdpBandwidth = class(TIdPrintable)
@@ -431,7 +431,7 @@ type
     ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
     procedure OnNewData(const Data: TStream;
                         const Port: Integer;
-                        const Format: TIdRTPEncoding);
+                        const Format: TIdRTPPayload);
     procedure OnNewUdpData(const Data: TStream);
   end;
 
@@ -457,7 +457,7 @@ type
     function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TStream;
                                  Port: Cardinal;
-                                 Format: TIdRTPEncoding);
+                                 Format: TIdRTPPayload);
     procedure NotifyOfNewUdpData(Data: TStream);
     procedure OnReceiveRTCP(Sender: TObject;
                             APacket: TIdRTCPPacket;
@@ -773,7 +773,7 @@ constructor TIdSdpRTPMapAttribute.Create;
 begin
   inherited Create;
 
-  Self.fEncoding := TIdRTPNullEncoding.Create;
+  Self.fEncoding := TIdNullPayload.Create;
 end;
 
 destructor TIdSdpRTPMapAttribute.Destroy;
@@ -810,13 +810,13 @@ begin
   if (E <> 0) then
     raise EParser.Create(Format(MalformedToken, [Value]));
   Self.PayloadType := N;
-  
-  Self.SetEncoding(TIdRTPEncoding.CreateEncoding(EncodingDesc));
+
+  Self.SetEncoding(TIdRTPPayload.CreatePayload(EncodingDesc));
 end;
 
 //* TIdSdpRTPMapAttribute Private methods **************************************
 
-procedure TIdSdpRTPMapAttribute.SetEncoding(const Value: TIdRTPEncoding);
+procedure TIdSdpRTPMapAttribute.SetEncoding(const Value: TIdRTPPayload);
 begin
   Self.Encoding.Free;
   Self.fEncoding := Value;
@@ -2762,7 +2762,7 @@ end;
 
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TStream;
                                                     Port: Cardinal;
-                                                    Format: TIdRTPEncoding);
+                                                    Format: TIdRTPPayload);
 var
   I: Integer;
 begin

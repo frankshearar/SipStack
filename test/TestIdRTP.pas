@@ -38,7 +38,7 @@ type
     procedure TestWriteTimestamp;
     procedure TestWriteWord;
   end;
-
+{
   TestTIdRTPEncoding = class(TTestCase)
   published
     procedure TestAsString;
@@ -93,25 +93,36 @@ type
     procedure TestClone;
     procedure TestIsNull;
   end;
-
+}
   TPayloadTestCase = class(TTestCase)
   protected
-    Encoding: TIdRTPEncoding;
     Payload:  TIdRTPPayload;
 
-    function EncodingType: TIdRTPEncodingClass; virtual; abstract;
     function PayloadType: TIdRTPPayloadClass; virtual; abstract;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreate;
     procedure TestClone;
+    procedure TestCloneCopiesData;
+    procedure TestEncodingName;
     procedure TestIsNull; virtual;
+    procedure TestIsReserved; virtual;
   end;
 
   TestTIdNullPayload = class(TPayloadTestCase)
+  protected
+    function PayloadType: TIdRTPPayloadClass; override;
   published
     procedure TestIsNull; override;
+  end;
+
+  TestTIdReservedPayload = class(TPayloadTestCase)
+  protected
+    function PayloadType: TIdRTPPayloadClass; override;
+  published
+    procedure TestIsReserved; override;
   end;
 
   TestTIdRawPayload = class(TPayloadTestCase)
@@ -124,7 +135,6 @@ type
   private
     Packet: TIdT140Payload;
   protected
-    function EncodingType: TIdRTPEncodingClass; override;
     function PayloadType: TIdRTPPayloadClass; override;
   public
     procedure SetUp; override;
@@ -141,7 +151,6 @@ type
     Packet:          TIdTelephoneEventPayload;
     SampleDurations: array[0..5] of Word;
   protected
-    function EncodingType: TIdRTPEncodingClass; override;
     function PayloadType: TIdRTPPayloadClass; override;
   public
     procedure SetUp; override;
@@ -164,8 +173,8 @@ type
   private
     ArbPT:                   TIdRTPPayloadType;
     Profile:                 TIdRTPProfile;
-    T140Encoding:            TIdRTPEncoding;
-    InterleavedT140Encoding: TIdRTPEncoding;
+    T140Encoding:            TIdRTPPayload;
+    InterleavedT140Encoding: TIdRTPPayload;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -630,9 +639,9 @@ type
     procedure TestAddSender;
     procedure TestAddSenderAddsMember;
     procedure TestCantRemoveSelfFromSession;
-    procedure TestIsSenderSelf;
     procedure TestIsMember;
     procedure TestIsSender;
+    procedure TestIsSenderSelf;
     procedure TestPrepareRTP;
     procedure TestPrepareSR;
     procedure TestRemoveMember;
@@ -754,10 +763,14 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTP unit tests');
   Result.AddTest(TestFunctions.Suite);
+{
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
   Result.AddTest(TestTIdT140Encoding.Suite);
   Result.AddTest(TestTIdTelephoneEventEncoding.Suite);
+}
+  Result.AddTest(TestTIdReservedPayload.Suite);
+  Result.AddTest(TestTIdNullPayload.Suite);
   Result.AddTest(TestTIdTelephoneEventPayload.Suite);
   Result.AddTest(TestTIdT140Payload.Suite);
   Result.AddTest(TestTIdRTPProfile.Suite);
@@ -1361,7 +1374,7 @@ begin
     S.Free;
   end;
 end;
-
+{
 //******************************************************************************
 //* TestTIdRTPEncoding                                                         *
 //******************************************************************************
@@ -1460,7 +1473,7 @@ begin
   try
     Enc2 := TIdRTPEncoding.Create(Enc1);
     try
-      Check(Enc2.IsEqualTo(Enc1), 'Properties not copied correctly');
+      Check(Enc2.HasSameEncoding(Enc1), 'Properties not copied correctly');
     finally
       Enc2.Free;
     end;
@@ -1631,14 +1644,16 @@ end;
 
 procedure TestTIdRTPNullEncoding.TestAsString;
 begin
-  CheckEquals('', Self.Encoding.AsString, 'AsString for Null Encoding');
+  CheckEquals(NullEncodingName + '/0',
+              Self.Encoding.AsString,
+              'AsString for Null Encoding');
 end;
 
 procedure TestTIdRTPNullEncoding.TestCreate;
 begin
-  CheckEquals(0,  Self.Encoding.ClockRate,  'ClockRate');
-  CheckEquals('', Self.Encoding.Name,       'Name');
-  CheckEquals('', Self.Encoding.Parameters, 'Parameters');
+  CheckEquals(0,                Self.Encoding.ClockRate,  'ClockRate');
+  CheckEquals(NullEncodingName, Self.Encoding.Name,       'Name');
+  CheckEquals('',               Self.Encoding.Parameters, 'Parameters');
 end;
 
 procedure TestTIdRTPNullEncoding.TestCreateFromEncoding;
@@ -1650,7 +1665,7 @@ begin
   try
     Null := TIdRTPNullEncoding.Create(Enc);
     try
-      Check(Null.IsEqualTo(Self.Encoding), 'Properties not copied correctly');
+      Check(Null.HasSameEncoding(Self.Encoding), 'Properties not copied correctly');
     finally
       Null.Free;
     end;
@@ -1677,7 +1692,7 @@ procedure TestTIdRTPNullEncoding.TestIsNull;
 begin
   Check(Self.Encoding.IsNull, 'Null Encoding not marked as null');
 end;
-
+}
 //******************************************************************************
 //* TPayloadTestCase                                                           *
 //******************************************************************************
@@ -1687,19 +1702,37 @@ procedure TPayloadTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Encoding := Self.EncodingType.Create;
-  Self.Payload := Self.PayloadType.Create(Self.Encoding);
+  Self.Payload := Self.PayloadType.Create('');
 end;
 
 procedure TPayloadTestCase.TearDown;
 begin
   Self.Payload.Free;
-  Self.Encoding.Free;
 
   inherited TearDown;
 end;
 
 //* TPayloadTestCase Published methods *****************************************
+
+procedure TPayloadTestCase.TestCreate;
+var
+  NewPayload: TIdRTPPayload;
+begin
+  NewPayload := TIdRTPPayload.CreatePayload(Self.Payload.EncodingName);
+  try
+    CheckEquals(Self.Payload.EncodingName,
+                NewPayload.EncodingName,
+                'EncodingName');
+    CheckEquals(Self.Payload.ClockRate,
+                NewPayload.ClockRate,
+                'ClockRate');
+    CheckEquals(Self.Payload.Parameters,
+                NewPayload.Parameters,
+                'Parameters');
+  finally
+    NewPayload.Free;
+  end;
+end;
 
 procedure TPayloadTestCase.TestClone;
 var
@@ -1718,19 +1751,78 @@ begin
   end;
 end;
 
+procedure TPayloadTestCase.TestCloneCopiesData;
+var
+  Source: TIdRawPayload;
+  Copy:   TIdRawPayload;
+begin
+  Source := TIdRawPayload.Create('foo/0');
+  try
+    Source.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
+
+    Copy := Source.Clone as TIdRawPayload;
+    try
+      CheckEquals(Source.Data,
+                  Copy.Data,
+                  'Payload data not copied');
+    finally
+      Copy.Free;
+    end;
+  finally
+   Source.Free;
+  end;
+end;
+
+procedure TPayloadTestCase.TestEncodingName;
+begin
+  CheckEquals('foo/0',     TIdRTPPayload.EncodingName('foo', 0),        'foo/0');
+  CheckEquals('foo/0',     TIdRTPPayload.EncodingName('foo', 0, ''),    'foo/0');
+  CheckEquals('foo/100',   TIdRTPPayload.EncodingName('foo', 100),      'foo/100');
+  CheckEquals('foo/100/1', TIdRTPPayload.EncodingName('foo', 100, '1'), 'foo/100/1');
+end;
+
 procedure TPayloadTestCase.TestIsNull;
 begin
-  Check(not Self.Payload.IsNull, Self.Payload.ClassName + 'IsNull');
+  Check(not Self.Payload.IsNull, Self.Payload.ClassName + ' IsNull');
+end;
+
+procedure TPayloadTestCase.TestIsReserved;
+begin
+  Check(not Self.Payload.IsReserved, Self.Payload.ClassName + ' IsReserved');
 end;
 
 //******************************************************************************
 //* TestTIdNullPayload                                                         *
 //******************************************************************************
+//* TestTIdNullPayload Protected methods ***************************************
+
+function TestTIdNullPayload.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdNullPayload;
+end;
+
 //* TestTIdNullPayload Published methods ***************************************
 
 procedure TestTIdNullPayload.TestIsNull;
 begin
-  Check(Self.Payload.IsNull, Self.Payload.ClassName + 'IsNull');
+  Check(Self.Payload.IsNull, Self.Payload.ClassName + ' IsNull');
+end;
+
+//******************************************************************************
+//* TestTIdReservedPayload                                                     *
+//******************************************************************************
+//* TestTIdReservedPayload Protected methods ***********************************
+
+function TestTIdReservedPayload.PayloadType: TIdRTPPayloadClass;
+begin
+  Result := TIdReservedPayload;
+end;
+
+//* TestTIdReservedPayload Published methods ***********************************
+
+procedure TestTIdReservedPayload.TestIsReserved;
+begin
+  Check(Self.Payload.IsReserved, Self.Payload.ClassName + ' IsReserved');
 end;
 
 //******************************************************************************
@@ -1771,11 +1863,6 @@ begin
 end;
 
 //* TestTIdT140Payload Protected methods ***************************************
-
-function TestTIdT140Payload.EncodingType: TIdRTPEncodingClass;
-begin
-  Result := TIdT140Encoding;
-end;
 
 function TestTIdT140Payload.PayloadType: TIdRTPPayloadClass;
 begin
@@ -1866,11 +1953,6 @@ begin
 end;
 
 //* TestTIdTelephoneEventPayload Protected methods *****************************
-
-function TestTIdTelephoneEventPayload.EncodingType: TIdRTPEncodingClass;
-begin
-  Result := TIdTelephoneEventEncoding;
-end;
 
 function TestTIdTelephoneEventPayload.PayloadType: TIdRTPPayloadClass;
 begin
@@ -2118,9 +2200,9 @@ begin
 
   Self.ArbPT := 98;
 
-  Self.InterleavedT140Encoding := TIdRTPEncoding.Create('red', 8000);
+  Self.InterleavedT140Encoding := TIdRTPPayload.CreatePayload('RED/8000');
   Self.Profile                 := TIdRTPProfile.Create;
-  Self.T140Encoding            := TIdRTPEncoding.Create('t140', 1000);
+  Self.T140Encoding            := TIdRTPPayload.CreatePayload('T140/1000');
 end;
 
 procedure TestTIdRTPProfile.TearDown;
@@ -2155,16 +2237,16 @@ end;
 
 procedure TestTIdRTPProfile.TestAssign;
 var
-  Dvi4Vid:    TIdRTPEncoding;
-  GSM:        TIdRTPEncoding;
+  Dvi4Vid:    TIdRTPPayload;
+  GSM:        TIdRTPPayload;
   I:          Integer;
   NewProfile: TIdRTPProfile;
 begin
   NewProfile := TIdRTPProfile.Create;
   try
-    GSM := TIdRTPEncoding.Create(GSMEncoding, 8000);
+    GSM := TIdRTPPayload.Create(GSMEncoding + '/8000');
     try
-      Dvi4Vid := TIdRTPEncoding.Create(DVI4Encoding, 22050);
+      Dvi4Vid := TIdRTPPayload.Create(DVI4Encoding + '/22050');
       try
         NewProfile.AddEncoding(GSM, 5);
         NewProfile.AddEncoding(Dvi4Vid, 10);
@@ -2260,35 +2342,35 @@ end;
 
 procedure TestTIdRTPProfile.TestEncodingFor;
 begin
-  CheckEquals('',
-              Self.Profile.EncodingFor(Self.ArbPT).AsString,
+  CheckEquals(NullEncodingName + '/0',
+              Self.Profile.EncodingFor(Self.ArbPT).EncodingName,
               '"MIME type" for unknown Payload Type');
 
   Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT - 1);
   Self.Profile.AddEncoding(Self.T140Encoding,            Self.ArbPT);
 
-  CheckEquals(Self.InterleavedT140Encoding.AsString,
-              Self.Profile.EncodingFor(Self.ArbPT - 1).AsString,
+  CheckEquals(Self.InterleavedT140Encoding.EncodingName,
+              Self.Profile.EncodingFor(Self.ArbPT - 1).EncodingName,
               'MIME type for ' + InterleavedT140MimeType);
 
-  CheckEquals(Self.T140Encoding.AsString,
-              Self.Profile.EncodingFor(Self.ArbPT).AsString,
+  CheckEquals(Self.T140Encoding.EncodingName,
+              Self.Profile.EncodingFor(Self.ArbPT).EncodingName,
               'MIME type for ' + T140MimeType);
 end;
 
 procedure TestTIdRTPProfile.TestEncodingForName;
 begin
-  Check(Self.Profile.EncodingFor(Self.InterleavedT140Encoding.AsString).IsNull,
+  Check(Self.Profile.EncodingFor(Self.InterleavedT140Encoding.EncodingName).IsNull,
         'Non-null encoding returned for non-existent encoding');
 
   Self.Profile.AddEncoding(Self.InterleavedT140Encoding, Self.ArbPT - 1);
   Self.Profile.AddEncoding(Self.T140Encoding,            Self.ArbPT);
 
-  CheckEquals(Self.InterleavedT140Encoding.AsString,
-              Self.Profile.EncodingFor(Self.InterleavedT140Encoding.AsString).AsString,
+  CheckEquals(Self.InterleavedT140Encoding.EncodingName,
+              Self.Profile.EncodingFor(Self.InterleavedT140Encoding.EncodingName).EncodingName,
               'MIME type for ' + InterleavedT140MimeType);
-  CheckEquals(Self.T140Encoding.AsString,
-              Self.Profile.EncodingFor(Self.T140Encoding.AsString).AsString,
+  CheckEquals(Self.T140Encoding.EncodingName,
+              Self.Profile.EncodingFor(Self.T140Encoding.EncodingName).EncodingName,
               'MIME type for ' + T140MimeType);
 end;
 
@@ -2326,12 +2408,12 @@ end;
 procedure TestTIdRTPProfile.TestIsFull;
 var
   I:   TIdRTPPayloadType;
-  Enc: TIdRTPEncoding;
+  Enc: TIdRTPPayload;
 begin
   Check(not Self.Profile.IsFull, 'Empty profile');
 
   for I := Low(TIdRTPPayloadType) to High(TIdRTPPayloadType) do begin
-    Enc := TIdRTPEncoding.Create('foo', I);
+    Enc := TIdRTPPayload.CreatePayload('foo/' + IntToStr(I));
     try
       Self.Profile.AddEncoding(Enc, I);
     finally
@@ -2388,9 +2470,9 @@ end;
 
 procedure TestTIdRTPProfile.TestReservedEncodingMustntOverwriteOthers;
 var
-  Res: TIdRTPReservedEncoding;
+  Res: TIdReservedPayload;
 begin
-  Res := TIdRTPReservedEncoding.Create('', 0);
+  Res := TIdReservedPayload.Create('');
   try
     Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
     Self.Profile.AddEncoding(Res, Self.ArbPT);
@@ -2458,11 +2540,11 @@ procedure TestTIdAudioVisualProfile.CheckRange(StartType, EndType: TIdRTPPayload
 var
   I:            TIdRTPPayloadType;
   PayloadCount: Integer;
-  TestEncoding: TIdRTPEncoding;
+  TestEncoding: TIdRTPPayload;
 begin
   PayloadCount := Self.Profile.Count;
 
-  TestEncoding := TIdRTPEncoding.Create('arb values', 0);
+  TestEncoding := TIdRTPPayload.Create('arb values');
   try
     for I := StartType to EndType do begin
       Self.Profile.AddEncoding(TestEncoding, I);
@@ -2479,8 +2561,8 @@ end;
 
 procedure TestTIdAudioVisualProfile.TestAssign;
 var
-  Dvi4Vid:       TIdRTPEncoding;
-  GSM:           TIdRTPEncoding;
+  Dvi4Vid:       TIdRTPPayload;
+  GSM:           TIdRTPPayload;
   NewProfile:    TIdRTPProfile;
   VirginProfile: TIdAudioVisualProfile;
 begin
@@ -2488,9 +2570,9 @@ begin
   try
     NewProfile := TIdRTPProfile.Create;
     try
-      GSM := TIdRTPEncoding.Create(GSMEncoding, 44100);
+      GSM := TIdRTPPayload.Create(GSMEncoding + '/44100');
       try
-        Dvi4Vid := TIdRTPEncoding.Create(DVI4Encoding, 666);
+        Dvi4Vid := TIdRTPPayload.Create(DVI4Encoding + '/666');
         try
           NewProfile.AddEncoding(GSM, 0);
           NewProfile.AddEncoding(Dvi4Vid, 98);
@@ -2501,16 +2583,16 @@ begin
                       Self.Profile.EncodingFor(0).ClassName,
                       '0''s type');
 
-          CheckEquals(VirginProfile.EncodingFor(0).AsString,
-                      Self.Profile.EncodingFor(0).AsString,
+          CheckEquals(VirginProfile.EncodingFor(0).EncodingName,
+                      Self.Profile.EncodingFor(0).EncodingName,
                       '0''s details');
 
           CheckEquals(NewProfile.EncodingFor(98).ClassName,
                       Self.Profile.EncodingFor(98).ClassName,
                       '98''s type');
 
-          CheckEquals(NewProfile.EncodingFor(98).AsString,
-                      Self.Profile.EncodingFor(98).AsString,
+          CheckEquals(NewProfile.EncodingFor(98).EncodingName,
+                      Self.Profile.EncodingFor(98).EncodingName,
                       '98''s details');
         finally
           Dvi4Vid.Free;
@@ -2528,43 +2610,43 @@ end;
 
 procedure TestTIdAudioVisualProfile.TestDefinedPayloads;
 begin
-  CheckEquals('PCMU/8000',    Self.Profile.EncodingFor(0).AsString,   '0');
-  CheckEquals('GSM/8000',     Self.Profile.EncodingFor(3).AsString,   '3');
-  CheckEquals('G723/8000',    Self.Profile.EncodingFor(4).AsString,   '4');
-  CheckEquals('DVI4/8000',    Self.Profile.EncodingFor(5).AsString,   '5');
-  CheckEquals('DVI4/16000',   Self.Profile.EncodingFor(6).AsString,   '6');
-  CheckEquals('LPC/8000',     Self.Profile.EncodingFor(7).AsString,   '7');
-  CheckEquals('PCMA/8000',    Self.Profile.EncodingFor(8).AsString,   '8');
-  CheckEquals('G722/8000',    Self.Profile.EncodingFor(9).AsString,   '9');
-  CheckEquals('L16/44100/2',  Self.Profile.EncodingFor(10).AsString, '10');
-  CheckEquals('L16/44100/1',  Self.Profile.EncodingFor(11).AsString, '11');
-  CheckEquals('QCELP/8000',   Self.Profile.EncodingFor(12).AsString, '12');
-  CheckEquals('CN/8000',      Self.Profile.EncodingFor(13).AsString, '13');
-  CheckEquals('MPA/90000',    Self.Profile.EncodingFor(14).AsString, '14');
-  CheckEquals('G728/8000',    Self.Profile.EncodingFor(15).AsString, '15');
-  CheckEquals('DVI4/11025',   Self.Profile.EncodingFor(16).AsString, '16');
-  CheckEquals('DVI4/22050',   Self.Profile.EncodingFor(17).AsString, '17');
-  CheckEquals('G729/8000',    Self.Profile.EncodingFor(18).AsString, '18');
+  CheckEquals('PCMU/8000',    Self.Profile.EncodingFor(0).EncodingName,   '0');
+  CheckEquals('GSM/8000',     Self.Profile.EncodingFor(3).EncodingName,   '3');
+  CheckEquals('G723/8000',    Self.Profile.EncodingFor(4).EncodingName,   '4');
+  CheckEquals('DVI4/8000',    Self.Profile.EncodingFor(5).EncodingName,   '5');
+  CheckEquals('DVI4/16000',   Self.Profile.EncodingFor(6).EncodingName,   '6');
+  CheckEquals('LPC/8000',     Self.Profile.EncodingFor(7).EncodingName,   '7');
+  CheckEquals('PCMA/8000',    Self.Profile.EncodingFor(8).EncodingName,   '8');
+  CheckEquals('G722/8000',    Self.Profile.EncodingFor(9).EncodingName,   '9');
+  CheckEquals('L16/44100/2',  Self.Profile.EncodingFor(10).EncodingName, '10');
+  CheckEquals('L16/44100/1',  Self.Profile.EncodingFor(11).EncodingName, '11');
+  CheckEquals('QCELP/8000',   Self.Profile.EncodingFor(12).EncodingName, '12');
+  CheckEquals('CN/8000',      Self.Profile.EncodingFor(13).EncodingName, '13');
+  CheckEquals('MPA/90000',    Self.Profile.EncodingFor(14).EncodingName, '14');
+  CheckEquals('G728/8000',    Self.Profile.EncodingFor(15).EncodingName, '15');
+  CheckEquals('DVI4/11025',   Self.Profile.EncodingFor(16).EncodingName, '16');
+  CheckEquals('DVI4/22050',   Self.Profile.EncodingFor(17).EncodingName, '17');
+  CheckEquals('G729/8000',    Self.Profile.EncodingFor(18).EncodingName, '18');
 
-  CheckEquals('CelB/90000',   Self.Profile.EncodingFor(25).AsString, '25');
-  CheckEquals('JPEG/90000',   Self.Profile.EncodingFor(26).AsString, '26');
+  CheckEquals('CelB/90000',   Self.Profile.EncodingFor(25).EncodingName, '25');
+  CheckEquals('JPEG/90000',   Self.Profile.EncodingFor(26).EncodingName, '26');
 
-  CheckEquals('nv/90000',     Self.Profile.EncodingFor(28).AsString, '28');
+  CheckEquals('nv/90000',     Self.Profile.EncodingFor(28).EncodingName, '28');
 
-  CheckEquals('H261/90000',   Self.Profile.EncodingFor(31).AsString, '31');
-  CheckEquals('MPV/90000',    Self.Profile.EncodingFor(32).AsString, '32');
-  CheckEquals('MP2T/90000',   Self.Profile.EncodingFor(33).AsString, '33');
-  CheckEquals('H263/90000',   Self.Profile.EncodingFor(34).AsString, '34');
+  CheckEquals('H261/90000',   Self.Profile.EncodingFor(31).EncodingName, '31');
+  CheckEquals('MPV/90000',    Self.Profile.EncodingFor(32).EncodingName, '32');
+  CheckEquals('MP2T/90000',   Self.Profile.EncodingFor(33).EncodingName, '33');
+  CheckEquals('H263/90000',   Self.Profile.EncodingFor(34).EncodingName, '34');
 end;
 
 procedure TestTIdAudioVisualProfile.TestDynamicPayloadTypes;
 var
   I:            TIdRTPPayloadType;
   PayloadCount: Integer;
-  TestEncoding: TIdRTPEncoding;
+  TestEncoding: TIdRTPPayload;
 begin
   for I := 96 to High(TIdRTPPayloadType) do begin
-    TestEncoding := TIdRTPEncoding.Create('arb values', I);
+    TestEncoding := TIdRTPPayload.CreatePayload('arb values/' + IntToStr(I));
     try
       PayloadCount := Self.Profile.Count;
 
@@ -2792,7 +2874,7 @@ end;
 
 procedure TestTIdRTPPacket.SetUp;
 var
-  Encoding: TIdT140Encoding;
+  Encoding: TIdT140Payload;
 begin
   inherited SetUp;
 
@@ -2800,7 +2882,7 @@ begin
 
   Self.T140PT := 96;
 
-  Encoding := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  Encoding := TIdT140Payload.Create('');
   try
     Self.AVP.AddEncoding(Encoding, Self.T140PT);
   finally
@@ -3503,7 +3585,7 @@ var
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
     Expected.Block := Data;
 
@@ -3535,7 +3617,7 @@ var
   Expected: TIdT140Payload;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  Expected := Self.AVP.EncodingFor(Self.T140PT).Clone as TIdT140Payload;
   try
     Expected.Block := Data;
 
@@ -3559,7 +3641,7 @@ var
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT));
+  Expected := TIdT140Payload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
   try
     Expected.Block := Data;
 
@@ -6705,7 +6787,7 @@ end;
 
 procedure TRTPSessionTestCase.SetUp;
 var
-  T140: TIdT140Encoding;
+  T140: TIdT140Payload;
 begin
   inherited SetUp;
 
@@ -6717,7 +6799,7 @@ begin
   Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
 
   Self.T140PT := Self.Profile.FirstFreePayloadType;
-  T140 := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  T140 := TIdT140Payload.Create('');
   try
     Self.Profile.AddEncoding(T140, Self.T140PT);
   finally
@@ -6815,27 +6897,6 @@ begin
   Self.Session.RemoveMember(Self.Session.SyncSrcID);
   CheckEquals(1, Self.Session.MemberCount, 'Self was removed from session');
 end;
-{
-procedure TestSessionDelegationMethods.TestIsSenderSelf;
-begin
-  Check(not Self.Session.IsSender, 'New session');
-  Self.Session.SendData(TIdNullPayload.NullPayload);
-  Check(Self.Session.IsSender, 'Sent data');
-end;
-}
-procedure TestSessionDelegationMethods.TestIsSenderSelf;
-var
-  Data: TIdRTPPayload;
-begin
-  Data := Self.Profile.EncodingFor(Self.T140PT).CreatePayload;
-  try
-    Check(not Self.Session.IsSender, 'New session');
-    Self.Session.SendData(Data);
-    Check(Self.Session.IsSender, 'Sent data');
-  finally
-    Data.Free;
-  end;
-end;
 
 procedure TestSessionDelegationMethods.TestIsMember;
 begin
@@ -6851,23 +6912,38 @@ begin
   Check(Self.Session.IsSender(Self.SSRC), 'SSRC not added?');
 end;
 
+procedure TestSessionDelegationMethods.TestIsSenderSelf;
+var
+  Data: TIdRTPPayload;
+begin
+  Data := Self.Profile.EncodingFor(Self.T140PT).Clone;
+  try
+    Check(not Self.Session.IsSender, 'New session');
+    Self.Session.SendData(Data);
+    Check(Self.Session.IsSender, 'Sent data');
+  finally
+    Data.Free;
+  end;
+end;
+
 procedure TestSessionDelegationMethods.TestPrepareRTP;
 var
-  Data:           TIdRawPayload;
-  Encoding:       TIdRTPEncoding;
+  Data:           TIdRTPPayload;
+  Encoding:       TIdRTPPayload;
   StartTimestamp: Cardinal;
 begin
-  Encoding := TIdRTPEncoding.Create('foo', 8000);
+  Encoding := TIdRTPPayload.CreatePayload('foo/8000');
   try
     Self.Profile.AddEncoding(Encoding, Self.Profile.FirstFreePayloadType);
 
-    Data := TIdRawPayload.Create(Encoding);
+    Data := Encoding.Clone;
     try
+      Data.ClockRate := Encoding.ClockRate;
       Data.StartTime := Now + 5*OneSecond;
       Self.Session.SendData(Data);
 
       // Note that the session determines the initial sequence number and
-      // timestamp by selecting random numbers. We can't really check for
+      // timestamp by selecting random numbers. We can't really check for                           in
       // that sort've thing. The tests below should fail with a probability
       // ~2^-32, if my maths is correct. In other words, while it's perfectly
       // legal to have a zero initial sequence number and/or timestamp, it's
@@ -7334,7 +7410,7 @@ begin
               Self.Session.SentOctetCount,
               'Initially we have sent no data');
 
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
     DataLen := Payload.Length;
@@ -7362,7 +7438,7 @@ begin
               Self.Session.SentPacketCount,
               'Initially we have sent no data');
 
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     for I := 1 to 5 do begin
       Self.Session.SendData(Payload);
@@ -7379,7 +7455,7 @@ procedure TestSessionReportRules.TestSSRCChangeResetsSentOctetCount;
 var
   Payload: TIdT140Payload;
 begin
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
@@ -7398,7 +7474,7 @@ procedure TestSessionReportRules.TestSSRCChangeResetsSentPacketCount;
 var
   Payload: TIdT140Payload;
 begin
-  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT));
+  Payload := TIdT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
   try
     Self.Session.SendData(Payload);
   finally
@@ -7586,13 +7662,22 @@ begin
 end;
 
 procedure TestSessionSendReceiveRules.TestDeterministicSendInterval10MembersAndSender;
+var
+  Data: TIdRTPPayload;
 begin
   // See RFC 3550 section 6.2, 6.3, Appendix A.7 for details
 
   // Senders get much less bandwidth - 2666/0.75*0.25 = 2666/3 ~= 888ms;
   // 888 < minimum RTCP interval
   Self.Session.MaxRTCPBandwidth := 100; // bytes per second
-  Self.Session.SendData(TIdNullPayload.NullPayload);
+
+  Data := TIdRTPPayload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
+  try
+    Self.Session.SendData(Data);
+  finally
+    Data.Free;
+  end;
+  
   CheckEquals(Self.Session.MinimumRTCPSendInterval / 2,
               Self.Session.DeterministicSendInterval(Self.Session.IsSender),
               OneMillisecond,

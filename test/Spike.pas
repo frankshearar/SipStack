@@ -87,7 +87,7 @@ type
                                 const Invite: TIdSipRequest);
     procedure OnNewData(const Data: TStream;
                         const Port: Integer;
-                        const Format: TIdRTPEncoding);
+                        const Format: TIdRTPPayload);
     procedure OnNewUdpData(const Data: TStream);
     procedure OnNewSession(const Session: TIdSipSession);
     procedure OnPlaybackStopped(Origin: TAudioData);
@@ -129,6 +129,8 @@ uses
 //* TrnidSpike Public methods **************************************************
 
 constructor TrnidSpike.Create(AOwner: TComponent);
+const
+  LocalHostName = '127.0.0.1';
 var
   Binding: TIdSocketHandle;
   Contact: TIdSipContactHeader;
@@ -150,12 +152,17 @@ begin
   Self.CounterLock := TCriticalSection.Create;
 
   Self.TransportUDP := TIdSipUdpTransport.Create(IdPORT_SIP);
+  if (GStack.LocalAddress <> LocalHostName) then begin
+    Binding := Self.TransportUDP.Bindings.Add;
+    Binding.IP := GStack.LocalAddress;
+    Binding.Port := IdPORT_SIP;
+    Self.TransportUDP.HostName := Binding.IP;
+  end
+  else
+    Self.TransportUDP.HostName := LocalHostName;
+
   Binding := Self.TransportUDP.Bindings.Add;
-  Binding.IP := GStack.LocalAddress;
-  Binding.Port := IdPORT_SIP;
-  Self.TransportUDP.HostName := Binding.IP;
-  Binding := Self.TransportUDP.Bindings.Add;
-  Binding.IP := '127.0.0.1';
+  Binding.IP := LocalHostName;
   Binding.Port := IdPORT_SIP;
 
   Self.Media := TIdSdpPayloadProcessor.Create;
@@ -258,12 +265,12 @@ end;
 
 procedure TrnidSpike.OnNewData(const Data: TStream;
                                const Port: Integer;
-                               const Format: TIdRTPEncoding);
+                               const Format: TIdRTPPayload);
 begin
-  if (Format.Name = PCMMuLawEncoding) then begin
+  if (Lowercase(Format.Name) = Lowercase(PCMMuLawEncoding)) then begin
     Self.ProcessPCMMu(Data);
   end
-  else if (Format.Name = TelephoneEventEncoding) then begin
+  else if (Lowercase(Format.Name) = Lowercase(TelephoneEventEncoding)) then begin
     Self.ProcessTelephoneEvent(Data);
   end
   else
@@ -376,14 +383,13 @@ var
 begin
   S := TMemoryStream.Create;
   try
-
-    TE := Self.Media.Profile.EncodingFor(TelephoneEventEncoding + '/8000').CreatePayload as TIdTelephoneEventPayload;
+    TE := Self.Media.Profile.EncodingFor(TelephoneEventEncoding + '/8000').Clone as TIdTelephoneEventPayload;
     try
       TE.Event := Event;
       TE.Duration := 100;
       TE.PrintOn(S);
       // TODO: How do we figure out the real port?
-      Self.Media.ServerFor(8000).Session.SendData(TE);
+      Self.Media.ServerFor(8002).Session.SendData(TE);
     finally
       TE.Free;
     end;

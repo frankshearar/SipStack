@@ -9,7 +9,7 @@ uses
 type
   TestTIdRTPServer = class(TTestRTP)
   private
-    Encoding: TIdT140Encoding;
+    Encoding: TIdRTPPayload;
     Client:   TIdRTPServer;
     Packet:   TIdRTPPacket;
     Server:   TIdRTPServer;
@@ -72,7 +72,7 @@ end;
 procedure TestTIdRTPServer.SetUp;
 var
   Binding:    TIdSocketHandle;
-  NoEncoding: TIdRTPEncoding;
+  NoEncoding: TIdRTPPayload;
   PT:         TIdRTPPayloadType;
 begin
   inherited SetUp;
@@ -102,15 +102,14 @@ begin
   Binding.IP   := '127.0.0.1';
   Binding.Port := 6543; // arbitrary value
 
-  NoEncoding := TIdRTPEncoding.Create('No encoding', 0);
+  NoEncoding := TIdRTPPayload.CreatePayload('No encoding/0');
   try
     Self.Server.Profile.AddEncoding(NoEncoding, PT);
   finally
     NoEncoding.Free;
   end;
 
-  Self.Encoding := TIdT140Encoding.Create(T140Encoding,
-                                             T140ClockRate);
+  Self.Encoding := TIdT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   Self.Server.Profile.AddEncoding(Self.Encoding, PT + 1);
   Self.Client.Profile.AddEncoding(Self.Encoding, PT + 1);
 
@@ -281,7 +280,7 @@ end;
 procedure TestT140.SetUp;
 var
   Binding: TIdSocketHandle;
-  T140:    TIdRTPEncoding;
+  T140:    TIdRTPPayload;
 begin
   inherited SetUp;
 
@@ -301,7 +300,7 @@ begin
   Binding.IP   := '127.0.0.1';
   Binding.Port := Self.Server.DefaultPort + 2;
 
-  T140 := TIdT140Encoding.Create(T140Encoding, T140ClockRate);
+  T140 := TIdT140Payload.CreatePayload(T140Encoding + '/' + IntToStr(T140ClockRate));
   try
     Self.Server.Profile.AddEncoding(T140, Self.T140PT);
     Self.Client.Profile.AddEncoding(T140, Self.T140PT);
@@ -377,7 +376,7 @@ begin
   Self.WaitForSignaled(Self.RTCPEvent);
 
   Self.ExceptionMessage := 'Waiting for RFC 2793 data';
-  Payload := TIdT140Payload.Create(Self.Client.Profile.EncodingFor(Self.T140PT));
+  Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdT140Payload;
   try
     Payload.Block := Self.Msg;
     Payload.StartTime := Now;

@@ -36,12 +36,12 @@ type
     property RTCPCount:      Cardinal      read GetRTCPCount;
     property SecondLastRTCP: TIdRTCPPacket read GetSecondLastRTCP;
   end;
-
+{
   TIdMockEncoding = class(TIdRTPEncoding)
   public
     function PayloadType: TIdRTPPayloadClass; override;
   end;
-
+}
   TIdMockPayload = class(TIdRTPPayload)
   private
     fHasKnownLength: Boolean;
@@ -149,7 +149,7 @@ begin
   Self.fLastRTP := TIdRTPPacket.Create(Value);
   Self.fProfile := Value;
 end;
-
+{
 //******************************************************************************
 //* TIdMockEncoding                                                            *
 //******************************************************************************
@@ -159,7 +159,7 @@ function TIdMockEncoding.PayloadType: TIdRTPPayloadClass;
 begin
   Result := TIdMockPayload;
 end;
-
+}
 //******************************************************************************
 //* TIdMockPayload                                                             *
 //******************************************************************************
