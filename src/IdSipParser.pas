@@ -296,8 +296,6 @@ type
 
 const
   BadStatusCode             = -1;
-  BadSyntax                 = 'Bad syntax';
-  EmptyInputStream          = 'Empty input stream';
   InvalidSipVersion         = 'Invalid Sip-Version: ''%s''';
   InvalidStatusCode         = 'Invalid Status-Code: ''%s''';
   MalformedToken            = 'Malformed %s: ''%s''';

@@ -31,7 +31,9 @@ type
   EParser = class(Exception);
 
 const
+  BadSyntax                 = 'Bad syntax';
   DamagedLineEnd            = 'Damaged line end at line %d, expected %s but was %s';
+  EmptyInputStream          = 'Empty input stream';
 
 implementation
 
