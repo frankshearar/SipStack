@@ -3001,11 +3001,13 @@ begin
   else
     Transport := TransportParamUDP;
 
-  OutboundRequest.AddHeader(ViaHeaderFull);
-  OutboundRequest.LastHop.SipVersion := SipVersion;
-  OutboundRequest.LastHop.Transport  := ParamToTransport(Transport);
-  OutboundRequest.LastHop.SentBy     := Self.HostName;
-  OutboundRequest.LastHop.Branch     := Self.NextBranch;
+  if not OutboundRequest.IsAck then begin
+    OutboundRequest.AddHeader(ViaHeaderFull);
+    OutboundRequest.LastHop.SipVersion := SipVersion;
+    OutboundRequest.LastHop.Transport  := ParamToTransport(Transport);
+    OutboundRequest.LastHop.SentBy     := Self.HostName;
+    OutboundRequest.LastHop.Branch     := Self.NextBranch;
+  end;
 
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
