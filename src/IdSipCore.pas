@@ -268,6 +268,8 @@ type
     UserAgentListenerLock:    TCriticalSection;
     UserAgentListeners:       TList;
 
+    function  AddFork(RootSession: TIdSipOutboundSession;
+                      Response: TIdSipResponse): TIdSipOutboundSession;
     function  AddInboundSession(Invite: TIdSipRequest;
                                 Transaction: TIdSipTransaction;
                                 Receiver: TIdSipTransport): TIdSipInboundSession;
@@ -281,6 +283,7 @@ type
     function  DefaultHostName: String;
     function  DefaultUserAgent: String;
     function  FindSession(const Msg: TIdSipMessage): TIdSipSession;
+    function  ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
     function  GetContact: TIdSipContactHeader;
     function  IndexOfRegistrar(Registrar: TIdSipUri): Integer;
     function  KnowsRegistrar(Registrar: TIdSipUri): Boolean;
@@ -542,6 +545,7 @@ type
     procedure Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String);
+    function  Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
     function  IsInboundCall: Boolean; override;
   end;
 
@@ -1457,6 +1461,22 @@ end;
 
 //* TIdSipUserAgentCore Private methods ****************************************
 
+function TIdSipUserAgentCore.AddFork(RootSession: TIdSipOutboundSession;
+                                     Response: TIdSipResponse): TIdSipOutboundSession;
+begin
+  // RFC 3261, section 13.2.2.4
+
+  Self.SessionLock.Acquire;
+  try
+    Result := RootSession.Fork(Response);
+    Self.Sessions.Add(Result);
+  finally
+    Self.SessionLock.Release;
+  end;
+
+  Self.NotifyOfChange;
+end;                  
+
 function TIdSipUserAgentCore.AddInboundSession(Invite: TIdSipRequest;
                                                Transaction: TIdSipTransaction;
                                                Receiver: TIdSipTransport): TIdSipInboundSession;
@@ -1584,6 +1604,41 @@ begin
     end;
   finally
     DialogID.Free;
+  end;
+end;
+
+function TIdSipUserAgentCore.ForkCall(Response: TIdSipResponse): TIdSipOutboundSession;
+var
+  Root:    TIdSipOutboundSession;
+  I:       Integer;
+  Session: TIdSipOutboundSession;
+begin
+  // We received a second (or third, or...) 2xx in response to an INVITE.
+  // We create a new outbound session. This means we need to find the
+  // INVITE.
+
+  Result := nil;
+  Root   := nil;
+  Self.SessionLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Sessions.Count) and not Assigned(Root) do begin
+      if (Self.Sessions[I] as TIdSipSession).IsInboundCall then Inc(I)
+      else begin
+        Session := Self.Sessions[I] as TIdSipOutboundSession;
+        if Session.InitialRequest.Match(Response) then
+          Root := Session
+        else
+          Inc(I);
+      end;
+    end;
+
+    if Assigned(Root) then begin
+      Result := Self.AddFork(Root, Response);
+    end;
+
+  finally
+    Self.SessionLock.Release;
   end;
 end;
 
@@ -2443,6 +2498,13 @@ begin
       Invite.Free;
     end;
   end;
+end;
+
+function TIdSipOutboundSession.Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
+begin
+  Result := TIdSipOutboundSession.Create(Self.UA);
+  Result.Invite.Assign(Self.Invite);
+  Result.Invite.ToHeader.Tag := '';
 end;
 
 function TIdSipOutboundSession.IsInboundCall: Boolean;

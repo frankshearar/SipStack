@@ -118,6 +118,7 @@ type
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDispatchAckToSession;
+    procedure TestFork;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
     procedure TestIsMethodAllowed;
@@ -242,6 +243,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestFork;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
@@ -1370,6 +1372,24 @@ begin
   Self.SimulateRemoteAck(Self.Dispatcher.Transport.LastResponse);
   Check(not SessionOne.ReceivedAck, 'SessionOne got the ACK');
   Check(    SessionTwo.ReceivedAck, 'SessionTwo didn''t get the ACK');
+end;
+
+procedure TestTIdSipUserAgentCore.TestFork;
+var
+  OrigAckCount: Cardinal;
+begin
+  OrigAckCount := Self.Dispatcher.Transport.ACKCount;
+  Self.Core.Call(Self.Destination, '', '');
+  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+
+  CheckEquals(2,
+              Self.Core.SessionCount,
+              'A fork must create multiple dialogs, hence multiple sessions');
+  CheckEquals(2 + OrigAckCount,
+              Self.Dispatcher.Transport.AckCount,
+              'UAS MUST ACK every 2xx response to an INVITE - cf RFC 3261, '
+            + 'section 13.2.2.4');            
 end;
 
 procedure TestTIdSipUserAgentCore.TestHasUnknownContentEncoding;
@@ -2753,6 +2773,38 @@ begin
     Check(not Session.Dialog.IsSecure, 'Dialog secure when TLS used with a SIP URI');
   finally
     Response.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestFork;
+var
+  Fork: TIdSipOutboundSession;
+  Ok:   TIdSipResponse;
+begin
+  Self.SimulateRemoteAccept(Self.Session.Invite);
+
+  Ok := Self.Core.CreateResponse(Self.Invite, SIPOK);
+  try
+    CheckNotEquals(Ok.ToHeader.Tag,
+                   Self.Session.Dialog.ID.RemoteTag,
+                   'Sanity check on the To tag');
+
+    Fork := Self.Session.Fork(Ok);
+    try
+      CheckEquals(Self.Session.Invite.CallID,
+                  Fork.Invite.CallID,
+                  'Call-ID');
+      CheckEquals(Self.Session.Invite.From.Tag,
+                  Fork.Invite.From.Tag,
+                  'From tag');
+      CheckEquals(Self.Session.Invite.LastHop.Branch,
+                  Fork.Invite.LastHop.Branch,
+                  'Topmost Via branch');            
+    finally
+      Fork.Free;
+    end;
+  finally
+    Ok.Free;
   end;
 end;
 
