@@ -1656,8 +1656,15 @@ destructor TIdSipUserAgentCore.Destroy;
 begin
   Self.Contact.Free;
   Self.From.Free;
-  Self.Actions.Free;
+
+  Self.ActionLock.Acquire;
+  try
+    Self.Actions.Free;
+  finally
+    Self.ActionLock.Release;
+  end;
   Self.ActionLock.Free;
+  
   Self.KnownRegistrars.Free;
   Self.Proxy.Free;
 
