@@ -27,17 +27,17 @@ type
     function  GetContentLength: Cardinal;
     function  GetContentType: String;
     function  GetCSeq: TIdSipCSeqHeader;
-    function  GetFrom: TIdSipFromToHeader;
+    function  GetFrom: TIdSipFromHeader;
     function  GetMaxForwards: Byte;
-    function  GetTo: TIdSipFromToHeader;
+    function  GetTo: TIdSipToHeader;
     procedure SetCallID(const Value: String);
     procedure SetContentLength(const Value: Cardinal);
     procedure SetContentType(const Value: String);
     procedure SetCSeq(const Value: TIdSipCSeqHeader);
-    procedure SetFrom(const Value: TIdSipFromToHeader);
+    procedure SetFrom(const Value: TIdSipFromHeader);
     procedure SetMaxForwards(const Value: Byte);
     procedure SetPath(const Value: TIdSipViaPath);
-    procedure SetTo(const Value: TIdSipFromToHeader);
+    procedure SetTo(const Value: TIdSipToHeader);
   protected
     function FirstLine: String; virtual; abstract;
   public
@@ -48,20 +48,21 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     function  HasHeader(const HeaderName: String): Boolean;
+    function  IsRequest: Boolean; virtual; abstract;
     function  MalformedException: ExceptClass; virtual; abstract;
     procedure ReadBody(const S: TStream);
 
-    property Body:          String              read fBody write fBody;
-    property CallID:        String              read GetCallID write SetCallID;
-    property ContentLength: Cardinal            read GetContentLength write SetContentLength;
-    property ContentType:   String              read GetContentType write SetContentType;
-    property CSeq:          TIdSipCSeqHeader    read GetCSeq write SetCSeq;
-    property From:          TIdSipFromToHeader  read GetFrom write SetFrom;
-    property Headers:       TIdSipHeaders       read fHeaders;
-    property MaxForwards:   Byte                read GetMaxForwards write SetMaxForwards;
-    property Path:          TIdSipViaPath       read fPath write SetPath;
-    property SIPVersion:    String              read fSIPVersion write fSIPVersion;
-    property ToHeader:      TIdSipFromToHeader  read GetTo write SetTo;
+    property Body:          String           read fBody write fBody;
+    property CallID:        String           read GetCallID write SetCallID;
+    property ContentLength: Cardinal         read GetContentLength write SetContentLength;
+    property ContentType:   String           read GetContentType write SetContentType;
+    property CSeq:          TIdSipCSeqHeader read GetCSeq write SetCSeq;
+    property From:          TIdSipFromHeader read GetFrom write SetFrom;
+    property Headers:       TIdSipHeaders    read fHeaders;
+    property MaxForwards:   Byte             read GetMaxForwards write SetMaxForwards;
+    property Path:          TIdSipViaPath    read fPath write SetPath;
+    property SIPVersion:    String           read fSIPVersion write fSIPVersion;
+    property ToHeader:      TIdSipToHeader   read GetTo write SetTo;
   end;
 
   TIdSipMessageClass = class of TIdSipMessage;
@@ -78,6 +79,7 @@ type
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsInvite: Boolean;
+    function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
 
     property Method:     String read fMethod write fMethod;
@@ -98,6 +100,7 @@ type
     function  MalformedException: ExceptClass; override;
     function  IsFinal: Boolean;
     function  IsProvisional: Boolean;
+    function  IsRequest: Boolean; override;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -334,7 +337,7 @@ end;
 
 procedure TIdSipMessage.ReadBody(const S: TStream);
 begin
-  // TODO: It is the responsibility of the transport to ensure that
+  // It is the responsibility of the transport to ensure that
   // Content-Length is set before this method is called.
   SetLength(fBody, Self.ContentLength);
   S.Read(fBody[1], Self.ContentLength);
@@ -362,9 +365,9 @@ begin
   Result := Self.Headers[CSeqHeader] as TIdSipCSeqHeader;
 end;
 
-function TIdSipMessage.GetFrom: TIdSipFromToHeader;
+function TIdSipMessage.GetFrom: TIdSipFromHeader;
 begin
-  Result := Self.Headers[FromHeaderFull] as TIdSipFromToHeader;
+  Result := Self.Headers[FromHeaderFull] as TIdSipFromHeader;
 end;
 
 function TIdSipMessage.GetMaxForwards: Byte;
@@ -375,9 +378,9 @@ begin
   Result := StrToInt(Self.Headers[MaxForwardsHeader].Value);
 end;
 
-function TIdSipMessage.GetTo: TIdSipFromToHeader;
+function TIdSipMessage.GetTo: TIdSipToHeader;
 begin
-  Result := Self.Headers[ToHeaderFull] as TIdSipFromToHeader;
+  Result := Self.Headers[ToHeaderFull] as TIdSipToHeader;
 end;
 
 procedure TIdSipMessage.SetCallID(const Value: String);
@@ -400,7 +403,7 @@ begin
   Self.CSeq.Assign(Value);
 end;
 
-procedure TIdSipMessage.SetFrom(const Value: TIdSipFromToHeader);
+procedure TIdSipMessage.SetFrom(const Value: TIdSipFromHeader);
 begin
   Self.Headers[FromHeaderFull].Assign(Value);
 end;
@@ -420,7 +423,7 @@ begin
     Self.Path.Add(Value.Items[I]);
 end;
 
-procedure TIdSipMessage.SetTo(const Value: TIdSipFromToHeader);
+procedure TIdSipMessage.SetTo(const Value: TIdSipToHeader);
 begin
   Self.Headers[ToHeaderFull].Assign(Value);
 end;
@@ -463,6 +466,11 @@ end;
 function TIdSipRequest.IsInvite: Boolean;
 begin
   Result := Self.Method = MethodInvite;
+end;
+
+function TIdSipRequest.IsRequest: Boolean;
+begin
+  Result := true;
 end;
 
 function TIdSipRequest.MalformedException: ExceptClass;
@@ -512,6 +520,11 @@ end;
 function TIdSipResponse.IsProvisional: Boolean;
 begin
   Result := Self.StatusCode div 100 = 1;
+end;
+
+function TIdSipResponse.IsRequest: Boolean;
+begin
+  Result := false;
 end;
 
 //* TIdSipResponse Protected methods *******************************************

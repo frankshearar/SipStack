@@ -26,7 +26,7 @@ type
     procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
     procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
     procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
-    procedure SendOkResponse(Thread: TIdPeerThread);
+    procedure SendOkResponse;
   protected
     function TransportType: TIdSipTransportClass; override;
   published
@@ -75,11 +75,9 @@ begin
 
   P := TIdSipParser.Create;
   try
-    Self.Request  := P.ParseAndMakeMessage(BasicRequest) as TIdSipRequest;
-    Self.Request.RequestUri := 'sip:franks@127.0.0.1';
+    Self.Request  := P.ParseAndMakeRequest(LocalLoopRequest);
 
-    Self.Response := P.ParseAndMakeMessage(BasicResponse) as TIdSipResponse;
-    Self.Response.ToHeader.Value := 'sip:franks@127.0.0.1';
+    Self.Response := P.ParseAndMakeResponse(LocalLoopResponse);
   finally
     P.Free;
   end;
@@ -118,7 +116,7 @@ procedure TestTIdSipTcpTransport.CheckCanReceiveRequest(Sender: TObject; const R
 begin
   try
     Self.ReceivedRequest := true;
-    Self.SendOkResponse(Sender as TIdPeerThread);
+    Self.SendOkResponse;
 
     Self.ThreadEvent.SetEvent;
   except
@@ -146,7 +144,7 @@ end;
 procedure TestTIdSipTcpTransport.ReturnResponse(Sender: TObject; const R: TIdSipRequest);
 begin
   try
-    Self.SendOkResponse(Sender as TIdPeerThread);
+    Self.SendOkResponse;
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -155,16 +153,30 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpTransport.SendOkResponse(Thread: TIdPeerThread);
+procedure TestTIdSipTcpTransport.SendOkResponse;
 var
-  OK: TIdSipResponse;
-  P:  TIdSipParser;
+  Client: TIdTcpClient;
+  OK:     TIdSipResponse;
+  P:      TIdSipParser;
 begin
   P := TIdSipParser.Create;
   try
     OK := P.ParseAndMakeResponse(BasicResponse);
     try
-      Thread.Connection.Write(OK.AsString);
+      Client := TIdTcpClient.Create(nil);
+      try
+        Client.Host := Self.Response.Path.LastHop.SentBy;
+        Client.Port := Self.Response.Path.LastHop.Port;
+
+        Client.Connect(DefaultTimeout);
+        try
+          Client.Write(Self.Response.AsString);
+        finally
+          Client.Disconnect;
+        end;
+      finally
+        Client.Free;
+      end;
     finally
       OK.Free;
     end;

@@ -572,159 +572,57 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Request);
-    CheckEquals(TIdSipWeightedCommaSeparatedHeader.ClassName,
-                Self.Request.Headers[AcceptHeader].ClassName,
-                'Accept class');
 
-    CheckEquals(3,
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).ValueCount,
-                'Accept ValueCount');
-    CheckEquals('text/t140',
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[0].Value,
-                'Accept Values[0].Name');
-    CheckEquals(1000,
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[0].Weight,
-                'Accept Values[0].Weight');
-    CheckEquals('text/plain',
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Value,
-                'Accept Values[1].Name');
-    CheckEquals(700,
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Weight,
-                'Accept Values[1].Weight');
-    CheckEquals(1,
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Parameters.Count,
-                'Accept Values[1].Parameters.Count');
-    CheckEquals('bar',
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[1].Parameters.Values['foo'],
-                'Accept Values[1].Parameters[''foo'']');
-    CheckEquals('text/xml',
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[2].Value,
-                'Accept Values[2].Name');
-    CheckEquals(1000,
-                (Self.Request.Headers[AcceptHeader] as TIdSipWeightedCommaSeparatedHeader).Values[2].Weight,
-                'Accept Values[2].Weight');
-    CheckEquals(TIdSipCallIdHeader.ClassName,
-                Self.Request.Headers[CallIDHeaderFull].ClassName,
-                'Call-ID class');
-    CheckEquals('a84b4c76e66710@gw1.leo-ix.org',
-                Self.Request.Headers[CallIdHeaderFull].Value,
+    CheckEquals('Accept: text/t140, text/plain;q=0.7;foo=bar, text/xml',
+                Self.Request.Headers[AcceptHeader].AsString,
+                'Accept');
+    CheckEquals('Call-ID: a84b4c76e66710@gw1.leo-ix.org',
+                Self.Request.Headers[CallIdHeaderFull].AsString,
                 'Call-ID');
-    CheckEquals(TIdSipContactHeader.ClassName,
-                Self.Request.Headers[ContactHeaderFull].ClassName,
-                'Contact class');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
-                Self.Request.Headers[ContactHeaderFull].Value,
+    CheckEquals('Contact: sip:wintermute@tessier-ashpool.co.lu',
+                Self.Request.Headers[ContactHeaderFull].AsString,
                 'Contact');
-    CheckEquals('',
-                (Self.Request.Headers[ContactHeaderFull] as TIdSipAddressHeader).DisplayName,
-                'Contact DisplayName');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
-                (Self.Request.Headers[ContactHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
-                'Contact Address');
-    CheckEquals(TIdSipNumericHeader.ClassName,
-                Self.Request.Headers[ContentLengthHeaderFull].ClassName,
-                'Content-Length class');
-    CheckEquals(29,
-                (Self.Request.Headers[ContentLengthHeaderFull] as TIdSipNumericHeader).NumericValue,
+    CheckEquals('Content-Length: 29',
+                Self.Request.Headers[ContentLengthHeaderFull].AsString,
                 'Content-Length');
-    CheckEquals('text/plain',
-                Self.Request.Headers[ContentTypeHeaderFull].Value,
+    CheckEquals('Content-Type: text/plain',
+                Self.Request.Headers[ContentTypeHeaderFull].AsString,
                 'Content-Type');
-    CheckEquals(TIdSipCSeqHeader.ClassName,
-                Self.Request.Headers[CSeqHeader].ClassName,
-                'CSeq class');
-    CheckEquals(314159,
-                (Self.Request.Headers[CSeqHeader] as TIdSipCSeqHeader).SequenceNo,
-                'CSeq SequenceNo');
-    CheckEquals('INVITE',
-                (Self.Request.Headers[CSeqHeader] as TIdSipCSeqHeader).Method,
-                'CSeq Method');
-    CheckEquals(TIdSipDateHeader.ClassName,
-                Self.Request.Headers[DateHeader].ClassName,
-                'Date class');
-    CheckEquals('Thu, 1 Jan 1970 00:00:00 +0000',
-                (Self.Request.Headers[DateHeader] as TIdSipDateHeader).Time.GetAsRFC822,
+    CheckEquals('CSeq: 314159 INVITE',
+                Self.Request.Headers[CSeqHeader].AsString,
+                'CSeq');
+    CheckEquals('Date: Thu, 1 Jan 1970 00:00:00 GMT',
+                Self.Request.Headers[DateHeader].AsString,
                 'Date');
-    CheckEquals(TIdSipUriHeader.ClassName,
-                Self.Request.Headers[ErrorInfoHeader].ClassName,
-                'Error-Info class');
-    CheckEquals('http://www.error.com/info/bloop.wav',
-                (Self.Request.Headers[ErrorInfoHeader] as TIdSipUriHeader).Address.GetFullURI,
+    CheckEquals('Error-Info: <http://www.error.com/info/bloop.wav>',
+                Self.Request.Headers[ErrorInfoHeader].AsString,
                 'Error-Info');
-    CheckEquals(TIdSipNumericHeader.ClassName,
-                Self.Request.Headers[ExpiresHeader].ClassName,
-                'Expires class');
-    CheckEquals(1000,
-                (Self.Request.Headers[ExpiresHeader] as TIdSipNumericHeader).NumericValue,
+    CheckEquals('Expires: 1000',
+                Self.Request.Headers[ExpiresHeader].AsString,
                 'Expires');
-    CheckEquals(TIdSipFromToHeader.ClassName,
-                Self.Request.Headers[FromHeaderFull].ClassName,
-                'From class');
-    CheckEquals('Case',
-                (Self.Request.Headers[FromHeaderFull] as TIdSipAddressHeader).DisplayName,
-                'From DisplayName');
-    CheckEquals('sip:case@fried.neurons.org',
-                (Self.Request.Headers[FromHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
-                'From Address');
-    CheckEquals(';tag=1928301774',
-                Self.Request.Headers[FromHeaderFull].ParamsAsString,
-                'From parameters');
-    CheckEquals(TIdSipMaxForwardsHeader.ClassName,
-                Self.Request.Headers[MaxForwardsHeader].ClassName,
-                'Max-Forwards class');
-    CheckEquals(70,
-                (Self.Request.Headers[MaxForwardsHeader] as TIdSipMaxForwardsHeader).NumericValue,
+    CheckEquals('From: Case <sip:case@fried.neurons.org>;tag=1928301774',
+                Self.Request.Headers[FromHeaderFull].AsString,
+                'From');
+    CheckEquals('Max-Forwards: 70',
+                Self.Request.Headers[MaxForwardsHeader].AsString,
                 'Max-Forwards');
-    CheckEquals(TIdSipRouteHeader.ClassName,
-                Self.Request.Headers[RouteHeader].ClassName,
-                'Route class');
-    CheckEquals('localhost <sip:127.0.0.1>',
-                Self.Request.Headers[RouteHeader].Value,
-                'Route value');
-    CheckEquals(';lr',
-                Self.Request.Headers[RouteHeader].ParamsAsString,
-                'Route params');
-    CheckEquals(TIdSipFromToHeader.ClassName,
-                Self.Request.Headers[ToHeaderFull].ClassName,
-                'To class');
-    CheckEquals('Wintermute',
-                (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).DisplayName,
-                'To DisplayName');
-    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
-                (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
-                'To Address');
-    CheckEquals(TIdSipViaHeader.ClassName,
-                Self.Request.Headers[ViaHeaderFull].ClassName,
-                'Via class');
-    CheckEquals('gw1.leo-ix.org',
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).SentBy,
-                'Via Host');
-    CheckEquals(5060,
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Port,
-                'Via Port');
-    CheckEquals('SIP/2.0',
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).SipVersion,
-                'Via SipVersion');
-    Check       (sttTCP =
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Transport,
-                'Via Transport');
-    CheckEquals(';branch=z9hG4bK776asdhds',
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).ParamsAsString,
-                'Via Parameters');
-    CheckEquals(TIdSipWarningHeader.ClassName,
-                Self.Request.Headers[WarningHeader].ClassName,
-                'Warning class');
-    CheckEquals(301,
-                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Code,
-                'Warning Code');
-    CheckEquals('draugr',
-                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Agent,
-                'Warning Agent');
-    CheckEquals('Not really interested',
-                (Self.Request.Headers[WarningHeader] as TIdSipWarningHeader).Text,
-                'Warning Text');
-    CheckEquals('I am not defined in RFC 3261',
-                Self.Request.Headers['X-Not-A-Header'].Value,
+    CheckEquals('Record-Route: localhost <sip:127.0.0.1>;lr',
+                Self.Request.Headers[RecordRouteHeader].AsString,
+                'Record-Route');
+    CheckEquals('Route: localhost <sip:127.0.0.1>;lr',
+                Self.Request.Headers[RouteHeader].AsString,
+                'Route');
+    CheckEquals('To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775',
+                Self.Request.Headers[ToHeaderFull].AsString,
+                'To');
+    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
+                Self.Request.Headers[ViaHeaderFull].AsString,
+                'Via');
+    CheckEquals('Warning: 301 draugr "Not really interested"',
+                Self.Request.Headers[WarningHeader].AsString,
+                'Warning');
+    CheckEquals('X-Not-A-Header: I am not defined in RFC 3261',
+                Self.Request.Headers['X-Not-A-Header'].AsString,
                 'X-Not-A-Header');
   finally
     Str.Free;

@@ -91,7 +91,9 @@ type
 
     function GetParameters: TStrings;
   public
-    destructor  Destroy; override;
+    destructor Destroy; override;
+
+    function AsString: String;
 
     property Parameters: TStrings     read GetParameters;
     property Value:      String       read fValue write fValue;
@@ -105,6 +107,7 @@ type
     function  GetValues(const Index: Integer): TIdSipWeightedValue;
     procedure SetValues(const Index: Integer; const Value: TIdSipWeightedValue);
   protected
+    function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
@@ -175,6 +178,11 @@ type
     property Tag: String read GetTag write SetTag;
   end;
 
+  TIdSipFromHeader = class(TIdSipFromToHeader)
+  protected
+    function GetName: String; override;
+  end;
+
   TIdSipNumericHeader = class(TIdSipHeader)
   private
     fNumericValue: Cardinal;
@@ -206,7 +214,7 @@ type
     destructor  Destroy; override;
 
     function EncodeQuotedStr(const S: String): String;
-    function HasLr: Boolean;
+    function IsLooseRoutable: Boolean;
 
     property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
@@ -243,6 +251,11 @@ type
 
     property Delay:     TIdSipTimestamp read fDelay;
     property Timestamp: TIdSipTimestamp read fTimestamp;
+  end;
+
+  TIdSipToHeader = class(TIdSipFromToHeader)
+  protected
+    function GetName: String; override;
   end;
 
   TIdSipUriHeader = class(TIdSipHeader)
@@ -330,6 +343,8 @@ type
     function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
   public
     function  Count: Integer; virtual; abstract;
+    function  IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+
     property  Items[const I: Integer]:      TIdSipHeader read GetItems;
   end;
 
@@ -398,8 +413,6 @@ type
     procedure Clear;
     function  Count: Integer; override;
     function  IsEmpty: Boolean;
-    function  IsEqualTo(const OtherHeaders: TIdSipHeadersFilter): Boolean; overload;
-    function  IsEqualTo(const OtherHeaders: TIdSipHeaders): Boolean; overload;
     procedure Remove(Header: TIdSipHeader);
     procedure RemoveAll;
 
@@ -963,6 +976,19 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipWeightedValue.AsString: String;
+var
+  I: Integer;
+begin
+  Result := Self.Value;
+
+  if (Self.Weight < High(TIdSipQValue)) then
+    Result := Result + ';q=' + QValueToStr(Self.Weight);
+
+  for I := 0 to Self.Parameters.Count - 1 do
+    Result := Result + ';' + Self.Parameters[I];
+end;
+
 //* TIdSipWeightedValue Private methods ****************************************
 
 function TIdSipWeightedValue.GetParameters: TStrings;
@@ -1021,6 +1047,19 @@ begin
 end;
 
 //* TIdSipWeightedCommaSeparatedHeader Protected methods ***********************
+
+function TIdSipWeightedCommaSeparatedHeader.GetValue: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.ValueCount - 1 do begin
+    Result := Result + Self.Values[I].AsString + ', ';
+  end;
+
+  Delete(Result, Length(Result) - 1, 2);
+end;
 
 procedure TIdSipWeightedCommaSeparatedHeader.SetValue(const Value: String);
 var
@@ -1264,6 +1303,16 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipFromHeader                                                           *
+//******************************************************************************
+//* TIdSipFromHeader Protected methods *****************************************
+
+function TIdSipFromHeader.GetName: String;
+begin
+  Result := FromHeaderFull;
+end;
+
+//******************************************************************************
 //* TIdSipMaxForwardsHeader                                                    *
 //******************************************************************************
 //* TIdSipMaxForwardsHeader Protected methods **********************************
@@ -1332,7 +1381,7 @@ begin
   Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
 end;
 
-function TIdSipRouteHeader.HasLr: Boolean;
+function TIdSipRouteHeader.IsLooseRoutable: Boolean;
 begin
   Result := Pos(LrParam, Self.Address.GetFullURI) > 0;
 end;
@@ -1510,6 +1559,16 @@ begin
 
     Self.Delay.FractionalPart := Self.ReadNumber(S);
   end;
+end;
+
+//******************************************************************************
+//* TIdSipToHeader                                                             *
+//******************************************************************************
+//* TIdSipToHeader Protected methods *******************************************
+
+function TIdSipToHeader.GetName: String;
+begin
+  Result := ToHeaderFull;
 end;
 
 //******************************************************************************
@@ -1790,6 +1849,26 @@ begin
 
   fHeaderName := HeaderName;
   fHeaderClass  := HeaderClass;
+end;
+
+//******************************************************************************
+//* TIdSipHeaderList                                                           *
+//******************************************************************************
+//* TIdSipHeaderList Public methods ********************************************
+
+function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+var
+  I: Integer;
+begin
+  Result := Self.Count = OtherHeaders.Count;
+
+  I := 0;
+  if Result then begin
+    while Result and (I < Self.Count) do begin
+      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
+      Inc(I);
+    end;
+  end;
 end;
 
 //******************************************************************************
@@ -2080,8 +2159,8 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                  TIdSipDateHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,             TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,               TIdSipNumericHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,              TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,             TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,              TIdSipFromHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,             TIdSipFromHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(InReplyToHeader,             TIdSipCallIdHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,           TIdSipMaxForwardsHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,          TIdSipCommaSeparatedHeader));
@@ -2091,8 +2170,8 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,         TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderShort,        TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(TimestampHeader,             TIdSipTimestampHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,                TIdSipFromToHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,               TIdSipFromToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,                TIdSipToHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,               TIdSipToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(UnsupportedHeader,           TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,               TIdSipViaHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,              TIdSipViaHeader));
@@ -2221,36 +2300,6 @@ end;
 function TIdSipHeadersFilter.IsEmpty: Boolean;
 begin
   Result := Self.Count = 0;
-end;
-
-function TIdSipHeadersFilter.IsEqualTo(const OtherHeaders: TIdSipHeadersFilter): Boolean;
-var
-  I: Integer;
-begin
-  Result := Self.Count = OtherHeaders.Count;
-
-  I := 0;
-  if Result then begin
-    while Result and (I < Self.Count) do begin
-      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
-      Inc(I);
-    end;
-  end;
-end;
-
-function TIdSipHeadersFilter.IsEqualTo(const OtherHeaders: TIdSipHeaders): Boolean;
-var
-  I: Integer;
-begin
-  Result := Self.Count = OtherHeaders.Count;
-
-  I := 0;
-  if Result then begin
-    while Result and (I < Self.Count) do begin
-      Result := Result and (Self.Items[I].IsEqualTo(OtherHeaders.Items[I]));
-      Inc(I);
-    end;
-  end;
 end;
 
 procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);

@@ -41,6 +41,7 @@ type
     procedure TestMatchNonInviteClient;
     procedure TestMatchNonInviteServer;
     procedure TestWillUseReliableTransport;
+//    procedure TestTortureTest41;
   end;
 
   TestTIdSipTransaction = class(TTestCase)
@@ -239,7 +240,9 @@ begin
 
   Self.Core := TIdSipMockCore.Create;
 
-  Self.D := TIdSipTransactionDispatcher.Create(Self.Core);
+  Self.D := TIdSipTransactionDispatcher.Create;
+
+  Self.Core.Dispatcher := Self.D;
 
   Self.MockTransport := TIdSipMockTransport.Create;
   Self.D.AddTransport(Self.MockTransport);
@@ -548,7 +551,30 @@ begin
     R.Free;
   end;
 end;
-
+{
+procedure TestTIdSipTransactionDispatcher.TestTortureTest41;
+var
+  P: TIdSipParser;
+  Req: TIdSipRequest;
+begin
+  P := TIdSipParser.Create;
+  try
+    Req := P.ParseAndMakeRequest(TortureTest41);
+    try
+      Self.MockTransport.FireOnRequest(Req);
+      Fail('not implemented yet');
+//      Self.MockTransport.
+      CheckEquals(SIPSIPVersionNotSupported,
+                  Self.MockTransport.LastResponse.StatusCode,
+                  '');
+    finally
+      Req.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
+}
 //******************************************************************************
 //* TestTIdSipTransaction                                                      *
 //******************************************************************************
@@ -628,7 +654,7 @@ begin
   Self.InitialRequest.Body                             := 'I am a message. Hear me roar!';
 
   Self.FailMsg               := '';
-  Self.MockDispatcher        := TIdSipMockTransactionDispatcher.Create(Self.Core);
+  Self.MockDispatcher        := TIdSipMockTransactionDispatcher.Create;
   Self.Response              := TIdSipResponse.Create;
   Self.Tran                  := Self.TransactionType.Create;
   Self.TransactionCompleted  := false;

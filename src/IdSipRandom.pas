@@ -12,6 +12,8 @@ implementation
 
 class function TIdSipRandomNumber.Next: Cardinal;
 begin
+  // TODO: This is CRAP. When we have time we shall implement Schneier's
+  // Fortuna PRNG, as described in "Practical Cryptography".
   Result := Random(MaxInt);
 end;
 

@@ -3,18 +3,24 @@ unit TestIdSipSession;
 interface
 
 uses
-  IdSipSession, TestFramework;
+  IdSipMessage, IdSipSession, TestFramework;
 
 type
   TestTIdSipSession = class(TTestCase)
   private
-    Session: TIdSipSession;
+    InitialRequest: TIdSipRequest;
+    Session:        TIdSipSession;
   public
     procedure SetUp; override;
     procedure TearDown; override;
+  published
+
   end;
 
 implementation
+
+uses
+  TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -28,15 +34,25 @@ end;
 //* TestTIdSipSession Public methods *******************************************
 
 procedure TestTIdSipSession.SetUp;
+var
+  P: TIdSipParser;
 begin
   inherited SetUp;
 
-  Self.Session := TIdSipSession.Create;
+  P := TIdSipParser.Create;
+  try
+    Self.InitialRequest := P.ParseAndMakeRequest(LocalLoopRequest)
+  finally
+    P.Free;
+  end;
+
+  Self.Session := TIdSipSession.Create(Self.InitialRequest);
 end;
 
 procedure TestTIdSipSession.TearDown;
 begin
   Self.Session.Free;
+  Self.InitialRequest.Free;
 
   inherited TearDown;
 end;

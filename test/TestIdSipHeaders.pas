@@ -168,7 +168,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestHasLr;
+    procedure TestIsLooseRoutable;
     procedure TestName;
     procedure TestValue;
     procedure TestValueWithParamsAndHeaderParams;
@@ -256,7 +256,8 @@ type
   published
     procedure TestAddValue;
     procedure TestClearValues;
-    procedure TestValue;
+    procedure TestGetValue;
+    procedure TestSetValue;
     procedure TestValueMalformed;
   end;
 
@@ -1652,16 +1653,16 @@ end;
 
 //* TestTIdSipRouteHeader Published methods ************************************
 
-procedure TestTIdSipRouteHeader.TestHasLr;
+procedure TestTIdSipRouteHeader.TestIsLooseRoutable;
 begin
   Self.R.Value := '<sip:127.0.0.1>';
-  Check(not Self.R.HasLr, 'With no lr param');
+  Check(not Self.R.IsLooseRoutable, 'With no lr param');
 
   Self.R.Value := '<sip:127.0.0.1;lr>';
-  Check(Self.R.HasLr, 'With lr param');
+  Check(Self.R.IsLooseRoutable, 'With lr param');
 
   Self.R.Value := '<sip:127.0.0.1>;lr';
-  Check(not Self.R.HasLr, 'With no lr param for header, not URI');
+  Check(not Self.R.IsLooseRoutable, 'With no lr param for header, not URI');
 end;
 
 procedure TestTIdSipRouteHeader.TestName;
@@ -2478,7 +2479,16 @@ begin
   CheckEquals(0, Self.W.ValueCount, 'ClearValues didn''t');
 end;
 
-procedure TestTIdSipWeightedCommaSeparatedHeader.TestValue;
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestGetValue;
+begin
+  Self.W.AddValue('text/plain', 700);
+  Self.W.Values[0].Parameters.Values['foo'] := 'bar';
+  Self.W.AddValue('text/t140');
+
+  CheckEquals('text/plain;q=0.7;foo=bar, text/t140', Self.W.Value, 'GetValue');
+end;
+
+procedure TestTIdSipWeightedCommaSeparatedHeader.TestSetValue;
 begin
   Self.W.Value := '';
   CheckEquals(0, Self.W.ValueCount, 'Empty string');
@@ -2512,6 +2522,11 @@ begin
   CheckEquals(0,            Self.W.Values[1].Parameters.Count, '4: [0].Parameter count');
   CheckEquals('text/t140',  Self.W.Values[1].Value,            '4: [1].Value');
   CheckEquals(1000,         Self.W.Values[1].Weight,           '4: [1].Weight');
+
+  Self.W.Value := 'text/plain;q=0.0';
+  CheckEquals(1,            Self.W.ValueCount,                 '5: Count');
+  CheckEquals(0,            Self.W.Values[0].Parameters.Count, '5: Parameter count');
+  CheckEquals(0,            Self.W.Values[0].Weight,           '5: Weight');
 end;
 
 procedure TestTIdSipWeightedCommaSeparatedHeader.TestValueMalformed;
@@ -2708,8 +2723,8 @@ begin
   CheckType(TIdSipDateHeader,                   Self.H.Add(DateHeader),                 DateHeader);
   CheckType(TIdSipUriHeader,                    Self.H.Add(ErrorInfoHeader),            ErrorInfoHeader);
   CheckType(TIdSipNumericHeader,                Self.H.Add(ExpiresHeader),              ExpiresHeader);
-  CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderFull),             FromHeaderFull);
-  CheckType(TIdSipFromToHeader,                 Self.H.Add(FromHeaderShort),            FromHeaderShort);
+  CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderFull),             FromHeaderFull);
+  CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderShort),            FromHeaderShort);
   CheckType(TIdSipCallIdHeader,                 Self.H.Add(InReplyToHeader),            InReplyToHeader);
   CheckType(TIdSipMaxForwardsHeader,            Self.H.Add(MaxForwardsHeader),          MaxForwardsHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(MIMEVersionHeader),          MIMEVersionHeader);
@@ -2730,8 +2745,8 @@ begin
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderFull),        SupportedHeaderFull);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderShort),       SupportedHeaderShort);
   CheckType(TIdSipTimestampHeader,              Self.H.Add(TimestampHeader),            TimestampHeader);
-  CheckType(TIdSipFromToHeader,                 Self.H.Add(ToHeaderFull),               ToHeaderFull);
-  CheckType(TIdSipFromToHeader,                 Self.H.Add(ToHeaderShort),              ToHeaderShort);
+  CheckType(TIdSipToHeader,                     Self.H.Add(ToHeaderFull),               ToHeaderFull);
+  CheckType(TIdSipToHeader,                     Self.H.Add(ToHeaderShort),              ToHeaderShort);
   CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(UnsupportedHeader),          UnsupportedHeader);
   CheckType(TIdSipHeader,                       Self.H.Add(UserAgentHeader),            UserAgentHeader);
   CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderFull),              ViaHeaderFull);

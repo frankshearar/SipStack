@@ -6,36 +6,52 @@ uses
   IdSipHeaders, IdSipMessage, TestFramework, TestFrameworkEx;
 
 type
-  TestTIdSipRequest = class(TExtendedTestCase)
+  TestTIdSipMessage = class(TExtendedTestCase)
   private
-    Request: TIdSipRequest;
+    Message: TIdSipMessage;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestReadBody;
+    procedure TestSetCallID;
+    procedure TestSetContentLength;
+    procedure TestSetContentType;
+    procedure TestSetCSeq;
+    procedure TestSetFrom;
+    procedure TestSetMaxForwards;
+    procedure TestSetSipVersion;
+    procedure TestSetTo;
+  end;
+
+  TestTIdSipRequest = class(TestTIdSipMessage)
+  private
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+  published
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
-    procedure HasSipsUri;
+    procedure TestHasSipsUri;
     procedure TestIsAck;
     procedure TestIsInvite;
-    procedure TestReadBody;
+    procedure TestIsRequest;
     procedure TestSetPath;
   end;
 
-  TestTIdSipResponse = class(TExtendedTestCase)
+  TestTIdSipResponse = class(TestTIdSipMessage)
   private
     Response: TIdSipResponse;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestIsFinal;
     procedure TestIsProvisional;
-    procedure TestReadBody;
+    procedure TestIsRequest;
   end;
 
 implementation
@@ -52,6 +68,143 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipMessage                                                          *
+//******************************************************************************
+//* TestTIdSipMessage Public methods *******************************************
+
+procedure TestTIdSipMessage.SetUp;
+begin
+  inherited SetUp;
+
+end;
+
+procedure TestTIdSipMessage.TearDown;
+begin
+  Self.Message.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipMessage Published methods ****************************************
+
+procedure TestTIdSipMessage.TestReadBody;
+var
+  Len: Integer;
+  S:   String;
+  Str: TStringStream;
+begin
+  Self.Message.ContentLength := 8;
+
+  Str := TStringStream.Create('Negotium perambuians in tenebris');
+  try
+    Self.Message.ReadBody(Str);
+    CheckEquals('Negotium', Self.Message.Body, 'Body');
+
+    Len := Length(' perambuians in tenebris');
+    SetLength(S, Len);
+    Str.Read(S[1], Len);
+    CheckEquals(' perambuians in tenebris', S, 'Unread bits of the stream');
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestSetCallID;
+begin
+  Self.Message.CallID := '999';
+
+  Self.Message.CallID := '42';
+  CheckEquals('42', Self.Message.CallID, 'Call-ID not set');
+end;
+
+procedure TestTIdSipMessage.TestSetContentLength;
+begin
+  Self.Message.ContentLength := 999;
+
+  Self.Message.ContentLength := 42;
+  CheckEquals(42, Self.Message.ContentLength, 'Content-Length not set');
+end;
+
+procedure TestTIdSipMessage.TestSetContentType;
+begin
+  Self.Message.ContentType := 'text/plain';
+
+  Self.Message.ContentType := 'text/t140';
+  CheckEquals('text/t140', Self.Message.ContentType, 'Content-Type not set');
+end;
+
+procedure TestTIdSipMessage.TestSetCSeq;
+var
+  C: TIdSipCSeqHeader;
+begin
+  C := TIdSipCSeqHeader.Create;
+  try
+    C.Value := '314159 INVITE';
+
+    Self.Message.CSeq := C;
+
+    Check(Self.Message.CSeq.IsEqualTo(C), 'CSeq not set');
+  finally
+    C.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestSetFrom;
+var
+  From: TIdSipFromHeader;
+begin
+  Self.Message.From.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+
+  From := TIdSipFromHeader.Create;
+  try
+    From.Value := 'Case <sip:case@fried.neurons.org>';
+
+    Self.Message.From := From;
+
+    CheckEquals(From.Value, Self.Message.From.Value, 'From value not set');
+  finally
+    From.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestSetMaxForwards;
+var
+  OrigMaxForwards: Byte;
+begin
+  OrigMaxForwards := Self.Message.MaxForwards;
+
+  Self.Message.MaxForwards := Self.Message.MaxForwards + 1;
+
+  CheckEquals(OrigMaxForwards + 1, Self.Message.MaxForwards, 'Max-Forwards not set');
+end;
+
+procedure TestTIdSipMessage.TestSetSipVersion;
+begin
+  Self.Message.SIPVersion := 'SIP/2.0';
+
+  Self.Message.SIPVersion := 'SIP/7.7';
+  CheckEquals('SIP/7.7', Self.Message.SipVersion, 'SipVersion not set');
+end;
+
+procedure TestTIdSipMessage.TestSetTo;
+var
+  ToHeader: TIdSipToHeader;
+begin
+  Self.Message.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+
+  ToHeader := TIdSipToHeader.Create;
+  try
+    ToHeader.Value := 'Case <sip:case@fried.neurons.org>';
+
+    Self.Message.ToHeader := ToHeader;
+
+    CheckEquals(ToHeader.Value, Self.Message.ToHeader.Value, 'To value not set');
+  finally
+    ToHeader.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdSipRequest                                                          *
 //******************************************************************************
 //* TestTIdSipRequest Public methods *******************************************
@@ -60,14 +213,8 @@ procedure TestTIdSipRequest.SetUp;
 begin
   inherited SetUp;
 
-  Request := TIdSipRequest.Create;  
-end;
-
-procedure TestTIdSipRequest.TearDown;
-begin
-  Request.Free;
-
-  inherited TearDown;
+  Self.Message := TIdSipRequest.Create;
+  Self.Request := Self.Message as TIdSipRequest;
 end;
 
 //* TestTIdSipRequest Published methods ****************************************
@@ -87,9 +234,9 @@ begin
     R.Body := 'hello';
 
     Self.Request.Assign(R);
-    CheckEquals(R.SIPVersion, Self.Request.SipVersion, 'SIP-Version');
-    CheckEquals(R.Method, Self.Request.Method, 'Method');
-    CheckEquals(R.RequestUri, Self.Request.RequestUri, 'Request-URI');
+    CheckEquals(R.SIPVersion,    Self.Request.SipVersion,    'SIP-Version');
+    CheckEquals(R.Method,        Self.Request.Method,        'Method');
+    CheckEquals(R.RequestUri,    Self.Request.RequestUri,    'Request-URI');
     CheckEquals(R.Headers.Count, Self.Request.Headers.Count, 'Header count');
 
     for I := 0 to R.Headers.Count - 1 do
@@ -174,7 +321,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.HasSipsUri;
+procedure TestTIdSipRequest.TestHasSipsUri;
 begin
   Self.Request.RequestUri := 'tel://999';
   Check(not Self.Request.HasSipsUri, 'tel URI');
@@ -234,26 +381,9 @@ begin
   Check(not Self.Request.IsInvite, 'XXX');
 end;
 
-procedure TestTIdSipRequest.TestReadBody;
-var
-  Len: Integer;
-  S:   String;
-  Str: TStringStream;
+procedure TestTIdSipRequest.TestIsRequest;
 begin
-  Request.ContentLength := 8;
-
-  Str := TStringStream.Create('Negotium perambuians in tenebris');
-  try
-    Request.ReadBody(Str);
-    CheckEquals('Negotium', Request.Body, 'Body');
-
-    Len := Length(' perambuians in tenebris');
-    SetLength(S, Len);
-    Str.Read(S[1], Len);
-    CheckEquals(' perambuians in tenebris', S, 'Unread bits of the stream');
-  finally
-    Str.Free;
-  end;
+  Check(Self.Request.IsRequest, 'IsRequest');
 end;
 
 procedure TestTIdSipRequest.TestSetPath;
@@ -314,14 +444,8 @@ procedure TestTIdSipResponse.SetUp;
 begin
   inherited SetUp;
 
-  Response := TIdSipResponse.Create;
-end;
-
-procedure TestTIdSipResponse.TearDown;
-begin
-  Response.Free;
-
-  inherited TearDown;
+  Self.Message := TIdSipResponse.Create;
+  Self.Response := Self.Message as TIdSipResponse;
 end;
 
 //* TestTIdSipResponse Published methods ***************************************
@@ -341,9 +465,9 @@ begin
     R.Body := 'hello';
 
     Self.Response.Assign(R);
-    CheckEquals(R.SIPVersion, Self.Response.SipVersion, 'SIP-Version');
-    CheckEquals(R.StatusCode, Self.Response.StatusCode, 'Status-Code');
-    CheckEquals(R.StatusText, Self.Response.StatusText, 'Status-Text');
+    CheckEquals(R.SIPVersion,    Self.Response.SipVersion,    'SIP-Version');
+    CheckEquals(R.StatusCode,    Self.Response.StatusCode,    'Status-Code');
+    CheckEquals(R.StatusText,    Self.Response.StatusText,    'Status-Text');
     CheckEquals(R.Headers.Count, Self.Response.Headers.Count, 'Header count');
 
     for I := 0 to R.Headers.Count - 1 do
@@ -466,26 +590,9 @@ begin
   Check(not Self.Response.IsProvisional, IntToStr(Self.Response.StatusCode));
 end;
 
-procedure TestTIdSipResponse.TestReadBody;
-var
-  Len: Integer;
-  S:   String;
-  Str: TStringStream;
+procedure TestTIdSipResponse.TestIsRequest;
 begin
-  Response.ContentLength := 8;
-
-  Str := TStringStream.Create('Negotium perambuians in tenebris');
-  try
-    Response.ReadBody(Str);
-    CheckEquals('Negotium', Response.Body, 'Body');
-
-    Len := Length(' perambuians in tenebris');
-    SetLength(S, Len);
-    Str.Read(S[1], Len);
-    CheckEquals(' perambuians in tenebris', S, 'Unread bits of the stream');
-  finally
-    Str.Free;
-  end;
+  Check(not Self.Response.IsRequest, 'IsRequest');
 end;
 
 initialization

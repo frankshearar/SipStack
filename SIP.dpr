@@ -32,7 +32,7 @@ uses
   TestIdSipSession in 'test\TestIdSipSession.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',  TestIdSipTimer in 'test\TestIdSipTimer.pas',  TestIdSipTransaction in 'test\TestIdSipTransaction.pas',  TestIdSipTransport in 'test\TestIdSipTransport.pas',  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',  TestIdUri in 'test\TestIdUri.pas';
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}

@@ -14,21 +14,21 @@ type
     property Connection: TIdTCPConnection read fConnection write fConnection;
   end;
 
-  TIdSipTcpRequestEvent = procedure(AThread: TIdPeerThread; const Request: TIdSipRequest) of object;
-  TIdSipTcpResponseEvent = procedure(ASender: TObject; const Response: TIdSipResponse) of object;
+  TIdSipTcpRequestEvent = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
+  TIdSipTcpResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
 
   // ReadBodyTimeout = 0 implies that we never timeout the body wait. This is
   // not recommended. ReadBodyTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
-  TIdSipTcpServer = class(TIdTCPServer)
+  TIdSipTcpServer = class(TIdTCPServer, IIdSipMessageVisitor)
   private
     fOnRequest:       TIdSipTcpRequestEvent;
     fOnResponse:      TIdSipTcpResponseEvent;
     fReadBodyTimeout: Cardinal;
 
-    procedure DoOnRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
-    procedure DoOnResponse(AThread: TIdPeerThread; const Response: TIdSipResponse);
+    procedure DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
@@ -38,6 +38,9 @@ type
     function DoExecute(AThread: TIdPeerThread): Boolean; override;
   public
     constructor Create(AOwner: TComponent); override;
+
+    procedure VisitRequest(const Request: TIdSipRequest);
+    procedure VisitResponse(const Response: TIdSipResponse);
   published
     property DefaultPort default IdPORT_SIP;
     property OnRequest:       TIdSipTcpRequestEvent  read fOnRequest write fOnRequest;
@@ -60,6 +63,16 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort := IdPORT_SIP;
+end;
+
+procedure TIdSipTcpServer.VisitRequest(const Request: TIdSipRequest);
+begin
+  Self.DoOnRequest(Self, Request);
+end;
+
+procedure TIdSipTcpServer.VisitResponse(const Response: TIdSipResponse);
+begin
+  Self.DoOnResponse(Self, Response);
 end;
 
 //* TIdSipTcpServer Protected methods ******************************************
@@ -90,10 +103,7 @@ begin
               or (Msg.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
               Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
-            if (Msg is TIdSipRequest) then
-              Self.DoOnRequest(AThread, Msg as TIdSipRequest)
-            else if (Msg is TIdSipResponse) then
-              Self.DoOnResponse(AThread, Msg as TIdSipResponse)
+            Msg.Accept(Self);
           finally
             Msg.Free;
           end;
@@ -118,16 +128,16 @@ end;
 
 //* TIdSipTcpServer Private methods ********************************************
 
-procedure TIdSipTcpServer.DoOnRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TIdSipTcpServer.DoOnRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
   if Assigned(Self.OnRequest) then
-    Self.OnRequest(AThread, Request);
+    Self.OnRequest(Self, Request);
 end;
 
-procedure TIdSipTcpServer.DoOnResponse(AThread: TIdPeerThread; const Response: TIdSipResponse);
+procedure TIdSipTcpServer.DoOnResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
   if Assigned(Self.OnResponse) then
-    Self.OnResponse(AThread, Response);
+    Self.OnResponse(Self, Response);
 end;
 
 procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);

@@ -3,7 +3,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdSipCore, IdSipMessage, IdSipTimer, IdSipTransport, SyncObjs;
+  Contnrs, IdSipMessage, IdSipTimer, IdSipTransport, SyncObjs;
 
 const
   InitialT1     = 500;   // ms
@@ -32,24 +32,26 @@ type
   // * dispatch responses to the correct transaction
   TIdSipTransactionDispatcher = class(TObject)
   private
-    fCore:           TIdSipAbstractCore;
-    Transports:      TObjectList;
-    Transactions:    TObjectList;
-    TransactionLock: TCriticalSection;
+    fOnUnhandledRequest:  TIdSipRequestEvent;
+    fOnUnhandledResponse: TIdSipResponseEvent;
+    Transports:           TObjectList;
+    Transactions:         TObjectList;
+    TransactionLock:      TCriticalSection;
 
+    procedure CheckMessage(const Message: TIdSipMessage);
     procedure DeliverToTransaction(const Request: TIdSipRequest); overload;
     procedure DeliverToTransaction(const Response: TIdSipResponse); overload;
     function  FindTransaction(const R: TIdSipRequest): TIdSipTransaction; overload;
     function  FindTransaction(const R: TIdSipResponse): TIdSipTransaction; overload;
     function  TransactionAt(const Index: Cardinal): TIdSipTransaction;
   protected
+    procedure DoOnUnhandledRequest(const R: TIdSipRequest);
+    procedure DoOnUnhandledResponse(const R: TIdSipResponse);
     procedure OnTransportRequest(Sender: TObject; const R: TIdSipRequest);
     procedure OnTransportResponse(Sender: TObject; const R: TIdSipResponse);
     function  FindAppropriateTransport(const M: TIdSipMessage): TIdSipAbstractTransport;
-
-    property Core: TIdSipAbstractCore read fCore;
   public
-    constructor Create(const Core: TIdSipAbstractCore); virtual;
+    constructor Create; virtual;
     destructor  Destroy; override;
 
     procedure AddTransport(const Transport: TIdSipAbstractTransport);
@@ -65,13 +67,16 @@ type
     function  TransactionCount: Integer;
     function  TransportCount: Integer;
     function  WillUseReliableTranport(const R: TIdSipMessage): Boolean;
+
+    property OnUnhandledRequest:  TIdSipRequestEvent  read fOnUnhandledRequest write fOnUnhandledRequest;
+    property OnUnhandledResponse: TIdSipResponseEvent read fOnUnhandledResponse write fOnUnhandledResponse;
   end;
 
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
     fTransport: TIdSipMockTransport;
   public
-    constructor Create(const Core: TIdSipAbstractCore); override;
+    constructor Create; override;
     destructor  Destroy; override;
 
     procedure SendRequest(const R: TIdSipRequest); override;
@@ -245,14 +250,13 @@ uses
 //******************************************************************************
 //* TIdSipTransactionDispatcher Public methods *********************************
 
-constructor TIdSipTransactionDispatcher.Create(const Core: TIdSipAbstractCore);
+constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
   Self.Transports   := TObjectList.Create(false);
   Self.Transactions := TObjectList.Create(true);
 
-  Self.fCore := Core;
   Self.TransactionLock := TCriticalSection.Create;
 end;
 
@@ -274,12 +278,24 @@ end;
 
 function TIdSipTransactionDispatcher.AddTransaction(const TransactionType: TIdSipTransactionClass;
                                                     const InitialRequest: TIdSipRequest): TIdSipTransaction;
+var
+  Index: Integer;
 begin
-  // Question: what happens if Add() fails? It's easy enough to Result.Free but
-  // how can we clean up Self.Transactions?
-  Result := TransactionType.Create;
-  Self.Transactions.Add(Result);
-  Result.Initialise(Self, InitialRequest);
+  Result := nil;
+  Self.TransactionLock.Acquire;
+  try
+    try
+      Index := Self.Transactions.Add(TransactionType.Create);
+      Result := Self.TransactionAt(Index);
+      Result.Initialise(Self, InitialRequest);
+    except
+      Self.Transactions.Remove(Result);
+
+      raise;
+    end;
+  finally
+    Self.TransactionLock.Release;
+  end;
 end;
 
 procedure TIdSipTransactionDispatcher.ClearTransports;
@@ -317,7 +333,7 @@ begin
 
   if (ReceivedResponse.CSeq.Method = MethodAck) then
     Result := Result
-          and (TranRequest.Method = MethodInvite)
+          and (TranRequest.IsInvite)
   else
     Result := Result
           and (ReceivedResponse.CSeq.Method = TranRequest.Method);
@@ -325,10 +341,12 @@ end;
 
 procedure TIdSipTransactionDispatcher.SendRequest(const R: TIdSipRequest);
 begin
+  // add in a Via header describing this agent.
 end;
 
 procedure TIdSipTransactionDispatcher.SendResponse(const R: TIdSipResponse);
 begin
+  // RFC 3261 Section 18.2.2
   // We must keep an association between open connections and transactions. If
   // the TCP connection that gave us the Request is still open then we MUST use
   // that connection to send back R. Otherwise we must open a new connection to
@@ -370,13 +388,27 @@ end;
 
 //* TIdSipTransactionDispatcher Protected methods ******************************
 
+procedure TIdSipTransactionDispatcher.DoOnUnhandledRequest(const R: TIdSipRequest);
+begin
+  if Assigned(Self.OnUnhandledRequest) then
+    Self.OnUnhandledRequest(Self, R);
+end;
+
+procedure TIdSipTransactionDispatcher.DoOnUnhandledResponse(const R: TIdSipResponse);
+begin
+  if Assigned(Self.OnUnhandledResponse) then
+    Self.OnUnhandledResponse(Self, R);
+end;
+
 procedure TIdSipTransactionDispatcher.OnTransportRequest(Sender: TObject; const R: TIdSipRequest);
 begin
+  Self.CheckMessage(R);
   Self.DeliverToTransaction(R);
 end;
 
 procedure TIdSipTransactionDispatcher.OnTransportResponse(Sender: TObject; const R: TIdSipResponse);
 begin
+  Self.CheckMessage(R);
   Self.DeliverToTransaction(R);
 end;
 
@@ -387,6 +419,13 @@ end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
 
+procedure TIdSipTransactionDispatcher.CheckMessage(const Message: TIdSipMessage);
+begin
+  // Transport-layer-wide checks
+  if (Message.SIPVersion <> SipVersion) then
+    //
+end;
+
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Request: TIdSipRequest);
 var
   Tran: TIdSipTransaction;
@@ -396,7 +435,7 @@ begin
   if Assigned(Tran) then
     Tran.HandleRequest(Request)
   else
-    Self.Core.HandleUnmatchedRequest(Request);
+    Self.DoOnUnhandledRequest(Request);
 end;
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Response: TIdSipResponse);
@@ -409,7 +448,7 @@ begin
   if Assigned(Tran) then
     Tran.HandleResponse(Response)
   else
-    Self.Core.HandleUnmatchedResponse(Response);
+    Self.DoOnUnhandledResponse(Response);
 end;
 
 function TIdSipTransactionDispatcher.FindTransaction(const R: TIdSipRequest): TIdSipTransaction;
@@ -418,11 +457,16 @@ var
 begin
   Result := nil;
 
-  I := 0;
-  while (I < Self.Transactions.Count) and (Result = nil) do
-    if Self.Match(R, Self.TransactionAt(I).InitialRequest) then
-      Result := Self.TransactionAt(I)
-    else Inc(I);
+  Self.TransactionLock.Acquire;
+  try
+    I := 0;
+    while (I < Self.Transactions.Count) and (Result = nil) do
+      if Self.Match(R, Self.TransactionAt(I).InitialRequest) then
+        Result := Self.TransactionAt(I)
+      else Inc(I);
+  finally
+    Self.TransactionLock.Release;
+  end;
 end;
 
 function TIdSipTransactionDispatcher.FindTransaction(const R: TIdSipResponse): TIdSipTransaction;
@@ -453,9 +497,9 @@ end;
 //******************************************************************************
 //* TIdSipMockTransactionDispatcher Public methods *****************************
 
-constructor TIdSipMockTransactionDispatcher.Create(const Core: TIdSipAbstractCore);
+constructor TIdSipMockTransactionDispatcher.Create;
 begin
-  inherited Create(Core);
+  inherited Create;
 
   Self.fTransport := TIdSipMockTransport.Create;
 end;
@@ -470,11 +514,13 @@ end;
 procedure TIdSipMockTransactionDispatcher.SendRequest(const R: TIdSipRequest);
 begin
   Self.Transport.SendRequest(R);
+//  Self.Transport.FireOnRequest(R); // ??
 end;
 
 procedure TIdSipMockTransactionDispatcher.SendResponse(const R: TIdSipResponse);
 begin
   Self.Transport.SendResponse(R);
+//  Self.Transport.FireOnResponse(R); // ??
 end;
 
 //******************************************************************************
@@ -484,7 +530,7 @@ end;
 
 class function TIdSipTransaction.GetTransactionType(const Request: TIdSipRequest): TIdSipTransactionClass;
 begin
-  if (Request.Method = MethodInvite) then
+  if (Request.IsInvite) then
     Result := TIdSipClientInviteTransaction
   else
     Result := TIdSipClientNonInviteTransaction;
@@ -815,10 +861,11 @@ procedure TIdSipServerInviteTransaction.HandleRequest(const R: TIdSipRequest);
 begin
   case Self.State of
     itsProceeding: Self.TrySendLastResponse(R);
+    
     itsCompleted: begin
-      if (R.Method = MethodInvite) then
+      if R.IsInvite then
         Self.TrySendLastResponse(R)
-      else if (R.Method = MethodAck) then
+      else if R.IsAck then
         Self.ChangeToConfirmed(R);
     end;
   end;
@@ -1016,6 +1063,7 @@ begin
       else
         Self.ChangeToProceeding(R);
     end;
+    
     itsProceeding: begin
       if R.IsFinal then
         Self.ChangeToCompleted(R)

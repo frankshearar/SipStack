@@ -49,6 +49,7 @@ const
                    + 'Expires: 1000'#13#10
                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
                    + 'Max-Forwards: 70'#13#10
+                   + 'Record-Route: localhost <sip:127.0.0.1>;lr'#13#10
                    + 'Route: localhost <sip:127.0.0.1>;lr'#13#10
                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>;tag=1928301775'#13#10
@@ -57,6 +58,30 @@ const
                    + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
                    + #13#10
                    + BasicBody;
+
+  LocalLoopRequest = 'INVITE sip:franks@127.0.0.1 SIP/2.0'#13#10
+                   + 'Via: SIP/2.0/TCP 127.0.0.1;branch=z9hG4bK776asdhds'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'To: Wintermute <sip:franks@127.0.0.1>'#13#10
+                   + 'From: Case <sip:franks@127.0.0.1>;tag=1928301774'#13#10
+                   + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                   + 'CSeq: 314159 INVITE'#13#10
+                   + 'Contact: sip:franks@127.0.0.1'#13#10
+                   + 'Content-Type: text/plain'#13#10
+                   + BasicContentLengthHeader
+                   + #13#10
+                   + BasicBody;
+  LocalLoopResponse = 'SIP/2.0 486 Busy Here'#13#10
+                + 'Via: SIP/2.0/TCP 127.0.0.1;branch=z9hG4bK776asdhds'#13#10
+                + 'Max-Forwards: 70'#13#10
+                + 'To: Wintermute <sip:franks@127.0.0.1>;tag=1928301775'#13#10
+                + 'From: Case <sip:franks@127.0.0.1>;tag=1928301774'#13#10
+                + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                + 'CSeq: 314159 INVITE'#13#10
+                + 'Contact: sip:franks@127.0.0.1'#13#10
+                + 'Content-Type: text/plain'#13#10
+                + 'Content-Length: 0'#13#10
+                + #13#10;
 
   // Each TortureTestN constant is a message defined in
   // http://www.ietf.org/internet-drafts/draft-ietf-sipping-torture-tests-00.txt
@@ -362,7 +387,7 @@ const
                 + 'Contact: sip:host.company.com'#13#10
                 + #13#10;
 
-  //   This is an illegal invite at the display names in the To and From
+  //   This is an illegal invite as the display names in the To and From
   //   headers contain non-token characters but are unquoted.
   //
   //   A server may be intelligent enough to cope with this but may also

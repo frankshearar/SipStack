@@ -42,7 +42,7 @@ type
   private
     Transport: TIdSipTcpServer;
 
-    procedure DoOnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure DoOnTcpRequest(Sender: TObject; const Request: TIdSipRequest);
     procedure DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
   protected
     function  GetPort: Cardinal; override;
@@ -82,6 +82,7 @@ type
   private
     fACKCount:          Cardinal;
     fLastACK:           TIdSipRequest;
+    fLastResponse:      TIdSipResponse;
     fFailWith:          ExceptClass;
     fSentRequestCount:  Cardinal;
     fSentResponseCount: Cardinal;
@@ -100,11 +101,12 @@ type
     procedure Start; override;
     procedure Stop; override;
 
-    property ACKCount:          Cardinal      read fACKCount;
-    property FailWith:          ExceptClass   read fFailWith write fFailWith;
-    property LastACK:           TIdSipRequest read fLastACK;
-    property SentRequestCount:  Cardinal      read fSentRequestCount;
-    property SentResponseCount: Cardinal      read fSentResponseCount;
+    property ACKCount:          Cardinal       read fACKCount;
+    property FailWith:          ExceptClass    read fFailWith write fFailWith;
+    property LastACK:           TIdSipRequest  read fLastACK;
+    property LastResponse:      TIdSipResponse read fLastResponse;
+    property SentRequestCount:  Cardinal       read fSentRequestCount;
+    property SentResponseCount: Cardinal       read fSentResponseCount;
   end;
 
 const
@@ -203,7 +205,23 @@ begin
 end;
 
 procedure TIdSipTcpTransport.SendResponse(const R: TIdSipResponse);
+var
+  Client: TIdTcpClient;
 begin
+  Client := TIdTcpClient.Create(nil);
+  try
+    Client.Host := R.Path.LastHop.SentBy;
+    Client.Port := R.Path.LastHop.Port;
+
+    Client.Connect(DefaultTimeout);
+    try
+      Client.Write(R.AsString);
+    finally
+      Client.Disconnect;
+    end;
+  finally
+    Client.Free;
+  end;
 end;
 
 procedure TIdSipTcpTransport.Start;
@@ -230,9 +248,9 @@ end;
 
 //* TIdSipTcpTransport Private methods *****************************************
 
-procedure TIdSipTcpTransport.DoOnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TIdSipTcpTransport.DoOnTcpRequest(Sender: TObject; const Request: TIdSipRequest);
 begin
-  Self.DoOnRequest(AThread, Request);
+  Self.DoOnRequest(Sender, Request);
 end;
 
 procedure TIdSipTcpTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
@@ -349,10 +367,12 @@ begin
 
   Self.ResetSentRequestCount;
   Self.fLastACK := TIdSipRequest.Create;
+  Self.fLastResponse := TIdSipResponse.Create;
 end;
 
 destructor TIdSipMockTransport.Destroy;
 begin
+  Self.fLastResponse.Free;
   Self.fLastACK.Free;
 
   inherited Destroy;
@@ -393,7 +413,7 @@ begin
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipMockTransport.SendRequest');
 
-  if (R.Method = MethodAck) then begin
+  if R.IsAck then begin
     Self.LastACK.Assign(R);
     Inc(Self.fACKCount)
   end
@@ -408,9 +428,11 @@ begin
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipMockTransport.SendResponse');
 
-  Self.DoOnResponse(Self, R);
+  Self.LastResponse.Assign(R);
 
   Inc(Self.fSentResponseCount);
+
+  Self.DoOnResponse(Self, R);
 end;
 
 procedure TIdSipMockTransport.Start;

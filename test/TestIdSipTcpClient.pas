@@ -16,11 +16,11 @@ type
 
     procedure CheckReceiveOkResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject; const Response: TIdSipResponse);
-    procedure CheckSendInvite(AThread: TIdPeerThread; const Request: TIdSipRequest);
-    procedure CheckSendTwoInvites(AThread: TIdPeerThread; const Request: TIdSipRequest);
-    procedure CutConnection(AThread: TIdPeerThread; const R: TIdSipRequest);
-    procedure SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
-    procedure SendProvisionalAndOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
+    procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
+    procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
+    procedure SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
+    procedure SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -55,28 +55,21 @@ end;
 procedure TestTIdSipTcpClient.SetUp;
 var
   P: TIdSipParser;
-  S: TStringStream;
 begin
   inherited SetUp;
 
   Self.Client := TIdSipTcpClient.Create(nil);
   Self.Server := TIdSipTcpServer.Create(nil);
 
-  Self.Client.Host := '127.0.0.1';
-  Self.Client.Port := Self.Server.DefaultPort;
+  Self.Client.Host    := '127.0.0.1';
+  Self.Client.Port    := Self.Server.DefaultPort;
+  Self.Client.Timeout := 1000;
 
-  S := TStringStream.Create(BasicRequest);
+  P := TIdSipParser.Create;
   try
-    P := TIdSipParser.Create;
-    try
-      P.Source := S;
-      Self.Invite := P.ParseAndMakeMessage as TIdSipRequest;
-      Self.Invite.Body := BasicBody;
-    finally
-      P.Free;
-    end;
+    Self.Invite := P.ParseAndMakeRequest(LocalLoopRequest);
   finally
-    S.Free;
+    P.Free;
   end;
 
   Self.InviteCount           := 0;
@@ -131,12 +124,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendInvite(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
     CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
 
-    AThread.Connection.Write(BasicResponse);
+    Self.SendOkResponse(Sender, Request);
 
     Self.ThreadEvent.SetEvent;
   except
@@ -147,12 +140,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckSendTwoInvites(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
 begin
   try
     Inc(Self.InviteCount);
 
-    AThread.Connection.Write(BasicResponse);
+    Self.SendOkResponse(Sender, Request);
 
     if (Self.InviteCount > 1) then
       Self.ThreadEvent.SetEvent;
@@ -164,10 +157,17 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CutConnection(AThread: TIdPeerThread; const R: TIdSipRequest);
+procedure TestTIdSipTcpClient.CutConnection(Sender: TObject; const R: TIdSipRequest);
+var
+  Threads: TList;
 begin
   try
-    AThread.Connection.DisconnectSocket;
+    Threads := Self.Server.Threads.LockList;
+    try
+      (TObject(Threads[0]) as TIdPeerThread).Connection.DisconnectSocket;
+    finally
+      Self.Server.Threads.UnlockList;
+    end;
 
     Self.ThreadEvent.SetEvent;
   except
@@ -178,16 +178,30 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.SendOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
+var
+  Threads: TList;
 begin
-  AThread.Connection.Write(BasicResponse);
+    Threads := Self.Server.Threads.LockList;
+    try
+      (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+    finally
+      Self.Server.Threads.UnlockList;
+    end;
 end;
 
-procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
+var
+  Threads: TList;
 begin
-  AThread.Connection.Write(StringReplace(BasicResponse, '486 Busy Here', '100 Trying', []));
-  Sleep(500);
-  AThread.Connection.Write(BasicResponse);
+  Threads := Self.Server.Threads.LockList;
+  try
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []));
+    Sleep(500);
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
 end;
 
 //* TestTIdSipTcpClient Published methods **************************************

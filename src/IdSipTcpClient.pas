@@ -3,7 +3,7 @@ unit IdSipTcpClient;
 interface
 
 uses
-  IdSipMessage, IdTCPClient, IdSipTcpServer;
+  Classes, IdSipMessage, IdTCPClient, IdSipTcpServer;
 
 type
   // todo:
@@ -12,23 +12,35 @@ type
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fOnResponse: TIdSipTcpResponseEvent;
+    fTimeout:    Cardinal;
+
     procedure DoOnResponse(const R: TIdSipResponse);
     procedure ReadResponses;
   public
+    constructor Create(AOwner: TComponent); override;
+
     procedure Send(const Request: TIdSipRequest);
 
     property OnResponse: TIdSipTcpResponseEvent read fOnResponse write fOnResponse;
+    property Timeout:    Cardinal               read fTimeout write fTimeout;
   end;
 
 implementation
 
 uses
-  Classes, IdException;
+  IdException, IdTCPConnection;
 
 //******************************************************************************
 //* TIdSipTcpClient                                                            *
 //******************************************************************************
 //* TIdSipTcpClient Public methods *********************************************
+
+constructor TIdSipTcpClient.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+
+  Self.Timeout := 5000;
+end;
 
 procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);
 begin
@@ -46,35 +58,42 @@ end;
 
 procedure TIdSipTcpClient.ReadResponses;
 var
+  Finished:              Boolean;
+  Line:                  String;
   S:                     TStringStream;
   P:                     TIdSipParser;
   R:                     TIdSipResponse;
-  ReceivedFinalResponse: Boolean;
 begin
-  ReceivedFinalResponse := false;
+  Finished := false;
 
   try
-    while (not ReceivedFinalResponse) do begin
+    while (not Finished) do begin
       S := TStringStream.Create('');
       try
-        while (S.DataString = '') do
-          Self.Capture(S, '');       // this won't time out :/
+        Line := Self.ReadLn(#$A, Timeout);
+        while (Line <> '') do begin
+          S.WriteString(Line);
+          Line := Self.ReadLn(#$A, Timeout);
+        end;
         S.Seek(0, soFromBeginning);
+        Finished := Self.ReadLnTimedOut;
 
-        P := TIdSipParser.Create;
-        try
-          P.Source := S;
-          R := P.ParseAndMakeResponse;
+        if (S.DataString <> '') then begin
+          P := TIdSipParser.Create;
           try
-            R.Body := Self.ReadString(R.ContentLength);
-            Self.DoOnResponse(R);
+            P.Source := S;
+            R := P.ParseAndMakeResponse;
+            try
+              R.Body := Self.ReadString(R.ContentLength);
+              Self.DoOnResponse(R);
 
-            ReceivedFinalResponse := R.IsFinal;
+              Finished := R.IsFinal;
+            finally
+              R.Free;
+            end;
           finally
-            R.Free;
+            P.Free;
           end;
-        finally
-          P.Free;
         end;
       finally
         S.Free;

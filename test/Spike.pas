@@ -15,7 +15,7 @@ type
     TcpServer: TIdSipTcpServer;
     UdpServer: TIdSipUdpServer;
 
-    procedure OnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+    procedure OnTcpRequest(ASender: TObject; const Request: TIdSipRequest);
     procedure OnUdpRequest(Sender: TObject; const Request: TIdSipRequest);
   public
     constructor Create(AOwner: TComponent); override;
@@ -57,7 +57,7 @@ end;
 
 //* TrnidSpike Private methods *************************************************
 
-procedure TrnidSpike.OnTcpRequest(AThread: TIdPeerThread; const Request: TIdSipRequest);
+procedure TrnidSpike.OnTcpRequest(ASender: TObject; const Request: TIdSipRequest);
 begin
   Self.Log.Lines.Add('=== TCP Request ===');
   Self.Log.Lines.Add(Request.AsString);

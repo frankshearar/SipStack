@@ -3,66 +3,109 @@ unit TestIdSipDialog;
 interface
 
 uses
-  IdSipDialog, IdSipMessage, TestFramework;
+  IdSipDialog, IdSipHeaders, IdSipMessage, IdURI, TestFramework;
 
 type
   TestTIdSipDialogID = class(TTestCase)
+  private
+    ID: TIdSipDialogID;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
-    procedure TestCreation;
+    procedure TestCreationFromParameters;
+    procedure TestCreationFromDialogID;
+    procedure TestIsEqualToSameID;
+    procedure TestIsEqualToDifferentCallID;
+    procedure TestIsEqualToDifferentLocalTag;
+    procedure TestIsEqualToDifferentRemoteTag;
   end;
 
   TestTIdSipDialog = class(TTestCase)
   protected
-    Req: TIdSipRequest;
-    Res: TIdSipResponse;
+    Dlg:              TIdSipDialog;
+    ID:               TIdSipDialogID;
+    LocalSequenceNo:  Cardinal;
+    LocalUri:         TIdURI;
+    RemoteSequenceNo: Cardinal;
+    RemoteTarget:     TIdURI;
+    RemoteUri:        TIdURI;
+    Req:              TIdSipRequest;
+    Res:              TIdSipResponse;
+    RouteSet:         TIdSipHeaders;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestCreateRequest;
-    procedure TestIsSecure;
-  end;
-
-  TestTIdSipUACDialog = class(TestTIdSipDialog)
-  private
-    D: TIdSipUACDialog;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
+    procedure TestCreateFromAnotherDialog;
     procedure TestCreateRequest;
     procedure TestCreateRequestRouteSetEmpty;
     procedure TestCreateRequestRouteSetWithLrParam;
     procedure TestCreateRequestRouteSetWithoutLrParam;
-    procedure TestCreateRequestWithNullTags;
+    procedure TestCreateWithStrings;
+    procedure TestDialogID;
+    procedure TestEarlyState;
+    procedure TestEmptyRemoteTargetAfterResponse;
+    procedure TestIsSecure;
+    procedure TestRemoteTarget;
+  end;
+
+  TestTIdSipUACDialog = class(TestTIdSipDialog)
+  private
+    Dlg: TIdSipUACDialog;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
     procedure TestDialogID;
     procedure TestDialogIDToHasNoTag;
     procedure TestRecordRouteHeaders;
-    procedure TestRemoteTarget;
     procedure TestSequenceNo;
     procedure TestUri;
   end;
 
   TestTIdSipUASDialog = class(TestTIdSipDialog)
   private
-    D: TIdSipUASDialog;
+    Dlg: TIdSipUASDialog;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestDialogID;
     procedure TestDialogIDFromHasNoTag;
-    procedure TestEarlyState;
     procedure TestRemoteTarget;
     procedure TestRecordRouteHeaders;
     procedure TestSequenceNo;
     procedure TestUri;
   end;
 
+  TestTIdSipDialogs = class(TTestCase)
+  private
+    D:                TIdSipDialogs;
+    Dlg:              TIdSipDialog;
+    ID:               TIdSipDialogID;
+    LocalSequenceNo:  Cardinal;
+    LocalUri:         TIdURI;
+    RemoteSequenceNo: Cardinal;
+    RemoteTarget:     TIdURI;
+    RemoteUri:        TIdURI;
+    RouteSet:         TIdSipHeaders;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestAddCopiesDialog;
+    procedure TestDialogAt;
+    procedure TestDialogAtString;
+    procedure TestDialogAtStringUnknownID;
+    procedure TestDialogAtUnknownID;
+  end;
+
 implementation
 
 uses
-  Classes, IdSipConsts, IdSipHeaders, SysUtils, TestMessages, TypInfo;
+  Classes, IdSipConsts, SysUtils, TestMessages, TypInfo;
 
 function DialogStateToStr(const S: TIdSipDialogState): String;
 begin
@@ -76,24 +119,100 @@ begin
   Result.AddTest(TestTIdSipDialog.Suite);
   Result.AddTest(TestTIdSipUACDialog.Suite);
   Result.AddTest(TestTIdSipUASDialog.Suite);
+  Result.AddTest(TestTIdSipDialogs.Suite);
 end;
 
 //******************************************************************************
 //* TestTIdSipDialogID                                                         *
 //******************************************************************************
+//* TestTIdSipDialogID Public methods ******************************************
+
+procedure TestTIdSipDialogID.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ID := TIdSipDialogID.Create('1', '2', '3');
+end;
+
+procedure TestTIdSipDialogID.TearDown;
+begin
+  Self.ID.Free;
+
+  inherited TearDown;
+end;
+
 //* TestTIdSipDialogID Published methods ***************************************
 
-procedure TestTIdSipDialogID.TestCreation;
-var
-  Dlg: TIdSipDialogID;
+procedure TestTIdSipDialogID.TestCreationFromParameters;
 begin
-  Dlg := TIdSipDialogID.Create('1', '2', '3');
+  CheckEquals('1', Self.ID.CallID,    'CallID');
+  CheckEquals('2', Self.ID.LocalTag,  'LocalTag');
+  CheckEquals('3', Self.ID.RemoteTag, 'RemoteTag');
+end;
+
+procedure TestTIdSipDialogID.TestCreationFromDialogID;
+var
+  Dlg:    TIdSipDialogID;
+begin
+  Dlg := TIdSipDialogID.Create(Self.ID);
   try
-    CheckEquals('1', Dlg.CallID,    'CallID');
-    CheckEquals('2', Dlg.LocalTag,  'LocalTag');
-    CheckEquals('3', Dlg.RemoteTag, 'RemoteTag');
+    Check(Dlg.IsEqualTo(Self.ID), 'Dialog IDs not equal');
   finally
     Dlg.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogID.TestIsEqualToSameID;
+var
+  D: TIdSipDialogID;
+begin
+  D := TIdSipDialogID.Create(Self.ID);
+  try
+    Check(D.IsEqualTo(Self.ID), 'Same Dialog ID');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogID.TestIsEqualToDifferentCallID;
+var
+  D: TIdSipDialogID;
+begin
+  D := TIdSipDialogID.Create(Self.ID.CallID + '1',
+                             Self.ID.LocalTag,
+                             Self.ID.RemoteTag);
+  try
+    Check(not D.IsEqualTo(Self.ID), 'Different Call-ID');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogID.TestIsEqualToDifferentLocalTag;
+var
+  D: TIdSipDialogID;
+begin
+  D := TIdSipDialogID.Create(Self.ID.CallID,
+                             Self.ID.LocalTag + '1',
+                             Self.ID.RemoteTag);
+  try
+    Check(not D.IsEqualTo(Self.ID), 'Different Local Tag');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogID.TestIsEqualToDifferentRemoteTag;
+var
+  D: TIdSipDialogID;
+begin
+  D := TIdSipDialogID.Create(Self.ID.CallID,
+                             Self.ID.LocalTag,
+                             Self.ID.RemoteTag + '1');
+  try
+    Check(not D.IsEqualTo(Self.ID), 'Different Remote Tag');
+  finally
+    D.Free;
   end;
 end;
 
@@ -105,42 +224,50 @@ end;
 procedure TestTIdSipDialog.SetUp;
 var
   P: TIdSipParser;
-  S: TStringStream;
 begin
   inherited SetUp;
 
-  S := TStringStream.Create(BasicRequest);
+  P := TIdSipParser.Create;
   try
-    P := TIdSipParser.Create;
-    try
-      P.Source := S;
+    Self.Req := P.ParseAndMakeRequest(BasicRequest);
 
-      Self.Req := P.ParseAndMakeMessage as TIdSipRequest;
-    finally
-      P.Free;
-    end;
+    Self.Res := P.ParseAndMakeResponse(BasicResponse);
+    Self.Res.StatusCode := SIPTrying;
   finally
-    S.Free;
+    P.Free;
   end;
 
-  S := TStringStream.Create(BasicResponse);
-  try
-    P := TIdSipParser.Create;
-    try
-      P.Source := S;
+  Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
-      Self.Res := P.ParseAndMakeMessage as TIdSipResponse;
-      Self.Res.StatusCode := SIPTrying;
-    finally
-      P.Free;
-    end;
-  finally
-    S.Free;
-  end;
+  Self.LocalSequenceNo := 13;
+  Self.LocalUri        := TIdUri.Create('sip:case@fried.neurons.org');
+  Self.LocalSequenceNo := 42;
+  Self.RemoteTarget    := TIdUri.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+
+  Self.RouteSet := TIdSipHeaders.Create;
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
+
+  Self.Dlg := TIdSipDialog.Create(Self.ID,
+                                  Self.LocalSequenceNo,
+                                  Self.RemoteSequenceNo,
+                                  Self.LocalUri,
+                                  Self.RemoteUri,
+                                  Self.RemoteTarget,
+                                  false,
+                                  Self.RouteSet);
 end;
 
 procedure TestTIdSipDialog.TearDown;
 begin
+  Self.Dlg.Free;
+  Self.RouteSet.Free;
+  Self.RemoteTarget.Free;
+  Self.RemoteUri.Free;
+  Self.LocalUri.Free;
+  Self.ID.Free;
   Self.Res.Free;
   Self.Req.Free;
 
@@ -149,15 +276,235 @@ end;
 
 //* TestTIdSipDialog Published methods *****************************************
 
-procedure TestTIdSipDialog.TestCreateRequest;
+procedure TestTIdSipDialog.TestCreateFromAnotherDialog;
 var
   D: TIdSipDialog;
 begin
-  Self.Req.RequestUri := 'sip:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, false);
+  D := TIdSipDialog.Create(Self.Dlg);
   try
+    Check(Self.Dlg.ID.IsEqualTo(D.ID),
+          'ID');
+    CheckEquals(Self.Dlg.LocalSequenceNo,
+                D.LocalSequenceNo,
+                'LocalSequenceNo');
+    CheckEquals(Self.Dlg.RemoteSequenceNo,
+                D.RemoteSequenceNo,
+                'RemoteSequenceNo');
+    CheckEquals(Self.Dlg.LocalUri.GetFullURI,
+                D.LocalUri.GetFullURI,
+                'LocalUri');
+    CheckEquals(Self.Dlg.RemoteUri.GetFullURI,
+                D.RemoteUri.GetFullURI,
+                'RemoteUri');
+    CheckEquals(Self.Dlg.RemoteTarget.GetFullURI,
+                D.RemoteTarget.GetFullURI,
+                'RemoteTarget');
+    Check(Self.Dlg.IsSecure = D.IsSecure,
+          'IsSecure');
+    Check(Self.Dlg.RouteSet.IsEqualTo(D.RouteSet),
+          'RouteSet');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequest;
+var
+  R: TIdSipRequest;
+begin
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals(Self.Dlg.RemoteURI.GetFullURI, R.ToHeader.Address.GetFullURI, 'To URI');
+    CheckEquals(Self.Dlg.ID.RemoteTag,         R.ToHeader.Tag,                'To tag');
+    CheckEquals(Self.Dlg.LocalURI.GetFullURI,  R.From.Address.GetFullURI,     'From URI');
+    CheckEquals(Self.Dlg.ID.LocalTag,          R.From.Tag,                    'From tag');
+    CheckEquals(Self.Dlg.ID.CallID,            R.CallID,                      'Call-ID');
+
+    // we should somehow check that CSeq.SequenceNo has been (randomly) generated. How?
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestRouteSetEmpty;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.Res.StatusCode := SIPTrying;
+  Self.Dlg.HandleMessage(Self.Res);
+
+  Self.Dlg.RouteSet.Clear;
+
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals(Self.Dlg.RemoteTarget.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    try
+      Check(Routes.IsEmpty, 'Route headers are present');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestRouteSetWithLrParam;
+var
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.Dlg.RouteSet.Clear;
+  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com;lr>';
+  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com>';
+  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
+
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals(Self.Dlg.RemoteTarget.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RecordRouteHeader);
+    try
+      Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
+            'Record-Route headers not set to the Dialog route set');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateRequestRouteSetWithoutLrParam;
+var
+  I:      Integer;
+  R:      TIdSipRequest;
+  Routes: TIdSipHeadersFilter;
+begin
+  Self.Res.StatusCode := SIPTrying;
+  Self.Dlg.HandleMessage(Self.Res);
+
+  R := Self.Dlg.CreateRequest;
+  try
+    CheckEquals((Self.Dlg.RouteSet.Items[0] as TIdSipRouteHeader).Address.GetFullUri,
+                R.RequestUri,
+                'Request-URI');
+
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
+    try
+      // These are the manipulations the dialog's meant to perform on its route
+      // set. Just so you know we're not fiddling our test data.
+      Self.Dlg.RouteSet.Delete(0);
+      Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.GetFullURI + '>';
+
+      for I := 0 to Routes.Count - 1 do 
+        CheckEquals(Self.Dlg.RouteSet.Items[I].Value,
+                    Routes.Items[I].Value,
+                    'Route ' + IntToStr(I + 1) + ' value');
+    finally
+      Routes.Free;
+    end;
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateWithStrings;
+var
+  D: TIdSipDialog;
+begin
+  D := TIdSipDialog.Create(Self.ID,
+                           Self.LocalSequenceNo,
+                           Self.RemoteSequenceNo,
+                           Self.LocalURI.GetFullURI,
+                           Self.RemoteURI.GetFullURI,
+                           Self.RemoteTarget.GetFullURI,
+                           false,
+                           Self.RouteSet);
+  try
+    CheckEquals(Self.LocalUri.GetFullURI,
+                D.LocalURI.GetFullURI,
+                'LocalURI');
+    CheckEquals(Self.RemoteUri.GetFullURI,
+                D.RemoteURI.GetFullURI,
+                'RemoteURI');
+    CheckEquals(Self.RemoteTarget.GetFullURI,
+                D.RemoteTarget.GetFullURI,
+                'RemoteTarget');
+  finally
+    D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestDialogID;
+begin
+  Check(Self.Dlg.ID.IsEqualTo(Self.ID), 'Dialog ID not set');
+  CheckEquals(Self.LocalSequenceNo,
+              Self.Dlg.LocalSequenceNo,
+              'Local Sequence number not set');
+  CheckEquals(Self.RemoteSequenceNo,
+              Self.Dlg.RemoteSequenceNo,
+              'Remote Sequence number not set');
+  CheckEquals(Self.LocalUri.GetFullURI,
+              Self.Dlg.LocalUri.GetFullURI,
+              'Local URI not set');
+  CheckEquals(Self.RemoteUri.GetFullURI,
+              Self.Dlg.RemoteUri.GetFullURI,
+              'Remote URI not set');
+  CheckEquals(Self.RemoteTarget.GetFullURI,
+              Self.Dlg.RemoteTarget.GetFullURI,
+              'Remote Target not set');
+  Check(not Self.Dlg.IsSecure, 'IsSecure not set');
+  Check(Self.Dlg.RouteSet.IsEqualTo(Self.RouteSet), 'Route set not set');
+end;
+
+procedure TestTIdSipDialog.TestEarlyState;
+begin
+  Check(not Self.Dlg.IsEarly,
+        'Before any response is received');
+
+  Self.Res.StatusCode := SIPTrying;
+  Self.Dlg.HandleMessage(Self.Res);
+  Check(Self.Dlg.IsEarly,
+        'Received provisional Response: ' + IntToStr(Self.Res.StatusCode));
+
+  Self.Res.StatusCode := SIPOK;
+  Self.Dlg.HandleMessage(Self.Res);
+  Check(not Self.Dlg.IsEarly,
+        'Received final Response: ' + IntToStr(Self.Res.StatusCode));
+end;
+
+procedure TestTIdSipDialog.TestEmptyRemoteTargetAfterResponse;
+var
+  D:        TIdSipDialog;
+  EmptyUri: TIdUri;
+begin
+  EmptyUri := TIdUri.Create('');
+  try
+    D := TIdSipDialog.Create(Self.ID,
+                             Self.LocalSequenceNo,
+                             Self.RemoteSequenceNo,
+                             Self.LocalUri,
+                             Self.RemoteUri,
+                             EmptyUri,
+                             false,
+                             Self.RouteSet);
+    try
+      D.HandleMessage(Self.Res);
+      CheckEquals((Self.Res.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullUri,
+                  D.RemoteTarget.GetFullURI,
+                  'RemoteTarget after response received');
+    finally
+      D.Free;
+    end;
+  finally
+    EmptyUri.Free;
   end;
 end;
 
@@ -198,6 +545,13 @@ begin
   end;
 end;
 
+procedure TestTIdSipDialog.TestRemoteTarget;
+begin
+  CheckEquals(Self.RemoteTarget.GetFullURI,
+              Self.Dlg.RemoteTarget.GetFullURI,
+              'RemoteTarget before response received');
+end;
+
 //******************************************************************************
 //* TestTIdSipUACDialog                                                        *
 //******************************************************************************
@@ -206,157 +560,25 @@ end;
 procedure TestTIdSipUACDialog.SetUp;
 begin
   inherited SetUp;
+  Self.Dlg.Free;
 
-  Self.D := TIdSipUACDialog.Create(Self.Req, false);
+  Self.Dlg := TIdSipUACDialog.Create(Self.Req, false);
 end;
 
 procedure TestTIdSipUACDialog.TearDown;
 begin
-  Self.D.Free;
+  Self.Dlg.Free;
 
   inherited TearDown;
 end;
 
 //* TestTIdSipUACDialog Published methods **************************************
 
-procedure TestTIdSipUACDialog.TestCreateRequest;
-var
-  R: TIdSipRequest;
-begin
-  R := Self.D.CreateRequest;
-  try
-    CheckEquals(Self.D.RemoteURI.GetFullURI, R.ToHeader.Address.GetFullURI, 'To URI');
-    CheckEquals(Self.D.ID.RemoteTag,         R.ToHeader.Tag,                'To tag');
-    CheckEquals(Self.D.LocalURI.GetFullURI,  R.From.Address.GetFullURI,     'From URI');
-    CheckEquals(Self.D.ID.LocalTag,          R.From.Tag,                    'From tag');
-    CheckEquals(Self.D.ID.CallID,            R.CallID,                      'Call-ID');
-    CheckEquals(Self.Req.CSeq.Method,        R.CSeq.Method,                 'CSeq method');
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestCreateRequestRouteSetEmpty;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.Res.StatusCode := SIPTrying;
-  Self.D.HandleMessage(Self.Res);
-
-  Self.D.RouteSet.Clear;
-
-  R := Self.D.CreateRequest;
-  try
-    CheckEquals(Self.D.RemoteTarget.GetFullUri,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Check(Routes.IsEmpty, 'Route headers are present');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestCreateRequestRouteSetWithLrParam;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com;lr>';
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com>';
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
-
-  R := Self.D.CreateRequest;
-  try
-    CheckEquals(Self.D.RemoteTarget.GetFullUri,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RecordRouteHeader);
-    try
-      Check(Routes.IsEqualTo(Self.D.RouteSet),
-            'Record-Route headers not set to the Dialog route set');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestCreateRequestRouteSetWithoutLrParam;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com>';
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com;tag=nine>;tag=ten';
-  Self.D.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
-
-  Self.Res.StatusCode := SIPTrying;
-  Self.D.HandleMessage(Self.Res);
-
-  R := Self.D.CreateRequest;
-  try
-    CheckEquals((Self.D.RouteSet.Items[0] as TIdSipRouteHeader).Address.GetFullUri,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      CheckEquals(3, Routes.Count, 'Route header count');
-      CheckEquals(RouteHeader,
-                  Routes.Items[0].Name,
-                  '1st Route name');
-      CheckEquals('<sip:server9.biloxi.com;tag=nine>',
-                  Routes.Items[0].Value,
-                  '1st Route');
-      CheckEquals(';tag=ten',
-                  Routes.Items[0].ParamsAsString,
-                  '1st Route params');
-
-      CheckEquals(RouteHeader,
-                  Routes.Items[0].Name,
-                  '2nd Route name');
-      CheckEquals('<sip:server8.biloxi.com;lr>',
-                  Routes.Items[1].Value,
-                  '2nd Route');
-      CheckEquals('',
-                  Routes.Items[1].ParamsAsString,
-                  '2nd Route params');
-
-      CheckEquals(RouteHeader,
-                  Routes.Items[2].Name,
-                  '3rd Route name');
-      CheckEquals(Self.D.RemoteTarget.GetFullUri,
-                  (Routes.Items[2] as TIdSipRouteHeader).Address.GetFullUri,
-                  '3rd Route');
-      CheckEquals('',
-                  Routes.Items[2].ParamsAsString,
-                  '3rd Route params');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestCreateRequestWithNullTags;
-begin
-end;
-
 procedure TestTIdSipUACDialog.TestDialogID;
 begin
-  CheckEquals(Self.Req.CallID,       Self.D.ID.CallID,    'CallID');
-  CheckEquals(Self.Req.From.Tag,     Self.D.ID.LocalTag,  'LocalTag');
-  CheckEquals(Self.Req.ToHeader.Tag, Self.D.ID.RemoteTag, 'RemoteTag');
+  CheckEquals(Self.Req.CallID,       Self.Dlg.ID.CallID,    'CallID');
+  CheckEquals(Self.Req.From.Tag,     Self.Dlg.ID.LocalTag,  'LocalTag');
+  CheckEquals(Self.Req.ToHeader.Tag, Self.Dlg.ID.RemoteTag, 'RemoteTag');
 end;
 
 procedure TestTIdSipUACDialog.TestDialogIDToHasNoTag;
@@ -391,38 +613,26 @@ begin
   end;
 end;
 
-procedure TestTIdSipUACDialog.TestRemoteTarget;
-begin
-  CheckEquals('',
-              Self.D.RemoteTarget.GetFullURI,
-              'RemoteTarget before response received');
-
-  Self.D.HandleMessage(Self.Res);
-  CheckEquals((Self.Res.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullUri,
-              Self.D.RemoteTarget.GetFullURI,
-              'RemoteTarget after response received');
-end;
-
 procedure TestTIdSipUACDialog.TestSequenceNo;
 begin
-  CheckEquals(Self.Req.CSeq.SequenceNo, Self.D.LocalSequenceNo,  'LocalSequenceNo');
-  CheckEquals(0,                        Self.D.RemoteSequenceNo, 'RemoteSequenceNo');
+  CheckEquals(Self.Req.CSeq.SequenceNo, Self.Dlg.LocalSequenceNo,  'LocalSequenceNo');
+  CheckEquals(0,                        Self.Dlg.RemoteSequenceNo, 'RemoteSequenceNo');
 
   Self.Res.StatusCode := SIPTrying;
-  Self.D.HandleMessage(Self.Res);
+  Self.Dlg.HandleMessage(Self.Res);
   CheckEquals(Self.Res.CSeq.SequenceNo,
-              Self.D.RemoteSequenceNo,
+              Self.Dlg.RemoteSequenceNo,
               'RemoteSequenceNo after receiving a response');
 end;
 
 procedure TestTIdSipUACDialog.TestUri;
 begin
   CheckEquals(Self.Req.From.Address.GetFullUri,
-              Self.D.LocalURI.GetFullUri,
+              Self.Dlg.LocalURI.GetFullUri,
               'LocalUri');
 
   CheckEquals(Self.Req.ToHeader.Address.GetFullUri,
-              Self.D.RemoteURI.GetFullUri,
+              Self.Dlg.RemoteURI.GetFullUri,
               'RemoteUri');
 end;
 
@@ -434,13 +644,14 @@ end;
 procedure TestTIdSipUASDialog.SetUp;
 begin
   inherited SetUp;
+  Self.Dlg.Free;
 
-  Self.D := TIdSipUASDialog.Create(Self.Req, false);
+  Self.Dlg := TIdSipUASDialog.Create(Self.Req, false);
 end;
 
 procedure TestTIdSipUASDialog.TearDown;
 begin
-  Self.D.Free;
+  Self.Dlg.Free;
 
   inherited TearDown;
 end;
@@ -449,9 +660,9 @@ end;
 
 procedure TestTIdSipUASDialog.TestDialogID;
 begin
-  CheckEquals(Self.Req.CallID,       Self.D.ID.CallID,    'CallID');
-  CheckEquals(Self.Req.ToHeader.Tag, Self.D.ID.LocalTag,  'LocalTag');
-  CheckEquals(Self.Req.From.Tag,     Self.D.ID.RemoteTag, 'RemoteTag');
+  CheckEquals(Self.Req.CallID,       Self.Dlg.ID.CallID,    'CallID');
+  CheckEquals(Self.Req.ToHeader.Tag, Self.Dlg.ID.LocalTag,  'LocalTag');
+  CheckEquals(Self.Req.From.Tag,     Self.Dlg.ID.RemoteTag, 'RemoteTag');
 end;
 
 procedure TestTIdSipUASDialog.TestDialogIDFromHasNoTag;
@@ -467,26 +678,10 @@ begin
   end;
 end;
 
-procedure TestTIdSipUASDialog.TestEarlyState;
-begin
-  Check(not Self.D.IsEarly,
-        'Before any response is received');
-
-  Self.Res.StatusCode := SIPTrying;
-  Self.D.HandleMessage(Self.Res);
-  Check(Self.D.IsEarly,
-        'Received provisional Response: ' + IntToStr(Self.Res.StatusCode));
-
-  Self.Res.StatusCode := SIPOK;
-  Self.D.HandleMessage(Self.Res);
-  Check(not Self.D.IsEarly,
-        'Received final Response: ' + IntToStr(Self.Res.StatusCode));
-end;
-
 procedure TestTIdSipUASDialog.TestRemoteTarget;
 begin
   CheckEquals((Self.Req.Headers[ContactHeaderFull] as TIdSipContactHeader).Address.GetFullURI,
-              Self.D.RemoteTarget.GetFullURI,
+              Self.Dlg.RemoteTarget.GetFullURI,
               'Remote target');
 end;
 
@@ -511,19 +706,207 @@ end;
 
 procedure TestTIdSipUASDialog.TestSequenceNo;
 begin
-  CheckEquals(0,                        Self.D.LocalSequenceNo,  'LocalSequenceNo');
-  CheckEquals(Self.Req.CSeq.SequenceNo, Self.D.RemoteSequenceNo, 'RemoteSequenceNo');
+  CheckEquals(0,                        Self.Dlg.LocalSequenceNo,  'LocalSequenceNo');
+  CheckEquals(Self.Req.CSeq.SequenceNo, Self.Dlg.RemoteSequenceNo, 'RemoteSequenceNo');
 end;
 
 procedure TestTIdSipUASDialog.TestUri;
 begin
   CheckEquals(Self.Req.ToHeader.Address.GetFullUri,
-              Self.D.LocalURI.GetFullUri,
+              Self.Dlg.LocalURI.GetFullUri,
               'LocalUri');
 
   CheckEquals(Self.Req.From.Address.GetFullUri,
-              Self.D.RemoteURI.GetFullUri,
+              Self.Dlg.RemoteURI.GetFullUri,
               'RemoteUri');
+end;
+
+//******************************************************************************
+//* TestTIdSipDialogs                                                          *
+//******************************************************************************
+//* TestTIdSipDialogs Public methods *******************************************
+
+procedure TestTIdSipDialogs.SetUp;
+begin
+  inherited SetUp;
+
+  Self.D := TIdSipDialogs.Create;
+
+  Self.ID := TIdSipDialogID.Create('1', '2', '3');
+
+  Self.LocalSequenceNo := 13;
+  Self.LocalUri        := TIdUri.Create('sip:case@fried.neurons.org');
+  Self.LocalSequenceNo := 42;
+  Self.RemoteTarget    := TIdUri.Create('sip:sip-proxy1.tessier-ashpool.co.lu');
+  Self.RemoteUri       := TIdUri.Create('sip:wintermute@tessier-ashpool.co.lu');
+
+  Self.RouteSet := TIdSipHeaders.Create;
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
+
+  Self.Dlg := TIdSipDialog.Create(Self.ID,
+                                  Self.LocalSequenceNo,
+                                  Self.RemoteSequenceNo,
+                                  Self.LocalUri,
+                                  Self.RemoteUri,
+                                  Self.RemoteTarget,
+                                  false,
+                                  Self.RouteSet);
+end;
+
+procedure TestTIdSipDialogs.TearDown;
+begin
+  Self.Dlg.Free;
+  Self.RouteSet.Free;
+  Self.RemoteTarget.Free;
+  Self.RemoteUri.Free;
+  Self.LocalUri.Free;
+  Self.ID.Free;
+  Self.D.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipDialogs Published methods ****************************************
+
+procedure TestTIdSipDialogs.TestAddAndCount;
+var
+  Dlg:           TIdSipDialog;
+  ID:            TIdSipDialogID;
+  OriginalCount: Integer;
+  RouteSet:      TIdSipHeaders;
+begin
+  OriginalCount := Self.D.Count;
+
+  ID := TIdSipDialogID.Create('1', '2', '3');
+  try
+    RouteSet := TIdSipHeaders.Create;
+    try
+      Dlg := TIdSipDialog.Create(ID,
+                                 1,
+                                 2,
+                                 'sip:localhost',
+                                 'sip:remote.org',
+                                 'sips:target.remote.net',
+                                 false,
+                                 RouteSet);
+      try
+        Self.D.Add(Dlg);
+        CheckEquals(OriginalCount + 1, Self.D.Count, 'After one Add');
+      finally
+        Dlg.Free;
+      end;
+    finally
+      RouteSet.Free;
+    end;
+  finally
+    ID.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogs.TestAddCopiesDialog;
+var
+  Dlg:      TIdSipDialog;
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipHeaders;
+begin
+  ID := TIdSipDialogID.Create('1', '2', '3');
+  try
+    RouteSet := TIdSipHeaders.Create;
+    try
+      Dlg := TIdSipDialog.Create(ID,
+                                 1,
+                                 2,
+                                 'sip:localhost',
+                                 'sip:remote.org',
+                                 'sips:target.remote.net',
+                                 false,
+                                 RouteSet);
+      try
+        Self.D.Add(Dlg);
+      finally
+        Dlg.Free;
+      end;
+
+      // This is a sneaky test - we're implicitly testing that the list
+      // COPIED Dlg. If a reference to Dlg was stored then this would
+      // access violate because we'd have a dangling pointer.
+      Check(ID.IsEqualTo(Self.D.Items[0].ID), 'IDs not equal');
+    finally
+      RouteSet.Free;
+    end;
+  finally
+    ID.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogs.TestDialogAt;
+var
+  ID2:  TIdSipDialogID;
+  Dlg2: TIdSipDialog;
+begin
+  ID2 := TIdSipDialogID.Create('a', 'b', 'c');
+  try
+    Dlg2 := TIdSipDialog.Create(ID2, Self.LocalSequenceNo, Self.RemoteSequenceNo, Self.LocalUri, Self.RemoteUri, Self.RemoteTarget, false, Self.RouteSet);
+    try
+      Self.D.Add(Dlg);
+      Self.D.Add(Dlg2);
+
+      Check(Dlg.ID.IsEqualTo(Self.D.DialogAt(Self.ID).ID), 'Returned dialog is not Dlg');
+      Check(Dlg2.ID.IsEqualTo(Self.D.DialogAt(ID2).ID),    'Returned dialog is not Dlg2');
+    finally
+      Dlg2.Free;
+    end;
+  finally
+    ID2.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogs.TestDialogAtString;
+var
+  ID2:  TIdSipDialogID;
+  Dlg2: TIdSipDialog;
+begin
+  ID2 := TIdSipDialogID.Create('a', 'b', 'c');
+  try
+    Dlg2 := TIdSipDialog.Create(ID2, Self.LocalSequenceNo, Self.RemoteSequenceNo, Self.LocalUri, Self.RemoteUri, Self.RemoteTarget, false, Self.RouteSet);
+    try
+      Self.D.Add(Dlg);
+      Self.D.Add(Dlg2);
+
+      Check(Dlg.ID.IsEqualTo(Self.D.DialogAt(Self.ID.CallID, Self.ID.LocalTag, Self.ID.RemoteTag).ID),
+            'Returned dialog is not Dlg');
+      Check(Dlg2.ID.IsEqualTo(Self.D.DialogAt(ID2.CallID, ID2.LocalTag, ID2.RemoteTag).ID),
+            'Returned dialog is not Dlg2');
+    finally
+      Dlg2.Free;
+    end;
+  finally
+    ID2.Free;
+  end;
+end;
+
+procedure TestTIdSipDialogs.TestDialogAtStringUnknownID;
+begin
+  Check(Self.D.DialogAt(Self.ID.CallID + 'a',
+                        Self.ID.CallID + 'b',
+                        Self.ID.CallID + 'c').IsNull,
+        'Null Dialog not returned');
+end;
+
+procedure TestTIdSipDialogs.TestDialogAtUnknownID;
+var
+  ID2:  TIdSipDialogID;
+begin
+  ID2 := TIdSipDialogID.Create(Self.ID.CallID + 'a',
+                               Self.ID.CallID + 'b',
+                               Self.ID.CallID + 'c');
+  try
+    Check(Self.D.DialogAt(ID2).IsNull, 'Null Dialog not returned');
+  finally
+    ID2.Free;
+  end;
 end;
 
 initialization

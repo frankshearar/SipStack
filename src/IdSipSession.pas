@@ -3,17 +3,20 @@ unit IdSipSession;
 interface
 
 uses
-  IdSipMessage;
+  IdSipDialog, IdSipMessage;
 
 type
-  TIdSipDialogs = class(TObject); // stub - move to IdSipDialog
-
   TIdSipSession = class(TObject)
   private
     fDialogs:        TIdSipDialogs;
     fInitialRequest: TIdSipRequest;
   public
-    procedure Close;
+    constructor Create(const InitialRequest: TIdSipRequest);
+    destructor  Destroy; override;
+
+    procedure Cancel;
+    procedure Modify;
+    procedure Terminate;
 
     property InitialRequest: TIdSipRequest read fInitialRequest;
     property Dialogs:        TIdSipDialogs read fDialogs;
@@ -26,7 +29,25 @@ implementation
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
 
-procedure TIdSipSession.Close;
+constructor TIdSipSession.Create(const InitialRequest: TIdSipRequest);
+begin
+  inherited Create;
+end;
+
+destructor TIdSipSession.Destroy;
+begin
+  inherited Destroy;
+end;
+
+procedure TIdSipSession.Cancel;
+begin
+end;
+
+procedure TIdSipSession.Modify;
+begin
+end;
+
+procedure TIdSipSession.Terminate;
 begin
 end;
 

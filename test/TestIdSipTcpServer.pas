@@ -15,15 +15,15 @@ type
     Parser:            TIdSipParser;
     Server:            TIdSipTcpServer;
 
-    procedure CheckMultipleMessages(AThread: TIdPeerThread;
+    procedure CheckMultipleMessages(Sender: TObject;
                               const Request: TIdSipRequest);
-    procedure CheckMethodEvent(AThread: TIdPeerThread;
-                               const Request: TIdSipRequest);
-    procedure CheckReceivedParamDifferentIPv4SentBy(AThread: TIdPeerThread;
+    procedure CheckMethodEvent(Sender: TObject;
+                         const Request: TIdSipRequest);
+    procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                               const Request: TIdSipRequest);
-    procedure CheckReceivedParamFQDNSentBy(AThread: TIdPeerThread;
+    procedure CheckReceivedParamFQDNSentBy(Sender: TObject;
                                      const Request: TIdSipRequest);
-    procedure CheckReceivedParamIPv4SentBy(AThread: TIdPeerThread;
+    procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
                                      const Request: TIdSipRequest);
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
@@ -119,7 +119,7 @@ end;
 
 //* TestTIdSipTcpServer Private methods ****************************************
 
-procedure TestTIdSipTcpServer.CheckMultipleMessages(AThread: TIdPeerThread;
+procedure TestTIdSipTcpServer.CheckMultipleMessages(Sender: TObject; 
                                               const Request: TIdSipRequest);
 begin
   try
@@ -137,8 +137,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckMethodEvent(      AThread: TIdPeerThread;
-                                               const Request: TIdSipRequest);
+procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
+                                         const Request: TIdSipRequest);
 begin
   try
     CheckEquals('INVITE',                               Request.Method,        'Method');
@@ -171,13 +171,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckReceivedParamDifferentIPv4SentBy(AThread: TIdPeerThread;
+procedure TestTIdSipTcpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
                                                               const Request: TIdSipRequest);
 begin
-  Self.CheckReceivedParamFQDNSentBy(AThread, Request);
+  Self.CheckReceivedParamFQDNSentBy(Sender, Request);
 end;
 
-procedure TestTIdSipTcpServer.CheckReceivedParamFQDNSentBy(AThread: TIdPeerThread;
+procedure TestTIdSipTcpServer.CheckReceivedParamFQDNSentBy(Sender: TObject;
                                                      const Request: TIdSipRequest);
 begin
   try
@@ -192,7 +192,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckReceivedParamIPv4SentBy(AThread: TIdPeerThread;
+procedure TestTIdSipTcpServer.CheckReceivedParamIPv4SentBy(Sender: TObject;
                                                      const Request: TIdSipRequest);
 begin
   try
@@ -351,20 +351,13 @@ var
   Response: TIdSipResponse;
   Str:      TStringStream;
 begin
-  Str := TStringStream.Create(Self.ReadResponse);
+  Response := Parser.ParseAndMakeResponse(Self.ReadResponse);
   try
-    Parser.Source := Str;
-
-    Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-    try
-      CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
-      CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
-      CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
-    finally
-      Response.Free;
-    end;
+    CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
+    CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
+    CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
   finally
-    Str.Free;
+    Response.Free;
   end;
 end;
 }
@@ -567,7 +560,6 @@ begin
   Self.CheckTortureTest41;
 end;
 }
-
 initialization
   RegisterTest('SIP Server using TCP', Suite);
 end.
