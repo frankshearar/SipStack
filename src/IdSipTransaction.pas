@@ -901,7 +901,7 @@ begin
   Self.LastResponse.Free;
   Self.InitialRequest.Free;
 
-  inherited Create;
+  inherited Destroy;
 end;
 
 procedure TIdSipTransaction.AddTransactionListener(const Listener: IIdSipTransactionListener);
