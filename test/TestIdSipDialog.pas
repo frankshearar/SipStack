@@ -259,7 +259,7 @@ end;
 procedure TestTIdSipDialog.TestCreateInboundDialog;
 var
   Expected: TIdSipHeaders;
-  InDlg: TIdSipDialog;
+  InDlg:    TIdSipDialog;
 begin
   Self.Req.AddHeaders(Self.RouteSet);
 //  Check(not Self.Req.RecordRoute.IsEmpty,
