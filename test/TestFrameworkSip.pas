@@ -3,8 +3,8 @@ unit TestFrameworkSip;
 interface
 
 uses
-  Classes, IdRTP, IdSipHeaders, IdSipInterfacedObject, IdSipMessage, IdSipCore,
-  IdSipTransaction, IdSipTransport, TestFrameworkEx;
+  Classes, IdRTP, IdSdp, IdSipHeaders, IdSipInterfacedObject, IdSipMessage,
+  IdSipCore, IdSipTransaction, IdSipTransport, TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)
