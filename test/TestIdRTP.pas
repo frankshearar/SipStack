@@ -8,6 +8,8 @@ uses
 type
   TestFunctions = class(TTestCase)
   published
+    procedure TestAddModulo;
+    procedure TestDateTimeToNTPFractionsOfASecond;
     procedure TestDateTimeToNTPSeconds;
     procedure TestDateTimeToNTPTimestampExceptionalCases;
     procedure TestDateTimeToNTPTimestampFractionalValues;
@@ -58,14 +60,14 @@ type
     procedure TestCreatePayload;
   end;
 
-  TestTIdRTPT140Encoding = class(TTestCaseEncoding)
+  TestTIdT140Encoding = class(TTestCaseEncoding)
   private
     function EncodingType: TIdRTPEncodingClass; override;
     function EncodingName: String; override;
     function EncodingClockRate: Cardinal; override;
   end;
 
-  TestTIdRTPTelephoneEventEncoding = class(TTestCaseEncoding)
+  TestTIdTelephoneEventEncoding = class(TTestCaseEncoding)
   private
     function EncodingType: TIdRTPEncodingClass; override;
     function EncodingName: String; override;
@@ -87,7 +89,8 @@ type
 
   TestTIdT140Payload = class(TTestCase)
   private
-    Packet: TIdT140Payload;
+    Encoding: TIdRTPEncoding;
+    Packet:   TIdT140Payload;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -98,11 +101,14 @@ type
 
   TestTIdTelephoneEventPayload = class(TTestCase)
   private
-    Packet: TIdTelephoneEventPayload;
+    Encoding:        TIdRTPEncoding;
+    Packet:          TIdTelephoneEventPayload;
+    SampleDurations: array[0..5] of Word;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestNumberOfSamples;
     procedure TestPrintOnDuration;
     procedure TestPrintOnEvent;
     procedure TestPrintOnIsEnd;
@@ -218,6 +224,101 @@ type
     procedure TestRTCPType;
   end;
 
+  TSrcDescChunkItemTestCase = class(TTestCase)
+  protected
+    Item: TIdSrcDescChunkItem;
+
+    function ItemType: TIdSrcDescChunkItemClass; virtual; abstract;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestPrintOn;
+    procedure TestReadFrom;
+    procedure TestRealLength;
+  end;
+
+  TestTIdSDESCanonicalName = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESUserName = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESEmail = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESPhone = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESLocation = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESTool = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESNote = class(TSrcDescChunkItemTestCase)
+  protected
+    function ItemType: TIdSrcDescChunkItemClass; override;
+  published
+    procedure TestID;
+  end;
+
+  TestTIdSDESPriv = class(TTestCase)
+  private
+    Item: TIdSDESPriv;
+
+    procedure CheckPrintOn(Prefix, Data: String);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestID;
+    procedure TestPrintOn;
+    procedure TestPrintOnEmpty;
+    procedure TestPrintOnNoPrefix;
+    procedure TestPrintOnNoData;
+    procedure TestRealLength;
+    procedure TestSetData;
+  end;
+
+  TestTIdRTCPSrcDescChunk = class(TTestCase)
+  private
+    Chunk: TIdRTCPSrcDescChunk;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestPrintOn;
+    procedure TestPrintOnByteAlign;
+    procedure TestReadFrom;
+    procedure TestReadFromMultipleChunks;
+    procedure TestRealLength;
+  end;
+
   TRTCPPacketTestCase = class(TTestCase)
   protected
     Packet: TIdRTCPPacket;
@@ -230,6 +331,7 @@ type
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestPrintOnHasPadding;
+    procedure TestPrintOnPacketType;
     procedure TestPrintOnSyncSrcId;
     procedure TestPrintOnVersion;
     procedure TestPrintOnWithPadding;
@@ -251,7 +353,6 @@ type
     procedure TestPrintOnNTPTimestamp;
     procedure TestPrintOnOctetCount;
     procedure TestPrintOnPacketCount;
-    procedure TestPrintOnPacketType;
     procedure TestPrintOnReceptionReportCount;
     procedure TestPrintOnReportBlocks;
     procedure TestPrintOnRTPTimestamp;
@@ -271,6 +372,21 @@ type
     procedure TestReportAt;
   end;
 
+  TestTIdRTCPSourceDescriptionPacket = class(TRTCPPacketTestCase)
+  private
+    SrcDesc: TIdRTCPSourceDescriptionPacket;
+  protected
+    function PacketType: TIdRTCPPacketClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestAddChunkAndChunkCount;
+    procedure TestPacketType;
+    procedure TestPrintOn;
+    procedure TestPrintOnLength;
+    procedure TestReadFromPacketType;
+  end;
+
   TestTIdRTCPByePacket = class(TRTCPPacketTestCase)
   private
     Bye: TIdRTCPByePacket;
@@ -282,7 +398,6 @@ type
     procedure TestPacketType;
     procedure TestPrintOnLength;
     procedure TestPrintOnMultipleSources;
-    procedure TestPrintOnPacketType;
     procedure TestPrintOnReason;
     procedure TestPrintOnSyncSrcId;
     procedure TestReadFrom;
@@ -309,7 +424,6 @@ type
     procedure TestPrintOnData;
     procedure TestPrintOnLength;
     procedure TestPrintOnName;
-    procedure TestPrintOnPacketType;
     procedure TestReadFromData;
     procedure TestReadFromHasPadding;
     procedure TestReadFromLength;
@@ -367,8 +481,8 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdRTPEncoding.Suite);
   Result.AddTest(TestTIdRTPNullEncoding.Suite);
-  Result.AddTest(TestTIdRTPT140Encoding.Suite);
-  Result.AddTest(TestTIdRTPTelephoneEventEncoding.Suite);
+  Result.AddTest(TestTIdT140Encoding.Suite);
+  Result.AddTest(TestTIdTelephoneEventEncoding.Suite);
   Result.AddTest(TestTIdTelephoneEventPayload.Suite);
   Result.AddTest(TestTIdT140Payload.Suite);
   Result.AddTest(TestTIdRTPProfile.Suite);
@@ -377,16 +491,21 @@ begin
   Result.AddTest(TestTIdRTCPReportBlock.Suite);
   Result.AddTest(TestTIdRTPBasePacket.Suite);
   Result.AddTest(TestTIdRTPPacket.Suite);
+  Result.AddTest(TestTIdSDESCanonicalName.Suite);
+  Result.AddTest(TestTIdSDESUserName.Suite);
+  Result.AddTest(TestTIdSDESEmail.Suite);
+  Result.AddTest(TestTIdSDESPhone.Suite);
+  Result.AddTest(TestTIdSDESLocation.Suite);
+  Result.AddTest(TestTIdSDESTool.Suite);
+  Result.AddTest(TestTIdSDESNote.Suite);
+  Result.AddTest(TestTIdSDESPriv.Suite);
+  Result.AddTest(TestTIdRTCPSrcDescChunk.Suite);
   Result.AddTest(TestTIdRTCPSenderReportPacket.Suite);
+  Result.AddTest(TestTIdRTCPSourceDescriptionPacket.Suite);
   Result.AddTest(TestTIdRTCPByePacket.Suite);
   Result.AddTest(TestTIdRTCPApplicationDefinedPacket.Suite);
   Result.AddTest(TestTIdRTPPacketBuffer.Suite);
 end;
-
-//******************************************************************************
-//* TestFunctions                                                              *
-//******************************************************************************
-//* TestFunctions Published methods ********************************************
 
 function ShowEncoded(S: String): String;
 var
@@ -396,6 +515,56 @@ begin
 
   for I := 1 to Length(S) do
     Result := Result + '#$' + IntToHex(Ord(S[I]), 2);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestAddModulo;
+begin
+  CheckEquals(8, AddModulo(7, 1, 10),   'AddModulo(7, 1, 10)');
+  CheckEquals(8, AddModulo(7, 11, 10),  'AddModulo(7, 11, 10)');
+  CheckEquals(8, AddModulo(7, 101, 10), 'AddModulo(7, 101, 10)');
+  CheckEquals(0, AddModulo(7, 1, 8),    'AddModulo(7, 1, 8)');
+
+  CheckEquals(0,
+              AddModulo($fffffffe, 1, $ffffffff),
+              'AddModulo($fffffffe, 1, $ffffffff)');
+
+  CheckEquals(1,
+              AddModulo($ffffffff, 1, $ffffffff),
+              'AddModulo($ffffffff, 1, $ffffffff)');
+end;
+
+procedure TestFunctions.TestDateTimeToNTPFractionsOfASecond;
+var
+  JanOne1900: TDateTime;
+begin
+  JanOne1900    := 2;
+  CheckEquals(0,
+              DateTimeToNTPFractionsOfASecond(JanOne1900),
+              '1900/01/01 00:00:00');
+  CheckEquals(IntToHex($80000000, 8),
+              IntToHex(DateTimeToNTPFractionsOfASecond(JanOne1900 + 0.5*OneSecond), 8),
+              '1900/01/01 00:00:0.500');
+  CheckEquals(IntToHex($80000000, 8),
+              IntToHex(DateTimeToNTPFractionsOfASecond(EncodeDateTime(1999, 1, 1, 0, 0, 0, 500)), 8),
+              '1999/01/01 00:00:0.500');
+  CheckEquals(IntToHex($40000000, 8),
+              IntToHex(DateTimeToNTPFractionsOfASecond(EncodeDateTime(1999, 1, 1, 0, 0, 0, 250)), 8),
+              '1999/01/01 00:00:0.250');
+
+  CheckEquals(IntToHex(429496728, 8),
+              IntToHex(DateTimeToNTPFractionsOfASecond(EncodeDateTime(1999, 1, 1, 0, 0, 0, 100)), 8),
+              '1999/01/01 00:00:0.1');
+
+  // Squeak calculates the fractional part of 0.001 as 4294966. However, it
+  // calculates 1/1000 exactly, not as a floating point.
+  CheckEquals(IntToHex(4294964, 8),
+              IntToHex(DateTimeToNTPFractionsOfASecond(EncodeDateTime(1999, 1, 1, 0, 0, 0, 1)), 8),
+              '1999/01/01 00:00:0.001');
 end;
 
 procedure TestFunctions.TestDateTimeToNTPSeconds;
@@ -415,11 +584,12 @@ begin
               DateTimeToNTPSeconds(JanOne1900 + OneSecond),
               '1900/01/01 00:00:01');
   CheckEquals(4*SecsPerDay + 3600 + 120 + 1,
-              DateTimeToNTPSeconds(StrToDateTime('05/01/1900 01:02:01')),
+              DateTimeToNTPSeconds(EncodeDateTime(1900, 1, 5, 1, 2, 1, 0)),
               '1900/01/05 01:02:01');
 
   ExpectedTime := MultiplyCardinal(AprTwelve2002, SecsPerDay) + 14*3600 + 59*60 + 59;
-  ReceivedTime := DateTimeToNTPSeconds(StrToDateTime('12/04/2002 14:59:59.999'));
+
+  ReceivedTime := DateTimeToNTPSeconds(EncodeDateTime(2002, 4, 12, 14, 59, 59, 999));
   CheckEquals(IntToHex(ExpectedTime, 8),
               IntToHex(ReceivedTime, 8),
               '2002/04/12 14:59:59.999');
@@ -783,7 +953,7 @@ var
 begin
   Enc := TIdRTPEncoding.CreateEncoding(Format('%s/%d/%s', [T140Encoding, T140ClockRate, '1']));
   try
-    CheckEquals(TIdRTPT140Encoding.ClassName,
+    CheckEquals(TIdT140Encoding.ClassName,
                 Enc.ClassName,
                 'Encoding type');
     CheckEquals(T140Encoding,  Enc.Name,       'Name');
@@ -800,7 +970,7 @@ var
 begin
   Enc := TIdRTPEncoding.CreateEncoding('telephone-event/8000');
   try
-    CheckEquals(TIdRTPTelephoneEventEncoding.ClassName,
+    CheckEquals(TIdTelephoneEventEncoding.ClassName,
                 Enc.ClassName,
                 'Encoding type');
     CheckEquals(TelephoneEventEncoding, Enc.Name,       'Name');
@@ -934,36 +1104,36 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPT140Encoding                                                     *
+//* TestTIdT140Encoding                                                        *
 //******************************************************************************
-//* TestTIdRTPT140Encoding Private methods *************************************
+//* TestTIdT140Encoding Private methods ****************************************
 
-function TestTIdRTPT140Encoding.EncodingType: TIdRTPEncodingClass;
+function TestTIdT140Encoding.EncodingType: TIdRTPEncodingClass;
 begin
-  Result := TIdRTPT140Encoding;
+  Result := TIdT140Encoding;
 end;
 
-function TestTIdRTPT140Encoding.EncodingName: String;
+function TestTIdT140Encoding.EncodingName: String;
 begin
   Result := T140Encoding;
 end;
 
-function TestTIdRTPT140Encoding.EncodingClockRate: Cardinal;
+function TestTIdT140Encoding.EncodingClockRate: Cardinal;
 begin
   Result := T140ClockRate;
 end;
 
 //******************************************************************************
-//* TestTIdRTPTelephoneEventEncoding                                           *
+//* TestTIdTelephoneEventEncoding                                           *
 //******************************************************************************
-//* TestTIdRTPTelephoneEventEncoding Private methods ***************************
+//* TestTIdTelephoneEventEncoding Private methods ***************************
 
-function TestTIdRTPTelephoneEventEncoding.EncodingType: TIdRTPEncodingClass;
+function TestTIdTelephoneEventEncoding.EncodingType: TIdRTPEncodingClass;
 begin
-  Result := TIdRTPTelephoneEventEncoding;
+  Result := TIdTelephoneEventEncoding;
 end;
 
-function TestTIdRTPTelephoneEventEncoding.EncodingName: String;
+function TestTIdTelephoneEventEncoding.EncodingName: String;
 begin
   Result := TelephoneEventEncoding;
 end;
@@ -1047,12 +1217,14 @@ procedure TestTIdT140Payload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Packet := TIdT140Payload.Create;
+  Self.Encoding := TIdT140Encoding.Create;
+  Self.Packet   := TIdT140Payload.Create(Self.Encoding);
 end;
 
 procedure TestTIdT140Payload.TearDown;
 begin
   Self.Packet.Free;
+  Self.Encoding.Free;
 
   inherited TearDown;
 end;
@@ -1102,21 +1274,41 @@ procedure TestTIdTelephoneEventPayload.SetUp;
 begin
   inherited SetUp;
 
-  Self.Packet := TIdTelephoneEventPayload.Create;
+  Self.Encoding := TIdTelephoneEventEncoding.Create;
+  Self.Packet := TIdTelephoneEventPayload.Create(Self.Encoding);
+
+  SampleDurations[0] := $f00d;
+  SampleDurations[1] := $beef;
+  SampleDurations[2] := $cafe;
+  SampleDurations[3] := $deaf;
+  SampleDurations[4] := $deca;
+  SampleDurations[5] := $fbad;
 end;
 
 procedure TestTIdTelephoneEventPayload.TearDown;
 begin
   Self.Packet.Free;
+  Self.Encoding.Free;
 
   inherited TearDown;
 end;
 
 //* TestTIdTelephoneEventPayload Published methods *****************************
 
+procedure TestTIdTelephoneEventPayload.TestNumberOfSamples;
+var
+  I: Integer;
+begin
+  for I := Low(SampleDurations) to High(SampleDurations) do begin
+    Self.Packet.Duration := Self.SampleDurations[I];
+    CheckEquals(Self.SampleDurations[I],
+                Self.Packet.NumberOfSamples,
+                'NumberOfSamples for duration $'
+              + IntToHex(Self.SampleDurations[I], 4));
+  end;
+end;
+
 procedure TestTIdTelephoneEventPayload.TestPrintOnDuration;
-const
-  SampleDurations: array[0..5] of Word = ($f00d, $beef, $cafe, $deaf, $deca, $fbad);
 var
   I: Integer;
   S: TStringStream;
@@ -1124,7 +1316,7 @@ begin
   for I := Low(SampleDurations) to High(SampleDurations) do begin
     S := TStringStream.Create('');
     try
-      Self.Packet.Duration := SampleDurations[I];
+      Self.Packet.Duration := Self.SampleDurations[I];
       Self.Packet.PrintOn(S);
 
       Check(S.Size > 3, 'Output stream too short');
@@ -2389,6 +2581,534 @@ begin
 end;
 
 //******************************************************************************
+//* TSrcDescChunkItemTestCase                                                  *
+//******************************************************************************
+//* TSrcDescChunkItemTestCase Public methods ***********************************
+
+procedure TSrcDescChunkItemTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Item := Self.ItemType.Create;
+end;
+
+procedure TSrcDescChunkItemTestCase.TearDown;
+begin
+  Self.Item.Free;
+
+  inherited TearDown;
+end;
+
+//* TSrcDescChunkItemTestCase Published methods ********************************
+
+procedure TSrcDescChunkItemTestCase.TestPrintOn;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Item.Data := 'In R''lyeh dead Cthulhu lies dreaming';
+
+    Self.Item.PrintOn(S);
+
+    Check(Length(S.DataString) > Length(Self.Item.Data) + 1,
+          'Too little output');
+    CheckEquals(Self.Item.ID,
+                Ord(S.DataString[1]), 'ID');
+    CheckEquals(Length(Self.Item.Data),
+                Ord(S.DataString[2]), 'Length');
+
+    CheckEquals(Self.Item.Data,
+                Copy(S.DataString, 3, Length(S.DataString)),
+                'Name');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TSrcDescChunkItemTestCase.TestReadFrom;
+var
+  Name: String;
+  S: TStringStream;
+begin
+  Name := 'In R''lyeh dead Cthulhu lies dreaming';
+
+  S := TStringStream.Create(Chr(Self.Item.ID) + Chr(Length(Name))
+                          + Name
+                          + 'trailing garbage');
+  try
+    Self.Item.ReadFrom(S);
+    CheckEquals(Name, Self.Item.Data, 'Name');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TSrcDescChunkItemTestCase.TestRealLength;
+begin
+  CheckEquals(2, Self.Item.RealLength, 'Empty data');
+
+  Self.Item.Data := 'In R''lyeh dead Cthulhu lies dreaming';
+  CheckEquals(2 + Length(Self.Item.Data),
+              Self.Item.RealLength,
+              'Real data');
+end;
+
+//******************************************************************************
+//* TestTIdSDESCanonicalName                                                   *
+//******************************************************************************
+//* TestTIdSDESCanonicalName Protected methods *********************************
+
+function TestTIdSDESCanonicalName.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESCanonicalName;
+end;
+
+//* TestTIdSDESCanonicalName Published methods *********************************
+
+procedure TestTIdSDESCanonicalName.TestID;
+begin
+  CheckEquals(SDESCName,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESUserName                                                        *
+//******************************************************************************
+//* TestTIdSDESUserName Protected methods **************************************
+
+function TestTIdSDESUserName.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESUserName;
+end;
+
+//* TestTIdSDESUserName Published methods **************************************
+
+procedure TestTIdSDESUserName.TestID;
+begin
+  CheckEquals(SDESName,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESEmail                                                           *
+//******************************************************************************
+//* TestTIdSDESEmail Protected methods *****************************************
+
+function TestTIdSDESEmail.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESEmail;
+end;
+
+//* TestTIdSDESEmail Published methods *****************************************
+
+procedure TestTIdSDESEmail.TestID;
+begin
+  CheckEquals(SDESEmail,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESPhone                                                           *
+//******************************************************************************
+//* TestTIdSDESPhone Protected methods *****************************************
+
+function TestTIdSDESPhone.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESPhone;
+end;
+
+//* TestTIdSDESPhone Published methods *****************************************
+
+procedure TestTIdSDESPhone.TestID;
+begin
+  CheckEquals(SDESPhone,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESLocation                                                        *
+//******************************************************************************
+//* TestTIdSDESLocation Protected methods **************************************
+
+function TestTIdSDESLocation.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESLocation;
+end;
+
+//* TestTIdSDESLocation Published methods **************************************
+
+procedure TestTIdSDESLocation.TestID;
+begin
+  CheckEquals(SDESLoc,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESTool                                                            *
+//******************************************************************************
+//* TestTIdSDESTool Protected methods ******************************************
+
+function TestTIdSDESTool.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESTool;
+end;
+
+//* TestTIdSDESTool Published methods ******************************************
+
+procedure TestTIdSDESTool.TestID;
+begin
+  CheckEquals(SDESTool,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESNote                                                            *
+//******************************************************************************
+//* TestTIdSDESNote Protected methods ******************************************
+
+function TestTIdSDESNote.ItemType: TIdSrcDescChunkItemClass;
+begin
+  Result := TIdSDESNote;
+end;
+
+//* TestTIdSDESNote Published methods ******************************************
+
+procedure TestTIdSDESNote.TestID;
+begin
+  CheckEquals(SDESNote,
+              Self.Item.ID,
+              'ID');
+end;
+
+//******************************************************************************
+//* TestTIdSDESPriv                                                            *
+//******************************************************************************
+//* TestTIdSDESPriv Public methods *********************************************
+
+procedure TestTIdSDESPriv.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Item := TIdSDESPriv.Create
+end;
+
+procedure TestTIdSDESPriv.TearDown;
+begin
+  Self.Item.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSDESPriv Private methods ********************************************
+
+procedure TestTIdSDESPriv.CheckPrintOn(Prefix, Data: String);
+var
+  Offset: Cardinal;
+  S:      TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Item.Prefix := Prefix;
+    Self.Item.Data   := Data;
+
+    Self.Item.PrintOn(S);
+
+    Check(Length(S.DataString) > 0, 'Too little output');
+    CheckEquals(SDESPriv, Ord(S.DataString[1]), 'PRIV ID');
+    CheckEquals(Length(Self.Item.Data) + Length(Self.Item.Prefix) + 1,
+                Ord(S.DataString[2]),
+                'Length');
+    CheckEquals(Length(Self.Item.Prefix),
+                Ord(S.DataString[3]),
+                'Prefix length');
+
+    Offset := 4;
+    CheckEquals(Self.Item.Prefix,
+                Copy(S.DataString, Offset, Length(Self.Item.Prefix)),
+                'Prefix');
+    Inc(Offset, Length(Self.Item.Prefix));
+    CheckEquals(Self.Item.Data,
+                Copy(S.DataString, Offset, Length(Self.Item.Data)),
+                'Data');
+
+  finally
+    S.Free;
+  end;
+end;
+
+//* TestTIdSDESPriv Published methods ******************************************
+
+procedure TestTIdSDESPriv.TestID;
+begin
+  CheckEquals(SDESPriv,
+              Self.Item.ID,
+              'ID');
+end;
+
+procedure TestTIdSDESPriv.TestPrintOn;
+begin
+  Self.CheckPrintOn('foo', 'bar');
+end;
+
+procedure TestTIdSDESPriv.TestPrintOnEmpty;
+begin
+  Self.CheckPrintOn('', '');
+end;
+
+procedure TestTIdSDESPriv.TestPrintOnNoPrefix;
+begin
+  Self.CheckPrintOn('', 'bar');
+end;
+
+procedure TestTIdSDESPriv.TestPrintOnNoData;
+begin
+  Self.CheckPrintOn('foo', '');
+end;
+
+procedure TestTIdSDESPriv.TestRealLength;
+begin
+  CheckEquals(3, Self.Item.RealLength, '"Empty" PRIV');
+
+  Self.Item.Prefix := 'foo';
+  CheckEquals(3 + Length(Self.Item.Prefix),
+              Self.Item.RealLength,
+              'PRIV with prefix');
+
+  Self.Item.Prefix := '';
+  Self.Item.Data   := 'bar';
+  CheckEquals(3 + Length(Self.Item.Data),
+              Self.Item.RealLength,
+              'PRIV with data');
+
+  Self.Item.Prefix := 'foo';
+  CheckEquals(3 + Length(Self.Item.Prefix) + Length(Self.Item.Data),
+              Self.Item.RealLength,
+              'PRIV with prefix & data');
+end;
+
+procedure TestTIdSDESPriv.TestSetData;
+var
+  I: Integer;
+  S: String;
+begin
+  S := '';
+  for I := 1 to 300 do
+    S := S + 'o';
+
+  Self.Item.Data := S;
+  CheckEquals(High(Byte) - 1,
+              Length(Self.Item.Data),
+              'Maximal data with no prefix');
+
+  Self.Item.Prefix := 'ia! shub-niggurath!';
+  CheckEquals(High(Byte) - Length(Self.Item.Prefix) - 1,
+              Length(Self.Item.Data),
+              'Prefix causes truncation of data');
+
+  Self.Item.Prefix := S;
+  CheckEquals(0,
+              Length(Self.Item.Data),
+              'Massive prefix wipes out all data');
+  CheckEquals(High(Byte) - 1,
+              Length(Self.Item.Prefix),
+              'Prefix wasn''t truncated');
+
+  Self.Item.Data := S;
+  CheckEquals(0,
+              Length(Self.Item.Data),
+              'Prefix gets precedence over data');
+end;
+
+//******************************************************************************
+//* TestTIdRTCPSrcDescChunk                                                    *
+//******************************************************************************
+//* TestTIdRTCPSrcDescChunk Public methods *************************************
+
+procedure TestTIdRTCPSrcDescChunk.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Chunk := TIdRTCPSrcDescChunk.Create;
+end;
+
+procedure TestTIdRTCPSrcDescChunk.TearDown;
+begin
+  Self.Chunk.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdRTCPSrcDescChunk Published methods **********************************
+
+procedure TestTIdRTCPSrcDescChunk.TestPrintOn;
+var
+  CName:  TStringStream;
+  Name:   String;
+  Offset: Cardinal;
+  S:      TStringStream;
+begin
+  Name := 'In R''lyeh dead Cthulhu lies dreaming';
+
+  Self.Chunk.SyncSrcID := $deadbeef;
+  Self.Chunk.AddCanonicalName(Name);
+  Self.Chunk.AddCanonicalName(Name);
+
+  CName := TStringStream.Create('');
+  try
+    Self.Chunk.Items[0].PrintOn(CName);
+
+    S := TStringStream.Create('');
+    try
+      Self.Chunk.PrintOn(S);
+
+      CheckEquals($de, Ord(S.DataString[1]), 'MSB');
+      CheckEquals($ad, Ord(S.DataString[2]), 'MSB - 1');
+      CheckEquals($be, Ord(S.DataString[3]), 'LSB + 1');
+      CheckEquals($ef, Ord(S.DataString[4]), 'LSB');
+      Offset := 5;
+
+      CheckEquals(CName.DataString,
+                  Copy(S.DataString, Offset, Length(CName.DataString)),
+                  'First CNAME');
+
+      Inc(Offset, Self.Chunk.Items[0].RealLength);
+      CheckEquals(CName.DataString,
+                  Copy(S.DataString, Offset, Length(CName.DataString)),
+                  'Second CNAME');
+    finally
+      S.Free;
+    end;
+  finally
+    CName.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSrcDescChunk.TestPrintOnByteAlign;
+var
+  S: TStringStream;
+begin
+  Self.Chunk.AddCanonicalName('A');
+
+  S := TStringStream.Create('');
+  try
+    Self.Chunk.PrintOn(S);
+
+    Check(Length(S.DataString) > 7, 'Too little output');
+    CheckEquals($00, Ord(S.DataString[8]), 'Zero padding');
+  finally
+    S.Free;
+  end;
+
+  (Self.Chunk.Items[0] as TIdSDESCanonicalName).Data := 'AAAA';
+  S := TStringStream.Create('');
+  try
+    Self.Chunk.PrintOn(S);
+
+    Check(Length(S.DataString) > 11, 'Too little output');
+    CheckEquals('AAAA'#$00#$00,
+                Copy(S.DataString, 7, Length(S.DataString)),
+                'CNAME name');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSrcDescChunk.TestReadFrom;
+var
+  Name: String;
+  S:    TStringStream;
+begin
+  Name := 'shub-niggurath';
+
+  S := TStringStream.Create(#$de#$ad#$be#$ef
+                          + Chr(SDESCName)
+                          + Chr(Length(Name)) + Name);
+  try
+    Self.Chunk.ReadFrom(S);
+
+    CheckEquals(IntToHex($deadbeef, 8),
+                IntToHex(Self.Chunk.SyncSrcID, 8),
+                'SSRC');
+    CheckEquals(1,
+                Self.Chunk.ItemCount,
+                'ItemCount');
+    CheckEquals(SDESCName,
+                Self.Chunk.Items[0].ID, 'Item ID');
+    CheckEquals(Name,
+                (Self.Chunk.Items[0] as TIdSDESCanonicalName).Data,
+                'CNAME');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSrcDescChunk.TestReadFromMultipleChunks;
+var
+  Garbage:   String;
+  Name1:     String;
+  Name2:     String;
+  S:         TStringStream;
+begin
+  Garbage := 'trailing garbage';
+  Name1   := 'ia!';
+  Name2   := 'shub-niggurath!';
+
+  S := TStringStream.Create(#$de#$ad#$be#$ef
+                          + Chr(SDESCName)
+                          + Chr(Length(Name1)) + Name1
+                          + Chr(SDESCName)
+                          + Chr(Length(Name2)) + Name2
+                          + #$00#$00 + Garbage);
+  try
+    Self.Chunk.ReadFrom(S);
+
+    CheckEquals(IntToHex($deadbeef, 8),
+                IntToHex(Self.Chunk.SyncSrcID, 8),
+                'SSRC');
+    CheckEquals(2,
+                Self.Chunk.ItemCount,
+                'ItemCount');
+    CheckEquals(SDESCName,
+                Self.Chunk.Items[0].ID, 'Item 1 ID');
+    CheckEquals(Name1,
+                (Self.Chunk.Items[0] as TIdSDESCanonicalName).Data,
+                'Item 1 CNAME');
+    CheckEquals(SDESCName,
+                Self.Chunk.Items[1].ID, 'Item 2 ID');
+    CheckEquals(Name2,
+                (Self.Chunk.Items[1] as TIdSDESCanonicalName).Data,
+                'Item 2 CNAME');
+    CheckEquals(Garbage,
+                ReadString(S, Length(Garbage)),
+                'Too much read');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSrcDescChunk.TestRealLength;
+begin
+  CheckEquals(4, Self.Chunk.RealLength, 'Empty chunk');
+
+  Self.Chunk.AddCanonicalName('A');
+  CheckEquals(4 + 2 + Length('A'),
+              Self.Chunk.RealLength,
+              'Chunk with a CNAME');
+
+  Self.Chunk.AddCanonicalName('A');
+  CheckEquals(4 + 2*(2 + Length('A')),
+              Self.Chunk.RealLength,
+              'Chunk with two CNAMEs');
+end;
+
+//******************************************************************************
 //* TRTCPPacketTestCase                                                        *
 //******************************************************************************
 //* TRTCPPacketTestCase Public methods *****************************************
@@ -2448,6 +3168,27 @@ begin
   end;
 end;
 
+procedure TRTCPPacketTestCase.TestPrintOnPacketType;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Packet.PrintOn(S);
+
+    Check(Length(S.DataString) > 1, 'Too little output');
+
+    // This looks odd, but remember that Self.Packet.PacketType returns
+    // a constant - Packet doesn't set PacketType based on the source
+    // stream.
+    CheckEquals(Self.Packet.PacketType,
+                Ord(S.DataString[2]),
+                'Packet type');
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TRTCPPacketTestCase.TestPrintOnSyncSrcId;
 var
   S: TStringStream;
@@ -2457,7 +3198,7 @@ begin
     Self.Packet.SyncSrcID := $decafbad;
     Self.Packet.PrintOn(S);
 
-    Check(Length(S.DataString) > 11, 'Too little output');
+    Check(Length(S.DataString) > 7, 'Too little output');
     CheckEquals($de, Ord(S.DataString[5]), 'LSB');
     CheckEquals($ca, Ord(S.DataString[6]), 'LSB + 1');
     CheckEquals($fb, Ord(S.DataString[7]), 'MSB - 1');
@@ -2631,21 +3372,6 @@ begin
     CheckEquals($ca, Ord(S.DataString[22]), 'Integer part, LSB + 1');
     CheckEquals($fb, Ord(S.DataString[23]), 'Integer part, MSB - 1');
     CheckEquals($ad, Ord(S.DataString[24]), 'Integer part, MSB');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPSenderReportPacket.TestPrintOnPacketType;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create('');
-  try
-    Self.SenderReport.PrintOn(S);
-
-    Check(Length(S.DataString) > 2, 'Too little output');
-    CheckEquals(RTCPSenderReport, Ord(S.DataString[2]), 'Packet type');
   finally
     S.Free;
   end;
@@ -2941,6 +3667,114 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdRTCPSourceDescriptionPacket                                         *
+//******************************************************************************
+//* TestTIdRTCPSourceDescriptionPacket Public methods **************************
+
+procedure TestTIdRTCPSourceDescriptionPacket.SetUp;
+begin
+  inherited SetUp;
+
+  Self.SrcDesc := Self.Packet as TIdRTCPSourceDescriptionPacket;
+end;
+
+//* TestTIdRTCPSourceDescriptionPacket Protected methods ***********************
+
+function TestTIdRTCPSourceDescriptionPacket.PacketType: TIdRTCPPacketClass;
+begin
+  Result := TIdRTCPSourceDescriptionPacket;
+end;
+
+//* TestTIdRTCPSourceDescriptionPacket Published methods ***********************
+
+procedure TestTIdRTCPSourceDescriptionPacket.TestAddChunkAndChunkCount;
+begin
+  CheckEquals(0, Self.SrcDesc.ChunkCount, 'Empty list');
+  CheckNotNull(Self.SrcDesc.AddChunk, 'AddChunk');
+  CheckEquals(1, Self.SrcDesc.ChunkCount, 'Chunk not added');
+end;
+
+procedure TestTIdRTCPSourceDescriptionPacket.TestPacketType;
+begin
+  CheckEquals(RTCPSourceDescription,
+              Self.Packet.PacketType,
+              'PacketType');
+end;
+
+procedure TestTIdRTCPSourceDescriptionPacket.TestPrintOn;
+var
+  Chunk: TIdRTCPSrcDescChunk;
+  Name:  String;
+  S:     TStringStream;
+begin
+  Name := 'A';
+
+  S := TStringStream.Create('');
+  try
+    Self.SrcDesc.HasPadding := false;
+
+    Chunk := Self.SrcDesc.AddChunk;
+    Chunk.SyncSrcID := $deadbeef;
+    Chunk.AddCanonicalName(Name);
+    Self.SrcDesc.Length := 12;
+    Self.SrcDesc.PrintOn(S);
+
+    Check(Length(S.DataString) > 11, 'Too little output');
+
+    CheckEquals($81, Ord(S.DataString[1]),  'Version, padding & SC');
+    CheckEquals(RTCPSourceDescription,
+                     Ord(S.DataString[2]),  'Packet type');
+    CheckEquals($00, Ord(S.DataString[3]),  'Length MSB');
+    CheckEquals($0C, Ord(S.DataString[4]),  'Length LSB');
+
+    CheckEquals($de, Ord(S.DataString[5]),  'Chunk 1 SSRC MSB');
+    CheckEquals($ad, Ord(S.DataString[6]),  'Chunk 1 SSRC MSB - 1');
+    CheckEquals($be, Ord(S.DataString[7]),  'Chunk 1 SSRC LSB + 1');
+    CheckEquals($ef, Ord(S.DataString[8]),  'Chunk 1 SSRC LSB');
+    CheckEquals(SDESCName,
+                     Ord(S.DataString[9]),  'CNAME');
+    CheckEquals($01, Ord(S.DataString[10]), 'CNAME length');
+    CheckEquals('A',     S.DataString[11],  'CNAME name');
+    CheckEquals($00, Ord(S.DataString[12]), 'One byte of zero padding');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSourceDescriptionPacket.TestPrintOnLength;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.SrcDesc.Length := $f00d;
+    Self.SrcDesc.PrintOn(S);
+
+    Check(Length(S.DataString) > 3, 'Too little output');
+    CheckEquals($f0, Ord(S.DataString[3]), 'MSB');
+    CheckEquals($0d, Ord(S.DataString[4]), 'LSB');
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTCPSourceDescriptionPacket.TestReadFromPacketType;
+var
+  S: TStringStream;
+begin
+  S  := TStringStream.Create(#$00 + Chr(RTCPSourceDescription));
+  try
+    Self.Packet.ReadFrom(S);
+
+    CheckEquals(RTCPSourceDescription,
+                Self.SrcDesc.PacketType,
+                'PacketType');
+  finally
+    S.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdRTCPByePacket                                                       *
 //******************************************************************************
 //* TestTIdRTCPByePacket Public methods ****************************************
@@ -3003,21 +3837,6 @@ begin
     CheckEquals($ef, Ord(S.DataString[10]), '1: MSB - 1');
     CheckEquals($fe, Ord(S.DataString[11]), '1: LSB + 1');
     CheckEquals($ed, Ord(S.DataString[12]), '1: LSB');
-  finally
-    S.Free;
-  end;
-end;
-
-procedure TestTIdRTCPByePacket.TestPrintOnPacketType;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create('');
-  try
-    Self.Bye.PrintOn(S);
-
-    Check(Length(S.DataString) > 7, 'Too little output');
-    CheckEquals(RTCPGoodbye, Ord(S.DataString[2]), 'Packet type');
   finally
     S.Free;
   end;
@@ -3330,21 +4149,6 @@ end;
 
 procedure TestTIdRTCPApplicationDefinedPacket.TestPrintOnName;
 begin
-end;
-
-procedure TestTIdRTCPApplicationDefinedPacket.TestPrintOnPacketType;
-var
-  S: TStringStream;
-begin
-  S := TStringStream.Create('');
-  try
-    Self.AppDef.PrintOn(S);
-
-    Check(Length(S.DataString) > 11, 'Too little output');
-    CheckEquals(RTCPApplicationDefined, Ord(S.DataString[2]), 'Packet type');
-  finally
-    S.Free;
-  end;
 end;
 
 procedure TestTIdRTCPApplicationDefinedPacket.TestReadFromData;

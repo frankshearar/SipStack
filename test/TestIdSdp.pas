@@ -791,7 +791,7 @@ procedure TestTIdSdpRTPMapAttribute.TestSetValue;
 begin
   Self.A.Value := '98 T140/1000';
 
-  CheckEquals(TIdRTPT140Encoding.ClassName,
+  CheckEquals(TIdT140Encoding.ClassName,
               Self.A.Encoding.ClassName,
               'Encoding');
   CheckEquals(T140Encoding,

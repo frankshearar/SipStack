@@ -443,28 +443,32 @@ type
     fHost:            String;
     fUsername:        String;
     fProfile:         TIdRTPProfile;
-    RTPClients:       TObjectList;
     RTPServerLock:    TCriticalSection;
     RTPServers:       TObjectList;
     RTCPServers:      TObjectList;
 
-    procedure ActivateServerOnFreePort(const Server: TIdRTPServer);
-    procedure AddRTCPServer(const RTP: TIdRTPServer);
+    procedure ActivateServerOnFreePort(Server: TIdRTPServer);
+    procedure AddLocalBinding(Server: TIdRTPServer;
+                              Address: String;
+                              Port: Cardinal);
+    procedure AddRTCPServer(RTP: TIdRTPServer);
     procedure NotifyOfNewRTPData(Data: TStream;
-                                 const Port: Cardinal;
-                                 const Format: TIdRTPEncoding);
+                                 Port: Cardinal;
+                                 Format: TIdRTPEncoding);
     procedure NotifyOfNewUdpData(Data: TStream);
+    procedure OnReceiveRTCP(Sender: TObject;
+                            APacket: TIdRTCPPacket;
+                            ABinding: TIdSocketHandle);
     procedure OnReceiveRTP(Sender: TObject;
                            APacket: TIdRTPPacket;
                            ABinding: TIdSocketHandle);
     procedure OnReceiveUDP(Sender: TObject;
                            AData: TStream;
                            ABinding: TIdSocketHandle);
-    function  RTCPAt(const Index: Integer): TIdUDPServer;
     function  ServerAt(const Index: Integer): TIdRTPServer;
-    procedure SetUpMediaStreams(const RemoteDescription: TIdSdpPayload);
-    procedure SetUpSingleStream(const Address: String;
-                                const Port: Cardinal);
+    procedure SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
+    procedure SetUpSingleStream(Address: String;
+                                Port: Cardinal);
   public
     constructor Create;
     destructor  Destroy; override;
@@ -573,7 +577,7 @@ function StrToMediaType(const S: String): TIdSDPMediaType;
 implementation
 
 uses
-  IdGlobal, IdRTPClient, SysUtils;
+  IdGlobal, SysUtils;
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
@@ -2204,6 +2208,7 @@ var
   Token:         String;
   Value:         String;
 begin
+  // m=<media type> <port>[/<number>] <transport> <fmt list>
   Self.ParseHeader(Name, Value);
   OriginalValue := Value;
 
@@ -2564,10 +2569,9 @@ begin
   Self.DataListeners := TList.Create;
   Self.DataListenerLock := TCriticalSection.Create;
 
-  Self.RTCPServers := TObjectList.Create(true);
-  Self.RTPClients  := TObjectList.Create(true);
-  Self.RTPServers  := TObjectList.Create(true);
-  Self.RTPServerLock     := TCriticalSection.Create;
+  Self.RTCPServers   := TObjectList.Create(false);
+  Self.RTPServers    := TObjectList.Create(true);
+  Self.RTPServerLock := TCriticalSection.Create;
 
   Self.fProfile := TIdAudioVisualProfile.Create;
 end;
@@ -2578,7 +2582,6 @@ begin
 
   Self.RTPServerLock.Free;
   Self.RTPServers.Free;
-  Self.RTPClients.Free;
   Self.RTCPServers.Free;
 
   Self.DataListenerLock.Free;
@@ -2703,7 +2706,6 @@ begin
   try
     for I := 0 to Self.RTPServers.Count - 1 do begin
       Self.ServerAt(I).Active := false;
-      Self.RTCPAt(I).Active   := false;
     end;
   finally
     Self.RTPServerLock.Release;
@@ -2712,14 +2714,14 @@ end;
 
 //* TIdSdpPayloadProcessor Public methods **************************************
 
-procedure TIdSdpPayloadProcessor.ActivateServerOnFreePort(const Server: TIdRTPServer);
+procedure TIdSdpPayloadProcessor.ActivateServerOnFreePort(Server: TIdRTPServer);
 var
   Binding:  TIdSocketHandle;
   Bound:    Boolean;
   NextPort: Integer;
 begin
   NextPort := Self.DefaultBasePort;
-  
+
   Server.Bindings.Clear;
   Binding := Server.Bindings.Add;
 
@@ -2738,32 +2740,26 @@ begin
   end;
 end;
 
-procedure TIdSdpPayloadProcessor.AddRTCPServer(const RTP: TIdRTPServer);
+procedure TIdSdpPayloadProcessor.AddLocalBinding(Server: TIdRTPServer;
+                                                 Address: String;
+                                                 Port: Cardinal);
 var
-  NewRTCPServer: TIdUDPServer;
-  I:             Integer;
+  LocalBinding: TIdSocketHandle;
 begin
-  NewRTCPServer := TIdUDPServer.Create(nil);
-  try
-    Self.RTCPServers.Add(NewRTCPServer);
+  LocalBinding := Server.Bindings.Add;
 
-    NewRTCPServer.DefaultPort := RTP.DefaultPort + 1;
-    NewRTCPServer.Bindings.Assign(RTP.Bindings);
+  LocalBinding.IP   := Address;
+  LocalBinding.Port := Port;
+end;
 
-    for I := 0 to RTP.Bindings.Count - 1 do begin
-      NewRTCPServer.Bindings[I].Port := NewRTCPServer.Bindings[I].Port + 1;
-    end;
-    NewRTCPServer.Active := true;
-  except
-    Self.RTCPServers.Remove(NewRTCPServer);
-
-    raise;
-  end;
+procedure TIdSdpPayloadProcessor.AddRTCPServer(RTP: TIdRTPServer);
+begin
+  Self.RTCPServers.Add(RTP);
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TStream;
-                                                    const Port: Cardinal;
-                                                    const Format: TIdRTPEncoding);
+                                                    Port: Cardinal;
+                                                    Format: TIdRTPEncoding);
 var
   I: Integer;
 begin
@@ -2787,6 +2783,12 @@ begin
   finally
     Self.DataListenerLock.Release;
   end;
+end;
+
+procedure TIdSdpPayloadProcessor.OnReceiveRTCP(Sender: TObject;
+                                               APacket: TIdRTCPPacket;
+                                               ABinding: TIdSocketHandle);
+begin
 end;
 
 procedure TIdSdpPayloadProcessor.OnReceiveRTP(Sender: TObject;
@@ -2813,17 +2815,12 @@ begin
   Self.NotifyOfNewUdpData(AData);
 end;
 
-function TIdSdpPayloadProcessor.RTCPAt(const Index: Integer): TIdUDPServer;
-begin
-  Result := Self.RTCPServers[Index] as TIdUDPServer;
-end;
-
 function TIdSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
 begin
   Result := Self.RTPServers[Index] as TIdRTPServer;
 end;
 
-procedure TIdSdpPayloadProcessor.SetUpMediaStreams(const RemoteDescription: TIdSdpPayload);
+procedure TIdSdpPayloadProcessor.SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
 var
   I: Integer;
 begin
@@ -2832,38 +2829,30 @@ begin
                            RemoteDescription.MediaDescriptionAt(I).Port);
 end;
 
-procedure TIdSdpPayloadProcessor.SetUpSingleStream(const Address: String;
-                                                      const Port: Cardinal);
+procedure TIdSdpPayloadProcessor.SetUpSingleStream(Address: String;
+                                                   Port: Cardinal);
 var
-  NewClient: TIdRTPClient;
   NewServer: TIdRTPServer;
 begin
   Self.RTPServerLock.Acquire;
   try
-    NewClient := TIdRTPClient.Create(nil);
+    NewServer := TIdRTPServer.Create(nil);
     try
-      Self.RTPClients.Add(NewClient);
+      Self.RTPServers.Add(NewServer);
 
-      NewClient.Host := Address;
-      NewClient.Port := Port;
+      NewServer.Profile.Assign(Self.Profile);
+      NewServer.OnRTCPRead := Self.OnReceiveRTCP;
+      NewServer.OnRTPRead  := Self.OnReceiveRTP;
+      NewServer.OnUDPRead  := Self.OnReceiveUDP;
 
-      NewServer := TIdRTPServer.Create(nil);
-      try
-        Self.RTPServers.Add(NewServer);
-
-        NewServer.Profile.Assign(Self.Profile);
-        NewServer.OnRTPRead  := Self.OnReceiveRTP;
-        NewServer.OnUDPRead  := Self.OnReceiveUDP;
-
-        Self.ActivateServerOnFreePort(NewServer);
-        Self.AddRTCPServer(NewServer);
-      except
-        Self.RTPServers.Remove(NewServer);
-
-        raise;
-      end;
+      Self.ActivateServerOnFreePort(NewServer);
+      Self.AddLocalBinding(NewServer, Address, Port);
+      Self.AddRTCPServer(NewServer);
     except
-      Self.RTPClients.Remove(NewClient);
+      if (Self.RTPServers.IndexOf(NewServer) <> -1) then
+        Self.RTPServers.Remove(NewServer)
+      else
+        FreeAndNil(NewServer);
 
       raise;
     end;

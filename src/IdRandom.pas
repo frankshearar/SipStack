@@ -1,9 +1,9 @@
-unit IdSipRandom;
+unit IdRandom;
 
 interface
 
 type
-  TIdSipRandomNumber = class(TObject)
+  TIdRandomNumber = class(TObject)
   public
     class function Next: Cardinal; overload; virtual;
     class function Next(Max: Cardinal): Cardinal; overload;
@@ -11,7 +11,7 @@ type
 
 implementation
 
-class function TIdSipRandomNumber.Next: Cardinal;
+class function TIdRandomNumber.Next: Cardinal;
 begin
   // TODO: Delphi's RNG is not sufficient. When we have time we shall implement
   // Ferguson/Schneier's Fortuna PRNG, as described in "Practical
@@ -20,7 +20,7 @@ begin
   Result := Random(MaxInt);
 end;
 
-class function TIdSipRandomNumber.Next(Max: Cardinal): Cardinal;
+class function TIdRandomNumber.Next(Max: Cardinal): Cardinal;
 begin
   repeat
     Result := Self.Next;

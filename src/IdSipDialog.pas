@@ -117,7 +117,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipRandom, SysUtils;
+  IdSipConsts, IdRandom, SysUtils;
 
 //******************************************************************************
 //* TIdSipDialog                                                               *

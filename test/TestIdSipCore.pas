@@ -3,7 +3,7 @@ unit TestIdSipCore;
 interface
 
 uses
-  Classes, IdRTP, IdRTPClient, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
+  Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockCore,
   IdSipMockTransactionDispatcher, IdSipTransaction, IdSipTransport,
   TestFramework, TestFrameworkSip;
@@ -137,7 +137,6 @@ type
     MultiStreamSdp:         TIdSdpPayload;
     OnEndedSessionFired:    Boolean;
     OnModifiedSessionFired: Boolean;
-    RTPClient:              TIdRTPClient;
     SentRequestTerminated:  Boolean;
     SimpleSdp:              TIdSdpPayload;
 
@@ -1830,10 +1829,6 @@ begin
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
   Self.SimpleSdp      := Self.CreateSimpleSdp;
 
-  Self.RTPClient := TIdRTPClient.Create(nil);
-  Self.RTPClient.Host := Self.SimpleSdp.MediaDescriptionAt(0).Connections[0].Address;
-  Self.RTPClient.Port := Self.SimpleSdp.MediaDescriptionAt(0).Port;
-
   Self.Invite.ContentType := SdpMimeType;
   Self.Invite.Body        := Self.SimpleSdp.AsString;
 
@@ -1844,7 +1839,6 @@ end;
 procedure TestTIdSipSession.TearDown;
 begin
   Self.Core.HangUpAllCalls;
-  Self.RTPClient.Free;
   Self.SimpleSdp.Free;
   Self.MultiStreamSdp.Free;
 

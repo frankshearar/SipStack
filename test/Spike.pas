@@ -365,7 +365,24 @@ begin
 end;
 
 procedure TrnidSpike.SendDTMF(const Event: Byte);
+var
+  TE: TIdTelephoneEventPayload;
+  S:  TMemoryStream;
 begin
+  S := TMemoryStream.Create;
+  try
+    TE := TIdTelephoneEventPayload.Create(nil);
+    try
+      TE.Event := Event;
+      TE.Duration := 100;
+      TE.PrintOn(S);
+      Self.Media.ServerFor(Self.Media.BasePort).SendData(TE);
+    finally
+      TE.Free;
+    end;
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TrnidSpike.StartReadingData(const SDP: String);

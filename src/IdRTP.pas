@@ -34,13 +34,16 @@ type
     fClockRate:  Cardinal;
     fName:       String;
     fParameters: String;
+  protected
+    function GetName: String; virtual;
   public
     class function CreateEncoding(Value: String): TIdRTPEncoding;
+    class function NullEncoding: TIdRTPEncoding;
 
-    constructor Create(const Name: String;
-                       const ClockRate: Cardinal;
-                       const Parameters: String = ''); overload; virtual;
-    constructor Create(const Src: TIdRTPEncoding); overload; virtual;
+    constructor Create(Name: String;
+                       ClockRate: Cardinal;
+                       Parameters: String = ''); overload; virtual;
+    constructor Create(Src: TIdRTPEncoding); overload; virtual;
 
     function AsString: String; virtual;
     function Clone: TIdRTPEncoding; virtual;
@@ -51,18 +54,18 @@ type
     function PayloadType: TIdRTPPayloadClass; virtual;
 
     property ClockRate:  Cardinal read fClockRate;
-    property Name:       String   read fName;
+    property Name:       String   read GetName;
     property Parameters: String   read fParameters;
   end;
 
   TIdRTPEncodingClass = class of TIdRTPEncoding;
 
-  TIdRTPT140Encoding = class(TIdRTPEncoding)
+  TIdT140Encoding = class(TIdRTPEncoding)
   public
     function PayloadType: TIdRTPPayloadClass; override;
   end;
 
-  TIdRTPTelephoneEventEncoding = class(TIdRTPEncoding)
+  TIdTelephoneEventEncoding = class(TIdRTPEncoding)
   public
     function PayloadType: TIdRTPPayloadClass; override;
   end;
@@ -70,10 +73,10 @@ type
   // I represent the Null Encoding.
   TIdRTPNullEncoding = class(TIdRTPEncoding)
   public
-    constructor Create(const Name: String;
-                       const ClockRate: Cardinal;
-                       const Parameters: String = ''); overload; override;
-    constructor Create(const Src: TIdRTPEncoding); overload; override;
+    constructor Create(Name: String;
+                       ClockRate: Cardinal;
+                       Parameters: String = ''); overload; override;
+    constructor Create(Src: TIdRTPEncoding); overload; override;
 
     function AsString: String; override;
     function Clone: TIdRTPEncoding; override;
@@ -84,31 +87,40 @@ type
   // do nothing other than say to you "you may not use this payload type".
   TIdRTPReservedEncoding = class(TIdRTPEncoding)
   public
-    constructor Create(const Name: String;
-                       const ClockRate: Cardinal;
-                       const Parameters: String = ''); overload; override;
-    constructor Create(const Src: TIdRTPEncoding); overload; override;
+    constructor Create(Name: String;
+                       ClockRate: Cardinal;
+                       Parameters: String = ''); overload; override;
+    constructor Create(Src: TIdRTPEncoding); overload; override;
 
     function AsString: String; override;
     function Clone: TIdRTPEncoding; override;
     function IsReserved: Boolean; override;
   end;
 
-  // I represent the payload in an RTP packet. My subclasses implement
-  // appropriate parsing and outputting.
+  // I represent the payload in an RTP packet. I store a reference to an
+  // encoding. I strongly suggest that you don't mix-and-match payloads and
+  // encodings. An RFC 2833 payload must work with an RFC 2833 encoding, for
+  // instance.
   //
   // I offer a Flyweight Null Payload.
   TIdRTPPayload = class(TObject)
+  private
+    fEncoding: TIdRTPEncoding;
   public
-    class function CreatePayload(const Encoding: TIdRTPEncoding): TIdRTPPayload;
-    class function CreateFrom(const Encoding: TIdRTPEncoding;
+    class function CreatePayload(Encoding: TIdRTPEncoding): TIdRTPPayload;
+    class function CreateFrom(Encoding: TIdRTPEncoding;
                               Src: TStream): TIdRTPPayload;
     class function NullPayload: TIdRTPPayload;
 
+    constructor Create(Encoding: TIdRTPEncoding);
+
     function  IsNull: Boolean; virtual;
     function  Length: Cardinal; virtual;
+    function  NumberOfSamples: Cardinal; virtual;
     procedure ReadFrom(Src: TStream); virtual;
     procedure PrintOn(Dest: TStream); virtual;
+
+    property Encoding: TIdRTPEncoding read fEncoding;
   end;
 
   // I represent the Null payload - a Null Object representing the absence of a
@@ -153,6 +165,7 @@ type
     fReservedBit: Boolean;
     fVolume:      TIdTelephoneEventVolume;
   public
+    function  NumberOfSamples: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
     procedure PrintOn(Dest: TStream); override;
 
@@ -182,24 +195,28 @@ type
     procedure RemoveEncoding(const PayloadType: TIdRTPPayloadType);
   protected
     procedure AddEncodingAsReference(Encoding: TIdRTPEncoding;
-                                     const PayloadType: TIdRTPPayloadType);
+                                     PayloadType: TIdRTPPayloadType);
 
     procedure ReservePayloadType(const PayloadType: TIdRTPPayloadType);
   public
     constructor Create; virtual;
     destructor  Destroy; override;
 
-    procedure AddEncoding(const Encoding: TIdRTPEncoding;
-                          const PayloadType: TIdRTPPayloadType);
+    procedure AddEncoding(Encoding: TIdRTPEncoding;
+                          PayloadType: TIdRTPPayloadType); overload;
+    procedure AddEncoding(Name: String;
+                          ClockRate: Cardinal;
+                          Params: String;
+                          PayloadType: TIdRTPPayloadType); overload;
     procedure Assign(Src: TPersistent); override;
     procedure Clear;
     function  Count: Integer;
     function  FirstFreePayloadType: TIdRTPPayloadType;
     function  IsFull: Boolean;
     function  HasEncoding(const Encoding: TIdRTPEncoding): Boolean;
-    function  HasPayloadType(const PayloadType: TIdRTPPayloadType): Boolean;
-    function  EncodingFor(const PayloadType: TIdRTPPayloadType): TIdRTPEncoding;
-    function  PayloadTypeFor(const Encoding: TIdRTPEncoding): TIdRTPPayloadType;
+    function  HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
+    function  EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPEncoding;
+    function  PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType;
     function  TransportDesc: String; virtual;
   end;
 
@@ -208,7 +225,7 @@ type
   // allow the alteration of the dynamic payload types - 96-127.
   TIdAudioVisualProfile = class(TIdRTPProfile)
   private
-    procedure ReserveRange(const LowPT, HighPT: TIdRTPPayloadType);
+    procedure ReserveRange(LowPT, HighPT: TIdRTPPayloadType);
   public
     constructor Create; override;
 
@@ -277,8 +294,8 @@ type
 
     constructor Create;
 
-    function IsRTCP: Boolean; virtual; abstract;
-    function IsRTP: Boolean; virtual; abstract;
+    function  IsRTCP: Boolean; virtual; abstract;
+    function  IsRTP: Boolean; virtual; abstract;
     procedure ReadFrom(Src: TStream); virtual; abstract;
     function  RealLength: Word; virtual; abstract;
     procedure PrintOn(Dest: TStream); virtual; abstract;
@@ -339,7 +356,8 @@ type
   // RFC 3550 section 6.
   TIdRTCPPacket = class(TIdRTPBasePacket)
   protected
-    function GetPacketType: Cardinal; virtual; abstract;
+    procedure AssertPacketType(const PT: Byte);
+    function  GetPacketType: Cardinal; virtual; abstract;
   public
     class function RTCPType(const PacketType: Byte): TIdRTCPPacketClass;
 
@@ -390,7 +408,124 @@ type
   end;
 
   TIdRTCPReceiverReportPacket = class(TIdRTCPPacket);
-  TIdRTCPSourceDescriptionPacket = class(TIdRTCPPacket);
+
+  TIdSrcDescChunkItem = class(TObject)
+  private
+    fData: String;
+  protected
+    procedure SetData(const Value: String); virtual;
+  public
+    function  ID: Byte; virtual; abstract;
+    function  Length: Byte;
+    procedure PrintOn(Dest: TStream); virtual;
+    procedure ReadFrom(Src: TStream); virtual;
+    function  RealLength: Cardinal; virtual;
+
+    property Data: String read fData write SetData;
+  end;
+
+  TIdSrcDescChunkItemClass = class of TIdSrcDescChunkItem;
+
+  TIdSDESCanonicalName = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESUserName = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESEmail = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESPhone = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESLocation = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESTool = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESNote = class(TIdSrcDescChunkItem)
+  public
+    function ID: Byte; override;
+  end;
+
+  TIdSDESPriv = class(TIdSrcDescChunkItem)
+  private
+    fPrefix: String;
+
+    function  MaxDataLength: Byte;
+    function  MaxPrefixLength: Byte;
+    procedure SetPrefix(const Value: String);
+    procedure TruncateData;
+  protected
+    procedure SetData(const Value: String); override;
+  public
+    function  ID: Byte; override;
+    procedure PrintOn(Dest: TStream); override;
+    procedure ReadFrom(Src: TStream); override;
+    function  RealLength: Cardinal; override;
+
+    property Prefix: String read fPrefix write SetPrefix;
+  end;
+
+  TIdRTCPSrcDescChunk = class(TObject)
+  private
+    fSyncSrcID: Cardinal;
+    ItemList:   TObjectList;
+
+    function  AddCanonicalHeader: TIdSDESCanonicalName; overload;
+    function  GetItems(Index: Integer): TIdSrcDescChunkItem;
+    function  HasMoreItems(Src: TStream): Boolean;
+    function  Peek(Src: TStream): Byte;
+    procedure PrintAlignmentPadding(Dest: TStream);
+    procedure ReadAlignmentPadding(Src: TStream);
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure AddCanonicalName(Name: String); overload;
+    function  ItemCount: Integer;
+    procedure PrintOn(Dest: TStream);
+    procedure ReadFrom(Src: TStream);
+    function  RealLength: Cardinal;
+
+    property Items[Index: Integer]: TIdSrcDescChunkItem read GetItems;
+    property SyncSrcID:             Cardinal            read fSyncSrcID write fSyncSrcID;
+  end;
+
+  TIdRTCPSourceDescriptionPacket = class(TIdRTCPPacket)
+  private
+    ChunkList: TObjectList;
+
+    function GetChunks(Index: Integer): TIdRTCPSrcDescChunk;
+  protected
+    function  GetPacketType: Cardinal; override;
+    function  GetSyncSrcID: Cardinal; override;
+    procedure SetSyncSrcID(const Value: Cardinal); override;
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    function  AddChunk: TIdRTCPSrcDescChunk;
+    function  ChunkCount: TIdRTCPSourceCount;
+    procedure PrintOn(Dest: TStream); override;
+    procedure ReadFrom(Src: TStream); override;
+    function  RealLength: Word; override;
+
+    property Chunks[Index: Integer]: TIdRTCPSrcDescChunk read GetChunks;
+  end;
 
   // I represent an RTCP Bye packet. You use me to remove yourself from an RTP
   // session. RTP servers that receive me remove the SSRC that sent me from
@@ -466,6 +601,8 @@ type
 
   ENoPayloadTypeFound = class(Exception);
 
+function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
+function DateTimeToNTPFractionsOfASecond(const DT: TDateTime): Cardinal;
 function DateTimeToNTPSeconds(const DT: TDateTime): Cardinal;
 function DateTimeToNTPTimestamp(const DT: TDateTime): TIdNTPTimestamp;
 function EncodeAsString(Value: Cardinal): String; overload;
@@ -473,6 +610,7 @@ function EncodeAsString(Value: Word): String; overload;
 function HtoNL(Value: Cardinal): Cardinal;
 function HtoNS(Value: Word): Word;
 function MultiplyCardinal(FirstValue, SecondValue: Cardinal): Cardinal;
+function NowAsNTP: TIdNTPTimestamp;
 function NtoHL(Value: Cardinal): Cardinal;
 function NtoHS(Value: Word): Cardinal;
 
@@ -481,6 +619,7 @@ procedure ReadNTPTimestamp(Src: TStream; var Timestamp: TIdNTPTimestamp);
 function  ReadRemainderOfStream(Src: TStream): String;
 function  ReadString(Src: TStream; const Length: Cardinal): String;
 function  ReadWord(Src: TStream): Word;
+procedure WriteByte(Dest: TStream; Value: Byte);
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 procedure WriteNTPTimestamp(Dest: TStream; Value: TIdNTPTimestamp);
 procedure WriteWord(Dest: TStream; Value: Word);
@@ -500,7 +639,6 @@ const
   GSMEncoding                 = 'GSM';
   H261Encoding                = 'H261';
   H263Encoding                = 'H263';
-  InterleavedT140ClockRate    = 8000;
   JPEGEncoding                = 'JPEG';
   L16Encoding                 = 'L16';
   LPCEncoding                 = 'LPC';
@@ -530,6 +668,7 @@ const
 
 // From RFC 2793
 const
+  InterleavedT140ClockRate    = 8000;
   RedundancyEncoding          = 'RED';
   RedundancyEncodingParameter = 'RED';
   T140ClockRate               = 1000;
@@ -563,10 +702,11 @@ const
 implementation
 
 uses
-  DateUtils, IdGlobal;
+  DateUtils, IdGlobal, IdRandom, IdRTPTimerQueue;
 
 var
-  GNullPayload: TIdRTPPayload;
+  GNullEncoding: TIdRTPEncoding;
+  GNullPayload:  TIdRTPPayload;
 
 const
   JanOne1900 = 2;
@@ -575,10 +715,47 @@ const
 //* Unit public functions & procedures                                         *
 //******************************************************************************
 
+function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
+var
+  Answer: Int64;
+begin
+  Answer := Int64(Addend) + Augend;
+
+    Result := Answer mod Radix
+end;
+
+function DateTimeToNTPFractionsOfASecond(const DT: TDateTime): Cardinal;
+var
+  Divisor:         Int64;
+  Fraction:        Double;
+  FractionBit:     Cardinal;
+  PartOfOneSecond: Double;
+begin
+//  if (DT < 2) then
+//    raise EConvertError.Create('DT < 1900/01/01');
+
+  PartOfOneSecond := MilliSecondOfTheSecond(DT)/1000;
+  Result          := 0;
+  Divisor         := 2;
+  FractionBit     := $80000000;
+  while (Divisor <= $40000000) and (PartOfOneSecond > 0) do begin
+    Fraction := 1/Divisor;
+    if ((PartOfOneSecond - Fraction) >= 0) then begin
+      Result := Result or FractionBit;
+      PartOfOneSecond := PartOfOneSecond - Fraction;
+    end;
+    FractionBit := FractionBit div 2;
+    Divisor := MultiplyCardinal(2, Divisor);
+  end;
+end;
+
 function DateTimeToNTPSeconds(const DT: TDateTime): Cardinal;
 var
   Days: Cardinal;
 begin
+  if (DT < 2) then
+    raise EConvertError.Create('DT < 1900/01/01');
+
   Days := Trunc(DT) - JanOne1900;
 
   Result := MultiplyCardinal(Days, SecsPerDay) + SecondOfTheDay(DT);
@@ -586,31 +763,15 @@ end;
 
 // Caveat Programmer: TDateTime has the floating point nature. Don't expect
 // enormous precision.
+// TODO: Maybe we can find a platform-independent way of getting an accurate
+// timestamp?
 function DateTimeToNTPTimestamp(const DT: TDateTime): TIdNTPTimestamp;
-var
-  Divisor:         Int64;
-  Fraction:        Double;
-  FractionBit:     Cardinal;
-  PartOfOneSecond: Double;
 begin
   if (DT < 2) then
     raise EConvertError.Create('DT < 1900/01/01');
 
-  Result.IntegerPart := DateTimeToNTPSeconds(DT);
-
-  PartOfOneSecond       := MilliSecondOfTheSecond(DT)/1000;
-  Result.FractionalPart := 0;
-  Divisor               := 2;
-  FractionBit           := $80000000;
-  while (Divisor <= $40000000) and (PartOfOneSecond > 0) do begin
-    Fraction := 1/Divisor;
-    if ((PartOfOneSecond - Fraction) >= 0) then begin
-      Result.FractionalPart := Result.FractionalPart or FractionBit;
-      PartOfOneSecond := PartOfOneSecond - Fraction;
-    end;
-    FractionBit := FractionBit div 2;
-    Divisor := MultiplyCardinal(2, Divisor);
-  end;
+  Result.IntegerPart    := DateTimeToNTPSeconds(DT);
+  Result.FractionalPart := DateTimeToNTPFractionsOfASecond(DT);
 end;
 
 function EncodeAsString(Value: Cardinal): String;
@@ -651,6 +812,12 @@ asm
   jno @end
   call System.@IntOver
  @end:
+end;
+
+function NowAsNTP: TIdNTPTimestamp;
+begin
+  // TODO: This is ugly, but at least it's a bit more portable.
+  Result := DateTimeToNTPTimestamp(SysUtils.Now);
 end;
 
 function NtoHL(Value: Cardinal): Cardinal;
@@ -716,6 +883,11 @@ begin
   Result := NtoHS(Result);
 end;
 
+procedure WriteByte(Dest: TStream; Value: Byte);
+begin
+  Dest.Write(Value, SizeOf(Value));
+end;
+
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
 begin
   Value := HtoNL(Value);
@@ -750,11 +922,11 @@ begin
   Parameters := Value;
 
   if (Lowercase(Name) = Lowercase(T140Encoding)) then
-    Result := TIdRTPT140Encoding.Create(Name,
+    Result := TIdT140Encoding.Create(Name,
                                         ClockRate,
                                         Parameters)
   else if (Lowercase(Name) = Lowercase(TelephoneEventEncoding)) then
-    Result := TIdRTPTelephoneEventEncoding.Create(Name,
+    Result := TIdTelephoneEventEncoding.Create(Name,
                                                   ClockRate,
                                                   Parameters)
   else
@@ -763,9 +935,17 @@ begin
                                     Parameters);
 end;
 
-constructor TIdRTPEncoding.Create(const Name: String;
-                                  const ClockRate: Cardinal;
-                                  const Parameters: String = '');
+class function TIdRTPEncoding.NullEncoding: TIdRTPEncoding;
+begin
+  if not Assigned(GNullEncoding) then
+    GNullEncoding := TIdRTPNullEncoding.Create;
+
+  Result := GNullEncoding;
+end;
+
+constructor TIdRTPEncoding.Create(Name: String;
+                                  ClockRate: Cardinal;
+                                  Parameters: String = '');
 begin
   inherited Create;
 
@@ -774,7 +954,7 @@ begin
   fParameters := Parameters;
 end;
 
-constructor TIdRTPEncoding.Create(const Src: TIdRTPEncoding);
+constructor TIdRTPEncoding.Create(Src: TIdRTPEncoding);
 begin
   inherited Create;
 
@@ -798,7 +978,7 @@ end;
 
 function TIdRTPEncoding.CreatePayload: TIdRTPPayload;
 begin
-  Result := Self.PayloadType.Create;
+  Result := Self.PayloadType.Create(Self);
 end;
 
 function TIdRTPEncoding.IsEqualTo(const OtherEncoding: TIdRTPEncoding): Boolean;
@@ -823,22 +1003,29 @@ begin
   Result := TIdRawPayload;
 end;
 
-//******************************************************************************
-//* TIdRTPT140Encoding                                                         *
-//******************************************************************************
-//* TIdRTPT140Encoding Public methods ******************************************
+//* TIdRTPEncoding Private methods *********************************************
 
-function TIdRTPT140Encoding.PayloadType: TIdRTPPayloadClass;
+function TIdRTPEncoding.GetName: String;
+begin
+  Result := fName;
+end;
+
+//******************************************************************************
+//* TIdT140Encoding                                                            *
+//******************************************************************************
+//* TIdT140Encoding Public methods *********************************************
+
+function TIdT140Encoding.PayloadType: TIdRTPPayloadClass;
 begin
   Result := TIdT140Payload;
 end;
 
 //******************************************************************************
-//* TIdRTPTelephoneEventEncoding                                               *
+//* TIdTelephoneEventEncoding                                                  *
 //******************************************************************************
-//* TIdRTPTelephoneEventEncoding Public methods ********************************
+//* TIdTelephoneEventEncoding Public methods ***********************************
 
-function TIdRTPTelephoneEventEncoding.PayloadType: TIdRTPPayloadClass;
+function TIdTelephoneEventEncoding.PayloadType: TIdRTPPayloadClass;
 begin
   Result := TIdTelephoneEventPayload;
 end;
@@ -848,14 +1035,14 @@ end;
 //******************************************************************************
 //* TIdRTPNullEncoding Public methods ******************************************
 
-constructor TIdRTPNullEncoding.Create(const Name: String;
-                                      const ClockRate: Cardinal;
-                                      const Parameters: String = '');
+constructor TIdRTPNullEncoding.Create(Name: String;
+                                      ClockRate: Cardinal;
+                                      Parameters: String = '');
 begin
   inherited Create('', 0, '');
 end;
 
-constructor TIdRTPNullEncoding.Create(const Src: TIdRTPEncoding);
+constructor TIdRTPNullEncoding.Create(Src: TIdRTPEncoding);
 begin
   inherited Create('', 0, '');
 end;
@@ -880,14 +1067,14 @@ end;
 //******************************************************************************
 //* TIdRTPReservedEncoding Public methods **************************************
 
-constructor TIdRTPReservedEncoding.Create(const Name: String;
-                                          const ClockRate: Cardinal;
-                                          const Parameters: String = '');
+constructor TIdRTPReservedEncoding.Create(Name: String;
+                                          ClockRate: Cardinal;
+                                          Parameters: String = '');
 begin
   inherited Create('', 0, '');
 end;
 
-constructor TIdRTPReservedEncoding.Create(const Src: TIdRTPEncoding);
+constructor TIdRTPReservedEncoding.Create(Src: TIdRTPEncoding);
 begin
   inherited Create('', 0, '');
 end;
@@ -912,19 +1099,23 @@ end;
 //******************************************************************************
 //* TIdRTPPayload Public methods ***********************************************
 
-class function TIdRTPPayload.CreatePayload(const Encoding: TIdRTPEncoding): TIdRTPPayload;
+class function TIdRTPPayload.CreatePayload(Encoding: TIdRTPEncoding): TIdRTPPayload;
+var
+  PayloadType: TIdRTPPayloadClass;
 begin
-  if Encoding.IsNull then
-    Result := TIdRawPayload.Create
-  else if (Encoding.Name = T140Encoding) then
-    Result := TIdT140Payload.Create
-  else if (Encoding.Name = TelephoneEventEncoding) then
-    Result := TIdTelephoneEventPayload.Create
-  else
-    Result := TIdRawPayload.Create;
+  PayloadType := TIdRawPayload;
+
+  if not Encoding.IsNull then begin
+    if (Encoding.Name = T140Encoding) then
+      PayloadType := TIdT140Payload
+    else if (Encoding.Name = TelephoneEventEncoding) then
+      PayloadType := TIdTelephoneEventPayload;
+  end;
+
+  Result := PayloadType.Create(Encoding);
 end;
 
-class function TIdRTPPayload.CreateFrom(const Encoding: TIdRTPEncoding;
+class function TIdRTPPayload.CreateFrom(Encoding: TIdRTPEncoding;
                                         Src: TStream): TIdRTPPayload;
 begin
   Result := Self.CreatePayload(Encoding);
@@ -940,9 +1131,16 @@ end;
 class function TIdRTPPayload.NullPayload: TIdRTPPayload;
 begin
   if not Assigned(GNullPayload) then
-    GNullPayload := TIdNullPayload.Create;
+    GNullPayload := TIdNullPayload.Create(GNullEncoding);
 
   Result := GNullPayload;
+end;
+
+constructor TIdRTPPayload.Create(Encoding: TIdRTPEncoding);
+begin
+  inherited Create;
+
+  fEncoding := Encoding;
 end;
 
 function TIdRTPPayload.IsNull: Boolean;
@@ -951,6 +1149,11 @@ begin
 end;
 
 function TIdRTPPayload.Length: Cardinal;
+begin
+  Result := 0;
+end;
+
+function TIdRTPPayload.NumberOfSamples: Cardinal;
 begin
   Result := 0;
 end;
@@ -1016,7 +1219,12 @@ end;
 //******************************************************************************
 //* TIdTelephoneEventPayload                                                   *
 //******************************************************************************
-//* TIdTelephoneEventPayload Public methods ***********************************
+//* TIdTelephoneEventPayload Public methods ************************************
+
+function TIdTelephoneEventPayload.NumberOfSamples: Cardinal;
+begin
+  Result := Self.Duration;
+end;
 
 procedure TIdTelephoneEventPayload.ReadFrom(Src: TStream);
 var
@@ -1071,13 +1279,28 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdRTPProfile.AddEncoding(const Encoding: TIdRTPEncoding;
-                                    const PayloadType: TIdRTPPayloadType);
+procedure TIdRTPProfile.AddEncoding(Encoding: TIdRTPEncoding;
+                                    PayloadType: TIdRTPPayloadType);
 begin
   if Encoding.IsNull then
     Self.RemoveEncoding(PayloadType)
   else
     Self.AddEncodingAsReference(Encoding.Clone, PayloadType);
+end;
+
+procedure TIdRTPProfile.AddEncoding(Name: String;
+                                    ClockRate: Cardinal;
+                                    Params: String;
+                                    PayloadType: TIdRTPPayloadType);
+var
+  Enc: TIdRTPEncoding;
+begin
+  Enc := TIdRTPEncoding.Create(Name, ClockRate, Params);
+  try
+    Self.AddEncoding(Enc, PayloadType);
+  finally
+    Enc.Free;
+  end;
 end;
 
 procedure TIdRTPProfile.Assign(Src: TPersistent);
@@ -1141,17 +1364,17 @@ begin
   Result := not Encoding.IsNull and (Self.IndexOfEncoding(Encoding) <> -1);
 end;
 
-function TIdRTPProfile.HasPayloadType(const PayloadType: TIdRTPPayloadType): Boolean;
+function TIdRTPProfile.HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
 begin
   Result := not Self.EncodingAt(PayloadType).IsNull;
 end;
 
-function TIdRTPProfile.EncodingFor(const PayloadType: TIdRTPPayloadType): TIdRTPEncoding;
+function TIdRTPProfile.EncodingFor(PayloadType: TIdRTPPayloadType): TIdRTPEncoding;
 begin
   Result := Self.EncodingAt(PayloadType)
 end;
 
-function TIdRTPProfile.PayloadTypeFor(const Encoding: TIdRTPEncoding): TIdRTPPayloadType;
+function TIdRTPProfile.PayloadTypeFor(Encoding: TIdRTPEncoding): TIdRTPPayloadType;
 var
   Index: Integer;
 begin
@@ -1171,7 +1394,7 @@ end;
 //* TIdRTPProfile Protected methods ********************************************
 
 procedure TIdRTPProfile.AddEncodingAsReference(Encoding: TIdRTPEncoding;
-                                               const PayloadType: TIdRTPPayloadType);
+                                               PayloadType: TIdRTPPayloadType);
 begin
   if not Self.HasPayloadType(PayloadType) and not Self.HasEncoding(Encoding) then
     Self.Encodings[PayloadType] := Encoding;
@@ -1182,7 +1405,7 @@ begin
   if    (Self.Encodings[PayloadType] <> Self.NullEncoding)
     and (Self.Encodings[PayloadType] <> Self.Reserved) then
     Self.Encodings[PayloadType].Free;
-    
+
   Self.Encodings[PayloadType] := Self.Reserved;
 end;
 
@@ -1287,7 +1510,7 @@ end;
 
 //* TIdAudioVisualProfile Private methods **************************************
 
-procedure TIdAudioVisualProfile.ReserveRange(const LowPT, HighPT: TIdRTPPayloadType);
+procedure TIdAudioVisualProfile.ReserveRange(LowPT, HighPT: TIdRTPPayloadType);
 var
   I: TIdRTPPayloadType;
 begin
@@ -1424,7 +1647,6 @@ end;
 
 procedure TIdRTPBasePacket.PrintPadding(Dest: TStream);
 var
-  B:         Byte;
   I:         Integer;
   PadLength: Byte;
 begin
@@ -1440,10 +1662,10 @@ begin
   Assert((Self.Length - Self.RealLength) mod 4 = 0,
          'Padding must be a multiple of 4');
 
-  B := 0;
+  // RFC 3550, section 4: "Octets designated as padding have the value zero."
   PadLength := Self.Length - Self.RealLength;
   for I := 1 to PadLength - 1 do
-    Dest.Write(B, 1);
+    WriteByte(Dest, 0);
 
   // The written padding length includes itself
   Dest.Write(PadLength, 1);
@@ -1532,11 +1754,11 @@ begin
   if Self.HasPadding then B := B or $20;
   if Self.HasExtension then B := B or $10;
   B := B or Self.CsrcCount;
-  Dest.Write(B, SizeOf(B));
+  Dest.Write(B, 1);
 
   B := Self.PayloadType;
   if Self.IsMarker then B := B or $80;
-  Dest.Write(B, SizeOf(B));
+  Dest.Write(B, 1);
 
   WriteWord(Dest, Self.SequenceNo);
 
@@ -1581,7 +1803,11 @@ end;
 
 procedure TIdRTPPacket.CreatePayload(const Encoding: TIdRTPEncoding);
 begin
-  fPayload := TIdRTPPayload.CreatePayload(Encoding);
+  // TODO: is this safe?
+  if not Self.Payload.IsNull then
+    fPayload.Free;
+
+  fPayload := TIdRTPPayload.CreatePayload(Encoding)
 end;
 
 function TIdRTPPacket.GetCsrcCount: TIdRTPCsrcCount;
@@ -1639,6 +1865,14 @@ begin
   Result := false;
 end;
 
+//* TIdRTCPPacket Protected methods ********************************************
+
+procedure TIdRTCPPacket.AssertPacketType(const PT: Byte);
+begin
+  Assert(PT = Self.GetPacketType,
+         Self.ClassName + ' packet type');
+end;
+
 //******************************************************************************
 //* TIdRTCPSenderReportPacket                                                  *
 //******************************************************************************
@@ -1670,8 +1904,7 @@ begin
   B := B or Self.ReceptionReportCount;
   Dest.Write(B, 1);
 
-  B := Self.GetPacketType;
-  Dest.Write(B, 1);
+  WriteByte(Dest, Self.GetPacketType);
 
   WriteWord(Dest, Self.Length);
   WriteCardinal(Dest, Self.SyncSrcID);
@@ -1697,6 +1930,7 @@ begin
   Self.HasPadding           := (B and $20) > 0;
   Self.ReceptionReportCount := B and $1F;
   Src.Read(B, 1);
+  Self.AssertPacketType(B);
 
   Self.Length       := ReadWord(Src);
   Self.SyncSrcID    := ReadCardinal(Src);
@@ -1763,6 +1997,409 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSrcDescChunkItem                                                        *
+//******************************************************************************
+//* TIdSrcDescChunkItem Public methods *****************************************
+
+function TIdSrcDescChunkItem.Length: Byte;
+begin
+  Result := System.Length(Self.Data);
+end;
+
+procedure TIdSrcDescChunkItem.PrintOn(Dest: TStream);
+begin
+  WriteByte(Dest, Self.ID);
+  WriteByte(Dest, Self.Length);
+  Dest.Write(Self.Data[1], System.Length(Self.Data));
+end;
+
+procedure TIdSrcDescChunkItem.ReadFrom(Src: TStream);
+var
+  B: Byte;
+begin
+  Src.Read(B, 1);
+  Assert(B = Self.ID, Self.ClassName + ' SDES item ID');
+
+  Src.Read(B, 1);
+  Self.Data := ReadString(Src, B);
+end;
+
+function TIdSrcDescChunkItem.RealLength: Cardinal;
+begin
+  Result := 2 + System.Length(Self.Data);
+end;
+
+//* TIdSrcDescChunkItem Protected methods **************************************
+
+procedure TIdSrcDescChunkItem.SetData(const Value: String);
+begin
+  fData := Copy(Value, 1, High(Self.Length));
+end;
+
+//******************************************************************************
+//* TIdSDESCanonicalName                                                       *
+//******************************************************************************
+//* TIdSDESCanonicalName Public methods ****************************************
+
+function TIdSDESCanonicalName.ID: Byte;
+begin
+  Result := SDESCName;
+end;
+
+//******************************************************************************
+//* TIdSDESUserName                                                            *
+//******************************************************************************
+//* TIdSDESUserName Public methods *********************************************
+
+function TIdSDESUserName.ID: Byte;
+begin
+  Result := SDESName;
+end;
+
+//******************************************************************************
+//* TIdSDESEmail                                                               *
+//******************************************************************************
+//* TIdSDESEmail Public methods ************************************************
+
+function TIdSDESEmail.ID: Byte;
+begin
+  Result := SDESEmail;
+end;
+
+//******************************************************************************
+//* TIdSDESPhone                                                               *
+//******************************************************************************
+//* TIdSDESPhone Public methods ************************************************
+
+function TIdSDESPhone.ID: Byte;
+begin
+  Result := SDESPhone;
+end;
+
+//******************************************************************************
+//* TIdSDESLocation                                                            *
+//******************************************************************************
+//* TIdSDESLocation Public methods *********************************************
+
+function TIdSDESLocation.ID: Byte;
+begin
+  Result := SDESLoc;
+end;
+
+//******************************************************************************
+//* TIdSDESTool                                                                *
+//******************************************************************************
+//* TIdSDESTool Public methods *************************************************
+
+function TIdSDESTool.ID: Byte;
+begin
+  Result := SDESTool;
+end;
+
+//******************************************************************************
+//* TIdSDESNote                                                                *
+//******************************************************************************
+//* TIdSDESNote Public methods *************************************************
+
+function TIdSDESNote.ID: Byte;
+begin
+  Result := SDESNote;
+end;
+
+//******************************************************************************
+//* TIdSDESPriv                                                                *
+//******************************************************************************
+//* TIdSDESPriv Public methods *************************************************
+
+function TIdSDESPriv.ID: Byte;
+begin
+  Result := SDESPriv;
+end;
+
+procedure TIdSDESPriv.PrintOn(Dest: TStream);
+begin
+  WriteByte(Dest, Self.ID);
+  WriteByte(Dest, Self.Length + System.Length(Self.Prefix) + 1);
+  WriteByte(Dest, System.Length(Self.Prefix));
+
+  if (Self.Prefix <> '') then
+    Dest.Write(Self.Prefix[1], System.Length(Self.Prefix));
+
+  if (Self.Data <> '') then
+    Dest.Write(Self.Data[1],   System.Length(Self.Data));
+end;
+
+procedure TIdSDESPriv.ReadFrom(Src: TStream);
+begin
+end;
+
+function TIdSDESPriv.RealLength: Cardinal;
+begin
+  Result := 3 + System.Length(Self.Prefix) + System.Length(Self.Data);
+end;
+
+//* TIdSDESPriv Protected methods **********************************************
+
+procedure TIdSDESPriv.SetData(const Value: String);
+begin
+  inherited SetData(Copy(Value, 1, Self.MaxDataLength));
+end;
+
+//* TIdSDESPriv Private methods ************************************************
+
+function TIdSDESPriv.MaxDataLength: Byte;
+begin
+  Result := Self.MaxPrefixLength - System.Length(Self.Prefix);
+end;
+
+function TIdSDESPriv.MaxPrefixLength: Byte;
+begin
+  Result := High(Byte) - 1;
+end;
+
+procedure TIdSDESPriv.SetPrefix(const Value: String);
+begin
+  fPrefix := Copy(Value, 1, Self.MaxPrefixLength);
+
+  Self.TruncateData;
+end;
+
+procedure TIdSDESPriv.TruncateData;
+begin
+  if (Self.Data <> '') then
+    Self.Data := Self.Data;
+end;
+
+//******************************************************************************
+//* TIdRTCPSrcDescChunk                                                        *
+//******************************************************************************
+//* TIdRTCPSrcDescChunk Public methods *****************************************
+
+constructor TIdRTCPSrcDescChunk.Create;
+begin
+  inherited Create;
+
+  Self.ItemList := TObjectList.Create(true);
+end;
+
+destructor TIdRTCPSrcDescChunk.Destroy;
+begin
+  Self.ItemList.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdRTCPSrcDescChunk.AddCanonicalName(Name: String);
+begin
+  Self.AddCanonicalHeader.Data := Name;
+end;
+
+function TIdRTCPSrcDescChunk.ItemCount: Integer;
+begin
+  Result := Self.ItemList.Count;
+end;
+
+procedure TIdRTCPSrcDescChunk.PrintOn(Dest: TStream);
+var
+  I: Integer;
+begin
+  WriteCardinal(Dest, Self.SyncSrcID);
+
+  for I := 0 to Self.ItemCount - 1 do
+    Self.Items[I].PrintOn(Dest);
+
+  Self.PrintAlignmentPadding(Dest);
+end;
+
+procedure TIdRTCPSrcDescChunk.ReadFrom(Src: TStream);
+var
+  ID: Byte;
+begin
+  Self.SyncSrcID := ReadCardinal(Src);
+
+  while Self.HasMoreItems(Src) do begin
+    ID := Self.Peek(Src);
+    case ID of
+      SDESEnd:;
+      SDESCName: Self.AddCanonicalHeader.ReadFrom(Src);
+    else
+      raise Exception.Create(IntToStr(ID) + ' is an unknown SDES item type');
+    end;
+  end;
+
+  Self.ReadAlignmentPadding(Src);
+end;
+
+function TIdRTCPSrcDescChunk.RealLength: Cardinal;
+var
+  I: Integer;
+begin
+  Result := 4;
+
+  for I := 0 to Self.ItemCount - 1 do
+    Result := Result + Self.Items[I].RealLength;
+end;
+
+//* TIdRTCPSrcDescChunk Private methods ****************************************
+
+function TIdRTCPSrcDescChunk.AddCanonicalHeader: TIdSDESCanonicalName;
+begin
+  Result := TIdSDESCanonicalName.Create;
+  try
+    Self.ItemList.Add(Result);
+  except
+    if (Self.ItemList.IndexOf(Result) <> -1) then
+      Self.ItemList.Remove(Result)
+    else
+      FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdRTCPSrcDescChunk.GetItems(Index: Integer): TIdSrcDescChunkItem;
+begin
+  Result := Self.ItemList[Index] as TIdSrcDescChunkItem;
+end;
+
+function TIdRTCPSrcDescChunk.HasMoreItems(Src: TStream): Boolean;
+begin
+  Result := Self.Peek(Src) <> 0;
+end;
+
+function TIdRTCPSrcDescChunk.Peek(Src: TStream): Byte;
+begin
+  Src.Read(Result, 1);
+  Src.Seek(-1, soFromCurrent);
+end;
+
+procedure TIdRTCPSrcDescChunk.PrintAlignmentPadding(Dest: TStream);
+var
+  I: Integer;
+begin
+  if (Self.RealLength mod 4 > 0) then
+    for I := 1 to 4 - (Self.RealLength mod 4) do
+      WriteByte(Dest, 0);
+end;
+
+procedure TIdRTCPSrcDescChunk.ReadAlignmentPadding(Src: TStream);
+var
+  B: Byte;
+begin
+  while not Self.HasMoreItems(Src) do
+    Src.Read(B, 1);
+end;
+
+//******************************************************************************
+//* TIdRTCPSourceDescriptionPacket                                             *
+//******************************************************************************
+//* TIdRTCPSourceDescriptionPacket Public methods ******************************
+
+constructor TIdRTCPSourceDescriptionPacket.Create;
+begin
+  inherited Create;
+
+  Self.ChunkList := TObjectList.Create(true);
+end;
+
+destructor TIdRTCPSourceDescriptionPacket.Destroy;
+begin
+  Self.ChunkList.Free;
+
+  inherited Destroy;
+end;
+
+function TIdRTCPSourceDescriptionPacket.AddChunk: TIdRTCPSrcDescChunk;
+begin
+  if (Self.ChunkCount = High(Self.ChunkCount)) then begin
+    Result := nil;
+    Exit;
+  end;
+
+  Result := TIdRTCPSrcDescChunk.Create;
+  try
+    Self.ChunkList.Add(Result);
+  except
+    if (Self.ChunkList.IndexOf(Result) <> -1) then
+      Self.ChunkList.Remove(Result)
+    else
+      FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdRTCPSourceDescriptionPacket.ChunkCount: TIdRTCPSourceCount;
+begin
+  Result := Self.ChunkList.Count;
+end;
+
+procedure TIdRTCPSourceDescriptionPacket.PrintOn(Dest: TStream);
+var
+  B: Byte;
+  I: Integer;
+begin
+  B := Self.Version shl 6;
+  if Self.HasPadding then
+    B := B or $20;
+  B := B or Self.ChunkCount;
+  Dest.Write(B, 1);
+
+  WriteByte(Dest, Self.PacketType);
+
+  WriteWord(Dest, Self.Length);
+
+  for I := 0 to Self.ChunkCount - 1 do
+    Self.Chunks[I].PrintOn(Dest);
+
+  if Self.HasPadding then
+    Self.PrintPadding(Dest);
+end;
+
+procedure TIdRTCPSourceDescriptionPacket.ReadFrom(Src: TStream);
+begin
+end;
+
+function TIdRTCPSourceDescriptionPacket.RealLength: Word;
+var
+  I: Integer;
+begin
+  Result := 4;
+  for I := 0 to Self.ChunkCount - 1 do
+    Result := Result + Self.Chunks[I].RealLength;
+end;
+
+//* TIdRTCPSourceDescriptionPacket Protected methods ***************************
+
+function TIdRTCPSourceDescriptionPacket.GetPacketType: Cardinal;
+begin
+  Result := RTCPSourceDescription;
+end;
+
+function TIdRTCPSourceDescriptionPacket.GetSyncSrcID: Cardinal;
+begin
+  if (Self.ChunkCount = 0) then
+    Result := 0
+  else
+    Result := Self.Chunks[0].SyncSrcID;
+end;
+
+procedure TIdRTCPSourceDescriptionPacket.SetSyncSrcID(const Value: Cardinal);
+begin
+  if (Self.ChunkCount = 0) then
+    Self.AddChunk;
+
+  Self.Chunks[0].SyncSrcID := Value;
+end;
+
+//* TIdRTCPSourceDescriptionPacket Private methods *****************************
+
+function TIdRTCPSourceDescriptionPacket.GetChunks(Index: Integer): TIdRTCPSrcDescChunk;
+begin
+  Result := Self.ChunkList[Index] as TIdRTCPSrcDescChunk;
+end;
+
+//******************************************************************************
 //* TIdRTCPByePacket                                                           *
 //******************************************************************************
 //* TIdRTCPByePacket Public methods ********************************************
@@ -1780,12 +2417,10 @@ var
   I: Integer;
 begin
   B := Self.Version shl 6;
-
   if Self.HasPadding then B := B or $20;
   Dest.Write(B, 1);
 
-  B := Self.GetPacketType;
-  Dest.Write(B, 1);
+  WriteByte(Dest, Self.GetPacketType);
 
   WriteWord(Dest, Self.Length);
 
@@ -1813,7 +2448,7 @@ begin
   Self.SourceCount := B and $1F;
 
   Src.Read(B, 1);
-  Assert(RTCPGoodBye = B, 'TIdRTCPByePacket packet type');
+  Self.AssertPacketType(B);
 
   Self.Length := ReadWord(Src);
 
@@ -1898,12 +2533,10 @@ var
   B: Byte;
 begin
   B := Self.Version shl 6;
-
   if Self.HasPadding then B := B or $20;
   Dest.Write(B, 1);
 
-  B := Self.GetPacketType;
-  Dest.Write(B, 1);
+  WriteByte(Dest, Self.GetPacketType);
 
   WriteWord(Dest, Self.Length);
 
@@ -1932,7 +2565,7 @@ begin
   Self.HasPadding := (B and $20) <> 0;
 
   Src.Read(B, 1);
-  Assert(RTCPApplicationDefined = B, 'TIdRTCPApplicationDefinedPacket packet type');
+  Self.AssertPacketType(B);
 
   Self.Length := ReadWord(Src);
   Self.SyncSrcID := ReadCardinal(Src);
@@ -2043,5 +2676,6 @@ end;
 
 initialization
 finalization
+  GNullEncoding.Free;
   GNullPayload.Free;
 end.
