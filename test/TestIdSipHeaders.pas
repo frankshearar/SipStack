@@ -281,6 +281,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestCredentialHeaderType;
     procedure TestName; override;
   end;
 
@@ -420,6 +421,7 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestCredentialHeaderType;
     procedure TestName; override;
   end;
 
@@ -496,6 +498,18 @@ type
     procedure TestRemoveAll;
   end;
 
+  TestTIdSipAuthorizations = class(TTestCase)
+  private
+    Headers:        TIdSipHeaders;
+    Authorizations: TIdSipAuthorizations;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCreateOnEmptySet;
+    procedure TestCurrentAuthorization;
+  end;
+
   TestTIdSipContacts = class(TTestCase)
   private
     Headers:  TIdSipHeaders;
@@ -518,6 +532,18 @@ type
     procedure TearDown; override;
   published
     procedure TestCurrentExpires;
+  end;
+
+  TestTIdSipProxyAuthorizations = class(TTestCase)
+  private
+    Headers:        TIdSipHeaders;
+    ProxyAuthorizations: TIdSipProxyAuthorizations;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCreateOnEmptySet;
+    procedure TestCurrentProxyAuthorization;
   end;
 
   TestTIdSipRoutePath = class(TTestCase)
@@ -2662,6 +2688,20 @@ end;
 
 //* TestTIdSipProxyAuthenticateHeader Published methods ************************
 
+procedure TestTIdSipProxyAuthenticateHeader.TestCredentialHeaderType;
+var
+  Credential: TIdSipAuthorizationHeader;
+begin
+  Credential := Self.A.CredentialHeaderType.Create;
+  try
+    CheckEquals(ProxyAuthorizationHeader,
+                Credential.Name,
+                Self.A.Name + ' credentials header');
+  finally
+    Credential.Free;
+  end;
+end;
+
 procedure TestTIdSipProxyAuthenticateHeader.TestName;
 begin
   CheckEquals(ProxyAuthenticateHeader,
@@ -3658,6 +3698,20 @@ begin
   inherited SetUp;
 
   Self.W := Self.Header as TIdSipWWWAuthenticateHeader;
+end;
+
+procedure TestTIdSipWWWAuthenticateHeader.TestCredentialHeaderType;
+var
+  Credential: TIdSipAuthorizationHeader;
+begin
+  Credential := Self.W.CredentialHeaderType.Create;
+  try
+    CheckEquals(AuthorizationHeader,
+                Credential.Name,
+                Self.W.Name + ' credentials header');
+  finally
+    Credential.Free;
+  end;
 end;
 
 procedure TestTIdSipWWWAuthenticateHeader.TestName;
@@ -4755,6 +4809,82 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipAuthorizations                                                   *
+//******************************************************************************
+//* TestTIdSipAuthorizations Public methods ************************************
+
+procedure TestTIdSipAuthorizations.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers  := TIdSipHeaders.Create;
+  Self.Authorizations := TIdSipAuthorizations.Create(Self.Headers);
+end;
+
+procedure TestTIdSipAuthorizations.TearDown;
+begin
+  Self.Authorizations.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipAuthorizations Published methods *********************************
+
+procedure TestTIdSipAuthorizations.TestCreateOnEmptySet;
+var
+  Cnts:       TIdSipAuthorizations;
+  NewHeader: TIdSipHeader;
+begin
+  Cnts := TIdSipAuthorizations.Create;
+  try
+    CheckEquals(0, Cnts.Count, 'Initial list');
+
+    NewHeader := TIdSipAuthorizationHeader.Create;
+    try
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a new Authorization');
+    finally
+      NewHeader.Free;
+    end;
+
+    NewHeader := TIdSipCallIdHeader.Create;
+    try
+      NewHeader.Value := '1'; // otherwise you have an invalid Call-ID
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a non-Authorization');
+    finally
+      NewHeader.Free;
+    end;
+  finally
+    Cnts.Free;
+  end;
+end;
+
+procedure TestTIdSipAuthorizations.TestCurrentAuthorization;
+var
+  NewAuthorization: TIdSipHeader;
+begin
+  Check(nil = Self.Authorizations.CurrentAuthorization,
+        'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  Check(nil = Self.Authorizations.CurrentAuthorization,
+        'No Authorizations');
+
+  NewAuthorization := Self.Headers.Add(AuthorizationHeader);
+  Self.Authorizations.First;
+  Check(NewAuthorization = Self.Authorizations.CurrentAuthorization,
+        'First Authorization');
+
+  NewAuthorization := Self.Headers.Add(AuthorizationHeader);
+  Self.Authorizations.First;
+  Self.Authorizations.Next;
+  Check(NewAuthorization = Self.Authorizations.CurrentAuthorization,
+        'Second Authorization');
+end;
+
+//******************************************************************************
 //* TestTIdSipContacts                                                         *
 //******************************************************************************
 //* TestTIdSipContacts Public methods ******************************************
@@ -4895,6 +5025,82 @@ begin
   CheckEquals(22,
               Self.ExpiresHeaders.CurrentExpires,
               'First Expires');
+end;
+
+//******************************************************************************
+//* TestTIdSipProxyAuthorizations                                              *
+//******************************************************************************
+//* TestTIdSipProxyAuthorizations Public methods *******************************
+
+procedure TestTIdSipProxyAuthorizations.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers  := TIdSipHeaders.Create;
+  Self.ProxyAuthorizations := TIdSipProxyAuthorizations.Create(Self.Headers);
+end;
+
+procedure TestTIdSipProxyAuthorizations.TearDown;
+begin
+  Self.ProxyAuthorizations.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipProxyAuthorizations Published methods ****************************
+
+procedure TestTIdSipProxyAuthorizations.TestCreateOnEmptySet;
+var
+  Cnts:       TIdSipProxyAuthorizations;
+  NewHeader: TIdSipHeader;
+begin
+  Cnts := TIdSipProxyAuthorizations.Create;
+  try
+    CheckEquals(0, Cnts.Count, 'Initial list');
+
+    NewHeader := TIdSipProxyAuthorizationHeader.Create;
+    try
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a new ProxyAuthorization');
+    finally
+      NewHeader.Free;
+    end;
+
+    NewHeader := TIdSipCallIdHeader.Create;
+    try
+      NewHeader.Value := '1'; // otherwise you have an invalid Call-ID
+      Cnts.Add(NewHeader);
+      CheckEquals(1, Cnts.Count, 'Added a non-ProxyAuthorization');
+    finally
+      NewHeader.Free;
+    end;
+  finally
+    Cnts.Free;
+  end;
+end;
+
+procedure TestTIdSipProxyAuthorizations.TestCurrentProxyAuthorization;
+var
+  NewProxyAuthorization: TIdSipHeader;
+begin
+  Check(nil = Self.ProxyAuthorizations.CurrentProxyAuthorization,
+        'No headers');
+
+  Self.Headers.Add(ViaHeaderFull);
+  Check(nil = Self.ProxyAuthorizations.CurrentProxyAuthorization,
+        'No ProxyAuthorizations');
+
+  NewProxyAuthorization := Self.Headers.Add(ProxyAuthorizationHeader);
+  Self.ProxyAuthorizations.First;
+  Check(NewProxyAuthorization = Self.ProxyAuthorizations.CurrentProxyAuthorization,
+        'First ProxyAuthorization');
+
+  NewProxyAuthorization := Self.Headers.Add(ProxyAuthorizationHeader);
+  Self.ProxyAuthorizations.First;
+  Self.ProxyAuthorizations.Next;
+  Check(NewProxyAuthorization = Self.ProxyAuthorizations.CurrentProxyAuthorization,
+        'Second ProxyAuthorization');
 end;
 
 //******************************************************************************
