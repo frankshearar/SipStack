@@ -184,9 +184,9 @@ type
     function IsSecure: Boolean; override;
 
     property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
-    property RootCertificate:   TFileName read GetRootCertificate write SetRootCertificate;
-    property ServerCertificate: TFileName read GetServerCertificate write SetServerCertificate;
-    property ServerKey:         TFileName read GetServerKey write SetServerKey;
+    property RootCertificate:   TFileName      read GetRootCertificate write SetRootCertificate;
+    property ServerCertificate: TFileName      read GetServerCertificate write SetServerCertificate;
+    property ServerKey:         TFileName      read GetServerKey write SetServerKey;
   end;
 
   // I implement the Stream Control Transmission Protocol (RFC 3286) connections
