@@ -61,10 +61,14 @@ type
     Transport:             TIdSipTransport;
     WrongServer:           Boolean;
 
-    procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
-    procedure CheckCanReceiveResponse(Sender: TObject; const R: TIdSipResponse);
-    procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject; const R: TIdSipResponse);
-    procedure CheckSendRequestTopVia(Sender: TObject; const R: TIdSipRequest);
+    procedure CheckCanReceiveRequest(Sender: TObject;
+                                     const R: TIdSipRequest);
+    procedure CheckCanReceiveResponse(Sender: TObject;
+                                      const R: TIdSipResponse);
+    procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
+                                                    const R: TIdSipResponse);
+    procedure CheckSendRequestTopVia(Sender: TObject;
+                                     const R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
                                const Transport: TIdSipTransport);
@@ -427,7 +431,7 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckCanReceiveResponse(Sender: TObject;
-                                                        const R:      TIdSipResponse);
+                                                      const R: TIdSipResponse);
 begin
   try
     Self.ReceivedResponse := true;
@@ -442,13 +446,13 @@ begin
 end;
 
 procedure TestTIdSipTransport.CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
-                                                                      const R:      TIdSipResponse);
+                                                                    const R: TIdSipResponse);
 begin
   Self.ReceivedResponse := true;
 end;
 
 procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
-                                                       const R:      TIdSipRequest);
+                                                     const R: TIdSipRequest);
 begin
   try
     Check(Self.Transport.GetTransportType = R.LastHop.Transport,
