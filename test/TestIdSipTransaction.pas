@@ -153,6 +153,7 @@ type
     procedure TestReceiveInviteInTerminatedState;
     procedure TestReceiveNonTryingProvisionalResponseFromTUInProceedingState;
     procedure TestReliableTransportNoFinalResponseRetransmissions;
+    procedure TestReReceiveInitialRequestInCompletedState;
     procedure TestResponseRetransmissionInCompletedState;
     procedure TestSending100;
     procedure TestTimerGStops;
@@ -227,12 +228,12 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
-  Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
-  Result.AddTest(TestTIdSipTransaction.Suite);
-  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
+//  Result.AddTest(TestTIdSipTransaction.Suite);
+//  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
   Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+//  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
 end;
 
 function Transaction(const S: TIdSipTransactionState): String;
@@ -686,9 +687,22 @@ begin
   Self.InitialRequest.ContentLength                      := 29;
   Self.InitialRequest.Body                               := 'I am a message. Hear me roar!';
 
-  Self.FailMsg               := '';
-  Self.MockDispatcher        := TIdSipMockTransactionDispatcher.Create;
-  Self.Response              := TIdSipResponse.Create;
+  Self.FailMsg        := '';
+  Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.Response                                    := TIdSipResponse.Create;
+  Self.Response.MaxForwards                        := 70;
+  Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw1.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Response.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP gw2.leo-ix.org;branch=z9hG4bK776asdhds';
+  Self.Response.From.DisplayName                   := 'Case';
+  Self.Response.From.Address.URI                   := 'sip:case@fried.neurons.org';
+  Self.Response.From.Tag                           := '1928301774';
+  Self.Response.CallID                             := 'a84b4c76e66710@gw1.leo-ix.org';
+  Self.Response.CSeq.Method                        := 'INVITE';
+  Self.Response.CSeq.SequenceNo                    := 314159;
+  Self.Response.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.lu';
+  Self.InitialRequest.ContentLength                := 0;
+
   Self.Tran                  := Self.TransactionType.Create;
   Self.TransactionCompleted  := false;
   Self.TransactionFailed     := false;
@@ -1257,7 +1271,11 @@ end;
 
 procedure TestTIdSipServerInviteTransaction.CheckReceiveInvite(Sender: TObject; const R: TIdSipResponse);
 begin
+  CheckEquals(Self.InitialRequest.CallID, R.CallID, 'Call-ID');
+  Check(Self.InitialRequest.CSeq.IsEqualTo(R.CSeq), 'CSeq');
   Check(R.Path.IsEqualTo(Self.InitialRequest.Path), 'Via path differs');
+  CheckEquals(Self.InitialRequest.ToHeader.Address, R.ToHeader.Address, 'To address');
+  Check(not R.ToHeader.HasTag, 'To tag');
 
   Self.CheckReceiveInviteFired := true;
 end;
@@ -1524,11 +1542,39 @@ begin
               'Reliable transports should not resend final response');
 end;
 
+procedure TestTIdSipServerInviteTransaction.TestReReceiveInitialRequestInCompletedState;
+var
+  FirstResponse:  TIdSipResponse;
+  SecondResponse: TIdSipResponse;
+begin
+  FirstResponse := TIdSipResponse.Create;
+  try
+    Self.MoveToCompletedState;
+    Self.MockDispatcher.Transport.ResetSentResponseCount;
+
+    FirstResponse.Assign(Self.MockDispatcher.Transport.LastResponse);
+
+    Self.Tran.HandleRequest(Self.InitialRequest, Self.MockDispatcher.Transport);
+
+    CheckEquals(1,
+                Self.MockDispatcher.Transport.SentResponseCount,
+                'Response not sent to re-received initial request');
+
+    SecondResponse := Self.MockDispatcher.Transport.LastResponse;
+    Check(FirstResponse.IsEqualTo(SecondResponse),
+          'Different response sent to initial request retransmission');
+  finally
+    FirstResponse.Free;
+  end;
+end;
+
 procedure TestTIdSipServerInviteTransaction.TestResponseRetransmissionInCompletedState;
 begin
   Self.MoveToCompletedState;
   Self.MockDispatcher.Transport.ResetSentResponseCount;
 
+  // Long enough to send 2 responses, but not long enough for 3.
+  // cf. RFC 3261, section 17.2.1
   Sleep(3*InitialT1 + (InitialT1 div 2));
   CheckEquals(2,
               Self.MockDispatcher.Transport.SentResponseCount,

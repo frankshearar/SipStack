@@ -101,11 +101,6 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipUACDialog = class(TIdSipDialog)
-  public
-    constructor Create(const Request: TIdSipRequest; const SentOverTLS: Boolean); override;
-  end;
-
   TIdSipDialogs = class(TObject)
   private
     List:    TObjectList;
@@ -388,41 +383,6 @@ end;
 function TIdSipNullDialog.IsNull: Boolean;
 begin
   Result := true;
-end;
-
-//******************************************************************************
-//* TIdSipUACDialog                                                            *
-//******************************************************************************
-//* TIdSipUACDialog Public methods *********************************************
-
-constructor TIdSipUACDialog.Create(const Request: TIdSipRequest; const SentOverTLS: Boolean);
-var
-  RouteFilter: TIdSipHeadersFilter;
-begin
-  inherited Create(Request, SentOverTLS);
-
-  fID := TIdSipDialogID.Create(Request.CallID,
-                               Request.From.Tag,
-                               Request.ToHeader.Tag);
-
-  Self.LocalSequenceNo  := Request.CSeq.SequenceNo;
-
-  fLocalURI := TIdURI.Create(Request.From.Address.GetFullURI);
-
-  Self.RemoteSequenceNo := 0;
-
-  Self.fRemoteTarget := TIdURI.Create('');
-
-  fRemoteURI := TIdURI.Create(Request.ToHeader.Address.GetFullURI);
-
-  fRouteSet := TIdSipHeaders.Create;
-
-  RouteFilter := TIdSipHeadersFilter.Create(Request.Headers, RecordRouteHeader);
-  try
-    Self.RouteSet.AddInReverseOrder(RouteFilter);
-  finally
-    RouteFilter.Free;
-  end;
 end;
 
 //******************************************************************************

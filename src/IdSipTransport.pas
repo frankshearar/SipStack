@@ -3,9 +3,9 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdSipConsts, IdSipHeaders, IdSipMessage,
-  IdSipTcpClient, IdSipTcpServer, IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL,
-  IdTCPClient, IdTCPServer, IdUDPServer, SyncObjs, SysUtils;
+  Contnrs, IdException, IdSipHeaders, IdSipMessage, IdSipTcpClient,
+  IdSipTcpServer, IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, IdTCPClient,
+  IdTCPServer, SyncObjs, SysUtils;
 
 const
   DefaultTimeout = 5000;
@@ -192,7 +192,7 @@ type
 implementation
 
 uses
-  IdSipTlsServer, IdUDPClient, IdURI;
+  IdSipConsts, IdSipTlsServer, IdUDPClient;
 
 //******************************************************************************
 //* TIdSipAbstractTransport                                                    *

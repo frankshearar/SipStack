@@ -50,20 +50,6 @@ type
     procedure TestRemoteTarget;
   end;
 
-  TestTIdSipUACDialog = class(TestTIdSipDialog)
-  private
-    Dlg: TIdSipUACDialog;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestDialogID;
-    procedure TestDialogIDToHasNoTag;
-    procedure TestRecordRouteHeaders;
-    procedure TestSequenceNo;
-    procedure TestUri;
-  end;
-
   TestTIdSipDialogs = class(TTestCase)
   private
     D:                TIdSipDialogs;
@@ -102,7 +88,6 @@ begin
   Result := TTestSuite.Create('IdSipDialog unit tests');
   Result.AddTest(TestTIdSipDialogID.Suite);
   Result.AddTest(TestTIdSipDialog.Suite);
-  Result.AddTest(TestTIdSipUACDialog.Suite);
   Result.AddTest(TestTIdSipDialogs.Suite);
 end;
 
@@ -536,90 +521,6 @@ begin
   CheckEquals(Self.RemoteTarget,
               Self.Dlg.RemoteTarget,
               'RemoteTarget before response received');
-end;
-
-//******************************************************************************
-//* TestTIdSipUACDialog                                                        *
-//******************************************************************************
-//* TestTIdSipUACDialog Public methods *****************************************
-
-procedure TestTIdSipUACDialog.SetUp;
-begin
-  inherited SetUp;
-  Self.Dlg.Free;
-
-  Self.Dlg := TIdSipUACDialog.Create(Self.Req, false);
-end;
-
-procedure TestTIdSipUACDialog.TearDown;
-begin
-  Self.Dlg.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipUACDialog Published methods **************************************
-
-procedure TestTIdSipUACDialog.TestDialogID;
-begin
-  CheckEquals(Self.Req.CallID,       Self.Dlg.ID.CallID,    'CallID');
-  CheckEquals(Self.Req.From.Tag,     Self.Dlg.ID.LocalTag,  'LocalTag');
-  CheckEquals(Self.Req.ToHeader.Tag, Self.Dlg.ID.RemoteTag, 'RemoteTag');
-end;
-
-procedure TestTIdSipUACDialog.TestDialogIDToHasNoTag;
-var
-  D: TIdSipUACDialog;
-begin
-  Self.Req.ToHeader.Value := 'Case <sip:case@fried.neurons.org>';
-  D := TIdSipUACDialog.Create(Self.Req, false);
-  try
-    CheckEquals('', D.ID.RemoteTag, 'LocalTag value with no To tag');
-  finally
-    D.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestRecordRouteHeaders;
-var
-  D: TIdSipUACDialog;
-begin
-  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
-  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
-  Self.Req.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
-
-  D := TIdSipUACDialog.Create(Self.Req, false);
-  try
-    CheckEquals(3, D.RouteSet.Count, 'Incorrect number of Record-Route headers');
-    CheckEquals('<sip:127.0.0.1:5002>',     D.RouteSet.Items[0].Value, '1st Record-Route header');
-    CheckEquals('<sip:127.0.0.1:5001>',     D.RouteSet.Items[1].Value, '2nd Record-Route header');
-    CheckEquals('<sip:127.0.0.1:5000;foo>', D.RouteSet.Items[2].Value, '3rd Record-Route header');
-  finally
-    D.Free;
-  end;
-end;
-
-procedure TestTIdSipUACDialog.TestSequenceNo;
-begin
-  CheckEquals(Self.Req.CSeq.SequenceNo, Self.Dlg.LocalSequenceNo,  'LocalSequenceNo');
-  CheckEquals(0,                        Self.Dlg.RemoteSequenceNo, 'RemoteSequenceNo');
-
-  Self.Res.StatusCode := SIPTrying;
-  Self.Dlg.HandleMessage(Self.Res);
-  CheckEquals(Self.Res.CSeq.SequenceNo,
-              Self.Dlg.RemoteSequenceNo,
-              'RemoteSequenceNo after receiving a response');
-end;
-
-procedure TestTIdSipUACDialog.TestUri;
-begin
-  CheckEquals(Self.Req.From.Address,
-              Self.Dlg.LocalURI,
-              'LocalUri');
-
-  CheckEquals(Self.Req.ToHeader.Address,
-              Self.Dlg.RemoteURI,
-              'RemoteUri');
 end;
 
 //******************************************************************************

@@ -154,16 +154,14 @@ type
 
   TIdSipServerInviteTransaction = class(TIdSipTransaction)
   private
-    LastProceedingResponseSent: Cardinal;
-    TimerG:                     TIdSipTimer;
-    TimerGHasFired:             Boolean;
-    TimerH:                     TIdSipTimer;
-    TimerI:                     TIdSipTimer;
+    LastResponseSent: TIdSipResponse;
+    TimerG:           TIdSipTimer;
+    TimerGHasFired:   Boolean;
+    TimerH:           TIdSipTimer;
+    TimerI:           TIdSipTimer;
 
     procedure ChangeToConfirmed(const R: TIdSipRequest);
     function  Create100Response(const R: TIdSipRequest): TIdSipResponse;
-    function  CreateResponse(const R:          TIdSipRequest;
-                             const StatusCode: Cardinal): TIdSipResponse;
     procedure EstablishDialog;
     procedure OnTimerG(Sender: TObject);
     procedure OnTimerH(Sender: TObject);
@@ -214,7 +212,7 @@ type
 
   TIdSipServerNonInviteTransaction = class(TIdSipTransaction)
   private
-    LastProceedingResponse: TIdSipResponse;
+    LastResponseSent: TIdSipResponse;
     TimerJ:                 TIdSipTimer;
 
     procedure ChangeToTrying(const R: TIdSipRequest);
@@ -906,10 +904,14 @@ begin
   Self.TimerI := TIdSipTimer.Create;
   Self.TimerI.Interval := T4;
   Self.TimerI.OnTimer  := Self.OnTimerI;
+
+  Self.LastResponseSent := TIdSipResponse.Create;
 end;
 
 destructor TIdSipServerInviteTransaction.Destroy;
 begin
+  Self.LastResponseSent.Free;
+
   Self.TimerI.TerminateAndWaitFor;
   Self.TimerI.Free;
   Self.TimerH.TerminateAndWaitFor;
@@ -960,7 +962,6 @@ begin
 
   Self.TimerH.Interval := Timeout;
 
-  Self.LastProceedingResponseSent := SIPTrying;
   Self.TrySend100Response(Self.InitialRequest);
 end;
 
@@ -1002,15 +1003,9 @@ end;
 
 function TIdSipServerInviteTransaction.Create100Response(const R: TIdSipRequest): TIdSipResponse;
 begin
-  Result := Self.CreateResponse(R, SIPTrying);
-end;
-
-function TIdSipServerInviteTransaction.CreateResponse(const R:          TIdSipRequest;
-                                                      const StatusCode: Cardinal): TIdSipResponse;
-begin
   Result := TIdSipResponse.Create;
   try
-    Result.StatusCode := StatusCode;
+    Result.StatusCode := SIPTrying;
     Result.SIPVersion := SIPVersion;
 
     Result.From     := R.From;
@@ -1086,8 +1081,9 @@ procedure TIdSipServerInviteTransaction.TrySendLastResponse(const R: TIdSipReque
 var
   Response: TIdSipResponse;
 begin
-  Response := Self.CreateResponse(R, Self.LastProceedingResponseSent);
+  Response := TIdSipResponse.Create;
   try
+    Response.Assign(Self.LastResponseSent);
     Self.TrySendResponse(Response);
   finally
     Response.Free;
@@ -1096,7 +1092,7 @@ end;
 
 procedure TIdSipServerInviteTransaction.TrySendResponse(const R: TIdSipResponse);
 begin
-  Self.LastProceedingResponseSent := R.StatusCode;
+  Self.LastResponseSent.Assign(R);
 
   inherited TrySendResponse(R);
 end;
@@ -1228,12 +1224,12 @@ begin
   Self.TimerJ         := TIdSipTimer.Create(true);
   Self.TimerJ.OnTimer := Self.OnTimerJ;
 
-  Self.LastProceedingResponse := TIdSipResponse.Create;
+  Self.LastResponseSent := TIdSipResponse.Create;
 end;
 
 destructor TIdSipServerNonInviteTransaction.Destroy;
 begin
-  Self.LastProceedingResponse.Free;
+  Self.LastResponseSent.Free;
 
   Self.TimerJ.TerminateAndWaitFor;
   Self.TimerJ.Free;
@@ -1261,7 +1257,7 @@ begin
       if R.IsFinal then
         Self.ChangeToCompleted(R)
       else begin
-        Self.LastProceedingResponse.Assign(R);
+        Self.LastResponseSent.Assign(R);
         Self.ChangeToProceeding(R);
       end;
     end;
@@ -1298,7 +1294,7 @@ end;
 
 procedure TIdSipServerNonInviteTransaction.TrySendResponse(const R: TIdSipResponse);
 begin
-  Self.LastProceedingResponse.Assign(R);
+  Self.LastResponseSent.Assign(R);
 
   inherited TrySendResponse(R);
 end;
@@ -1319,7 +1315,7 @@ end;
 
 procedure TIdSipServerNonInviteTransaction.TrySendLastResponse(const R: TIdSipRequest);
 begin
-  Self.TrySendResponse(Self.LastProceedingResponse);
+  Self.TrySendResponse(Self.LastResponseSent);
 end;
 
 //******************************************************************************

@@ -63,7 +63,7 @@ type
 
     function HasSipsUri: Boolean;
 
-    property Address: TIdURI read fAddress write SetAddress;
+    property Address:     TIdURI read fAddress write SetAddress;
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
@@ -217,6 +217,7 @@ type
     destructor  Destroy; override;
 
     function EncodeQuotedStr(const S: String): String;
+    function HasSipsUri: Boolean;
     function IsLooseRoutable: Boolean;
 
     property Address:     TIdURI read fAddress write SetAddress;
@@ -1394,6 +1395,11 @@ begin
   Result := S;
   Result := StringReplace(Result, '\', '\\', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '"', '\"', [rfReplaceAll, rfIgnoreCase]);
+end;
+
+function TIdSipRouteHeader.HasSipsUri: Boolean;
+begin
+  Result := Self.Address.Protocol = SipsScheme;
 end;
 
 function TIdSipRouteHeader.IsLooseRoutable: Boolean;
