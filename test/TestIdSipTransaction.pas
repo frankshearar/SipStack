@@ -25,7 +25,6 @@ type
   published
     procedure TestAddAndCountTransport;
     procedure TestClearTransports;
-    procedure TestLiveTransactionCount;
     procedure TestMatchInviteClient;
     procedure TestMatchInviteClientAckWithInvite;
     procedure TestMatchInviteClientDifferentCSeqMethod;
@@ -337,36 +336,6 @@ begin
     end;
   finally
     T1.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestLiveTransactionCount;
-var
-  Mock: TIdSipMockTransport;
-  R:    TIdSipRequest;
-begin
-  Mock := TIdSipMockTransport.Create;
-  try
-    Self.D.AddTransport(Mock);
-
-    R := TIdSipRequest.Create;
-    try
-      R.Method := MethodInvite;
-      R.SIPVersion := SIPVersion;
-      R.Headers.Add(ViaHeaderFull).Value     := 'SIP/2.0/TCP localhost;branch=z9hG4bK776asdhds';
-      R.Headers.Add(MaxForwardsHeader).Value := '70';
-      R.Headers.Add(ToHeaderFull).Value      := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
-      R.Headers.Add(FromHeaderFull).Value    := 'Case <sip:case@fried.neurons.org>';
-      R.Headers.Add(CallIDHeaderFull).Value  := 'a84b4c76e66710@gw1.leo-ix.org';
-      R.Headers.Add(CSeqHeader).Value        := '314159 INVITE';
-      Mock.SendRequest(R);
-    finally
-      R.Free;
-    end;
-
-    CheckEquals(1, Self.D.LiveTransactionCount, 'No new transaction created');
-  finally
-    Mock.Free;
   end;
 end;
 

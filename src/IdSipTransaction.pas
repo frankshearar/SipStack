@@ -41,7 +41,6 @@ type
 
     procedure AddTransport(const Transport: TIdSipAbstractTransport);
     procedure ClearTransports;
-    function  LiveTransactionCount: Integer;
     function  Match(const ReceivedRequest,
                           TranRequest: TIdSipRequest): Boolean; overload;
     function  Match(const ReceivedResponse: TIdSipResponse;
@@ -244,11 +243,6 @@ end;
 procedure TIdSipTransactionDispatcher.ClearTransports;
 begin
   Self.Transports.Clear;
-end;
-
-function TIdSipTransactionDispatcher.LiveTransactionCount: Integer;
-begin
-  Result := 0;
 end;
 
 function TIdSipTransactionDispatcher.Match(const ReceivedRequest,
