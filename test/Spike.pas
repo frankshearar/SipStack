@@ -7,6 +7,16 @@
   This unit contains code written by:
     * Frank Shearar
 }
+
+{ CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING
+
+  This is a PROTOTYPE. You WILL find all sorts of bugs and things in things like
+  buttons not en/disabling etc. The unit does provide you with some examples of
+  how to use the SIP stack, and a fairly decent testing User Agent for fiddling
+  with the call control SIP provides.
+  
+  CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING CAVEAT WARNING
+}
 unit Spike;
 
 interface
@@ -418,6 +428,8 @@ end;
 
 procedure TrnidSpike.OnModifySession(Modify: TIdSipInboundInvite);
 begin
+  Modify.Accept(Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address),
+                SdpMimeType);
 end;
 
 procedure TrnidSpike.OnNewData(Data: TIdRTPPayload;
@@ -596,8 +608,8 @@ begin
 
     Self.ResetCounters;
 
-    Self.AudioPlayer.Play(AnyAudioDevice);
-    Self.PayloadProcessor.StartListening(SDP);
+//    Self.AudioPlayer.Play(AnyAudioDevice);
+//    Self.PayloadProcessor.StartListening(SDP);
 
     if Self.MasqAsNat.Checked then
       SDP := StringReplace(SDP, OurHostName, Self.HostName.Text, [rfReplaceAll, rfIgnoreCase]);
@@ -775,27 +787,31 @@ var
   SDP:    TIdSdpPayload;
 begin
   if Assigned(Self.LatestSession) then begin
-    SDP := TIdSdpPayload.CreateFrom(Self.LatestSession.InitialRequest.Body);
-    try
-      SDP.Origin.Address := Self.Address;
-      for I := 0 to SDP.MediaDescriptionCount - 1 do
-        SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
-
-      Answer := SDP.AsString;
-    finally
-      SDP.Free;
-    end;
-
     Self.ResetCounters;
 
-    Self.AudioPlayer.Play(AnyAudioDevice);
+    if (Self.LatestSession.InitialRequest.Body <> '') then begin
+      SDP := TIdSdpPayload.CreateFrom(Self.LatestSession.InitialRequest.Body);
+      try
+        SDP.Origin.Address := Self.Address;
+        for I := 0 to SDP.MediaDescriptionCount - 1 do
+          SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
+
+        Answer := SDP.AsString;
+      finally
+        SDP.Free;
+      end;
+
+//      Self.AudioPlayer.Play(AnyAudioDevice);
 
     // Offer contains a description of what data we expect to receive. Sometimes
     // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
     // port 8000's already bound. We thus try to honour the offer as closely as
     // possible.
-    Self.PayloadProcessor.StartListening(Answer);
-    Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
+//      Self.PayloadProcessor.StartListening(Answer);
+//      Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
+    end
+    else
+      Answer := Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address);
 
     (Self.LatestSession as TIdSipInboundSession).AcceptCall(Answer, SdpMimeType);
   end;
