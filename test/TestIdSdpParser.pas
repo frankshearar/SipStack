@@ -6,6 +6,12 @@ uses
   IdSdpParser, TestFramework;
 
 type
+  TestFunctions = class(TTestCase)
+  published
+    procedure TestStrToAddressType;
+    procedure TestAddressTypeToStr;
+  end;
+
   TestTIdSdpParser = class(TTestCase)
   private
     P:       TIdSdpParser;
@@ -17,6 +23,7 @@ type
     procedure TestIsPhone;
     procedure TestIsPhoneNumber;
     procedure TestIsText;
+    procedure TestParseConnection;
     procedure TestParseEmail;
     procedure TestParseEmailBracketedName;
     procedure TestParseEmailRfc822;
@@ -28,9 +35,12 @@ type
     procedure TestParseInfo;
     procedure TestParseInfoIllegalCharacters;
     procedure TestParseMinimumPayload;
+    procedure TestParseMalformedOrigin;
     procedure TestParseMissingOrigin;
     procedure TestParseMissingSession;
     procedure TestParseMissingVersion;
+    procedure TestParseMultiplePhoneNumbers;
+    procedure TestParseMultipleVersions;
     procedure TestParsePhoneNumber;
     procedure TestParsePhoneNumberWithAngleBracketsButNoName;
     procedure TestParsePhoneNumberWithStuffOutsideComment;
@@ -51,7 +61,75 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+  Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
+end;
+
+//******************************************************************************
+//* TestFunctions                                                              *
+//******************************************************************************
+//* TestFunctions Published methods ********************************************
+
+procedure TestFunctions.TestStrToAddressType;
+begin
+  Check(Id_IPv4 = StrToAddressType('IP4'), 'IP4');
+  Check(Id_IPv6 = StrToAddressType('IP6'), 'IP6');
+
+  try
+    StrToAddressType('');
+    Fail('Failed to bail out: ''''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert '''' to type TIdIPVersion',
+                  E.Message,
+                  'Unexpected exception: ''''');
+  end;
+
+  try
+    StrToAddressType('ip4');
+    Fail('Failed to bail out: ''ip4''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert ''ip4'' to type TIdIPVersion',
+                  E.Message,
+                  'Unexpected exception: ''ip4''');
+  end;
+
+  try
+    StrToAddressType('IP5');
+    Fail('Failed to bail out: ''IP5''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert ''IP5'' to type TIdIPVersion',
+                  E.Message,
+                  'Unexpected exception: ''IP5''');
+  end;
+
+  try
+    StrToAddressType('halloo');
+    Fail('Failed to bail out: ''halloo''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert ''halloo'' to type TIdIPVersion',
+                  E.Message,
+                  'Unexpected exception: ''halloo''');
+  end;
+
+  try
+    StrToAddressType(' ');
+    Fail('Failed to bail out: '' ''');
+  except
+    on E: EConvertError do
+      CheckEquals('Couldn''t convert '' '' to type TIdIPVersion',
+                  E.Message,
+                  'Unexpected exception: '' ''');
+  end;
+end;
+
+procedure TestFunctions.TestAddressTypeToStr;
+begin
+  CheckEquals(AddressTypeIP4, AddressTypeToStr(Id_IPv4), 'Id_IPv4');
+  CheckEquals(AddressTypeIP6, AddressTypeToStr(Id_IPv6), 'Id_IPv6');
 end;
 
 //******************************************************************************
@@ -125,6 +203,24 @@ begin
   for C := Low(Char) to High(Char) do
     if not (C in [#0, #10, #13]) then
       Check(TIdSdpParser.IsText(C), 'Checking Ord(C) = ' + IntToStr(Ord(C)));
+end;
+
+procedure TestTIdSdpParser.TestParseConnection;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'c=IN IP4 224.2.17.12/127');
+  try
+    Self.P.Source := S;
+
+    Self.P.Parse(Self.Payload);
+    CheckEquals('IN',             Self.Payload.Connection.NetType,     'NetType');
+    Check      (Id_IPv4 =         Self.Payload.Connection.AddressType, 'AddressType');
+    CheckEquals('224.2.17.12/127', Self.Payload.Connection.Address,    'Address');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpParser.TestParseEmail;
@@ -293,7 +389,7 @@ begin
       Fail('Failed to bail out on Session with #0');
     except
       on E: EParser do
-        CheckEquals(Format(MalformedToken, [RSSDPSessionName, #0]),
+        CheckEquals(Format(MalformedToken, [RSSDPSessionName, 's='#0]),
                     E.Message,
                     'Unexpected exception');
     end;
@@ -361,6 +457,29 @@ begin
   end;
 end;
 
+procedure TestTIdSdpParser.TestParseMalformedOrigin;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('v= 0'#13#10 // note the SP after the "="
+                          + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
+                          + 's=Minimum Session Info');
+  try
+    try
+      Self.P.Source := S;
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out on malformed header');
+    except
+      on E: EParser do
+        CheckEquals(Format(MalformedToken, ['v', 'v= 0']),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
 procedure TestTIdSdpParser.TestParseMissingOrigin;
 var
   S: TStringStream;
@@ -418,6 +537,53 @@ begin
     except
       on E: EParser do
         CheckEquals(MissingVersion, E.Message, 'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseMultiplePhoneNumbers;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'p=Ziggy Stardust <+99 666 0942-3>'#13#10
+                          + 'p=Ziggy Stardust <+99 666 0942-3>');
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out with multiple Phone headers');
+    except
+      on E: EParser do
+        CheckEquals(Format(TooManyHeaders, [RSSDPPhoneName]),
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdSdpParser.TestParseMultipleVersions;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create(MinimumPayload + #13#10
+                          + 'v=1');
+  try
+    Self.P.Source := S;
+
+    try
+      Self.P.Parse(Self.Payload);
+      Fail('Failed to bail out with a duplicate version header');
+    except
+      on E: EParser do
+        CheckEquals(Format(UnknownOptionalHeader, ['v=1']),
+                    E.Message,
+                    'Unexpected exception');
     end;
   finally
     S.Free;
@@ -501,7 +667,7 @@ begin
       on E: EParser do
         CheckEquals(Format(MalformedToken,
                            [RSSDPPhoneName,
-                            '+99 666 0942-3'#0]),
+                            'p=+99 666 0942-3'#0]),
                     E.Message,
                     'Unexpected exception');
     end;

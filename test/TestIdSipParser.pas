@@ -203,6 +203,7 @@ type
     procedure TestParseAndMakeMessageMalformedRequest;
     procedure TestParseAndMakeMessageRequest;
     procedure TestParseAndMakeMessageResponse;
+    procedure TestParseExtensiveRequest;
     procedure TestParseReallyLongViaHeader;
     procedure TestParseRequest;
     procedure TestParseRequestEmptyString;
@@ -254,6 +255,22 @@ const
                 + 'Content-Length: 29'#13#10
                 + #13#10
                 + 'I am a message. Hear me roar!';
+  ExhaustiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+                    + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+                    + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                    + 'Content-Length: 29'#13#10
+                    + 'Content-Type: text/plain'#13#10
+                    + 'CSeq: 314159 INVITE'#13#10
+                    + 'Date: Thu, 1 Jan 1970 00:00:00 GMT'#13#10
+                    + 'Expires: 1000'#13#10
+                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                    + 'Max-Forwards: 70'#13#10
+                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
+                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                    + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+                    + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
+                    + #13#10
+                    + 'I am a message. Hear me roar!';
 
 implementation
 
@@ -828,12 +845,9 @@ end;
 procedure TestTIdSipDateHeader.TestValueAbsoluteTime;
 begin
   Self.D.Value := 'Fri, 18 Jul 2003 16:00:00 GMT';
-  
-  Check      (   not Self.D.IsRelativeTime, 'IsRelativeTime');
-  CheckEquals(0, Self.D.RelativeTime,       'RelativeTime');
 
   CheckEquals('2003/07/18 16:00:00',
-              FormatDateTime('yyyy/mm/dd hh:mm:ss', Self.D.AbsoluteTime.AsTDateTime),
+              FormatDateTime('yyyy/mm/dd hh:mm:ss', Self.D.Time.AsTDateTime),
               'AbsoluteTime');
 end;
 
@@ -849,10 +863,12 @@ end;
 
 procedure TestTIdSipDateHeader.TestValueRelativeTime;
 begin
-  Self.D.Value := '1';
-  Check      (   Self.D.IsRelativeTime,                      'IsRelativeTime');
-  CheckEquals(1, Self.D.RelativeTime,                        'RelativeTime');
-  CheckEquals(0, Self.D.AbsoluteTime.AsTDateTime, OneSecond, 'AbsoluteTime');
+  try
+    Self.D.Value := '1';
+    Fail('Failed to bail out');
+  except
+    on EBadHeader do;
+  end;
 end;
 
 //******************************************************************************
@@ -1111,7 +1127,7 @@ procedure TestTIdSipHeaders.TestAddAndCount;
 begin
   CheckEquals(0, Self.H.Count, 'Supposedly an empty set of headers');
   CheckEquals(TIdSipHeader.ClassName,
-              Self.H.Add('Content-Length').ClassName,
+              Self.H.Add(CallIdHeaderFull).ClassName,
               'Incorrect return type');
   CheckEquals(1, Self.H.Count, 'Failed to add new header');
 end;
@@ -1119,10 +1135,10 @@ end;
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
   CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ContactHeaderFull).ClassName,       ContactHeaderFull);
-  CheckEquals(TIdSipHeader.ClassName,            Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
+  CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ContentLengthHeaderFull).ClassName, ContentLengthHeaderFull);
   CheckEquals(TIdSipCSeqHeader.ClassName,        Self.H.Add(CSeqHeader).ClassName,              CSeqHeader);
   CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(DateHeader).ClassName,              DateHeader);
-  CheckEquals(TIdSipDateHeader.ClassName,        Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
+  CheckEquals(TIdSipNumericHeader.ClassName,     Self.H.Add(ExpiresHeader).ClassName,           ExpiresHeader);
   CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(FromHeaderFull).ClassName,          FromHeaderFull);
   CheckEquals(TIdSipMaxForwardsHeader.ClassName, Self.H.Add(MaxForwardsHeader).ClassName,       MaxForwardsHeader);
   CheckEquals(TIdSipAddressHeader.ClassName,     Self.H.Add(ToHeaderFull).ClassName,            ToHeaderFull);
@@ -1175,11 +1191,11 @@ procedure TestTIdSipHeaders.TestHeaders;
 var
   Header: TIdSipHeader;
 begin
-  CheckEquals('Content-Length',
-              Self.H.Headers['Content-Length'].Name,
+  CheckEquals(CallIdHeaderFull,
+              Self.H.Headers[CallIdHeaderFull].Name,
               'Returned newly created header: Name');
   CheckEquals('',
-              Self.H.Headers['Content-Length'].Value,
+              Self.H.Headers[CallIdHeaderFull].Value,
               'Returned newly created header: Value');
   CheckEquals(1, Self.H.Count, 'Newly created header wasn''t added though');
 
@@ -1298,17 +1314,17 @@ end;
 procedure TestTIdSipHeaders.TestValues;
 begin
   CheckEquals('',
-              Self.H.Headers['Content-Length'].Value,
+              Self.H.Headers[CallIdHeaderFull].Value,
               'Newly created header');
 
-  Self.H.Values['Content-Length'] := 'b';
+  Self.H.Values[CallIdHeaderFull] := 'b';
   CheckEquals('b',
-              Self.H.Headers['Content-Length'].Value,
+              Self.H.Headers[CallIdHeaderFull].Value,
               'Header value not set');
 
-  Self.H.Values['Content-Type'] := 'Content-Type';
+  Self.H.Values[ContentTypeHeaderFull] := 'Content-Type';
   CheckEquals('Content-Type',
-              Self.H.Headers['Content-Type'].Value,
+              Self.H.Headers[ContentTypeHeaderFull].Value,
               'New header value not set');
 end;
 
@@ -1851,6 +1867,133 @@ begin
     finally
       Msg.Free;
     end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseExtensiveRequest;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create(ExhaustiveRequest);
+  try
+    P.Source := Str;
+
+    P.ParseRequest(Request);
+    CheckEquals('a84b4c76e66710@gw1.leo_ix.org',
+                Self.Request.Headers[CallIdHeaderFull].Value,
+                'Call-ID');
+    CheckEquals(TIdSipAddressHeader.ClassName,
+                Self.Request.Headers[ContactHeaderFull].ClassName,
+                'Contact class');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+                Self.Request.Headers[ContactHeaderFull].Value,
+                'Contact');
+    CheckEquals('',
+                (Self.Request.Headers[ContactHeaderFull] as TIdSipAddressHeader).DisplayName,
+                'Contact DisplayName');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+                (Self.Request.Headers[ContactHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
+                'Contact Address');
+    CheckEquals(TIdSipNumericHeader.ClassName,
+                Self.Request.Headers[ContentLengthHeaderFull].ClassName,
+                'Content-Length class');
+    CheckEquals(29,
+                (Self.Request.Headers[ContentLengthHeaderFull] as TIdSipNumericHeader).NumericValue,
+                'Content-Length');
+    CheckEquals('text/plain',
+                Self.Request.Headers[ContentTypeHeaderFull].Value,
+                'Content-Type');
+    CheckEquals(TIdSipCSeqHeader.ClassName,
+                Self.Request.Headers[CSeqHeader].ClassName,
+                'CSeq class');
+    CheckEquals(314159,
+                (Self.Request.Headers[CSeqHeader] as TIdSipCSeqHeader).SequenceNo,
+                'CSeq SequenceNo');
+    CheckEquals('INVITE',
+                (Self.Request.Headers[CSeqHeader] as TIdSipCSeqHeader).Method,
+                'CSeq Method');
+    CheckEquals(TIdSipDateHeader.ClassName,
+                Self.Request.Headers[DateHeader].ClassName,
+                'Date class');
+    CheckEquals('Thu, 1 Jan 1970 00:00:00 +0000',
+                (Self.Request.Headers[DateHeader] as TIdSipDateHeader).Time.GetAsRFC822,
+                'Date');
+    CheckEquals(TIdSipNumericHeader.ClassName,
+                Self.Request.Headers[ExpiresHeader].ClassName,
+                'Expires class');
+    CheckEquals(1000,
+                (Self.Request.Headers[ExpiresHeader] as TIdSipNumericHeader).NumericValue,
+                'Expires');
+    CheckEquals(TIdSipAddressHeader.ClassName,
+                Self.Request.Headers[FromHeaderFull].ClassName,
+                'From class');
+    CheckEquals('Case',
+                (Self.Request.Headers[FromHeaderFull] as TIdSipAddressHeader).DisplayName,
+                'From DisplayName');
+    CheckEquals('sip:case@fried.neurons.org',
+                (Self.Request.Headers[FromHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
+                'From Address');
+    CheckEquals(';tag=1928301774',
+                Self.Request.Headers[FromHeaderFull].ParamsAsString,
+                'From parameters');
+    CheckEquals(TIdSipMaxForwardsHeader.ClassName,
+                Self.Request.Headers[MaxForwardsHeader].ClassName,
+                'Max-Forwards class');
+    CheckEquals(70,
+                (Self.Request.Headers[MaxForwardsHeader] as TIdSipMaxForwardsHeader).NumericValue,
+                'Max-Forwards');
+    CheckEquals(TIdSipAddressHeader.ClassName,
+                Self.Request.Headers[ToHeaderFull].ClassName,
+                'To class');
+    CheckEquals('Wintermute',
+                (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).DisplayName,
+                ' DisplayName');
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu',
+                (Self.Request.Headers[ToHeaderFull] as TIdSipAddressHeader).Address.GetFullURI,
+                'To Address');
+    CheckEquals(TIdSipViaHeader.ClassName,
+                Self.Request.Headers[ViaHeaderFull].ClassName,
+                'Via class');
+    CheckEquals('gw1.leo_ix.org',
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Host,
+                'Via Host');
+    CheckEquals(5060,
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Port,
+                'Via Port');
+    CheckEquals('SIP/2.0',
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).SipVersion,
+                'Via SipVersion');
+    Check       (sttTCP =
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Transport,
+                'Via Transport');
+    CheckEquals(';branch=z9hG4bK776asdhds',
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).ParamsAsString,
+                'Via Parameters');
+    CheckEquals('I am not defined in RFC 3261',
+                Self.Request.Headers['X-Not-A-Header'].Value,
+                'X-Not-A-Header');
+    CheckEquals(13, Self.Request.Headers.Count, 'Headers.Count');
+{
+  ExhaustiveRequest = 'INVITE sip:wintermute@tessier-ashpool.co.lu SIP/2.0'#13#10
+                    + 'Call-ID: a84b4c76e66710@gw1.leo_ix.org'#13#10
+                    + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                    + 'Content-Length: 29'#13#10
+                    + 'Content-Type: text/plain'#13#10
+                    + 'CSeq: 314159 INVITE'#13#10
+                    + 'Date: Thu, 1 January 1970 00:00:00 GMT'#13#10
+                    + 'Expires: 1000'#13#10
+                    + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                    + 'Max-Forwards: 70'#13#10
+                    + 'Subject: I am a SIP request with every legal header (even an extension)'#13#10
+                    + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                    + 'Via: SIP/2.0/TCP gw1.leo_ix.org;branch=z9hG4bK776asdhds'#13#10
+                    + 'X-Not-A-Header: I am not defined in RFC 3261'#13#10
+                    + #13#10
+                    + 'I am a message. Hear me roar!';
+}
+
   finally
     Str.Free;
   end;

@@ -74,28 +74,23 @@ type
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
-    property Method: String       read fMethod     write fMethod;
+    property Method:     String   read fMethod     write fMethod;
     property SequenceNo: Cardinal read fSequenceNo write fSequenceNo;
   end;
 
   TIdSipDateHeader = class(TIdSipHeader)
   private
-    fIsRelativeTime: Boolean;
-    fRelativeTime:   Cardinal;
     fAbsoluteTime:   TIdDateTimeStamp;
 
     function  GetAbsoluteTime: TIdDateTimeStamp;
     procedure SetAbsoluteTime(Value: String);
-    procedure SetRelativeTime(const Value: String);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     destructor Destroy; override;
 
-    property IsRelativeTime: Boolean          read fIsRelativeTime write fIsRelativeTime;
-    property RelativeTime:   Cardinal         read fRelativeTime write fRelativeTime;
-    property AbsoluteTime:   TIdDateTimeStamp read GetAbsoluteTime;
+    property Time: TIdDateTimeStamp read GetAbsoluteTime;
   end;
 
   TIdSipNumericHeader = class(TIdSipHeader)
@@ -893,10 +888,7 @@ procedure TIdSipDateHeader.SetValue(const Value: String);
 begin
   inherited SetValue(Value);
 
-  if TIdSipParser.IsNumber(Value) then
-    Self.SetRelativeTime(Value)
-  else
-    Self.SetAbsoluteTime(Value);
+  Self.SetAbsoluteTime(Value);
 end;
 
 //* TIdSipDateHeader Private methods *******************************************
@@ -911,28 +903,11 @@ end;
 
 procedure TIdSipDateHeader.SetAbsoluteTime(Value: String);
 begin
-  fIsRelativeTime := false;
-
-  Self.AbsoluteTime.SetFromRFC822(Value);
+  Self.Time.SetFromRFC822(Value);
 
   // this is a bit crap. What if someone uses "xxx, 1 Jan 1899 00:00:00 GMT"?
-  if (Self.AbsoluteTime.AsTDateTime = 0) then
+  if (Self.Time.AsTDateTime = 0) then
     raise EBadHeader.Create(Self.Name);
-end;
-
-procedure TIdSipDateHeader.SetRelativeTime(const Value: String);
-var
-  N: Cardinal;
-  E: Integer;
-begin
-  fIsRelativeTime := true;
-
-  Val(Value, N, E);
-  if (E <> 0) then
-    raise EBadHeader.Create(Self.Name);
-
-  fRelativeTime := N;
-  Self.AbsoluteTime.SetFromTDateTime(0);
 end;
 
 //******************************************************************************
@@ -1189,18 +1164,19 @@ class function TIdSipHeaders.HeaderTypes: TObjectList;
 begin
   if not Assigned(GIdSipHeadersMap) then begin
     GIdSipHeadersMap := TObjectList.Create(true);
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,  TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort, TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,         TIdSipCSeqHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,         TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,      TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,     TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,    TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,  TIdSipMaxForwardsHeader));    
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,       TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,      TIdSipAddressHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,      TIdSipViaHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,     TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderFull,       TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContactHeaderShort,      TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull, TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,              TIdSipCSeqHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,              TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,           TIdSipNumericHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,          TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderShort,         TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(MaxForwardsHeader,       TIdSipMaxForwardsHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderFull,            TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ToHeaderShort,           TIdSipAddressHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderFull,           TIdSipViaHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ViaHeaderShort,          TIdSipViaHeader));
   end;
 
   Result := GIdSipHeadersMap;
