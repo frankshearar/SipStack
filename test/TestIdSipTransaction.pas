@@ -341,9 +341,8 @@ type
   published
     procedure TestCallingLeavesTimerARunning;
     procedure TestCallingLeavesTimerBRunning;
-    procedure TestCancel;
-    procedure TestCancelBeforeProvisionalResponse;
     procedure TestCompletedStartsTimerD;
+    procedure TestCompletedStopsCancelTimer;
     procedure TestCompletedStopsTimerA;
     procedure TestCompletedStopsTimerB;
     procedure TestInitialTimerAInterval;
@@ -3758,65 +3757,17 @@ begin
   Check(Self.Timer.TimerBIsRunning, 'Timer B was stopped');
 end;
 
-procedure TestTIdSipClientInviteTransactionTimer.TestCancel;
-var
-  Response:     TIdSipResponse;
-  RequestCount: Cardinal;
-begin
-  Response := TIdSipResponse.InResponseTo(Self.Transaction.InitialRequest,
-                                          SIPTrying);
-  try
-    Self.Transaction.SendRequest;
-    Self.Transaction.ReceiveResponse(Response,
-                                     Self.Dispatcher.Transport);
-
-    RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-    Self.Transaction.Cancel;
-    Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-          'No (CANCEL) request sent');
-    Check(Self.Dispatcher.Transport.LastRequest.IsCancel,
-          'No CANCEL request sent - '
-        + Self.Dispatcher.Transport.LastRequest.Method
-        + ' instead');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipClientInviteTransactionTimer.TestCancelBeforeProvisionalResponse;
-var
-  Response:     TIdSipResponse;
-  RequestCount: Cardinal;
-begin
-  Response := TIdSipResponse.InResponseTo(Self.Transaction.InitialRequest,
-                                          SIPTrying);
-  try
-    Self.Transaction.SendRequest;
-
-    RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-    Self.Transaction.Cancel;
-    CheckEquals(RequestCount,
-                Self.Dispatcher.Transport.SentRequestCount,
-                'CANCEL sent before we''ve received a response');
-
-    Self.Transaction.ReceiveResponse(Response,
-                                     Self.Dispatcher.Transport);
-
-    Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-          'No (CANCEL) request sent');
-    Check(Self.Dispatcher.Transport.LastRequest.IsCancel,
-          'No CANCEL request sent - '
-        + Self.Dispatcher.Transport.LastRequest.Method
-        + ' instead');
-  finally
-    Response.Free;
-  end;
-end;
-
 procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStartsTimerD;
 begin
   Self.Timer.ChangeState(itsCompleted);
   Check(Self.Timer.TimerDIsRunning, 'Timer D wasn''t started');
+end;
+
+procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStopsCancelTimer;
+begin
+  Self.Timer.StartCancelTimer;
+  Self.Timer.ChangeState(itsCompleted);
+  Check(not Self.Timer.CancelTimerIsRunning, 'Cancel Timer wasn''t stopped');
 end;
 
 procedure TestTIdSipClientInviteTransactionTimer.TestCompletedStopsTimerA;
@@ -3871,9 +3822,10 @@ begin
   Self.Timer.Start;
   Self.Timer.StartTimerD;
   Self.Timer.ChangeState(itsTerminated);
-  Check(not Self.Timer.TimerAIsRunning, 'Timer A wasn''t stopped');
-  Check(not Self.Timer.TimerBIsRunning, 'Timer B wasn''t stopped');
-  Check(not Self.Timer.TimerDIsRunning, 'Timer D wasn''t stopped');
+  Check(not Self.Timer.CancelTimerIsRunning, 'Cancel Timer wasn''t stopped');
+  Check(not Self.Timer.TimerAIsRunning,      'Timer A wasn''t stopped');
+  Check(not Self.Timer.TimerBIsRunning,      'Timer B wasn''t stopped');
+  Check(not Self.Timer.TimerDIsRunning,      'Timer D wasn''t stopped');
 end;
 
 procedure TestTIdSipClientInviteTransactionTimer.TestTimerAInitiallyStarted;

@@ -343,19 +343,22 @@ type
 
   TIdSipClientInviteTransactionTimer = class(TObject)
   private
-    fTimerAInterval:  Cardinal;
-    fTimerAIsRunning: Boolean;
-    fTimerBInterval:  Cardinal;
-    fTimerBIsRunning: Boolean;
-    fTimerDInterval:  Cardinal;
-    fTimerDIsRunning: Boolean;
-    Lock:             TCriticalSection;
-    Owner:            TIdSipClientInviteTransaction;
-    State:            TIdSipTransactionState;
-    Timer:            TIdTimerQueue;
+    fCancelTimerInterval:  Cardinal;
+    fCancelTimerIsRunning: Boolean;
+    fTimerAInterval:       Cardinal;
+    fTimerAIsRunning:      Boolean;
+    fTimerBInterval:       Cardinal;
+    fTimerBIsRunning:      Boolean;
+    fTimerDInterval:       Cardinal;
+    fTimerDIsRunning:      Boolean;
+    Lock:                  TCriticalSection;
+    Owner:                 TIdSipClientInviteTransaction;
+    State:                 TIdSipTransactionState;
+    Timer:                 TIdTimerQueue;
 
     procedure OnException(T: TIdThread;
                           E: Exception);
+    procedure OnCancelTimer(Sender: TObject);
     procedure OnTimerA(Sender: TObject);
     procedure OnTimerB(Sender: TObject);
     procedure OnTimerD(Sender: TObject);
@@ -364,12 +367,17 @@ type
                        T1: Cardinal = DefaultT1);
     destructor  Destroy; override;
 
+    function  CancelTimerInterval: Cardinal;
+    function  CancelTimerIsRunning: Boolean;
     procedure ChangeState(NewState: TIdSipTransactionState);
+    procedure FireCancelTimer;
     procedure FireTimerA;
     procedure Start;
+    procedure StartCancelTimer;
     procedure StartTimerA;
     procedure StartTimerB;
     procedure StartTimerD;
+    procedure StopCancelTimer;
     procedure StopTimerA;
     procedure StopTimerB;
     procedure StopTimerD;
@@ -399,6 +407,7 @@ type
     destructor  Destroy; override;
 
     procedure Cancel;
+    procedure FireCancelTimer;
     procedure FireTimerA;
     procedure FireTimerB;
     procedure FireTimerD;
@@ -1765,9 +1774,10 @@ begin
   Self.Timer := TIdTimerQueue.Create(false);
   Self.Timer.OnException := Self.OnException;
 
-  Self.fTimerAInterval := T1;
-  Self.fTimerBInterval := 64*T1;
-  Self.fTimerDInterval := 64*T1;
+  Self.fCancelTimerInterval := 64*T1;
+  Self.fTimerAInterval      := T1;
+  Self.fTimerBInterval      := 64*T1;
+  Self.fTimerDInterval      := 64*T1;
 end;
 
 destructor TIdSipClientInviteTransactionTimer.Destroy;
@@ -1780,6 +1790,16 @@ begin
   inherited Destroy;
 end;
 
+function TIdSipClientInviteTransactionTimer.CancelTimerInterval: Cardinal;
+begin
+  Result := Self.fCancelTimerInterval;
+end;
+
+function TIdSipClientInviteTransactionTimer.CancelTimerIsRunning: Boolean;
+begin
+  Result := Self.fCancelTimerIsRunning;
+end;
+
 procedure TIdSipClientInviteTransactionTimer.ChangeState(NewState: TIdSipTransactionState);
 begin
   Self.State := NewState;
@@ -1790,10 +1810,17 @@ begin
   end;
 
   case NewState of
-    itsCompleted:  Self.StartTimerD;
+    itsCompleted:  begin
+      Self.StartTimerD;
+      Self.StopCancelTimer;
+    end;
     itsTerminated: Self.StopTimerD;
   end;
+end;
 
+procedure TIdSipClientInviteTransactionTimer.FireCancelTimer;
+begin
+  Owner.FireCancelTimer;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.FireTimerA;
@@ -1814,6 +1841,12 @@ begin
   Self.StartTimerB;
 end;
 
+procedure TIdSipClientInviteTransactionTimer.StartCancelTimer;
+begin
+  Self.Timer.AddEvent(Self.CancelTimerInterval, Self.OnCancelTimer);
+  Self.fCancelTimerIsRunning := true;
+end;
+
 procedure TIdSipClientInviteTransactionTimer.StartTimerA;
 begin
   Self.Timer.AddEvent(Self.TimerAInterval, Self.OnTimerA);
@@ -1830,6 +1863,14 @@ procedure TIdSipClientInviteTransactionTimer.StartTimerD;
 begin
   Self.Timer.AddEvent(Self.TimerDInterval, Self.OnTimerD);
   Self.fTimerDIsRunning := true;
+end;
+
+procedure TIdSipClientInviteTransactionTimer.StopCancelTimer;
+begin
+  if Self.CancelTimerIsRunning then begin
+    Self.Timer.RemoveEvent(Self.OnCancelTimer);
+    Self.fCancelTimerIsRunning := false;
+  end;
 end;
 
 procedure TIdSipClientInviteTransactionTimer.StopTimerA;
@@ -1890,6 +1931,12 @@ begin
   Self.Owner.ExceptionRaised(E);
 end;
 
+procedure TIdSipClientInviteTransactionTimer.OnCancelTimer(Sender: TObject);
+begin
+  if Self.CancelTimerIsRunning then
+    Self.FireCancelTimer;
+end;
+
 procedure TIdSipClientInviteTransactionTimer.OnTimerA(Sender: TObject);
 begin
   if Self.TimerAIsRunning then begin
@@ -1947,6 +1994,13 @@ begin
     Self.Cancelled := true
   else if not (Self.State in [itsCompleted, itsTerminated]) then
     Self.SendCancel;
+end;
+
+procedure TIdSipClientInviteTransaction.FireCancelTimer;
+begin
+  // Call me when you've given up waiting for a final response after sending
+  // a CANCEL
+  Self.ChangeToTerminated(false);
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;
