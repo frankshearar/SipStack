@@ -298,12 +298,14 @@ type
     fCallID:     String;
     fRegistrar:  TIdSipUri;
     fSequenceNo: Cardinal;
+
+    procedure SetRegistrar(Value: TIdSipUri);
   public
     constructor Create;
     destructor  Destroy; override;
 
     property CallID:     String    read fCallID write fCallID;
-    property Registrar:  TIdSipUri read fRegistrar;
+    property Registrar:  TIdSipUri read fRegistrar write SetRegistrar;
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
@@ -1856,6 +1858,13 @@ begin
   inherited Destroy;
 end;
 
+//* TIdSipRegistrationInfo Private methods *************************************
+
+procedure TIdSipRegistrationInfo.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.fRegistrar.Uri := Value.Uri;
+end;
+
 //******************************************************************************
 //* TIdSipRegistrations                                                        *
 //******************************************************************************
@@ -1894,9 +1903,9 @@ begin
       NewReg := TIdSipRegistrationInfo.Create;
       Self.KnownRegistrars.Add(NewReg);
 
-      NewReg.CallID        := CallID;
-      NewReg.Registrar.Uri := Registrar.Uri;
-      NewReg.SequenceNo    := SequenceNo;
+      NewReg.CallID     := CallID;
+      NewReg.Registrar  := Registrar;
+      NewReg.SequenceNo := SequenceNo;
     end;
   finally
     Self.Lock.Release;
