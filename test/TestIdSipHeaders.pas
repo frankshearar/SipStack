@@ -782,7 +782,7 @@ begin
   Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
   CheckEquals(ToHeaderFull + ': Count Zero <sip:countzero@jacks-bar.com;paranoid>;very',
               Self.A.AsString,
-              'AsString, display-name URI and header have parameters');
+              'AsString, display-name, and URI and header have parameters');
 
   Self.A.Value         := '';
   Self.A.DisplayName   := 'Bell, Alexander';

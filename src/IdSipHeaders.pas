@@ -3,7 +3,7 @@ unit IdSipHeaders;
 interface
 
 uses
-  Classes, IdDateTimeStamp, IdSimpleParser, IdURI, Contnrs;
+  Classes, Contnrs, IdDateTimeStamp, IdSimpleParser, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -15,19 +15,28 @@ type
   TIdSipHeader = class;
   TIdSipHeaders = class;
 
-  TIdSipUri = class(TObject)
+  TIdUri = class(TObject)
   private
-    fHeaders:   TIdSipHeaders;
-    fHasPort:   Boolean;
-    fHost:      String;
-    fPassword:  String;
-    fPort:      Cardinal;
-    fScheme:    String;
-    fUsername:  String;
-    Parameters: TStrings;
+    fScheme: String;
+  public
+    function  IsSipUri: Boolean; virtual;
+
+    property Scheme: String read fScheme write fScheme;
+  end;
+
+  TIdSipUri = class(TIdUri)
+  private
+    fHeaders:         TIdSipHeaders;
+    fHost:            String;
+    fPassword:        String;
+    fPort:            Cardinal;
+    fPortIsSpecified: Boolean;
+    fUsername:        String;
+    Parameters:       TStrings;
 
     class function IsEscapedOrInSet(const Token: String; AcceptableChars: TIdSipChars): Boolean;
 
+    function  EqualParameters(const Uri: TIdSipUri): Boolean;
     function  GetMaddr: String;
     function  GetMethod: String;
     function  GetTransport: String;
@@ -39,6 +48,7 @@ type
     function  HasValidScheme: Boolean;
     function  HasValidUserInfo: Boolean;
     function  HeadersAsString: String;
+    function  IsKnownParameter(const Name: String): Boolean;
     function  ParamsAsString: String;
     procedure Parse(Uri: String);
     procedure ParseHeaders(HeaderList: String);
@@ -53,25 +63,37 @@ type
     procedure SetTTL(const Value: Cardinal);
     procedure SetUri(const Value: String);
     procedure SetUserParameter(const Value: String);
+    function  UnidirectionalParameterCompare(ThisUri, ThatUri: TIdSipUri): Boolean;
   public
+    class function CreateUri(URI: String = ''): TIdUri;
+    class function Decode(const Src: String): String;
+    class function Encode(const Src: String; const SafeChars: TIdSipChars): String;
+    class function HeaderEncode(const NameOrValue: String): String;
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
     class function IsUser(const Token: String): Boolean;
+    class function ParameterEncode(const Parameter: String): String; //; override;
+    class function UsernameEncode(const Username: String): String;
 
     constructor Create(URI: String = ''); virtual;
     destructor  Destroy; override;
 
     procedure AddParameter(const Name: String; const Value: String = '');
     function  DefaultPort: Cardinal; virtual;
+    function  DefaultTransport: String; virtual;
+    function  Equals(const Uri: TIdSipUri): Boolean;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
-    function  HasPort: Boolean;
+    function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
+    function  IsSipUri: Boolean; override;
     function  ParamCount: Integer;
     function  ParamName(const Index: Cardinal): String;
     function  ParamValue(const Index: Cardinal): String; overload;
     function  ParamValue(const Name: String): String; overload;
+    function  PortIsSpecified: Boolean;
+    function  TransportIsSpecified: Boolean;
     function  UserIsIp: Boolean;
     function  UserIsPhoneNumber: Boolean;
 
@@ -81,7 +103,6 @@ type
     property Method:        String        read GetMethod write SetMethod;
     property Password:      String        read fPassword write fPassword;
     property Port:          Cardinal      read fPort write SetPort;
-    property Scheme:        String        read fScheme write fScheme;
     property Transport:     String        read GetTransport write SetTransport;
     property TTL:           Cardinal      read GetTTL write SetTTL;
     property Uri:           String        read GetUri write SetUri;
@@ -92,8 +113,11 @@ type
   TIdSipsUri = class(TIdSipUri)
   public
     function DefaultPort: Cardinal; override;
+    function DefaultTransport: String; override;
     function IsSecure: Boolean; override;
   end;
+
+  ESchemeNotSupported = class(Exception);
 
   TIdSipHeader = class(TPersistent)
   private
@@ -134,12 +158,11 @@ type
 
   TIdSipHeaderClass = class of TIdSipHeader;
 
-  TIdSipAddressHeader = class(TIdSipHeader)
+  TIdSipUriHeader = class(TIdSipHeader)
   private
-    fAddress:     TIdSipURI;
-    fDisplayName: String;
+    fAddress: TIdSipUri;
 
-    procedure SetAddress(const Value: TIdSipURI);
+    procedure SetAddress(const Value: TIdSipUri);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
@@ -147,9 +170,18 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    property Address: TIdSipUri read fAddress write SetAddress;
+  end;
+
+  TIdSipAddressHeader = class(TIdSipUriHeader)
+  private
+    fDisplayName: String;
+  protected
+    function  GetValue: String; override;
+    procedure SetValue(const Value: String); override;
+  public
     function HasSipsUri: Boolean;
 
-    property Address:     TIdSipURI read fAddress write SetAddress;
     property DisplayName: String    read fDisplayName write fDisplayName;
   end;
 
@@ -358,21 +390,6 @@ type
     function GetName: String; override;
   end;
 
-  TIdSipUriHeader = class(TIdSipHeader)
-  private
-    fAddress: TIdSipUri;
-
-    procedure SetAddress(const Value: TIdSipUri);
-  protected
-    function  GetValue: String; override;
-    procedure SetValue(const Value: String); override;
-  public
-    constructor Create; override;
-    destructor  Destroy; override;
-
-    property Address: TIdSipUri read fAddress write SetAddress;
-  end;
-
   TIdSipViaHeader = class(TIdSipHeader)
   private
     fSentBy:     String;
@@ -449,10 +466,10 @@ type
   protected
     function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
   public
-    function  Count: Integer; virtual; abstract;
-    function  IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+    function Count: Integer; virtual; abstract;
+    function IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
 
-    property  Items[const I: Integer]:      TIdSipHeader read GetItems;
+    property Items[const I: Integer]: TIdSipHeader read GetItems;
   end;
 
   TIdSipHeaders = class(TIdSipHeaderList)
@@ -468,7 +485,7 @@ type
     function  IndexOf(const HeaderName: String): Integer;
     procedure SetValues(const Header, Value: String);
   protected
-    function  GetItems(const I: Integer): TIdSipHeader; override;
+    function GetItems(const I: Integer): TIdSipHeader; override;
   public
     class function CanonicaliseName(HeaderName: String): String;
     class function GetHeaderName(Header: String): String;
@@ -537,12 +554,14 @@ type
   end;
 
 const
-  ConvertErrorMsg      = 'Failed to convert ''%s'' to type %s';
-  ParamUnreservedChars = ['[', ']', '/', ':', '&', '+', '$'];
-  ParamChars           = ParamUnreservedChars + UnreservedChars;
-  PasswordChars        = UnreservedChars + ['&', '=', '+', '$', ','];
-  UserUnreservedChars  = ['&', '=', '+', '$', ',', ';', '?', '/'];
-  UserChars            = Alphabet + Digits + UnreservedChars + UserUnreservedChars;
+  ConvertErrorMsg       = 'Failed to convert ''%s'' to type %s';
+  HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
+  HeaderChars           = HeaderUnreservedChars + UnreservedChars;
+  ParamUnreservedChars  = ['[', ']', '/', ':', '&', '+', '$'];
+  ParamChars            = ParamUnreservedChars + UnreservedChars;
+  PasswordChars         = UnreservedChars + ['&', '=', '+', '$', ','];
+  UserUnreservedChars   = ['&', '=', '+', '$', ',', ';', '?', '/'];
+  UserChars             = Alphabet + Digits + UnreservedChars + UserUnreservedChars;
 
 function NeedsQuotes(Name: String): Boolean;
 function ParseNameAddr(NameAddr: String; var DisplayName, AddrSpec: String): Boolean;
@@ -556,7 +575,7 @@ function TransportToStr(const T: TIdSipTransportType): String;
 implementation
 
 uses
-  IdGlobal, IdSipConsts, IdSipMessage, SysUtils;
+  IdGlobal, IdSipConsts, IdSipMessage;
 
 // class variables
 var
@@ -716,9 +735,94 @@ begin
 end;
 
 //******************************************************************************
+//* TIdUri                                                                     *
+//******************************************************************************
+//* TIdUri Public methods ******************************************************
+
+function TIdUri.IsSipUri: Boolean;
+begin
+  // TODO: This is a stopgap
+  Result := (Lowercase(Self.Scheme) = SipScheme)
+         or (Lowercase(Self.Scheme) = SipsScheme);
+//  Result := false;
+end;
+
+//******************************************************************************
 //* TIdSipUri                                                                  *
 //******************************************************************************
 //* TIdSipUri Public methods ***************************************************
+
+class function TIdSipUri.CreateUri(URI: String = ''): TIdUri;
+var
+  Scheme: String;
+begin
+  Result := nil;
+  try
+    if (URI = '') then
+      Result := TIdSipUri.Create(URI)
+    else begin
+      Scheme := Lowercase(Fetch(URI, ':', false));
+      if (Scheme = SipScheme) then
+        Result := TIdSipUri.Create(URI)
+      else if (Scheme = SipsScheme) then
+        Result := TIdSipsUri.Create(URI)
+      else raise ESchemeNotSupported.Create(URI);
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+class function TIdSipUri.Decode(const Src: String): String;
+var
+  CharCode: Integer;
+  ESC:      String[2];
+  I:        Integer;
+begin
+  Result := '';
+  // S.G. 27/11/2002: Spaces is NOT to be encoded as "+".
+  // S.G. 27/11/2002: "+" is a field separator in query parameter, space is...
+  // S.G. 27/11/2002: well, a space
+
+  I := 1;
+  while I <= Length(Src) do begin
+    if Src[I] <> '%' then begin
+      Result := Result + Src[I];
+      Inc(I);
+    end
+    else begin
+      Inc(I); // skip the % char
+      ESC := Copy(Src, I, 2); // Copy the escape code
+      Inc(I, 2); // Then skip it.
+      try
+        CharCode := StrToInt('$' + ESC);
+        if (CharCode > 0) and (CharCode < 256) then
+          Result := Result + Char(CharCode);
+      except
+      end;
+    end;
+  end;
+end;
+
+class function TIdSipUri.Encode(const Src: String; const SafeChars: TIdSipChars): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(Src) do begin
+    if Src[I] in SafeChars then
+      Result := Result + Src[I]
+    else
+      Result := Result + '%' + IntToHex(Ord(Src[I]), 2);
+  end;
+end;
+
+class function TIdSipUri.HeaderEncode(const NameOrValue: String): String;
+begin
+  Result := Self.Encode(NameOrValue, HeaderChars);
+end;
 
 class function TIdSipUri.IsParamNameOrValue(const Token: String): Boolean;
 begin
@@ -733,6 +837,16 @@ end;
 class function TIdSipUri.IsUser(const Token: String): Boolean;
 begin
   Result := Self.IsEscapedOrInSet(Token, UserChars);
+end;
+
+class function TIdSipUri.ParameterEncode(const Parameter: String): String;
+begin
+  Result := Self.Encode(Parameter, ParamChars);
+end;
+
+class function TIdSipUri.UsernameEncode(const Username: String): String;
+begin
+  Result := Self.Encode(Username, UserChars);
 end;
 
 constructor TIdSipUri.Create(URI: String = '');
@@ -754,12 +868,32 @@ end;
 
 procedure TIdSipUri.AddParameter(const Name: String; const Value: String = '');
 begin
-  Self.Parameters.Add(Name + '=' + TIdUri.URLDecode(Value));
+  Self.Parameters.Add(Name + '=' + Self.Decode(Value));
 end;
 
 function TIdSipUri.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
+end;
+
+function TIdSipUri.DefaultTransport: String;
+begin
+  Result := TransportParamUDP;
+end;
+
+function TIdSipUri.Equals(const Uri: TIdSipUri): Boolean;
+begin
+  // a SIP and SIPS URI are never equivalent
+  Result := Lowercase(Self.Scheme) = Lowercase(Uri.Scheme);
+
+  Result := Result
+        and (Lowercase(Self.Host) = Lowercase(Uri.Host))
+        and (Self.Port = Uri.Port)
+        and (Self.PortIsSpecified = Uri.PortIsSpecified)
+        and (Self.Username = Uri.Username)
+        and (Self.Password = Uri.Password)
+        and Self.EqualParameters(Uri)
+        and Self.Headers.IsEqualTo(Uri.Headers);
 end;
 
 function TIdSipUri.HasValidSyntax: Boolean;
@@ -769,8 +903,8 @@ begin
         and Self.HasValidUserInfo
         and Self.HasValidParameters;
 
-  if Self.IsSecure and (Self.Transport <> '') then
-    Result := Result and (Self.Transport <> TransportParamUDP);
+  if Self.IsSecure then
+    Result := Result and (Self.Transport = TransportParamTLS);
 end;
 
 function TIdSipUri.HasHeaders: Boolean;
@@ -778,19 +912,24 @@ begin
   Result := not Self.Headers.IsEmpty;
 end;
 
-function TIdSipUri.HasPort: Boolean;
+function TIdSipUri.HasParameter(const Name: String): Boolean;
 begin
-  Result := Self.fHasPort;
+  Result := Self.Parameters.IndexOfName(Name) <> -1;
 end;
 
 function TIdSipUri.IsLooseRoutable: Boolean;
 begin
-  Result := Self.Parameters.IndexOfName(LooseRoutableParam) <> -1;
+  Result := Self.HasParameter(LooseRoutableParam);
 end;
 
 function TIdSipUri.IsSecure: Boolean;
 begin
   Result := IsEqual(Self.Scheme, SipsScheme);
+end;
+
+function TIdSipUri.IsSipUri: Boolean;
+begin
+  Result := inherited IsSipUri;
 end;
 
 function TIdSipUri.ParamCount: Integer;
@@ -811,6 +950,16 @@ end;
 function TIdSipUri.ParamValue(const Name: String): String;
 begin
   Result := Self.Parameters.Values[Name];
+end;
+
+function TIdSipUri.PortIsSpecified: Boolean;
+begin
+  Result := Self.fPortIsSpecified;
+end;
+
+function TIdSipUri.TransportIsSpecified: Boolean;
+begin
+  Result := Self.HasParameter(TransportParam);
 end;
 
 function TIdSipUri.UserIsIp: Boolean;
@@ -851,6 +1000,25 @@ begin
   end;
 end;
 
+function TIdSipUri.EqualParameters(const Uri: TIdSipUri): Boolean;
+begin
+  Result := (Self.HasParameter(TransportParam) = Uri.HasParameter(TransportParam))
+        and (Self.HasParameter(UserParam)      = Uri.HasParameter(UserParam))
+        and (Self.HasParameter(TtlParam)       = Uri.HasParameter(TtlParam))
+        and (Self.HasParameter(MethodParam)    = Uri.HasParameter(MethodParam))
+        and (Self.HasParameter(MaddrParam)     = Uri.HasParameter(MaddrParam));
+
+  // According to RFC 3261 section 19.1.4 if A and B are URIs then (apart
+  // from special params - transport, ttl, etc) any parameters in both A.Params
+  // and B.Params must have equal value. It's simple to compare one set against
+  // another. Thus, we compare all the parameters in A.Params against those in
+  // B.Params, and then vice versa.
+  if Result then
+    Result := Result
+          and Self.UnidirectionalParameterCompare(Self, Uri)
+          and Self.UnidirectionalParameterCompare(Uri, Self);
+end;
+
 function TIdSipUri.GetMaddr: String;
 begin
   Result := Self.ParamValue(MaddrParam);
@@ -864,6 +1032,9 @@ end;
 function TIdSipUri.GetTransport: String;
 begin
   Result := Self.ParamValue(TransportParam);
+
+  if (Result = '') then
+    Result := Self.DefaultTransport;
 end;
 
 function TIdSipUri.GetTTL: Cardinal;
@@ -879,7 +1050,7 @@ begin
     Result := Self.Scheme + ':';
 
     if (Self.Username <> '') then begin
-      Result := Result + Self.Username;
+      Result := Result + Self.UsernameEncode(Self.Username);
 
       if (Self.Password <> '') then
         Result := Result + ':' + Self.Password;
@@ -946,11 +1117,24 @@ begin
       HeaderName  := Trim(Fetch(HeaderValue, ':'));
       HeaderValue := Trim(HeaderValue);
 
-      Result := Result + HeaderName + '=' + TIdUri.ParamsEncode(HeaderValue) + '&';
+      Result := Result
+              + TIdSipUri.HeaderEncode(HeaderName) + '='
+              + TIdSipUri.HeaderEncode(HeaderValue) + '&';
     end;
 
     Result := '?' + Copy(Result, 1, Length(Result) - 1);
   end;
+end;
+
+function TIdSipUri.IsKnownParameter(const Name: String): Boolean;
+var
+  CaselessName: String;
+begin
+  CaselessName := Lowercase(Name);
+  Result := (CaselessName = UserParam)
+         or (CaselessName = TtlParam)
+         or (CaselessName = MethodParam)
+         or (CaselessName = MaddrParam)
 end;
 
 function TIdSipUri.ParamsAsString: String;
@@ -963,7 +1147,7 @@ begin
   for I := 0 to Self.Parameters.Count - 1 do begin
     Param := Self.ParamName(I);
     if (Self.ParamValue(I) <> '') then
-      Param := Param + '=' + TIdUri.ParamsEncode(Self.ParamValue(I));
+      Param := Param + '=' + TIdSipUri.ParameterEncode(Self.ParamValue(I));
 
     Result := Result + ';' + Param;
   end;
@@ -1005,7 +1189,7 @@ begin
     HeaderValue := Fetch(HeaderList, '&');
     HeaderName := Fetch(HeaderValue, '=');
 
-    Self.Headers.Add(HeaderName).Value := TIdURI.URLDecode(HeaderValue);
+    Self.Headers.Add(HeaderName).Value := TIdSipURI.Decode(HeaderValue);
   end;
 end;
 
@@ -1018,7 +1202,7 @@ begin
       Self.Port := IdPORT_SIPS
     else
       Self.Port := IdPORT_SIP;
-    Self.fHasPort := false;
+    Self.fPortIsSpecified := false;
   end
   else
     Self.Port := StrToIntDef(HostAndPort, IdPORT_SIP);
@@ -1039,7 +1223,7 @@ end;
 
 procedure TIdSipUri.ParseUserInfo(UserInfo: String);
 begin
-  Self.Username := Fetch(UserInfo, ':');
+  Self.Username := TIdSipURI.Decode(Fetch(UserInfo, ':'));
   Self.Password := UserInfo;
 end;
 
@@ -1066,8 +1250,8 @@ end;
 
 procedure TIdSipUri.SetPort(const Value: Cardinal);
 begin
-  Self.fPort    := Value;
-  Self.fHasPort := true;
+  Self.fPort            := Value;
+  Self.fPortIsSpecified := true;
 end;
 
 procedure TIdSipUri.SetTransport(const Value: String);
@@ -1090,6 +1274,29 @@ begin
   Self.Parameters.Values[UserParam] := Value;
 end;
 
+function TIdSipUri.UnidirectionalParameterCompare(ThisUri, ThatUri: TIdSipUri): Boolean;
+var
+  I: Integer;
+  OurName: String;
+begin
+  Result := true;
+
+  for I := 0 to ThisUri.ParamCount - 1 do begin
+    OurName := ThisUri.ParamName(I);
+
+    if ThisUri.IsKnownParameter(OurName) then begin
+      Result := Result
+            and ThatUri.HasParameter(OurName)
+            and (ThisUri.ParamValue(OurName) = ThatUri.ParamValue(OurName));
+    end
+    else begin
+      if ThatUri.HasParameter(OurName) then
+        Result := Result
+              and (ThisUri.ParamValue(OurName) = ThatUri.ParamValue(OurName));
+    end;
+  end;
+end;
+
 //******************************************************************************
 //* TIdSipsUri                                                                 *
 //******************************************************************************
@@ -1098,6 +1305,11 @@ end;
 function TIdSipsUri.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
+end;
+
+function TIdSipsUri.DefaultTransport: String;
+begin
+  Result := TransportParamTLS;
 end;
 
 function TIdSipsUri.IsSecure: Boolean;
@@ -1223,6 +1435,9 @@ var
   ParamName:  String;
   ParamValue: String;
 begin
+  Self.Parameters.Clear;
+  Fetch(Value, ';');
+
   while (Value <> '') do begin
     ParamValue := Fetch(Value, ';');
     ParamName  := Fetch(ParamValue, '=');
@@ -1246,18 +1461,14 @@ procedure TIdSipHeader.SetValue(const Value: String);
 var
   S: String;
 begin
-  Self.Parameters.Clear;
-
   S := Value;
 
-  if (IndyPos(';', S) = 0) then begin
-    fValue := S;
-  end
-  else begin
-    fValue := Trim(Fetch(S, ';'));
+  if (IndyPos(';', S) = 0) then
+    fValue := S
+  else
+    fValue := Trim(Fetch(S, ';', false));
 
-    Self.ParseParameters(S, Self.Parameters);
-  end;
+  Self.ParseParameters(S, Self.Parameters);
 end;
 
 //* TIdSipHeader Private methods ***********************************************
@@ -1311,27 +1522,73 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipAddressHeader                                                        *
+//* TIdSipUriHeader                                                            *
 //******************************************************************************
-//* TIdSipAddressHeader Public methods *****************************************
+//* TIdSipUriHeader Public methods *********************************************
 
-constructor TIdSipAddressHeader.Create;
+constructor TIdSipUriHeader.Create;
 begin
   inherited Create;
 
-  fAddress := TIdSipURI.Create('');
+  fAddress := TIdSipUri.Create('');
 end;
 
-destructor TIdSipAddressHeader.Destroy;
+destructor TIdSipUriHeader.Destroy;
 begin
   fAddress.Free;
 
   inherited Destroy;
 end;
 
+function TIdSipUriHeader.GetValue: String;
+begin
+  Result := Self.Address.URI;
+
+  if   (IndyPos(';', Result) > 0)
+    or (IndyPos(',', Result) > 0)
+    or (IndyPos('?', Result) > 0)
+    or (Result <> '') then
+    Result := '<' + Result + '>';
+end;
+
+procedure TIdSipUriHeader.SetValue(const Value: String);
+var
+  AddrSpec:    String;
+  DisplayName: String;
+  S:           String;
+begin
+  Self.Address.URI := '';
+
+  S := Trim(Value);
+  if (IndyPos('<', Value) = 0) then
+    Self.FailParse;
+
+  if not ParseNameAddr(Value, DisplayName, AddrSpec) then
+    Self.FailParse;
+  if (DisplayName <> '') then
+    Self.FailParse;
+
+  Self.Address.URI := AddrSpec;
+  Fetch(S, '>');
+
+  inherited SetValue(S);
+end;
+
+//* TIdSipUriHeader Private methods ********************************************
+
+procedure TIdSipUriHeader.SetAddress(const Value: TIdSipUri);
+begin
+  fAddress.URI := Value.URI;
+end;
+
+//******************************************************************************
+//* TIdSipAddressHeader                                                        *
+//******************************************************************************
+//* TIdSipAddressHeader Public methods *****************************************
+
 function TIdSipAddressHeader.HasSipsUri: Boolean;
 begin
-  Result := Self.Address.Scheme = SipsScheme;
+  Result := Self.Address.IsSecure;
 end;
 
 //* TIdSipAddressHeader Protected methods **************************************
@@ -1358,49 +1615,41 @@ end;
 
 procedure TIdSipAddressHeader.SetValue(const Value: String);
 var
-  AddrSpec:          String;
-  DisplayName:       String;
-  PreserveSemicolon: Boolean;
-  S:                 String;
+  AddrSpec:    String;
+  DisplayName: String;
+  S:           String;
 begin
-  PreserveSemicolon := false;
   Self.DisplayName := '';
   Self.Address.URI := '';
 
   S := Trim(Value);
-  if (IndyPos('<', Value) > 0) then begin
-    if not ParseNameAddr(Value, DisplayName, AddrSpec) then
+  if (IndyPos('<', S) > 0) then begin
+    if not ParseNameAddr(S, DisplayName, AddrSpec) then
       Self.FailParse;
 
     Self.Address.URI := AddrSpec;
 
     Fetch(S, '>');
+    Self.ParseParameters(S, Self.Parameters);
   end
   else begin
-    // any semicolons in a URI not in angle brackets indicate that the
-    // HEADER has the parameters, not the URI
-    PreserveSemicolon := IndyPos(';', S) > 0;
+    // Any semicolons in a URI not in angle brackets indicate that the
+    // HEADER has the parameters, not the URI. Hence we separate the
+    // parameters first to prevent the TIdSipUri from adding those
+    // parameters to itself.
     Self.Address.URI := Trim(Fetch(S, ';'));
+
+    if (S <> '') then
+      S := ';' + S;
+
+    Self.ParseParameters(S, Self.Parameters);
   end;
 
   if (Self.Address.Uri <> '')
-    and (Self.Address.Scheme <> SipScheme)
-    and (Self.Address.Scheme <> SipsScheme) then
+    and not Self.Address.IsSipUri then
     Self.FailParse;
 
-  if PreserveSemicolon then
-    S := ';' + S;
-
   Self.DisplayName := DisplayName;
-
-  inherited SetValue(S);
-end;
-
-//* TIdSipAddressHeader Private methods ****************************************
-
-procedure TIdSipAddressHeader.SetAddress(const Value: TIdSipURI);
-begin
-  fAddress.URI := Value.URI;
 end;
 
 //******************************************************************************
@@ -1586,7 +1835,7 @@ begin
 
     if (IndyPos(';', MediaRange) > 0) then begin
       Params := MediaRange;
-      MediaRange := Fetch(Params, ';');
+      MediaRange := Fetch(Params, ';', false);
     end
     else
       Params := '';
@@ -1642,10 +1891,10 @@ begin
   S := Value;
   Self.IsWildCard := Fetch(S, ';') = '*';
 
-  if not Self.IsWildCard then
-    inherited SetValue(Value)
+  if Self.IsWildCard then
+    Self.ParseParameters(Value, Self.Parameters)
   else
-    Self.ParseParameters(S, Self.Parameters);
+    inherited SetValue(Value);
 
   if (Self.IndexOfParam(QParam) > -1) and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse;
@@ -2116,66 +2365,6 @@ end;
 function TIdSipToHeader.GetName: String;
 begin
   Result := ToHeaderFull;
-end;
-
-//******************************************************************************
-//* TIdSipUriHeader                                                            *
-//******************************************************************************
-//* TIdSipUriHeader Public methods *********************************************
-
-constructor TIdSipUriHeader.Create;
-begin
-  inherited Create;
-
-  fAddress := TIdSipUri.Create('');
-end;
-
-destructor TIdSipUriHeader.Destroy;
-begin
-  fAddress.Free;
-
-  inherited Destroy;
-end;
-
-function TIdSipUriHeader.GetValue: String;
-begin
-  Result := Self.Address.URI;
-
-  if   (IndyPos(';', Result) > 0)
-    or (IndyPos(',', Result) > 0)
-    or (IndyPos('?', Result) > 0)
-    or (Result <> '') then
-    Result := '<' + Result + '>';
-end;
-
-procedure TIdSipUriHeader.SetValue(const Value: String);
-var
-  AddrSpec:    String;
-  DisplayName: String;
-  S:           String;
-begin
-  Self.Address.URI := '';
-
-  S := Trim(Value);
-  if (IndyPos('<', Value) = 0) then
-    Self.FailParse;
-
-  if not ParseNameAddr(Value, DisplayName, AddrSpec) then
-    Self.FailParse;
-  if (DisplayName <> '') then
-    Self.FailParse;
-
-  Self.Address.URI := AddrSpec;
-  Fetch(S, '>');
-
-  inherited SetValue(S);
-end;
-
-//* TIdSipUriHeader Private methods ********************************************
-
-procedure TIdSipUriHeader.SetAddress(const Value: TIdSipUri);
-begin
-  fAddress.URI := Value.URI;
 end;
 
 //******************************************************************************

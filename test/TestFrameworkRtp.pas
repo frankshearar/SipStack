@@ -3,18 +3,12 @@ unit TestFrameworkRtp;
 interface
 
 uses
-  IdRTP, SyncObjs, SysUtils, TestFramework;
+  IdRTP, SyncObjs, SysUtils, TestFrameworkEx;
 
 type
-  TTestRTP = class(TTestCase)
-  protected
-    ExceptionType:    ExceptClass;
-    ExceptionMessage: String;
-    ThreadEvent:      TEvent;
+  TTestRTP = class(TThreadingTestCase)
   public
     procedure CheckHasEqualHeaders(const Expected, Received: TIdRTPPacket);
-    procedure SetUp; override;
-    procedure TearDown; override;
   end;
 
 implementation
@@ -41,22 +35,6 @@ begin
     CheckEquals(Integer(Expected.CsrcIDs[I]),
                 Integer(Received.CsrcIDs[I]),
                 IntToStr(I) + 'th CSRC ID');
-end;
-
-procedure TTestRTP.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ExceptionType    := Exception;
-  Self.ExceptionMessage := 'The event waited for was never fired';
-  Self.ThreadEvent      := TEvent.Create(nil, true, false, 'ThreadEvent');
-end;
-
-procedure TTestRTP.TearDown;
-begin
-  ThreadEvent.Free;
-
-  inherited TearDown;
 end;
 
 end.

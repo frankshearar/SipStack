@@ -48,8 +48,7 @@ end;
 
 procedure TestTIdSipTimer.TearDown;
 begin
-  Self.Timer.Stop;
-  Self.Timer.WaitFor;
+  Self.Timer.TerminateAndWaitFor;
   Self.Timer.Free;
 
   inherited TearDown;

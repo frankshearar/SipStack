@@ -55,7 +55,8 @@ type
   TTestIdSipResponseEvent = procedure(Sender: TObject;
                                       const R: TIdSipResponse) of object;
 
-  TestTIdSipTransport = class(TThreadingTestCase, IIdSipTransportListener)
+  TestTIdSipTransport = class(TThreadingTestCase,
+                              IIdSipTransportListener)
   protected
     CheckingRequestEvent:  TTestIdSipRequestEvent;
     CheckingResponseEvent: TTestIdSipResponseEvent;
@@ -998,17 +999,22 @@ begin
   // If we get a request with an rport param (which MUST be empty!) then we
   // should send our responses back to the server at received:rport.
 
+  Self.CheckingRequestEvent := Self.ReturnResponse;
+
+  Self.Request.LastHop.Params[RPortParam] := '';
+
   Server := TIdSipUdpServer.Create(nil);
   try
     Server.AddMessageListener(Self);
     Server.DefaultPort := 5000; // some arbitrary value
     Server.Active      := true;
 
-    Self.Request.LastHop.Params[RPortParam] := '';
-
-    Self.Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
+                       Self.Response.LastHop.Received := Self.HighPortTransport.Bindings[0].IP;
     Self.Response.LastHop.Rport    := Server.DefaultPort;
-    Self.HighPortTransport.Send(Self.Response);
+
+    Server.Send(Self.HighPortTransport.Bindings[0].IP,
+                Self.HighPortTransport.Bindings[0].Port,
+                Self.Request.AsString);
 
     if (wrSignaled <> Self.RPortEvent.WaitFor(DefaultTimeout)) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);

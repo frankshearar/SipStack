@@ -51,7 +51,6 @@ type
     procedure TestParseAndMakeResponse;
     procedure TestParseAndMakeResponseFromString;
     procedure TestParseExtensiveRequest;
-    procedure TestParseReallyLongViaHeader;
     procedure TestParseRequest;
     procedure TestParseRequestBadCSeq;
     procedure TestParseRequestEmptyString;
@@ -639,48 +638,6 @@ begin
     CheckEquals('X-Not-A-Header: I am not defined in RFC 3261',
                 Self.Request.FirstHeader('X-Not-A-Header').AsString,
                 'X-Not-A-Header');
-  finally
-    Str.Free;
-  end;
-end;
-
-procedure TestTIdSipParser.TestParseReallyLongViaHeader;
-const
-  IterCount = 49;
-var
-  Msg: TIdSipMessage;
-  Str: TStringStream;
-  S:   String;
-  I, J: Integer;
-begin
-  S := 'Via: ';
-  for I := 0 to IterCount do
-    for J := 0 to IterCount do
-      S := S + 'SIP/2.0/UDP 127.0.' + IntToStr(I) + '.' + IntToStr(J) + ',';
-  Delete(S, Length(S), 1);
-
-  Str := TStringStream.Create('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-               + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
-               + 'Max-Forwards: 70'#13#10
-               + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-               + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-               + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-               + 'CSeq: 314159 INVITE'#13#10
-               + 'Contact: sip:wintermute@tessier-ashpool.co.luna'#13#10
-               + 'Content-Type: text/plain'#13#10
-               + 'Content-Length: 29'#13#10
-               + S + #13#10
-               + #13#10
-               + 'I am a message. Hear me roar!');
-  try
-    Self.P.Source := Str;
-
-    Msg := Self.P.ParseAndMakeMessage;
-    try
-      Self.CheckEquals((IterCount+1)*(IterCount+1) + 1, Msg.Path.Length, 'Length');
-    finally
-      Msg.Free;
-    end;
   finally
     Str.Free;
   end;

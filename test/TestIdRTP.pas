@@ -24,11 +24,6 @@ type
   end;
 
   TestTIdRTPEncoding = class(TTestCase)
-  private
-    Encoding: TIdRTPEncoding;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAsString;
     procedure TestCreate;
@@ -420,45 +415,39 @@ end;
 //******************************************************************************
 //* TestTIdRTPEncoding                                                         *
 //******************************************************************************
-//* TestTIdRTPEncoding Public methods ******************************************
-
-procedure TestTIdRTPEncoding.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Encoding := TIdRTPEncoding.Create('t140', 1000, '1');
-end;
-
-procedure TestTIdRTPEncoding.TearDown;
-begin
-  Self.Encoding.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdRTPEncoding Published methods ***************************************
 
 procedure TestTIdRTPEncoding.TestAsString;
 var
   Enc: TIdRTPEncoding;
 begin
-  CheckEquals('t140/1000/1',
-              Self.Encoding.AsString,
-              'AsString with Parameters');
-
   Enc := TIdRTPEncoding.Create('red', 8000);
   try
     CheckEquals('red/8000', Enc.AsString, 'AsString without Parameters');
   finally
     Enc.Free;
   end;
+
+  Enc := TIdRTPEncoding.Create('foo', 8000, '2');
+  try
+    CheckEquals('foo/8000/2', Enc.AsString, 'AsString with Parameters');
+  finally
+    Enc.Free;
+  end;
 end;
 
 procedure TestTIdRTPEncoding.TestCreate;
+var
+  Enc: TIdRTPEncoding;
 begin
-  CheckEquals(1000,   Self.Encoding.ClockRate,  'ClockRate');
-  CheckEquals('t140', Self.Encoding.Name,       'Name');
-  CheckEquals('1',    Self.Encoding.Parameters, 'Parameters');
+  Enc := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, '1');
+  try
+    CheckEquals(T140ClockRate, Enc.ClockRate,  'ClockRate');
+    CheckEquals(T140Encoding,  Enc.Name,       'Name');
+    CheckEquals('1',           Enc.Parameters, 'Parameters');
+  finally
+    Enc.Free;
+  end;
 end;
 
 procedure TestTIdRTPEncoding.TestCreateEncoding;
@@ -482,7 +471,7 @@ procedure TestTIdRTPEncoding.TestCreateEncodingT140;
 var
   Enc: TIdRTPEncoding;
 begin
-  Enc := TIdRTPEncoding.CreateEncoding('t140/1000/1');
+  Enc := TIdRTPEncoding.CreateEncoding(Format('%s/%d/%s', [T140Encoding, T140ClockRate, '1']));
   try
     CheckEquals(TIdRTPT140Encoding.ClassName,
                 Enc.ClassName,
@@ -514,33 +503,52 @@ end;
 
 procedure TestTIdRTPEncoding.TestCreateFromEncoding;
 var
-  Enc: TIdRTPEncoding;
+  Enc1: TIdRTPEncoding;
+  Enc2: TIdRTPEncoding;
 begin
-  Enc := TIdRTPEncoding.Create(Self.Encoding);
+  Enc1 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, 'foo');
   try
-    Check(Enc.IsEqualTo(Self.Encoding), 'Properties not copied correctly');
+    Enc2 := TIdRTPEncoding.Create(Enc1);
+    try
+      Check(Enc2.IsEqualTo(Enc1), 'Properties not copied correctly');
+    finally
+      Enc2.Free;
+    end;
   finally
-    Enc.Free;
+    Enc1.Free;
   end;
 end;
 
 procedure TestTIdRTPEncoding.TestClone;
 var
-  Enc: TIdRTPEncoding;
+  Enc1: TIdRTPEncoding;
+  Enc2: TIdRTPEncoding;
 begin
-  Enc := Self.Encoding.Clone;
+  Enc1 := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, 'foo');
   try
-    CheckEquals(TIdRTPEncoding.ClassName,
-                Enc.ClassName,
-                'Incorrect type used for cloning');
+    Enc2 := Enc1.Clone;
+    try
+      CheckEquals(Enc1.ClassName,
+                  Enc2.ClassName,
+                  'Incorrect type used for cloning');
+    finally
+      Enc2.Free;
+    end;
   finally
-    Enc.Free;
+    Enc1.Free;
   end;
 end;
 
 procedure TestTIdRTPEncoding.TestIsNull;
+var
+  Enc: TIdRTPEncoding;
 begin
-  Check(not Self.Encoding.IsNull, 'non-Null Encoding marked as null');
+  Enc := TIdRTPEncoding.Create(T140Encoding, T140ClockRate, '1');
+  try
+    Check(not Enc.IsNull, 'non-Null Encoding marked as null');
+  finally
+    Enc.Free;
+  end;
 end;
 
 //******************************************************************************

@@ -361,9 +361,9 @@ const
   QCELPEncoding               = 'QCELP';
   RedundancyEncoding          = 'RED';
   TelephoneEventEncoding      = 'telephone-event';
-  RedundancyEncodingParameter = 'red';
+  RedundancyEncodingParameter = 'RED';
   T140ClockRate               = 1000;
-  T140Encoding                = 't140';
+  T140Encoding                = 'T140';
 
   TelephoneEventMimeType  = 'audio/' + TelephoneEventEncoding;
   InterleavedT140MimeType = 'audio/' + T140Encoding;
