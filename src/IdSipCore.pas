@@ -1,3 +1,4 @@
+
 {
   (c) 2004 Directorate of New Technologies, Royal National Institute for Deaf people (RNID)
 
@@ -1849,7 +1850,7 @@ begin
     try
       Session := Self.FindSession(Invite);
 
-      if not Assigned(Session) then
+      if Assigned(Session) then
         Proc(Session, Invite);
 
       Self.CleanOutTerminatedActions;
@@ -4988,14 +4989,21 @@ procedure TIdSipSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
 begin
   Self.ModifyLock.Acquire;
   try
-    if (Response.StatusCode = SIPRequestPending) then
-      Self.RescheduleModify(InviteAgent);
-
     if (InviteAgent = Self.ModifyAttempt) then begin
-      Self.ModifyAttempt := nil;
       case Response.StatusCode of
+        //  We attempted to modify the session. The remote end has also
+        // attempted to do so, and sent an INVITE before our INVITE arrived.
+        // Thus it rejects our attempt with a 491 Request Pending.
+        SIPRequestPending: Self.RescheduleModify(InviteAgent);
+
+       // If we receive a 408 Request Timeout or a 481 Call Leg Or Transaction
+       // Does Not Exist from our attempted modify then the remote end's
+       // disappeared or our session died. We have no choice but to terminate.
         SIPRequestTimeout,
-        SIPCallLegOrTransactionDoesNotExist: Self.Terminate;
+        SIPCallLegOrTransactionDoesNotExist: begin
+          Self.ModifyAttempt := nil;
+          Self.Terminate;
+        end;
       end;
     end;
   finally
@@ -5204,7 +5212,6 @@ end;
 procedure TIdSipSession.RescheduleModify(InviteAgent: TIdSipInvite);
 begin
   // Precondition: You've acquired ModifyLock.
-
   Self.UA.ScheduleEvent(Self.UA.OnResendReInvite,
                         Self.ModifyWaitTime,
                         InviteAgent.InitialRequest.Copy);
