@@ -1152,7 +1152,7 @@ type
     property MimeType:     String              read fMimeType write fMimeType;
   end;
 
-  TIdSipInviteMethod = class(TIdMethod)
+  TIdSipInviteMethod = class(TIdNotification)
   private
     fInvite: TIdSipInboundInvite;
   public
@@ -1210,7 +1210,7 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TIdSipOptionsResponseMethod = class(TIdMethod)
+  TIdSipOptionsResponseMethod = class(TIdNotification)
   private
     fOptions:  TIdSipOutboundOptions;
     fResponse: TIdSipResponse;
@@ -1221,7 +1221,7 @@ type
     property Response: TIdSipResponse        read fResponse write fResponse;
   end;
 
-  TIdSipRegistrationMethod = class(TIdMethod)
+  TIdSipRegistrationMethod = class(TIdNotification)
   private
     fCurrentBindings: TIdSipContacts;
     fRegistration:    TIdSipOutboundRegistration;
@@ -1244,7 +1244,7 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TIdSipSessionMethod = class(TIdMethod)
+  TIdSipSessionMethod = class(TIdNotification)
   private
     fSession: TIdSipSession;
   public
@@ -1274,7 +1274,7 @@ type
     property Answer: TIdSipResponse read fAnswer write fAnswer;
   end;
 
-  TIdSipSessionModifySessionMethod = class(TIdMethod)
+  TIdSipSessionModifySessionMethod = class(TIdNotification)
   private
     fModify: TIdSipInboundInvite;
   public
@@ -1285,7 +1285,7 @@ type
 
   // Ask the listeners for a username/password pair. First listener to set
   // either Password or Username wins.
-  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdMethod)
+  TIdSipUserAgentAuthenticationChallengeMethod = class(TIdNotification)
   private
     fChallenge:     TIdSipResponse;
     fFirstPassword: String;
@@ -1302,7 +1302,7 @@ type
     property UserAgent:     TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
-  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdMethod)
+  TIdSipUserAgentDroppedUnmatchedResponseMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
     fMessage:  TIdSipMessage;
@@ -1313,7 +1313,7 @@ type
     property Message:  TIdSipMessage  read fMessage write fMessage;
   end;
 
-  TIdSipUserAgentInboundCallMethod = class(TIdMethod)
+  TIdSipUserAgentInboundCallMethod = class(TIdNotification)
   private
     fSession: TIdSipInboundSession;
   public

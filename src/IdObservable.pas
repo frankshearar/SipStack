@@ -42,7 +42,7 @@ type
 
   // I represent a reified Method that you use to tell listeners when
   // Subject has changed in some way.
-  TIdObserverChangedMethod = class(TIdMethod)
+  TIdObserverChangedMethod = class(TIdNotification)
   private
     fObserved: TObject;
   public

@@ -233,7 +233,7 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipTransportExceptionMethod = class(TIdMethod)
+  TIdSipTransportExceptionMethod = class(TIdNotification)
   private
     fException: Exception;
     fReason:    String;
@@ -244,7 +244,7 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
-  TIdSipTransportReceiveRequestMethod = class(TIdMethod)
+  TIdSipTransportReceiveRequestMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
     fRequest:  TIdSipRequest;
@@ -255,7 +255,7 @@ type
     property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
-  TIdSipTransportReceiveResponseMethod = class(TIdMethod)
+  TIdSipTransportReceiveResponseMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
     fResponse: TIdSipResponse;
@@ -266,7 +266,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
-  TIdSipTransportRejectedMessageMethod = class(TIdMethod)
+  TIdSipTransportRejectedMessageMethod = class(TIdNotification)
   private
     fMsg:    String;
     fReason: String;
@@ -277,7 +277,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipTransportSendingRequestMethod = class(TIdMethod)
+  TIdSipTransportSendingRequestMethod = class(TIdNotification)
   private
     fSender:  TIdSipTransport;
     fRequest: TIdSipRequest;
@@ -288,7 +288,7 @@ type
     property Request: TIdSipRequest   read fRequest write fRequest;
   end;
 
-  TIdSipTransportSendingResponseMethod = class(TIdMethod)
+  TIdSipTransportSendingResponseMethod = class(TIdNotification)
   private
     fSender: TIdSipTransport;
     fResponse: TIdSipResponse;

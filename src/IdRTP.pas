@@ -1065,7 +1065,7 @@ type
     procedure RemoveLast;
   end;
 
-  TIdRTPMethod = class(TIdMethod)
+  TIdRTPMethod = class(TIdNotification)
   private
     fBinding: TIdConnection;
   public

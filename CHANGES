@@ -12,6 +12,7 @@ v0.4 ()
   to re-issue the request, and if they do, the TransactionDispatcher
   creates a new client transaction with the credentials. This
   (currently) completely empties the ActionListener interface.
+* TIdMethod renamed to TIdNotification.
 
 v0.3 (2004/12/24)
 

@@ -409,7 +409,7 @@ type
     function IsNull: Boolean; override;
   end;
 
-  TIdSipTransactionDispatcherMethod = class(TIdMethod)
+  TIdSipTransactionDispatcherMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
   public
@@ -449,7 +449,7 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
-  TIdSipTransactionMethod = class(TIdMethod)
+  TIdSipTransactionMethod = class(TIdNotification)
   private
     fTransaction: TIdSipTransaction;
   public
@@ -1147,6 +1147,8 @@ begin
   try
     ReAttempt.Assign(Transaction.InitialRequest);
     Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
+
+    // Todo: What if no listener gave us an authentication token?
 
     if TryAgain then begin
       NewAttempt := Self.AddClientTransaction(ReAttempt);

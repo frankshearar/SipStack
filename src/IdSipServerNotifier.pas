@@ -36,7 +36,7 @@ type
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
   end;
 
-  TIdSipServerExceptionMethod = class(TIdMethod)
+  TIdSipServerExceptionMethod = class(TIdNotification)
   private
     fException: Exception;
     fReason:    String;
@@ -47,7 +47,7 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
-  TIdSipServerMalformedMessageMethod = class(TIdMethod)
+  TIdSipServerMalformedMessageMethod = class(TIdNotification)
   private
     fMsg:    String;
     fReason: String;
@@ -58,7 +58,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipServerReceiveRequestMethod = class(TIdMethod)
+  TIdSipServerReceiveRequestMethod = class(TIdNotification)
   private
     fReceivedFrom: TIdSipConnectionBindings;
     fRequest:      TIdSipRequest;
@@ -69,7 +69,7 @@ type
     property Request:      TIdSipRequest            read fRequest write fRequest;
   end;
 
-  TIdSipServerReceiveResponseMethod = class(TIdMethod)
+  TIdSipServerReceiveResponseMethod = class(TIdNotification)
   private
     fReceivedFrom: TIdSipConnectionBindings;
     fResponse:     TIdSipResponse;
