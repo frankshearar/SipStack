@@ -1499,6 +1499,7 @@ begin
   Self.ActionLock         := TCriticalSection.Create;
   Self.Actions            := TObjectList.Create;
   Self.UserAgentListeners := TIdNotificationList.Create;
+  Self.UserAgentListeners.AddExpectedException(EParserError);
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
