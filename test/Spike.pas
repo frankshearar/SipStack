@@ -62,7 +62,7 @@ type
     UA:           TIdSipUserAgentCore;
     UDPByteCount: Integer;
 
-    procedure LogMessage(const Msg: TIdSipMessage);
+    procedure LogMessage(Msg: TIdSipMessage);
     procedure OnChanged(Observed: TObject);
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnEndedSession(Session: TIdSipSession);
@@ -80,7 +80,7 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
-    procedure ProcessPCM(const Data: TStream);
+    procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure StartReadingData(const SDP: String);
     procedure StopReadingData;
@@ -276,7 +276,7 @@ end;
 
 //* TrnidSpike Private methods *************************************************
 
-procedure TrnidSpike.LogMessage(const Msg: TIdSipMessage);
+procedure TrnidSpike.LogMessage(Msg: TIdSipMessage);
 begin
   Self.Log.Lines.Add(Msg.AsString);
   Self.Log.Lines.Add('----');
@@ -357,7 +357,7 @@ begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpike.ProcessPCM(const Data: TStream);
+procedure TrnidSpike.ProcessPCM(Data: TStream);
 begin
   Self.Lock.Acquire;
   try
