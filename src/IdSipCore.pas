@@ -2969,22 +2969,16 @@ end;
 
 procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
 var
-  CurrentBindings: TIdSipContacts;
-  Notification:    TIdSipOptionsSuccessMethod;
+  Notification: TIdSipOptionsSuccessMethod;
 begin
-  CurrentBindings := TIdSipContacts.Create(Response.Headers);
+  Notification := TIdSipOptionsSuccessMethod.Create;
   try
-    Notification := TIdSipOptionsSuccessMethod.Create;
-    try
-      Notification.Options  := Self;
-      Notification.Response := Response;
+    Notification.Options  := Self;
+    Notification.Response := Response;
 
-      Self.Listeners.Notify(Notification);
-    finally
-      Notification.Free;
-    end;
+    Self.Listeners.Notify(Notification);
   finally
-    CurrentBindings.Free;
+    Notification.Free;
   end;
 
   Self.Terminate;
