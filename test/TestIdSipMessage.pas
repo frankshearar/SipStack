@@ -48,6 +48,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestCreateDialogID;
     procedure TestHasSipsUri;
     procedure TestIsAck;
     procedure TestIsBye;
@@ -81,6 +82,7 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestCreateDialogID;
     procedure TestIsEqualToComplexMessages;
     procedure TestIsEqualToDifferentHeaders;
     procedure TestIsEqualToDifferentSipVersion;
@@ -96,7 +98,7 @@ type
 implementation
 
 uses
-  Classes, IdSipConsts, SysUtils, TestMessages;
+  Classes, IdSipConsts, IdSipDialogID, SysUtils, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -513,6 +515,20 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateDialogID;
+var
+  ID: TIdSipDialogID;
+begin
+  ID := Self.Message.CreateDialogID;
+  try
+    CheckEquals(Self.Message.CallID,       ID.CallID,    'Call-ID');
+    CheckEquals(Self.Message.From.Tag,     ID.LocalTag,  'Local tag');
+    CheckEquals(Self.Message.ToHeader.Tag, ID.RemoteTag, 'Remote tag');
+  finally
+    ID.Free;
   end;
 end;
 
@@ -1008,6 +1024,20 @@ begin
     end;
   finally
     Expected.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCreateDialogID;
+var
+  ID: TIdSipDialogID;
+begin
+  ID := Self.Message.CreateDialogID;
+  try
+    CheckEquals(Self.Message.CallID,       ID.CallID,    'Call-ID');
+    CheckEquals(Self.Message.From.Tag,     ID.RemoteTag, 'Remote tag');
+    CheckEquals(Self.Message.ToHeader.Tag, ID.LocalTag,  'Local tag');
+  finally
+    ID.Free;
   end;
 end;
 

@@ -3,40 +3,31 @@ unit TestIdSipDialog;
 interface
 
 uses
-  IdSipDialog, IdSipHeaders, IdSipMessage, IdURI, TestFramework, TestFrameworkSip;
+  IdSipDialog, IdSipDialogID, IdSipHeaders, IdSipMessage, IdURI, TestFramework,
+  TestFrameworkSip;
 
 type
-  TestTIdSipDialogID = class(TTestCase)
-  private
-    ID: TIdSipDialogID;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestCreationFromParameters;
-    procedure TestCreationFromDialogID;
-    procedure TestIsEqualToSameID;
-    procedure TestIsEqualToDifferentCallID;
-    procedure TestIsEqualToDifferentLocalTag;
-    procedure TestIsEqualToDifferentRemoteTag;
-  end;
-
   TestTIdSipDialog = class(TTestCaseSip)
   protected
-    Dlg:              TIdSipDialog;
-    ID:               TIdSipDialogID;
-    LocalSequenceNo:  Cardinal;
-    LocalUri:         TIdURI;
-    RemoteSequenceNo: Cardinal;
-    RemoteTarget:     TIdURI;
-    RemoteUri:        TIdURI;
-    Req:              TIdSipRequest;
-    Res:              TIdSipResponse;
-    RouteSet:         TIdSipHeaders;
+    Dlg:                TIdSipDialog;
+    ID:                 TIdSipDialogID;
+    LocalSequenceNo:    Cardinal;
+    LocalUri:           TIdURI;
+    OnEstablishedFired: Boolean;
+    RemoteSequenceNo:   Cardinal;
+    RemoteTarget:       TIdURI;
+    RemoteUri:          TIdURI;
+    Req:                TIdSipRequest;
+    Res:                TIdSipResponse;
+    RouteSet:           TIdSipHeaders;
+  private
+    procedure CheckOnEstablishedFired(Sender: TIdSipDialog);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateBye;
+    procedure TestCreateCancel;
     procedure TestCreateFromAnotherDialog;
     procedure TestCreateRequest;
     procedure TestCreateRequestRouteSetEmpty;
@@ -47,6 +38,8 @@ type
     procedure TestEarlyState;
     procedure TestEmptyRemoteTargetAfterResponse;
     procedure TestIsSecure;
+    procedure TestLocalSequenceNoMonotonicallyIncreases;
+    procedure TestOnEstablishedFired;
     procedure TestRemoteTarget;
   end;
 
@@ -86,105 +79,8 @@ end;
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipDialog unit tests');
-  Result.AddTest(TestTIdSipDialogID.Suite);
   Result.AddTest(TestTIdSipDialog.Suite);
   Result.AddTest(TestTIdSipDialogs.Suite);
-end;
-
-//******************************************************************************
-//* TestTIdSipDialogID                                                         *
-//******************************************************************************
-//* TestTIdSipDialogID Public methods ******************************************
-
-procedure TestTIdSipDialogID.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ID := TIdSipDialogID.Create('1', '2', '3');
-end;
-
-procedure TestTIdSipDialogID.TearDown;
-begin
-  Self.ID.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipDialogID Private methods *****************************************
-
-//* TestTIdSipDialogID Published methods ***************************************
-
-procedure TestTIdSipDialogID.TestCreationFromParameters;
-begin
-  CheckEquals('1', Self.ID.CallID,    'CallID');
-  CheckEquals('2', Self.ID.LocalTag,  'LocalTag');
-  CheckEquals('3', Self.ID.RemoteTag, 'RemoteTag');
-end;
-
-procedure TestTIdSipDialogID.TestCreationFromDialogID;
-var
-  Dlg:    TIdSipDialogID;
-begin
-  Dlg := TIdSipDialogID.Create(Self.ID);
-  try
-    Check(Dlg.IsEqualTo(Self.ID), 'Dialog IDs not equal');
-  finally
-    Dlg.Free;
-  end;
-end;
-
-procedure TestTIdSipDialogID.TestIsEqualToSameID;
-var
-  D: TIdSipDialogID;
-begin
-  D := TIdSipDialogID.Create(Self.ID);
-  try
-    Check(D.IsEqualTo(Self.ID), 'Same Dialog ID');
-  finally
-    D.Free;
-  end;
-end;
-
-procedure TestTIdSipDialogID.TestIsEqualToDifferentCallID;
-var
-  D: TIdSipDialogID;
-begin
-  D := TIdSipDialogID.Create(Self.ID.CallID + '1',
-                             Self.ID.LocalTag,
-                             Self.ID.RemoteTag);
-  try
-    Check(not D.IsEqualTo(Self.ID), 'Different Call-ID');
-  finally
-    D.Free;
-  end;
-end;
-
-procedure TestTIdSipDialogID.TestIsEqualToDifferentLocalTag;
-var
-  D: TIdSipDialogID;
-begin
-  D := TIdSipDialogID.Create(Self.ID.CallID,
-                             Self.ID.LocalTag + '1',
-                             Self.ID.RemoteTag);
-  try
-    Check(not D.IsEqualTo(Self.ID), 'Different Local Tag');
-  finally
-    D.Free;
-  end;
-end;
-
-procedure TestTIdSipDialogID.TestIsEqualToDifferentRemoteTag;
-var
-  D: TIdSipDialogID;
-begin
-  D := TIdSipDialogID.Create(Self.ID.CallID,
-                             Self.ID.LocalTag,
-                             Self.ID.RemoteTag + '1');
-  try
-    Check(not D.IsEqualTo(Self.ID), 'Different Remote Tag');
-  finally
-    D.Free;
-  end;
 end;
 
 //******************************************************************************
@@ -229,6 +125,8 @@ begin
                                   Self.RemoteTarget,
                                   false,
                                   Self.RouteSet);
+
+  Self.OnEstablishedFired := false;                                
 end;
 
 procedure TestTIdSipDialog.TearDown;
@@ -245,7 +143,38 @@ begin
   inherited TearDown;
 end;
 
+//* TestTIdSipDialog Private methods *******************************************
+
+procedure TestTIdSipDialog.CheckOnEstablishedFired(Sender: TIdSipDialog);
+begin
+  Self.OnEstablishedFired := true;
+end;
+
 //* TestTIdSipDialog Published methods *****************************************
+
+procedure TestTIdSipDialog.TestCreateBye;
+var
+  Bye: TIdSipRequest;
+begin
+  Bye := Self.Dlg.CreateBye;
+  try
+    CheckEquals(MethodBye, Bye.Method, 'Unexpected method');
+  finally
+    Bye.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateCancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.Dlg.CreateCancel;
+  try
+    CheckEquals(MethodCancel, Cancel.Method, 'Unexpected method');
+  finally
+    Cancel.Free;
+  end;
+end;
 
 procedure TestTIdSipDialog.TestCreateFromAnotherDialog;
 var
@@ -330,9 +259,9 @@ var
   Routes: TIdSipHeadersFilter;
 begin
   Self.Dlg.RouteSet.Clear;
-  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server10.biloxi.com;lr>';
-  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server9.biloxi.com>';
-  Self.Dlg.RouteSet.Add(RecordRouteHeader).Value := '<sip:server8.biloxi.com;lr>';
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server10.biloxi.com;lr>';
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server9.biloxi.com>';
+  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server8.biloxi.com;lr>';
 
   R := Self.Dlg.CreateRequest;
   try
@@ -340,10 +269,10 @@ begin
                 R.RequestUri,
                 'Request-URI');
 
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RecordRouteHeader);
+    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
     try
       Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
-            'Record-Route headers not set to the Dialog route set');
+            'Route headers not set to the Dialog route set');
     finally
       Routes.Free;
     end;
@@ -374,7 +303,7 @@ begin
       Self.Dlg.RouteSet.Delete(0);
       Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.GetFullURI + '>';
 
-      for I := 0 to Routes.Count - 1 do 
+      for I := 0 to Routes.Count - 1 do
         CheckEquals(Self.Dlg.RouteSet.Items[I].Value,
                     Routes.Items[I].Value,
                     'Route ' + IntToStr(I + 1) + ' value');
@@ -483,37 +412,84 @@ procedure TestTIdSipDialog.TestIsSecure;
 var
   D: TIdSipDialog;
 begin
-  Self.Req.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, false);
+  D := TIdSipDialog.Create(Self.ID,
+                           Self.LocalSequenceNo,
+                           Self.RemoteSequenceNo,
+                           Self.LocalUri,
+                           Self.RemoteUri,
+                           Self.RemoteTarget,
+                           true,
+                           Self.RouteSet);
   try
-    Check(not D.IsSecure, 'SIP Request-URI, not received over TLS');
+    Check(D.IsSecure, 'Set secure');
   finally
     D.Free;
   end;
 
-  Self.Req.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, true);
+  D := TIdSipDialog.Create(Self.ID,
+                           Self.LocalSequenceNo,
+                           Self.RemoteSequenceNo,
+                           Self.LocalUri,
+                           Self.RemoteUri,
+                           Self.RemoteTarget,
+                           false,
+                           Self.RouteSet);
   try
-    Check(not D.IsSecure, 'SIP Request-URI, received over TLS');
+    Check(not D.IsSecure, 'Not set secure');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestLocalSequenceNoMonotonicallyIncreases;
+var
+  BaseSeqNo: Cardinal;
+  R:         TIdSipRequest;
+begin
+  R := Self.Dlg.CreateRequest;
+  try
+     BaseSeqNo := R.CSeq.SequenceNo;
+  finally
+    R.Free;
   end;
 
-  Self.Req.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, false);
+  R := Self.Dlg.CreateRequest;
   try
-    Check(not D.IsSecure, 'SIPS Request-URI, not received over TLS');
+    CheckEquals(BaseSeqNo + 1,
+                R.CSeq.SequenceNo,
+                'Not monotonically increasing by one');
   finally
-    D.Free;
+    R.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestOnEstablishedFired;
+var
+  OK:     TIdSipResponse;
+  Invite: TIdSipRequest;
+begin
+  Self.Dlg.OnEstablished := Self.CheckOnEstablishedFired;
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Method := MethodInvite;
+    Self.Dlg.HandleMessage(Invite);
+  finally
+    Invite.Free;
   end;
 
-  Self.Req.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
-  D := TIdSipDialog.Create(Self.Req, true);
+  Check(not Self.OnEstablishedFired, 'OnEstablished event fired prematurely');
+
+  OK := TIdSipResponse.Create;
   try
-    Check(D.IsSecure, 'SIPS Request-URI, received over TLS');
+    OK.StatusCode := SIPOK;
+
+    Self.Dlg.HandleMessage(OK);
   finally
-    D.Free;
+    OK.Free;
   end;
+
+  Check(Self.OnEstablishedFired, 'OnEstablished event didn''t fire');
 end;
 
 procedure TestTIdSipDialog.TestRemoteTarget;

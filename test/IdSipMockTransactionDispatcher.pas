@@ -13,7 +13,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure FireOnNewDialog(const Dialog: TIdSipDialog);
+    procedure FireOnTransactionFail(const Reason: String);
     procedure Send(const Msg: TIdSipMessage); override;
 
     property Transport: TIdSipMockTransport read fTransport;
@@ -45,15 +45,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipMockTransactionDispatcher.FireOnNewDialog(const Dialog: TIdSipDialog);
+procedure TIdSipMockTransactionDispatcher.FireOnTransactionFail(const Reason: String);
 begin
-  Self.DoOnNewDialog(Dialog);
+  Self.DoOnTransactionFail(Self, Reason);
 end;
 
 procedure TIdSipMockTransactionDispatcher.Send(const Msg: TIdSipMessage);
 begin
   Self.Transport.Send(Msg);
-//  Self.Transport.FireOnRequest(R); // ??
 end;
 
 end.

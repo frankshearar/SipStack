@@ -3,8 +3,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipHeaders,
-  IdURI, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipDialogID, 
+  IdSipHeaders, IdURI, SysUtils;
 
 type
   TIdSipRequest = class;
@@ -55,12 +55,13 @@ type
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
     procedure ClearHeaders;
+    function  CreateDialogID: TIdSipDialogID;
     function  FirstContact: TIdSipContactHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
     function  HeaderAt(const Index: Cardinal): TIdSipHeader;
     function  HeaderCount: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
-    function  IsEqualTo(const Message: TIdSipMessage): Boolean; virtual; abstract;
+    function  IsEqualTo(const Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
     function  MalformedException: ExceptClass; virtual; abstract;
@@ -99,12 +100,11 @@ type
     function  IsAck: Boolean;
     function  IsBye: Boolean;
     function  IsCancel: Boolean;
-    function  IsEqualTo(const Message: TIdSipMessage): Boolean; override;
+    function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
-    function  Match(const Request: TIdSipRequest): Boolean; overload;
-    function  Match(const Response: TIdSipResponse): Boolean; overload;
+    function  Match(const Msg: TIdSipMessage): Boolean;
 
     property Method:     String read fMethod write fMethod;
     property RequestUri: TIdURI read fRequestUri write SetRequestUri;
@@ -121,7 +121,7 @@ type
   public
     procedure Accept(const Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
-    function  IsEqualTo(const Message: TIdSipMessage): Boolean; override;
+    function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
     function  IsProvisional: Boolean;
     function  IsRequest: Boolean; override;
@@ -377,6 +377,11 @@ begin
   Self.Headers.Clear;
 end;
 
+function TIdSipMessage.CreateDialogID: TIdSipDialogID;
+begin
+  Result := nil;
+end;
+
 function TIdSipMessage.FirstContact: TIdSipContactHeader;
 begin
   Result := Self.FirstHeader(ContactHeaderFull) as TIdSipContactHeader;
@@ -557,12 +562,12 @@ begin
   Result := Self.Method = MethodCancel;
 end;
 
-function TIdSipRequest.IsEqualTo(const Message: TIdSipMessage): Boolean;
+function TIdSipRequest.IsEqualTo(const Msg: TIdSipMessage): Boolean;
 var
   Request: TIdSipRequest;
 begin
-  if (Message is Self.ClassType) then begin
-    Request := Message as TIdSipRequest;
+  if (Msg is Self.ClassType) then begin
+    Request := Msg as TIdSipRequest;
 
     Result := (Self.SIPVersion            = Request.SIPVersion)
           and (Self.Method                = Request.Method)
@@ -588,42 +593,49 @@ begin
   Result := EBadRequest;
 end;
 
-function TIdSipRequest.Match(const Request: TIdSipRequest): Boolean;
+function TIdSipRequest.Match(const Msg: TIdSipMessage): Boolean;
+var
+  Request:  TIdSipRequest;
+  Response: TIdSipResponse;
 begin
-  // Add RFC 2543 matching
 
-  // cf. RFC 3261 section 17.2.3
-  if Request.LastHop.IsRFC3261Branch then begin
-    Result := (Request.LastHop.Branch = Self.LastHop.Branch)
-          and (Request.LastHop.SentBy = Self.LastHop.SentBy);
+  if (Msg is TIdSipRequest) then begin
+    Request := Msg as TIdSipRequest;
+    // Add RFC 2543 matching
 
-    if Request.IsACK then
-      Result := Result and Self.IsInvite
-    else
-      Result := Result and (Request.Method = Self.Method);
+    // cf. RFC 3261 section 17.2.3
+    if Request.LastHop.IsRFC3261Branch then begin
+      Result := (Request.LastHop.Branch = Self.LastHop.Branch)
+            and (Request.LastHop.SentBy = Self.LastHop.SentBy);
+
+      if Request.IsACK then
+        Result := Result and Self.IsInvite
+      else
+        Result := Result and (Request.Method = Self.Method);
+    end
+    else begin
+      raise Exception.Create('matching of SIP/1.0 messages not implemented yet');
+    end;
   end
-  else begin
-    raise Exception.Create('matching of SIP/1.0 messages not implemented yet');
-  end;
-end;
+  else if (Msg is TIdSipResponse) then begin
+    Response := Msg as TIdSipResponse;
+    // Add RFC 2543 matching
 
-function TIdSipRequest.Match(const Response: TIdSipResponse): Boolean;
-begin
-  // Add RFC 2543 matching
+    // cf. RFC 3261 section 17.1.3
+    Result := (Response.Path.Length > 0)
+          and (Self.Path.Length > 0);
 
-  // cf. RFC 3261 section 17.1.3
-  Result := (Response.Path.Length > 0)
-        and (Self.Path.Length > 0);
-
-  Result := Result
-        and (Response.LastHop.Branch = Self.LastHop.Branch);
-
-  if (Response.CSeq.Method = MethodAck) then
     Result := Result
-          and (Self.IsInvite)
-  else
-    Result := Result
-          and (Response.CSeq.Method = Self.Method);
+          and (Response.LastHop.Branch = Self.LastHop.Branch);
+
+    if (Response.CSeq.Method = MethodAck) then
+      Result := Result
+            and (Self.IsInvite)
+    else
+      Result := Result
+            and (Response.CSeq.Method = Self.Method);
+  end
+  else Result := false;
 end;
 
 //* TIdSipRequest Protected methods ********************************************
@@ -662,12 +674,12 @@ begin
   Self.StatusText := R.StatusText;
 end;
 
-function TIdSipResponse.IsEqualTo(const Message: TIdSipMessage): Boolean;
+function TIdSipResponse.IsEqualTo(const Msg: TIdSipMessage): Boolean;
 var
   Response: TIdSipResponse;
 begin
-  if (Message is Self.ClassType) then begin
-    Response := Message as TIdSipResponse;
+  if (Msg is Self.ClassType) then begin
+    Response := Msg as TIdSipResponse;
 
     Result := (Self.SIPVersion = Response.SipVersion)
           and (Self.StatusCode = Response.StatusCode)

@@ -73,7 +73,7 @@ type
     procedure Completed(Sender: TObject; const R: TIdSipResponse);
     procedure Proceeding(Sender: TObject; const R: TIdSipResponse);
     procedure TransactionFail(Sender: TObject; const Reason: String);
-    procedure Terminated(Sender: TObject);
+    procedure Terminated(Sender: TIdSipTransaction);
     function  TransactionType: TIdSipTransactionClass; virtual; abstract;
   public
     procedure SetUp; override;
@@ -85,11 +85,8 @@ type
     OnNewDialogFired: Boolean;
 
     procedure CheckACK(Sender: TObject; const R: TIdSipResponse);
-    procedure CheckOnNewDialogState(Sender: TObject; const Dialog: TIdSipDialog);
-    procedure CheckOnNewDialogUsingTLS(Sender: TObject; const Dialog: TIdSipDialog);
     procedure MoveToCompletedState;
     procedure MoveToProceedingState;
-    procedure NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
     procedure OnFail(Sender: TObject; const Reason: String);
   protected
     function TransactionType: TIdSipTransactionClass; override;
@@ -103,9 +100,6 @@ type
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
-    procedure TestOnNewDialogFired;
-    procedure TestOnNewDialogState;
-    procedure TestOnNewDialogUsingTLS;
     procedure TestReceive1xxInCallingState;
     procedure TestReceive1xxInCompletedState;
     procedure TestReceive1xxInProceedingState;
@@ -125,15 +119,11 @@ type
 
   TestTIdSipServerInviteTransaction = class(TTestTransaction)
   private
-    OnNewDialogFired:     Boolean;
     Request:              TIdSipRequest;
     TransactionConfirmed: Boolean;
 
-    procedure CheckOnNewDialogState(Sender: TObject; const Dialog: TIdSipDialog);
-    procedure CheckOnNewDialogUsingTLS(Sender: TObject; const Dialog: TIdSipDialog);
     procedure MoveToCompletedState;
     procedure MoveToConfirmedState;
-    procedure NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
     procedure OnFail(Sender: TObject; const Reason: String);
     procedure OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
     procedure ReceiveInvite;
@@ -146,9 +136,6 @@ type
     procedure TestInitialRequestSentToTU;
     procedure TestInitialState;
     procedure TestIsClient;
-    procedure TestOnNewDialogFired;
-    procedure TestOnNewDialogState;
-    procedure TestOnNewDialogUsingTLS;
     procedure TestReceive2xxFromTUInProceedingState;
     procedure TestReceiveAckInCompletedState;
     procedure TestReceiveFinalResponseFromTUInProceedingState;
@@ -884,7 +871,7 @@ begin
   Self.TransactionFailed := true;
 end;
 
-procedure TTestTransaction.Terminated(Sender: TObject);
+procedure TTestTransaction.Terminated(Sender: TIdSipTransaction);
 begin
   Self.TransactionTerminated := true;
 end;
@@ -939,66 +926,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipClientInviteTransaction.CheckOnNewDialogState(Sender: TObject; const Dialog: TIdSipDialog);
-var
-  RouteSet:     TIdSipHeaders;
-  RecordRoutes: TIdSipHeadersFilter;
-begin
-  Check(Self.InitialRequest.HasHeader(ContactHeaderFull),
-        'A UAC generated request that can establish a dialog MUST have a Contact header, '
-      + 'cf. RFC 3261, section 12.1.2');
-
-  Check(not Dialog.IsSecure, 'Dialog not established over TLS - must not be secure');
-
-  RouteSet := TIdSipHeaders.Create;
-  try
-    RecordRoutes := TIdSipHeadersFilter.Create(Self.Response.Headers, RecordRouteHeader);
-    try
-      RouteSet.AddInReverseOrder(RecordRoutes);
-
-      Check(RouteSet.IsEqualTo(Dialog.RouteSet), 'Route set');
-    finally
-      RecordRoutes.Free;
-    end;
-  finally
-    RouteSet.Free;
-  end;
-
-  CheckEquals(Self.InitialRequest.CSeq.SequenceNo,
-              Dialog.LocalSequenceNo,
-              'Local sequence no');
-  CheckEquals(0,
-              Dialog.RemoteSequenceNo,
-              'Remote sequence no');
-  CheckEquals(Self.InitialRequest.CallID,
-              Dialog.ID.CallID,
-              'Call-ID');
-  CheckEquals(Self.InitialRequest.From.Tag,
-              Dialog.ID.LocalTag,
-              'Local tag');
-  CheckEquals(Self.Response.ToHeader.Tag,
-              Dialog.ID.RemoteTag,
-              'Remote tag');
-  CheckEquals(Self.InitialRequest.ToHeader.Address,
-              Dialog.RemoteURI,
-              'Remote URI');
-  CheckEquals(Self.InitialRequest.From.Address,
-              Dialog.LocalURI,
-              'Local URI');
-  CheckEquals(Self.Response.ToHeader.Address,
-              Dialog.RemoteURI,
-              'Remote URI');
-
-  Self.OnNewDialogFired := true;
-end;
-
-procedure TestTIdSipClientInviteTransaction.CheckOnNewDialogUsingTLS(Sender: TObject; const Dialog: TIdSipDialog);
-begin
-  Check(Dialog.IsSecure, 'Dialog established over TLS - must be secure');
-
-  Self.OnNewDialogFired := true;
-end;
-
 procedure TestTIdSipClientInviteTransaction.MoveToCompletedState;
 begin
   CheckEquals(Transaction(itsProceeding),
@@ -1025,11 +952,6 @@ begin
   CheckEquals(Transaction(itsProceeding),
               Transaction(Self.Tran.State),
               'MoveToCompletedState postcondition');
-end;
-
-procedure TestTIdSipClientInviteTransaction.NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
-begin
-  Self.OnNewDialogFired := true;
 end;
 
 procedure TestTIdSipClientInviteTransaction.OnFail(Sender: TObject; const Reason: String);
@@ -1112,50 +1034,6 @@ begin
     Fail('Failed to bail out on non-INVITE method');
   except
   end;
-end;
-
-procedure TestTIdSipClientInviteTransaction.TestOnNewDialogFired;
-begin
-  Self.Tran.OnNewDialog := Self.NewDialog;
-
-  Self.MoveToProceedingState;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Response.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5000;foo>';
-  Self.Response.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5001>';
-  Self.Response.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:5002>';
-
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
-end;
-
-procedure TestTIdSipClientInviteTransaction.TestOnNewDialogState;
-begin
-  Self.Tran.OnNewDialog := Self.CheckOnNewDialogState;
-
-  Self.MoveToProceedingState;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
-end;
-
-procedure TestTIdSipClientInviteTransaction.TestOnNewDialogUsingTLS;
-begin
-  Self.MockDispatcher.Transport.TransportType := sttTLS;
-  Self.InitialRequest.FirstContact.Address.Protocol := SipsScheme;
-  Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
-
-  Self.Tran.OnNewDialog := Self.CheckOnNewDialogUsingTLS;
-
-  Self.MoveToProceedingState;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;
@@ -1340,13 +1218,12 @@ begin
   Self.MoveToCompletedState;
   Sleep(500);
 
-  Check(Self.TransactionTerminated, 'TimerD didn''t fire');
-
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
+  Check(not Self.TransactionTerminated, 'OnTerminated fired');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestTimeout;
@@ -1411,56 +1288,6 @@ end;
 
 //* TestTIdSipServerInviteTransaction Private methods **************************
 
-procedure TestTIdSipServerInviteTransaction.CheckOnNewDialogState(Sender: TObject;
-                                                            const Dialog: TIdSipDialog);
-var
-  RecordRouteFilter: TIdSipHeaderList;
-begin
-  RecordRouteFilter := TIdSipHeadersFilter.Create(Self.InitialRequest.Headers,
-                                                  RecordRouteHeader);
-  try
-    Check(Dialog.RouteSet.IsEqualTo(RecordRouteFilter),
-          'Record-Route headers not kept as route set');
-  finally
-    RecordRouteFilter.Free;
-  end;
-
-  CheckEquals(Self.InitialRequest.FirstContact.Address,
-              Dialog.RemoteTarget,
-              'Remote target');
-  CheckEquals(Self.InitialRequest.CSeq.SequenceNo,
-              Dialog.RemoteSequenceNo,
-              'Remote sequence no');
-  CheckEquals(0,
-              Dialog.LocalSequenceNo,
-              'Local sequence no');
-  CheckEquals(Self.InitialRequest.CallID,
-              Dialog.ID.CallID,
-              'Call-ID');
-  CheckEquals(Self.MockDispatcher.Transport.LastResponse.ToHeader.Tag,
-              Dialog.ID.LocalTag,
-              'ID Local tag');
-  CheckEquals(Self.InitialRequest.From.Tag,
-              Dialog.ID.RemoteTag,
-              'ID Remote tag');
-  CheckEquals(Self.InitialRequest.From.Address,
-              Dialog.RemoteURI,
-              'Remote URI');
-  CheckEquals(Self.InitialRequest.ToHeader.Address,
-              Dialog.LocalURI,
-              'Local URI');
-
-  Self.OnNewDialogFired := true;
-end;
-
-procedure TestTIdSipServerInviteTransaction.CheckOnNewDialogUsingTLS(Sender: TObject;
-                                                               const Dialog: TIdSipDialog);
-begin
-  Check(Dialog.IsSecure, 'Dialog established over TLS - must be secure');
-
-  Self.OnNewDialogFired := true;
-end;
-
 procedure TestTIdSipServerInviteTransaction.MoveToCompletedState;
 begin
   CheckEquals(Transaction(itsProceeding),
@@ -1487,11 +1314,6 @@ begin
   CheckEquals(Transaction(itsConfirmed),
               Transaction(Self.Tran.State),
               'MoveToCompletedState postcondition');
-end;
-
-procedure TestTIdSipServerInviteTransaction.NewDialog(Sender: TObject; const Dialog: TIdSipDialog);
-begin
-  Self.OnNewDialogFired := true;
 end;
 
 procedure TestTIdSipServerInviteTransaction.OnFail(Sender: TObject; const Reason: String);
@@ -1550,40 +1372,6 @@ end;
 procedure TestTIdSipServerInviteTransaction.TestIsClient;
 begin
   Check(not Self.Tran.IsClient, 'IsClient not false');
-end;
-
-procedure TestTIdSipServerInviteTransaction.TestOnNewDialogFired;
-begin
-  Self.Tran.OnNewDialog := Self.NewDialog;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
-end;
-
-procedure TestTIdSipServerInviteTransaction.TestOnNewDialogState;
-begin
-  Self.Tran.OnNewDialog := Self.CheckOnNewDialogState;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
-end;
-
-procedure TestTIdSipServerInviteTransaction.TestOnNewDialogUsingTLS;
-begin
-  Self.MockDispatcher.Transport.TransportType := sttTLS;
-  Self.InitialRequest.RequestURI.URI := 'sips:wintermute@tessier-ashpool.co.lu';
-  Self.Tran.Initialise(Self.MockDispatcher, Self.InitialRequest);
-
-  Self.Tran.OnNewDialog := Self.CheckOnNewDialogUsingTLS;
-
-  Self.Response.StatusCode := SIPOK;
-  Self.Tran.HandleResponse(Self.Response, Self.MockDispatcher.Transport);
-
-  Check(Self.OnNewDialogFired, 'New Dialog event didn''t fire');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestReceive2xxFromTUInProceedingState;
@@ -1856,13 +1644,12 @@ begin
   Self.MoveToConfirmedState;
   Sleep(6000);
 
-  Check(Self.TransactionTerminated, 'TimerI didn''t fire');
-
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
+  Check(not Self.TransactionTerminated, 'OnTerminated fired');
 end;
 
 procedure TestTIdSipServerInviteTransaction.TestTransportErrorInCompletedState;
@@ -2127,13 +1914,12 @@ begin
   Self.MoveToCompletedState;
   Sleep(6000);
 
-  Check(Self.TransactionTerminated, 'TimerK didn''t fire');
-
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
+  Check(not Self.TransactionTerminated, 'OnTerminated fired');
 end;
 
 procedure TestTIdSipClientNonInviteTransaction.TestTransportErrorInTryingState;
@@ -2464,13 +2250,12 @@ begin
   Self.MoveToCompletedState;
   Sleep(200);
 
-  Check(Self.TransactionTerminated, 'TimerJ didn''t fire');
-
   CheckEquals(Transaction(itsTerminated),
               Transaction(Self.Tran.State),
               'Terminated');
 
   CheckEquals('', Self.FailMsg, 'Unexpected fail');
+  Check(not Self.TransactionTerminated, 'OnTerminated fired');
 end;
 
 procedure TestTIdSipServerNonInviteTransaction.TestTransportErrorInCompletedState;

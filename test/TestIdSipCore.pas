@@ -3,8 +3,9 @@ unit TestIdSipCore;
 interface
 
 uses
-  IdSipCore, IdSipHeaders, IdSipMessage, IdSipMockTransactionDispatcher,
-  IdSipTransaction, IdURI, TestFramework, TestFrameworkSip;
+  IdSipCore, IdSipDialog, IdSipDialogID, IdSipHeaders, IdSipMessage,
+  IdSipMockTransactionDispatcher, IdSipTransaction, IdURI, TestFramework,
+  TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -19,21 +20,16 @@ type
 
   TestTIdSipUserAgentCore = class(TTestCaseSip)
   private
-    Core:                TIdSipUserAgentCore;
-    Dispatch:            TIdSipMockTransactionDispatcher;
-    OnEndedSessionFired: Boolean;
-    OnInviteFired:       Boolean;
-    Request:             TIdSipRequest;
-    Session:             TIdSipSession;
+    Core:          TIdSipUserAgentCore;
+    Dispatch:      TIdSipMockTransactionDispatcher;
+    OnFailFired:   Boolean;
+    OnInviteFired: Boolean;
+    Request:       TIdSipRequest;
 
     procedure AcceptCallImmediately(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckAcceptCall(Sender: TObject; const Session: TIdSipSession);
-    procedure CheckAcceptSecureCall(Sender: TObject; const Session: TIdSipSession);
-    procedure CheckOnEndedSessionFired(Sender: TObject; const Session: TIdSipSession);
+    procedure CheckCallTimedOut(Sender: TObject; const Reason: String);
     procedure CheckOnInviteFired(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckCreateRequest(const Dest: TIdSipToHeader; const Request: TIdSipRequest);
-    procedure HangUpSessionImmediately(Sender: TObject; const Session: TIdSipSession);
-    procedure RecordNewSession(Sender: TObject; const Session: TIdSipSession);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -47,6 +43,7 @@ type
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestCall;
+    procedure TestCallTimedOut;
     procedure TestCreateInvite;
     procedure TestCreateRequest;
     procedure TestCreateRequestSipsRequestUri;
@@ -63,7 +60,6 @@ type
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
     procedure TestNextTag;
-    procedure TestOnEndedSessionFired;
     procedure TestOnInviteFired;
     procedure TestRejectNoContact;
     procedure TestRejectUnknownContentEncoding;
@@ -73,8 +69,6 @@ type
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
     procedure TestRinging;
-    procedure TestSessionEstablished;
-    procedure TestSessionTornDown;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -82,24 +76,25 @@ type
     procedure TestSetFromMailto;
   end;
 
-  TestTIdSipSession = class(TTestCase)
+  TestTIdSipSession = class(TTestCaseSip)
   private
     Core:           TIdSipUserAgentCore;
     Dispatch:       TIdSipMockTransactionDispatcher;
+    ID:             TIdSipDialogID;
     InitialRequest: TIdSipRequest;
+    RouteSet:       TIdSipHeaders;
     Session:        TIdSipSession;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
-//    procedure TestHangUp;
   end;
 
 implementation
 
 uses
-  Classes, IdException, IdGlobal, IdHttp, IdSipConsts, IdSipDialog, SysUtils,
-  TestMessages, IdSipTransport;
+  Classes, IdException, IdGlobal, IdHttp, IdSipConsts, SysUtils,
+  TestMessages, IdSipTransport, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
@@ -191,8 +186,8 @@ begin
   end;
   Self.Request.ContentType := SdpMimeType;
 
-  Self.OnEndedSessionFired := false;
-  Self.OnInviteFired       := false;
+  Self.OnFailFired   := false;
+  Self.OnInviteFired := false;
 end;
 
 procedure TestTIdSipUserAgentCore.TearDown;
@@ -211,58 +206,10 @@ begin
   Self.Core.AcceptCall(Request);
 end;
 
-procedure TestTIdSipUserAgentCore.CheckAcceptCall(Sender: TObject; const Session: TIdSipSession);
-var
-  I:                 Integer;
-  RecordRouteFilter: TIdSipHeadersFilter;
-  ReqContact:        TIdSipContactHeader;
-  Response:          TIdSipResponse;
-  RouteFilter:       TIdSipHeadersFilter;
+procedure TestTIdSipUserAgentCore.CheckCallTimedOut(Sender: TObject; const Reason: String);
 begin
-  Response := Self.Dispatch.Transport.LastResponse;
-
-  CheckEquals(Response.CallID,              Session.Dialog.ID.CallID,        'Call-ID');
-  CheckEquals(Response.ToHeader.Tag,        Session.Dialog.ID.LocalTag,      'Local tag');
-  CheckEquals(Response.From.Tag,            Session.Dialog.ID.RemoteTag,     'Remote tag');
-  CheckEquals(0,                            Session.Dialog.LocalSequenceNo,  'Local sequence no');
-  CheckEquals(Self.Request.CSeq.SequenceNo, Session.Dialog.RemoteSequenceNo, 'Remote sequence no');
-  CheckEquals(Response.ToHeader.Address,
-              Session.Dialog.LocalURI,
-              'Local URI');
-  CheckEquals(Response.From.Address,
-              Session.Dialog.RemoteURI,
-              'Remote URI');
-  ReqContact := Self.Request.FirstContact;
-  CheckEquals(ReqContact.Address,
-              Session.Dialog.RemoteURI,
-              'Remote Target');
-
-  Check(not Session.Dialog.IsSecure, 'A secure dialog shouldn''t be created from a SIP URI');
-
-  RecordRouteFilter := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
-  try
-    RouteFilter := TIdSipHeadersFilter.Create(Response.Headers, RouteHeader);
-    try
-      for I := 0 to Min(RouteFilter.Count, RecordRouteFilter.Count) - 1 do
-        CheckEquals(RecordRouteFilter.Items[I].Value,
-                    RouteFilter.Items[I].Value,
-                    'Route set differs on value ' + IntToStr(I + 1));
-    finally
-      RouteFilter.Free;
-    end;
-  finally
-    RecordRouteFilter.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.CheckAcceptSecureCall(Sender: TObject; const Session: TIdSipSession);
-begin
-  Check(Session.Dialog.IsSecure, 'A secure dialog MUST be created from a SIPS URI');
-end;
-
-procedure TestTIdSipUserAgentCore.CheckOnEndedSessionFired(Sender: TObject; const Session: TIdSipSession);
-begin
-  Self.OnEndedSessionFired := true;
+  CheckEquals(SessionTimeoutMsg, Reason, 'Unexpected fail');
+  Self.OnFailFired := true;
 end;
 
 procedure TestTIdSipUserAgentCore.CheckOnInviteFired(Sender: TObject; const Request: TIdSipRequest);
@@ -311,31 +258,21 @@ begin
         'User-Agent header present when Core''s User-Agent name is blank');
 end;
 
-procedure TestTIdSipUserAgentCore.HangUpSessionImmediately(Sender: TObject; const Session: TIdSipSession);
-begin
-  Session.HangUp;
-end;
-
-procedure TestTIdSipUserAgentCore.RecordNewSession(Sender: TObject; const Session: TIdSipSession);
-begin
-  Self.Session := Session;
-end;
-
 //* TestTIdSipUserAgentCore Published methods **********************************
 
 procedure TestTIdSipUserAgentCore.TestAcceptCall;
 var
-  Response:      TIdSipResponse;
-  ResponseCount: Cardinal;
-  SessionCount:  Cardinal;
+//  I:                 Integer;
+//  RecordRouteFilter: TIdSipHeadersFilter;
+//  ReqContact:        TIdSipContactHeader;
+  Response:          TIdSipResponse;
+  ResponseCount:     Cardinal;
+//  RouteFilter:       TIdSipHeadersFilter;
 begin
   ResponseCount := Self.Dispatch.Transport.SentResponseCount;
-  SessionCount  := Self.Core.SessionCount;
-
-  Self.Core.OnInvite := Self.AcceptCallImmediately;
-  Self.Core.OnNewSession := Self.CheckAcceptCall;
 
   Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.Core.AcceptCall(Self.Request);
 
   Check(Self.Dispatch.Transport.SentResponseCount > ResponseCount,
         'No response sent');
@@ -345,17 +282,45 @@ begin
   Check(Response.From.HasTag,                  'No From tag');
   Check(Response.ToHeader.HasTag,              'No To tag');
   Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
+{
+  CheckEquals(Response.CallID,              Session.Dialog.ID.CallID,        'Call-ID');
+  CheckEquals(Response.ToHeader.Tag,        Session.Dialog.ID.LocalTag,      'Local tag');
+  CheckEquals(Response.From.Tag,            Session.Dialog.ID.RemoteTag,     'Remote tag');
+  CheckEquals(0,                            Session.Dialog.LocalSequenceNo,  'Local sequence no');
+  CheckEquals(Self.Request.CSeq.SequenceNo, Session.Dialog.RemoteSequenceNo, 'Remote sequence no');
+  CheckEquals(Response.ToHeader.Address,
+              Session.Dialog.LocalURI,
+              'Local URI');
+  CheckEquals(Response.From.Address,
+              Session.Dialog.RemoteURI,
+              'Remote URI');
+  ReqContact := Self.Request.FirstContact;
+  CheckEquals(ReqContact.Address,
+              Session.Dialog.RemoteURI,
+              'Remote Target');
 
-  CheckEquals(SessionCount + 1,
-              Self.Core.SessionCount,
-              'No new session was created');
+  Check(not Session.Dialog.IsSecure, 'A secure dialog shouldn''t be created from a SIP URI');
 
-              end;
+  RecordRouteFilter := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
+  try
+    RouteFilter := TIdSipHeadersFilter.Create(Response.Headers, RouteHeader);
+    try
+      for I := 0 to Min(RouteFilter.Count, RecordRouteFilter.Count) - 1 do
+        CheckEquals(RecordRouteFilter.Items[I].Value,
+                    RouteFilter.Items[I].Value,
+                    'Route set differs on value ' + IntToStr(I + 1));
+    finally
+      RouteFilter.Free;
+    end;
+  finally
+    RecordRouteFilter.Free;
+  end;
+}  
+end;
 
 procedure TestTIdSipUserAgentCore.TestAcceptSecureCall;
 begin
   Self.Core.OnInvite     := Self.AcceptCallImmediately;
-  Self.Core.OnNewSession := Self.CheckAcceptSecureCall;
 
   Self.Dispatch.Transport.TransportType := sttTLS;
   Self.Request.LastHop.Transport := sttTLS;
@@ -363,6 +328,9 @@ begin
   Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.lu';
 
   Self.Dispatch.Transport.FireOnRequest(Self.Request);
+  Self.Core.AcceptCall(Self.Request);
+
+//  Check(Session.Dialog.IsSecure, 'A secure dialog MUST be created from a SIPS URI');  
 end;
 
 procedure TestTIdSipUserAgentCore.TestAddAllowedLanguage;
@@ -519,6 +487,23 @@ begin
     CheckEquals(TranCount + 1,
                 Self.Dispatch.TransactionCount,
                 'no client INVITE transaction created');
+  finally
+    Destination.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCallTimedOut;
+var
+  Destination:  TIdSipToHeader;
+begin
+  Destination := TIdSipToHeader.Create;
+  try
+    Destination.Value := 'sip:franks@localhost';
+    Self.Core.OnFail := Self.CheckCallTimedOut;
+    Self.Core.Call(Destination);
+
+    Self.Dispatch.FireOnTransactionFail(SessionTimeoutMsg);
+    Check(Self.OnFailFired, 'OnFail event didn''t fire');
   finally
     Destination.Free;
   end;
@@ -834,17 +819,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestOnEndedSessionFired;
-begin
-  Self.Core.OnEndedSession := Self.CheckOnEndedSessionFired;
-  Self.Core.OnInvite       := Self.AcceptCallImmediately;
-  Self.Core.OnNewSession   := Self.HangUpSessionImmediately;
-
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
-
-  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
-end;
-
 procedure TestTIdSipUserAgentCore.TestOnInviteFired;
 begin
   Self.Core.OnInvite := Self.CheckOnInviteFired;
@@ -1032,62 +1006,6 @@ begin
   CheckEquals(SIPRinging, Response.StatusCode, 'Status-Code');
 end;
 
-procedure TestTIdSipUserAgentCore.TestSessionEstablished;
-var
-  Destination:      TIdSipToHeader;
-  OrigSessionCount: Cardinal;
-  Dialog:           TIdSipDialog;
-  ID:               TIdSipDialogID;
-  RouteSet:         TIdSipHeadersFilter;
-begin
-  OrigSessionCount := Self.Core.SessionCount;
-
-  Destination := TIdSipToHeader.Create;
-  try
-    Destination.Value := 'sip:franks@localhost';
-
-    ID := TIdSipDialogID.Create(Self.Request.ToHeader.Tag, Self.Request.From.Tag, Self.Request.CallID);
-    try
-      RouteSet := TIdSipHeadersFilter.Create(Self.Request.Headers, RouteHeader);
-      try
-        Dialog := TIdSipDialog.Create(ID, 0, 0, '', '', '', false, RouteSet);
-        try
-          Self.Dispatch.FireOnNewDialog(Dialog);
-
-          CheckEquals(OrigSessionCount + 1,
-              Self.Core.SessionCount,
-              'No session established');
-        finally
-          Dialog.Free;
-        end;
-      finally
-        RouteSet.Free;
-      end;
-    finally
-      ID.Free;
-    end;
-  finally
-    Destination.Free;
-  end;
-end;
-
-procedure TestTIdSipUserAgentCore.TestSessionTornDown;
-var
-  SessionCount: Cardinal;
-begin
-  Self.Core.OnInvite     := Self.AcceptCallImmediately;
-  Self.Core.OnNewSession := Self.RecordNewSession;
-
-  Self.Dispatch.Transport.FireOnRequest(Self.Request);
-
-  SessionCount := Self.Core.SessionCount;
-
-  Self.Core.HangUp(Session);
-  
-  Check(SessionCount > Self.Core.SessionCount,
-        'Ended session not removed from UA');
-end;
-
 procedure TestTIdSipUserAgentCore.TestSetContact;
 var
   C: TIdSipContactHeader;
@@ -1180,9 +1098,7 @@ end;
 
 procedure TestTIdSipSession.SetUp;
 var
-  D:        TIdSipDialog;
-  ID:       TIdSipDialogID;
-  RouteSet: TIdSipHeaders;
+  D: TIdSipDialog;
 begin
   inherited SetUp;
 
@@ -1190,28 +1106,30 @@ begin
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
 
-  ID := TIdSipDialogID.Create('', '', '');
+  ID := TIdSipDialogID.Create('CallID', 'LocalID', 'RemoteID');
+
+  RouteSet := TIdSipHeaders.Create;
+  D := TIdSipDialog.Create(ID,
+                           1,
+                           2,
+                           'sip:wintermute@tessier-ashpool.co.lu',
+                           'sip:case@fried.neurons.org',
+                           'sip:case@fried.neurons.org',
+                           false,
+                           RouteSet);
   try
-    RouteSet := TIdSipHeaders.Create;
-    try
-      D := TIdSipDialog.Create(ID, 1, 1, '', '', '', false, RouteSet);
-      try
-        Self.Session := TIdSipSession.Create(D, Self.Core);
-      finally
-        D.Free;
-      end;
-    finally
-      RouteSet.Free;
-    end;
+    Self.Session := TIdSipSession.Create(D, Self.Core);
   finally
-    ID.Free;
+    D.Free;
   end;
 end;
 
 procedure TestTIdSipSession.TearDown;
 begin
+  Self.RouteSet.Free;
   Self.Session.Free;
   Self.InitialRequest.Free;
+  Self.ID.Free;
   Self.Core.Free;
   Self.Dispatch.Free;
 
@@ -1219,22 +1137,7 @@ begin
 end;
 
 //* TestTIdSipSession Published methods ****************************************
-{
-procedure TestTIdSipSession.TestHangUp;
-var
-  Request:      TIdSipRequest;
-  RequestCount: Cardinal;
-begin
-  RequestCount := Self.Dispatch.Transport.SentRequestCount;
 
-  Self.Session.HangUp;
-
-  Check(RequestCount < Self.Dispatch.Transport.SentRequestCount, 'No BYE sent');
-
-  Request := Self.Dispatch.Transport.LastRequest;
-  CheckEquals(MethodBye, Request.Method, 'Method');
-end;
-}
 initialization
   RegisterTest('Transaction User Cores', Suite);
 end.
