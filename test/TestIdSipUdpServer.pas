@@ -35,6 +35,11 @@ type
     procedure AcknowledgeEvent(Sender: TObject;
                                Response: TIdSipResponse;
                                ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure CheckRejectFragmentedRequestProperly(Sender: TObject;
+                                                   Request: TIdSipRequest);
+    procedure CheckRejectFragmentedResponseProperly(Sender: TObject;
+                                                    Response: TIdSipResponse;
+                                                    ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckRequest(Sender: TObject;
                            Request: TIdSipRequest);
     procedure OnException(E: Exception;
@@ -52,6 +57,7 @@ type
     procedure TestAddMessageListener;
     procedure TestListenerReceiveRequest;
     procedure TestListenerReceiveResponse;
+    procedure TestNotifyFragmentedRequestProperly;
     procedure TestRemoveMessageListener;
     procedure TestRequest;
   end;
@@ -139,6 +145,39 @@ procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipUdpServer.CheckRejectFragmentedRequestProperly(Sender: TObject;
+                                                                   Request: TIdSipRequest);
+begin
+  try
+    Check(Request.IsMalformed,
+          'Fragment (that looks like a request) not marked as malformed');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipUdpServer.CheckRejectFragmentedResponseProperly(Sender: TObject;
+                                                                    Response: TIdSipResponse;
+                                                                    ReceivedFrom: TIdSipConnectionBindings);
+begin
+  try
+    Check(Response.IsMalformed,
+          'Fragment (that by default looks like a response) not marked as malformed');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
 end;
 
 procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject;
@@ -243,6 +282,26 @@ begin
   finally
     Listener.Free;
   end;
+end;
+
+procedure TestTIdSipUdpServer.TestNotifyFragmentedRequestProperly;
+var
+  Divider: Integer;
+  Msg: String;
+begin
+  Self.CheckReceivedRequest := Self.CheckRejectFragmentedRequestProperly;
+  Self.CheckReceivedResponse := Self.CheckRejectFragmentedResponseProperly;
+
+  Msg := Format(BasicRequest, [Self.Server.Bindings[0].IP]);
+
+  Divider := Length(Msg) div 2;
+  Self.Client.Send(Copy(Msg, 1, Divider));
+
+  Self.WaitForSignaled;
+  Self.ThreadEvent.ResetEvent;
+
+  Self.Client.Send(Copy(Msg, Divider + 1, Length(Msg)));
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipUdpServer.TestRemoveMessageListener;
