@@ -81,6 +81,7 @@ type
     procedure TestSetUriTortureParameters;
     procedure TestSetUriUserHasEscapedChars;
     procedure TestSetUriValuelessParameter;
+    procedure TestSetUriWithEscapedCharacters;
     procedure TestSetUriWithNoUser;
     procedure TestSetUriWithPassword;
     procedure TestSetUriWithPort;
@@ -961,6 +962,15 @@ begin
   CheckEquals(1,    Uri.ParamCount,    'Parameter count');
   CheckEquals('lr', Uri.ParamName(0),  'Parameter name');
   CheckEquals('',   Uri.ParamValue(0), 'Parameter value');
+end;
+
+procedure TestTIdSipUri.TestSetUriWithEscapedCharacters;
+begin
+  Uri.Uri := 'sip:%77intermute@tessier-ashpool.co.luna';
+
+  CheckEquals('sip:wintermute@tessier-ashpool.co.luna',
+              Uri.Uri,
+              '(Needlessly) escaped characters in username');
 end;
 
 procedure TestTIdSipUri.TestSetUriWithNoUser;
