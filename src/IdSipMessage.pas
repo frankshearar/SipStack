@@ -888,6 +888,8 @@ type
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
+    function  HasAuthorization: Boolean;
+    function  HasProxyAuthorization: Boolean;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
     function  IsBye: Boolean;
@@ -5035,6 +5037,16 @@ end;
 function TIdSipRequest.FirstProxyRequire: TIdSipCommaSeparatedHeader;
 begin
   Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
+end;
+
+function TIdSipRequest.HasAuthorization: Boolean;
+begin
+  Result := Self.HasHeader(AuthorizationHeader);
+end;
+
+function TIdSipRequest.HasProxyAuthorization: Boolean;
+begin
+  Result := Self.HasHeader(ProxyAuthorizationHeader);
 end;
 
 function TIdSipRequest.HasSipsUri: Boolean;

@@ -102,6 +102,8 @@ type
     procedure TestEqualsFromAssign;
     procedure TestEqualsResponse;
     procedure TestEqualsTrivial;
+    procedure TestHasAuthorization;
+    procedure TestHasProxyAuthorization;
     procedure TestIsInvite;
     procedure TestIsRegister;
     procedure TestIsRequest;
@@ -1411,6 +1413,34 @@ begin
   finally
     R1.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestHasAuthorization;
+begin
+  Check(not Self.Request.HasHeader(ProxyAuthorizationHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasProxyAuthorization,
+        'New request');
+
+
+  Self.Request.AddHeader(ProxyAuthorizationHeader);
+  Check(Self.Request.HasProxyAuthorization,
+        'Lies! There is too a Proxy-Authorization header!');
+end;
+
+procedure TestTIdSipRequest.TestHasProxyAuthorization;
+begin
+  Check(not Self.Request.HasHeader(AuthorizationHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasAuthorization,
+        'New request');
+
+
+  Self.Request.AddHeader(AuthorizationHeader);
+  Check(Self.Request.HasAuthorization,
+        'Lies! There is too a Authorization header!');
 end;
 
 procedure TestTIdSipRequest.TestIsInvite;
