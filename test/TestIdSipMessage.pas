@@ -129,14 +129,6 @@ type
     procedure TestAssignBad;
     procedure TestAsString;
     procedure TestCopy;
-    procedure TestFirstProxyAuthenticate;
-    procedure TestFirstUnsupported;
-    procedure TestFirstWWWAuthenticate;
-    procedure TestInResponseToRecordRoute;
-    procedure TestInResponseToSipsRecordRoute;
-    procedure TestInResponseToSipsRequestUri;
-    procedure TestInResponseToTryingWithTimestamps;
-    procedure TestInResponseToWithContact;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentSipVersion;
@@ -144,9 +136,17 @@ type
     procedure TestEqualsDifferentStatusText;
     procedure TestEqualsRequest;
     procedure TestEqualsTrivial;
+    procedure TestFirstProxyAuthenticate;
+    procedure TestFirstUnsupported;
+    procedure TestFirstWWWAuthenticate;
     procedure TestHasAuthenticationInfo;
     procedure TestHasProxyAuthenticate;
     procedure TestHasWWWAuthenticate;
+    procedure TestInResponseToRecordRoute;
+    procedure TestInResponseToSipsRecordRoute;
+    procedure TestInResponseToSipsRequestUri;
+    procedure TestInResponseToTryingWithTimestamps;
+    procedure TestInResponseToWithContact;
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
@@ -1760,171 +1760,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipResponse.TestFirstProxyAuthenticate;
-var
-  P: TIdSipHeader;
-begin
-  Self.Response.ClearHeaders;
-
-  CheckNotNull(Self.Response.FirstProxyAuthenticate,
-               'Proxy-Authenticate not present');
-  CheckEquals(1,
-              Self.Response.HeaderCount,
-              'Proxy-Authenticate not auto-added');
-
-  P := Self.Response.FirstHeader(ProxyAuthenticateHeader);
-  Self.Response.AddHeader(ProxyAuthenticateHeader);
-
-  Check(P = Self.Response.FirstProxyAuthenticate,
-        'Wrong Proxy-Authenticate');
-end;
-
-procedure TestTIdSipResponse.TestFirstUnsupported;
-var
-  U: TIdSipHeader;
-begin
-  Self.Response.ClearHeaders;
-
-  CheckNotNull(Self.Response.FirstUnsupported, 'Unsupported not present');
-  CheckEquals(1, Self.Response.HeaderCount, 'Unsupported not auto-added');
-
-  U := Self.Response.FirstHeader(UnsupportedHeader);
-  Self.Response.AddHeader(UnsupportedHeader);
-
-  Check(U = Self.Response.FirstUnsupported, 'Wrong Unsupported');
-end;
-
-procedure TestTIdSipResponse.TestFirstWWWAuthenticate;
-var
-  P: TIdSipHeader;
-begin
-  Self.Response.ClearHeaders;
-
-  CheckNotNull(Self.Response.FirstWWWAuthenticate,
-               'WWW-Authenticate not present');
-  CheckEquals(1,
-              Self.Response.HeaderCount,
-              'WWW-Authenticate not auto-added');
-
-  P := Self.Response.FirstHeader(WWWAuthenticateHeader);
-  Self.Response.AddHeader(WWWAuthenticateHeader);
-
-  Check(P = Self.Response.FirstWWWAuthenticate,
-        'Wrong WWW-Authenticate');
-end;
-
-procedure TestTIdSipResponse.TestInResponseToRecordRoute;
-var
-  RequestRecordRoutes:  TIdSipHeadersFilter;
-  Response:             TIdSipResponse;
-  ResponseRecordRoutes: TIdSipHeadersFilter;
-begin
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
-
-  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
-  try
-    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
-    try
-      ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
-      try
-        Check(ResponseRecordRoutes.Equals(RequestRecordRoutes),
-              'Record-Route header sets mismatch');
-      finally
-        ResponseRecordRoutes.Free;
-      end;
-    finally
-      Response.Free;
-    end;
-  finally
-    RequestRecordRoutes.Free;
-  end;
-end;
-
-procedure TestTIdSipResponse.TestInResponseToSipsRecordRoute;
-var
-  Response:    TIdSipResponse;
-  SipsContact: TIdSipContactHeader;
-begin
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
-
-  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
-  try
-    SipsContact := Response.FirstContact;
-    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
-                'Must use a SIPS URI in the Contact');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipResponse.TestInResponseToSipsRequestUri;
-var
-  Response:    TIdSipResponse;
-  SipsContact: TIdSipContactHeader;
-begin
-  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-
-  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
-  try
-    SipsContact := Response.FirstContact;
-    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
-                'Must use a SIPS URI in the Contact');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipResponse.TestInResponseToTryingWithTimestamps;
-var
-  Response: TIdSipResponse;
-begin
-  Self.Request.AddHeader(TimestampHeader).Value := '1';
-
-  Response := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
-  try
-    Check(Response.HasHeader(TimestampHeader),
-          'Timestamp header(s) not copied');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipResponse.TestInResponseToWithContact;
-var
-  FromFilter: TIdSipHeadersFilter;
-  P:          TIdSipParser;
-  Response:   TIdSipResponse;
-begin
-  P := TIdSipParser.Create;
-  try
-    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
-    try
-      FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
-      try
-        CheckEquals(1, FromFilter.Count, 'Number of From headers');
-      finally
-        FromFilter.Free;
-      end;
-
-      CheckEquals(SIPOK, Response.StatusCode,           'StatusCode mismatch');
-      Check(Response.CSeq.Equals(Self.Request.CSeq), 'Cseq header mismatch');
-      Check(Response.From.Equals(Self.Request.From), 'From header mismatch');
-      Check(Response.Path.Equals(Self.Request.Path), 'Via headers mismatch');
-
-      Check(Request.ToHeader.Equals(Response.ToHeader),
-            'To header mismatch');
-
-      Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
-    finally
-      Response.Free;
-    end;
-  finally
-    P.Free;
-  end;
-end;
-
 procedure TestTIdSipResponse.TestEqualsComplexMessages;
 var
   R1, R2: TIdSipResponse;
@@ -2062,6 +1897,59 @@ begin
   end;
 end;
 
+procedure TestTIdSipResponse.TestFirstProxyAuthenticate;
+var
+  P: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstProxyAuthenticate,
+               'Proxy-Authenticate not present');
+  CheckEquals(1,
+              Self.Response.HeaderCount,
+              'Proxy-Authenticate not auto-added');
+
+  P := Self.Response.FirstHeader(ProxyAuthenticateHeader);
+  Self.Response.AddHeader(ProxyAuthenticateHeader);
+
+  Check(P = Self.Response.FirstProxyAuthenticate,
+        'Wrong Proxy-Authenticate');
+end;
+
+procedure TestTIdSipResponse.TestFirstUnsupported;
+var
+  U: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstUnsupported, 'Unsupported not present');
+  CheckEquals(1, Self.Response.HeaderCount, 'Unsupported not auto-added');
+
+  U := Self.Response.FirstHeader(UnsupportedHeader);
+  Self.Response.AddHeader(UnsupportedHeader);
+
+  Check(U = Self.Response.FirstUnsupported, 'Wrong Unsupported');
+end;
+
+procedure TestTIdSipResponse.TestFirstWWWAuthenticate;
+var
+  P: TIdSipHeader;
+begin
+  Self.Response.ClearHeaders;
+
+  CheckNotNull(Self.Response.FirstWWWAuthenticate,
+               'WWW-Authenticate not present');
+  CheckEquals(1,
+              Self.Response.HeaderCount,
+              'WWW-Authenticate not auto-added');
+
+  P := Self.Response.FirstHeader(WWWAuthenticateHeader);
+  Self.Response.AddHeader(WWWAuthenticateHeader);
+
+  Check(P = Self.Response.FirstWWWAuthenticate,
+        'Wrong WWW-Authenticate');
+end;
+
 procedure TestTIdSipResponse.TestHasAuthenticationInfo;
 begin
   Check(not Self.Response.HasHeader(AuthenticationInfoHeader),
@@ -2102,6 +1990,118 @@ begin
   Self.Response.AddHeader(WWWAuthenticateHeader);
   Check(Self.Response.HasWWWAuthenticate,
         'Lies! There is too a WWW-Authenticate header!');
+end;
+
+procedure TestTIdSipResponse.TestInResponseToRecordRoute;
+var
+  RequestRecordRoutes:  TIdSipHeadersFilter;
+  Response:             TIdSipResponse;
+  ResponseRecordRoutes: TIdSipHeadersFilter;
+begin
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6001>';
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:127.0.0.1:6002>';
+
+  RequestRecordRoutes := TIdSipHeadersFilter.Create(Self.Request.Headers, RecordRouteHeader);
+  try
+    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+    try
+      ResponseRecordRoutes := TIdSipHeadersFilter.Create(Response.Headers, RecordRouteHeader);
+      try
+        Check(ResponseRecordRoutes.Equals(RequestRecordRoutes),
+              'Record-Route header sets mismatch');
+      finally
+        ResponseRecordRoutes.Free;
+      end;
+    finally
+      Response.Free;
+    end;
+  finally
+    RequestRecordRoutes.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToSipsRecordRoute;
+var
+  Response:    TIdSipResponse;
+  SipsContact: TIdSipContactHeader;
+begin
+  Self.Request.AddHeader(RecordRouteHeader).Value := '<sips:127.0.0.1:6000>';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+  try
+    SipsContact := Response.FirstContact;
+    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
+                'Must use a SIPS URI in the Contact');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToSipsRequestUri;
+var
+  Response:    TIdSipResponse;
+  SipsContact: TIdSipContactHeader;
+begin
+  Self.Request.RequestUri.URI := 'sips:wintermute@tessier-ashpool.co.luna';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+  try
+    SipsContact := Response.FirstContact;
+    CheckEquals(SipsScheme, SipsContact.Address.Scheme,
+                'Must use a SIPS URI in the Contact');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToTryingWithTimestamps;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Request.AddHeader(TimestampHeader).Value := '1';
+
+  Response := TIdSipResponse.InResponseTo(Self.Request, SIPTrying);
+  try
+    Check(Response.HasHeader(TimestampHeader),
+          'Timestamp header(s) not copied');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInResponseToWithContact;
+var
+  FromFilter: TIdSipHeadersFilter;
+  P:          TIdSipParser;
+  Response:   TIdSipResponse;
+begin
+  P := TIdSipParser.Create;
+  try
+    Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK, Contact);
+    try
+      FromFilter := TIdSipHeadersFilter.Create(Response.Headers, FromHeaderFull);
+      try
+        CheckEquals(1, FromFilter.Count, 'Number of From headers');
+      finally
+        FromFilter.Free;
+      end;
+
+      CheckEquals(SIPOK, Response.StatusCode,           'StatusCode mismatch');
+      Check(Response.CSeq.Equals(Self.Request.CSeq), 'Cseq header mismatch');
+      Check(Response.From.Equals(Self.Request.From), 'From header mismatch');
+      Check(Response.Path.Equals(Self.Request.Path), 'Via headers mismatch');
+
+      Check(Request.ToHeader.Equals(Response.ToHeader),
+            'To header mismatch');
+
+      Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
+    finally
+      Response.Free;
+    end;
+  finally
+    P.Free;
+  end;
 end;
 
 procedure TestTIdSipResponse.TestIsFinal;
