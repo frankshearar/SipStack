@@ -35,9 +35,11 @@ type
   end;
 
   // I supply a single timer thread with which you may register a wait time
-  // and an event. When that wait time is up, I set the event you've given
-  // me.
-  // You may safely specify a wait time of up to 1 day (86 400 000ms).
+  // (in milliseconds) and an event (a TEvent or a TNotifyEvent). When that
+  // wait time is up, I set the event you've given me. You may register as
+  // many events as you like, up to the size of a TObjectList (High(Integer)).
+  // 
+  // You may safely specify a wait time of up to 1 day (86 400 000 ms).
   TIdRTPTimerQueue = class(TIdThread)
   private
     EventList: TObjectList;
