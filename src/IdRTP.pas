@@ -4010,7 +4010,7 @@ begin
       end;
     end
     else begin
-      // First received packet - one down, Self.MinimumSequentialPackets - 1
+      // First received packet - one down, Self.MinimumSequentialPackets - 1 to go
       Self.Probation := Self.MinimumSequentialPackets - 1;
       Self.HighestSeqNo  := Data.SequenceNo;
     end;
