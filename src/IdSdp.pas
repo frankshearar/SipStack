@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress,
-  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdSipNotification,
+  IdInterfacedObject, IdRTP, IdRTPServer, IdSimpleParser, IdNotification,
   IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
@@ -524,7 +524,7 @@ type
   TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
                              IIdRTPListener)
   private
-    FilteredListeners:  TIdSipNotificationList;
+    FilteredListeners:  TIdNotificationList;
     fLocalDescription:  TIdSdpMediaDescription;
     fRemoteDescription: TIdSdpMediaDescription;
     fPeer:              Pointer;
@@ -3276,7 +3276,7 @@ constructor TIdFilteredRTPPeer.Create(Peer: IIdAbstractRTPPeer;
 begin
   inherited Create;
 
-  Self.FilteredListeners    := TIdSipNotificationList.Create;
+  Self.FilteredListeners    := TIdNotificationList.Create;
 
   fLocalDescription := TIdSdpMediaDescription.Create;
   fLocalDescription.Assign(LocalDescription);

@@ -13,7 +13,7 @@ interface
 
 uses
   Contnrs, IdException, IdInterfacedObject, IdSipMessage,
-  IdSipNotification, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer,
+  IdNotification, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer,
   IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, SyncObjs, SysUtils;
 
 type
@@ -50,8 +50,8 @@ type
     fHostName:                 String;
     fTimeout:                  Cardinal;
     fUseRport:                 Boolean;
-    TransportListeners:        TIdSipNotificationList;
-    TransportSendingListeners: TIdSipNotificationList;
+    TransportListeners:        TIdNotificationList;
+    TransportSendingListeners: TIdNotificationList;
 
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
@@ -316,8 +316,8 @@ constructor TIdSipTransport.Create(Port: Cardinal);
 begin
   inherited Create;
 
-  Self.TransportListeners        := TIdSipNotificationList.Create;
-  Self.TransportSendingListeners := TIdSipNotificationList.Create;
+  Self.TransportListeners        := TIdNotificationList.Create;
+  Self.TransportSendingListeners := TIdNotificationList.Create;
 
   Self.Timeout  := Self.DefaultTimeout;
   Self.UseRport := false;

@@ -35,7 +35,7 @@ interface
 uses
   Classes, Contnrs, IdSipDialog, IdSipDialogID, IdException,
   IdInterfacedObject, IdObservable, IdSipAuthentication, IdSipMessage,
-  IdSipNotification, IdSipRegistration, IdSipTimer, IdSipTransaction,
+  IdNotification, IdSipRegistration, IdSipTimer, IdSipTransaction,
   IdSipTransport, SyncObjs;
 
 type
@@ -300,7 +300,7 @@ type
     fMinimumExpiryTime:    Cardinal; // in seconds
     fProxy:                TIdSipUri;
     KnownRegistrars:       TObjectList;
-    UserAgentListeners:    TIdSipNotificationList;
+    UserAgentListeners:    TIdNotificationList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
@@ -435,7 +435,7 @@ type
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
   protected
-    Listeners: TIdSipNotificationList;
+    Listeners: TIdNotificationList;
 
     procedure ActionSucceeded(Response: TIdSipResponse); virtual;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; virtual; abstract;
@@ -1507,7 +1507,7 @@ begin
 
   Self.ActionLock         := TCriticalSection.Create;
   Self.Actions            := TObjectList.Create;
-  Self.UserAgentListeners := TIdSipNotificationList.Create;
+  Self.UserAgentListeners := TIdNotificationList.Create;
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
@@ -2328,7 +2328,7 @@ begin
   Self.UA := UA;
 
   Self.fCurrentRequest := TIdSipRequest.Create;
-  Self.Listeners       := TIdSipNotificationList.Create;
+  Self.Listeners       := TIdNotificationList.Create;
   Self.NonceCount      := 0;
 end;
 

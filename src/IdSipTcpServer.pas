@@ -12,7 +12,7 @@ unit IdSipTcpServer;
 interface
 
 uses
-  Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipNotification,
+  Classes, Contnrs, IdSipConsts, IdSipMessage, IdNotification,
   IdSipTcpClient, IdSipTimer, IdTCPConnection, IdTCPServer, IdThread,
   SyncObjs, SysUtils;
 
@@ -94,7 +94,7 @@ type
     ConnectionMap:      TIdSipConnectionTableLock;
     fConnectionTimeout: Cardinal;
     fReadBodyTimeout:   Cardinal;
-    Listeners:          TIdSipNotificationList;
+    Listeners:          TIdNotificationList;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
@@ -338,7 +338,7 @@ begin
   Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
   Self.ConnectionTimeout := Self.DefaultTimeout;
   Self.DefaultPort       := IdPORT_SIP;
-  Self.Listeners         := TIdSipNotificationList.Create;
+  Self.Listeners         := TIdNotificationList.Create;
 end;
 
 destructor TIdSipTcpServer.Destroy;

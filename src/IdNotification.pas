@@ -7,7 +7,7 @@
   This unit contains code written by:
     * Frank Shearar
 }
-unit IdSipNotification;
+unit IdNotification;
 
 interface
 
@@ -27,7 +27,7 @@ type
   // I provide a storage space for listeners, and you use Notify to make me
   // iterate over my contained listeners, passing each item to the
   // TIdSipMethod.
-  TIdSipNotificationList = class(TObject)
+  TIdNotificationList = class(TObject)
   private
     List: TList;
     Lock: TCriticalSection;
@@ -56,11 +56,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipNotificationList                                                     *
+//* TIdNotificationList                                                        *
 //******************************************************************************
-//* TIdSipNotificationList Public methods **************************************
+//* TIdNotificationList Public methods *****************************************
 
-constructor TIdSipNotificationList.Create;
+constructor TIdNotificationList.Create;
 begin
   inherited Create;
 
@@ -68,7 +68,7 @@ begin
   Self.Lock := TCriticalSection.Create;
 end;
 
-destructor TIdSipNotificationList.Destroy;
+destructor TIdNotificationList.Destroy;
 begin
   Self.Lock.Acquire;
   try
@@ -81,7 +81,7 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipNotificationList.AddListener(L: IInterface);
+procedure TIdNotificationList.AddListener(L: IInterface);
 begin
   Self.Lock.Acquire;
   try
@@ -91,7 +91,7 @@ begin
   end;
 end;
 
-function TIdSipNotificationList.Count: Integer;
+function TIdNotificationList.Count: Integer;
 begin
   Self.Lock.Acquire;
   try
@@ -101,7 +101,7 @@ begin
   end;
 end;
 
-procedure TIdSipNotificationList.Notify(Method: TIdSipMethod);
+procedure TIdNotificationList.Notify(Method: TIdSipMethod);
 var
   Copy: TList;
   I:    Integer;
@@ -125,7 +125,7 @@ begin
   end;
 end;
 
-procedure TIdSipNotificationList.RemoveListener(L: IInterface);
+procedure TIdNotificationList.RemoveListener(L: IInterface);
 begin
   Self.Lock.Acquire;
   try
@@ -135,7 +135,9 @@ begin
   end;
 end;
 
-procedure TIdSipNotificationList.CopyList(Copy: TList);
+//* TIdNotificationList Private methods ****************************************
+
+procedure TIdNotificationList.CopyList(Copy: TList);
 var
   I: Integer;
 begin

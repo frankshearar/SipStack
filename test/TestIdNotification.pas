@@ -1,9 +1,9 @@
-unit TestIdSipNotification;
+unit TestIdNotification;
 
 interface
 
 uses
-  IdInterfacedObject, IdSipNotification, TestFramework;
+  IdInterfacedObject, IdNotification, TestFramework;
 
 type
   IIdFoo = interface
@@ -28,9 +28,9 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TestTIdSipNotificationList = class(TTestCase)
+  TestTIdNotificationList = class(TTestCase)
   private
-    List: TIdSipNotificationList;
+    List: TIdNotificationList;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -46,8 +46,8 @@ uses
 
 function Suite: ITestSuite;
 begin
-  Result := TTestSuite.Create('IdSipNotification unit tests');
-  Result.AddTest(TestTIdSipNotificationList.Suite);
+  Result := TTestSuite.Create('IdNotification unit tests');
+  Result.AddTest(TestTIdNotificationList.Suite);
 end;
 
 //******************************************************************************
@@ -80,27 +80,27 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipNotificationList                                                 *
+//* TestTIdNotificationList                                                    *
 //******************************************************************************
-//* TestTIdSipNotificationList Public methods **********************************
+//* TestTIdNotificationList Public methods *************************************
 
-procedure TestTIdSipNotificationList.SetUp;
+procedure TestTIdNotificationList.SetUp;
 begin
   inherited SetUp;
 
-  Self.List := TIdSipNotificationList.Create;
+  Self.List := TIdNotificationList.Create;
 end;
 
-procedure TestTIdSipNotificationList.TearDown;
+procedure TestTIdNotificationList.TearDown;
 begin
   Self.List.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipNotificationList Published methods *******************************
+//* TestTIdNotificationList Published methods **********************************
 
-procedure TestTIdSipNotificationList.TestAddRemoveCount;
+procedure TestTIdNotificationList.TestAddRemoveCount;
 var
   O1, O2: TIdInterfacedObject;
 begin
@@ -126,7 +126,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipNotificationList.TestNotify;
+procedure TestTIdNotificationList.TestNotify;
 var
   F1, F2: TIdFoo;
   BarCaller: TIdCallBar;

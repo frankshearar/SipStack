@@ -17,6 +17,7 @@ uses
   BasicClient in 'src\client\BasicClient.pas' {fmBasicClient},
   IdDTMFPanel in 'src\IdDTMFPanel.pas',
   IdInterfacedObject in 'src\IdInterfacedObject.pas',
+  IdNotification in 'src\IdNotification.pas',
   IdObservable in 'src\IdObservable.pas',
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
@@ -55,6 +56,7 @@ uses
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestMessages in 'test\TestMessages.pas',
+  TestIdNotification in 'test\TestIdNotification.pas',
   TestIdObservable in 'test\TestIdObservable.pas',
   TestIdRTP in 'test\TestIdRTP.pas',
   TestIdRTPDiagnostics in 'test\TestIdRTPDiagnostics.pas',
@@ -97,7 +99,6 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-//  Forms.Application.CreateForm(TrnidSpikeRegistrar, rnidSpikeRegistrar);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

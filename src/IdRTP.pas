@@ -12,7 +12,7 @@ unit IdRTP;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdSipNotification, IdSocketHandle,
+  Classes, Contnrs, IdInterfacedObject, IdNotification, IdSocketHandle,
   IdTimerQueue, SyncObjs, SysUtils, Types;
 
 type
@@ -880,7 +880,7 @@ type
                                  IIdAbstractRTPPeer)
   private
     fProfile:     TIdRTPProfile;
-    Listeners:    TIdSipNotificationList;
+    Listeners:    TIdNotificationList;
   public
     constructor Create; virtual;
     destructor  Destroy; override;
@@ -926,7 +926,7 @@ type
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
     fSessionBandwidth:          Cardinal;
-    Listeners:                  TIdSipNotificationList;
+    Listeners:                  TIdNotificationList;
     MemberLock:                 TCriticalSection;
     Members:                    TIdRTPMemberTable;
     NextTransmissionTime:       TDateTime;
@@ -4497,7 +4497,7 @@ constructor TIdBaseRTPAbstractPeer.Create;
 begin
   inherited Create;
 
-  Self.Listeners := TIdSipNotificationList.Create;
+  Self.Listeners := TIdNotificationList.Create;
 end;
 
 destructor TIdBaseRTPAbstractPeer.Destroy;
@@ -4574,7 +4574,7 @@ constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer);
 begin
   inherited Create;
 
-  Self.Listeners := TIdSipNotificationList.Create;
+  Self.Listeners := TIdNotificationList.Create;
 
   Self.Agent          := Agent;
   Self.fNoControlSent := true;

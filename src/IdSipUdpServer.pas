@@ -12,13 +12,13 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdSipNotification, IdSipTcpClient,
+  Classes, IdSipConsts, IdSipMessage, IdNotification, IdSipTcpClient,
   IdSipTcpServer, IdSocketHandle, IdUDPServer, SysUtils;
 
 type
   TIdSipUdpServer = class(TIdUDPServer)
   private
-    Listeners: TIdSipNotificationList;
+    Listeners: TIdNotificationList;
 
     procedure DoOnParserError(const RawMessage, Reason: String);
     procedure NotifyListeners(const Request: TIdSipRequest;
@@ -56,7 +56,7 @@ begin
   inherited Create(AOwner);
 
   Self.DefaultPort   := IdPORT_SIP;
-  Self.Listeners     := TIdSipNotificationList.Create;
+  Self.Listeners     := TIdNotificationList.Create;
   Self.ThreadedEvent := true;
 end;
 

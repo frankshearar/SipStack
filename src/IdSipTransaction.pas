@@ -12,7 +12,7 @@ unit IdSipTransaction;
 interface
 
 uses
-  Contnrs, IdInterfacedObject, IdSipMessage, IdSipNotification, IdSipTimer,
+  Contnrs, IdInterfacedObject, IdSipMessage, IdNotification, IdSipTimer,
   IdSipTransport, IdThread, IdTimerQueue, SyncObjs, SysUtils;
 
 const
@@ -78,7 +78,7 @@ type
     fT1Interval:     Cardinal;
     fT2Interval:     Cardinal;
     fT4Interval:     Cardinal;
-    MsgListeners:    TIdSipNotificationList;
+    MsgListeners:    TIdNotificationList;
     Transports:      TObjectList;
     TransportLock:   TCriticalSection;
     Transactions:    TObjectList;
@@ -170,7 +170,7 @@ type
     fState:           TIdSipTransactionState;
     fDispatcher:      TIdSipTransactionDispatcher;
     fLastResponse:    TIdSipResponse;
-    TranListeners:    TIdSipNotificationList;
+    TranListeners:    TIdNotificationList;
   protected
     FirstTime: Boolean;
 
@@ -601,7 +601,7 @@ constructor TIdSipTransactionDispatcher.Create;
 begin
   inherited Create;
 
-  Self.MsgListeners := TIdSipNotificationList.Create;
+  Self.MsgListeners := TIdNotificationList.Create;
 
   Self.Transports    := TObjectList.Create(false);
   Self.TransportLock := TCriticalSection.Create;
@@ -1089,7 +1089,7 @@ begin
   Self.InitialRequest.Assign(InitialRequest);
   Self.fLastResponse := TIdSipResponse.Create;
 
-  Self.TranListeners := TIdSipNotificationList.Create;
+  Self.TranListeners := TIdNotificationList.Create;
 
   Self.FirstTime := true;
 end;
