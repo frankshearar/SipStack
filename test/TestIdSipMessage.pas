@@ -138,6 +138,7 @@ type
     procedure TestEqualsDifferentStatusText;
     procedure TestEqualsRequest;
     procedure TestEqualsTrivial;
+    procedure TestHasProxyAuthenticate;
     procedure TestHasWWWAuthenticate;
     procedure TestIsFinal;
     procedure TestIsOK;
@@ -1955,6 +1956,20 @@ begin
   finally
     R1.Free;
   end;
+end;
+
+procedure TestTIdSipResponse.TestHasProxyAuthenticate;
+begin
+  Check(not Self.Response.HasHeader(ProxyAuthenticateHeader),
+        'Sanity check');
+
+  Check(not Self.Response.HasProxyAuthenticate,
+        'New response');
+
+
+  Self.Response.AddHeader(ProxyAuthenticateHeader);
+  Check(Self.Response.HasProxyAuthenticate,
+        'Lies! There is too a Proxy-Authenticate header!');
 end;
 
 procedure TestTIdSipResponse.TestHasWWWAuthenticate;
