@@ -150,6 +150,7 @@ type
     fRequireAuthentication: Boolean;
     fUserAgentName:         String;
     Observed:               TIdObservable;
+    UserAgentListeners:     TIdNotificationList;
 
     function  DefaultHostName: String;
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
@@ -186,6 +187,7 @@ type
     destructor  Destroy; override;
 
     procedure AddObserver(const Listener: IIdObserver);
+    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
     function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
     function  CreateResponse(Request: TIdSipRequest;
@@ -193,6 +195,7 @@ type
     function  NextCallID: String;
     function  NextTag: String;
     procedure RemoveObserver(const Listener: IIdObserver);
+    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     procedure SendRequest(Request: TIdSipRequest);
     procedure SendResponse(Response: TIdSipResponse);
 
@@ -307,7 +310,6 @@ type
     fMinimumExpiryTime:    Cardinal; // in seconds
     fProxy:                TIdSipUri;
     KnownRegistrars:       TObjectList;
-    UserAgentListeners:    TIdNotificationList;
 
     function  ActionAt(Index: Integer): TIdSipAction;
     function  AddFork(RootSession: TIdSipOutboundSession;
@@ -361,7 +363,6 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
@@ -385,7 +386,6 @@ type
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  RegistrationCount: Integer;
     procedure RemoveAction(Action: TIdSipAction);
-    procedure RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
     function  SessionCount: Integer;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundRegistration;
     function  Username: String;
@@ -887,6 +887,9 @@ begin
 
   Self.Observed := TIdObservable.Create;
 
+  Self.UserAgentListeners := TIdNotificationList.Create;
+  Self.UserAgentListeners.AddExpectedException(EParserError);
+
   Self.HostName              := Self.DefaultHostName;
   Self.Realm                 := Self.HostName;
   Self.RequireAuthentication := false;
@@ -894,6 +897,7 @@ end;
 
 destructor TIdSipAbstractCore.Destroy;
 begin
+  Self.UserAgentListeners.Free;
   Self.Observed.Free;
 
   inherited Destroy;
@@ -902,6 +906,11 @@ end;
 procedure TIdSipAbstractCore.AddObserver(const Listener: IIdObserver);
 begin
   Self.Observed.AddObserver(Listener);
+end;
+
+procedure TIdSipAbstractCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
+begin
+  Self.UserAgentListeners.AddListener(Listener);
 end;
 
 function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
@@ -926,6 +935,11 @@ end;
 procedure TIdSipAbstractCore.RemoveObserver(const Listener: IIdObserver);
 begin
   Self.Observed.RemoveObserver(Listener);
+end;
+
+procedure TIdSipAbstractCore.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
+begin
+  Self.UserAgentListeners.RemoveListener(Listener);
 end;
 
 procedure TIdSipAbstractCore.SendRequest(Request: TIdSipRequest);
@@ -1503,10 +1517,8 @@ begin
 
   Self.KnownRegistrars := TObjectList.Create(true);
 
-  Self.ActionLock         := TCriticalSection.Create;
-  Self.Actions            := TObjectList.Create;
-  Self.UserAgentListeners := TIdNotificationList.Create;
-  Self.UserAgentListeners.AddExpectedException(EParserError);
+  Self.ActionLock := TCriticalSection.Create;
+  Self.Actions    := TObjectList.Create;
 
   Self.fAllowedContentTypeList := TStringList.Create;
   Self.fAllowedLanguageList    := TStringList.Create;
@@ -1530,18 +1542,12 @@ destructor TIdSipUserAgentCore.Destroy;
 begin
   Self.Contact.Free;
   Self.From.Free;
-  Self.UserAgentListeners.Free;
   Self.Actions.Free;
   Self.ActionLock.Free;  
   Self.KnownRegistrars.Free;
   Self.Proxy.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipUserAgentCore.AddUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.AddListener(Listener);
 end;
 
 function TIdSipUserAgentCore.Call(Dest: TIdSipAddressHeader;
@@ -1757,11 +1763,6 @@ begin
     Self.ActionLock.Release;
   end;
   Self.NotifyOfChange;
-end;
-
-procedure TIdSipUserAgentCore.RemoveUserAgentListener(const Listener: IIdSipUserAgentListener);
-begin
-  Self.UserAgentListeners.RemoveListener(Listener);
 end;
 
 function TIdSipUserAgentCore.SessionCount: Integer;
