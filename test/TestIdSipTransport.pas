@@ -876,8 +876,6 @@ begin
 end;
 
 procedure TestTIdSipTransport.SendFromLowTransport(Msg: String);
-var
-  Req: TIdSipRequest;
 begin
   if (Pos('%s', Msg) > 0) then
     Msg := StringReplace(Msg,
