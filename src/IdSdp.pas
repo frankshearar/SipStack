@@ -638,6 +638,7 @@ type
 
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
+    procedure RegisterEncodingMaps(Maps: TIdSdpRTPMapAttributes);
   public
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
@@ -3977,8 +3978,10 @@ begin
   try
     SDP := TIdSdpPayload.CreateFrom(LocalSessionDesc);
     try
-      for I := 0 to SDP.MediaDescriptionCount - 1 do
+      for I := 0 to SDP.MediaDescriptionCount - 1 do begin
         Self.EstablishStream(SDP.MediaDescriptionAt(I));
+        Self.RegisterEncodingMaps(SDP.MediaDescriptionAt(I).RTPMapAttributes);
+      end;
     finally
       SDP.Free;
     end;
@@ -4072,6 +4075,14 @@ begin
   finally
     Self.StreamLock.Release;
   end;
+end;
+
+procedure TIdSDPMultimediaSession.RegisterEncodingMaps(Maps: TIdSdpRTPMapAttributes);
+var
+  I: Integer;
+begin
+  for I := 0 to Maps.Count - 1 do
+    Self.Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
 end;
 
 end.
