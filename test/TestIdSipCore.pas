@@ -388,13 +388,13 @@ type
     procedure TestCancelAfterAccept;
     procedure TestCancelBeforeAccept;
     procedure TestCancelBeforeProvisional;
+    procedure TestCancelReceiveInviteOkBeforeCancelOk;
     procedure TestInviteTwice;
     procedure TestIsInbound;
     procedure TestIsInvite; override;
     procedure TestMethod;
     procedure TestOfferInInvite;
     procedure TestReceiveGlobalFailed;
-    procedure TestReceiveInviteOkBeforeCancelOk;
     procedure TestReceiveRedirect;
     procedure TestReceiveRequestFailed;
     procedure TestReceiveServerFailed;
@@ -693,6 +693,7 @@ type
     procedure TestCallSipUriOverTls;
     procedure TestCallWithOffer;
     procedure TestCallWithoutOffer;
+    procedure TestCancelReceiveInviteOkBeforeCancelOk;
     procedure TestCircularRedirect;
     procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestDoubleRedirect;
@@ -709,7 +710,6 @@ type
     procedure TestReceive3xxWithNoContacts;
     procedure TestReceiveFailureResponseNotifiesOnce;
     procedure TestReceiveFinalResponseSendsAck;
-    procedure TestReceiveInviteOkBeforeCancelOk;
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
     procedure TestRedirectWithMultipleContacts;
@@ -5537,6 +5537,60 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestCancelReceiveInviteOkBeforeCancelOk;
+var
+  Action: TIdSipOutboundInvite;
+  Cancel: TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---        100 Trying       ---
+  //  ---          CANCEL         --->
+  // <--- 200 OK (for the INVITE) ---
+  //  ---           ACK           --->
+  // <--- 200 OK (for the CANCEL) ---
+  //  ---           BYE           --->
+  // <---   200 OK (for the BYE)  ---
+
+  Action := Self.CreateAction as TIdSipOutboundInvite;
+
+  Invite := TIdSipRequest.Create;
+  try
+    Cancel := TIdSipRequest.Create;
+    try
+      Invite.Assign(Self.LastSentRequest);
+      Self.ReceiveTrying(Invite);
+
+      Action.Cancel;
+      Cancel.Assign(Self.LastSentRequest);
+
+      Self.MarkSentAckCount;
+      Self.MarkSentRequestCount;
+      Self.ReceiveOk(Invite);
+      Self.ReceiveOk(Cancel);
+
+      CheckRequestSent('No request sent to terminate the cancelled session');
+      CheckEquals(MethodBye,
+                  Self.LastSentRequest.Method,
+                  'Terminating request');
+
+      CheckAckSent('No ACK sent in response to the 2xx');
+      CheckEquals(Invite.Body,
+                  Self.LastSentAck.Body,
+                  'ACK body');
+      CheckEquals(Invite.ContentType,
+                  Self.LastSentAck.ContentType,
+                  'ACK Content-Type');
+      Check(Invite.ContentDisposition.Equals(Self.LastSentAck.ContentDisposition),
+            'ACK Content-Disposition');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundInvite.TestInviteTwice;
 var
   Invite: TIdSipAction;
@@ -5611,49 +5665,6 @@ begin
   StatusCode := 600;
 //  for StatusCode := 600 to 699 do
     Self.CheckReceiveFailed(StatusCode);
-end;
-
-procedure TestTIdSipOutboundInvite.TestReceiveInviteOkBeforeCancelOk;
-var
-  Action: TIdSipOutboundInvite;
-  Cancel: TIdSipRequest;
-  Invite: TIdSipRequest;
-begin
-  //  ---          INVITE         --->
-  // <---        100 Trying       ---
-  //  ---          CANCEL         --->
-  // <--- 200 OK (for the INVITE) ---
-  //  ---           ACK           --->
-  // <--- 200 OK (for the CANCEL) ---
-  //  ---           BYE           --->
-  // <---   200 OK (for the BYE)  ---
-
-  Action := Self.CreateAction as TIdSipOutboundInvite;
-
-  Invite := TIdSipRequest.Create;
-  try
-    Cancel := TIdSipRequest.Create;
-    try
-      Invite.Assign(Self.LastSentRequest);
-      Self.ReceiveTrying(Invite);
-
-      Action.Cancel;
-      Cancel.Assign(Self.LastSentRequest);
-
-      Self.MarkSentRequestCount;
-      Self.ReceiveOk(Invite);
-      Self.ReceiveOk(Cancel);
-
-      CheckRequestSent('No request sent to terminate the cancelled session');
-      CheckEquals(MethodBye,
-                  Self.LastSentRequest.Method,
-                  'Terminating request');
-    finally
-      Cancel.Free;
-    end;
-  finally
-    Invite.Free;
-  end;
 end;
 
 procedure TestTIdSipOutboundInvite.TestReceiveRedirect;
@@ -7857,6 +7868,44 @@ begin
               'ACK answer MIME type');
 end;
 
+procedure TestTIdSipOutboundSession.TestCancelReceiveInviteOkBeforeCancelOk;
+var
+  Cancel: TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  //  ---          INVITE         --->
+  // <---        100 Trying       ---
+  //  ---          CANCEL         --->
+  // <--- 200 OK (for the INVITE) ---
+  //  ---           ACK           --->
+  // <--- 200 OK (for the CANCEL) ---
+  //  ---           BYE           --->
+  // <---   200 OK (for the BYE)  ---
+
+  Invite := TIdSipRequest.Create;
+  try
+    Cancel := TIdSipRequest.Create;
+    try
+      Invite.Assign(Self.LastSentRequest);
+      Self.ReceiveTrying(Invite);
+
+      Self.Session.Cancel;
+      Cancel.Assign(Self.LastSentRequest);
+
+      Self.MarkSentRequestCount;
+      Self.ReceiveOk(Invite);
+      Self.ReceiveOk(Cancel);
+
+      Check(Self.OnEndedSessionFired,
+            'Listeners not notified of end of session');
+    finally
+      Cancel.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.TestCircularRedirect;
 begin
   //  ---   INVITE (original)   --->
@@ -8164,44 +8213,6 @@ begin
     Self.ReceiveResponse(I*100);
     CheckAckSent('Session didn''t send an ACK to a final response, '
                + Self.LastSentResponse.Description);
-  end;
-end;
-
-procedure TestTIdSipOutboundSession.TestReceiveInviteOkBeforeCancelOk;
-var
-  Cancel: TIdSipRequest;
-  Invite: TIdSipRequest;
-begin
-  //  ---          INVITE         --->
-  // <---        100 Trying       ---
-  //  ---          CANCEL         --->
-  // <--- 200 OK (for the INVITE) ---
-  //  ---           ACK           --->
-  // <--- 200 OK (for the CANCEL) ---
-  //  ---           BYE           --->
-  // <---   200 OK (for the BYE)  ---
-
-  Invite := TIdSipRequest.Create;
-  try
-    Cancel := TIdSipRequest.Create;
-    try
-      Invite.Assign(Self.LastSentRequest);
-      Self.ReceiveTrying(Invite);
-
-      Self.Session.Cancel;
-      Cancel.Assign(Self.LastSentRequest);
-
-      Self.MarkSentRequestCount;
-      Self.ReceiveOk(Invite);
-      Self.ReceiveOk(Cancel);
-
-      Check(Self.OnEndedSessionFired,
-            'Listeners not notified of end of session');
-    finally
-      Cancel.Free;
-    end;
-  finally
-    Invite.Free;
   end;
 end;
 
