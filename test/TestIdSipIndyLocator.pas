@@ -15,6 +15,7 @@ type
     Loc:        TIdSipIndyLocator;
     NameServer: TIdUdpServer;
 
+    function  ARecords: String;
     function  NaptrRecords: String;
 
     procedure ProvideAnswer(Sender: TObject;
@@ -25,6 +26,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestResolveNameRecords;
     procedure TestResolveNAPTR;
     procedure TestResolveSRV;
   end;
@@ -75,6 +77,33 @@ begin
 end;
 
 //* TestTIdSipIndyLocator Private methods **************************************
+
+function TestTIdSipIndyLocator.ARecords: String;
+begin
+
+  // Dig would translate this data as
+  // ;; QUERY SECTION:
+  // ;;      paranoid.leo-ix.net, type = A, class = IN
+  //
+  // ;; ANSWER SECTION:
+  // paranoid.leo-ix.net.    1H IN A         127.0.0.2
+  // paranoid.leo-ix.net.    1H IN A         127.0.0.1
+  //
+  // ;; AUTHORITY SECTION:
+  // leo-ix.net.             1H IN NS        ns1.leo-ix.net.
+  //
+  // ;; ADDITIONAL SECTION:
+  // ns1.leo-ix.net.         1H IN A         127.0.0.1
+
+  Result :=
+  { hdr id }#$85#$80#$00#$01#$00#$02#$00#$01#$00#$01#$08#$70#$61#$72
+  + #$61#$6E#$6F#$69#$64#$06#$6C#$65#$6F#$2D#$69#$78#$03#$6E#$65#$74
+  + #$00#$00#$01#$00#$01#$C0#$0C#$00#$01#$00#$01#$00#$00#$0E#$10#$00
+  + #$04#$7F#$00#$00#$01#$C0#$0C#$00#$01#$00#$01#$00#$00#$0E#$10#$00
+  + #$04#$7F#$00#$00#$02#$C0#$15#$00#$02#$00#$01#$00#$00#$0E#$10#$00
+  + #$06#$03#$6E#$73#$31#$C0#$15#$C0#$51#$00#$01#$00#$01#$00#$00#$0E
+  + #$10#$00#$04#$7F#$00#$00#$01;
+end;
 
 function TestTIdSipIndyLocator.NaptrRecords: String;
 begin
@@ -198,6 +227,31 @@ end;
 
 //* TestTIdSipIndyLocator Published methods ************************************
 
+procedure TestTIdSipIndyLocator.TestResolveNameRecords;
+var
+  Records: TIdDomainNameRecords;
+begin
+  Self.Answer := Self.ARecords;
+
+  Records := TIdDomainNameRecords.Create;
+  try
+    Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Records);
+
+    // See the comment in Self.ARecords.
+    CheckEquals(2, Records.Count, 'Record count');
+
+    CheckEquals(DnsARecord,            Records[0].RecordType, '1st record record type');
+    CheckEquals('paranoid.leo-ix.net', Records[0].Domain,     '1st record domain');
+    CheckEquals('127.0.0.1',           Records[0].IPAddress,  '1st record IP address');
+
+    CheckEquals(DnsARecord,            Records[1].RecordType, '2nd record record type');
+    CheckEquals('paranoid.leo-ix.net', Records[1].Domain,     '2nd record domain');
+    CheckEquals('127.0.0.2',           Records[1].IPAddress,  '2nd record IP address');
+  finally
+    Records.Free;
+  end;
+end;
+
 procedure TestTIdSipIndyLocator.TestResolveNAPTR;
 var
   Records: TIdNaptrRecords;
@@ -211,10 +265,6 @@ begin
     try
       Self.Loc.ResolveNAPTR(Uri, Records);
       // See the comment in Self.NaptrRecords.
-    // leo-ix.net.             1H IN NAPTR     0 0 "s" "SIPS+D2T" "" _sips._tcp.leo-ix.net.
-    // leo-ix.net.             1H IN NAPTR     0 0 "s" "SIP+D2T" "" _sip._tcp.leo-ix.net.
-    // leo-ix.net.             1H IN NAPTR     0 0 "s" "SIP+D2U" "" _sip._udp.leo-ix.net.
-
       CheckEquals(3, Records.Count, 'Record count');
 
       CheckEquals('s',                     Records[0].Flags,      '1st record Flag');

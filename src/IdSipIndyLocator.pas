@@ -78,7 +78,8 @@ begin
     if (Self.Resolver.QueryResult[I] is TARecord) then begin
       A := Self.Resolver.QueryResult[I] as TARecord;
 
-      Result.Add(DnsARecord, DomainName, A.IPAddress);
+      if (A.Name = DomainName) then
+        Result.Add(DnsARecord, DomainName, A.IPAddress);
     end;
   end;
 end;
