@@ -2254,11 +2254,14 @@ end;
 
 procedure TIdSipUserAgentCore.OnInboundSessionExpire(Sender: TObject);
 var
+  ExpiredRequest: TIdSipRequest;
   Session: TIdSipAction;
 begin
+  ExpiredRequest := (Sender as TIdSipSingleShotTimer).Data as TIdSipRequest;
+
   Self.ActionLock.Acquire;
   try
-    Session := Self.FindAction((Sender as TIdSipSingleShotTimer).Data as TIdSipRequest);
+    Session := Self.FindAction(ExpiredRequest);
 
     if Assigned(Session) then
       (Session as TIdSipInboundSession).TimeOut;
@@ -2266,7 +2269,7 @@ begin
     Self.ActionLock.Release;
   end;
 
-  (Sender as TIdSipSingleShotTimer).Data.Free;
+  ExpiredRequest.Free;
 end;
 
 function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
