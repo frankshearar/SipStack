@@ -4313,8 +4313,7 @@ begin
     GCanonicalHeaderNames.Add(WWWAuthenticateHeader      + '=' + WWWAuthenticateHeader);
   end;
 
-  if (GCanonicalHeaderNames.IndexOfName(HeaderName) > -1) then
-    Result := GCanonicalHeaderNames.Values[HeaderName];
+  Result := GCanonicalHeaderNames.Values[HeaderName];
 
   if (Result = '') then begin
       Result := HeaderName;
