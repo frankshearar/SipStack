@@ -201,7 +201,7 @@ type
     function  CreateAction: TIdSipAction; virtual; abstract;
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
-                                        var Password: String);
+                                        var Password: String); virtual;
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteMovedPermanently(const SipUrl: String);
@@ -242,9 +242,6 @@ type
     function  CreateRemoteReInvite(LocalDialog: TIdSipDialog): TIdSipRequest;
     function  CreateMultiStreamSdp: TIdSdpPayload;
     function  CreateSimpleSdp: TIdSdpPayload;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
@@ -293,9 +290,6 @@ type
     OnModifiedSessionFired: Boolean;
     Session:                TIdSipOutboundSession;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                          Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
@@ -350,9 +344,6 @@ type
 
     procedure AddOpaque(Auth: TIdSipAuthenticateHeader);
     procedure AddQop(Auth: TIdSipAuthenticateHeader);
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -362,7 +353,10 @@ type
     procedure SimulateRejectProxyUnauthorizedWithOpaque;
     procedure SimulateRejectProxyUnauthorizedWithQop;
   protected
-    function CreateAction: TIdSipAction; override;
+    function  CreateAction: TIdSipAction; override;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String); override;
   public
     procedure SetUp; override;
   published
@@ -2872,12 +2866,6 @@ begin
   Connection.Address     := '127.0.0.1';
 end;
 
-procedure TestTIdSipInboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                             Challenge: TIdSipResponse;
-                                                             var Password: String);
-begin
-end;
-
 procedure TestTIdSipInboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                        Receiver: TIdSipTransport);
 begin
@@ -3266,12 +3254,6 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
-
-procedure TestTIdSipOutboundSession.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                              Challenge: TIdSipResponse;
-                                                              var Password: String);
-begin
-end;
 
 procedure TestTIdSipOutboundSession.OnDroppedUnmatchedResponse(Response: TIdSipResponse;
                                                                Receiver: TIdSipTransport);
@@ -3840,6 +3822,15 @@ begin
   (Result as TIdSipSession).AddSessionListener(Self);
 end;
 
+procedure TestProxyAuthentication.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                            Challenge: TIdSipResponse;
+                                                            var Password: String);
+begin
+  inherited OnAuthenticationChallenge(Action, Challenge, Password);
+
+  Password := Self.Password;
+end;
+
 //* TestProxyAuthentication Private methods ************************************
 
 procedure TestProxyAuthentication.AddOpaque(Auth: TIdSipAuthenticateHeader);
@@ -3851,13 +3842,6 @@ procedure TestProxyAuthentication.AddQop(Auth: TIdSipAuthenticateHeader);
 begin
   Auth.Nonce := 'bfa807909eb7d5b960d7b23de1dc620ed82f40b5';
   Auth.Qop   := QopAuth;
-end;
-
-procedure TestProxyAuthentication.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                            Challenge: TIdSipResponse;
-                                                            var Password: String);
-begin
-  Password := Self.Password;
 end;
 
 procedure TestProxyAuthentication.OnEndedSession(Session: TIdSipSession;
@@ -4065,7 +4049,7 @@ begin
   CheckEquals(KD(MD5(A1),
                  Auth.Nonce + ':' + MD5(A2),
                  MD5),
-              ReInvite.FirstProxyAuthorization.Response,
+              Auth.Response,
               'Response');
 end;
 
