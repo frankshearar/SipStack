@@ -758,8 +758,8 @@ procedure TestTIdSipAddressHeader.TestAsString;
 begin
   Self.A.Name := ToHeaderFull;
 
-  Self.A.Value := 'sips:countzero@jacks-bar.com';
-  CheckEquals(ToHeaderFull + ': sips:countzero@jacks-bar.com',
+  Self.A.Value := 'sip:countzero@jacks-bar.com';
+  CheckEquals(ToHeaderFull + ': sip:countzero@jacks-bar.com',
               Self.A.AsString,
               'AsString, plain URI');
 
@@ -768,18 +768,18 @@ begin
               Self.A.AsString,
               'AsString, display-name');
 
-  Self.A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sips:countzero@jacks-bar.com>',
+  Self.A.Value := '"Count Zero\"" <sip:countzero@jacks-bar.com>';
+  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sip:countzero@jacks-bar.com>',
               Self.A.AsString,
               'AsString, display-name with quoted-pair');
 
-  Self.A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>;paranoid';
-  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sips:countzero@jacks-bar.com>;paranoid',
+  Self.A.Value := '"Count Zero\"" <sip:countzero@jacks-bar.com>;paranoid';
+  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sip:countzero@jacks-bar.com>;paranoid',
               Self.A.AsString,
               'AsString, display-name with quoted-pair + parameters');
 
-  Self.A.Value := 'Count Zero <sips:countzero@jacks-bar.com;paranoid>;very';
-  CheckEquals(ToHeaderFull + ': Count Zero <sips:countzero@jacks-bar.com;paranoid>;very',
+  Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
+  CheckEquals(ToHeaderFull + ': Count Zero <sip:countzero@jacks-bar.com;paranoid>;very',
               Self.A.AsString,
               'AsString, display-name URI and header have parameters');
 
@@ -858,33 +858,33 @@ end;
 
 procedure TestTIdSipAddressHeader.TestValueWithEncodings;
 begin
-  Self.A.Value := '"Count Zero\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com',                  Self.A.Address.URI,    '1: Address');
-  CheckEquals('Count Zero"',                                   Self.A.DisplayName,    '1: DisplayName');
-  CheckEquals('',                                              Self.A.ParamsAsString, '1: Params');
-  CheckEquals('"Count Zero\"" <sips:countzero@jacks-bar.com>', Self.A.Value,          '1: Value');
+  Self.A.Value := '"Count Zero\"" <sip:countzero@jacks-bar.com>';
+  CheckEquals('sip:countzero@jacks-bar.com',                  Self.A.Address.URI,    '1: Address');
+  CheckEquals('Count Zero"',                                  Self.A.DisplayName,    '1: DisplayName');
+  CheckEquals('',                                             Self.A.ParamsAsString, '1: Params');
+  CheckEquals('"Count Zero\"" <sip:countzero@jacks-bar.com>', Self.A.Value,          '1: Value');
 
-  Self.A.Value := '"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '2: Address');
-  CheckEquals('Count\" Zero""',               Self.A.DisplayName,    '2: DisplayName');
-  CheckEquals('',                             Self.A.ParamsAsString, '2: Params');
-  CheckEquals('"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>',
+  Self.A.Value := '"Count\\\" Zero\"\"" <sip:countzero@jacks-bar.com>';
+  CheckEquals('sip:countzero@jacks-bar.com', Self.A.Address.URI,    '2: Address');
+  CheckEquals('Count\" Zero""',              Self.A.DisplayName,    '2: DisplayName');
+  CheckEquals('',                            Self.A.ParamsAsString, '2: Params');
+  CheckEquals('"Count\\\" Zero\"\"" <sip:countzero@jacks-bar.com>',
               Self.A.Value,
               '2: Value');
 
-  Self.A.Value := '"\C\o\u\n\t\\\"\ \Z\e\r\o\"\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '3: Address');
-  CheckEquals('Count\" Zero""',               Self.A.DisplayName,    '3: Name');
-  CheckEquals('',                             Self.A.ParamsAsString, '3: Params');
-  CheckEquals('"Count\\\" Zero\"\"" <sips:countzero@jacks-bar.com>',
+  Self.A.Value := '"\C\o\u\n\t\\\"\ \Z\e\r\o\"\"" <sip:countzero@jacks-bar.com>';
+  CheckEquals('sip:countzero@jacks-bar.com', Self.A.Address.URI,    '3: Address');
+  CheckEquals('Count\" Zero""',              Self.A.DisplayName,    '3: Name');
+  CheckEquals('',                            Self.A.ParamsAsString, '3: Params');
+  CheckEquals('"Count\\\" Zero\"\"" <sip:countzero@jacks-bar.com>',
               Self.A.Value,
               '3: Value');
 
-  Self.A.Value := '"Count Zero \\\\\\\"" <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com', Self.A.Address.URI,    '4: Address');
-  CheckEquals('Count Zero \\\"',              Self.A.DisplayName,    '4: Name');
-  CheckEquals('',                             Self.A.ParamsAsString, '4: Params');
-  CheckEquals('"Count Zero \\\\\\\"" <sips:countzero@jacks-bar.com>',
+  Self.A.Value := '"Count Zero \\\\\\\"" <sip:countzero@jacks-bar.com>';
+  CheckEquals('sip:countzero@jacks-bar.com', Self.A.Address.URI,    '4: Address');
+  CheckEquals('Count Zero \\\"',             Self.A.DisplayName,    '4: Name');
+  CheckEquals('',                            Self.A.ParamsAsString, '4: Params');
+  CheckEquals('"Count Zero \\\\\\\"" <sip:countzero@jacks-bar.com>',
               Self.A.Value,
               '4: Value');
 end;
@@ -893,7 +893,7 @@ procedure TestTIdSipAddressHeader.TestValueWithMalformedQuotedName;
 begin
   try
     // missing close quote
-    Self.A.Value := '"Count Zero <sips:countzero@jacks-bar.com>';
+    Self.A.Value := '"Count Zero <sip:countzero@jacks-bar.com>';
     Fail('Failed to bail out because of unmatched quotes #1');
   except
     on EBadHeader do;
@@ -901,7 +901,7 @@ begin
 
   try
     // missing close quote
-    Self.A.Value := '"Count Zero \" <sips:countzero@jacks-bar.com>';
+    Self.A.Value := '"Count Zero \" <sip:countzero@jacks-bar.com>';
     Fail('Failed to bail out because of unmatched quotes #2');
   except
     on EBadHeader do;
@@ -909,7 +909,7 @@ begin
 
   try
     // missing close quote
-    Self.A.Value := '"Count Zero \\\\\\\" <sips:countzero@jacks-bar.com>';
+    Self.A.Value := '"Count Zero \\\\\\\" <sip:countzero@jacks-bar.com>';
     Fail('Failed to bail out because of unmatched quotes #3');
   except
     on EBadHeader do;
@@ -952,22 +952,22 @@ begin
   CheckEquals('',                                                  Self.A.ParamsAsString, '1: Params');
   CheckEquals('Wintermute <sip:wintermute@tessier-ashpool.co.lu>', Self.A.Value,          '1: Value');
 
-  Self.A.Value := '"Count Zero" <sips:countzero@jacks-bar.com>';
+  Self.A.Value := '"Count Zero" <sip:countzero@jacks-bar.com>';
 
-  CheckEquals('sips:countzero@jacks-bar.com',                Self.A.Address.URI,    '2: Address');
-  CheckEquals('Count Zero',                                  Self.A.DisplayName,    '2: Name');
-  CheckEquals('',                                            Self.A.ParamsAsString, '2: Params');
-  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>',   Self.A.Value,          '2: Value');
+  CheckEquals('sip:countzero@jacks-bar.com',                Self.A.Address.URI,    '2: Address');
+  CheckEquals('Count Zero',                                 Self.A.DisplayName,    '2: Name');
+  CheckEquals('',                                           Self.A.ParamsAsString, '2: Params');
+  CheckEquals('Count Zero <sip:countzero@jacks-bar.com>',   Self.A.Value,          '2: Value');
 
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithSpace;
 begin
-  Self.A.Value := 'Count Zero <sips:countzero@jacks-bar.com>';
-  CheckEquals('sips:countzero@jacks-bar.com',              Self.A.Address.URI,    'Address');
-  CheckEquals('Count Zero',                                Self.A.DisplayName,    'Name');
-  CheckEquals('',                                          Self.A.ParamsAsString, 'Params');
-  CheckEquals('Count Zero <sips:countzero@jacks-bar.com>', Self.A.Value,          'Value');
+  Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com>';
+  CheckEquals('sip:countzero@jacks-bar.com',              Self.A.Address.URI,    'Address');
+  CheckEquals('Count Zero',                               Self.A.DisplayName,    'Name');
+  CheckEquals('',                                         Self.A.ParamsAsString, 'Params');
+  CheckEquals('Count Zero <sip:countzero@jacks-bar.com>', Self.A.Value,          'Value');
 end;
 
 procedure TestTIdSipAddressHeader.TestValueWithSpecialChars;
@@ -1582,6 +1582,9 @@ begin
   Self.F.Tag := '123abc';
   CheckEquals('123abc', Self.F.Tag, '123abc');
 
+  Self.F.Tag := '';
+  Check(not Self.F.HasTag, 'Tag wasn''t removed');
+
   try
     Self.F.Tag := '19283@01774';
     Fail('Failed to bail out with malformed token');
@@ -1797,13 +1800,13 @@ end;
 
 procedure TestTIdSipRouteHeader.TestValueWithParamsAndHeaderParams;
 begin
-  Self.R.Value := 'Count Zero <sips:countzero@jacks-bar.com;paranoid>;very';
+  Self.R.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
 
-  CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
-  CheckEquals('sips:countzero@jacks-bar.com;paranoid',
+  CheckEquals('Count Zero', Self.R.DisplayName, 'DisplayName');
+  CheckEquals('sip:countzero@jacks-bar.com;paranoid',
               Self.R.Address.URI,
               'Address');
-  CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
+  CheckEquals(';very', Self.R.ParamsAsString, 'Header parameters');
 end;
 
 //******************************************************************************
@@ -1862,13 +1865,13 @@ end;
 
 procedure TestTIdSipRecordRouteHeader.TestValueWithParamsAndHeaderParams;
 begin
-  Self.R.Value := 'Count Zero <sips:countzero@jacks-bar.com;paranoid>;very';
+  Self.R.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
 
-  CheckEquals('Count Zero', Self.R.DisplayName,    'DisplayName');
-  CheckEquals('sips:countzero@jacks-bar.com;paranoid',
+  CheckEquals('Count Zero', Self.R.DisplayName, 'DisplayName');
+  CheckEquals('sip:countzero@jacks-bar.com;paranoid',
               Self.R.Address.URI,
               'Address');
-  CheckEquals(';very',      Self.R.ParamsAsString, 'Header parameters');
+  CheckEquals(';very', Self.R.ParamsAsString, 'Header parameters');
 end;
 
 //******************************************************************************
