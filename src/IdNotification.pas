@@ -130,7 +130,6 @@ end;
 
 procedure TIdNotificationList.Assign(Src: TPersistent);
 var
-  I:     Integer;
   Other: TIdNotificationList;
 begin
   if (Src is TIdNotificationList) then begin
