@@ -2278,21 +2278,16 @@ var
   Action: TIdSipAction;
   I:      Integer;
 begin
+  // Precondition: You've locked Self.ActionLock.
   Result := nil;
 
-  Self.ActionLock.Acquire;
-  try
-    I := 0;
-
-    while (I < Self.Actions.Count) and not Assigned(Result) do begin
-      Action := Self.Actions[I] as TIdSipAction;
-      if not Action.IsTerminated and Action.Match(Msg) then
-        Result := Action
-      else
-        Inc(I);
-    end;
-  finally
-    Self.ActionLock.Release;
+  I := 0;
+  while (I < Self.Actions.Count) and not Assigned(Result) do begin
+    Action := Self.Actions[I] as TIdSipAction;
+    if not Action.IsTerminated and Action.Match(Msg) then
+      Result := Action
+    else
+      Inc(I);
   end;
 end;
 
@@ -2301,22 +2296,18 @@ var
   Action: TIdSipAction;
   I:      Integer;
 begin
+  // Precondition: You've locked Self.ActionLock.
   Result := nil;
 
-  Self.ActionLock.Acquire;
-  try
-    I := 0;
-    while (I < Self.Actions.Count) and not Assigned(Result) do begin
-      Action := Self.Actions[I] as TIdSipAction;
-      if not Action.IsTerminated
-        and Action.IsSession
-        and Msg.InSameDialogAs(Action.InitialRequest) then
-        Result := Action as TIdSipSession
-      else
-        Inc(I);
-    end;
-  finally
-    Self.ActionLock.Release;
+  I := 0;
+  while (I < Self.Actions.Count) and not Assigned(Result) do begin
+    Action := Self.Actions[I] as TIdSipAction;
+    if not Action.IsTerminated
+      and Action.IsSession
+      and Msg.InSameDialogAs(Action.InitialRequest) then
+      Result := Action as TIdSipSession
+    else
+      Inc(I);
   end;
 end;
 
