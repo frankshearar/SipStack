@@ -1621,15 +1621,15 @@ end;
 procedure TestTIdSipActions.TestFindActionAndPerform;
 var
   A:     TIdSipAction;
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
   A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := A.InitialRequest.Copy;
+    Event.Message := A.InitialRequest.Copy;
     Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
 
     Check(Self.FoundAction = A, 'Wrong action found');
@@ -1640,11 +1640,11 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformNoActions;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Options.Copy;
+    Event.Message := Self.Options.Copy;
     Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
 
     Check(not Assigned(Self.FoundAction), 'An action found in an empty list');
@@ -1655,13 +1655,13 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformNoMatch;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Options.Copy;
+    Event.Message := Self.Options.Copy;
     Self.Actions.FindActionAndPerform(Event, Self.RecordAction);
 
     Check(not Assigned(Self.FoundAction), 'An action found');
@@ -1673,15 +1673,15 @@ end;
 procedure TestTIdSipActions.TestFindActionAndPerformOr;
 var
   A:     TIdSipAction;
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
   A := Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := A.InitialRequest.Copy;
+    Event.Message := A.InitialRequest.Copy;
     Self.Actions.FindActionAndPerformOr(Event,
                                         Self.FoundActionProc,
                                         Self.DidntFindAction);
@@ -1696,13 +1696,13 @@ end;
 
 procedure TestTIdSipActions.TestFindActionAndPerformOrNoMatch;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundInvite.Create(Self.Core, Self.Invite));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Options.Copy;
+    Event.Message := Self.Options.Copy;
     Self.Actions.FindActionAndPerformOr(Event,
                                         Self.FoundActionProc,
                                         Self.DidntFindAction);
@@ -1718,15 +1718,15 @@ end;
 procedure TestTIdSipActions.TestFindSessionAndPerform;
 var
   S:     TIdSipAction;
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
   S := Self.Actions.Add(TIdSipInboundSession.Create(Self.Core, Self.Invite, false));
   Self.Actions.Add(TIdSipOutboundOptions.Create(Self.Core));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := S.InitialRequest.Copy;
+    Event.Message := S.InitialRequest.Copy;
     Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
 
     Check(Self.FoundSession = S, 'Wrong session found');
@@ -1737,13 +1737,13 @@ end;
 
 procedure TestTIdSipActions.TestFindSessionAndPerformNoMatch;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Actions.Add(TIdSipInboundOptions.Create(Self.Core, Self.Options));
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Invite.Copy;
+    Event.Message := Self.Invite.Copy;
     Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
 
     Check(not Assigned(Self.FoundAction), 'A session found');
@@ -1754,11 +1754,11 @@ end;
 
 procedure TestTIdSipActions.TestFindSessionAndPerformNoSessions;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Invite.Copy;
+    Event.Message := Self.Invite.Copy;
     Self.Actions.FindSessionAndPerform(Event, Self.RecordSession);
 
     Check(not Assigned(Self.FoundSession), 'Session found in an empty list');
@@ -2955,7 +2955,7 @@ end;
 
 procedure TestTIdSipUserAgent.TestInviteExpires;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Core.AddObserver(Self);
 
@@ -2968,9 +2968,9 @@ begin
   Self.WaitForSignaled;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Invite.Copy;
+    Event.Message := Self.Invite.Copy;
     Self.Core.OnInboundSessionExpire(Event);
   finally
     Event.Free;
@@ -3588,15 +3588,15 @@ end;
 
 procedure TestTIdSipUserAgent.TestReregister;
 var
-  Event: TIdNotifyEventWait;
+  Event: TIdSipMessageWait;
 begin
   Self.Invite.Method := MethodRegister;
 
   Self.MarkSentRequestCount;
 
-  Event := TIdNotifyEventWait.Create;
+  Event := TIdSipMessageWait.Create;
   try
-    Event.Data := Self.Invite.Copy;
+    Event.Message := Self.Invite.Copy;
     Self.Core.OnReregister(Event);
   finally
     Event.Free;
