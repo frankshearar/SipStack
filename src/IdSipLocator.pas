@@ -111,10 +111,6 @@ type
   // message.
   TIdSipAbstractLocator = class(TObject)
   private
-    procedure AddNameRecordsTo(Locations: TIdSipLocations;
-                               const Transport: String;
-                               NameRecords: TIdDomainNameRecords;
-                               Port: Cardinal);
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                            Recs: TIdNaptrRecords);
     procedure ClearOutUnwantedSrvRecords(Recs: TIdSrvRecords);
@@ -578,10 +574,10 @@ begin
           // AddressOfRecord's Host is a domain name
           Self.ResolveNameRecords(AddressOfRecord.Host, ARecords);
 
-          Self.AddNameRecordsTo(Result,
-                                Transport,
-                                ARecords,
-                                AddressOfRecord.Port);
+          Result.AddLocationsFromNames(Transport,
+                                       AddressOfRecord.Port,
+                                       ARecords);
+
           Exit;
         end;
 
@@ -823,18 +819,6 @@ begin
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
-
-procedure TIdSipAbstractLocator.AddNameRecordsTo(Locations: TIdSipLocations;
-                                                 const Transport: String;
-                                                 NameRecords: TIdDomainNameRecords;
-                                                 Port: Cardinal);
-var
-  I: Integer;
-begin
-  for I := 0 to NameRecords.Count - 1 do begin
-    Locations.AddLocation(Transport, NameRecords[I].IPAddress, Port);
-  end;
-end;
 
 procedure TIdSipAbstractLocator.ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
                                                              Recs: TIdNaptrRecords);
