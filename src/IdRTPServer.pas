@@ -3,7 +3,7 @@ unit IdRTPServer;
 interface
 
 uses
-  Classes, IdRTP, IdSocketHandle, IdUDPServer;
+  Classes, IdRTPBase, IdRTP, IdSocketHandle, IdUDPServer;
 
 type
   TIdRTPReadEvent = procedure(Sender: TObject;

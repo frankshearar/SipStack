@@ -111,6 +111,7 @@ type
 
     procedure Assign(Src: TPersistent); override;
     function  AsString: String;
+    function  HasParam(Name: String): Boolean;
     function  IndexOfParam(Name: String): Integer;
     function  IsEqualTo(const Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
@@ -1074,6 +1075,11 @@ end;
 function TIdSipHeader.AsString: String;
 begin
   Result := Self.Name + ': ' + Self.Value + Self.ParamsAsString;
+end;
+
+function TIdSipHeader.HasParam(Name: String): Boolean;
+begin
+  Result := Self.IndexOfParam(Name) <> -1;
 end;
 
 function TIdSipHeader.IndexOfParam(Name: String): Integer;

@@ -4,9 +4,14 @@ interface
 
 uses
   Classes, Contnrs, IdSipConsts, IdSipMessage, IdSipTcpClient, IdSipTimer,
-  IdSipUdpServer, IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
+  IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
 
 type
+  TIdSipIPTarget = record
+    IP:   String;
+    Port: Integer;
+  end;
+
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
   private
     fConnection: TIdTCPConnection;

@@ -12,7 +12,8 @@ type
   TIdSdpKeyType       = (ktClear, ktBase64, ktURI, ktPrompt);
   // Technically, Text doesn't exist. However, it will once
   // draft-ietf-sip-callee-caps is accepted as an RFC.
-  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl, mtText);
+  TIdSdpMediaType     = (mtAudio, mtVideo, mtApplication, mtData, mtControl,
+                         mtText);
 
   TIdPrintable = class(TObject)
     procedure PrintOn(Dest: TStream); virtual; abstract;
@@ -22,14 +23,29 @@ type
   private
     fName:  String;
     fValue: String;
+
+  protected
+    procedure SetValue(const Value: String); virtual;
   public
     function  Clone: TIdSdpAttribute;
     procedure PrintOn(Dest: TStream); override;
 
     property Name:  String read fName write fName;
-    property Value: String read fValue write fValue;
+    property Value: String read fValue write SetValue;
   end;
+{
+  TIdSdpRTPMapAttribute = class(TIdSdpAttribute)
+  private
+    fPayloadType: TIdRTPPayloadType;
+    fEncoding:    TIdRTPEncoding;
+  public
+    constructor Create;
+    destructor  Destroy; override;
 
+    property PayloadType: TIdRTPPayloadType read fPayloadType write fPayloadType;
+    property Encoding:    TIdRTPEncoding    read fEncoding;
+  end;
+}
   TIdSdpBandwidth = class(TIdPrintable)
   private
     fBandwidth:     Cardinal;
@@ -567,6 +583,13 @@ begin
     S := S + ':' + Self.Value;
 
   Dest.Write(PChar(S)^, Length(S));
+end;
+
+//* TIdSdpAttribute Private methods ********************************************
+
+procedure TIdSdpAttribute.SetValue(const Value: String);
+begin
+  fValue := Value;
 end;
 
 //******************************************************************************

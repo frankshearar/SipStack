@@ -27,6 +27,7 @@ type
     procedure TestAsString;
     procedure TestEncodeQuotedStr;
     procedure TestGetSetParam;
+    procedure TestHasParam;
     procedure TestIndexOfParam;
     procedure TestParamCount;
     procedure TestParamsAsString;
@@ -640,6 +641,17 @@ begin
 
   Self.H.Params['branch'] := 'f00';
   CheckEquals('f00', Self.H.Params['branch'], 'Value of param with non-empty string value');
+end;
+
+procedure TestTIdSipHeader.TestHasParam;
+begin
+  Check(not Self.H.HasParam('foo'), 'New header, no params');
+
+  Self.H.Params['branch'] := 'z9hG4bK776asdhds';
+  Check(not Self.H.HasParam('foo'), 'Some non-foo params');
+
+  Self.H.Params['foo'] := 'bar';
+  Check(Self.H.HasParam('foo'), 'Some non-foo and foo params');
 end;
 
 procedure TestTIdSipHeader.TestIndexOfParam;

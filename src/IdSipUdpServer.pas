@@ -6,11 +6,6 @@ uses
   Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
-  TIdSipIPTarget = record
-    IP:   String;
-    Port: Integer;
-  end;
-
   TIdSipUdpServer = class(TIdUDPServer, IIdSipMessageVisitor)
   private
     ListenerLock: TCriticalSection;

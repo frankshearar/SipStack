@@ -5,6 +5,7 @@ uses
   GuiTestRunner,
   TextTestRunner,
   IdRTP in 'src\IdRTP.pas',
+  IdRTPBase in 'src\IdRTPBase.pas',
   IdRTPClient in 'src\IdRTPClient.pas',
   IdRTPPCM in 'src\IdRTPPCM.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
@@ -48,12 +49,12 @@ uses
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTimer in 'test\TestIdSipTimer.pas',
-  TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas',
-  TestIdUri in 'test\TestIdUri.pas';
+  TestIdUri in 'test\TestIdUri.pas',
+  TestIdRTPBase in 'test\TestIdRTPBase.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}
@@ -67,8 +68,7 @@ uses
 begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
-//  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-  Application.CreateForm(TIdSpikeT140, IdSpikeT140);
+  Forms.Application.CreateForm(TrnidSpike, rnidSpike);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

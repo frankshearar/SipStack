@@ -167,6 +167,8 @@ type
     function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
+    function DefaultHostName: String;
+    function DefaultUserAgent: String;
     procedure ReceiveRequest(const Request: TIdSipRequest;
                              const Transaction: TIdSipTransaction;
                              const Receiver: TIdSipTransport); override;
@@ -343,7 +345,8 @@ begin
 
   Self.AddAllowedScheme(SipScheme);
 
-  Self.HostName := 'localhost';
+  Self.HostName      := Self.DefaultHostName;
+  Self.UserAgentName := Self.DefaultUserAgent;
 end;
 
 destructor TIdSipUserAgentCore.Destroy;
@@ -471,6 +474,8 @@ begin
 end;
 
 function TIdSipUserAgentCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
+var
+  Transport: String;
 begin
   Result := TIdSipRequest.Create;
   try
@@ -485,7 +490,12 @@ begin
     Result.From.Tag := Self.NextTag;
     Result.ToHeader := Dest;
 
-    Result.AddHeader(ViaHeaderFull).Value := SipVersion + '/TCP localhost';
+    if (Pos(TransportParam, Dest.AsString) > 0) then
+      Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
+    else
+      Transport := TransportParamTCP;
+
+    Result.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' localhost';
     Result.LastHop.Branch := Self.NextBranch;
 
     if (Self.UserAgentName <> '') then
@@ -607,6 +617,16 @@ begin
 
     raise;
   end;
+end;
+
+function TIdSipUserAgentCore.DefaultHostName: String;
+begin
+  Result := 'localhost';
+end;
+
+function TIdSipUserAgentCore.DefaultUserAgent: String;
+begin
+  Result := 'Indy SIP/2.0 Server v0.1';
 end;
 
 procedure TIdSipUserAgentCore.ReceiveRequest(const Request: TIdSipRequest;
@@ -969,6 +989,7 @@ var
 begin
   Response := Self.CreateResponse(Request, SIPMethodNotAllowed);
   try
+    Response.StatusText := Response.StatusText + ' (' + Request.Method + ')';
     Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
 
     Transaction.SendResponse(Response);

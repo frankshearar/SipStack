@@ -81,12 +81,14 @@ type
     procedure TestCreateRequestInDialogRouteSetWithoutLrParam;
     procedure TestCreateRequestSipsRequestUri;
     procedure TestCreateRequestUserAgent;
+    procedure TestCreateRequestWithTransport;
     procedure TestCreateResponse;
     procedure TestCreateResponseRecordRoute;
     procedure TestCreateResponseSipsRecordRoute;
     procedure TestCreateResponseSipsRequestUri;
     procedure TestCreateResponseTryingWithTimestamps;
     procedure TestCreateResponseUserAgent;
+    procedure TestCreateResponseUserAgentBlank;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
@@ -400,10 +402,8 @@ begin
               'New requests MUST have a Via header; cf. RFC 3261 section 8.1.1.7');
   Check(Request.LastHop.HasBranch,
         'New requests MUST have a branch; cf. RFC 3261 section 8.1.1.7');
-
-  // optional headers
-  Check(not Request.HasHeader(UserAgentHeader),
-        'User-Agent header present when Core''s User-Agent name is blank');
+  Check(sttTCP = Request.LastHop.Transport,
+        'TCP should be the default transport');
 end;
 
 procedure TestTIdSipUserAgentCore.OnEndedSession(const Session: TIdSipSession);
@@ -888,6 +888,26 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestCreateRequestWithTransport;
+var
+  Request: TIdSipRequest;
+  Dest:    TIdSipToHeader;
+begin
+  Dest := TIdSipToHeader.Create;
+  try
+    Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu;transport=udp';
+    Request := Self.Core.CreateRequest(Dest);
+    try
+      Check(Request.LastHop.Transport = sttUDP,
+            'UDP transport not specified');
+    finally
+      Request.Free;
+    end;
+  finally
+    Dest.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgentCore.TestCreateResponse;
 var
   FromFilter: TIdSipHeadersFilter;
@@ -915,9 +935,6 @@ begin
                 'To is missing a Tag');
 
     Check(Response.HasHeader(ContactHeaderFull), 'Missing Contact header');
-
-    Check(not Response.HasHeader(UserAgentHeader),
-          'User-Agent header present when Core''s User-Agent name is blank');
   finally
     Response.Free;
   end;
@@ -1013,6 +1030,22 @@ begin
     CheckEquals(Self.Core.UserAgentName,
                 Response.FirstHeader(UserAgentHeader).Value,
                 'User-Agent header not set');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateResponseUserAgentBlank;
+var
+  Response: TIdSipResponse;
+begin
+  Self.Core.UserAgentName := '';
+  Self.Invite.RequestUri.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+
+  Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
+  try
+    Check(not Response.HasHeader(UserAgentHeader),
+          'User-Agent header not removed because it''s blank');
   finally
     Response.Free;
   end;

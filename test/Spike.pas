@@ -20,7 +20,7 @@ type
     procedure InviteSelfClick(Sender: TObject);
   private
     Dispatch:  TIdSipTransactionDispatcher;
-    Transport: TIdSipTcpTransport;
+    Transport: TIdSipTransport;
     UA:        TIdSipUserAgentCore;
 
     procedure LogMessage(const Msg: TIdSipMessage);
@@ -51,7 +51,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts, IdSipHeaders, IdSocketHandle, SysUtils;
+  IdGlobal, IdSipConsts, IdSipHeaders, IdSocketHandle, IdStack, SysUtils;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -66,11 +66,11 @@ var
 begin
   inherited Create(AOwner);
 
-  Self.Transport := TIdSipTcpTransport.Create(IdPORT_SIP);
+  Self.Transport := TIdSipUdpTransport.Create(IdPORT_SIP);
   Binding := Self.Transport.Bindings.Add;
-  Binding.IP := '127.0.0.1';
+  Binding.IP := GStack.LocalAddress;
   Binding.Port := 5060;
-  Self.Transport.HostName := 'wsfrank';
+  Self.Transport.HostName := IndyGetHostName;
 
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
@@ -81,10 +81,11 @@ begin
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddSessionListener(Self);
   Self.UA.AddObserver(Self);
+  Self.UA.HostName := Self.Transport.HostName;
 
   Contact := TIdSipContactHeader.Create;
   try
-    Contact.Value := 'sip:franks@127.0.0.1';
+    Contact.Value := 'sip:franks@' + IndyGetHostName;
     Self.UA.Contact := Contact;
   finally
     Contact.Free;
@@ -92,7 +93,7 @@ begin
 
   From := TIdSipFromHeader.Create;
   try
-    From.Value := 'sip:franks@127.0.0.1';
+    From.Value := 'sip:franks@' + IndyGetHostName;
     Self.UA.From := From;
   finally
     From.Free;
@@ -175,7 +176,7 @@ var
 begin
   Local := TIdSipToHeader.Create;
   try
-    Local.Value := 'Frank <sip:franks@wsfrank>';
+    Local.Value := 'Frank <sip:franks@wsfrank:15060>';
     Self.UA.Call(Local);
   finally
     Local.Free;

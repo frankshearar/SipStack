@@ -4,8 +4,8 @@ interface
 
 uses
   Classes, Contnrs, IdException, IdSipHeaders, IdSipInterfacedObject,
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipUdpServer, IdSocketHandle,
-  IdSSLOpenSSL, IdTCPClient, IdTCPServer, SyncObjs, SysUtils;
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
+  IdSocketHandle, IdSSLOpenSSL, IdTCPClient, IdTCPServer, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -112,13 +112,12 @@ type
 
   TIdSipTLSTransport = class(TIdSipTCPTransport)
   private
-    fOnGetPassword: TPasswordEvent;
-    TLS:            TIdServerIOHandlerSSL;
-
-    procedure DoOnGetPassword(var Password: String);
+    function  GetOnGetPassword: TPasswordEvent;
     function  GetRootCertificate: TFileName;
     function  GetServerCertificate: TFileName;
     function  GetServerKey: TFileName;
+    function  TLS: TIdSipTlsServer;
+    procedure SetOnGetPassword(const Value: TPasswordEvent);
     procedure SetRootCertificate(const Value: TFileName);
     procedure SetServerCertificate(const Value: TFileName);
     procedure SetServerKey(const Value: TFileName);
@@ -127,14 +126,11 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); override;
     function  ServerType: TIdSipTcpServerClass; override;
   public
-    constructor Create(const Port: Cardinal); override;
-    destructor  Destroy; override;
-
     function  DefaultPort: Cardinal; override;
     function  GetTransportType: TIdSipTransportType; override;
     function  IsSecure: Boolean; override;
 
-    property OnGetPassword:     TPasswordEvent read fOnGetPassword write fOnGetPassword;
+    property OnGetPassword:     TPasswordEvent read GetOnGetPassword write SetOnGetPassword;
     property RootCertificate:   TFileName read GetRootCertificate write SetRootCertificate;
     property ServerCertificate: TFileName read GetServerCertificate write SetServerCertificate;
     property ServerKey:         TFileName read GetServerKey write SetServerKey;
@@ -171,7 +167,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdSipTlsServer, IdUDPClient;
+  IdSipConsts, IdUDPClient;
 
 //******************************************************************************
 //* TIdSipTransport                                                            *
@@ -551,24 +547,6 @@ end;
 //******************************************************************************
 //* TIdSipTLSTransport Public methods ******************************************
 
-constructor TIdSipTLSTransport.Create(const Port: Cardinal);
-begin
-  inherited Create(Port);
-
-  Self.TLS := TIdServerIOHandlerSSL.Create(nil);
-  Self.TLS.OnGetPassword := Self.DoOnGetPassword;
-
-  Self.Transport.IOHandler := Self.TLS;
-end;
-
-destructor TIdSipTLSTransport.Destroy;
-begin
-  Self.Transport.IOHandler := nil;
-  Self.TLS.Free;
-
-  inherited Destroy;
-end;
-
 function TIdSipTLSTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
@@ -607,40 +585,49 @@ end;
 
 //* TIdSipTLSTransport Private methods *****************************************
 
-procedure TIdSipTLSTransport.DoOnGetPassword(var Password: String);
+function TIdSipTLSTransport.GetOnGetPassword: TPasswordEvent;
 begin
-  if Assigned(Self.OnGetPassword) then
-    Self.OnGetPassword(Password);
+  Result := Self.TLS.OnGetPassword;
 end;
 
 function TIdSipTLSTransport.GetRootCertificate: TFileName;
 begin
-  Result := Self.TLS.SSLOptions.RootCertFile;
+  Result := Self.TLS.RootCertificate;
 end;
 
 function TIdSipTLSTransport.GetServerCertificate: TFileName;
 begin
-  Result := Self.TLS.SSLOptions.CertFile;
+  Result := Self.TLS.ServerCertificate;
 end;
 
 function TIdSipTLSTransport.GetServerKey: TFileName;
 begin
-  Result := Self.TLS.SSLOptions.KeyFile;
+  Result := Self.TLS.ServerKey;
+end;
+
+function TIdSipTLSTransport.TLS: TIdSipTlsServer;
+begin
+  Result := Self.Transport as TIdSipTlsServer;
+end;
+
+procedure TIdSipTLSTransport.SetOnGetPassword(const Value: TPasswordEvent);
+begin
+  Self.TLS.OnGetPassword := Value;
 end;
 
 procedure TIdSipTLSTransport.SetRootCertificate(const Value: TFileName);
 begin
-  Self.TLS.SSLOptions.RootCertFile := Value;
+  Self.TLS.RootCertificate := Value;
 end;
 
 procedure TIdSipTLSTransport.SetServerCertificate(const Value: TFileName);
 begin
-  Self.TLS.SSLOptions.CertFile := Value;
+  Self.TLS.ServerCertificate := Value;
 end;
 
 procedure TIdSipTLSTransport.SetServerKey(const Value: TFileName);
 begin
-  Self.TLS.SSLOptions.KeyFile := Value;
+  Self.TLS.ServerKey := Value;
 end;
 
 //******************************************************************************
