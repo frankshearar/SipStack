@@ -379,7 +379,6 @@ type
                        InitialRequest: TIdSipRequest); override;
     destructor  Destroy; override;
 
-    function  CreateACK(R: TIdSipResponse): TIdSipRequest;
     procedure FireTimerA;
     procedure FireTimerB;
     procedure FireTimerD;
@@ -1805,11 +1804,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipClientInviteTransaction.CreateACK(R: TIdSipResponse): TIdSipRequest;
-begin
-  Result := Self.InitialRequest.AckFor(R);
-end;
-
 procedure TIdSipClientInviteTransaction.FireTimerA;
 begin
   if (Self.State = itsCalling) then
@@ -1921,7 +1915,7 @@ procedure TIdSipClientInviteTransaction.TrySendACK(R: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.CreateACK(R);
+  Ack := Self.InitialRequest.AckFor(R);
   try
     Self.TrySendRequest(Ack);
   finally

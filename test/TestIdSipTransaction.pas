@@ -437,15 +437,8 @@ end;
 //* TestTIdSipTransactionDispatcher Private methods ****************************
 
 function TestTIdSipTransactionDispatcher.CreateAck(const Response: TIdSipResponse): TIdSipRequest;
-var
-  ClientTran: TIdSipClientInviteTransaction;
 begin
-  ClientTran := TidSipClientInviteTransaction.Create(Self.D, Self.Invite);
-  try
-    Result := ClientTran.CreateAck(Response);
-  finally
-    ClientTran.Free;
-  end;
+  Result := Self.Invite.AckFor(Response);
 end;
 
 function TestTIdSipTransactionDispatcher.CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;

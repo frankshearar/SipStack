@@ -9,10 +9,12 @@ type
     fLocalTag:  String;
     fRemoteTag: String;
   public
-    constructor Create(const CallID, LocalTag, RemoteTag: String); overload;
+    constructor Create(const CallID: String;
+                       const LocalTag: String;
+                       const RemoteTag: String); overload;
     constructor Create(ID: TIdSipDialogID); overload;
 
-    function IsEqualTo(const ID: TIdSipDialogID): Boolean;
+    function IsEqualTo(ID: TIdSipDialogID): Boolean;
 
     property CallID:    String read fCallID;
     property LocalTag:  String read fLocalTag;
@@ -26,7 +28,9 @@ implementation
 //******************************************************************************
 //* TIdSipDialogID Public methods **********************************************
 
-constructor TIdSipDialogID.Create(const CallID, LocalTag, RemoteTag: String);
+constructor TIdSipDialogID.Create(const CallID: String;
+                                  const LocalTag: String;
+                                  const RemoteTag: String);
 begin
   inherited Create;
 
@@ -44,7 +48,7 @@ begin
   fRemoteTag := ID.RemoteTag;
 end;
 
-function TIdSipDialogID.IsEqualTo(const ID: TIdSipDialogID): Boolean;
+function TIdSipDialogID.IsEqualTo(ID: TIdSipDialogID): Boolean;
 begin
   Result := (Self.CallID    = ID.CallID)
         and (Self.LocalTag  = ID.LocalTag)
