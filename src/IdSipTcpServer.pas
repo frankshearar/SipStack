@@ -351,45 +351,49 @@ begin
   while AThread.Connection.Connected do begin
     AThread.Connection.ReadTimeout := Self.ReadTimeout;
 
-    S := Self.ReadMessage(AThread.Connection);
     try
-      Msg := TIdSipMessage.ReadMessageFrom(S);
+      S := Self.ReadMessage(AThread.Connection);
       try
+        Msg := TIdSipMessage.ReadMessageFrom(S);
         try
           try
-            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+            try
+              Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+            except
+              on EIdReadTimeout do
+                ConnTimedOut := true;
+              on EIdConnClosedGracefully do
+                ConnTimedOut := true;
+            end;
+
+            if Msg.IsRequest then begin
+              // If Self.ReadBody closes the connection, we don't want to AddConnection!
+              if not ConnTimedOut then
+                Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+
+              Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
+                                                     ReceivedFrom);
+            end
+            else
+              Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
+                                                      ReceivedFrom);
           except
-            on EIdReadTimeout do
-              ConnTimedOut := true;
-            on EIdConnClosedGracefully do
-              ConnTimedOut := true;
+            on E: Exception do begin
+              // This results in returning a 500 Internal Server Error to a response!
+              Self.ReturnInternalServerError(AThread.Connection, E.Message);
+              AThread.Connection.DisconnectSocket;
+              Self.Notifier.NotifyListenersOfException(E,
+                                                       'TCP Server: ' + E.Message);
+            end;
           end;
-
-          if Msg.IsRequest then begin
-            // If Self.ReadBody closes the connection, we don't want to AddConnection!
-            if not ConnTimedOut then
-              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-
-            Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
-                                                   ReceivedFrom);
-          end
-          else
-            Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
-                                                    ReceivedFrom);
-        except
-          on E: Exception do begin
-            // This results in returning a 500 Internal Server Error to a response!
-            Self.ReturnInternalServerError(AThread.Connection, E.Message);
-            AThread.Connection.DisconnectSocket;
-            Self.Notifier.NotifyListenersOfException(E,
-                                                     'TCP Server: ' + E.Message);
-          end;
+        finally
+          Msg.Free;
         end;
       finally
-        Msg.Free;
+        S.Free;
       end;
-    finally
-      S.Free;
+    except
+      on EIdReadTimeout do;
     end;
   end;
 end;
