@@ -14,6 +14,41 @@ interface
 uses
   Classes, Contnrs, IdSipMessage;
 
+// The classes below all encapsulate DNS lookups, or the SIP processing of these
+// lookups according to RFC 3263.
+//
+// As a refresher, here's what a sample zonefile looks like:
+//
+// $TTL 3600
+// @       IN      SOA     ns1.foo.bar.  dnsadmin.foo.bar. (
+//                        1998082085
+//                        1800            ; refresh, seconds
+//                        900             ; retry, seconds
+//                        604800          ; expire, seconds
+//                        86400 )         ; minimum, seconds
+//                A       1.1.1.1
+//                NS      ns1.foo.bar.
+//                NS      ns.quaax.quaax.
+//                MX      100 mx1.foo.bar.
+//                MX      200 mx2.foo.bar.
+//
+// ;;               Priority Weight Port   Target
+//  _sips._tls  SRV 0        0      5060   baz.foo.bar.
+//  _sip._tcp   SRV 0        0      5060   baz.foo.bar.
+//  _sip._udp   SRV 0        0      5060   baz.foo.bar.
+//
+// ;;        order pref flags service      regexp  replacement
+//  IN NAPTR 50    50   "s"   "SIPS+D2T"   ""      _sips._tcp.baz.foo.bar.
+//  IN NAPTR 90    50   "s"   "SIP+D2T"    ""      _sip._tcp.baz.foo.bar.
+//  IN NAPTR 100   50   "s"   "SIP+D2U"    ""      _sip._udp.baz.foo.bar.
+//
+// localhost       A       127.0.0.1
+// warez           A       127.0.0.1
+// baz             A       1.1.1.2
+// sip             A       1.1.1.2
+// baz             AAAA    2002:0101:0102:1::1
+// sip             AAAA    2002:0101:0102:1::1
+
 type
   TIdSipLocation = class(TObject)
   private
@@ -48,10 +83,11 @@ type
     function  Count: Integer;
     function  First: TIdSipLocation;
     function  IsEmpty: Boolean;
-    procedure LoadFromStrings(const NaptrData: String);
 
     property Items[Index: Integer]: TIdSipLocation read GetLocation; default;
   end;
+
+  TIdNaptrRecords = class;
 
   // Given a SIP or SIPS URI, I return (using FindServersFor) a set of tuples of
   // the form (transport, IP address, port) that you can use to send a SIP
@@ -64,42 +100,58 @@ type
   public
     constructor Create; virtual;
 
-    function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; overload; virtual; abstract;
+    function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; overload; 
     function FindServersFor(const AddressOfRecord: String): TIdSipLocations; overload;
     function FindServersFor(Response: TIdSipResponse): TIdSipLocations; overload;
-    function ResolveNAPTR(const DomainName: String): TStrings; virtual; abstract;
-    function TransportFor(Uri: TIdSipUri): String;
+    function ResolveNameRecords(const DomainName: String): TStrings; virtual; abstract;
+    function ResolveNAPTR(const DomainName: String): TIdNaptrRecords; virtual; abstract;
   end;
 
   // I take an address-of-record SIP/SIPS URI and return a URL at which
   // a server can take a call for the given address-of-record.
   TIdSipLocator = class(TIdSipAbstractLocator)
   public
-    function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; override;
-    function ResolveNAPTR(const DomainName: String): TStrings; override;
+    function ResolveNameRecords(const DomainName: String): TStrings; override;
+    function ResolveNAPTR(const DomainName: String): TIdNaptrRecords; override;
+  end;
+
+  TIdDomainNameRecord = class(TObject)
+  private
+    fDomain:     String;
+    fIPAddress:  String;
+    fRecordType: String;
+  public
+    constructor Create(const RecordType, Domain, IPAddress: String);
+
+    function Copy: TIdDomainNameRecord;
+
+    property Domain:     String read fDomain;
+    property IPAddress:  String read fIPAddress;
+    property RecordType: String read fRecordType;
   end;
 
   // cf RFCs 2915, 3401-3
   // I represent a single NAPTR record.
   TIdNaptrRecord = class(TObject)
   private
-    fFlag:       String;
+    fFlags:      String;
     fKey:        String; // The DDDS key
     fOrder:      Word;
-    fRegex:      String;
     fPreference: Word;
+    fRegex:      String;
     fService:    String;
     fValue:      String; // The DDDS value (a domain name we can feed into SRV queries
   public
     constructor Create(const Key: String;
                        Order: Word;
                        Preference: Word;
-                       const Flag: String;
+                       const Flags: String;
                        const Service: String;
                        const Regex: String;
                        const Value: String);
+    function Copy: TIdNaptrRecord;
 
-    property Flag:       String read fFlag;
+    property Flags:      String read fFlags;
     property Key:        String read fKey;
     property Order:      Word   read fOrder;
     property Preference: Word   read fPreference;
@@ -108,7 +160,27 @@ type
     property Value:      String read fValue;
   end;
 
+  // I represent a list of NAPTR records, usually a result of a NAPTR query.
+  TIdNaptrRecords = class(TObject)
+  private
+    List: TObjectList;
+
+    function GetItems(Index: Integer): TIdNaptrRecord;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Copy: TIdNaptrRecord);
+    procedure Clear;
+    function  Count: Integer;
+
+    property Items[Index: Integer]: TIdNaptrRecord read GetItems; default;
+  end;
+
 const
+  DnsARecord     = 'A';
+  DnsA6Record    = 'A6';
+  DnsAAAARecord  = 'AAAA';
   SipSctpService = 'SIP+D2S';
   SipsTlsService = 'SIPS+D2T';
   SipTcpService  = 'SIP+D2T';
@@ -197,10 +269,6 @@ begin
   Result := Self.Count = 0;
 end;
 
-procedure TIdSipLocations.LoadFromStrings(const NaptrData: String);
-begin
-end;
-
 //* TIdSipLocations Private methods ********************************************
 
 function TIdSipLocations.GetLocation(Index: Integer): TIdSipLocation;
@@ -216,6 +284,41 @@ end;
 constructor TIdSipAbstractLocator.Create;
 begin
   inherited Create;
+end;
+
+function TIdSipAbstractLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
+var
+  Target: String;
+  UriTransport: String;
+begin
+  Result := TIdSipLocations.Create;
+
+  if AddressOfRecord.HasMaddr then
+    Target := AddressOfRecord.Maddr
+  else
+    Target := AddressOfRecord.Host;
+
+  if AddressOfRecord.TransportIsSpecified then begin
+    Result.AddLocation(ParamToTransport(AddressOfRecord.Transport),
+                       Target,
+                       AddressOfRecord.Port);
+    Exit;
+  end
+  else begin
+    if TIdIPAddressParser.IsNumericAddress(Target) or AddressOfRecord.PortIsSpecified then begin
+      if AddressOfRecord.IsSecure then
+        UriTransport := TlsTransport
+      else
+        UriTransport := UdpTransport;
+    end;
+
+    Result.AddLocation(UriTransport, Target, AddressOfRecord.Port);
+    Exit;
+  end;
+
+  raise Exception.Create('No NAPTR stuff');
+  raise Exception.Create('No SRV stuff');
+  raise Exception.Create('No A/AAAA stuff');
 end;
 
 function TIdSipAbstractLocator.FindServersFor(const AddressOfRecord: String): TIdSipLocations;
@@ -259,35 +362,6 @@ begin
   else begin
 //   raise Exception.Create('We''ve not got a DNS A/AAA lookup thing yet');
   end;
-end;
-
-function TIdSipAbstractLocator.TransportFor(Uri: TIdSipUri): String;
-var
-  Target: String;
-begin
-  // RFC 3263, section 4.1
-  if Uri.TransportIsSpecified then begin
-    Result := ParamToTransport(Uri.Transport);
-    Exit;
-  end;
-
-  Result := 'You''re wrong';
-
-  if Uri.HasMaddr then
-    Target := Uri.Maddr
-  else
-    Target := Uri.Host;
-
-  if TIdIPAddressParser.IsNumericAddress(Target) or Uri.PortIsSpecified then begin
-    if Uri.IsSecure then
-      Result := TcpTransport
-    else
-      Result := UdpTransport;
-
-    Exit;
-  end;
-
-  // The target's a name and the URI specifies no port
 end;
 
 //* TIdSipAbstractLocator Protected methods ************************************
@@ -334,21 +408,35 @@ end;
 //******************************************************************************
 //* TIdSipLocator Public methods ***********************************************
 
-function TIdSipLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
+function TIdSipLocator.ResolveNameRecords(const DomainName: String): TStrings;
 begin
-  // Try get the NAPTR/SRV data.
-  // Otherwise, suck the data from the URI.
-  // What to do with a transport param? Just override the Transports of all
-  // locations?
-
-  Result := TIdSipLocations.Create;
-
-  Self.AddUriLocation(AddressOfRecord, Result);
+  raise Exception.Create('TIdSipLocator doesn''t know how to ResolveNameRecords');
 end;
 
-function TIdSipLocator.ResolveNAPTR(const DomainName: String): TStrings;
+function TIdSipLocator.ResolveNAPTR(const DomainName: String): TIdNaptrRecords;
 begin
   raise Exception.Create('TIdSipLocator doesn''t know how to ResolveNAPTR');
+end;
+
+//******************************************************************************
+//* TIdDomainNameRecord                                                        *
+//******************************************************************************
+//* TIdDomainNameRecord Public methods *****************************************
+
+constructor TIdDomainNameRecord.Create(const RecordType, Domain, IPAddress: String);
+begin
+  inherited Create;
+
+  Self.fDomain     := Domain;
+  Self.fIPAddress  := IPAddress;
+  Self.fRecordType := RecordType;
+end;
+
+function TIdDomainNameRecord.Copy: TIdDomainNameRecord;
+begin
+  Result := TIdDomainNameRecord.Create(Self.RecordType,
+                                       Self.Domain,
+                                       Self.IPAddress);
 end;
 
 //******************************************************************************
@@ -359,7 +447,7 @@ end;
 constructor TIdNaptrRecord.Create(const Key: String;
                                   Order: Word;
                                   Preference: Word;
-                                  const Flag: String;
+                                  const Flags: String;
                                   const Service: String;
                                   const Regex: String;
                                   const Value: String);
@@ -369,10 +457,62 @@ begin
   Self.fKey        := Key;
   Self.fOrder      := Order;
   Self.fPreference := Preference;
-  Self.fFlag       := Flag;
+  Self.fFlags      := Flags;
   Self.fService    := Service;
   Self.fRegex      := Regex;
   Self.fValue      := Value;
+end;
+
+function TIdNaptrRecord.Copy: TIdNaptrRecord;
+begin
+  Result := TIdNaptrRecord.Create(Self.Key,
+                                  Self.Order,
+                                  Self.Preference,
+                                  Self.Flags,
+                                  Self.Service,
+                                  Self.Regex,
+                                  Self.Value);
+end;
+
+//******************************************************************************
+//* TIdNaptrRecords                                                            *
+//******************************************************************************
+//* TIdNaptrRecords Public methods *********************************************
+
+constructor TIdNaptrRecords.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdNaptrRecords.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdNaptrRecords.Add(Copy: TIdNaptrRecord);
+begin
+  Self.List.Add(Copy.Copy);
+end;
+
+procedure TIdNaptrRecords.Clear;
+begin
+  Self.List.Clear;
+end;
+
+function TIdNaptrRecords.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+//* TIdNaptrRecords Private methods ********************************************
+
+function TIdNaptrRecords.GetItems(Index: Integer): TIdNaptrRecord;
+begin
+  Result := Self.List[Index] as TIdNaptrRecord;
 end;
 
 end.

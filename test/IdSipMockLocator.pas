@@ -8,9 +8,11 @@ uses
 type
   TIdSipMockLocator = class(TIdSipAbstractLocator)
   private
+    NameRecords:   TObjectList;
     Locations: TStrings;
     NAPTR:     TObjectList;
 
+    function  NameRecordsAt(Index: Integer): TIdDomainNameRecord;
     function  NaptrRecAt(Index: Integer): TIdNaptrRecord;
     procedure FreeLocations;
     procedure ReorderNaptrRecs;
@@ -18,10 +20,10 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddLocation(const AddressOfRecord: String;
-                          const Transport: String;
-                          const Address: String;
-                          Port: Cardinal);
+    procedure AddA(const AddressOfRecord: String;
+                   const IPv4Address: String);
+    procedure AddAAAA(const AddressOfRecord: String;
+                      const IPv6Address: String);
     procedure AddNAPTR(const AddressOfRecord: String;
                        Order: Cardinal;
                        Preference: Cardinal;
@@ -29,8 +31,8 @@ type
                        const Service: String;
                        const DomainName: String);
 
-    function FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations; override;
-    function ResolveNAPTR(const DomainName: String): TStrings; override;
+    function ResolveNameRecords(const DomainName: String): TStrings; override;
+    function ResolveNAPTR(const DomainName: String): TIdNaptrRecords; override;
   end;
 
 implementation
@@ -62,6 +64,7 @@ constructor TIdSipMockLocator.Create;
 begin
   inherited Create;
 
+  Self.NameRecords   := TObjectList.Create(true);
   Self.Locations := TStringList.Create;
   Self.NAPTR     := TObjectList.Create(true);
 end;
@@ -71,20 +74,31 @@ begin
   Self.NAPTR.Free;
   Self.FreeLocations;
   Self.Locations.Free;
+  Self.NameRecords.Free;
 
   inherited Destroy;
 end;
 
-procedure TIdSipMockLocator.AddLocation(const AddressOfRecord: String;
-                                        const Transport: String;
-                                        const Address: String;
-                                        Port: Cardinal);
+procedure TIdSipMockLocator.AddA(const AddressOfRecord: String;
+                                 const IPv4Address: String);
 var
-  NewLocation: TIdSipLocation;
+  NewA: TIdDomainNameRecord;
 begin
-  NewLocation := TIdSipLocation.Create(Transport, Address, Port);
+  NewA := TIdDomainNameRecord.Create(DnsARecord,
+                                     AddressOfRecord,
+                                     IPv4Address);
+  Self.NameRecords.Add(NewA);
+end;
 
-  Self.Locations.AddObject(AddressOfRecord, NewLocation);
+procedure TIdSipMockLocator.AddAAAA(const AddressOfRecord: String;
+                                    const IPv6Address: String);
+var
+  NewAAAA: TIdDomainNameRecord;
+begin
+  NewAAAA := TIdDomainNameRecord.Create(DnsAAAARecord,
+                                        AddressOfRecord,
+                                        IPv6Address);
+  Self.NameRecords.Add(NewAAAA);
 end;
 
 procedure TIdSipMockLocator.AddNAPTR(const AddressOfRecord: String;
@@ -108,38 +122,36 @@ begin
   Self.ReorderNaptrRecs;
 end;
 
-function TIdSipMockLocator.FindServersFor(AddressOfRecord: TIdSipUri): TIdSipLocations;
-var
-  CurrLoc: TIdSipLocation;
-  I:       Integer;
-begin
-  Result := TIdSipLocations.Create;
-
-  for I := 0 to Self.Locations.Count - 1 do begin
-    CurrLoc := Self.Locations.Objects[I] as TIdSipLocation;
-
-    if (Self.Locations[I] = AddressOfRecord.AsString) then
-      Result.AddLocation(CurrLoc.Transport,
-                         CurrLoc.Address,
-                         CurrLoc.Port);
-  end;
-
-  Self.AddUriLocation(AddressOfRecord, Result);
-end;
-
-function TIdSipMockLocator.ResolveNAPTR(const DomainName: String): TStrings;
+function TIdSipMockLocator.ResolveNameRecords(const DomainName: String): TStrings;
 var
   I: Integer;
 begin
   Result := TStringList.Create;
 
+  for I := 0 to Self.NameRecords.Count - 1 do begin
+    if (Self.NameRecordsAt(I).Domain = DomainName) then
+      Result.Add(Self.NameRecordsAt(I).IPAddress);
+  end;
+end;
+
+function TIdSipMockLocator.ResolveNAPTR(const DomainName: String): TIdNaptrRecords;
+var
+  I: Integer;
+begin
+  Result := TIdNaptrRecords.Create;
+
   for I := 0 to Self.NAPTR.Count - 1 do begin
     if (Self.NaptrRecAt(I).Key = DomainName) then
-      Result.Add(Self.NaptrRecAt(I).Value);
+      Result.Add(Self.NaptrRecAt(I));
   end;
 end;
 
 //* TIdSipMockLocator Private methods ******************************************
+
+function TIdSipMockLocator.NameRecordsAt(Index: Integer): TIdDomainNameRecord;
+begin
+  Result := Self.NameRecords[Index] as TIdDomainNameRecord;
+end;
 
 function TIdSipMockLocator.NaptrRecAt(Index: Integer): TIdNaptrRecord;
 begin
