@@ -2539,7 +2539,7 @@ end;
 
 function TIdSdpPayloadProcessor.RTCPAt(const Index: Integer): TIdUDPServer;
 begin
-  Result := Self.RTPServers[Index] as TIdUDPServer;
+  Result := Self.RTCPServers[Index] as TIdUDPServer;
 end;
 
 function TIdSdpPayloadProcessor.ServerAt(const Index: Integer): TIdRTPServer;
