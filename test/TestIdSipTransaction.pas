@@ -636,7 +636,7 @@ begin
   CheckEquals(1, Self.D.TransactionCount, 'INVITE');
 
   Self.MockTransport.FireOnResponse(Self.Response200);
-  CheckEquals(0, Self.D.TransactionCount, '200 terminates an INVITE tran');
+  CheckEquals(0, Self.D.TransactionCount, '200 terminates a client INVITE tran');
 
   Ack := Self.Invite.AckFor(Self.ReceivedResponse);
   try
@@ -647,7 +647,7 @@ begin
 
   CheckEquals(0,
               Self.D.TransactionCount,
-              'ACK');
+              'ACK created a transaction');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
