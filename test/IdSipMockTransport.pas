@@ -79,13 +79,27 @@ type
     procedure Stop; override;
     function  ThirdLastRequest: TIdSipRequest;
 
-    property ACKCount:          Cardinal            read fACKCount;
-    property FailWith:          ExceptClass         read fFailWith write fFailWith;
-    property LastACK:           TIdSipRequest       read fLastACK;
-    property SentRequestCount:  Cardinal            read fSentRequestCount;
-    property SentResponseCount: Cardinal            read fSentResponseCount;
-    property TransportType:     String              read GetGlobalTransportType write SetTransportType;
-    property WriteLog:          Boolean             read fWriteLog write SetWriteLog;
+    property ACKCount:          Cardinal      read fACKCount;
+    property FailWith:          ExceptClass   read fFailWith write fFailWith;
+    property LastACK:           TIdSipRequest read fLastACK;
+    property SentRequestCount:  Cardinal      read fSentRequestCount;
+    property SentResponseCount: Cardinal      read fSentResponseCount;
+    property TransportType:     String        read GetGlobalTransportType write SetTransportType;
+    property WriteLog:          Boolean       read fWriteLog write SetWriteLog;
+  end;
+
+  TIdSipMockTcpTransport = class(TIdSipMockTransport)
+  public
+    class function IsSecure: Boolean; override;
+
+    function GetTransportType: String; override;
+  end;
+
+  TIdSipMockUdpTransport = class(TIdSipMockTransport)
+  public
+    class function IsSecure: Boolean; override;
+
+    function GetTransportType: String; override;
   end;
 
 const
@@ -392,8 +406,39 @@ begin
   Result := GAllTransports[Index] as TIdSipMockTransport;
 end;
 
+//******************************************************************************
+//* TIdSipMockTcpTransport                                                     *
+//******************************************************************************
+//* TIdSipMockTcpTransport Public methods **************************************
+
+class function TIdSipMockTcpTransport.IsSecure: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipMockTcpTransport.GetTransportType: String;
+begin
+  Result := TcpTransport;
+end;
+
+//******************************************************************************
+//* TIdSipMockUdpTransport                                                     *
+//******************************************************************************
+//* TIdSipMockUdpTransport Public methods **************************************
+
+class function TIdSipMockUdpTransport.IsSecure: Boolean;
+begin
+  Result := false;
+end;
+
+function TIdSipMockUdpTransport.GetTransportType: String;
+begin
+  Result := UdpTransport;
+end;
+
 initialization
   GAllTransports := TObjectList.Create(false);
+  GTransportType := UdpTransport;
 finalization
   GLog.Free;
   GAllTransports.Free;
