@@ -383,6 +383,7 @@ type
                        InitialRequest: TIdSipRequest); override;
     destructor  Destroy; override;
 
+    procedure Cancel;
     procedure FireTimerA;
     procedure FireTimerB;
     procedure FireTimerD;
@@ -1816,6 +1817,18 @@ begin
   Self.Timer.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipClientInviteTransaction.Cancel;
+var
+  Cancel: TIdSipRequest;
+begin
+  Cancel := Self.InitialRequest.CreateCancel;
+  try
+    Self.Dispatcher.Send(Cancel);
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TIdSipClientInviteTransaction.FireTimerA;

@@ -237,6 +237,7 @@ type
     procedure SetUp; override;
   published
     procedure TestACK;
+    procedure TestCancel;
     procedure TestInitialState;
     procedure TestInviteWithHostUnreachable;
     procedure TestIsClient;
@@ -2716,6 +2717,28 @@ begin
   CheckEquals(Transaction(itsCompleted),
               Transaction(Self.Tran.State),
               'Sent ack');
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestCancel;
+var
+  Cancel:       TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.MockDispatcher.Transport.SentRequestCount;
+  (Self.Tran as TIdSipClientInviteTransaction).Cancel;
+
+  Check(RequestCount < Self.MockDispatcher.Transport.SentRequestCount,
+        'no request sent');
+  Check(Self.MockDispatcher.Transport.LastRequest.IsCancel,
+        'Request wasn''t a CANCEL');
+
+  Cancel := Self.Tran.InitialRequest.CreateCancel;
+  try
+    Check(Cancel.Equals(Self.MockDispatcher.Transport.LastRequest),
+          'Unexpected request sent');
+  finally
+    Cancel.Free;
+  end;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestInitialState;

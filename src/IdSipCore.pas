@@ -482,7 +482,6 @@ type
                             Transaction: TIdSipTransaction);
     procedure RemoveTransaction(Transaction: TIdSipTransaction);
     procedure SendBye;
-    procedure SendCancel;
     procedure TerminateOpenTransaction(Transaction: TIdSipTransaction);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
@@ -496,13 +495,13 @@ type
     destructor  Destroy; override;
 
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
-    procedure Cancel;
     function  IsEstablished: Boolean;
     function  IsInboundCall: Boolean; virtual; abstract;
+    function  IsOutboundCall: Boolean;
     function  IsSession: Boolean; override;
     procedure Modify(const Offer, ContentType: String);
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
-    procedure Terminate;
+    procedure Terminate; virtual; abstract;
 
     property Dialog:           TIdSipDialog           read fDialog;
     property Invite:           TIdSipRequest          read GetInvite;
@@ -517,6 +516,7 @@ type
     OkTimer:      TIdSipSessionTimer;
 
     function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
+    procedure TerminateRequest;
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Invite: TIdSipRequest;
@@ -530,6 +530,7 @@ type
                                Transaction: TIdSipTransaction;
                                Receiver: TIdSipTransport); override;
     procedure ResendLastResponse; virtual;
+    procedure Terminate; override;
     procedure TimeOut;
   end;
 
@@ -554,8 +555,10 @@ type
     procedure Call(Dest: TIdSipToHeader;
                    const InitialOffer: String;
                    const MimeType: String);
+    procedure Cancel;
     function  Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
     function  IsInboundCall: Boolean; override;
+    procedure Terminate; override;
   end;
 
   // I piggyback on a transaction in a blocking I/O fashion to provide a UAC
@@ -2162,10 +2165,6 @@ begin
   end;
 end;
 
-procedure TIdSipSession.Cancel;
-begin
-end;
-
 function TIdSipSession.IsEstablished: Boolean;
 begin
   Self.DialogLock.Acquire;
@@ -2174,6 +2173,11 @@ begin
   finally
     Self.DialogLock.Release;
   end;
+end;
+
+function TIdSipSession.IsOutboundCall: Boolean;
+begin
+  Result := not Self.IsInboundCall;
 end;
 
 function TIdSipSession.IsSession: Boolean;
@@ -2193,15 +2197,6 @@ begin
   finally
     Self.SessionListenerLock.Release;
   end;
-end;
-
-procedure TIdSipSession.Terminate;
-begin
-  if Self.IsEstablished then
-    Self.SendBye;
-
-  Self.MarkAsTerminated;
-  Self.UA.RemoveSession(Self);
 end;
 
 //* TIdSipSession Protected methods ********************************************
@@ -2383,20 +2378,6 @@ begin
   end;
 end;
 
-procedure TIdSipSession.SendCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.CurrentRequest.CreateCancel;
-  try
-    // We don't listen to the new transaction because we assume the CANCEL
-    // succeeds immediately.
-    Self.UA.Dispatcher.AddClientTransaction(Cancel).SendRequest;
-  finally
-    Cancel.Free;
-  end;
-end;
-
 procedure TIdSipSession.TerminateOpenTransaction(Transaction: TIdSipTransaction);
 begin
   if not Transaction.IsClient then
@@ -2519,6 +2500,17 @@ begin
     Self.UA.Dispatcher.Send(Self.LastResponse);
 end;
 
+procedure TIdSipInboundSession.Terminate;
+begin
+  if Self.IsEstablished then
+    Self.SendBye
+  else
+    Self.TerminateRequest;
+
+  Self.MarkAsTerminated;
+  Self.UA.RemoveSession(Self);
+end;
+
 procedure TIdSipInboundSession.TimeOut;
 var
   Response: TIdSipResponse;
@@ -2543,6 +2535,19 @@ begin
                                              Self.InitialTransport);
   Self.LastResponse := TIdSipResponse.Create;
   Self.LastResponse.Assign(Response);
+end;
+
+procedure TIdSipInboundSession.TerminateRequest;
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Self.InitialTran.InitialRequest,
+                                     SIPRequestTerminated);
+  try
+    Self.InitialTran.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 //******************************************************************************
@@ -2571,6 +2576,11 @@ begin
   end;
 end;
 
+procedure TIdSipOutboundSession.Cancel;
+begin
+  (Self.InitialTran as TIdSipClientInviteTransaction).Cancel;
+end;
+
 function TIdSipOutboundSession.Fork(OkResponse: TIdSipResponse): TIdSipOutboundSession;
 begin
   Result := TIdSipOutboundSession.Create(Self.UA);
@@ -2581,6 +2591,17 @@ end;
 function TIdSipOutboundSession.IsInboundCall: Boolean;
 begin
   Result := false;
+end;
+
+procedure TIdSipOutboundSession.Terminate;
+begin
+  if Self.IsEstablished then
+    Self.SendBye
+  else
+    Self.Cancel;
+
+  Self.MarkAsTerminated;
+  Self.UA.RemoveSession(Self);
 end;
 
 //* TIdSipOutboundSession Protected methods ************************************

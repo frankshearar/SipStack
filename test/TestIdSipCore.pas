@@ -76,7 +76,7 @@ type
     RemoteTarget:        TIdSipURI;
     RemoteUri:           TIdSipURI;
     RouteSet:            TIdSipHeaders;
-    Session:             TIdSipSession;
+    Session:             TIdSipInboundSession;
     SessionEstablished:  Boolean;
 
     procedure CheckCommaSeparatedHeaders(const ExpectedValues: String;
@@ -175,7 +175,6 @@ type
                                    IIdSipTransportSendingListener,
                                    IIdSipUserAgentListener)
   private
-    EstablishedSession:     TIdSipSession;
     MultiStreamSdp:         TIdSdpPayload;
     OnEndedSessionFired:    Boolean;
     OnModifiedSessionFired: Boolean;
@@ -213,13 +212,15 @@ type
     procedure TestAcceptCallRespectsContentType;
     procedure TestAcceptCallStartsListeningMedia;
     procedure TestAddSessionListener;
-    procedure TestReceive2xxSendsAck;
+    procedure TestIsInboundCall;
+    procedure TestIsOutboundCall;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderRequest;
     procedure TestReceiveReInvite;
     procedure TestRemoveSessionListener;
     procedure TestTerminate;
+    procedure TestTerminateUnestablishedSession;
   end;
 
   TestTIdSipOutboundSession = class(TestTIdSipAction,
@@ -247,7 +248,10 @@ type
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
     procedure TestFork;
+    procedure TestIsInboundCall;
+    procedure TestIsOutboundCall;
     procedure TestDialogNotEstablishedOnTryingResponse;
+    procedure TestReceive2xxSendsAck;
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestTerminateUnestablishedSession;
   end;
@@ -1335,7 +1339,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestDispatchToCorrectSession;
 var
-  SessionOne: TIdSipSession;
+  SessionOne: TIdSipInboundSession;
   SessionTwo: TIdSipInboundSession;
 begin
   Self.SimulateRemoteInvite;
@@ -1347,7 +1351,7 @@ begin
   Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
   Self.SimulateRemoteInvite;
   Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
-  SessionTwo := Self.Session as TIdSipInboundSession;
+  SessionTwo := Self.Session;
   CheckEquals(2,
               Self.Core.SessionCount,
               'Number of sessions after two INVITEs');
@@ -1372,14 +1376,14 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  SessionOne := Self.Session as TIdSipInboundSession;
+  SessionOne := Self.Session;
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
   Self.SimulateRemoteInvite;
   Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
-  SessionTwo := Self.Session as TIdSipInboundSession;
+  SessionTwo := Self.Session;
   CheckEquals(2,
               Self.Core.SessionCount,
               'Number of sessions after two INVITEs');
@@ -1596,7 +1600,7 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -2003,13 +2007,13 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  FirstSession := Self.Session as TIdSipInboundSession;
+  FirstSession := Self.Session;
   FirstSession.AcceptCall('', '');
   Self.Session := nil;
 
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  SecondSession := Self.Session as TIdSipInboundSession;
+  SecondSession := Self.Session;
   SecondSession.AcceptCall('', '');
 
   CheckEquals(2,
@@ -2115,9 +2119,6 @@ begin
 
   Self.Invite.ContentType := SdpMimeType;
   Self.Invite.Body        := Self.SimpleSdp.AsString;
-
-  Self.EstablishedSession := Self.Core.Call(Self.Destination, '', '');
-  Self.SimulateRemoteAccept(Self.EstablishedSession.Invite);
 end;
 
 procedure TestTIdSipInboundSession.TearDown;
@@ -2295,7 +2296,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
   Self.Dispatcher.Transport.ResetSentResponseCount;
   Self.Session.ResendLastResponse;
   CheckEquals(1,
@@ -2317,7 +2318,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
@@ -2349,8 +2350,8 @@ begin
 
     Self.SimulateRemoteInvite;
     Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-    Offer := (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
-                                                               SdpMimeType);
+    Offer := Self.Session.AcceptCall(Self.SimpleSdp.AsString,
+                                     SdpMimeType);
     Check(Offer <> Self.SimpleSdp.AsString,
           'Actual offer identical to suggested offer');
 
@@ -2378,8 +2379,8 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
-                                                    SdpMimeType);
+  Self.Session.AcceptCall(Self.SimpleSdp.AsString,
+                          SdpMimeType);
 
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'no responses sent');
@@ -2398,8 +2399,8 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  (Self.Session as TIdSipInboundSession).AcceptCall(Self.SimpleSdp.AsString,
-                                                    SdpMimeType);
+  Self.Session.AcceptCall(Self.SimpleSdp.AsString,
+                          SdpMimeType);
 
   Udp := TIdUDPServer.Create(nil);
   try
@@ -2421,7 +2422,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2441,29 +2442,24 @@ begin
   end;
 end;
 
-procedure TestTIdSipInboundSession.TestReceive2xxSendsAck;
-var
-  Ack:    TIdSipRequest;
-  Invite: TIdSipRequest;
+procedure TestTIdSipInboundSession.TestIsInboundCall;
 begin
-  // Remember, we established a dialog for EstablishedSession in the SetUp
-  CheckEquals(1,
-              Self.Dispatcher.Transport.ACKCount,
-              'Retransmission');
-  Self.Dispatcher.Transport.FireOnResponse(Self.Dispatcher.Transport.LastResponse);
-  CheckEquals(2,
-              Self.Dispatcher.Transport.ACKCount,
-              'Retransmission');
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session),
+        'OnInboundCall didn''t fire');
 
-  Ack := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-  Invite := Self.EstablishedSession.Invite;
-  CheckEquals(Invite.CSeq.SequenceNo,
-              Ack.CSeq.SequenceNo,
-              'CSeq numerical portion');
-  CheckEquals(MethodAck,
-              Ack.CSeq.Method,
-              'ACK must have an INVITE method in the CSeq');
+  Check(Self.Session.IsInboundCall,
+        'Inbound session; IsInboundCall');
+end;
+
+procedure TestTIdSipInboundSession.TestIsOutboundCall;
+begin
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session),
+        'OnInboundCall didn''t fire');
+
+  Check(not Self.Session.IsOutboundCall,
+        'Inbound session; IsOutboundCall');
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveBye;
@@ -2471,7 +2467,7 @@ begin
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
   Self.Session.AddSessionListener(Self);
 
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -2510,7 +2506,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   Invite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
@@ -2538,7 +2534,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall wasn''t fired');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   ReInvite := Self.CreateRemoteReInvite(Self.Session.Dialog);
   try
@@ -2556,7 +2552,7 @@ var
 begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -2588,7 +2584,7 @@ begin
   Self.SimulateRemoteInvite;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  (Self.Session as TIdSipInboundSession).AcceptCall('', '');
+  Self.Session.AcceptCall('', '');
   Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
@@ -2597,6 +2593,29 @@ begin
 
   Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.IsBye, 'Unexpected last request');
+
+  Check(Self.Session.IsTerminated, 'Session not marked as terminated');
+end;
+
+procedure TestTIdSipInboundSession.TestTerminateUnestablishedSession;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Self.SimulateRemoteInvite;
+  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+
+  Self.Session.Terminate;
+
+  CheckEquals(ResponseCount + 1,
+              Self.Dispatcher.Transport.SentResponseCount,
+              'no CANCEL sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPRequestTerminated,
+              Response.StatusCode, 'Unexpected last response');
 
   Check(Self.Session.IsTerminated, 'Session not marked as terminated');
 end;
@@ -2857,13 +2876,25 @@ begin
                   'From tag');
       CheckEquals(Self.Session.Invite.LastHop.Branch,
                   Fork.Invite.LastHop.Branch,
-                  'Topmost Via branch');            
+                  'Topmost Via branch');
     finally
       Fork.Free;
     end;
   finally
     Ok.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.TestIsInboundCall;
+begin
+  Check(not Self.Session.IsInboundCall,
+        'Outbound session; IsInboundCall');
+end;
+
+procedure TestTIdSipOutboundSession.TestIsOutboundCall;
+begin
+  Check(Self.Session.IsOutboundCall,
+        'Outbound session; IsOutboundCall');
 end;
 
 procedure TestTIdSipOutboundSession.TestDialogNotEstablishedOnTryingResponse;
@@ -2890,6 +2921,33 @@ begin
         'Dialog not established after receiving a 180 Ringing');
 end;
 
+procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
+var
+  Ack:    TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  Self.SimulateRemoteAccept(Self.Session.Invite);
+
+ CheckEquals(1,
+              Self.Dispatcher.Transport.ACKCount,
+              'Original ACK');
+
+  Self.Dispatcher.Transport.FireOnResponse(Self.Dispatcher.Transport.LastResponse);
+  CheckEquals(2,
+              Self.Dispatcher.Transport.ACKCount,
+              'Retransmission');
+
+  Ack := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
+  Invite := Self.Session.Invite;
+  CheckEquals(Invite.CSeq.SequenceNo,
+              Ack.CSeq.SequenceNo,
+              'CSeq numerical portion');
+  CheckEquals(MethodAck,
+              Ack.CSeq.Method,
+              'ACK must have an INVITE method in the CSeq');
+end;
+
 procedure TestTIdSipOutboundSession.TestReceiveFinalResponseSendsAck;
 var
   I:                Integer;
@@ -2913,12 +2971,11 @@ procedure TestTIdSipOutboundSession.TestTerminateUnestablishedSession;
 var
   Request:      TIdSipRequest;
   RequestCount: Cardinal;
-  Session:      TIdSipSession;
 begin
-  Session := Self.Core.Call(Self.Destination, '', '');
+//  Session := Self.Core.Call(Self.Destination, '', '');
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
 
-  Session.Terminate;
+  Self.Session.Terminate;
 
   CheckEquals(RequestCount + 1,
               Self.Dispatcher.Transport.SentRequestCount,
@@ -2927,7 +2984,7 @@ begin
   Request := Self.Dispatcher.Transport.LastRequest;
   Check(Request.IsCancel, 'Unexpected last request');
 
-  Check(Session.IsTerminated, 'Session not marked as terminated');
+  Check(Self.Session.IsTerminated, 'Session not marked as terminated');
 end;
 
 //******************************************************************************
