@@ -51,10 +51,6 @@ type
     property FailWith: ExceptClass read fFailWith write fFailWith;
   end;
 
-  TIdSipTestActionListener = class(TIdSipMockListener,
-                                   IIdSipActionListener)
-  end;
-
   TIdSipTestDataListener = class(TIdSipMockListener,
                                  IIdRtpDataListener)
   private
@@ -120,7 +116,7 @@ type
     property Changed: Boolean read fChanged;
   end;
 
-  TIdSipTestInboundInviteListener = class(TIDSipTestActionListener,
+  TIdSipTestInboundInviteListener = class(TIdSipMockListener,
                                           IIdSipInboundInviteListener)
   private
     fAckParam:          TIdSipRequest;
@@ -141,7 +137,7 @@ type
   end;
 
 
-  TIdSipTestInviteListener = class(TIdSipTestActionListener,
+  TIdSipTestInviteListener = class(TIdSipMockListener,
                                    IIdSipInviteListener)
   private
     fDialogEstablished: Boolean;
@@ -175,7 +171,7 @@ type
     property Success:           Boolean              read fSuccess;
   end;
 
-  TIdSipTestOptionsListener = class(TIdSipTestActionListener,
+  TIdSipTestOptionsListener = class(TIdSipMockListener,
                                     IIdSipOptionsListener)
   private
     fOptionsAgentParam: TIdSipOutboundOptions;
@@ -192,7 +188,7 @@ type
     property Response:          Boolean               read fResponse;
   end;
 
-  TIdSipTestRegistrationListener = class(TIdSipTestActionListener,
+  TIdSipTestRegistrationListener = class(TIdSipMockListener,
                                          IIdSipRegistrationListener)
   private
     fCurrentBindingsParam: TIdSipContacts;
