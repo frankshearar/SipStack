@@ -90,11 +90,8 @@ type
 
   IIdSipOptionsListener = interface(IIdSipActionListener)
     ['{3F2ED4DF-4854-4255-B156-F4581AEAEDA3}']
-    procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse;
-                        const Reason: String);
-    procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse);
+    procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                         Response: TIdSipResponse);
   end;
 
   TIdSipOutboundRegistration = class;
@@ -668,9 +665,10 @@ type
 
   TIdSipOutboundOptions = class(TIdSipOptions)
   private
-    procedure NotifyOfSuccess(Response: TIdSipResponse);
+    procedure NotifyOfResponse(Response: TIdSipResponse);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
+    procedure NotifyOfFailure(Response: TIdSipResponse); override;
   public
     procedure AddListener(const Listener: IIdSipOptionsListener);
     procedure QueryOptions(Server: TIdSipAddressHeader);
@@ -945,27 +943,15 @@ type
     procedure Run(const Subject: IInterface); override;
   end;
 
-  TIdSipOptionsMethod = class(TIdMethod)
+  TIdSipOptionsResponseMethod = class(TIdMethod)
   private
     fOptions:  TIdSipOutboundOptions;
     fResponse: TIdSipResponse;
   public
+    procedure Run(const Subject: IInterface); override;
+
     property Options:  TIdSipOutboundOptions read fOptions write fOptions;
     property Response: TIdSipResponse        read fResponse write fResponse;
-  end;
-
-  TIdSipOptionsFailureMethod = class(TIdSipOptionsMethod)
-  private
-    fReason: String;
-  public
-    procedure Run(const Subject: IInterface); override;
-
-    property Reason: String read fReason write fReason;
-  end;
-
-  TIdSipOptionsSuccessMethod = class(TIdSipOptionsMethod)
-  public
-    procedure Run(const Subject: IInterface); override;
   end;
 
   TIdSipRegistrationMethod = class(TIdMethod)
@@ -3732,16 +3718,21 @@ end;
 
 procedure TIdSipOutboundOptions.ActionSucceeded(Response: TIdSipResponse);
 begin
-  Self.NotifyOfSuccess(Response);
+  Self.NotifyOfResponse(Response);
+end;
+
+procedure TIdSipOutboundOptions.NotifyOfFailure(Response: TIdSipResponse);
+begin
+  Self.NotifyOfResponse(Response);
 end;
 
 //* TIdSipOutboundOptions Private methods **************************************
 
-procedure TIdSipOutboundOptions.NotifyOfSuccess(Response: TIdSipResponse);
+procedure TIdSipOutboundOptions.NotifyOfResponse(Response: TIdSipResponse);
 var
-  Notification: TIdSipOptionsSuccessMethod;
+  Notification: TIdSipOptionsResponseMethod;
 begin
-  Notification := TIdSipOptionsSuccessMethod.Create;
+  Notification := TIdSipOptionsResponseMethod.Create;
   try
     Notification.Options  := Self;
     Notification.Response := Response;
@@ -5014,25 +5005,13 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOptionsFailureMethod                                                 *
+//* TIdSipOptionsResponseMethod                                                *
 //******************************************************************************
-//* TIdSipOptionsFailureMethod Public methods **********************************
+//* TIdSipOptionsResponseMethod Public methods *********************************
 
-procedure TIdSipOptionsFailureMethod.Run(const Subject: IInterface);
+procedure TIdSipOptionsResponseMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipOptionsListener).OnFailure(Self.Options,
-                                               Self.Response,
-                                               Self.Reason);
-end;
-
-//******************************************************************************
-//* TIdSipOptionsSuccessMethod                                                 *
-//******************************************************************************
-//* TIdSipOptionsSuccessMethod Public methods **********************************
-
-procedure TIdSipOptionsSuccessMethod.Run(const Subject: IInterface);
-begin
-  (Subject as IIdSipOptionsListener).OnSuccess(Self.Options,
+  (Subject as IIdSipOptionsListener).OnResponse(Self.Options,
                                                Self.Response);
 end;
 

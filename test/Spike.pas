@@ -119,9 +119,6 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String); overload;
-    procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse;
-                        const Reason: String); overload;
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
@@ -138,14 +135,14 @@ type
                                 Receiver: TIdSipTransport);
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
+    procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                         Response: TIdSipResponse);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                        CurrentBindings: TIdSipContacts); overload;
-    procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse); overload;
+                        CurrentBindings: TIdSipContacts); 
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure ResetCounters;
@@ -391,12 +388,6 @@ procedure TrnidSpike.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
 begin
 end;
 
-procedure TrnidSpike.OnFailure(OptionsAgent: TIdSipOutboundOptions;
-                               Response: TIdSipResponse;
-                               const Reason: String);
-begin
-end;
-
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
 var
   Answer: String;
@@ -499,6 +490,11 @@ begin
   end;
 end;
 
+procedure TrnidSpike.OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                                Response: TIdSipResponse);
+begin
+end;
+
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
                                    Sender: TIdSipTransport);
 begin
@@ -520,11 +516,6 @@ end;
 
 procedure TrnidSpike.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                                CurrentBindings: TIdSipContacts);
-begin
-end;
-
-procedure TrnidSpike.OnSuccess(OptionsAgent: TIdSipOutboundOptions;
-                               Response: TIdSipResponse);
 begin
 end;
 

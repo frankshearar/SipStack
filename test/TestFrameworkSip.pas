@@ -192,25 +192,18 @@ type
   TIdSipTestOptionsListener = class(TIdSipTestActionListener,
                                     IIdSipOptionsListener)
   private
-    fFailure:           Boolean;
     fOptionsAgentParam: TIdSipOutboundOptions;
-    fReasonParam:       String;
     fResponseParam:     TIdSipResponse;
-    fSuccess:           Boolean;
+    fResponse:          Boolean;
 
-    procedure OnFailure(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse;
-                        const Reason: String);
-    procedure OnSuccess(OptionsAgent: TIdSipOutboundOptions;
-                        Response: TIdSipResponse);
+    procedure OnResponse(OptionsAgent: TIdSipOutboundOptions;
+                         Response: TIdSipResponse);
   public
     constructor Create; override;
 
-    property Failure:           Boolean               read fFailure;
     property OptionsAgentParam: TIdSipOutboundOptions read fOptionsAgentParam;
-    property ReasonParam:       String                read fReasonParam;
     property ResponseParam:     TIdSipResponse        read fResponseParam;
-    property Success:           Boolean               read fSuccess;
+    property Response:          Boolean               read fResponse;
   end;
 
   TIdSipTestRegistrationListener = class(TIdSipTestActionListener,
@@ -798,34 +791,20 @@ constructor TIdSipTestOptionsListener.Create;
 begin
   inherited Create;
 
-  Self.fFailure := false;
-  Self.fSuccess := false;
+  Self.fResponse := false;
 end;
 
 //* TIdSipTestOptionsListener Private methods **********************************
 
-procedure TIdSipTestOptionsListener.OnFailure(OptionsAgent: TIdSipOutboundOptions;
-                                              Response: TIdSipResponse;
-                                              const Reason: String);
-begin
-  Self.fFailure           := true;
-  Self.fOptionsAgentParam := OptionsAgent;
-  Self.fResponseParam     := Response;
-  Self.fReasonParam       := Reason;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestOptionsListener.OnFailure');
-end;
-
-procedure TIdSipTestOptionsListener.OnSuccess(OptionsAgent: TIdSipOutboundOptions;
+procedure TIdSipTestOptionsListener.OnResponse(OptionsAgent: TIdSipOutboundOptions;
                                               Response: TIdSipResponse);
 begin
   Self.fOptionsAgentParam := OptionsAgent;
   Self.fResponseParam     := Response;
-  Self.fSuccess           := true;
+  Self.fResponse          := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestOptionsListener.OnSuccess');
+    raise Self.FailWith.Create('TIdSipTestOptionsListener.OnResponse');
 end;
 
 //******************************************************************************

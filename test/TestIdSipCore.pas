@@ -591,19 +591,9 @@ type
     procedure TestRun;
   end;
 
-  TestTIdSipOptionsFailureMethod = class(TActionMethodTestCase)
+  TestTIdSipOptionsResponseMethod = class(TActionMethodTestCase)
   private
-    Method: TIdSipOptionsFailureMethod;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestRun;
-  end;
-
-  TestTIdSipOptionsSuccessMethod = class(TActionMethodTestCase)
-  private
-    Method: TIdSipOptionsSuccessMethod;
+    Method: TIdSipOptionsResponseMethod;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -704,8 +694,7 @@ begin
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteRedirectMethod.Suite);
   Result.AddTest(TestTIdSipInviteSuccessMethod.Suite);
-  Result.AddTest(TestTIdSipOptionsFailureMethod.Suite);
-  Result.AddTest(TestTIdSipOptionsSuccessMethod.Suite);
+  Result.AddTest(TestTIdSipOptionsResponseMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationFailedMethod.Suite);
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
@@ -3910,8 +3899,8 @@ begin
 
       Self.SimulateRemoteOK;
 
-      Check(L1.Success, 'L1 not informed of success');
-      Check(L2.Success, 'L2 not informed of success');
+      Check(L1.Response, 'L1 not informed of response');
+      Check(L2.Response, 'L2 not informed of response');
     finally
       L2.Free;
     end;
@@ -3977,9 +3966,9 @@ begin
 
       Self.SimulateRemoteOK;
 
-      Check(L1.Success,
+      Check(L1.Response,
             'First listener not notified');
-      Check(not L2.Success,
+      Check(not L2.Response,
             'Second listener erroneously notified, ergo not removed');
     finally
       L2.Free
@@ -6560,70 +6549,17 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipOptionsFailureMethod                                             *
+//* TestTIdSipOptionsResponseMethod                                            *
 //******************************************************************************
-//* TestTIdSipOptionsFailureMethod Public methods ******************************
+//* TestTIdSipOptionsResponseMethod Public methods *****************************
 
-procedure TestTIdSipOptionsFailureMethod.SetUp;
+procedure TestTIdSipOptionsResponseMethod.SetUp;
 var
   Nowhere: TIdSipAddressHeader;
 begin
   inherited SetUp;
 
-  Self.Method := TIdSipOptionsFailureMethod.Create;
-
-  Nowhere := TIdSipAddressHeader.Create;
-  try
-    Self.Method.Options  := Self.UA.QueryOptions(Nowhere);
-    Self.Method.Reason   := 'none';
-    Self.Method.Response := Self.Response;
-  finally
-    Nowhere.Free;
-  end;
-end;
-
-procedure TestTIdSipOptionsFailureMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipOptionsFailureMethod Published methods ***************************
-
-procedure TestTIdSipOptionsFailureMethod.TestRun;
-var
-  Listener: TIdSipTestOptionsListener;
-begin
-  Listener := TIdSipTestOptionsListener.Create;
-  try
-    Self.Method.Run(Listener);
-
-    Check(Listener.Failure, 'Listener not notified');
-    Check(Self.Method.Options = Listener.OptionsAgentParam,
-          'OptionsAgent param');
-    Check(Self.Method.Response = Listener.ResponseParam,
-          'Response param');
-    CheckEquals(Self.Method.Reason,
-                Listener.ReasonParam,
-                'Reason param');
-  finally
-    Listener.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSipOptionsSuccessMethod                                             *
-//******************************************************************************
-//* TestTIdSipOptionsSuccessMethod Public methods ******************************
-
-procedure TestTIdSipOptionsSuccessMethod.SetUp;
-var
-  Nowhere: TIdSipAddressHeader;
-begin
-  inherited SetUp;
-
-  Self.Method := TIdSipOptionsSuccessMethod.Create;
+  Self.Method := TIdSipOptionsResponseMethod.Create;
 
   Nowhere := TIdSipAddressHeader.Create;
   try
@@ -6634,16 +6570,16 @@ begin
   end;
 end;
 
-procedure TestTIdSipOptionsSuccessMethod.TearDown;
+procedure TestTIdSipOptionsResponseMethod.TearDown;
 begin
   Self.Method.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdSipOptionsSuccessMethod Published methods ***************************
+//* TestTIdSipOptionsResponseMethod Published methods **************************
 
-procedure TestTIdSipOptionsSuccessMethod.TestRun;
+procedure TestTIdSipOptionsResponseMethod.TestRun;
 var
   Listener: TIdSipTestOptionsListener;
 begin
@@ -6651,7 +6587,7 @@ begin
   try
     Self.Method.Run(Listener);
 
-    Check(Listener.Success, 'Listener not notified');
+    Check(Listener.Response, 'Listener not notified');
     Check(Self.Method.Options = Listener.OptionsAgentParam,
           'OptionsAgent param');
     Check(Self.Method.Response = Listener.ResponseParam,
