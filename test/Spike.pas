@@ -444,7 +444,7 @@ procedure TrnidSpike.OnNewData(Data: TIdRTPPayload;
 var
   S: TStringStream;
 begin
-  if (Lowercase(Data.Name) = Lowercase(PCMMuLawEncoding)) then begin
+  if IsEqual(Data.Name, PCMMuLawEncoding) then begin
     S := TStringStream.Create((Data as TIdRTPRawPayload).Data);
     try
       Self.ProcessPCM(S);
