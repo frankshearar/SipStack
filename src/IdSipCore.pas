@@ -3022,6 +3022,8 @@ begin
   Self.UsingSecureTransport := UsingSecureTransport;
 
   Self.OkTimer := TIdSipSessionTimer.Create(Self, DefaultT1, DefaultT2);
+
+  Self.Ring;
 end;
 
 destructor TIdSipInboundSession.Destroy;

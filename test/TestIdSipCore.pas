@@ -244,6 +244,7 @@ type
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
+    procedure TestNewSessionRings;
     procedure TestPendingTransactionCount;
     procedure TestReceiveBye;
     procedure TestReceiveByeWithPendingRequests;
@@ -543,10 +544,11 @@ type
 
   TestTIdSipUserAgentInboundCallMethod = class(TTestCase)
   private
-    Method:  TIdSipUserAgentInboundCallMethod;
-    Request: TIdSipRequest;
-    Session: TIdSipInboundSession;
-    UA:      TIdSipUserAgentCore;
+    Dispatcher: TIdSipMockTransactionDispatcher;
+    Method:     TIdSipUserAgentInboundCallMethod;
+    Request:    TIdSipRequest;
+    Session:    TIdSipInboundSession;
+    UA:         TIdSipUserAgentCore;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -2977,6 +2979,16 @@ begin
               'Inbound session; Method');
 end;
 
+procedure TestTIdSipInboundSession.TestNewSessionRings;
+begin
+  Check(Self.Dispatcher.Transport.SentResponseCount > 0,
+        'No responses automatically sent');
+
+  CheckEquals(SIPRinging,
+              Self.Dispatcher.Transport.LastResponse.StatusCode,
+              'New session didn''t Ring automatically');
+end;
+
 procedure TestTIdSipInboundSession.TestPendingTransactionCount;
 begin
   Self.Session.AcceptCall('', '');
@@ -4076,7 +4088,7 @@ begin
   inherited SetUp;
 
   Self.Dispatcher    := TIdSipMockTransactionDispatcher.Create;
-  Self.Invite        := TIdSipRequest.Create;
+  Self.Invite        := TIdSipTestResources.CreateLocalLoopRequest;
   Self.NullTran      := TIdSipNullTransaction.Create(Self.Dispatcher, Self.Invite);
   Self.UA            := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
@@ -5345,7 +5357,12 @@ begin
   inherited SetUp;
 
   Self.Request := TIdSipTestResources.CreateBasicRequest;
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
   Self.UA      := TIdSipUserAgentCore.Create;
+
+  Self.UA.Dispatcher := Self.Dispatcher;
 
   Self.Session := TIdSipInboundSession.Create(Self.UA,
                                               Self.Request,
@@ -5359,6 +5376,7 @@ begin
   Self.Method.Free;
   Self.Session.Free;
   Self.UA.Free;
+  Self.Dispatcher.Free;
   Self.Request.Free;
 
   inherited TearDown;
