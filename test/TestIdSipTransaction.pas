@@ -728,6 +728,7 @@ begin
   Self.CheckAuthenticationOf(Self.Options, AuthenticationHeaderName, AuthorizationHeaderName, QopType);
   Self.CheckAuthenticationOf(Self.Invite,  AuthenticationHeaderName, AuthorizationHeaderName, QopType);
 
+  // BYEs only work inside dialogs, hence the setup code.
   Bye := TIdSipRequest.Create;
   try
     Bye.Assign(Self.Invite);
