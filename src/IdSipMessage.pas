@@ -1040,6 +1040,7 @@ type
     function  IsFinal: Boolean;
     function  IsOK: Boolean;
     function  IsProvisional: Boolean;
+    function  IsRedirect: Boolean;
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
     function  MalformedException: EBadMessageClass; override;
@@ -2938,12 +2939,12 @@ constructor TIdSipWeightedCommaSeparatedHeader.Create;
 begin
   inherited Create;
 
-  fValues := TObjectList.Create(true);
+  Self.fValues := TObjectList.Create(true);
 end;
 
 destructor TIdSipWeightedCommaSeparatedHeader.Destroy;
 begin
-  fValues.Free;
+  Self.fValues.Free;
 
   inherited Destroy;
 end;
@@ -2960,7 +2961,7 @@ begin
     NewValue.Value := Value;
     NewValue.Weight := Weight;
 
-    fValues.Add(NewValue);
+    Self.fValues.Add(NewValue);
   except
     if (Self.ValueCount = OldCount) then
       NewValue.Free;
@@ -2969,12 +2970,12 @@ end;
 
 procedure TIdSipWeightedCommaSeparatedHeader.ClearValues;
 begin
-  fValues.Clear;
+  Self.fValues.Clear;
 end;
 
 function TIdSipWeightedCommaSeparatedHeader.ValueCount: Integer;
 begin
-  Result := fValues.Count;
+  Result := Self.fValues.Count;
 end;
 
 //* TIdSipWeightedCommaSeparatedHeader Protected methods ***********************
@@ -3008,7 +3009,7 @@ begin
     MediaRange := Trim(Fetch(S, ','));
 
     if (IndyPos(';', MediaRange) > 0) then begin
-      Params := MediaRange;
+      Params     := MediaRange;
       MediaRange := Fetch(Params, ';', false);
     end
     else
@@ -3045,8 +3046,8 @@ end;
 procedure TIdSipWeightedCommaSeparatedHeader.SetValues(Index: Integer;
                                                        Value: TIdSipWeightedValue);
 begin
-  (fValues[Index] as TIdSipWeightedValue).Value  := Value.Value;
-  (fValues[Index] as TIdSipWeightedValue).Weight := Value.Weight;
+  Self.Values[Index].Value := Value.Value;
+  Self.Values[Index].Weight := Value.Weight;
 end;
 
 //******************************************************************************
@@ -6021,6 +6022,12 @@ function TIdSipResponse.IsProvisional: Boolean;
 begin
   Result := Self.StatusCode div 100 = 1;
 end;
+
+function TIdSipResponse.IsRedirect: Boolean;
+begin
+  Result := Self.StatusCode div 100 = 3;
+end;
+
 
 function TIdSipResponse.IsRequest: Boolean;
 begin

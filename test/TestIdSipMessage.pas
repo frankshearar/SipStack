@@ -204,6 +204,7 @@ type
     procedure TestIsFinal;
     procedure TestIsOK;
     procedure TestIsProvisional;
+    procedure TestIsRedirect;
     procedure TestIsRequest;
     procedure TestIsTrying;
     procedure TestParse;
@@ -2875,6 +2876,32 @@ begin
   for I := 200 to 699 do begin
     Self.Response.StatusCode := I;
     Check(not Self.Response.IsProvisional,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+end;
+
+procedure TestTIdSipResponse.TestIsRedirect;
+var
+  I: Integer;
+begin
+  for I := 100 to 299 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsRedirect,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  for I := 300 to 399 do begin
+    Self.Response.StatusCode := I;
+    Check(Self.Response.IsRedirect,
+          IntToStr(Self.Response.StatusCode)
+        + ' ' + Self.Response.StatusText);
+  end;
+
+  for I := 400 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsRedirect,
           IntToStr(Self.Response.StatusCode)
         + ' ' + Self.Response.StatusText);
   end;
