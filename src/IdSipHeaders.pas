@@ -64,7 +64,7 @@ type
     function  HasHeaders: Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean;
-    function  ParamCount: Cardinal;
+    function  ParamCount: Integer;
     function  ParamName(const Index: Cardinal): String;
     function  ParamValue(const Index: Cardinal): String; overload;
     function  ParamValue(const Name: String): String; overload;
@@ -623,11 +623,12 @@ var
   Malformed:     Boolean;
   I:             Cardinal;
   E:             Integer;
-  F:             Currency;
+  F:             Cardinal;
+  Q:             Cardinal;
 begin
-  Result := 0;
-  F      := 0;
-  Fraction := S;
+  Q         := 0;
+  F         := 0;
+  Fraction  := S;
   Malformed := (Fraction = '') or (Pos(' ', S) > 0);
 
   if not Malformed then begin
@@ -640,17 +641,23 @@ begin
 
     Malformed := Malformed or (Length(Fraction) > 3);
     if (Fraction <> '') then begin
-      F := Trunc(StrToCurrDef('0.' + Fraction, -1)*1000);
+      while (Length(Fraction) < 3) do
+        Fraction := Fraction + '0';
 
-      Malformed := Malformed or (F = -1);
+      Val(Fraction, F, E);
+      Malformed := Malformed or (E <> 0) or (F > 1000);
     end;
 
-    Result := 1000*I + Trunc(F);
-    Malformed := Malformed or (Result > 1000);
+    Q := 1000*I + Trunc(F);
+    Malformed := Malformed or (Q > 1000);
   end;
 
   if Malformed then
     raise EConvertError.Create(Format(ConvertErrorMsg, [S, 'TIdSipQValue']));
+
+  Assert(Q <= High(TIdSipQValue),
+         'Sanity check assigning a Cardinal to a TIdSipQValue');
+  Result := Q;
 end;
 
 function StrToQValueDef(const S: String; const DefaultValue: TIdSipQValue): TIdSipQValue;
@@ -752,7 +759,7 @@ begin
   Result := IsEqual(Self.Scheme, SipsScheme);
 end;
 
-function TIdSipUri.ParamCount: Cardinal;
+function TIdSipUri.ParamCount: Integer;
 begin
   Result := Self.Parameters.Count;
 end;
@@ -1930,7 +1937,7 @@ begin
   if (Src = '') then Self.FailParse;
 
   I := 1;
-  while (Src[I] in Digits) do Inc(I);
+  while (I <= Length(Src)) and (Src[I] in Digits) do Inc(I);
 
 
   Number := Copy(Src, 1, I - 1);

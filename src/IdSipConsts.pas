@@ -201,8 +201,11 @@ const
   SIPDoesNotExistAnywhere             = 604;
   SIPNotAcceptableGlobal              = 606;
 
-// MIME types
+// MIME types etc
 const
+  RedundancyEncodingParameter = 'red';
+  T140EncodingName            = 't140';
+
   InterleavedT140MimeType = 'audio/t140';
   RedundantT140MimeType   = 'text/RED';
   SdpMimeType             = 'application/sdp';

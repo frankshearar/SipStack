@@ -69,7 +69,6 @@ type
     Transactions:    TObjectList;
     TransactionLock: TCriticalSection;
 
-    procedure CheckMessage(const Msg: TIdSipMessage);
     procedure DeliverToTransaction(const Msg: TIdSipMessage; const Receiver: TIdSipTransport);
     function  FindTransaction(const R: TIdSipMessage;
                               ClientTran: Boolean): TIdSipTransaction;
@@ -598,25 +597,16 @@ end;
 procedure TIdSipTransactionDispatcher.OnReceiveRequest(const Request: TIdSipRequest;
                                                        const Receiver: TIdSipTransport);
 begin
-  Self.CheckMessage(Request);
   Self.DeliverToTransaction(Request, Receiver);
 end;
 
 procedure TIdSipTransactionDispatcher.OnReceiveResponse(const Response: TIdSipResponse;
                                                         const Receiver: TIdSipTransport);
 begin
-  Self.CheckMessage(Response);
   Self.DeliverToTransaction(Response, Receiver);
 end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************
-
-procedure TIdSipTransactionDispatcher.CheckMessage(const Msg: TIdSipMessage);
-begin
-  // Transport-layer-wide checks
-  if (Msg.SIPVersion <> SipVersion) then
-    //
-end;
 
 procedure TIdSipTransactionDispatcher.DeliverToTransaction(const Msg: TIdSipMessage;
                                                            const Receiver: TIdSipTransport);

@@ -135,6 +135,8 @@ type
                                                   const Transaction: TIdSipTransaction);
     procedure RejectRequestUnknownContentType(const Request: TIdSipRequest;
                                               const Transaction: TIdSipTransaction);
+    procedure RejectUnsupportedSipVersion(const Request: TIdSipRequest;
+                                          const Transaction: TIdSipTransaction);
     procedure ResetLastBranch;
     procedure SendByeToAppropriateSession(const Bye: TIdSipRequest;
                          const Transaction: TIdSipTransaction;
@@ -160,7 +162,7 @@ type
     function  Call(const Dest: TIdSipToHeader): TIdSipSession;
     function  CreateBye(const Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateCancel(const Dialog: TIdSipDialog): TIdSipRequest;
-    function  CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
+    function  CreateInvite(const Dest: TIdSipToHeader; const Body: String = ''): TIdSipRequest;
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; overload; override;
     function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(const Request: TIdSipRequest;
@@ -193,6 +195,8 @@ type
     property UserAgentName: String              read fUserAgentName write fUserAgentName;
   end;
 
+  TIdSipProcedure = procedure(ObjectOrIntf: Pointer) of object;
+
   // I am a SIP session. As such, I represent both what my dialog represents
   // (a long-term relationship between two peers in a SIP network) and also
   // the media streams initiated between those peers.
@@ -217,10 +221,14 @@ type
     SessionListeners:    TList;
 
     procedure AddOpenTransaction(const Transaction: TIdSipTransaction);
+    procedure ApplyTo(const List: TList; const Lock: TCriticalSection; Proc: TIdSipProcedure);
     procedure CreateInternal(const UA: TIdSipUserAgentCore);
     procedure MarkAsTerminated;
+    procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEndedSession;
+    procedure NotifyOfEndedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEstablishedSession;
+    procedure NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
     procedure NotifyOfModifiedSession(const Invite: TIdSipRequest);
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
@@ -450,13 +458,16 @@ begin
   end;
 end;
 
-function TIdSipUserAgentCore.CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
+function TIdSipUserAgentCore.CreateInvite(const Dest: TIdSipToHeader; const Body: String = ''): TIdSipRequest;
 begin
   Result := CreateRequest(Dest);
   Result.Method := MethodInvite;
 
   Result.CSeq.Method     := MethodInvite;
   Result.CSeq.SequenceNo := 0;
+
+  Result.Body := Body;
+  Result.ContentLength := Length(Body);
 end;
 
 function TIdSipUserAgentCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
@@ -601,6 +612,10 @@ procedure TIdSipUserAgentCore.ReceiveRequest(const Request: TIdSipRequest;
                                              const Transaction: TIdSipTransaction;
                                              const Receiver: TIdSipTransport);
 begin
+  if (Request.SIPVersion <> SipVersion) then begin
+    Self.RejectUnsupportedSipVersion(Request, Transaction);
+  end;
+
   // cf RFC 3261 section 8.2
   // inspect the method - 8.2.1
   if not Self.IsMethodAllowed(Request.Method) then begin
@@ -1006,6 +1021,21 @@ begin
   end;
 end;
 
+procedure TIdSipUserAgentCore.RejectUnsupportedSipVersion(const Request: TIdSipRequest;
+                                                          const Transaction: TIdSipTransaction);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPSIPVersionNotSupported);
+  try
+    Response.AddHeader(AcceptHeader).Value := SdpMimeType;
+
+    Transaction.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TIdSipUserAgentCore.ResetLastBranch;
 begin
   Self.BranchLock.Acquire;
@@ -1245,6 +1275,21 @@ begin
   end;
 end;
 
+procedure TIdSipSession.ApplyTo(const List: TList;
+                                const Lock: TCriticalSection;
+                                Proc: TIdSipProcedure);
+var
+  I: Integer;
+begin
+  Lock.Acquire;
+  try
+    for I := 0 to List.Count - 1 do
+      Proc(List[I]);
+  finally
+    Lock.Release;
+  end;
+end;
+
 procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore);
 begin
   Self.fCore := UA;
@@ -1259,47 +1304,45 @@ begin
 end;
 
 procedure TIdSipSession.MarkAsTerminated;
-var
-  I: Integer;
 begin
   Self.fIsTerminated := true;
 
-  Self.OpenTransactionLock.Acquire;
-  try
-    for I := 0 to Self.OpenTransactions.Count - 1 do
-      Self.TerminateOpenTransaction(TIdSipTransaction(Self.OpenTransactions[I]));
-  finally
-    Self.OpenTransactionLock.Release;
-  end;
+  Self.ApplyTo(Self.OpenTransactions,
+               Self.OpenTransactionLock,
+               Self.MarkAsTerminatedProc);
+end;
+
+procedure TIdSipSession.MarkAsTerminatedProc(ObjectOrIntf: Pointer);
+begin
+  Self.TerminateOpenTransaction(TIdSipTransaction(ObjectOrIntf));
 end;
 
 procedure TIdSipSession.NotifyOfEndedSession;
-var
-  I: Integer;
 begin
-  Self.SessionListenerLock.Acquire;
-  try
-    for I := 0 to Self.SessionListeners.Count - 1 do
-      IIdSipSessionListener(Self.SessionListeners[I]).OnEndedSession(Self);
-  finally
-    Self.SessionListenerLock.Release;
-  end;
-  
+  Self.ApplyTo(Self.SessionListeners,
+               Self.SessionListenerLock,
+               Self.NotifyOfEndedSessionProc);
+
   Self.Core.RemoveSession(Self);
 end;
 
-procedure TIdSipSession.NotifyOfEstablishedSession;
-var
-  I: Integer;
+procedure TIdSipSession.NotifyOfEndedSessionProc(ObjectOrIntf: Pointer);
 begin
-  Self.SessionListenerLock.Acquire;
-  try
-    for I := 0 to Self.SessionListeners.Count - 1 do
-      IIdSipSessionListener(Self.SessionListeners[I]).OnEstablishedSession(Self);
-  finally
-    Self.SessionListenerLock.Release;
-  end;
+  IIdSipSessionListener(ObjectOrIntf).OnEndedSession(Self);
+end;
+
+procedure TIdSipSession.NotifyOfEstablishedSession;
+begin
+  Self.ApplyTo(Self.SessionListeners,
+               Self.SessionListenerLock,
+               Self.NotifyOfEstablishedSessionProc);
+
   Self.IsEstablished := true;
+end;
+
+procedure TIdSipSession.NotifyOfEstablishedSessionProc(ObjectOrIntf: Pointer);
+begin
+  IIdSipSessionListener(ObjectOrIntf).OnEstablishedSession(Self);
 end;
 
 procedure TIdSipSession.NotifyOfModifiedSession(const Invite: TIdSipRequest);
@@ -1309,7 +1352,8 @@ begin
   Self.SessionListenerLock.Acquire;
   try
     for I := 0 to Self.SessionListeners.Count - 1 do
-      IIdSipSessionListener(Self.SessionListeners[I]).OnModifiedSession(Self, Invite);
+      IIdSipSessionListener(Self.SessionListeners[I]).OnModifiedSession(Self,
+                                                                        Invite);
   finally
     Self.SessionListenerLock.Release;
   end;
@@ -1392,7 +1436,7 @@ begin
   finally
     Self.OpenTransactionLock.Release;
   end;
-end;  
+end;
 
 procedure TIdSipSession.TerminateOpenTransaction(const Transaction: TIdSipTransaction);
 begin

@@ -73,6 +73,7 @@ type
     procedure TestCreateBye;
     procedure TestCreateCancel;
     procedure TestCreateInvite;
+    procedure TestCreateInviteWithBody;
     procedure TestCreateRequest;
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
@@ -107,6 +108,7 @@ type
     procedure TestRejectUnknownExtension;
     procedure TestRejectUnknownScheme;
     procedure TestRejectUnsupportedMethod;
+    procedure TestRejectUnsupportedSipVersion;
     procedure TestSetContact;
     procedure TestSetContactMailto;
     procedure TestSetContactWildCard;
@@ -673,6 +675,22 @@ begin
     end;
   finally
     Dest.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCreateInviteWithBody;
+var
+  Invite: TIdSipRequest;
+  Body:   String;
+begin
+  Body := 'foo fighters';
+
+  Invite := Self.Core.CreateInvite(Self.Destination, Body);
+  try
+    CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
+    CheckEquals(Body,         Invite.Body,          'Body');
+  finally
+    Invite.Free;
   end;
 end;
 
@@ -1428,6 +1446,26 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestRejectUnsupportedSipVersion;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatch.Transport.SentResponseCount;
+  Self.Invite.SIPVersion := 'SIP/1.0';
+
+  Self.SimulateRemoteInvite;
+
+  CheckEquals(ResponseCount + 1,
+              Self.Dispatch.Transport.SentResponseCount,
+              'No response sent');
+
+  Response := Self.Dispatch.Transport.LastResponse;
+  CheckEquals(SIPSIPVersionNotSupported,
+              Response.StatusCode,
+              'Status-Code');
+end;
+
 procedure TestTIdSipUserAgentCore.TestSetContact;
 var
   C: TIdSipContactHeader;
@@ -1532,8 +1570,6 @@ end;
 //* TestTIdSipSession Private methods ******************************************
 
 function TestTIdSipSession.CreateRemoteReInvite(const LocalDialog: TIdSipDialog): TIdSipRequest;
-var
-  Temp: String;
 begin
   Result := Self.Core.CreateRequest(LocalDialog);
   try

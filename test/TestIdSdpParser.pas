@@ -212,6 +212,16 @@ type
     procedure TestParseVersionMultipleHeaders;
   end;
 
+  TestTIdSdpPayload = class(TTestCase)
+  private
+    Payload: TIdSdpPayload;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestPrintOn;
+  end;
+
 const
   MinimumPayloadSansConnection = 'v=0'#13#10
                  + 'o=mhandley 2890844526 2890842807 IN IP4 126.16.64.4'#13#10
@@ -238,6 +248,7 @@ begin
   Result.AddTest(TestTIdSdpTimes.Suite);
   Result.AddTest(TestTIdSdpZoneAdjustments.Suite);
   Result.AddTest(TestTIdSdpParser.Suite);
+  Result.AddTest(TestTIdSdpPayload.Suite);
 end;
 
 //******************************************************************************
@@ -2497,6 +2508,32 @@ begin
   finally
     S.Free;
   end;
+end;
+
+//******************************************************************************
+//* TestTIdSdpPayload                                                          *
+//******************************************************************************
+//* TestTIdSdpPayload Public methods *******************************************
+
+procedure TestTIdSdpPayload.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Payload := TIdSdpPayload.Create;
+end;
+
+procedure TestTIdSdpPayload.TearDown;
+begin
+  Self.Payload.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSdpPayload Published methods ****************************************
+
+procedure TestTIdSdpPayload.TestPrintOn;
+begin
+  Fail('implement');
 end;
 
 initialization

@@ -3,7 +3,7 @@ unit IdSdpParser;
 interface
 
 uses
-  Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdSimpleParser,
+  Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress, IdSimpleParser,
   IdURI;
 
 type
@@ -54,6 +54,7 @@ type
 
   TIdSdpAttributes = class;
   TIdSdpBandwidths = class;
+  
   TIdSdpMediaDescription = class(TObject)
   private
     fAttributes: TIdSdpAttributes;
@@ -62,10 +63,10 @@ type
     fInfo:       String;
     fKey:        TIdSdpKey;
     fMediaType:  TIdSdpMediaType;
+    FormatList:  array of String;
     fPort:       Cardinal;
     fPortCount:  Cardinal;
     fTransport:  String;
-    List:        array of String;
 
     function GetAttributes: TIdSdpAttributes;
     function GetBandwidths: TIdSdpBandwidths;
@@ -239,8 +240,9 @@ type
   public
     destructor Destroy; override;
 
-    function AllDescriptionsHaveConnections: Boolean;
-    function HasConnection: Boolean;
+    function  AllDescriptionsHaveConnections: Boolean;
+    procedure PrintOn(Dest: TStream);
+    function  HasConnection: Boolean;
 
     property Attributes:        TIdSdpAttributes        read GetAttributes;
     property Bandwidths:        TIdSdpBandwidths        read GetBandwidths;
@@ -499,18 +501,18 @@ var
   InsertPos: Integer;
 begin
   InsertPos := Self.FormatCount;
-  SetLength(Self.List, InsertPos + 1);
-  Self.List[InsertPos] := Fmt;
+  SetLength(Self.FormatList, InsertPos + 1);
+  Self.FormatList[InsertPos] := Fmt;
 end;
 
 function TIdSdpMediaDescription.FormatCount: Integer;
 begin
-  Result := Length(Self.List);
+  Result := Length(Self.FormatList);
 end;
 
 procedure TIdSdpMediaDescription.ClearFormats;
 begin
-  SetLength(Self.List, 0);
+  SetLength(Self.FormatList, 0);
 end;
 
 function TIdSdpMediaDescription.HasConnection: Boolean;
@@ -546,7 +548,7 @@ end;
 
 function TIdSdpMediaDescription.GetFormats(Index: Integer): String;
 begin
-  Result := Self.List[Index];
+  Result := Self.FormatList[Index];
 end;
 
 function TIdSdpMediaDescription.GetKey: TIdSdpKey;
@@ -759,6 +761,10 @@ end;
 function TIdSdpPayload.AllDescriptionsHaveConnections: Boolean;
 begin
   Result := Self.MediaDescriptions.AllDescriptionsHaveConnections;
+end;
+
+procedure TIdSdpPayload.PrintOn(Dest: TStream);
+begin
 end;
 
 function TIdSdpPayload.HasConnection: Boolean;

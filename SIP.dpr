@@ -4,6 +4,8 @@ uses
   Forms,
   GuiTestRunner,
   TextTestRunner,
+  IdRTPClient in 'src\IdRTPClient.pas',
+  IdRTPServer in 'src\IdRTPServer.pas',
   IdSdpParser in 'src\IdSdpParser.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
   IdSipConsts in 'src\IdSipConsts.pas',
@@ -27,13 +29,15 @@ uses
   Spike in 'test\Spike.pas' {rnidSpike},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
-  TestMessages in 'test\TestMessages.pas'{,
-  TestIdSdpParser in 'test\TestIdSdpParser.pas',                 // pass
-  TestIdSimpleParser in 'test\TestIdSimpleParser.pas',           // pass
-  TestIdSipCore in 'test\TestIdSipCore.pas',                     // check
+  TestMessages in 'test\TestMessages.pas',
+  TestIdRTPClient in 'test\TestIdRTPClient.pas',
+  TestIdRTPServer in 'test\TestIdRTPServer.pas',
+  TestIdSdpParser in 'test\TestIdSdpParser.pas',
+  TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
+  TestIdSipCore in 'test\TestIdSipCore.pas',
   TestIdSipDialog in 'test\TestIdSipDialog.pas',
   TestIdSipDialogID in 'test\TestIdSipDialogID.pas',
-  TestIdSipHeaders in 'test\TestIdSipHeaders.pas',               // pass
+  TestIdSipHeaders in 'test\TestIdSipHeaders.pas',
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
@@ -41,12 +45,12 @@ uses
   TestIdSipTimer in 'test\TestIdSipTimer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
-  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',           // pass (3rd party moans)
-  TestIdUri in 'test\TestIdUri.pas'},                             // pass
+  TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
+  TestIdUri in 'test\TestIdUri.pas',
   TestIdSipUri in 'test\TestIdSipUri.pas';
 
 //{$DEFINE SPIKE}
-{$DEFINE GUI}
+//{$DEFINE GUI}
 
 {$IFNDEF GUI}
   {$APPTYPE CONSOLE}
