@@ -455,9 +455,10 @@ begin
          raise EAudioError.CreateResFmt(@rsCannotOpenOutputDevice,[DeviceID,Error]);
       Synchronize(AudioData.StartEvent);
       repeat
+        Sleep(100);
         while OutPutBuffers[NextOutPutBuffer].State<>bsAvailable do
         begin
-          Sleep(0);
+          Sleep(100);
         end;
         EnterCriticalSection(AudioPlaybackCriticalSection);
           OutPutBuffers[NextOutPutBuffer].State:=bsBusy;
@@ -521,7 +522,7 @@ begin
             {Wait for every non-free buffer to become available or time out}
             while OutPutBuffers[I].State<>bsAvailable do
             begin
-              sleep(0);
+              Sleep(100);
               Inc(Counter);
               if Counter>50
                  then break;
