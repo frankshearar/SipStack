@@ -9,12 +9,25 @@ type
   TIdSipMethodEvent = procedure(AThread: TIdPeerThread;
                                 AMessage: TIdSipMessage) of object;
 
+  TIdSipTcpConnectionCutter = class(TIdSipTimer)
+  private
+    fConnection: TIdTCPConnection;
+  public
+    property Connection: TIdTCPConnection read fConnection write fConnection;
+  end;
+
+  // ReadBodyTimeout = 0 implies that we never timeout the body wait. This is
+  // not recommended. ReadBodyTimeout = n implies we wait n milliseconds for
+  // the body to be received. If we haven't read Content-Length bytes by the
+  // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
-    fOnMethod: TIdSipMethodEvent;
+    fOnMethod:        TIdSipMethodEvent;
+    fReadBodyTimeout: Cardinal;
 
-    procedure  DoOnMethod(AThread: TIdPeerThread;
-                          AMessage: TIdSipMessage);
+    procedure DoOnMethod(AThread: TIdPeerThread;
+                         AMessage: TIdSipMessage);
+    procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
     procedure ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
@@ -25,7 +38,8 @@ type
     constructor Create(AOwner: TComponent); override;
   published
     property DefaultPort default IdPORT_SIP;
-    property OnMethod: TIdSipMethodEvent read fOnMethod write fOnMethod;
+    property OnMethod:        TIdSipMethodEvent read fOnMethod write fOnMethod;
+    property ReadBodyTimeout: Cardinal          read fReadBodyTimeout write fReadBodyTimeout;
   end;
 
 implementation
@@ -80,7 +94,7 @@ begin
         except
           on E: EBadRequest do begin
             Self.ReturnBadRequest(AThread.Connection, E.Message, Parser);
-            AThread.Connection.Disconnect;
+            AThread.Connection.DisconnectSocket;
           end;
           on EBadResponse do begin
             // tear down the connection?
@@ -104,8 +118,26 @@ begin
     Self.OnMethod(AThread, AMessage);
 end;
 
-function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
+procedure TIdSipTcpServer.OnReadBodyTimeout(Sender: TObject);
 begin
+  (Sender as TIdSipTcpConnectionCutter).Connection.DisconnectSocket;
+end;
+
+function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
+var
+  Timer: TIdSipTcpConnectionCutter;
+begin
+  if (Self.ReadBodyTimeout > 0) then begin
+    Timer := TIdSipTcpConnectionCutter.Create(true);
+    try
+      Timer.FreeOnTerminate := true;
+      Timer.OnTimer := Self.OnReadBodyTimeout;
+      Timer.Start;
+    except
+      Timer.Free;
+    end;
+  end;
+
   Result := Connection.ReadString(Message.ContentLength);
 end;
 

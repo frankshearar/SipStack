@@ -178,6 +178,7 @@ begin
     try
       CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
       CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+      
       CheckEquals(Format(UnexpectedMessageLength, [154, 9999]),
                   Response.StatusText,
                   'StatusText');

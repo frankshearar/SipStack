@@ -9,10 +9,11 @@ uses
 type
   TestTIdSipTcpServer = class(TThreadingTestCase)
   private
-    Client:          TIdTcpClient;
-    MethodCallCount: Cardinal;
-    Parser:          TIdSipParser;
-    Server:          TIdSipTcpServer;
+    Client:            TIdTcpClient;
+    ConnectionDropped: Boolean;
+    MethodCallCount:   Cardinal;
+    Parser:            TIdSipParser;
+    Server:            TIdSipTcpServer;
 
     procedure CheckMultipleMessages(AThread: TIdPeerThread;
                                     AMessage: TIdSipMessage);
@@ -31,6 +32,7 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
+    procedure OnServerDisconnect(AThread: TIdPeerThread);
     function ReadResponse: String;
   public
     procedure SetUp; override;
@@ -43,7 +45,7 @@ type
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
-//    procedure TestTortureTest16;
+    procedure TestTortureTest16;
     procedure TestTortureTest19;
     procedure TestTortureTest21;
     procedure TestTortureTest22;
@@ -101,6 +103,8 @@ begin
   Self.Server.Active := true;
 
   Self.Parser := TIdSipParser.Create;
+
+  Self.ConnectionDropped := false;
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
@@ -345,6 +349,11 @@ begin
   end;
 end;
 }
+procedure TestTIdSipTcpServer.OnServerDisconnect(AThread: TIdPeerThread);
+begin
+  Self.ConnectionDropped := true;
+end;
+
 function TestTIdSipTcpServer.ReadResponse: String;
 var
   Line: String;
@@ -470,15 +479,18 @@ begin
   if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
-{
+
 procedure TestTIdSipTcpServer.TestTortureTest16;
 begin
+  Self.Server.OnDisconnect := Self.OnServerDisconnect;
+  Self.Server.ReadBodyTimeout := 50;
+
   Self.Client.Connect(DefaultTimeout);
+
   Self.Client.Write(TortureTest16);
-//  Fail('We have to somehow wait and then sever a connection if it''s taking too long');
-//  Self.CheckTortureTest16;
+  Sleep(100);
 end;
-}
+
 procedure TestTIdSipTcpServer.TestTortureTest19;
 begin
   Self.Client.Connect(DefaultTimeout);

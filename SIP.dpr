@@ -24,11 +24,11 @@ uses
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
+  TestIdSipTimer in 'test\TestIdSipTimer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdURI in 'test\TestIdURI.pas',
-  TestIdSipTimer in 'test\TestIdSipTimer.pas';
+  TestIdURI in 'test\TestIdURI.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}

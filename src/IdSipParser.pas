@@ -468,9 +468,13 @@ begin
     Result := Trim(Result);
   end;
 end;
+
 function TIdSipParser.MakeBadRequestResponse(const Reason: String): TIdSipResponse;
 begin
-  // this is wrong. We need the original request's details - via headers, etc.
+  // This is wrong. We need the original request's details - via headers, etc.
+  // Sometimes we cannot get this information, though, especially if the
+  // original message we malformed and unparseable.
+
   Result := TIdSipResponse.Create;
   Result.StatusCode := SIPBadRequest;
   Result.StatusText := Reason;
