@@ -242,12 +242,12 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestMessageWithTrailingGarbage;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
     procedure TestLeaveNonRportRequestsUntouched;
     procedure TestMaddrUsed;
+    procedure TestMessageWithTrailingGarbage;
     procedure TestMissingContentLength;
     procedure TestRespectRport;
     procedure TestRportParamFilledIn;
@@ -1613,6 +1613,8 @@ end;
 procedure TestTIdSipUDPTransport.CheckMessageWithTrailingGarbage(Sender: TObject;
                                                                  R: TIdSipRequest);
 begin
+  Self.Request.Body := R.Body;
+  
   Self.ThreadEvent.SetEvent;
 end;
 
@@ -1713,44 +1715,6 @@ end;
 
 //* TestTIdSipUDPTransport Published methods ***********************************
 
-procedure TestTIdSipUDPTransport.TestMessageWithTrailingGarbage;
-var
-  Body:   String;
-  Client: TIdUdpClient;
-begin
-  Self.CheckingRequestEvent := Self.CheckMessageWithTrailingGarbage;
-  Body := 'I am a message. Hear me roar!';
-
-  Client := TIdUdpClient.Create(nil);
-  try
-    Client.Host := Self.HighPortTransport.Address;
-    Client.Port := Self.HighPortTransport.Port;
-
-    Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
-              + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
-              + 'Max-Forwards: 70'#13#10
-              + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-              + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
-              + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
-              + 'CSeq: 314159 INVITE'#13#10
-              + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
-              + 'Content-Type: text/plain'#13#10
-              + 'Content-Length: ' + IntToStr(Length(Body)) + #13#10
-              + #13#10
-              + Body + #0#0#0#0#0);
-
-    Self.ExceptionMessage := Self.HighPortTransport.ClassName
-        + ': We rejected a message with a Content-Length that had trailing '
-        + 'octets';
-    Self.WaitForSignaled;
-    CheckEquals(Body,
-                Self.Request.Body,
-                'Body of message');
-  finally
-    Client.Free;
-  end;
-end;
-
 procedure TestTIdSipUDPTransport.TestGetTransportType;
 begin
   CheckEquals(UdpTransport,
@@ -1793,6 +1757,44 @@ begin
     Self.WaitForSignaled;
   finally
     Self.MaddrTransport.Stop;
+  end;
+end;
+
+procedure TestTIdSipUDPTransport.TestMessageWithTrailingGarbage;
+var
+  Body:   String;
+  Client: TIdUdpClient;
+begin
+  Self.CheckingRequestEvent := Self.CheckMessageWithTrailingGarbage;
+  Body := 'I am a message. Hear me roar!';
+
+  Client := TIdUdpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortTransport.Address;
+    Client.Port := Self.HighPortTransport.Port;
+
+    Client.Send('INVITE sip:wintermute@tessier-ashpool.co.luna SIP/2.0'#13#10
+              + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+              + 'Max-Forwards: 70'#13#10
+              + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+              + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+              + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+              + 'CSeq: 314159 INVITE'#13#10
+              + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+              + 'Content-Type: text/plain'#13#10
+              + 'Content-Length: ' + IntToStr(Length(Body)) + #13#10
+              + #13#10
+              + Body + #0#0#0#0#0);
+
+    Self.ExceptionMessage := Self.HighPortTransport.ClassName
+        + ': We rejected a message with a Content-Length that had trailing '
+        + 'octets';
+    Self.WaitForSignaled;
+    CheckEquals(Body,
+                Self.Request.Body,
+                'Body of message');
+  finally
+    Client.Free;
   end;
 end;
 
