@@ -572,30 +572,38 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
 var
-  Ack:      TIdSipRequest;
-  Listener: TIdSipTestUnhandledMessageListener;
-  Tran:     TIdSipTransaction;
+  Ack:          TIdSipRequest;
+  RemoteDialog: TIdSipDialog;
+  Listener:     TIdSipTestUnhandledMessageListener;
+  Tran:         TIdSipTransaction;
 begin
-  Ack := Self.CreateAck(Self.Response200);
+  RemoteDialog := TIdSipDialog.CreateOutboundDialog(Self.Invite,
+                                                    Self.Response200,
+                                                    false);
   try
-    Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
-
-    Listener := TIdSipTestUnhandledMessageListener.Create;
+    Ack := RemoteDialog.CreateAck;
     try
-      Self.D.AddUnhandledMessageListener(Listener);
+      Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
 
-      Tran.SendResponse(Self.Response200);
+      Listener := TIdSipTestUnhandledMessageListener.Create;
+      try
+        Self.D.AddUnhandledMessageListener(Listener);
 
-      Self.MockTransport.FireOnRequest(Ack);
-      // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
-      // responsible for handling ACKs to a 2xx response!
-      Check(Listener.ReceivedUnhandledRequest,
-            'ACK not handed up to TU');
+        Tran.SendResponse(Self.Response200);
+
+        Self.MockTransport.FireOnRequest(Ack);
+        // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
+        // responsible for handling ACKs to a 2xx response!
+        Check(Listener.ReceivedUnhandledRequest,
+              'ACK not handed up to TU');
+      finally
+        Listener.Free;
+      end;
     finally
-      Listener.Free;
+      Ack.Free;
     end;
   finally
-    Ack.Free;
+    RemoteDialog.Free;
   end;
 end;
 

@@ -185,6 +185,8 @@ type
   end;
 
   TestTIdSipSession = class(TestTIdSipAction)
+  private
+     procedure SimulateRemoteReInvite(Session: TIdSipSession);
   published
     procedure TestIsSession; override;
   end;
@@ -239,6 +241,7 @@ type
     procedure TestIsInboundCall;
     procedure TestIsOutboundCall;
     procedure TestMethod;
+    procedure TestPendingTransactionCount;
     procedure TestReceiveBye;
     procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveOutOfOrderReInvite;
@@ -273,7 +276,6 @@ type
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRejectUnauthorized;
     procedure SimulateRemoteOKWithRecordRoute;
-    procedure SimulateRemoteReInvite(Session: TIdSipSession);
   protected
     SDP: String;
 
@@ -363,7 +365,7 @@ type
   published
     procedure TestOutboundCallAndByeToXlite;
     procedure TestSimultaneousInAndOutboundCall;
-    procedure TestXlitesAckBug;
+    procedure TestXlitesAckNonBug;
   end;
 
   TestTIdSipSessionTimer = class(TTestCase)
@@ -967,8 +969,10 @@ end;
 
 procedure TestTIdSipUserAgentCore.SetUp;
 var
-  C: TIdSipContactHeader;
-  F: TIdSipFromHeader;
+  C:        TIdSipContactHeader;
+  F:        TIdSipFromHeader;
+  Invite:   TIdSipRequest;
+  Response: TIdSipResponse;
 begin
   inherited SetUp;
 
@@ -989,14 +993,26 @@ begin
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:6000>';
   Self.RouteSet.Add(RecordRouteHeader).Value := '<sip:127.0.0.1:8000>';
 
-  Self.Dlg := TIdSipDialog.Create(Self.ID,
-                                  Self.LocalSequenceNo,
-                                  Self.RemoteSequenceNo,
-                                  Self.LocalUri,
-                                  Self.RemoteUri,
-                                  Self.RemoteTarget,
-                                  false,
-                                  Self.RouteSet);
+  Invite := TIdSipRequest.Create;
+  try
+    Response := TIdSipResponse.Create;
+    try
+      Self.Dlg := TIdSipDialog.Create(Invite,
+                                      Response,
+                                      Self.ID,
+                                      Self.LocalSequenceNo,
+                                      Self.RemoteSequenceNo,
+                                      Self.LocalUri,
+                                      Self.RemoteUri,
+                                      Self.RemoteTarget,
+                                      false,
+                                      Self.RouteSet);
+    finally
+      Response.Free;
+    end;
+  finally
+    Invite.Free;
+  end;
 
   C := TIdSipContactHeader.Create;
   try
@@ -1700,12 +1716,20 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestFork;
 var
+  Invite:       TIdSipRequest;
   OrigAckCount: Cardinal;
 begin
   OrigAckCount := Self.Dispatcher.Transport.ACKCount;
   Self.Core.Call(Self.Destination, '', '');
-  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
-  Self.SimulateRemoteAccept(Self.Dispatcher.Transport.LastRequest);
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+    Self.SimulateRemoteAccept(Invite);
+    Self.SimulateRemoteAccept(Invite);
+  finally
+    Invite.Free;
+  end;
 
   CheckEquals(2,
               Self.Core.SessionCount,
@@ -2490,7 +2514,22 @@ end;
 //******************************************************************************
 //* TestTIdSipSession                                                          *
 //******************************************************************************
-//* TestTIdSipSession Public methods *******************************************
+//* TestTIdSipSession Private methods ******************************************
+
+procedure TestTIdSipSession.SimulateRemoteReInvite(Session: TIdSipSession);
+begin
+  // At this point Self.Invite represents the INVITE we sent out
+  Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
+  Self.Invite.CallID          := Session.Dialog.ID.CallID;
+  Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
+  Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
+  Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
+
+  // Now it represents an INVITE received from the network
+  Self.SimulateRemoteInvite;
+end;
+
+//* TestTIdSipSession Published methods ****************************************
 
 procedure TestTIdSipSession.TestIsSession;
 var
@@ -2904,6 +2943,20 @@ begin
               'Inbound session; Method');
 end;
 
+procedure TestTIdSipInboundSession.TestPendingTransactionCount;
+begin
+  Self.Session.AcceptCall('', '');
+  CheckEquals(0,
+              Self.Session.PendingTransactionCount,
+              'Session should have no pending transactions');
+
+  Self.SimulateRemoteReInvite(Self.Session);
+
+  CheckEquals(1,
+              Self.Session.PendingTransactionCount,
+              'Session should have one pending transaction');
+end;
+
 procedure TestTIdSipInboundSession.TestReceiveBye;
 begin
   Self.Session.AcceptCall('', '');
@@ -3184,16 +3237,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.SimulateRemoteReInvite(Session: TIdSipSession);
-begin
-  Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
-  Self.Invite.CallID          := Session.Dialog.ID.CallID;
-  Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
-  Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
-  Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
-  Self.SimulateRemoteInvite;
-end;
-
 //* TestTIdSipOutboundSession Published methods ********************************
 
 procedure TestTIdSipOutboundSession.TestAck;
@@ -3227,8 +3270,10 @@ begin
                 'Content-Disposition');
     Check(Ack.ContentDisposition.IsSession,
           'Content-Disposition handling');
-
-    // check credentials!
+    CheckNotEquals(Invite.LastHop.Branch,
+                   Ack.LastHop.Branch,
+                   'Branch must differ - a UAS creates an ACK as an '
+                 + 'in-dialog request');
   finally
     Invite.Destroy;
   end;
@@ -3344,6 +3389,8 @@ begin
 
   Response := Self.Core.CreateResponse(Invite, SIPOK);
   try
+    Response.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
+    Response.From.Tag     := Self.Dispatcher.Transport.LastResponse.From.Tag;
     Self.Dispatcher.Transport.FireOnResponse(Response);
 
     Check(not Session.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
@@ -3569,7 +3616,7 @@ begin
 
   CheckEquals(1,
               Self.Session.PendingTransactionCount,
-              'Session should have no pending transactions');
+              'Session should have one pending transaction');
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
@@ -4074,23 +4121,40 @@ begin
   CheckEquals(2, Self.UA.SessionCount, 'Session count');
 end;
 
-procedure TestBugHunt.TestXlitesAckBug;
+procedure TestBugHunt.TestXlitesAckNonBug;
 var
+  Ack:       TIdSipRequest;
+  RemoteDlg: TIdSipDialog;
   TranCount: Cardinal;
 begin
   Self.UA.AddUserAgentListener(Self);
   Self.SimulateRemoteInvite;
+
   Check(Assigned(Self.Session), 'TU not informed of inbound call');
   Self.Session.AcceptCall('', '');
 
   TranCount := Self.Dispatcher.TransactionCount;
-  Self.SimulateUnexpectedAck;
-  CheckEquals(TranCount,
-              Self.Dispatcher.TransactionCount,
-              'A transaction got made in response to an ACK');
-  CheckEquals(1,
-              Self.UA.SessionCount,
-              'ACK wasn''t simply dropped by the TU');
+
+  RemoteDlg := TIdSipDialog.CreateOutboundDialog(Self.Dispatcher.Transport.LastRequest,
+                                                 Self.Dispatcher.Transport.LastResponse,
+                                                 false);
+  try
+    Ack := RemoteDlg.CreateAck;
+    try
+      Self.Dispatcher.Transport.FireOnRequest(Ack);
+      
+      CheckEquals(TranCount,
+                Self.Dispatcher.TransactionCount,
+                  'A transaction got made in response to an ACK');
+      CheckEquals(1,
+                  Self.UA.SessionCount,
+                  'ACK wasn''t simply dropped by the TU');
+    finally
+      Ack.Free;
+    end;
+  finally
+    RemoteDlg.Free;
+  end;
 end;
 
 //******************************************************************************

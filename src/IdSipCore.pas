@@ -24,9 +24,9 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSdp, IdSipDialog, IdException, IdInterfacedObject,
-  IdObservable, IdSipAuthentication, IdSipMessage, IdSipRegistration,
-  IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
+  Classes, Contnrs, IdSdp, IdSipDialog, IdSipDialogID, IdException,
+  IdInterfacedObject, IdObservable, IdSipAuthentication, IdSipMessage,
+  IdSipRegistration, IdSipTimer, IdSipTransaction, IdSipTransport, SyncObjs;
 
 type
   TIdSipAction = class;
@@ -510,6 +510,7 @@ type
 
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure AddOpenTransaction(Request: TIdSipRequest);
+    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; virtual; abstract;
     function  CreateNewAttempt(Challenge: TIdSipResponse): TIdSipRequest; override;
     function  GetInvite: TIdSipRequest; virtual;
     procedure MarkAsTerminated; override;
@@ -547,6 +548,8 @@ type
 
     function  CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
     procedure TerminatePendingInvite;
+  protected
+    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
   public
     constructor Create(UA: TIdSipUserAgentCore;
                        Invite: TIdSipRequest;
@@ -574,6 +577,7 @@ type
     procedure SendCancel;
     procedure TerminateAfterSendingCancel;
   protected
+    function  CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
                                 UsingSecureTransport: Boolean): Boolean; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
@@ -699,8 +703,8 @@ const
 implementation
 
 uses
-  IdGlobal, IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipDialogID,
-  IdRandom, IdStack, SysUtils, IdUDPServer;
+  IdGlobal, IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdRandom,
+  IdStack, SysUtils, IdUDPServer;
 
 const
   BusyHere        = 'Incoming call rejected - busy here';
@@ -1129,13 +1133,16 @@ var
 begin
   // The transport must be discovered using RFC 3263
   // TODO: Lies. Pure hack to get X-Lite talking
+
   if (Pos(TransportParam, OutboundRequest.RequestUri.AsString) > 0) then
     Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
   else
     Transport := TransportParamTCP;
+
 //  Transport := TransportParamUDP;
 
   OutboundRequest.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' ' + Self.HostName;
+
   OutboundRequest.LastHop.Branch := Self.NextBranch;
 
   if (Self.UserAgentName <> '') then
@@ -1678,7 +1685,7 @@ end;
 procedure TIdSipUserAgentCore.ActOnResponse(Response: TIdSipResponse;
                                             Receiver: TIdSipTransport);
 var
-  Session: TIdSipAction;
+  Action: TIdSipAction;
 begin
   inherited ActOnResponse(Response, Receiver);
 
@@ -1687,13 +1694,13 @@ begin
   // a transaction, since the receipt of a 200 terminates a client INVITE
   // immediately.
   if Response.IsOK then begin
-    Session := Self.FindAction(Response);
+    Action := Self.FindAction(Response);
 
-    if not Assigned(Session) then
-      Session := Self.ForkCall(Response);
+    if not Assigned(Action) then
+      Action := Self.ForkCall(Response);
 
-    if Assigned(Session) then
-      Session.ReceiveResponse(Response, Receiver.IsSecure);
+    if Assigned(Action) then
+      Action.ReceiveResponse(Response, Receiver.IsSecure);
   end
   else
     Self.NotifyOfDroppedResponse(Response, Receiver);
@@ -2640,12 +2647,12 @@ function TIdSipSession.Match(Msg: TIdSipMessage): Boolean;
 var
   DialogID: TIdSipDialogID;
 begin
-  DialogID := TIdSipDialogID.Create(Msg.CallID,
-                                    Msg.ToHeader.Tag,
-                                    Msg.From.Tag);
+  DialogID := Self.CreateDialogIDFrom(Msg);
   try
-   Result := (Self.DialogEstablished and Self.Dialog.ID.Equals(DialogID))
-          or Self.CurrentRequest.Match(Msg);
+   if Self.DialogEstablished then
+     Result := Self.Dialog.ID.Equals(DialogID)
+   else
+     Result := Self.CurrentRequest.Match(Msg);
   finally
     DialogID.Free;
   end;
@@ -3023,6 +3030,15 @@ begin
   end;
 end;
 
+//* TIdSipInboundSession Protected methods *************************************
+
+function TIdSipInboundSession.CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
+begin
+  Result := TIdSipDialogID.Create(Msg.CallID,
+                                  Msg.ToHeader.Tag,
+                                  Msg.From.Tag);
+end;
+
 //* TIdSipInboundSession Private methods ***************************************
 
 function TIdSipInboundSession.CreateInboundDialog(Response: TIdSipResponse): TIdSipDialog;
@@ -3134,6 +3150,19 @@ begin
 end;
 
 //* TIdSipOutboundSession Protected methods ************************************
+
+function TIdSipOutboundSession.CreateDialogIDFrom(Msg: TIdSipMessage): TIdSipDialogID;
+begin
+  if Msg.IsRequest then
+    Result := TIdSipDialogID.Create(Msg.CallID,
+                                    Msg.ToHeader.Tag,
+                                    Msg.From.Tag)
+  else
+    Result := TIdSipDialogID.Create(Msg.CallID,
+                                    Msg.From.Tag,
+                                    Msg.ToHeader.Tag);
+end;
+
 
 function TIdSipOutboundSession.ReceiveOKResponse(Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): Boolean;

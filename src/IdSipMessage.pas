@@ -112,7 +112,6 @@ type
     function  HasParameter(const Name: String): Boolean;
     function  IsLooseRoutable: Boolean;
     function  IsSecure: Boolean; virtual;
-    function  IsSipUri: Boolean; override;
     function  ParamCount: Integer;
     function  ParamName(Index: Cardinal): String;
     function  ParamValue(Index: Cardinal): String; overload;
@@ -1109,7 +1108,7 @@ function WithoutFirstAndLastChars(const S: String): String;
 implementation
 
 uses
-  IdRandom, IdSipConsts;
+  IdRandom, IdSipConsts, IdSipDialog;
 
 // class variables
 var
@@ -1651,11 +1650,6 @@ end;
 function TIdSipUri.IsSecure: Boolean;
 begin
   Result := IsEqual(Self.Scheme, SipsScheme);
-end;
-
-function TIdSipUri.IsSipUri: Boolean;
-begin
-  Result := inherited IsSipUri;
 end;
 
 function TIdSipUri.ParamCount: Integer;
@@ -4968,40 +4962,54 @@ begin
 end;
 
 function TIdSipRequest.AckFor(Response: TIdSipResponse): TIdSipRequest;
+var
+  Dlg: TIdSipDialog;
 begin
-  Result := TIdSipRequest.Create;
-  try
-    Result.SIPVersion  := Self.SIPVersion;
+  if Response.WillEstablishDialog(Self) then begin
+    Dlg := TIdSipDialog.CreateOutboundDialog(Self,
+                                             Response,
+                                             Self.RequestUri.IsSecure);
+    try
+      Result := Dlg.CreateAck;
+    finally
+      Dlg.Free;
+    end;
+  end
+  else begin
 
-    Result.CallID          := Self.CallID;
-    Result.CSeq.Method     := MethodAck;
-    Result.CSeq.SequenceNo := Response.CSeq.SequenceNo;
-    Result.From            := Self.From;
-    Result.MaxForwards     := Result.DefaultMaxForwards;
-    Result.Method          := MethodAck;
-    Result.RequestUri      := Self.RequestUri;
-    Result.ToHeader        := Response.ToHeader;
+{
+    Assert(not Response.WillEstablishDialog(Self),
+           'A UA that makes an ACK for a response that creates a dialog '
+         + 'must make that ACK as an in-dialog request');
+}
+    Result := TIdSipRequest.Create;
+    try
+      Result.SIPVersion  := Self.SIPVersion;
 
-    Result.AddHeaders(Self.Route);
+      Result.CallID          := Self.CallID;
+      Result.CSeq.Method     := MethodAck;
+      Result.CSeq.SequenceNo := Response.CSeq.SequenceNo;
+      Result.From            := Self.From;
+      Result.MaxForwards     := Result.DefaultMaxForwards;
+      Result.Method          := MethodAck;
+      Result.RequestUri      := Self.RequestUri;
+      Result.ToHeader        := Response.ToHeader;
 
-    if Response.WillEstablishDialog(Self) then begin
-      Result.AddHeader(Response.LastHop);
-      Result.LastHop.Branch := GRandomNumber.NextSipUserAgentTag;
-    end
-    else begin
+      Result.AddHeaders(Self.Route);
+
       Result.Path.Add(Self.LastHop);
       Result.ContentLength := 0;
       Result.Body          := '';
+
+      if Self.HasHeader(AuthorizationHeader) then
+        Result.AddHeader(AuthorizationHeader).Value := Self.FirstHeader(AuthorizationHeader).FullValue;
+      if Self.HasHeader(ProxyAuthorizationHeader) then
+        Result.AddHeader(ProxyAuthorizationHeader).Value := Self.FirstHeader(ProxyAuthorizationHeader).FullValue;
+    except
+      Result.Free;
+
+      raise;
     end;
-
-    if Self.HasHeader(AuthorizationHeader) then
-      Result.AddHeader(AuthorizationHeader).Value := Self.FirstHeader(AuthorizationHeader).FullValue;
-    if Self.HasHeader(ProxyAuthorizationHeader) then
-      Result.AddHeader(ProxyAuthorizationHeader).Value := Self.FirstHeader(ProxyAuthorizationHeader).FullValue;
-  except
-    Result.Free;
-
-    raise;
   end;
 end;
 
