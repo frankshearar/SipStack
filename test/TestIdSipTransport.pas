@@ -761,14 +761,14 @@ begin
   Self.RecvdRequest.Assign(Request);
 
   if Assigned(Self.CheckingRequestEvent) then
-    Self.CheckingRequestEvent(Transport, Request);
+    Self.CheckingRequestEvent(Receiver, Request);
 end;
 
 procedure TestTIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
                                                 Receiver: TIdSipTransport);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Transport, Response);
+    Self.CheckingResponseEvent(Receiver, Response);
 end;
 
 procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;

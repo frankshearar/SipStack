@@ -391,6 +391,109 @@ type
     procedure TestTryingTimerEInterval;
   end;
 
+  TUnhandledMessageListenerMethodTestCase = class(TTestCase)
+  protected
+    Receiver: TIdSipTransport;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipUnhandledMessageListenerReceiveRequestMethod = class(TUnhandledMessageListenerMethodTestCase)
+  private
+    Method:  TIdSipUnhandledMessageListenerReceiveRequestMethod;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipUnhandledMessageListenerReceiveResponseMethod = class(TUnhandledMessageListenerMethodTestCase)
+  private
+    Method:   TIdSipUnhandledMessageListenerReceiveResponseMethod;
+    Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipUnhandledMessageListenerUnhandledRequestMethod = class(TUnhandledMessageListenerMethodTestCase)
+  private
+    Method:  TIdSipUnhandledMessageListenerUnhandledRequestMethod;
+    Request: TIdSipRequest;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipUnhandledMessageListenerUnhandledResponseMethod = class(TUnhandledMessageListenerMethodTestCase)
+  private
+    Method:   TIdSipUnhandledMessageListenerUnhandledResponseMethod;
+    Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TTransactionListenerMethodTestCase = class(TTestCase)
+  protected
+    Dispatcher:  TIdSipMockTransactionDispatcher;
+    Request:     TIdSipRequest;
+    Transaction: TIdSipTransaction;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  end;
+
+  TestTIdSipTransactionListenerFailMethod = class(TTransactionListenerMethodTestCase)
+  private
+    Method: TIdSipTransactionListenerFailMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransactionListenerReceiveRequestMethod = class(TTransactionListenerMethodTestCase)
+  private
+    Method: TIdSipTransactionListenerReceiveRequestMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransactionListenerReceiveResponseMethod = class(TTransactionListenerMethodTestCase)
+  private
+    Method:   TIdSipTransactionListenerReceiveResponseMethod;
+    Response: TIdSipResponse;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
+  TestTIdSipTransactionListenerTerminatedMethod = class(TTransactionListenerMethodTestCase)
+  private
+    Method: TIdSipTransactionListenerTerminatedMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
 implementation
 
 uses
@@ -408,6 +511,14 @@ begin
   Result.AddTest(TestTIdSipServerInviteTransactionTimer.Suite);
   Result.AddTest(TestTIdSipClientInviteTransactionTimer.Suite);
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimer.Suite);
+  Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipUnhandledMessageListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.Suite);
+  Result.AddTest(TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerFailMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerReceiveRequestMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerReceiveResponseMethod.Suite);
+  Result.AddTest(TestTIdSipTransactionListenerTerminatedMethod.Suite);
 end;
 
 function Transaction(S: TIdSipTransactionState): String;
@@ -4023,6 +4134,407 @@ begin
   CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 3 fires');
   Self.Timer.FireTimerE;
   CheckEquals(DefaultT2, Self.Timer.TimerEInterval, 'After 4 fires');
+end;
+
+//******************************************************************************
+//* TUnhandledMessageListenerMethodTestCase                                    *
+//******************************************************************************
+//* TUnhandledMessageListenerMethodTestCase Public methods *********************
+
+procedure TUnhandledMessageListenerMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Receiver := TIdSipNullTransport.Create(IdPORT_SIP);
+end;
+
+procedure TUnhandledMessageListenerMethodTestCase.TearDown;
+begin
+  Self.Receiver.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod                     *
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod Public methods ******
+
+procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Request := TIdSipRequest.Create;
+
+  Self.Method := TIdSipUnhandledMessageListenerReceiveRequestMethod.Create;
+  Self.Method.Receiver := Self.Receiver;
+  Self.Method.Request  := Self.Request;
+end;
+
+procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Request.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUnhandledMessageListenerReceiveRequestMethod Published methods ***
+
+procedure TestTIdSipUnhandledMessageListenerReceiveRequestMethod.TestRun;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedRequest,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Request = Listener.RequestParam,
+          Self.ClassName + ': Request param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod                    *
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod Public methods *****
+
+procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipUnhandledMessageListenerReceiveResponseMethod.Create;
+  Self.Method.Receiver := Self.Receiver;
+  Self.Method.Response  := Self.Response;
+end;
+
+procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUnhandledMessageListenerReceiveResponseMethod Published methods **
+
+procedure TestTIdSipUnhandledMessageListenerReceiveResponseMethod.TestRun;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedResponse,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          Self.ClassName + ': Response param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod                   *
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod Public methods ****
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Request := TIdSipRequest.Create;
+
+  Self.Method := TIdSipUnhandledMessageListenerUnhandledRequestMethod.Create;
+  Self.Method.Receiver := Self.Receiver;
+  Self.Method.Request  := Self.Request;
+end;
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Request.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUnhandledMessageListenerUnhandledRequestMethod Published methods **
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledRequestMethod.TestRun;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedUnhandledRequest,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Request = Listener.RequestParam,
+          Self.ClassName + ': Request param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod                  *
+//******************************************************************************
+//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod Public methods ***
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipResponse.Create;
+
+  Self.Method := TIdSipUnhandledMessageListenerUnhandledResponseMethod.Create;
+  Self.Method.Receiver := Self.Receiver;
+  Self.Method.Response  := Self.Response;
+end;
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipUnhandledMessageListenerUnhandledResponseMethod Published methods *
+
+procedure TestTIdSipUnhandledMessageListenerUnhandledResponseMethod.TestRun;
+var
+  Listener: TIdSipTestUnhandledMessageListener;
+begin
+  Listener := TIdSipTestUnhandledMessageListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedUnhandledResponse,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          Self.ClassName + ': Response param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TTransactionListenerMethodTestCase                                         *
+//******************************************************************************
+//* TTransactionListenerMethodTestCase Public methods **************************
+
+procedure TTransactionListenerMethodTestCase.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
+
+  Self.Request := TIdSipTestResources.CreateLocalLoopRequest;
+  Self.Request.Method := MethodOptions;
+
+  Self.Transaction := TIdSipClientNonInviteTransaction.Create(Self.Dispatcher,
+                                                              Self.Request);
+end;
+
+procedure TTransactionListenerMethodTestCase.TearDown;
+begin
+  Self.Transaction.Free;
+  Self.Request.Free;
+  Self.Dispatcher.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionListenerFailMethod                                    *
+//******************************************************************************
+//* TestTIdSipTransactionListenerFailMethod Public methods *********************
+
+procedure TestTIdSipTransactionListenerFailMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransactionListenerFailMethod.Create;
+  Self.Method.Reason      := 'Foo';
+  Self.Method.Transaction := Self.Transaction;
+end;
+
+procedure TestTIdSipTransactionListenerFailMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionListenerFailMethod Published methods ******************
+
+procedure TestTIdSipTransactionListenerFailMethod.TestRun;
+var
+  Listener: TIdSipTestTransactionListener;
+begin
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Failed,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Transaction = Listener.TransactionParam,
+          Self.ClassName + ': Transaction param');
+    CheckEquals(Self.Method.Reason,
+                Listener.ReasonParam,
+                Self.ClassName + ': Reason param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionListenerReceiveRequestMethod                          *
+//******************************************************************************
+//* TestTIdSipTransactionListenerReceiveRequestMethod Public methods ***********
+
+procedure TestTIdSipTransactionListenerReceiveRequestMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransactionListenerReceiveRequestMethod.Create;
+  Self.Method.Receiver    := Self.Dispatcher.Transport;
+  Self.Method.Request     := Self.Request;
+  Self.Method.Transaction := Self.Transaction;
+end;
+
+procedure TestTIdSipTransactionListenerReceiveRequestMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionListenerReceiveRequestMethod Published methods ********
+
+procedure TestTIdSipTransactionListenerReceiveRequestMethod.TestRun;
+var
+  Listener: TIdSipTestTransactionListener;
+begin
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedRequest,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Transaction = Listener.TransactionParam,
+          Self.ClassName + ': Transaction param');
+    Check(Self.Method.Request = Listener.RequestParam,
+          Self.ClassName + ': Request param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionListenerReceiveResponseMethod                         *
+//******************************************************************************
+//* TestTIdSipTransactionListenerReceiveResponseMethod Public methods **********
+
+procedure TestTIdSipTransactionListenerReceiveResponseMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Response := TIdSipTestResources.CreateLocalLoopResponse;
+
+  Self.Method := TIdSipTransactionListenerReceiveResponseMethod.Create;
+  Self.Method.Receiver    := Self.Dispatcher.Transport;
+  Self.Method.Response     := Self.Response;
+  Self.Method.Transaction := Self.Transaction;
+end;
+
+procedure TestTIdSipTransactionListenerReceiveResponseMethod.TearDown;
+begin
+  Self.Method.Free;
+  Self.Response.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionListenerReceiveResponseMethod Published methods *******
+
+procedure TestTIdSipTransactionListenerReceiveResponseMethod.TestRun;
+var
+  Listener: TIdSipTestTransactionListener;
+begin
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.ReceivedResponse,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Receiver = Listener.ReceiverParam,
+          Self.ClassName + ': Receiver param');
+    Check(Self.Method.Transaction = Listener.TransactionParam,
+          Self.ClassName + ': Transaction param');
+    Check(Self.Method.Response = Listener.ResponseParam,
+          Self.ClassName + ': Response param');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipTransactionListenerTerminatedMethod                              *
+//******************************************************************************
+//* TestTIdSipTransactionListenerTerminatedMethod Public methods ***************
+
+procedure TestTIdSipTransactionListenerTerminatedMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Method := TIdSipTransactionListenerTerminatedMethod.Create;
+  Self.Method.Transaction := Self.Transaction;
+end;
+
+procedure TestTIdSipTransactionListenerTerminatedMethod.TearDown;
+begin
+  Self.Method.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransactionListenerTerminatedMethod Published methods ******************
+
+procedure TestTIdSipTransactionListenerTerminatedMethod.TestRun;
+var
+  Listener: TIdSipTestTransactionListener;
+begin
+  Listener := TIdSipTestTransactionListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Terminated,
+          Self.ClassName + ': Listener not notified');
+    Check(Self.Method.Transaction = Listener.TransactionParam,
+          Self.ClassName + ': Transaction param');
+  finally
+    Listener.Free;
+  end;
 end;
 
 initialization

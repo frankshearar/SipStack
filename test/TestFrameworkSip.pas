@@ -189,10 +189,15 @@ type
   TIdSipTestTransactionListener = class(TIdSipMockListener,
                                         IIdSipTransactionListener)
   private
-    fFailReason:       String;
+    fFailed:           Boolean;
+    fReasonParam:      String;
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
+    fReceiverParam:    TIdSipTransport;
+    fRequestParam:     TIdSipRequest;
+    fResponseParam:    TIdSipResponse;
     fTerminated:       Boolean;
+    fTransactionParam: TIdSipTransaction;
 
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
@@ -206,10 +211,15 @@ type
   public
     constructor Create; override;
 
-    property FailReason:       String  read fFailReason;
-    property ReceivedRequest:  Boolean read fReceivedRequest;
-    property ReceivedResponse: Boolean read fReceivedResponse;
-    property Terminated:       Boolean read fTerminated;
+    property Failed:           Boolean           read fFailed;
+    property ReasonParam:      String            read fReasonParam;
+    property ReceivedRequest:  Boolean           read fReceivedRequest;
+    property ReceivedResponse: Boolean           read fReceivedResponse;
+    property ReceiverParam:    TIdSipTransport   read fReceiverParam;
+    property RequestParam:     TIdSipRequest     read fRequestParam;
+    property ResponseParam:    TIdSipResponse    read fResponseParam;
+    property Terminated:       Boolean           read fTerminated;
+    property TransactionParam: TIdSipTransaction read fTransactionParam;
   end;
 
   TIdSipTestTransportListener = class(TIdSipMockListener,
@@ -281,6 +291,9 @@ type
     fReceivedResponse:          Boolean;
     fReceivedUnhandledRequest:  Boolean;
     fReceivedUnhandledResponse: Boolean;
+    fReceiverParam:             TIdSipTransport;
+    fRequestParam:              TIdSipRequest;
+    fResponseParam:             TIdSipResponse;
 
 
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -294,10 +307,13 @@ type
   public
     constructor Create; override;
 
-    property ReceivedRequest:           Boolean read fReceivedRequest;
-    property ReceivedResponse:          Boolean read fReceivedResponse;
-    property ReceivedUnhandledRequest:  Boolean read fReceivedUnhandledRequest;
-    property ReceivedUnhandledResponse: Boolean read fReceivedUnhandledResponse;
+    property ReceivedRequest:           Boolean         read fReceivedRequest;
+    property ReceivedResponse:          Boolean         read fReceivedResponse;
+    property ReceivedUnhandledRequest:  Boolean         read fReceivedUnhandledRequest;
+    property ReceivedUnhandledResponse: Boolean         read fReceivedUnhandledResponse;
+    property ReceiverParam:             TIdSipTransport read fReceiverParam;
+    property RequestParam:              TIdSipRequest   read fRequestParam;
+    property ResponseParam:             TIdSipResponse   read fResponseParam;
   end;
 
   TIdSipTestUserAgentListener = class(TIdSipMockListener,
@@ -697,7 +713,7 @@ constructor TIdSipTestTransactionListener.Create;
 begin
   inherited Create;
 
-  Self.fFailReason       := '';
+  Self.fFailed           := false;
   Self.fReceivedRequest  := false;
   Self.fReceivedResponse := false;
   Self.fTerminated       := false;
@@ -708,7 +724,9 @@ end;
 procedure TIdSipTestTransactionListener.OnFail(Transaction: TIdSipTransaction;
                                                const Reason: String);
 begin
-  Self.fFailReason := Reason;
+  Self.fFailed           := true;
+  Self.fReasonParam      := Reason;
+  Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionListener.OnFail');
@@ -718,7 +736,10 @@ procedure TIdSipTestTransactionListener.OnReceiveRequest(Request: TIdSipRequest;
                                                          Transaction: TIdSipTransaction;
                                                          Receiver: TIdSipTransport);
 begin
-  Self.fReceivedRequest := true;
+  Self.fReceivedRequest  := true;
+  Self.fReceiverParam    := Receiver;
+  Self.fRequestParam     := Request;  
+  Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionListener.OnReceiveRequest');
@@ -729,6 +750,9 @@ procedure TIdSipTestTransactionListener.OnReceiveResponse(Response: TIdSipRespon
                                                           Receiver: TIdSipTransport);
 begin
   Self.fReceivedResponse := true;
+  Self.fReceiverParam    := Receiver;
+  Self.fResponseParam    := Response;
+  Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionListener.OnReceiveResponse');
@@ -736,7 +760,8 @@ end;
 
 procedure TIdSipTestTransactionListener.OnTerminated(Transaction: TIdSipTransaction);
 begin
-  Self.fTerminated := true;
+  Self.fTerminated       := true;
+  Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestTransactionListener.OnTerminated');
@@ -851,10 +876,10 @@ constructor TIdSipTestUnhandledMessageListener.Create;
 begin
   inherited Create;
 
-  fReceivedRequest           := false;
-  fReceivedResponse          := false;
-  fReceivedUnhandledRequest  := false;
-  fReceivedUnhandledResponse := false;
+  Self.fReceivedRequest           := false;
+  Self.fReceivedResponse          := false;
+  Self.fReceivedUnhandledRequest  := false;
+  Self.fReceivedUnhandledResponse := false;
 end;
 
 //* TIdSipTestUnhandledMessageListener Private methods *************************
@@ -862,7 +887,9 @@ end;
 procedure TIdSipTestUnhandledMessageListener.OnReceiveRequest(Request: TIdSipRequest;
                                                               Receiver: TIdSipTransport);
 begin
-  fReceivedRequest := true;
+  Self.fReceivedRequest := true;
+  Self.fReceiverParam   := Receiver;
+  Self.fRequestParam    := Request;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveRequest');
@@ -871,7 +898,9 @@ end;
 procedure TIdSipTestUnhandledMessageListener.OnReceiveResponse(Response: TIdSipResponse;
                                                                Receiver: TIdSipTransport);
 begin
-  fReceivedResponse := true;
+  Self.fReceivedResponse := true;
+  Self.fReceiverParam    := Receiver;
+  Self.fResponseParam    := Response;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveResponse');
@@ -880,7 +909,9 @@ end;
 procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest(Request: TIdSipRequest;
                                                                        Receiver: TIdSipTransport);
 begin
-  fReceivedUnhandledRequest := true;
+  Self.fReceivedUnhandledRequest := true;
+  Self.fReceiverParam            := Receiver;
+  Self.fRequestParam             := Request;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveUnhandledRequest');
@@ -889,7 +920,9 @@ end;
 procedure TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse(Response: TIdSipResponse;
                                                                         Receiver: TIdSipTransport);
 begin
-  fReceivedUnhandledResponse := true;
+  Self.fReceivedUnhandledResponse := true;
+  Self.fReceiverParam             := Receiver;
+  Self.fResponseParam             := Response;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestUnhandledMessageListener.OnReceiveUnhandledResponse');

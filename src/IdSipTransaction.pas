@@ -508,7 +508,7 @@ type
     property Receiver: TIdSipTransport read fReceiver write fReceiver;
   end;
 
-  TIdSipTransactionDispatcherReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipUnhandledMessageListenerReceiveRequestMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fRequest: TIdSipRequest;
   public
@@ -517,7 +517,7 @@ type
     property Request:  TIdSipRequest read fRequest write fRequest;
   end;
 
-  TIdSipTransactionDispatcherReceiveResponseMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipUnhandledMessageListenerReceiveResponseMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fResponse: TIdSipResponse;
   public
@@ -526,7 +526,7 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
-  TIdSipTransactionDispatcherUnhandledRequestMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipUnhandledMessageListenerUnhandledRequestMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fRequest: TIdSipRequest;
   public
@@ -535,7 +535,7 @@ type
     property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
-  TIdSipTransactionDispatcherUnhandledResponseMethod = class(TIdSipTransactionDispatcherMethod)
+  TIdSipUnhandledMessageListenerUnhandledResponseMethod = class(TIdSipTransactionDispatcherMethod)
   private
     fResponse: TIdSipResponse;
   public
@@ -551,7 +551,7 @@ type
     property Transaction: TIdSipTransaction read fTransaction write fTransaction;
   end;
 
-  TIdSipTransactionFailMethod = class(TIdSipTransactionMethod)
+  TIdSipTransactionListenerFailMethod = class(TIdSipTransactionMethod)
   private
     fReason: String;
   public
@@ -560,7 +560,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
-  TIdSipTransactionReceiveRequestMethod = class(TIdSipTransactionMethod)
+  TIdSipTransactionListenerReceiveRequestMethod = class(TIdSipTransactionMethod)
   private
     fReceiver: TIdSipTransport;
     fRequest:  TIdSipRequest;
@@ -571,7 +571,7 @@ type
     property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
-  TIdSipTransactionReceiveResponseMethod = class(TIdSipTransactionMethod)
+  TIdSipTransactionListenerReceiveResponseMethod = class(TIdSipTransactionMethod)
   private
     fReceiver: TIdSipTransport;
     fResponse: TIdSipResponse;
@@ -582,7 +582,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
-  TIdSipTransactionTerminatedMethod = class(TIdSipTransactionMethod)
+  TIdSipTransactionListenerTerminatedMethod = class(TIdSipTransactionMethod)
   public
     procedure Run(const Subject: IInterface); override;
   end;
@@ -860,9 +860,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfRequest(Request: TIdSipRequest;
                                                                Receiver: TIdSipTransport);
 var
-  Notification: TIdSipTransactionDispatcherReceiveRequestMethod;
+  Notification: TIdSipUnhandledMessageListenerReceiveRequestMethod;
 begin
-  Notification := TIdSipTransactionDispatcherReceiveRequestMethod.Create;
+  Notification := TIdSipUnhandledMessageListenerReceiveRequestMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Request  := Request;
@@ -876,9 +876,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfResponse(Response: TIdSipResponse;
                                                                 Receiver: TIdSipTransport);
 var
-  Notification: TIdSipTransactionDispatcherReceiveResponseMethod;
+  Notification: TIdSipUnhandledMessageListenerReceiveResponseMethod;
 begin
-  Notification := TIdSipTransactionDispatcherReceiveResponseMethod.Create;
+  Notification := TIdSipUnhandledMessageListenerReceiveResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Response := Response;
@@ -892,9 +892,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledRequest(Request: TIdSipRequest;
                                                                         Receiver: TIdSipTransport);
 var
-  Notification: TIdSipTransactionDispatcherUnhandledRequestMethod;
+  Notification: TIdSipUnhandledMessageListenerUnhandledRequestMethod;
 begin
-  Notification := TIdSipTransactionDispatcherUnhandledRequestMethod.Create;
+  Notification := TIdSipUnhandledMessageListenerUnhandledRequestMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Request  := Request;
@@ -908,9 +908,9 @@ end;
 procedure TIdSipTransactionDispatcher.NotifyListenersOfUnhandledResponse(Response: TIdSipResponse;
                                                                          Receiver: TIdSipTransport);
 var
-  Notification: TIdSipTransactionDispatcherUnhandledResponseMethod;
+  Notification: TIdSipUnhandledMessageListenerUnhandledResponseMethod;
 begin
-  Notification := TIdSipTransactionDispatcherUnhandledResponseMethod.Create;
+  Notification := TIdSipUnhandledMessageListenerUnhandledResponseMethod.Create;
   try
     Notification.Receiver := Receiver;
     Notification.Response := Response;
@@ -1273,9 +1273,9 @@ end;
 
 procedure TIdSipTransaction.NotifyOfFailure(const Reason: String);
 var
-  Notification: TIdSipTransactionFailMethod;
+  Notification: TIdSipTransactionListenerFailMethod;
 begin
-  Notification := TIdSipTransactionFailMethod.Create;
+  Notification := TIdSipTransactionListenerFailMethod.Create;
   try
     Notification.Reason      := Reason;
     Notification.Transaction := Self;
@@ -1289,9 +1289,9 @@ end;
 procedure TIdSipTransaction.NotifyOfRequest(R: TIdSipRequest;
                                             T: TIdSipTransport);
 var
-  Notification: TIdSipTransactionReceiveRequestMethod;
+  Notification: TIdSipTransactionListenerReceiveRequestMethod;
 begin
-  Notification := TIdSipTransactionReceiveRequestMethod.Create;
+  Notification := TIdSipTransactionListenerReceiveRequestMethod.Create;
   try
     Notification.Receiver    := T;
     Notification.Request     := R;
@@ -1306,9 +1306,9 @@ end;
 procedure TIdSipTransaction.NotifyOfResponse(R: TIdSipResponse;
                                              Receiver: TIdSipTransport);
 var
-  Notification: TIdSipTransactionReceiveResponseMethod;
+  Notification: TIdSipTransactionListenerReceiveResponseMethod;
 begin
-  Notification := TIdSipTransactionReceiveResponseMethod.Create;
+  Notification := TIdSipTransactionListenerReceiveResponseMethod.Create;
   try
     Notification.Receiver    := Receiver;
     Notification.Response    := R;
@@ -1322,9 +1322,9 @@ end;
 
 procedure TIdSipTransaction.NotifyOfTermination;
 var
-  Notification: TIdSipTransactionTerminatedMethod;
+  Notification: TIdSipTransactionListenerTerminatedMethod;
 begin
-  Notification := TIdSipTransactionTerminatedMethod.Create;
+  Notification := TIdSipTransactionListenerTerminatedMethod.Create;
   try
     Notification.Transaction := Self;
 
@@ -2551,33 +2551,33 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionDispatcherReceiveRequestMethod                            *
+//* TIdSipUnhandledMessageListenerReceiveRequestMethod                         *
 //******************************************************************************
-//* TIdSipTransactionDispatcherReceiveRequestMethod Public methods *************
+//* TIdSipUnhandledMessageListenerReceiveRequestMethod Public methods **********
 
-procedure TIdSipTransactionDispatcherReceiveRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipUnhandledMessageListenerReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUnhandledMessageListener).OnReceiveRequest(Self.Request,
                                                                Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipTransactionDispatcherReceiveResponseMethod                           *
+//* TIdSipUnhandledMessageListenerReceiveResponseMethod                        *
 //******************************************************************************
-//* TIdSipTransactionDispatcherReceiveResponseMethod Public methods ************
+//* TIdSipUnhandledMessageListenerReceiveResponseMethod Public methods *********
 
-procedure TIdSipTransactionDispatcherReceiveResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipUnhandledMessageListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUnhandledMessageListener).OnReceiveResponse(Self.Response,
                                                                 Self.Receiver);
 end;
 
 //******************************************************************************
-//* TIdSipTransactionDispatcherUnhandledRequestMethod                          *
+//* TIdSipUnhandledMessageListenerUnhandledRequestMethod                       *
 //******************************************************************************
-//* TIdSipTransactionDispatcherUnhandledRequestMethod Public methods ***********
+//* TIdSipUnhandledMessageListenerUnhandledRequestMethod Public methods ********
 
-procedure TIdSipTransactionDispatcherUnhandledRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipUnhandledMessageListenerUnhandledRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledRequest(Self.Request,
                                                                         Self.Receiver);
@@ -2585,11 +2585,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionDispatcherUnhandledResponseMethod                         *
+//* TIdSipUnhandledMessageListenerUnhandledResponseMethod                      *
 //******************************************************************************
-//* TIdSipTransactionDispatcherUnhandledResponseMethod Public methods **********
+//* TIdSipUnhandledMessageListenerUnhandledResponseMethod Public methods *******
 
-procedure TIdSipTransactionDispatcherUnhandledResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipUnhandledMessageListenerUnhandledResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipUnhandledMessageListener).OnReceiveUnhandledResponse(Self.Response,
                                                                          Self.Receiver);
@@ -2597,22 +2597,22 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionFailMethod                                                *
+//* TIdSipTransactionListenerFailMethod                                        *
 //******************************************************************************
-//* TIdSipTransactionFailMethod Public methods *********************************
+//* TIdSipTransactionListenerFailMethod Public methods *************************
 
-procedure TIdSipTransactionFailMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionListenerFailMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionListener).OnFail(Self.Transaction,
                                                 Self.Reason);
 end;
 
 //******************************************************************************
-//* TIdSipTransactionReceiveRequestMethod                                      *
+//* TIdSipTransactionListenerReceiveRequestMethod                              *
 //******************************************************************************
-//* TIdSipTransactionReceiveRequestMethod Public methods ***********************
+//* TIdSipTransactionListenerReceiveRequestMethod Public methods ***************
 
-procedure TIdSipTransactionReceiveRequestMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionListenerReceiveRequestMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionListener).OnReceiveRequest(Self.Request,
                                                           Self.Transaction,
@@ -2620,11 +2620,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionReceiveResponseMethod                                     *
+//* TIdSipTransactionListenerReceiveResponseMethod                             *
 //******************************************************************************
-//* TIdSipTransactionReceiveResponseMethod Public methods **********************
+//* TIdSipTransactionListenerReceiveResponseMethod Public methods **************
 
-procedure TIdSipTransactionReceiveResponseMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionListenerReceiveResponseMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionListener).OnReceiveResponse(Self.Response,
                                                            Self.Transaction,
@@ -2632,11 +2632,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipTransactionTerminatedMethod                                          *
+//* TIdSipTransactionListenerTerminatedMethod                                  *
 //******************************************************************************
-//* TIdSipTransactionTerminatedMethod Public methods ***************************
+//* TIdSipTransactionListenerTerminatedMethod Public methods *******************
 
-procedure TIdSipTransactionTerminatedMethod.Run(const Subject: IInterface);
+procedure TIdSipTransactionListenerTerminatedMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipTransactionListener).OnTerminated(Self.Transaction);
 end;
