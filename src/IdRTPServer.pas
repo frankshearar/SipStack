@@ -28,6 +28,14 @@ type
   // Typically, you create an instance of me, and then reference the Session.
   //
   // SendPacket provides a service to the Session. Don't use it directly.
+  //
+  // When I receive an RTCP packet, I notify my listeners (as you might expect).
+  // However, when I receive a compound RTCP packet, I present the contents of
+  // that packet one at a time to my listeners. In other words, if I receive
+  // a compound packet containing an SR, an RR and an SDES, then my listeners
+  // will see first an SR, then an RR, then an SDES, with no apparent connection
+  // between the packets other than them having arrived on the same binding. This
+  // can work because the packets will all share the same SSRC.
   TIdRTPServer = class(TIdUDPServer,
                        IIdAbstractRTPPeer)
   private
@@ -148,11 +156,26 @@ end;
 
 procedure TIdRTPServer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                              Binding: TIdSocketHandle);
+var
+  Compound: TIdCompoundRTCPPacket;
+  I:        Integer;
 begin
-  Self.Peer.NotifyListenersOfRTCP(Packet, Binding);
+  if Packet is TIdCompoundRTCPPacket then begin
+    Compound := Packet as TIdCompoundRTCPPacket;
 
-  if Assigned(Self.OnRTCPRead) then
-    Self.OnRTCPRead(Self, Packet, Binding);
+    for I := 0 to Compound.PacketCount - 1 do begin
+      Self.Peer.NotifyListenersOfRTCP(Compound.PacketAt(I), Binding);
+
+      if Assigned(Self.OnRTCPRead) then
+        Self.OnRTCPRead(Self, Compound.PacketAt(I), Binding);
+    end;
+  end
+  else begin
+    Self.Peer.NotifyListenersOfRTCP(Packet, Binding);
+
+    if Assigned(Self.OnRTCPRead) then
+      Self.OnRTCPRead(Self, Packet, Binding);
+  end;
 end;
 
 procedure TIdRTPServer.NotifyListenersOfRTP(Packet: TIdRTPPacket;

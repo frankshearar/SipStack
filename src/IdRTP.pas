@@ -289,13 +289,19 @@ type
   TIdRTPSession = class;
 
   // Note that my Length property says how many 32-bit words (-1) I contain.
-  // IT IS NOT AN OCTET-BASED LENGTH.
+  // IT DOES NOT COUNT OCTETS.
+  // We make Length a read/write property because if you want to pad a packet,
+  // you can specify the length explicitly.
   TIdRTPBasePacket = class(TPersistent)
   private
-    fHasPadding: Boolean;
-    fLength:     Word;
-    fSyncSrcID:  Cardinal;
-    fVersion:    TIdRTPVersion;
+    fHasPadding:        Boolean;
+    fLength:            Word;
+    fSyncSrcID:         Cardinal;
+    fVersion:           TIdRTPVersion;
+    LengthSetManually:  Boolean;
+
+    function  GetLength: Word;
+    procedure SetLength(const Value: Word);
   protected
     function  GetSyncSrcID: Cardinal; virtual;
     procedure PrintPadding(Dest: TStream);
@@ -314,7 +320,7 @@ type
     function  RealLength: Word; virtual; abstract;
 
     property HasPadding: Boolean       read fHasPadding write fHasPadding;
-    property Length:     Word          read fLength write fLength;
+    property Length:     Word          read GetLength write SetLength;
     property SyncSrcID:  Cardinal      read GetSyncSrcID write SetSyncSrcID;
     property Version:    TIdRTPVersion read fVersion write fVersion;
   end;
@@ -602,6 +608,7 @@ type
 
     function  GetSourceCount: TIdRTCPSourceCount;
     function  GetSource(Index: TIdRTCPSourceCount): Cardinal;
+    procedure PrintReason(Dest: TStream);
     procedure ReadReasonPadding(Src: TStream);
     procedure SetReason(const Value: String);
     procedure SetSource(Index: TIdRTCPSourceCount;
@@ -1109,6 +1116,7 @@ procedure ReadNTPTimestamp(Src: TStream; var Timestamp: TIdNTPTimestamp);
 function  ReadRemainderOfStream(Src: TStream): String;
 function  ReadString(Src: TStream; Length: Cardinal): String;
 function  ReadWord(Src: TStream): Word;
+function  RoundUpToMultipleOfFour(Input: Cardinal): Cardinal;
 function  TwosComplement(N: Int64): Int64;
 procedure WriteByte(Dest: TStream; Value: Byte);
 procedure WriteCardinal(Dest: TStream; Value: Cardinal);
@@ -1282,7 +1290,7 @@ var
 begin
   // NTP zero time = 1900/01/01 00:00:00. Since we're working with fractions
   // of a second though we don't care that DT might be before this time.
-  
+
   PartOfOneSecond := MilliSecondOfTheSecond(DT)/1000;
   Result          := 0;
   Divisor         := 2;
@@ -1295,7 +1303,7 @@ begin
       Result := Result or FractionBit;
       PartOfOneSecond := PartOfOneSecond - Fraction;
     end;
-    
+
     FractionBit := FractionBit div 2;
     Divisor := MultiplyCardinal(2, Divisor);
   end;
@@ -1479,6 +1487,14 @@ begin
     raise EStreamTooShort.Create('ReadWord');
 
   Result := NtoHS(Result);
+end;
+
+function RoundUpToMultipleOfFour(Input: Cardinal): Cardinal;
+begin
+  if ((Input mod 4) <> 0) then
+    Inc(Input, 4);
+
+  Result := Input - (Input mod 4);
 end;
 
 function TwosComplement(N: Int64): Int64;
@@ -1971,8 +1987,7 @@ function TIdRTPProfile.EncodingFor(EncodingName: String): TIdRTPPayload;
 var
   I: Integer;
 begin
-  // EncodingName must be a full encoding name - T140/1000, or L16/44100/2,
-  // etc.
+  // You must use a full EncodingName - T140/1000, or L16/44100/2, etc.
   Result := Self.NullEncoding;
   I := Low(Self.Encodings);
   while (I <= High(Self.Encodings)) and Result.IsNull do
@@ -2302,7 +2317,10 @@ end;
 
 constructor TIdRTPBasePacket.Create;
 begin
+  inherited Create;
+  
   Self.Version := RFC3550Version;
+  Self.LengthSetManually := false;
 end;
 
 procedure TIdRTPBasePacket.Assign(Src: TPersistent);
@@ -2368,6 +2386,25 @@ begin
   fSyncSrcID := Value;
 end;
 
+//* TIdRTPBasePacket Private methods *******************************************
+
+function TIdRTPBasePacket.GetLength: Word;
+begin
+  if Self.LengthSetManually then
+    Result := Self.fLength
+  else begin
+    Result := RoundUpToMultipleOfFour(Self.RealLength) div 4;
+    Dec(Result);
+  end;
+end;
+
+procedure TIdRTPBasePacket.SetLength(const Value: Word);
+begin
+  Self.LengthSetManually := true;
+
+  Self.fLength := Value;
+end;
+
 //******************************************************************************
 //* TIdRTPPacket                                                               *
 //******************************************************************************
@@ -2414,7 +2451,7 @@ var
 begin
   // Return an array with all the source identifiers mentioned in this packet.
   // This boils down to the SSRC of the sender + the set of CSRCs
-  SetLength(Result, Self.CsrcCount + 1);
+  System.SetLength(Result, Self.CsrcCount + 1);
   Result[0] := Self.SyncSrcID;
 
   for I := 0 to Self.CsrcCount - 1 do
@@ -2605,7 +2642,7 @@ procedure TIdRTPPacket.SetCsrcCount(Value: TIdRTPCsrcCount);
 begin
   fCsrcCount := Value;
 
-  SetLength(fCsrcIDs, Value);
+  System.SetLength(fCsrcIDs, Value);
 end;
 
 procedure TIdRTPPacket.SetCsrcID(Index: TIdRTPCsrcCount;
@@ -2703,7 +2740,7 @@ function TIdRTCPReceiverReport.GetAllSrcIDs: TCardinalDynArray;
 var
   I, J: Integer;
 begin
-  SetLength(Result, Self.ReceptionReportCount + 1);
+  System.SetLength(Result, Self.ReceptionReportCount + 1);
   Result[Low(Result)] := Self.SyncSrcID;
 
   J := Low(Result) + 1;
@@ -2832,7 +2869,7 @@ end;
 procedure TIdRTCPReceiverReport.SetReceptionReportCount(Value: TIdRTCPReceptionCount);
 begin
   Self.ClearReportBlocks;
-  SetLength(fReceptionReports, Value);
+  System.SetLength(fReceptionReports, Value);
   Self.ReInitialiseReportBlocks;
 end;
 
@@ -3268,7 +3305,7 @@ function TIdRTCPSourceDescription.GetAllSrcIDs: TCardinalDynArray;
 var
   I, J: Integer;
 begin
-  SetLength(Result, Self.ChunkCount);
+  System.SetLength(Result, Self.ChunkCount);
 
   J := Low(Result);
   for I := 0 to Self.ChunkCount - 1 do begin
@@ -3382,7 +3419,7 @@ function TIdRTCPBye.GetAllSrcIDs: TCardinalDynArray;
 var
   I, J: Integer;
 begin
-  SetLength(Result, Self.SourceCount);
+  System.SetLength(Result, Self.SourceCount);
 
   J := Low(Result);
   for I := 0 to Self.SourceCount - 1 do begin
@@ -3411,10 +3448,8 @@ begin
   for I := 0 to Self.SourceCount - 1 do
     WriteCardinal(Dest, Self.Sources[I]);
 
-  if (Self.ReasonLength > 0) then begin
-    WriteByte(Dest, Self.ReasonLength);
-    WriteString(Dest, Self.Reason);
-  end;
+  if (Self.ReasonLength > 0) then
+    Self.PrintReason(Dest);
 
   if Self.HasPadding then
     Self.PrintPadding(Dest);
@@ -3482,6 +3517,17 @@ begin
   Result := fSources[Index];
 end;
 
+procedure TIdRTCPBye.PrintReason(Dest: TStream);
+var
+  I: Integer;
+begin
+  WriteByte(Dest, Self.ReasonLength);
+  WriteString(Dest, Self.Reason);
+
+  for I := Self.ReasonLength to RoundUpToMultipleOfFour(Self.ReasonLength) do
+    WriteByte(Dest, 0);
+end;
+
 procedure TIdRTCPBye.ReadReasonPadding(Src: TStream);
 var
   Mod4Length: Byte;
@@ -3509,7 +3555,7 @@ end;
 
 procedure TIdRTCPBye.SetSourceCount(Value: TIdRTCPSourceCount);
 begin
-  SetLength(fSources, Value);
+  System.SetLength(fSources, Value);
 end;
 
 function TIdRTCPBye.StreamHasReason: Boolean;

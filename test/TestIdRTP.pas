@@ -41,6 +41,7 @@ type
     procedure TestReadTimestamp;
     procedure TestReadString;
     procedure TestReadWord;
+    procedure TestRoundUpToMultipleOfFour;
     procedure TestTwosComplement;
     procedure TestWriteCardinal;
     procedure TestWriteString;
@@ -466,6 +467,7 @@ type
     procedure TestIsBye; override;
     procedure TestPrepareForTransmission;
     procedure TestPrintOnLength;
+    procedure TestPrintOnLengthAutomaticallyCalculated;
     procedure TestPrintOnMultipleSources;
     procedure TestPrintOnReason;
     procedure TestPrintOnSyncSrcId;
@@ -510,6 +512,7 @@ type
     procedure TestFirstPacket;
     procedure TestHasBye;
     procedure TestHasSourceDescription;
+    procedure TestIsBye;
     procedure TestIsRTCP;
     procedure TestIsRTP;
     procedure TestIsValidFirstPacketAnAppDef;
@@ -1322,6 +1325,16 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TestFunctions.TestRoundUpToMultipleOfFour;
+begin
+  CheckEquals(0, RoundUpToMultipleOfFour(0), '0');
+  CheckEquals(4, RoundUpToMultipleOfFour(1), '1');
+  CheckEquals(4, RoundUpToMultipleOfFour(2), '2');
+  CheckEquals(4, RoundUpToMultipleOfFour(3), '3');
+  CheckEquals(4, RoundUpToMultipleOfFour(4), '4');
+  CheckEquals(8, RoundUpToMultipleOfFour(5), '5');
 end;
 
 procedure TestFunctions.TestTwosComplement;
@@ -5435,6 +5448,28 @@ begin
   end;
 end;
 
+procedure TestTIdRTCPBye.TestPrintOnLengthAutomaticallyCalculated;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Bye.Reason := 'haha';
+    Self.Bye.PrintOn(S);
+
+    Check(Length(S.DataString) > 2, 'Too little output');
+    Check(Ord(S.DataString[3]) = 0,
+          'MSB of length');
+
+    CheckEquals(3,
+                Ord(S.DataString[4]),
+                'LSB of length');
+  finally
+    S.Free;
+  end;
+end;
+
+
 procedure TestTIdRTCPBye.TestPrintOnMultipleSources;
 var
   S: TStringStream;
@@ -5473,7 +5508,10 @@ begin
     Self.Bye.Reason := 'No reason';
     Self.Bye.PrintOn(S);
 
-    Check(Length(S.DataString) > (7 + SizeOf(Byte) + Length(Self.Bye.Reason)),
+    // We typecast to shut the compiler up - anyone seen a String with
+    // length < 0 lately?
+    Check(Cardinal(Length(S.DataString)) > (7 + SizeOf(Byte)
+                                + RoundUpToMultipleOfFour(Self.Bye.ReasonLength)),
           'Too little output');
 
     CheckEquals(Self.Bye.ReasonLength,
@@ -5481,9 +5519,15 @@ begin
                 'Reason length');
     CheckEquals(Self.Bye.Reason,
                 Copy(S.DataString,
-                     Length(S.DataString) - Length(Self.Bye.Reason) + 1,
-                     Length(S.DataString)),
+                     10,
+                     Self.Bye.ReasonLength),
                 'Reason');
+    CheckEquals(0,
+                Ord(S.DataString[Length(S.DataString) - 1]),
+                'Reason padding, first octet');
+    CheckEquals(0,
+                Ord(S.DataString[Length(S.DataString)]),
+                'Reason padding, second octet');
   finally
     S.Free;
   end;
@@ -5983,6 +6027,10 @@ begin
   Check(not Self.Packet.HasSourceDescription, 'One SR');
   Self.Packet.AddSourceDescription;
   Check(Self.Packet.HasSourceDescription, 'One SR, one SDES');
+end;
+
+procedure TestTIdCompoundRTCPPacket.TestIsBye;
+begin
 end;
 
 procedure TestTIdCompoundRTCPPacket.TestIsRTCP;
