@@ -35,6 +35,7 @@ uses
   IdSipMessage in 'src\IdSipMessage.pas',
   IdSipMockBindingDatabase in 'test\IdSipMockBindingDatabase.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
+  IdSipMockLocator in 'test\IdSipMockLocator.pas',
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',
   IdSipMockTransport in 'test\IdSipMockTransport.pas',
   IdSipProxy in 'src\IdSipProxy.pas',
