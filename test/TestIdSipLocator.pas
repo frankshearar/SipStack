@@ -96,15 +96,6 @@ type
     procedure TestWithoutNaptrWithSrv;
   end;
 
-  TestTIdSipLocator = class(TTestCase)
-  private
-    Loc: TIdSipLocator;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-  end;
-
   TestTIdSipMockLocator = class(TTestCase)
   private
     AOR: TIdUri;
@@ -223,7 +214,6 @@ begin
   Result.AddTest(TestTIdSipLocation.Suite);
   Result.AddTest(TestTIdSipLocations.Suite);
   Result.AddTest(TestTIdSipAbstractLocator.Suite);
-  Result.AddTest(TestTIdSipLocator.Suite);
   Result.AddTest(TestTIdSipMockLocator.Suite);
   Result.AddTest(TestTIdDomainNameRecord.Suite);
   Result.AddTest(TestTIdDomainNameRecords.Suite);
@@ -1294,28 +1284,6 @@ begin
     Locations.Free;
   end;
 end;
-
-
-//******************************************************************************
-//* TestTIdSipLocator                                                          *
-//******************************************************************************
-//* TestTIdSipLocator Public methods *******************************************
-
-procedure TestTIdSipLocator.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Loc := TIdSipLocator.Create;
-end;
-
-procedure TestTIdSipLocator.TearDown;
-begin
-  Self.Loc.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipLocator Published methods ****************************************
 
 //******************************************************************************
 //* TestTIdSipMockLocator                                                      *

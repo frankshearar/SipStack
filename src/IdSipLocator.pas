@@ -106,9 +106,9 @@ type
   TIdNaptrRecords = class;
   TIdSrvRecord = class;
 
-  // Given a SIP or SIPS URI, I return (using FindServersFor) a set of tuples of
-  // the form (transport, IP address, port) that you can use to send a SIP
-  // message.
+  // Given a SIP or SIPS URI, I return (using the FindServersFor methods) a set
+  // of tuples of the form (transport, IP address, port) that you can use to
+  // send a SIP message.
   TIdSipAbstractLocator = class(TObject)
   private
     procedure ClearOutUnwantedNaptrRecords(TargetUri: TIdUri;
@@ -155,11 +155,11 @@ type
                            NameRecords: TIdDomainNameRecords): String;
   end;
 
-  // I take an address-of-record SIP/SIPS URI and return a URL at which
-  // a server can take a call for the given address-of-record.
-  TIdSipLocator = class(TIdSipAbstractLocator)
-  end;
-
+  // I represent a name record of some sort. I might contain an A (RFC 1034) or
+  // AAAA (RFC 1886) records, or some future name record (like, perhaps, A6
+  // (RFC 2874).
+  //
+  // As you can see, I am a Value Object.
   TIdDomainNameRecord = class(TObject)
   private
     fDomain:     String;
@@ -193,7 +193,7 @@ type
   end;
 
   // cf RFCs 2915, 3401-3
-  // I represent a single NAPTR record.
+  // I represent a single NAPTR record. As you can see, I am a Value Object.
   //
   // My Value property gets its name from RFC 3401's nomenclature. in "classic
   // NAPTR" language it would be called "Replacement".
@@ -244,6 +244,14 @@ type
   end;
 
   // RFC 2782 defines SRV (service) records.
+  // RFC 2782 says that name servers supporting SRV RRs SHOULD return all
+  // A/AAAA records for the targets of each SRV RR. We support this with the
+  // NameRecords property.
+  //
+  // Note that while I aspire to be a Value Object, by NameRecords property
+  // is actually mutable. This might seem odd, but remember that the NameRecords
+  // have no bearing on my SRV RR - they're included as a convenience, a
+  // denormalisation for efficiency, if you like.
   TIdSrvRecord = class(TObject)
   private
     fDomain:      String;
