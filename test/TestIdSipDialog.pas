@@ -25,7 +25,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCreateAck;
     procedure TestCreateFromAnotherDialog;
+    procedure TestCreateOutboundDialog;
     procedure TestCreateRequestInDialog;
     procedure TestCreateRequestInDialogRouteSetEmpty;
     procedure TestCreateRequestInDialogRouteSetWithLrParam;
@@ -142,6 +144,22 @@ end;
 
 //* TestTIdSipDialog Published methods *****************************************
 
+procedure TestTIdSipDialog.TestCreateAck;
+var
+  Ack:        TIdSipRequest;
+  LocalSeqNo: Cardinal;
+begin
+  LocalSeqNo := Self.Dlg.LocalSequenceNo;
+  Ack := Self.Dlg.CreateAck;
+  try
+    CheckEquals(LocalSeqNo,
+                Self.Dlg.LocalSequenceNo,
+                'Sequence number must not change when generating an ACK');
+  finally
+    Ack.Free;
+  end;
+end;
+
 procedure TestTIdSipDialog.TestCreateFromAnotherDialog;
 var
   D: TIdSipDialog;
@@ -171,6 +189,42 @@ begin
           'RouteSet');
   finally
     D.Free;
+  end;
+end;
+
+procedure TestTIdSipDialog.TestCreateOutboundDialog;
+var
+  Expected: TIdSipHeaders;
+  I:        Integer;
+  OutDlg:   TIdSipDialog;
+begin
+  for I := 1 to 10 do
+    Self.Res.RecordRoute.Add(RecordRouteHeader).Value := '<sip:127.0.0.'
+                                                       + IntToStr(I) + '>';
+
+  Expected := TIdSipHeaders.Create;
+  try
+    Expected.AddInReverseOrder(Self.Res.RecordRoute);
+
+    OutDlg := TIdSipDialog.CreateOutboundDialog(Self.Req, Self.Res, false);
+    try
+      Check(not OutDlg.RouteSet.IsEmpty,
+            'No Record-Routes added from Response');
+
+      Expected.First;
+      OutDlg.RouteSet.First;
+      repeat
+        CheckEquals(Expected.CurrentHeader.Value,
+                    OutDlg.RouteSet.CurrentHeader.Value,
+                    'Route set differs');
+        Expected.Next;
+        OutDlg.RouteSet.Next;
+      until not Expected.HasNext;
+    finally
+      OutDlg.Free;
+    end;
+  finally
+    Expected.Free;
   end;
 end;
 

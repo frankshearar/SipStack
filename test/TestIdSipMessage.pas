@@ -61,6 +61,7 @@ type
     procedure TestSetCSeq;
     procedure TestSetFrom;
     procedure TestSetPath;
+    procedure TestSetRecordRoute;
     procedure TestSetSipVersion;
     procedure TestSetTo;
     procedure TestWillEstablishDialog;
@@ -110,10 +111,10 @@ type
     procedure TestIsOptions;
     procedure TestIsRegister;
     procedure TestIsRequest;
+    procedure TestMatchSipsakOptions;
     procedure TestNewRequestHasContentLength;
     procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
-    procedure TestSetRecordRoute;
     procedure TestSetRoute;
   end;
 
@@ -768,6 +769,30 @@ begin
       Self.Msg.Path := P;
 
       Check(Self.Msg.Path.Equals(P), 'Path not correctly set');
+    finally
+      P.Free;
+    end;
+  finally
+    H.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestSetRecordRoute;
+var
+  H: TIdSipHeaders;
+  P: TIdSipRecordRoutePath;
+begin
+  Self.Msg.AddHeader(RecordRouteHeader).Value := '<sip:gw1.leo-ix.org>';
+
+  H := TIdSipHeaders.Create;
+  try
+    H.Add(RecordRouteHeader).Value := '<sip:gw2.leo-ix.org>';
+    H.Add(RecordRouteHeader).Value := '<sip:gw3.leo-ix.org;lr>';
+    P := TIdSipRecordRoutePath.Create(H);
+    try
+      Self.Msg.RecordRoute := P;
+
+      Check(Self.Msg.RecordRoute.Equals(P), 'Path not correctly set');
     finally
       P.Free;
     end;
@@ -1558,6 +1583,35 @@ begin
   Check(Self.Request.IsRequest, 'IsRequest');
 end;
 
+procedure TestTIdSipRequest.TestMatchSipsakOptions;
+var
+  Options:  TIdSipRequest;
+begin
+  // Even though this message claims to conform to SIP/2.0, this SIP stack
+  // treats it as an RFC 2543 message because its Via branch doesn't begin with
+  // the SIP/2.0 magic cookie "z9hG4bk".
+  Options := TIdSipRequest.Create;
+  try
+    Options.Method := MethodOptions;
+    Options.RequestUri.Uri := 'sip:franks@192.168.0.254';
+    Options.AddHeader(ViaHeaderFull).Value  := 'SIP/2.0/UDP roke.angband.za.org:3442';
+    Options.From.Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ToHeader.Value := '<sip:franks@192.168.0.254>';
+    Options.CallID := '1631106896@roke.angband.za.org';
+    Options.CSeq.Value := '1 OPTIONS';
+    Options.AddHeader(ContactHeaderFull).Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ContentLength := 0;
+    Options.MaxForwards := 0;
+    Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
+
+    Check(Options.Match(Options),
+          'Even sipsak''s (malformed - look at the Via branch & Sip-Version!) '
+        + 'OPTIONS message should match itself!');
+  finally
+    Options.Free;
+  end;
+end;
+
 procedure TestTIdSipRequest.TestNewRequestHasContentLength;
 var
   R: TIdSipRequest;
@@ -1602,30 +1656,6 @@ begin
   CheckEquals(OrigMaxForwards + 1,
               Self.Request.MaxForwards,
               'Max-Forwards not set');
-end;
-
-procedure TestTIdSipRequest.TestSetRecordRoute;
-var
-  H: TIdSipHeaders;
-  P: TIdSipRecordRoutePath;
-begin
-  Self.Request.AddHeader(RecordRouteHeader).Value := '<sip:gw1.leo-ix.org>';
-
-  H := TIdSipHeaders.Create;
-  try
-    H.Add(RecordRouteHeader).Value := '<sip:gw2.leo-ix.org>';
-    H.Add(RecordRouteHeader).Value := '<sip:gw3.leo-ix.org;lr>';
-    P := TIdSipRecordRoutePath.Create(H);
-    try
-      Self.Request.RecordRoute := P;
-
-      Check(Self.Request.RecordRoute.Equals(P), 'Path not correctly set');
-    finally
-      P.Free;
-    end;
-  finally
-    H.Free;
-  end;
 end;
 
 procedure TestTIdSipRequest.TestSetRoute;

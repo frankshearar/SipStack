@@ -453,20 +453,24 @@ type
     procedure SetValue(const Value: String); override;
   end;
 
-  TIdSipProxyAuthenticateHeader = class(TIdSipHttpAuthHeader)
+  TIdSipAuthenticateHeader = class(TIdSipHttpAuthHeader)
   private
     function  GetDomain: String;
     function  GetStale: Boolean;
     procedure SetDomain(const Value: String);
     procedure SetStale(const Value: Boolean);
   protected
-    function GetName: String; override;
     function KnownResponse(const Name: String): Boolean; override;
   public
     procedure RemoveStaleResponse;
 
     property Domain: String  read GetDomain write SetDomain;
     property Stale:  Boolean read GetStale write SetStale;
+  end;
+
+  TIdSipProxyAuthenticateHeader = class(TIdSipAuthenticateHeader)
+  protected
+    function GetName: String; override;
   end;
 
   TIdSipAuthenticateInfoHeader = class(TIdSipHttpAuthHeader);
@@ -601,8 +605,7 @@ type
   TIdSipChallengeHeader = class(TIdSipHeader)
   end;
 
-  // We sublass TIdSipProxyAuthenticateHeader purely for code re-use
-  TIdSipWWWAuthenticateHeader = class(TIdSipProxyAuthenticateHeader)
+  TIdSipWWWAuthenticateHeader = class(TIdSipAuthenticateHeader)
   protected
     function GetName: String; override;
   end;
@@ -635,6 +638,7 @@ type
     function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
     procedure Add(Header: TIdSipHeader); overload; virtual; abstract;
     procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
+    procedure AddInReverseOrder(Headers: TIdSipHeaderList);
     function  AsString: String;
     procedure Clear; virtual; abstract;
     function  Count: Integer; virtual; abstract;
@@ -710,7 +714,6 @@ type
     function  Add(const HeaderName: String): TIdSipHeader; overload; override;
     procedure Add(Header: TIdSipHeader); overload; override;
     procedure Add(Headers: TIdSipHeaderList); overload; override;
-    procedure AddInReverseOrder(Headers: TIdSipHeadersFilter);
     procedure Clear; override;
     function  CurrentHeader: TIdSipHeader; override;
     procedure Delete(I: Integer);
@@ -783,11 +786,12 @@ type
 
   TIdSipMessage = class(TPersistent)
   private
-    fBody:       String;
-    fContacts:   TIdSipContacts;
-    fPath:       TIdSipViaPath;
-    fHeaders:    TIdSipHeaders;
-    fSIPVersion: String;
+    fBody:        String;
+    fContacts:    TIdSipContacts;
+    fPath:        TIdSipViaPath;
+    fRecordRoute: TIdSipRecordRoutePath;
+    fHeaders:     TIdSipHeaders;
+    fSIPVersion:  String;
 
     function  GetCallID: String;
     function  GetContentDisposition: TIdSipContentDispositionHeader;
@@ -809,6 +813,7 @@ type
     procedure SetCSeq(Value: TIdSipCSeqHeader);
     procedure SetFrom(Value: TIdSipFromHeader);
     procedure SetPath(Value: TIdSipViaPath);
+    procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
     procedure SetTo(Value: TIdSipToHeader);
   protected
     function FirstLine: String; virtual; abstract;
@@ -857,6 +862,7 @@ type
     property From:               TIdSipFromHeader               read GetFrom write SetFrom;
     property Headers:            TIdSipHeaders                  read fHeaders;
     property Path:               TIdSipViaPath                  read fPath write SetPath;
+    property RecordRoute:        TIdSipRecordRoutePath          read fRecordRoute write SetRecordRoute;
     property SIPVersion:         String                         read fSIPVersion write fSIPVersion;
     property ToHeader:           TIdSipToHeader                 read GetTo write SetTo;
   end;
@@ -866,15 +872,13 @@ type
   TIdSipRequest = class(TIdSipMessage)
   private
     fMethod:      String;
-    fRecordRoute: TIdSipRecordRoutePath;
     fRequestUri:  TIdSipURI;
     fRoute:       TIdSipRoutePath;
 
     function  GetMaxForwards: Byte;
-    function  MatchSip1Request(InitialRequest: TIdSipRequest): Boolean;
-    function  MatchSip2Request(InitialRequest: TIdSipRequest): Boolean;
+    function  MatchSipRFC2543Request(InitialRequest: TIdSipRequest): Boolean;
+    function  MatchSipRFC3261Request(InitialRequest: TIdSipRequest): Boolean;
     procedure SetMaxForwards(Value: Byte);
-    procedure SetRecordRoute(Value: TIdSipRecordRoutePath);
     procedure SetRequestUri(Value: TIdSipURI);
     procedure SetRoute(Value: TIdSipRoutePath);
   protected
@@ -910,7 +914,6 @@ type
 
     property MaxForwards: Byte                  read GetMaxForwards write SetMaxForwards;
     property Method:      String                read fMethod write fMethod;
-    property RecordRoute: TIdSipRecordRoutePath read fRecordRoute write SetRecordRoute;
     property RequestUri:  TIdSipURI             read fRequestUri write SetRequestUri;
     property Route:       TIdSipRoutePath       read fRoute write SetRoute;
   end;
@@ -3010,7 +3013,7 @@ end;
 
 function TIdSipContentDispositionHeader.IsSession: Boolean;
 begin
-  Result := IsEqual(Self.Handling, DispositionSession);
+  Result := IsEqual(Self.Value, DispositionSession);
 end;
 
 //* TIdSipContentDispositionHeader Protected methods ***************************
@@ -3238,23 +3241,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipProxyAuthenticateHeader                                              *
+//* TIdSipAuthenticateHeader                                                   *
 //******************************************************************************
-//* TIdSipProxyAuthenticateHeader Protected methods ****************************
+//* TIdSipAuthenticateHeader Public methods ************************************
 
-function TIdSipProxyAuthenticateHeader.GetName: String;
-begin
-  Result := ProxyAuthenticateHeader;
-end;
-
-function TIdSipProxyAuthenticateHeader.KnownResponse(const Name: String): Boolean;
-begin
-  Result := inherited KnownResponse(Name)
-         or (Name = DomainParam)
-         or (Name = StaleParam);
-end;
-
-procedure TIdSipProxyAuthenticateHeader.RemoveStaleResponse;
+procedure TIdSipAuthenticateHeader.RemoveStaleResponse;
 var
   Index: Integer;
 begin
@@ -3264,26 +3255,45 @@ begin
     Self.DigestResponses.Delete(Index);
 end;
 
-//* TIdSipProxyAuthenticateHeader Private methods ******************************
+//* TIdSipAuthenticateHeader Protected methods *********************************
 
-function TIdSipProxyAuthenticateHeader.GetDomain: String;
+function TIdSipAuthenticateHeader.KnownResponse(const Name: String): Boolean;
+begin
+  Result := inherited KnownResponse(Name)
+         or (Name = DomainParam)
+         or (Name = StaleParam);
+end;
+
+//* TIdSipAuthenticateHeader Private methods ***********************************
+
+function TIdSipAuthenticateHeader.GetDomain: String;
 begin
   Result := Self.DigestResponseValue(DomainParam);
 end;
 
-function TIdSipProxyAuthenticateHeader.GetStale: Boolean;
+function TIdSipAuthenticateHeader.GetStale: Boolean;
 begin
   Result := StrToBoolDef(Self.DigestResponseValue(StaleParam), false);
 end;
 
-procedure TIdSipProxyAuthenticateHeader.SetDomain(const Value: String);
+procedure TIdSipAuthenticateHeader.SetDomain(const Value: String);
 begin
   Self.DigestResponses.Values[DomainParam] := Value;
 end;
 
-procedure TIdSipProxyAuthenticateHeader.SetStale(const Value: Boolean);
+procedure TIdSipAuthenticateHeader.SetStale(const Value: Boolean);
 begin
     Self.DigestResponses.Values[StaleParam] := Lowercase(BoolToStr(Value));
+end;
+
+//******************************************************************************
+//* TIdSipProxyAuthenticateHeader                                              *
+//******************************************************************************
+//* TIdSipProxyAuthenticateHeader Protected methods ****************************
+
+function TIdSipProxyAuthenticateHeader.GetName: String;
+begin
+  Result := ProxyAuthenticateHeader;
 end;
 
 //******************************************************************************
@@ -3906,6 +3916,14 @@ begin
   Result := Trim(Fetch(Header, ':'));
 end;
 
+procedure TIdSipHeaderList.AddInReverseOrder(Headers: TIdSipHeaderList);
+var
+  I: Integer;
+begin
+  for I := Headers.Count - 1 downto 0 do
+    Self.Add(Headers.Items[I]);
+end;
+
 function TIdSipHeaderList.AsString: String;
 begin
   Result := '';
@@ -4284,14 +4302,6 @@ begin
   end;
 end;
 
-procedure TIdSipHeaders.AddInReverseOrder(Headers: TIdSipHeadersFilter);
-var
-  I: Integer;
-begin
-  for I := Headers.Count - 1 downto 0 do
-    Self.Add(Headers.Items[I]);
-end;
-
 procedure TIdSipHeaders.Clear;
 begin
   Self.List.Clear;
@@ -4588,16 +4598,19 @@ begin
   inherited Create;
 
   fHeaders := TIdSipHeaders.Create;
-  fPath := TIdSipViaPath.Create(Self.Headers);
-  fContacts := TIdSipContacts.Create(Self.Headers);
+
+  fContacts    := TIdSipContacts.Create(Self.Headers);
+  fPath        := TIdSipViaPath.Create(Self.Headers);
+  fRecordRoute := TIdSipRecordRoutePath.Create(Self.Headers);
 
   Self.SIPVersion  := IdSipConsts.SIPVersion;
 end;
 
 destructor TIdSipMessage.Destroy;
 begin
-  Self.Contacts.Free;
+  Self.RecordRoute.Free;
   Self.Path.Free;
+  Self.Contacts.Free;
   Self.Headers.Free;
 
   inherited Destroy;
@@ -4914,6 +4927,12 @@ begin
   Self.Path.Add(Value);
 end;
 
+procedure TIdSipMessage.SetRecordRoute(Value: TIdSipRecordRoutePath);
+begin
+  Self.RecordRoute.Clear;
+  Self.RecordRoute.Add(Value);
+end;
+
 procedure TIdSipMessage.SetTo(Value: TIdSipToHeader);
 begin
   Self.FirstHeader(ToHeaderFull).Assign(Value);
@@ -4928,7 +4947,6 @@ constructor TIdSipRequest.Create;
 begin
   inherited Create;
 
-  fRecordRoute := TIdSipRecordRoutePath.Create(Self.Headers);
   fRequestUri  := TIdSipURI.Create('');
   fRoute       := TIdSipRoutePath.Create(Self.Headers);
 
@@ -4940,7 +4958,6 @@ destructor TIdSipRequest.Destroy;
 begin
   Self.Route.Free;
   Self.RequestUri.Free;
-  Self.RecordRoute.Free;
 
   inherited Destroy;
 end;
@@ -4951,45 +4968,30 @@ begin
 end;
 
 function TIdSipRequest.AckFor(Response: TIdSipResponse): TIdSipRequest;
-var
-  Routes: TIdSipRoutePath;
 begin
   Result := TIdSipRequest.Create;
   try
-    if Response.WillEstablishDialog(Self) then begin
-      Result.RequestUri := Self.RequestUri;
-      Result.CallID   := Response.CallID;
-      Result.CSeq     := Response.CSeq;
-      Result.From     := Self.From;
-      Result.Method   := MethodAck;
-      Result.ToHeader := Response.ToHeader;
+    Result.SIPVersion  := Self.SIPVersion;
 
-      Result.CSeq.Method := Result.Method;
+    Result.CallID          := Self.CallID;
+    Result.CSeq.Method     := MethodAck;
+    Result.CSeq.SequenceNo := Response.CSeq.SequenceNo;
+    Result.From            := Self.From;
+    Result.MaxForwards     := Result.DefaultMaxForwards;
+    Result.Method          := MethodAck;
+    Result.RequestUri      := Self.RequestUri;
+    Result.ToHeader        := Response.ToHeader;
+
+    Result.AddHeaders(Self.Route);
+
+    if Response.WillEstablishDialog(Self) then begin
       Result.AddHeader(Response.LastHop);
       Result.LastHop.Branch := GRandomNumber.NextSipUserAgentTag;
-
-      Result.AddHeaders(Self.Route);
     end
     else begin
-      Result.Method          := MethodAck;
-      Result.RequestUri      := Self.RequestUri;
-      Result.SIPVersion      := Self.SIPVersion;
-      Result.CallID          := Self.CallID;
-      Result.From            := Self.From;
-      Result.MaxForwards     := Result.DefaultMaxForwards;
-      Result.ToHeader        := Response.ToHeader;
       Result.Path.Add(Self.LastHop);
-      Result.CSeq.SequenceNo := Self.CSeq.SequenceNo;
-      Result.CSeq.Method     := MethodAck;
-      Result.ContentLength   := 0;
-      Result.Body            := '';
-
-      Routes := TIdSipRoutePath.Create(Response.Headers);
-      try
-        Result.AddHeaders(Routes);
-      finally
-        Routes.Free;
-      end;
+      Result.ContentLength := 0;
+      Result.Body          := '';
     end;
 
     if Self.HasHeader(AuthorizationHeader) then
@@ -5163,9 +5165,9 @@ function TIdSipRequest.MatchRequest(InitialRequest: TIdSipRequest): Boolean;
 begin
   // cf. RFC 3261 section 17.2.3
   if Self.LastHop.IsRFC3261Branch then
-    Result := Self.MatchSip2Request(InitialRequest)
+    Result := Self.MatchSipRFC3261Request(InitialRequest)
   else
-    Result := Self.MatchSip1Request(InitialRequest)
+    Result := Self.MatchSipRFC2543Request(InitialRequest)
 end;
 
 //* TIdSipRequest Private methods **********************************************
@@ -5178,7 +5180,7 @@ begin
   Result := StrToInt(Self.FirstHeader(MaxForwardsHeader).Value);
 end;
 
-function TIdSipRequest.MatchSip1Request(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipRequest.MatchSipRFC2543Request(InitialRequest: TIdSipRequest): Boolean;
 begin
   // NOTE BENE:
   // This DOES NOT consistitute a full match! If Self.IsAck then we also
@@ -5199,10 +5201,15 @@ begin
          and (Self.CSeq.SequenceNo = InitialRequest.CSeq.SequenceNo)
          and  Self.LastHop.Equals(InitialRequest.LastHop)
   else
-    Result := false;
+    Result := Self.RequestUri.EqualParameters(InitialRequest.RequestUri)
+         and (Self.ToHeader.Tag = InitialRequest.ToHeader.Tag)
+         and (Self.From.Tag = InitialRequest.From.Tag)
+         and (Self.CallID = InitialRequest.CallID)
+         and  Self.CSeq.Equals(InitialRequest.CSeq)
+         and  Self.LastHop.Equals(InitialRequest.LastHop);
 end;
 
-function TIdSipRequest.MatchSip2Request(InitialRequest: TIdSipRequest): Boolean;
+function TIdSipRequest.MatchSipRFC3261Request(InitialRequest: TIdSipRequest): Boolean;
 begin
   Result := (Self.LastHop.Branch = InitialRequest.LastHop.Branch)
              and (Self.LastHop.SentBy = InitialRequest.LastHop.SentBy);
@@ -5218,12 +5225,6 @@ end;
 procedure TIdSipRequest.SetMaxForwards(Value: Byte);
 begin
   Self.FirstHeader(MaxForwardsHeader).Value := IntToStr(Value);
-end;
-
-procedure TIdSipRequest.SetRecordRoute(Value: TIdSipRecordRoutePath);
-begin
-  Self.RecordRoute.Clear;
-  Self.RecordRoute.Add(Value);
 end;
 
 procedure TIdSipRequest.SetRequestUri(Value: TIdSipURI);
@@ -6021,7 +6022,10 @@ end;
 
 function TIdSipParser.QueryInterface(const IID: TGUID; out Obj): HResult;
 begin
-  Result := 0;
+  if GetInterface(IID, Obj) then
+    Result := S_OK
+  else
+    Result := E_NOINTERFACE;
 end;
 
 function TIdSipParser._AddRef: Integer;

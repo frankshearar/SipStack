@@ -135,6 +135,7 @@ type
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
+    procedure TestReceiveOptions;
     procedure TestReceiveResponseWithMultipleVias;
     procedure TestRemoveObserver;
     procedure TestRemoveAction;
@@ -152,14 +153,20 @@ type
     procedure TestSetContactWildCard;
     procedure TestSetFrom;
     procedure TestSetFromMailto;
-    procedure TestHangUpAllCalls;
+    procedure TestTerminateAllCalls;
+    procedure TestViaMatchesTransportParameter;
   end;
 
-  TestTIdSipAction = class(TTestCaseTU)
+  TestTIdSipAction = class(TTestCaseTU,
+                           IIdSipActionListener)
   protected
     ActionFailed: Boolean;
+    Challenged:   Boolean;
 
     function  CreateAction: TIdSipAction; virtual; abstract;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Challenge: TIdSipResponse;
+                                        var Password: String);
     procedure SimulateRejectProxyUnauthorized;
     procedure SimulateRemoteBadExtensionResponse;
     procedure SimulateRemoteMovedPermanently(const SipUrl: String);
@@ -263,13 +270,21 @@ type
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure SimulateForbidden;
-    procedure SimulateRejectUnauthorized(Session: TIdSipSession);
+    procedure SimulateRejectProxyUnauthorized;
+    procedure SimulateRejectUnauthorized;
+    procedure SimulateRemoteOKWithRecordRoute;
     procedure SimulateRemoteReInvite(Session: TIdSipSession);
   protected
+    SDP: String;
+
     function CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
   published
+    procedure TestAck;
+    procedure TestAckFromRecordRouteResponse;
+    procedure TestAckWithAuthorization;
+    procedure TestAckWithProxyAuthorization;
     procedure TestCall;
     procedure TestCallTwice;
     procedure TestCallRemoteRefusal;
@@ -277,6 +292,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestCallWithOffer;
     procedure TestFork;
     procedure TestHangUp;
     procedure TestIsInboundCall;
@@ -289,11 +305,17 @@ type
     procedure TestTerminateUnestablishedSession;
   end;
 
+  TIdModifyAuthHeaderProc = procedure(Auth: TIdSipAuthenticateHeader) of object;
+
   TestProxyAuthentication = class(TestTIdSipSession,
                                   IIdSipSessionListener)
   private
+    Opaque:   String;
     Password: String;
     Session:  TIdSipOutboundSession;
+
+    procedure AddOpaque(Auth: TIdSipAuthenticateHeader);
+    procedure AddQop(Auth: TIdSipAuthenticateHeader);
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse;
                                         var Password: String);
@@ -302,16 +324,19 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
+    procedure SimulateRejectProxyUnauthorized(Modify: TIdModifyAuthHeaderProc); overload;
+    procedure SimulateRejectProxyUnauthorizedWithOpaque;
     procedure SimulateRejectProxyUnauthorizedWithQop;
   protected
     function CreateAction: TIdSipAction; override;
   public
     procedure SetUp; override;
   published
-    procedure TestMultipleProxyAuthenticationAffectsNonceCount;
-    procedure TestProxyAuthentication;
-    procedure TestProxyAuthenticationWithFailure;
-    procedure TestProxyAuthenticationWithQopAuth;
+    procedure TestFailedAuthentication;
+    procedure TestMultipleAuthenticationAffectsNonceCount;
+    procedure TestOpaque;
+    procedure TestQopAuth;
+    procedure TestSuccessfulAuthentication;
   end;
 
   TestBugHunt = class(TThreadingTestCase,
@@ -393,7 +418,6 @@ type
   TestTIdSipOutboundRegistration = class(TestTIdSipRegistration,
                                          IIdSipRegistrationListener)
   private
-    Challenged:  Boolean;
     Contacts:    TIdSipContacts;
     MinExpires:  Cardinal;
     Reg:         TIdSipOutboundRegistration;
@@ -402,9 +426,6 @@ type
     Succeeded:   Boolean;
 
     function  DigestForName(const Password: String): String;
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Challenge: TIdSipResponse;
-                                        var Password: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -1904,6 +1925,36 @@ begin
   end;
 end;
 
+procedure TestTIdSipUserAgentCore.TestReceiveOptions;
+var
+  Options:  TIdSipRequest;
+  Response: TIdSipResponse;
+begin
+  Options := TIdSipRequest.Create;
+  try
+    Options.Method := MethodOptions;
+    Options.RequestUri.Uri := 'sip:franks@192.168.0.254';
+    Options.AddHeader(ViaHeaderFull).Value  := 'SIP/2.0/UDP roke.angband.za.org:3442';
+    Options.From.Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ToHeader.Value := '<sip:franks@192.168.0.254>';
+    Options.CallID := '1631106896@roke.angband.za.org';
+    Options.CSeq.Value := '1 OPTIONS';
+    Options.AddHeader(ContactHeaderFull).Value := '<sip:sipsak@roke.angband.za.org:3442>';
+    Options.ContentLength := 0;
+    Options.MaxForwards := 0;
+    Options.AddHeader(UserAgentHeader).Value := 'sipsak v0.8.1';
+
+    Self.Dispatcher.Transport.FireOnRequest(Options);
+
+    Response := Self.Dispatcher.Transport.LastResponse;
+    CheckEquals(SIPOK,
+                Response.StatusCode,
+                'We should accept all OPTIONS');
+  finally
+    Options.Free;
+  end;
+end;
+
 procedure TestTIdSipUserAgentCore.TestReceiveResponseWithMultipleVias;
 var
   Response: TIdSipResponse;
@@ -2245,7 +2296,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipUserAgentCore.TestHangUpAllCalls;
+procedure TestTIdSipUserAgentCore.TestTerminateAllCalls;
 var
   FirstSession:  TIdSipInboundSession;
   SecondSession: TIdSipInboundSession;
@@ -2268,10 +2319,26 @@ begin
   CheckEquals(2,
               Self.Core.SessionCount,
               'Session count');
-  Self.Core.HangUpAllCalls;
+  Self.Core.TerminateAllCalls;
   CheckEquals(0,
               Self.Core.SessionCount,
-              'Session count after HangUpAllCalls');
+              'Session count after TerminateAllCalls');
+end;
+
+procedure TestTIdSipUserAgentCore.TestViaMatchesTransportParameter;
+var
+  Trans: TIdSipTransportType;
+begin
+  for Trans := Low(TIdSipTransportType) to High(TIdSipTransportType) do begin
+    Self.Dispatcher.Transport.TransportType := Trans;
+    Self.Destination.Address.Transport := TransportToStr(Trans);
+    Self.Core.Call(Self.Destination, '', '');
+
+    CheckEquals(TransportToStr(Trans),
+                TransportToStr(Self.Dispatcher.Transport.LastRequest.LastHop.Transport),
+                'Transport parameter = '
+              + Self.Destination.Address.Transport);
+  end;
 end;
 
 //******************************************************************************
@@ -2284,9 +2351,17 @@ begin
   inherited SetUp;
 
   Self.ActionFailed := false;
+  Self.Challenged   := false;
 end;
 
 //* TestTIdSipAction Protected methods *****************************************
+
+procedure TestTIdSipAction.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                     Challenge: TIdSipResponse;
+                                                      var Password: String);
+begin
+  Self.Challenged := true;
+end;
 
 procedure TestTIdSipAction.SimulateRejectProxyUnauthorized;
 var
@@ -2453,7 +2528,7 @@ end;
 
 procedure TestTIdSipInboundSession.TearDown;
 begin
-  Self.Core.HangUpAllCalls;
+  Self.Core.TerminateAllCalls;
   Self.SimpleSdp.Free;
   Self.MultiStreamSdp.Free;
 
@@ -2993,9 +3068,15 @@ procedure TestTIdSipOutboundSession.SetUp;
 begin
   inherited SetUp;
 
+  SDP :='v=0'#13#10
+      + 'o=franks 123456 123456 IN IP4 127.0.0.1'#13#10
+      + 's=-'#13#10
+      + 'c=IN IP4 127.0.0.1'#13#10
+      + 'm=audio 8000 RTP/AVP 0'#13#10;
+
   Self.Core.AddUserAgentListener(Self);
 
-  Self.Session := Self.Core.Call(Self.Destination, '', '');
+  Self.Session := Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
   Self.Session.AddSessionListener(Self);
 
   Self.OnDroppedResponse      := false;
@@ -3059,7 +3140,22 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.SimulateRejectUnauthorized(Session: TIdSipSession);
+procedure TestTIdSipOutboundSession.SimulateRejectProxyUnauthorized;
+var
+  Challenge: TIdSipResponse;
+begin
+  Challenge := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                           SIPProxyAuthenticationRequired);
+  try
+    Challenge.AddHeader(ProxyAuthenticateHeader);
+    Challenge.AddHeader(AuthenticationInfoHeader);
+    Self.Dispatcher.Transport.FireOnResponse(Challenge);
+  finally
+    Challenge.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.SimulateRejectUnauthorized;
 var
   Challenge: TIdSipResponse;
 begin
@@ -3074,6 +3170,20 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.SimulateRemoteOKWithRecordRoute;
+var
+  Response: TIdSipResponse;
+begin
+  Response := TIdSipResponse.InResponseTo(Self.Dispatcher.Transport.LastRequest,
+                                          SIPOK);
+  try
+    Response.RecordRoute.Add(RecordRouteHeader).Value := '<sip:127.0.0.1>';
+    Self.Dispatcher.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.SimulateRemoteReInvite(Session: TIdSipSession);
 begin
   Self.Invite.LastHop.Branch  := Self.Invite.LastHop.Branch + '1';
@@ -3085,6 +3195,102 @@ begin
 end;
 
 //* TestTIdSipOutboundSession Published methods ********************************
+
+procedure TestTIdSipOutboundSession.TestAck;
+var
+  Ack:    TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    Self.SimulateRemoteOK;
+
+    Ack := Self.Dispatcher.Transport.LastACK;
+
+    CheckEquals(Invite.CSeq.SequenceNo,
+                Ack.CSeq.SequenceNo,
+                'CSeq sequence number');
+
+    CheckEquals(Invite.Body,
+                Ack.Body,
+                'Offer');
+    CheckEquals(Length(Ack.Body),
+                Ack.ContentLength,
+                'Content-Length');
+    CheckEquals(Invite.ContentType,
+                Ack.ContentType,
+                'Content-Type');
+    CheckEquals(Invite.ContentDisposition.Value,
+                Ack.ContentDisposition.Value,
+                'Content-Disposition');
+    Check(Ack.ContentDisposition.IsSession,
+          'Content-Disposition handling');
+
+    // check credentials!
+  finally
+    Invite.Destroy;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestAckFromRecordRouteResponse;
+var
+  Ack: TIdSipRequest;
+begin
+  Self.SimulateRemoteOKWithRecordRoute;
+  Ack := Self.Dispatcher.Transport.LastACK;
+
+  Check(not Ack.Route.IsEmpty, 'No Route headers');
+end;
+
+procedure TestTIdSipOutboundSession.TestAckWithAuthorization;
+var
+  Ack:    TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  Self.SimulateRejectUnauthorized;
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    Self.SimulateRemoteOK;
+
+    Ack := Self.Dispatcher.Transport.LastRequest;
+
+    Check(Ack.HasAuthorization, 'ACK lacks Authorization header');
+    CheckEquals(Invite.FirstAuthorization.FullValue,
+                Ack.FirstAuthorization.FullValue,
+                'Authorization');
+  finally
+    Invite.Free;
+  end;
+end;
+
+procedure TestTIdSipOutboundSession.TestAckWithProxyAuthorization;
+var
+  Ack:    TIdSipRequest;
+  Invite: TIdSipRequest;
+begin
+  Self.SimulateRejectProxyUnauthorized;
+
+  Invite := TIdSipRequest.Create;
+  try
+    Invite.Assign(Self.Dispatcher.Transport.LastRequest);
+
+    Self.SimulateRemoteOK;
+
+    Ack := Self.Dispatcher.Transport.LastRequest;
+
+    Check(Ack.HasProxyAuthorization, 'ACK lacks Proxy-Authorization header');
+    CheckEquals(Invite.FirstProxyAuthorization.FullValue,
+                Ack.FirstProxyAuthorization.FullValue,
+                'Proxy-Authorization');
+  finally
+    Invite.Free;
+  end;
+end;
 
 procedure TestTIdSipOutboundSession.TestCall;
 var
@@ -3253,6 +3459,13 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundSession.TestCallWithOffer;
+begin
+  Self.Core.Call(Self.Destination, Self.SDP, SdpMimeType);
+  Check(Self.Dispatcher.Transport.LastRequest.ContentDisposition.IsSession,
+        'Content-Disposition');
+end;
+
 procedure TestTIdSipOutboundSession.TestFork;
 var
   Fork: TIdSipOutboundSession;
@@ -3383,7 +3596,7 @@ begin
               'CSeq numerical portion');
   CheckEquals(MethodAck,
               Ack.CSeq.Method,
-              'ACK must have an INVITE method in the CSeq');
+              'CSeq method');
 end;
 
 procedure TestTIdSipOutboundSession.TestReceiveFinalResponseSendsAck;
@@ -3448,6 +3661,7 @@ begin
   Self.Session := Self.Core.Call(Self.Destination, '', '');
   Self.Session.AddSessionListener(Self);
 
+  Self.Opaque := 'decafbadcafebabe';
   Self.Password := 'f00L';
 end;
 
@@ -3460,6 +3674,17 @@ begin
 end;
 
 //* TestProxyAuthentication Private methods ************************************
+
+procedure TestProxyAuthentication.AddOpaque(Auth: TIdSipAuthenticateHeader);
+begin
+  Auth.Opaque := Self.Opaque;
+end;
+
+procedure TestProxyAuthentication.AddQop(Auth: TIdSipAuthenticateHeader);
+begin
+  Auth.Nonce := 'bfa807909eb7d5b960d7b23de1dc620ed82f40b5';
+  Auth.Qop   := QopAuth;
+end;
 
 procedure TestProxyAuthentication.OnAuthenticationChallenge(Action: TIdSipAction;
                                                             Challenge: TIdSipResponse;
@@ -3482,7 +3707,7 @@ procedure TestProxyAuthentication.OnModifiedSession(Session: TIdSipSession;
 begin
 end;
 
-procedure TestProxyAuthentication.SimulateRejectProxyUnauthorizedWithQop;
+procedure TestProxyAuthentication.SimulateRejectProxyUnauthorized(Modify: TIdModifyAuthHeaderProc);
 var
   Challenge: TIdSipResponse;
   Auth:      TIdSipProxyAuthenticateHeader;
@@ -3494,9 +3719,9 @@ begin
 
     Auth := Challenge.FirstProxyAuthenticate;
     Auth.AuthorizationScheme := DigestAuthorizationScheme;
-    Auth.Nonce               := 'bfa807909eb7d5b960d7b23de1dc620ed82f40b5';
-    Auth.Qop                 := QopAuth;
     Auth.Realm               := '193.116.120.160';
+
+    Modify(Auth);
 
     Self.Dispatcher.Transport.FireOnResponse(Challenge);
   finally
@@ -3504,9 +3729,48 @@ begin
   end;
 end;
 
+procedure TestProxyAuthentication.SimulateRejectProxyUnauthorizedWithOpaque;
+begin
+  Self.SimulateRejectProxyUnauthorized(Self.AddOpaque);
+end;
+
+procedure TestProxyAuthentication.SimulateRejectProxyUnauthorizedWithQop;
+begin
+  Self.SimulateRejectProxyUnauthorized(Self.AddQop);
+end;
+
 //* TestProxyAuthentication Published methods **********************************
 
-procedure TestProxyAuthentication.TestMultipleProxyAuthenticationAffectsNonceCount;
+procedure TestProxyAuthentication.TestFailedAuthentication;
+var
+  SequenceNo:   Cardinal;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
+
+  Self.SimulateRejectProxyUnauthorized;
+  CheckEquals(RequestCount + 1,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 1,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+
+  Self.SimulateRejectProxyUnauthorized;
+  CheckEquals(RequestCount + 2,
+              Self.Dispatcher.Transport.SentRequestCount,
+              'no re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(SequenceNo + 2,
+              ReInvite.CSeq.SequenceNo,
+              'Re-INVITE CSeq sequence number');
+end;
+
+procedure TestProxyAuthentication.TestMultipleAuthenticationAffectsNonceCount;
 var
   ReInvite:     TIdSipRequest;
   RequestCount: Cardinal;
@@ -3530,7 +3794,59 @@ begin
               'NonceCount: 3 = initial request + 2 resends');
 end;
 
-procedure TestProxyAuthentication.TestProxyAuthentication;
+procedure TestProxyAuthentication.TestOpaque;
+var
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+  Self.SimulateRejectProxyUnauthorizedWithOpaque;
+
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no first re-issue of request');
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  CheckEquals(Self.Opaque,
+              ReInvite.FirstProxyAuthorization.Opaque,
+              'Opaque');
+end;
+
+procedure TestProxyAuthentication.TestQopAuth;
+var
+  A1:           String;
+  A2:           String;
+  Auth:         TIdSipProxyAuthorizationHeader;
+  ReInvite:     TIdSipRequest;
+  RequestCount: Cardinal;
+begin
+  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
+
+  Self.SimulateRejectProxyUnauthorizedWithQop;
+  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
+        'no re-issue of request');
+
+  ReInvite := Self.Dispatcher.Transport.LastRequest;
+  Auth := ReInvite.FirstProxyAuthorization;
+
+  Check(Auth.CNonce <> '',
+        'Missing CNonce (Client Nonce)');
+  Check(Auth.NonceCount > 0,
+        'Insane Nonce Count');
+
+  A1 := Auth.Username + ':' + Auth.Realm + ':' + Self.Password;
+  A2 := ReInvite.Method + ':' + Auth.DigestUri + ':' + MD5(ReInvite.Body);
+
+  CheckEquals(KD(MD5(A1),
+                 Auth.Nonce + ':'
+               + Auth.NC + ':'
+               + Auth.CNonce + ':'
+               + Auth.Qop + ':'
+               + MD5(A2),
+                 MD5),
+              ReInvite.FirstProxyAuthorization.Response,
+              'Response');
+end;
+
+procedure TestProxyAuthentication.TestSuccessfulAuthentication;
 var
   A1:           String;
   A2:           String;
@@ -3581,71 +3897,6 @@ begin
 
   CheckEquals(KD(MD5(A1),
                  Auth.Nonce + ':' + MD5(A2),
-                 MD5),
-              ReInvite.FirstProxyAuthorization.Response,
-              'Response');
-end;
-
-procedure TestProxyAuthentication.TestProxyAuthenticationWithFailure;
-var
-  SequenceNo:   Cardinal;
-  ReInvite:     TIdSipRequest;
-  RequestCount: Cardinal;
-begin
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
-
-  Self.SimulateRejectProxyUnauthorized;
-  CheckEquals(RequestCount + 1,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'no re-issue of request');
-
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(SequenceNo + 1,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-
-  Self.SimulateRejectProxyUnauthorized;
-  CheckEquals(RequestCount + 2,
-              Self.Dispatcher.Transport.SentRequestCount,
-              'no re-issue of request');
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  CheckEquals(SequenceNo + 2,
-              ReInvite.CSeq.SequenceNo,
-              'Re-INVITE CSeq sequence number');
-end;
-
-procedure TestProxyAuthentication.TestProxyAuthenticationWithQopAuth;
-var
-  A1:           String;
-  A2:           String;
-  Auth:         TIdSipProxyAuthorizationHeader;
-  ReInvite:     TIdSipRequest;
-  RequestCount: Cardinal;
-begin
-  RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-
-  Self.SimulateRejectProxyUnauthorizedWithQop;
-  Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
-        'no re-issue of request');
-
-  ReInvite := Self.Dispatcher.Transport.LastRequest;
-  Auth := ReInvite.FirstProxyAuthorization;
-
-  Check(Auth.CNonce <> '',
-        'Missing CNonce (Client Nonce)');
-  Check(Auth.NonceCount > 0,
-        'Insane Nonce Count');
-
-  A1 := Auth.Username + ':' + Auth.Realm + ':' + Self.Password;
-  A2 := ReInvite.Method + ':' + Auth.DigestUri + MD5(ReInvite.Body);
-
-  CheckEquals(KD(MD5(A1),
-                 Auth.Nonce + ':'
-               + Auth.NC + ':'
-               + Auth.CNonce + ':'
-               + Auth.Qop + ':'
-               + MD5(A2),
                  MD5),
               ReInvite.FirstProxyAuthorization.Response,
               'Response');
@@ -3804,7 +4055,7 @@ begin
   Self.SimulateRemoteOK;
   Self.SimulateRemoteOK;
 
-  Self.UA.HangUpAllCalls;
+  Self.UA.TerminateAllCalls;
   Check(Self.Dispatcher.Transport.LastRequest.IsBye,
         'Must send a BYE to terminate an established session');
 end;
@@ -4222,7 +4473,6 @@ begin
   Self.Reg := Self.Core.RegisterWith(Self.Registrar.From.Address);
   Self.Reg.AddListener(Self);
 
-  Self.Challenged := false;
   Self.Succeeded  := false;
   Self.MinExpires := TwoHours;
 end;
@@ -4251,15 +4501,9 @@ begin
   Result := KD(MD5(Self.Core.Username + ':'
                  + Self.Core.Realm + ':'
                  + Password),
-                   'REGISTER:' + Self.Registrar.From.Address.Uri,
+                   Self.Dispatcher.Transport.LastResponse.FirstProxyAuthenticate.Nonce + ':'
+                 + MD5('REGISTER:' + Self.Registrar.From.Address.Uri),
                    MD5);
-end;
-
-procedure TestTIdSipOutboundRegistration.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                           Challenge: TIdSipResponse;
-                                                           var Password: String);
-begin
-  Self.Challenged := true;
 end;
 
 procedure TestTIdSipOutboundRegistration.OnFailure(RegisterAgent: TIdSipOutboundRegistration;
@@ -4292,12 +4536,17 @@ end;
 
 procedure TestTIdSipOutboundRegistration.SimulateRemoteRejectProxyAuthenticationRequired;
 var
+  Auth:     TIdSipProxyAuthenticateHeader;
   Response: TIdSipResponse;
 begin
   Response := Self.Registrar.CreateResponse(Self.Dispatcher.Transport.LastRequest,
                                             SIPProxyAuthenticationRequired);
   try
-    Response.AddHeader(ProxyAuthenticateHeader).Value := 'Digest realm="' + Self.Core.Realm + '"';
+    Response.AddHeader(ProxyAuthenticateHeader);
+    Auth := Response.FirstProxyAuthenticate;
+    Auth.AuthorizationScheme := DigestAuthorizationScheme;
+    Auth.Realm := Self.Core.Realm;
+    Auth.Nonce := 'deadbeef';
 
     Self.Dispatcher.Transport.FireOnResponse(Response);
   finally
@@ -4546,7 +4795,7 @@ end;
 
 procedure TestTIdSipOutboundRegistration.TestReceiveUnauthorized;
 begin
-  Self.SimulateRemoteResponse(SIPUnauthorized);
+  Self.SimulateRejectProxyUnauthorized;
   Check(Self.Challenged,
         'No authentication challenge for REGISTER');
 end;

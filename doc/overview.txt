@@ -1,0 +1,148 @@
+This library implements a Session Initiation Protocol stack. Sections
+of the source code also provide an RTP stack.
+
+BROAD STROKES
+
+At the very lowest level, TIdSipTransports connect to the OS's socket
+layer. TIdSipTransports manage the sending of messages to and
+receiving of messages from the IP network.
+
+We connect TIdSipTransports to a TIdSipTransactionDispatcher. The
+dispatcher does not own these TIdSipTransports (i.e., it does not manage
+their lifetimes).
+
+A TIdSipDispatcher creates and destroys TIdSipTransactions as
+needed. Transactions contain state engines, and manage things like
+message resends for unreliable networks and the like.
+
+We attach a TIdSipDispatcher to a TIdSipUserAgent. The dispatcher
+distinguishes between "unhandled" messages and "handled" messages:
+unhandled messages do not belong to an existing transaction, and so
+the TIdSipUserAgent decides whether or not to accept these
+messages. Handled messages, naturally, belong to existing
+transactions.
+
+CAVEAT
+
+The Delphi community almost exclusively uses procedure/function
+variables to implement callbacks - TNotifyEvent, for instance.
+
+This library uses instead the Listener pattern. Objects that can
+notify us of interesting occurences allow us to register (and
+unregister) with them. For instance, with a TIdSipTransport we can
+attach any object that implements the IIdSipTransportListener
+interface, and receive notifications.
+
+We use Listeners rather than Events because the event mechanism in the
+VCL (i.e., TNotifyEvent and company) only allow a single recipient of
+a notification. While we could provide something like "procedure
+AddListener(Event: TNotifyEvent)" and keep a list of TNotifyEvents to
+trigger when necessary, this makes us work as hard as we'd have to
+using interfaces, and it still only provides one kind of
+notification. For transports we'd thus have to have the methods
+AddReceiveRequest and an AddReceiveResponse.
+
+Still, many programmers experience pain mixing interfaces and
+Delphi. To mitigate this, we follow the "weak reference" idiom
+espoused by many well-respected Delphi programmers. We store
+references to interfaces as Pointers (usually in a TList for the
+Listener pattern), and we pass interfaces around as const
+parameters. This solves half of the "Delphi interface problem".
+
+We solve the other half (the mismatch between reference-counted
+objects and objects whose lifetimes we manage manually) by never
+reference counting objects that implement interfaces. Where possible,
+we inherit from TIdInterfacedObject, which implements QueryInterface,
+_AddRef and _Release, directly. Otherwise we implement these methods
+as necessary to ensure that reference counting doesn't.
+
+MESSAGE FLOW OF AN INBOUND CALL
+
+Someone wants to call us, so they create an INVITE message and send it
+into the network. The message reaches our machine. A TIdSipTransport
+receives it and parses the message. If the message doesn't conform to
+the SIP/2.0 syntax, the transport rejects it (with a 400 Bad Request)
+if it can, or simply drops it and notifies its listeners that a bad
+message arrived (presenting the raw message).
+
+So, let's say the INVITE matched the SIP/2.0 grammar. The transport
+notifies its listeners that a new request has arrived. The
+TIdSipTransportDispatcher attached to the listener tries to match the
+message against any transactions. The INVITE doesn't match any
+transaction - it's a brand new call - so the dispatcher notifies its
+listeners that an unhandled request has arrived. At the same time it
+creates a new TIdSipServerInviteTransaction. Even if we don't want to
+answer the call, we still have a call flow we need to follow.
+
+The TIdSipUserAgent listening to the dispatcher receives the message, and
+notifies its listeners that a new inbound call request has arrived. It
+does this by creating a new TIdSipInboundSession (call itNewSession)
+and passing the message to NewSession. So we pick up the softphone by
+invoking NewSession.AcceptCall with an appropriate answer to the
+request's offer (more on this later).
+
+When we want to hang up, we just call NewSession.Terminate. If we have
+multiple calls that we want to terminate all in one go, we can call
+UserAgent.TerminateAllCalls.
+
+MESSAGE FLOW STRUCTURE
+
+Each layer has a single point of access to the adjacent layer. The
+Transaction User layer communicates with the Transaction layer solely
+through TIdSipTransactionDispatcher, and the Transport layer objects
+send their messages up to the Transaction layer also through the
+TIdSipTransactionDispatcher.
+
+Within the Transport layer, the TIdSipTransports talk to their
+contained servers (their TIdTcpServer, TIdUdpServer, etc.) to send or
+receive messages.
+
+Within the Transaction layer, the TIdSipTransactionDispatcher receives
+messages from its transports and dispatches those messages to its
+transactions. Those transactions do what they do, sending messages and
+notifying their listeners as appropriate. When they send messages,
+those messages reach the transport layer through the
+dispatcher. Likewise, when a transaction notifies the receipt of a
+message, the dispatcher mediates the notification, and notifies the
+Transaction User layer in turn.
+
+Within the Transaction User layer, a TIdSipUserAgent receives messages
+from its TIdSipTransactionDispatcher and dispatches those messages (if
+it accepts them) to its TIdSipActions. The TIdSipActions react to
+those messages, possibly notifying its listeners of interesting events
+(an authentication challenge, for instance) or sending messages
+(rejecting a malformed REGISTER attempt, say). In either case
+(notification or message sending), the User Agent mediates - it
+receives the Action's outbound message and routes the message down to
+its dispatcher, or catches the notification and notifies the user.
+
+Graphically, the Transaction and Transaction User layers look
+something like this:
+
+                  ^      |
+                  |      V
+               +-------------+       +--------------+
+               |             |<------|              |
+               | Dispatcher/ |       | Transaction/ |
+               | User agent  |       | Action       |
+               |             |------>|              |
+               +-------------+       +--------------+
+                  ^      |
+                  |      V
+
+
+UNIT BREAKDOWN
+
+IdSipCore implements the highest layer in the SIP stack, the
+Transaction User layer. The TIdSipUserAgent farms out its behaviour to
+TIdSipAction classes - TIdSipSession, TIdSipRegistration,
+TIdSipOptions, for instance - and these classes manage the actual
+message flows of the Transaction User layer.
+
+IdSipTransaction implements all transactions and the transaction
+dispatcher. This provides the entire Transaction Layer.
+
+IdSipTransport implements the Transport Layer. SipTransports use Indy
+servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
+data through the IP network, etc. SipTransports provide an
+encapsulated way to access network functionality.

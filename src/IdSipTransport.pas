@@ -330,6 +330,12 @@ end;
 procedure TIdSipTransport.Send(Msg: TIdSipMessage);
 begin
   try
+    // What dork thought of using Integer for Length? (a) it doesn't work
+    // for strings longer than 2B (don't get me started!), and (b) what does a
+    // string with length -1 look like?
+    // Hence the stupid (and erroneous) typecast.
+    Assert(Msg.ContentLength = Cardinal(Length(Msg.Body)),
+           'Content-Length MUST equal length of body');
     Msg.Accept(Self);
   except
     on E: EIdException do

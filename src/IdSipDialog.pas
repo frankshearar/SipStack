@@ -78,6 +78,7 @@ type
     constructor Create(Dialog: TIdSipDialog); overload;
     destructor  Destroy; override;
 
+    function  CreateAck: TIdSipRequest;
     function  CreateRequest: TIdSipRequest;
     procedure HandleMessage(Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(Response: TIdSipResponse); overload; virtual;
@@ -167,20 +168,28 @@ class function TIdSipDialog.CreateOutboundDialog(Request: TIdSipRequest;
                                                  Response: TIdSipResponse;
                                                  UsingSecureTransport: Boolean): TIdSipDialog;
 var
-  ID: TIdSipDialogID;
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipRecordRoutePath;
 begin
   ID := TIdSipDialogID.Create(Request.CallID,
                               Request.From.Tag,
                               Response.ToHeader.Tag);
   try
-    Result := TIdSipDialog.Create(ID,
-                                  Request.CSeq.SequenceNo,
-                                  0,
-                                  Request.From.Address,
-                                  Request.ToHeader.Address,
-                                  Response.FirstContact.Address,
-                                  UsingSecureTransport and Request.FirstContact.HasSipsUri,
-                                  Request.Route);
+    RouteSet := TIdSipRecordRoutePath.Create;
+    try
+      RouteSet.AddInReverseOrder(Response.RecordRoute);
+
+      Result := TIdSipDialog.Create(ID,
+                                    Request.CSeq.SequenceNo,
+                                    0,
+                                    Request.From.Address,
+                                    Request.ToHeader.Address,
+                                    Response.FirstContact.Address,
+                                    UsingSecureTransport and Request.FirstContact.HasSipsUri,
+                                    RouteSet);
+    finally
+      RouteSet.Free;
+    end;
   finally
     ID.Free;
   end;
@@ -252,6 +261,54 @@ begin
   Self.LocalSequenceNoLock.Free;
 
   inherited Destroy;
+end;
+
+function TIdSipDialog.CreateAck: TIdSipRequest;
+var
+  FirstRoute: TIdSipRouteHeader;
+  Routes:     TIdSipRoutePath;
+begin
+  Result := TIdSipRequest.Create;
+
+  Result.Method           := MethodAck;
+  Result.ToHeader.Address := Self.RemoteURI;
+  Result.ToHeader.Tag     := Self.ID.RemoteTag;
+  Result.From.Address     := Self.LocalURI;
+  Result.From.Tag         := Self.ID.LocalTag;
+  Result.CallID           := Self.ID.CallID;
+
+  Result.CSeq.Method     := MethodAck;
+  Result.CSeq.SequenceNo := Self.LocalSequenceNo;
+
+  if Self.RouteSet.IsEmpty then begin
+    Result.RequestUri := Self.RemoteTarget;
+  end
+  else begin
+    Self.RouteSet.First;
+    FirstRoute := Self.RouteSet.CurrentRoute;
+
+    if FirstRoute.IsLooseRoutable then begin
+      Result.RequestUri := Self.RemoteTarget;
+
+      Result.Route := Self.RouteSet;
+    end
+    else begin
+      Result.RequestUri := FirstRoute.Address;
+      // RFC 3261 section 12.2.1.1; 19.1.5
+      Result.RequestUri.Headers.Clear;
+      Result.RequestUri.RemoveParameter(MethodParam);
+
+      // Yes, we skip the first route. We use the 1st entry as the
+      // Request-URI, remember?
+      Routes := Self.RouteSet.GetAllButFirst;
+      try
+        Result.Route := Routes;
+        Result.Route.AddRoute(Self.RemoteURI);
+      finally
+        Routes.Free;
+      end;
+    end;
+  end;
 end;
 
 function TIdSipDialog.CreateRequest: TIdSipRequest;

@@ -181,7 +181,7 @@ begin
   Self.StopEvent := TSimpleEvent.Create;
 
   Self.Dispatch := TIdSipTransactionDispatcher.Create;
-  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
+//  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
 
   Self.UA := TIdSipUserAgentCore.Create;
@@ -374,7 +374,6 @@ end;
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
 var
   Address: String;
-  SDP:     String;
 begin
   if (Session.CurrentRequest.ContentLength > 0) then
     Self.StartReadingData(Session.CurrentRequest.Body);
@@ -521,7 +520,7 @@ end;
 
 procedure TrnidSpike.ByeClick(Sender: TObject);
 begin
-  Self.UA.HangUpAllCalls;
+  Self.UA.TerminateAllCalls;
   Self.StopReadingData;
 end;
 
@@ -538,7 +537,8 @@ begin
   try
     Target.Address.Uri := Self.TargetUri.Text;
 
-    Self.StartReadingData(Self.LocalSDP(Address));
+    SDP := Self.LocalSDP(Address);
+    Self.StartReadingData(SDP);
 
     Session := Self.UA.Call(Target,
                             SDP,

@@ -48,18 +48,20 @@ type
     procedure TearDown; override;
   published
     procedure TestAckDoesntCreateATransaction;
-    procedure TestAddAndCountTransport;
-    procedure TestClearTransports;
-    procedure TestCreateNewTransaction;
+    procedure TestAckForInviteWontCreateTransaction;
     procedure TestAckHandedUpToTU;
+    procedure TestAddAndCountTransport;
     procedure TestAddClientTransaction;
     procedure TestAddServerTransaction;
+    procedure TestClearTransports;
+    procedure TestCreateNewTransaction;
     procedure TestDispatchToCorrectTransaction;
     procedure TestDispatcherDoesntGetTransactionRequests;
     procedure TestDispatcherDoesntGetTransactionResponses;
     procedure TestHandUnmatchedRequestToCore;
     procedure TestHandUnmatchedResponseToCore;
     procedure TestLoopDetected;
+    procedure TestSendAckWontCreateTransaction;
     procedure TestSendRequest;
     procedure TestSendRequestOverTcp;
     procedure TestSendRequestOverTls;
@@ -97,15 +99,15 @@ type
     procedure TestMatchInviteServer;
     procedure TestMatchNonInviteClient;
     procedure TestMatchNonInviteServer;
-    procedure TestMatchSip1Ack;
-    procedure TestMatchSip1Invite;
-    procedure TestMatchSip1InviteDifferentCallID;
-    procedure TestMatchSip1InviteDifferentCSeq;
-    procedure TestMatchSip1InviteDifferentFromTag;
-    procedure TestMatchSip1InviteDifferentRequestUri;
-    procedure TestMatchSip1InviteDifferentToTag;
-    procedure TestMatchSip1InviteDifferentViaBranch;
-    procedure TestMatchSip1InviteDifferentViaSentBy;
+    procedure TestMatchRFC2543Ack;
+    procedure TestMatchRFC2543Invite;
+    procedure TestMatchRFC2543InviteDifferentCallID;
+    procedure TestMatchRFC2543InviteDifferentCSeq;
+    procedure TestMatchRFC2543InviteDifferentFromTag;
+    procedure TestMatchRFC2543InviteDifferentRequestUri;
+    procedure TestMatchRFC2543InviteDifferentToTag;
+    procedure TestMatchRFC2543InviteDifferentViaBranch;
+    procedure TestMatchRFC2543InviteDifferentViaSentBy;
     procedure TestRemoveTransactionListener;
   end;
 
@@ -429,11 +431,11 @@ begin
   Self.ReceivedResponse := TIdSipTestResources.CreateLocalLoopResponse;
 
   Self.ReceivedResponse.StatusCode := SIPTrying;
-  Self.ReceivedResponse.AddHeaders(Self.ReceivedRequest.Headers);
 
   Self.Invite := TIdSipRequest.Create;
   Self.Invite.Assign(Self.ReceivedRequest);
   Self.Invite.Body := '';
+  Self.Invite.ContentLength := 0;
   Self.Invite.ContentType := SdpMimeType;
 
   Self.Options := TIdSipRequest.Create;
@@ -534,13 +536,64 @@ procedure TestTIdSipTransactionDispatcher.TestAckDoesntCreateATransaction;
 var
   Ack: TIdSipRequest;
 begin
-  Ack := TIdSipRequest.Create;
+  Ack := Self.Invite.AckFor(Self.ReceivedResponse);
   try
     Ack.Method := MethodAck;
 
     Self.MockTransport.FireOnRequest(Ack);
 
     CheckEquals(0, Self.D.TransactionCount, 'ACK created a transaction');
+  finally
+    Ack.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAckForInviteWontCreateTransaction;
+var
+  Ack: TIdSipRequest;
+begin
+  Self.D.SendRequest(Self.Invite);
+  CheckEquals(1, Self.D.TransactionCount, 'INVITE');
+
+  Self.MockTransport.FireOnResponse(Self.Response200);
+  CheckEquals(0, Self.D.TransactionCount, '200 terminates an INVITE tran');
+
+  Ack := Self.Invite.AckFor(Self.ReceivedResponse);
+  try
+    Self.D.SendRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+
+  CheckEquals(0,
+              Self.D.TransactionCount,
+              'ACK');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
+var
+  Ack:      TIdSipRequest;
+  Listener: TIdSipTestUnhandledMessageListener;
+  Tran:     TIdSipTransaction;
+begin
+  Ack := Self.CreateAck(Self.Response200);
+  try
+    Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+
+    Listener := TIdSipTestUnhandledMessageListener.Create;
+    try
+      Self.D.AddUnhandledMessageListener(Listener);
+
+      Tran.SendResponse(Self.Response200);
+
+      Self.MockTransport.FireOnRequest(Ack);
+      // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
+      // responsible for handling ACKs to a 2xx response!
+      Check(Listener.ReceivedUnhandledRequest,
+            'ACK not handed up to TU');
+    finally
+      Listener.Free;
+    end;
   finally
     Ack.Free;
   end;
@@ -568,6 +621,34 @@ begin
   finally
     T1.Free;
   end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAddClientTransaction;
+var
+  Tran:      TIdSipTransaction;
+  TranCount: Cardinal;
+begin
+  TranCount := Self.D.TransactionCount;
+  Tran := Self.D.AddClientTransaction(Self.Invite);
+  Check(Tran.IsClient,
+        'Wrong kind of transaction added');
+  CheckEquals(TranCount + 1,
+              Self.D.TransactionCount,
+              'Transaction wasn''t added');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestAddServerTransaction;
+var
+  Tran:      TIdSipTransaction;
+  TranCount: Cardinal;
+begin
+  TranCount := Self.D.TransactionCount;
+  Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
+  Check(not Tran.IsClient,
+        'Wrong kind of transaction added');
+  CheckEquals(TranCount + 1,
+              Self.D.TransactionCount,
+              'Transaction wasn''t added');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearTransports;
@@ -603,63 +684,6 @@ begin
   CheckEquals(OriginalCount + 1,
               Self.D.TransactionCount,
               'No new transaction was created');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestAckHandedUpToTU;
-var
-  Ack:      TIdSipRequest;
-  Listener: TIdSipTestUnhandledMessageListener;
-  Tran:     TIdSipTransaction;
-begin
-  Ack := Self.CreateAck(Self.Response200);
-  try
-    Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
-
-    Listener := TIdSipTestUnhandledMessageListener.Create;
-    try
-      Self.D.AddUnhandledMessageListener(Listener);
-
-      Tran.SendResponse(Self.Response200);
-
-      Self.MockTransport.FireOnRequest(Ack);
-      // cf RFC 3261 section 13.3.1.4 - the Transaction User layer is
-      // responsible for handling ACKs to a 2xx response!
-      Check(Listener.ReceivedUnhandledRequest,
-            'ACK not handed up to TU');
-    finally
-      Listener.Free;
-    end;
-  finally
-    Ack.Free;
-  end;
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestAddClientTransaction;
-var
-  Tran:      TIdSipTransaction;
-  TranCount: Cardinal;
-begin
-  TranCount := Self.D.TransactionCount;
-  Tran := Self.D.AddClientTransaction(Self.Invite);
-  Check(Tran.IsClient,
-        'Wrong kind of transaction added');
-  CheckEquals(TranCount + 1,
-              Self.D.TransactionCount,
-              'Transaction wasn''t added');
-end;
-
-procedure TestTIdSipTransactionDispatcher.TestAddServerTransaction;
-var
-  Tran:      TIdSipTransaction;
-  TranCount: Cardinal;
-begin
-  TranCount := Self.D.TransactionCount;
-  Tran := Self.D.AddServerTransaction(Self.Invite, Self.MockTransport);
-  Check(not Tran.IsClient,
-        'Wrong kind of transaction added');
-  CheckEquals(TranCount + 1,
-              Self.D.TransactionCount,
-              'Transaction wasn''t added');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestDispatchToCorrectTransaction;
@@ -770,6 +794,25 @@ begin
   Check(Self.D.LoopDetected(Self.Invite),
         'Loop should be detected - same From tag, Call-ID, CSeq but no match '
       + '(differing branch)');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestSendAckWontCreateTransaction;
+var
+  Ack:       TIdSipRequest;
+  TranCount: Cardinal;
+begin
+  TranCount := Self.D.TransactionCount;
+
+  Ack := Self.Invite.AckFor(Self.ReceivedResponse);
+  try
+    Self.D.SendRequest(Ack);
+  finally
+    Ack.Free;
+  end;
+
+  CheckEquals(TranCount,
+              Self.D.TransactionCount,
+              'Dispatcher made a new transaction for an outbound ACK');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestSendRequest;
@@ -1460,7 +1503,7 @@ begin
         'Different method');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1Ack;
+procedure TestTIdSipTransaction.TestMatchRFC2543Ack;
 var
   Ack:  TIdSipRequest;
   Tran: TIdSipTransaction;
@@ -1471,7 +1514,7 @@ begin
   Tran := Self.Dispatcher.AddServerTransaction(Self.Request,
                                              Self.Dispatcher.Transport);
 
-  // SIP/1.0 matching depends on the last response the server sent.
+  // RFC2543 matching depends on the last response the server sent.
   // And remember, a 200 OK in response to an INVITE will TERMINATE THE
   // TRANSACTION!
   R := TIdSipResponse.InResponseTo(Self.Request, SIPBusyHere);
@@ -1489,7 +1532,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1Invite;
+procedure TestTIdSipTransaction.TestMatchRFC2543Invite;
 var
   Tran: TIdSipTransaction;
 begin
@@ -1501,7 +1544,7 @@ begin
   Check(Tran.Match(Self.Request), 'Identical INVITE');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentCallID;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentCallID;
 var
   Tran: TIdSipTransaction;
 begin
@@ -1513,7 +1556,7 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing Call-ID');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentCSeq;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentCSeq;
 var
   Tran: TIdSipTransaction;
 begin
@@ -1525,7 +1568,7 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing CSeq');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentFromTag;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentFromTag;
 var
   Tran: TIdSipTransaction;
 begin
@@ -1537,7 +1580,7 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing From tag');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentRequestUri;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentRequestUri;
 var
   Tran: TIdSipTransaction;
 begin
@@ -1549,11 +1592,11 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing Request-URI');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentToTag;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentToTag;
 var
   Tran: TIdSipTransaction;
 begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-RFC 3261 branch
 
   Tran := Self.Dispatcher.AddClientTransaction(Self.Request);
 
@@ -1561,11 +1604,11 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing To tag');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentViaBranch;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentViaBranch;
 var
   Tran: TIdSipTransaction;
 begin
-  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-SIP/2.0 branch
+  Self.Request.LastHop.Branch := '1'; // Some arbitrary non-RFC 3261 branch
 
   Tran := Self.Dispatcher.AddClientTransaction(Self.Request);
 
@@ -1573,7 +1616,7 @@ begin
   Check(not Tran.Match(Self.ReceivedRequest), 'Differing top Via branch');
 end;
 
-procedure TestTIdSipTransaction.TestMatchSip1InviteDifferentViaSentBy;
+procedure TestTIdSipTransaction.TestMatchRFC2543InviteDifferentViaSentBy;
 var
   Tran: TIdSipTransaction;
 begin
@@ -2790,8 +2833,7 @@ end;
 procedure TestTIdSipClientInviteTransaction.CheckACK(Sender: TObject;
                                                      R: TIdSipResponse);
 var
-  Ack:    TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
+  Ack: TIdSipRequest;
 begin
   Ack := Self.MockDispatcher.Transport.LastACK;
 
@@ -2823,22 +2865,10 @@ begin
               'Content-Length');
   CheckEquals('',
               Ack.Body,
-              'Body of ACK is recommended to be empty');
+              'RFC 3261 recommends having an empty ACK body');
 
-  Routes := TIdSipHeadersFilter.Create(Ack.Headers, RouteHeader);
-  try
-    CheckEquals(2,
-                Routes.Count,
-                'Number of Route headers');
-    CheckEquals('wsfrank <sip:192.168.1.43>',
-                Routes.Items[0].Value,
-                '1st Route');
-    CheckEquals('localhost <sip:127.0.0.1>',
-                Routes.Items[1].Value,
-                '2nd Route');
-  finally
-    Routes.Free;
-  end;
+  Check(Self.Tran.InitialRequest.Route.Equals(Ack.Route),
+        'Route path differs');
 end;
 
 procedure TestTIdSipClientInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
@@ -2873,8 +2903,8 @@ end;
 
 procedure TestTIdSipClientInviteTransaction.TestACK;
 begin
-  Self.Response.AddHeader(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
-  Self.Response.AddHeader(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
+  Self.Tran.InitialRequest.AddHeader(RouteHeader).Value := 'wsfrank <sip:192.168.1.43>';
+  Self.Tran.InitialRequest.AddHeader(RouteHeader).Value := 'localhost <sip:127.0.0.1>';
 
   Self.MoveToProceedingState(Self.Tran);
   Self.CheckReceiveResponse := Self.CheckACK;

@@ -166,7 +166,7 @@ object rnidSpike: TrnidSpike
         Width = 290
         Height = 21
         TabOrder = 0
-        Text = 'sip:frank@wsfrank:25060;transport=udp'
+        Text = 'sip:fasil01@193.116.120.160'
       end
       object Invite: TButton
         Left = 0

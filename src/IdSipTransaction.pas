@@ -689,6 +689,11 @@ begin
     if Assigned(ClientInvite) then
       ClientInvite.Cancel;
   end
+  else if Request.IsAck then begin
+    // Since ACKs to 200s live outside of transactions, we must send the
+    // ACK directly to the transport layer.
+    Self.Send(Request);
+  end
   else begin
     Tran := Self.FindTransaction(Request, true);
 
@@ -705,6 +710,10 @@ procedure TIdSipTransactionDispatcher.SendResponse(Response: TIdSipResponse);
 var
   Tran: TIdSipTransaction;
 begin
+  // We have a problem here. If we have an RFC 2543 non-INVITE transaction on
+  // the go, we CANNOT match Response to it. What the HELL do we do??
+  // TODO
+  // cf RFC 3261, section 17.2.3, last paragraph
   Tran := Self.FindTransaction(Response, false);
 
   if Assigned(Tran) then
@@ -1036,7 +1045,9 @@ function TIdSipTransaction.Match(Msg: TIdSipMessage): Boolean;
 begin
   Result := Self.InitialRequest.Match(Msg);
 
-  if not Msg.LastHop.IsRFC3261Branch and Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
+  if not Msg.LastHop.IsRFC3261Branch
+     and Msg.IsRequest
+     and (Msg as TIdSipRequest).IsAck then
     Result := Result
           and (Msg.ToHeader.Tag = Self.LastResponse.ToHeader.Tag)
 end;
@@ -1044,9 +1055,9 @@ end;
 function TIdSipTransaction.LoopDetected(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.From.Equals(Self.InitialRequest.From)
-    and (Request.CallID = Self.InitialRequest.CallID)
-    and (Request.CSeq.Equals(Self.InitialRequest.CSeq))
-    and not Self.Match(Request);
+       and (Request.CallID = Self.InitialRequest.CallID)
+       and (Request.CSeq.Equals(Self.InitialRequest.CSeq))
+       and not Self.Match(Request);
 end;
 
 procedure TIdSipTransaction.ReceiveCancel(Cancel: TIdSipRequest;

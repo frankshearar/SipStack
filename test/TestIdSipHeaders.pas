@@ -248,19 +248,28 @@ type
     procedure TestValueWithString;
   end;
 
-  TestTIdSipProxyAuthenticateHeader = class(THeaderTestCase)
+  TestTIdSipAuthenticateHeader = class(THeaderTestCase)
   private
-     P: TIdSipProxyAuthenticateHeader;
+     A: TIdSipAuthenticateHeader;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestDomain;
+    procedure TestName; virtual; abstract;
+    procedure TestRemoveStaleResponse;
+    procedure TestStale;
+    procedure TestValue; override;
+  end;
+
+  TestTIdSipProxyAuthenticateHeader = class(TestTIdSipAuthenticateHeader)
+  private
+    P: TIdSipProxyAuthenticateHeader;
   protected
     function HeaderType: TIdSipHeaderClass; override;
   public
     procedure SetUp; override;
   published
-    procedure TestDomain;
-    procedure TestName; virtual;
-    procedure TestRemoveStaleResponse;
-    procedure TestStale;
-    procedure TestValue; override;
+    procedure TestName; override;
   end;
 
   TestTIdSipProxyAuthorizationHeader = class(TestTIdSipAuthorizationHeader)
@@ -388,7 +397,7 @@ type
     procedure TestValueMalformed;
   end;
 
-  TestTIdSipWWWAuthenticateHeader = class(TestTIdSipProxyAuthenticateHeader)
+  TestTIdSipWWWAuthenticateHeader = class(TestTIdSipAuthenticateHeader)
   private
      W: TIdSipWWWAuthenticateHeader;
   protected
@@ -399,15 +408,25 @@ type
     procedure TestName; override;
   end;
 
-  TestTIdSipHeadersFilter = class(TTestCase)
-  private
+  TTestHeadersList = class(TTestCase)
+  protected
     Headers: TIdSipHeaders;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddInReverseOrder; virtual; abstract;
+  end;
+
+  TestTIdSipHeadersFilter = class(TTestHeadersList)
+  private
     Filter:  TIdSipHeadersFilter;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAdd;
+    procedure TestAddInReverseOrder; override;
     procedure TestCount;
     procedure TestFirst;
     procedure TestIsEmpty;
@@ -420,23 +439,18 @@ type
     procedure TestRemoveAll;
   end;
 
-  TestTIdSipHeaders = class(TTestCase)
+  TestTIdSipHeaders = class(TTestHeadersList)
   private
-    H: TIdSipHeaders;
-
     procedure CheckType(ExpectedClassType: TClass;
                         ReceivedObject: TObject;
                         Message: String = '');
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestAddAndCount;
     procedure TestAddHeader;
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
     procedure TestAddHeadersFilter;
-    procedure TestAddInReverseOrder;
+    procedure TestAddInReverseOrder; override;
     procedure TestAddResultTypes;
     procedure TestAsString;
     procedure TestCanonicaliseName;
@@ -2103,16 +2117,16 @@ end;
 
 procedure TestTIdSipContentDispositionHeader.TestIsSession;
 begin
-  Self.C.Handling := '';
+  Self.C.Value := '';
   Check(not Self.C.IsSession, 'Empty string');
 
-  Self.C.Handling := DispositionRender;
+  Self.C.Value := DispositionRender;
   Check(not Self.C.IsSession, DispositionRender);
 
-  Self.C.Handling := DispositionSession;
+  Self.C.Value := DispositionSession;
   Check(Self.C.IsSession, DispositionSession);
 
-  Self.C.Handling := UpperCase(DispositionSession);
+  Self.C.Value := UpperCase(DispositionSession);
   Check(Self.C.IsSession, UpperCase(DispositionSession));
 end;
 
@@ -2577,6 +2591,92 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipAuthenticateHeader                                               *
+//******************************************************************************
+//* TestTIdSipAuthenticateHeader Public methods ********************************
+
+procedure TestTIdSipAuthenticateHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.A := Self.Header as TIdSipAuthenticateHeader;
+end;
+
+procedure TestTIdSipAuthenticateHeader.TestDomain;
+var
+  Value: String;
+begin
+  Value := 'enki.org';
+  Self.A.Domain := Value;
+  CheckEquals(Value,
+              Self.A.Domain,
+              Self.ClassName + ' Domain');
+
+  Value := 'tessier-ashpool.co.luna';
+  Self.A.Domain := Value;
+  CheckEquals(Value,
+              Self.A.Domain,
+              Self.ClassName + ' Domain');
+end;
+
+procedure TestTIdSipAuthenticateHeader.TestRemoveStaleResponse;
+begin
+  Self.A.Stale := true;
+  Self.A.RemoveStaleResponse;
+  CheckEquals(0,
+              Pos('true', Self.A.AsString),
+              Self.ClassName + ' Stale response not removed');
+end;
+
+procedure TestTIdSipAuthenticateHeader.TestStale;
+begin
+  Check(not Self.A.Stale,
+        Self.ClassName + ' Default value');
+  Self.A.Stale := true;
+  Check(Self.A.Stale,
+        Self.ClassName + ' Should be true');
+  Self.A.Stale := false;
+  Check(not Self.A.Stale,
+        Self.ClassName + ' Should be false');
+end;
+
+procedure TestTIdSipAuthenticateHeader.TestValue;
+begin
+  Self.A.Value := 'Digest realm="enki.org",domain="sip:hiro@enki.org",'
+                + 'nonce="123456",opaque="ich bin''s",stale="true",'
+                + 'algorithm="SHA1-1024",qop="auth",other-param="foo"';
+
+  CheckEquals('SHA1-1024',
+              Self.A.Algorithm,
+              Self.ClassName + ' Algorithm');
+  CheckEquals('Digest',
+              Self.A.AuthorizationScheme,
+              Self.ClassName + ' AuthorizationScheme');
+  CheckEquals('sip:hiro@enki.org',
+              Self.A.Domain,
+              Self.ClassName + ' Domain');
+  CheckEquals('123456',
+              Self.A.Nonce,
+              Self.ClassName + ' Nonce');
+  CheckEquals('ich bin''s',
+              Self.A.Opaque,
+              Self.ClassName + ' Opaque');
+  CheckEquals('auth',
+              Self.A.Qop,
+              Self.ClassName + ' Qop');
+  CheckEquals('enki.org',
+              Self.A.Realm,
+              Self.ClassName + ' Realm');
+  Check      (Self.A.Stale,
+              Self.ClassName + ' Stale');
+
+  Self.A.Value := 'Digest realm="quasinormal.paranoia"';
+  CheckEquals('quasinormal.paranoia',
+              Self.A.Realm,
+              Self.ClassName + ' Realm (only)');
+end;
+
+//******************************************************************************
 //* TestTIdSipProxyAuthenticateHeader                                          *
 //******************************************************************************
 //* TestTIdSipProxyAuthenticateHeader Public methods ***************************
@@ -2588,82 +2688,6 @@ begin
   Self.P := Self.Header as TIdSipProxyAuthenticateHeader;
 end;
 
-procedure TestTIdSipProxyAuthenticateHeader.TestDomain;
-var
-  Value: String;
-begin
-  Value := 'enki.org';
-  Self.P.Domain := Value;
-  CheckEquals(Value,
-              Self.P.Domain,
-              Self.ClassName + ' Domain');
-
-  Value := 'tessier-ashpool.co.luna';
-  Self.P.Domain := Value;
-  CheckEquals(Value,
-              Self.P.Domain,
-              Self.ClassName + ' Domain');
-end;
-
-procedure TestTIdSipProxyAuthenticateHeader.TestName;
-begin
-  CheckEquals(ProxyAuthenticateHeader,
-              Self.P.Name,
-              'Name');
-end;
-
-procedure TestTIdSipProxyAuthenticateHeader.TestRemoveStaleResponse;
-begin
-  Self.P.Stale := true;
-  Self.P.RemoveStaleResponse;
-  CheckEquals(0, Pos('true', Self.P.AsString), 'Stale response not removed');
-end;
-
-procedure TestTIdSipProxyAuthenticateHeader.TestStale;
-begin
-  Check(not Self.P.Stale, 'Default value');
-  Self.P.Stale := true;
-  Check(Self.P.Stale, 'Should be true');
-  Self.P.Stale := false;
-  Check(not Self.P.Stale, 'Should be false');
-end;
-
-procedure TestTIdSipProxyAuthenticateHeader.TestValue;
-begin
-  Self.P.Value := 'Digest realm="enki.org",domain="sip:hiro@enki.org",'
-                + 'nonce="123456",opaque="ich bin''s",stale="true",'
-                + 'algorithm="SHA1-1024",qop="auth",other-param="foo"';
-
-  CheckEquals('SHA1-1024',
-              Self.P.Algorithm,
-              Self.ClassName + ' Algorithm');
-  CheckEquals('Digest',
-              Self.P.AuthorizationScheme,
-              Self.ClassName + ' AuthorizationScheme');
-  CheckEquals('sip:hiro@enki.org',
-              Self.P.Domain,
-              Self.ClassName + ' Domain');
-  CheckEquals('123456',
-              Self.P.Nonce,
-              Self.ClassName + ' Nonce');
-  CheckEquals('ich bin''s',
-              Self.P.Opaque,
-              Self.ClassName + ' Opaque');
-  CheckEquals('auth',
-              Self.P.Qop,
-              Self.ClassName + ' Qop');
-  CheckEquals('enki.org',
-              Self.P.Realm,
-              Self.ClassName + ' Realm');
-  Check      (Self.P.Stale,
-              Self.ClassName + ' Stale');
-
-  Self.P.Value := 'Digest realm="quasinormal.paranoia"';
-  CheckEquals('quasinormal.paranoia',
-              Self.P.Realm,
-              Self.ClassName + ' Realm (only)');
-end;
-
 //* TestTIdSipProxyAuthenticateHeader Protected methods ************************
 
 function TestTIdSipProxyAuthenticateHeader.HeaderType: TIdSipHeaderClass;
@@ -2671,9 +2695,19 @@ begin
   Result := TIdSipProxyAuthenticateHeader;
 end;
 
+//* TestTIdSipProxyAuthenticateHeader Published methods ************************
+
+procedure TestTIdSipProxyAuthenticateHeader.TestName;
+begin
+  CheckEquals(ProxyAuthenticateHeader,
+              Self.A.Name,
+              Self.ClassName + ' Name');
+end;
+
 //******************************************************************************
 //* TestTIdSipProxyAuthorizationHeader                                         *
 //******************************************************************************
+//* TestTIdSipProxyAuthorizationHeader Public methods **************************
 
 procedure TestTIdSipProxyAuthorizationHeader.SetUp;
 begin
@@ -3718,6 +3752,25 @@ begin
 end;
 
 //******************************************************************************
+//* TTestHeadersList                                                           *
+//******************************************************************************
+//* TTestHeadersList Public methods ********************************************
+
+procedure TTestHeadersList.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers := TIdSipHeaders.Create;
+end;
+
+procedure TTestHeadersList.TearDown;
+begin
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//******************************************************************************
 //* TestTIdSipHeadersFilter                                                    *
 //******************************************************************************
 //* TestTIdSipHeadersFilter Public methods *************************************
@@ -3725,8 +3778,6 @@ end;
 procedure TestTIdSipHeadersFilter.SetUp;
 begin
   inherited SetUp;
-
-  Self.Headers := TIdSipHeaders.Create;
 
   Self.Headers.Add(MaxForwardsHeader).Value       := '70';
   Self.Headers.Add(RouteHeader).Value             := 'wsfrank <sip:192.168.1.43>';
@@ -3739,7 +3790,6 @@ end;
 procedure TestTIdSipHeadersFilter.TearDown;
 begin
   Self.Filter.Free;
-  Self.Headers.Free;
 
   inherited TearDown;
 end;
@@ -3761,6 +3811,38 @@ begin
     CheckEquals(OriginalCount + 1, Self.Filter.Count, 'Count after Add');
   finally
     Route.Free;
+  end;
+end;
+
+procedure TestTIdSipHeadersFilter.TestAddInReverseOrder;
+var
+  NewHeaders: TIdSipHeaders;
+  Filter:     TIdSipHeadersFilter;
+begin
+  Self.Headers.Clear;
+
+  NewHeaders := TIdSipHeaders.Create;
+  try
+    NewHeaders.Add(ContentLengthHeaderFull).Value := '22';
+    NewHeaders.Add(RouteHeader).Value := '<sip:127.0.0.1>';
+    NewHeaders.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+    NewHeaders.Add(RouteHeader).Value := '<sip:127.0.0.3>';
+
+    Filter := TIdSipHeadersFilter.Create(NewHeaders, RouteHeader);
+    try
+      CheckEquals(0, Self.Headers.Count, 'Count before Add(Filter)');
+
+      Self.Headers.AddInReverseOrder(Filter);
+      CheckEquals(Filter.Count, Self.Headers.Count, 'Count after Add(Filter)');
+
+      CheckEquals('<sip:127.0.0.3>', Self.Headers.Items[0].Value, '1st header');
+      CheckEquals('<sip:127.0.0.2>', Self.Headers.Items[1].Value, '2nd header');
+      CheckEquals('<sip:127.0.0.1>', Self.Headers.Items[2].Value, '3rd header');
+    finally
+      Filter.Free;
+    end;
+  finally
+    NewHeaders.Free;
   end;
 end;
 
@@ -3948,22 +4030,6 @@ end;
 //******************************************************************************
 //* TestTIdSipHeaders                                                          *
 //******************************************************************************
-//* TestTIdSipHeaders Public methods *******************************************
-
-procedure TestTIdSipHeaders.SetUp;
-begin
-  inherited SetUp;
-
-  Self.H := TIdSipHeaders.Create;
-end;
-
-procedure TestTIdSipHeaders.TearDown;
-begin
-  Self.H.Free;
-
-  inherited TearDown;
-end;
-
 //* TestTIdSipHeaders Private methods ******************************************
 
 procedure TestTIdSipHeaders.CheckType(ExpectedClassType: TClass;
@@ -3979,11 +4045,11 @@ end;
 
 procedure TestTIdSipHeaders.TestAddAndCount;
 begin
-  CheckEquals(0, Self.H.Count, 'Supposedly an empty set of headers');
+  CheckEquals(0, Self.Headers.Count, 'Supposedly an empty set of headers');
   CheckEquals(TIdSipHeader.ClassName,
-              Self.H.Add(OrganizationHeader).ClassName,
+              Self.Headers.Add(OrganizationHeader).ClassName,
               'Incorrect return type');
-  CheckEquals(1, Self.H.Count, 'Failed to add new header');
+  CheckEquals(1, Self.Headers.Count, 'Failed to add new header');
 end;
 
 procedure TestTIdSipHeaders.TestAddHeader;
@@ -3995,13 +4061,13 @@ begin
     NewHeader.Name  := 'X-Header';
     NewHeader.Value := 'boogaloo;foo=bar';
 
-    CheckEquals(0, Self.H.Count, 'Count before Add(Header)');
-    Self.H.Add(NewHeader);
-    CheckEquals(1, Self.H.Count, 'Count after Add(Header)');
+    CheckEquals(0, Self.Headers.Count, 'Count before Add(Header)');
+    Self.Headers.Add(NewHeader);
+    CheckEquals(1, Self.Headers.Count, 'Count after Add(Header)');
 
-    Self.H.First;
+    Self.Headers.First;
     CheckEquals(NewHeader.AsString,
-                Self.H.CurrentHeader.AsString,
+                Self.Headers.CurrentHeader.AsString,
                 'Data not copied');
   finally
     NewHeader.Free;
@@ -4010,13 +4076,13 @@ end;
 
 procedure TestTIdSipHeaders.TestAddHeaderName;
 begin
-  CheckEquals(0, Self.H.Count, 'Count before Add(HeaderName)');
-  Self.H.Add('NewHeader').Value := 'FooBar';
-  CheckEquals(1, Self.H.Count, 'Count after Add(HeaderName)');
+  CheckEquals(0, Self.Headers.Count, 'Count before Add(HeaderName)');
+  Self.Headers.Add('NewHeader').Value := 'FooBar';
+  CheckEquals(1, Self.Headers.Count, 'Count after Add(HeaderName)');
 
-  Self.H.First;
+  Self.Headers.First;
   CheckEquals('NewHeader: FooBar',
-              Self.H.CurrentHeader.AsString,
+              Self.Headers.CurrentHeader.AsString,
               'AsString');
 end;
 
@@ -4030,11 +4096,11 @@ begin
     NewHeaders.Add(ContentLanguageHeader).Value := 'es';
     NewHeaders.Add(ContentLanguageHeader).Value := 'fr';
 
-    CheckEquals(0, Self.H.Count, 'Count before Add(Headers)');
-    Self.H.Add(NewHeaders);
-    CheckEquals(NewHeaders.Count, Self.H.Count, 'Count after Add(Headers)');
+    CheckEquals(0, Self.Headers.Count, 'Count before Add(Headers)');
+    Self.Headers.Add(NewHeaders);
+    CheckEquals(NewHeaders.Count, Self.Headers.Count, 'Count after Add(Headers)');
 
-    Check(Self.H.Equals(NewHeaders), 'Headers weren''t properly added');
+    Check(Self.Headers.Equals(NewHeaders), 'Headers weren''t properly added');
   finally
     NewHeaders.Free;
   end;
@@ -4056,10 +4122,10 @@ begin
 
     Filter := TIdSipHeadersFilter.Create(NewHeaders, ContentLanguageHeader);
     try
-      CheckEquals(0, Self.H.Count, 'Count before Add(Filter)');
+      CheckEquals(0, Self.Headers.Count, 'Count before Add(Filter)');
 
-      Self.H.Add(Filter);
-      CheckEquals(Filter.Count, Self.H.Count, 'Count after Add(Filter)');
+      Self.Headers.Add(Filter);
+      CheckEquals(Filter.Count, Self.Headers.Count, 'Count after Add(Filter)');
 
       Expected := TIdSipHeaders.Create;
       try
@@ -4067,7 +4133,7 @@ begin
         Expected.Add(ContentLanguageHeader).Value := 'es';
         Expected.Add(ContentLanguageHeader).Value := 'fr';
 
-        Check(Self.H.Equals(Expected), 'Filter doesn''t filter properly');
+        Check(Self.Headers.Equals(Expected), 'Filter doesn''t filter properly');
       finally
         Expected.Free;
       end;
@@ -4094,14 +4160,14 @@ begin
 
     Filter := TIdSipHeadersFilter.Create(NewHeaders, ContentLanguageHeader);
     try
-      CheckEquals(0, Self.H.Count, 'Count before Add(Filter)');
+      CheckEquals(0, Self.Headers.Count, 'Count before Add(Filter)');
 
-      Self.H.AddInReverseOrder(Filter);
-      CheckEquals(Filter.Count, Self.H.Count, 'Count after Add(Filter)');
+      Self.Headers.AddInReverseOrder(Filter);
+      CheckEquals(Filter.Count, Self.Headers.Count, 'Count after Add(Filter)');
 
-      CheckEquals('fr', Self.H.Items[0].Value, '1st header');
-      CheckEquals('es', Self.H.Items[1].Value, '2nd header');
-      CheckEquals('en', Self.H.Items[2].Value, '3rd header');
+      CheckEquals('fr', Self.Headers.Items[0].Value, '1st header');
+      CheckEquals('es', Self.Headers.Items[1].Value, '2nd header');
+      CheckEquals('en', Self.Headers.Items[2].Value, '3rd header');
     finally
       Filter.Free;
     end;
@@ -4112,81 +4178,81 @@ end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
 begin
-  CheckType(TIdSipWeightedCommaSeparatedHeader, Self.H.Add(AcceptHeader),               AcceptHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AcceptEncodingHeader),       AcceptEncodingHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
-  CheckType(TIdSipUriHeader,                    Self.H.Add(AlertInfoHeader),            AlertInfoHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(AllowHeader),                AllowHeader);
-  CheckType(TIdSipAuthenticateInfoHeader,       Self.H.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
-  CheckType(TIdSipAuthorizationHeader,          Self.H.Add(AuthorizationHeader),        AuthorizationHeader);
-  CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderFull),           CallIDHeaderFull);
-  CheckType(TIdSipCallIdHeader,                 Self.H.Add(CallIDHeaderShort),          CallIDHeaderShort);
-  CheckType(TIdSipHeader,                       Self.H.Add(CallInfoHeader),             CallInfoHeader);
-  CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderFull),          ContactHeaderFull);
-  CheckType(TIdSipContactHeader,                Self.H.Add(ContactHeaderShort),         ContactHeaderShort);
-  CheckType(TIdSipContentDispositionHeader,     Self.H.Add(ContentDispositionHeader),   ContentDispositionHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ContentLanguageHeader),      ContentLanguageHeader);
-  CheckType(TIdSipNumericHeader,                Self.H.Add(ContentLengthHeaderFull),    ContentLengthHeaderFull);
-  CheckType(TIdSipNumericHeader,                Self.H.Add(ContentLengthHeaderShort),   ContentLengthHeaderShort);
-  CheckType(TIdSipHeader,                       Self.H.Add(ContentTypeHeaderFull),      ContentTypeHeaderFull);
-  CheckType(TIdSipHeader,                       Self.H.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
-  CheckType(TIdSipCSeqHeader,                   Self.H.Add(CSeqHeader),                 CSeqHeader);
-  CheckType(TIdSipDateHeader,                   Self.H.Add(DateHeader),                 DateHeader);
-  CheckType(TIdSipUriHeader,                    Self.H.Add(ErrorInfoHeader),            ErrorInfoHeader);
-  CheckType(TIdSipNumericHeader,                Self.H.Add(ExpiresHeader),              ExpiresHeader);
-  CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderFull),             FromHeaderFull);
-  CheckType(TIdSipFromHeader,                   Self.H.Add(FromHeaderShort),            FromHeaderShort);
-  CheckType(TIdSipCallIdHeader,                 Self.H.Add(InReplyToHeader),            InReplyToHeader);
-  CheckType(TIdSipMaxForwardsHeader,            Self.H.Add(MaxForwardsHeader),          MaxForwardsHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(MIMEVersionHeader),          MIMEVersionHeader);
-  CheckType(TIdSipNumericHeader,                Self.H.Add(MinExpiresHeader),           MinExpiresHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(OrganizationHeader),         OrganizationHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(PriorityHeader),             PriorityHeader);
-  CheckType(TIdSipProxyAuthenticateHeader,      Self.H.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
-  CheckType(TIdSipProxyAuthorizationHeader,     Self.H.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(ProxyRequireHeader),         ProxyRequireHeader);
-  CheckType(TIdSipRecordRouteHeader,            Self.H.Add(RecordRouteHeader),          RecordRouteHeader);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(RequireHeader),              RequireHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(ReplyToHeader),              ReplyToHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(RetryAfterHeader),           RetryAfterHeader);
-  CheckType(TIdSipRouteHeader,                  Self.H.Add(RouteHeader),                RouteHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(ServerHeader),               ServerHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(SubjectHeaderFull),          SubjectHeaderFull);
-  CheckType(TIdSipHeader,                       Self.H.Add(SubjectHeaderShort),         SubjectHeaderShort);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderFull),        SupportedHeaderFull);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(SupportedHeaderShort),       SupportedHeaderShort);
-  CheckType(TIdSipTimestampHeader,              Self.H.Add(TimestampHeader),            TimestampHeader);
-  CheckType(TIdSipToHeader,                     Self.H.Add(ToHeaderFull),               ToHeaderFull);
-  CheckType(TIdSipToHeader,                     Self.H.Add(ToHeaderShort),              ToHeaderShort);
-  CheckType(TIdSipCommaSeparatedHeader,         Self.H.Add(UnsupportedHeader),          UnsupportedHeader);
-  CheckType(TIdSipHeader,                       Self.H.Add(UserAgentHeader),            UserAgentHeader);
-  CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderFull),              ViaHeaderFull);
-  CheckType(TIdSipViaHeader,                    Self.H.Add(ViaHeaderShort),             ViaHeaderShort);
-  CheckType(TIdSipWarningHeader,                Self.H.Add(WarningHeader),              WarningHeader);
-  CheckType(TIdSipWWWAuthenticateHeader,        Self.H.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
+  CheckType(TIdSipWeightedCommaSeparatedHeader, Self.Headers.Add(AcceptHeader),               AcceptHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(AcceptEncodingHeader),       AcceptEncodingHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
+  CheckType(TIdSipUriHeader,                    Self.Headers.Add(AlertInfoHeader),            AlertInfoHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(AllowHeader),                AllowHeader);
+  CheckType(TIdSipAuthenticateInfoHeader,       Self.Headers.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
+  CheckType(TIdSipAuthorizationHeader,          Self.Headers.Add(AuthorizationHeader),        AuthorizationHeader);
+  CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderFull),           CallIDHeaderFull);
+  CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderShort),          CallIDHeaderShort);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(CallInfoHeader),             CallInfoHeader);
+  CheckType(TIdSipContactHeader,                Self.Headers.Add(ContactHeaderFull),          ContactHeaderFull);
+  CheckType(TIdSipContactHeader,                Self.Headers.Add(ContactHeaderShort),         ContactHeaderShort);
+  CheckType(TIdSipContentDispositionHeader,     Self.Headers.Add(ContentDispositionHeader),   ContentDispositionHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ContentEncodingHeaderFull),  ContentEncodingHeaderFull);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ContentEncodingHeaderShort), ContentEncodingHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ContentLanguageHeader),      ContentLanguageHeader);
+  CheckType(TIdSipNumericHeader,                Self.Headers.Add(ContentLengthHeaderFull),    ContentLengthHeaderFull);
+  CheckType(TIdSipNumericHeader,                Self.Headers.Add(ContentLengthHeaderShort),   ContentLengthHeaderShort);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(ContentTypeHeaderFull),      ContentTypeHeaderFull);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
+  CheckType(TIdSipCSeqHeader,                   Self.Headers.Add(CSeqHeader),                 CSeqHeader);
+  CheckType(TIdSipDateHeader,                   Self.Headers.Add(DateHeader),                 DateHeader);
+  CheckType(TIdSipUriHeader,                    Self.Headers.Add(ErrorInfoHeader),            ErrorInfoHeader);
+  CheckType(TIdSipNumericHeader,                Self.Headers.Add(ExpiresHeader),              ExpiresHeader);
+  CheckType(TIdSipFromHeader,                   Self.Headers.Add(FromHeaderFull),             FromHeaderFull);
+  CheckType(TIdSipFromHeader,                   Self.Headers.Add(FromHeaderShort),            FromHeaderShort);
+  CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(InReplyToHeader),            InReplyToHeader);
+  CheckType(TIdSipMaxForwardsHeader,            Self.Headers.Add(MaxForwardsHeader),          MaxForwardsHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(MIMEVersionHeader),          MIMEVersionHeader);
+  CheckType(TIdSipNumericHeader,                Self.Headers.Add(MinExpiresHeader),           MinExpiresHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(OrganizationHeader),         OrganizationHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(PriorityHeader),             PriorityHeader);
+  CheckType(TIdSipProxyAuthenticateHeader,      Self.Headers.Add(ProxyAuthenticateHeader),    ProxyAuthenticateHeader);
+  CheckType(TIdSipProxyAuthorizationHeader,     Self.Headers.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ProxyRequireHeader),         ProxyRequireHeader);
+  CheckType(TIdSipRecordRouteHeader,            Self.Headers.Add(RecordRouteHeader),          RecordRouteHeader);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(RequireHeader),              RequireHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(ReplyToHeader),              ReplyToHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(RetryAfterHeader),           RetryAfterHeader);
+  CheckType(TIdSipRouteHeader,                  Self.Headers.Add(RouteHeader),                RouteHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(ServerHeader),               ServerHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(SubjectHeaderFull),          SubjectHeaderFull);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(SubjectHeaderShort),         SubjectHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderFull),        SupportedHeaderFull);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(SupportedHeaderShort),       SupportedHeaderShort);
+  CheckType(TIdSipTimestampHeader,              Self.Headers.Add(TimestampHeader),            TimestampHeader);
+  CheckType(TIdSipToHeader,                     Self.Headers.Add(ToHeaderFull),               ToHeaderFull);
+  CheckType(TIdSipToHeader,                     Self.Headers.Add(ToHeaderShort),              ToHeaderShort);
+  CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(UnsupportedHeader),          UnsupportedHeader);
+  CheckType(TIdSipHeader,                       Self.Headers.Add(UserAgentHeader),            UserAgentHeader);
+  CheckType(TIdSipViaHeader,                    Self.Headers.Add(ViaHeaderFull),              ViaHeaderFull);
+  CheckType(TIdSipViaHeader,                    Self.Headers.Add(ViaHeaderShort),             ViaHeaderShort);
+  CheckType(TIdSipWarningHeader,                Self.Headers.Add(WarningHeader),              WarningHeader);
+  CheckType(TIdSipWWWAuthenticateHeader,        Self.Headers.Add(WWWAuthenticateHeader),      WWWAuthenticateHeader);
 end;
 
 procedure TestTIdSipHeaders.TestAsString;
 begin
   CheckEquals('',
-              Self.H.AsString,
+              Self.Headers.AsString,
               'AsString with zero headers');
 
-  Self.H.Add('Content-Length').Value := '28';
-  H['Content-Length'].Params['bogus'] := 'true';
+  Self.Headers.Add('Content-Length').Value := '28';
+  Self.Headers['Content-Length'].Params['bogus'] := 'true';
 
   CheckEquals('Content-Length: 28;bogus=true'#13#10,
-              Self.H.AsString,
+              Self.Headers.AsString,
               'AsString with one header');
 
-  Self.H.Add('Content-Type').Value := 'text/xml';
-  H['Content-Type'].Params['kallisti'] := 'eris';
+  Self.Headers.Add('Content-Type').Value := 'text/xml';
+  Self.Headers['Content-Type'].Params['kallisti'] := 'eris';
 
   CheckEquals('Content-Length: 28;bogus=true'#13#10
             + 'Content-Type: text/xml;kallisti=eris'#13#10,
-              Self.H.AsString,
+              Self.Headers.AsString,
               'AsString with two headers');
 end;
 
@@ -4405,52 +4471,52 @@ end;
 
 procedure TestTIdSipHeaders.TestClear;
 begin
-  Self.H.Clear;
-  CheckEquals(0, Self.H.Count, 'Count after Clearing an empty list');
+  Self.Headers.Clear;
+  CheckEquals(0, Self.Headers.Count, 'Count after Clearing an empty list');
 
-  Self.H.Add('Content-Length');
-  Self.H.Add('Via');
-  Self.H.Clear;
-  CheckEquals(0, Self.H.Count, 'Count after Clearing a non-empty list');
+  Self.Headers.Add('Content-Length');
+  Self.Headers.Add('Via');
+  Self.Headers.Clear;
+  CheckEquals(0, Self.Headers.Count, 'Count after Clearing a non-empty list');
 end;
 
 procedure TestTIdSipHeaders.TestDelete;
 begin
-  Self.H.Add('foo');
-  Self.H.Add('bar');
-  Self.H.Add('baz');
-  Self.H.Add('quaax');
+  Self.Headers.Add('foo');
+  Self.Headers.Add('bar');
+  Self.Headers.Add('baz');
+  Self.Headers.Add('quaax');
 
-  Self.H.Delete(1);
-  CheckEquals(3, Self.H.Count, 'Count after 1st Delete');
-  CheckEquals('foo',   Self.H.Items[0].Name, '1: 1st header');
-  CheckEquals('baz',   Self.H.Items[1].Name, '1: 2nd header');
-  CheckEquals('quaax', Self.H.Items[2].Name, '1: 3rd header');
+  Self.Headers.Delete(1);
+  CheckEquals(3, Self.Headers.Count, 'Count after 1st Delete');
+  CheckEquals('foo',   Self.Headers.Items[0].Name, '1: 1st header');
+  CheckEquals('baz',   Self.Headers.Items[1].Name, '1: 2nd header');
+  CheckEquals('quaax', Self.Headers.Items[2].Name, '1: 3rd header');
 
-  Self.H.Delete(2);
-  CheckEquals(2, Self.H.Count, 'Count after 2nd Delete');
-  CheckEquals('foo',   Self.H.Items[0].Name, '2: 1st header');
-  CheckEquals('baz',   Self.H.Items[1].Name, '2: 2nd header');
+  Self.Headers.Delete(2);
+  CheckEquals(2, Self.Headers.Count, 'Count after 2nd Delete');
+  CheckEquals('foo',   Self.Headers.Items[0].Name, '2: 1st header');
+  CheckEquals('baz',   Self.Headers.Items[1].Name, '2: 2nd header');
 
-  Self.H.Delete(0);
-  CheckEquals(1, Self.H.Count, 'Count after 3rd Delete');
-  CheckEquals('baz', Self.H.Items[0].Name, '3: 1st header');
+  Self.Headers.Delete(0);
+  CheckEquals(1, Self.Headers.Count, 'Count after 3rd Delete');
+  CheckEquals('baz', Self.Headers.Items[0].Name, '3: 1st header');
 
-  Self.H.Delete(0);
-  CheckEquals(0, Self.H.Count, 'Count after 4th Delete');
+  Self.Headers.Delete(0);
+  CheckEquals(0, Self.Headers.Count, 'Count after 4th Delete');
 end;
 
 procedure TestTIdSipHeaders.TestFirst;
 begin
-  Self.H.First;
-  CheckNull(Self.H.CurrentHeader, 'First element of an empty collection');
+  Self.Headers.First;
+  CheckNull(Self.Headers.CurrentHeader, 'First element of an empty collection');
 
-  Self.H.Add('foo');
-  Self.H.First;
-  CheckNotNull(Self.H.CurrentHeader,
+  Self.Headers.Add('foo');
+  Self.Headers.First;
+  CheckNotNull(Self.Headers.CurrentHeader,
                'First element of a non-empty collection');
   CheckEquals('foo',
-              Self.H.CurrentHeader.Name,
+              Self.Headers.CurrentHeader.Name,
               'Name of first element');
 end;
 
@@ -4461,7 +4527,7 @@ var
 begin
   Expected := TIdSipHeaders.Create;
   try
-    Received := Self.H.GetAllButFirst;
+    Received := Self.Headers.GetAllButFirst;
     try
       Check(Expected.Equals(Received),
             'Incorrect headers returned, empty list');
@@ -4473,10 +4539,10 @@ begin
     Expected.Add(ContentTypeHeaderFull).Value   := 'text/plain';
     Expected.Add(MaxForwardsHeader).Value       := '70';
 
-    Self.H.Add(ContentLengthHeaderFull).Value := '29';
-    Self.H.Add(Expected);
+    Self.Headers.Add(ContentLengthHeaderFull).Value := '29';
+    Self.Headers.Add(Expected);
 
-    Received := Self.H.GetAllButFirst;
+    Received := Self.Headers.GetAllButFirst;
     try
       Check(Expected.Equals(Received),
             'Incorrect headers returned, nonempty list');
@@ -4490,11 +4556,11 @@ end;
 
 procedure TestTIdSipHeaders.TestHasHeader;
 begin
-  Check(not Self.H.HasHeader(''), '''''');
-  Check(not Self.H.HasHeader('Content-Length'), 'Content-Length');
+  Check(not Self.Headers.HasHeader(''), '''''');
+  Check(not Self.Headers.HasHeader('Content-Length'), 'Content-Length');
 
-  Self.H.Add('Content-Length');
-  Check(Self.H.HasHeader('Content-Length'), 'Content-Length not added');
+  Self.Headers.Add('Content-Length');
+  Check(Self.Headers.HasHeader('Content-Length'), 'Content-Length not added');
 end;
 
 procedure TestTIdSipHeaders.TestHeaders;
@@ -4502,29 +4568,29 @@ var
   Header: TIdSipHeader;
 begin
   CheckEquals(CallIdHeaderFull,
-              Self.H.Headers[CallIdHeaderFull].Name,
+              Self.Headers.Headers[CallIdHeaderFull].Name,
               'Returned newly created header: Name');
   CheckEquals('',
-              Self.H.Headers[CallIdHeaderFull].Value,
+              Self.Headers.Headers[CallIdHeaderFull].Value,
               'Returned newly created header: Value');
-  CheckEquals(1, Self.H.Count, 'Newly created header wasn''t added though');
+  CheckEquals(1, Self.Headers.Count, 'Newly created header wasn''t added though');
 
-  Header := Self.H.Add('Via');
-  Check(Header = Self.H.Headers['Via'],
+  Header := Self.Headers.Add('Via');
+  Check(Header = Self.Headers.Headers['Via'],
         'Incorrect header returned');
 end;
 
 procedure TestTIdSipHeaders.TestItems;
 begin
   try
-    Self.H.Items[0];
+    Self.Headers.Items[0];
     Fail('Failed to bail out accessing the 1st header in an empty collection');
   except
     on EListError do;
   end;
 
-  Self.H.Add('Content-Length');
-  CheckEquals('Content-Length', Self.H.Items[0].Name, 'Name of 1st header');
+  Self.Headers.Add('Content-Length');
+  CheckEquals('Content-Length', Self.Headers.Items[0].Name, 'Name of 1st header');
 end;
 
 procedure TestTIdSipHeaders.TestIsCallID;
@@ -4630,10 +4696,10 @@ end;
 
 procedure TestTIdSipHeaders.TestIsEmpty;
 begin
-  CheckEquals(0, Self.H.Count, 'Sanity check on test entry');
-  Check(Self.H.IsEmpty, 'IsEmpty with 0 headers');
-  Self.H.Add(RouteHeader).Value := '<sip:127.0.0.2>';
-  Check(not Self.H.IsEmpty, 'IsEmpty after Add');
+  CheckEquals(0, Self.Headers.Count, 'Sanity check on test entry');
+  Check(Self.Headers.IsEmpty, 'IsEmpty with 0 headers');
+  Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.2>';
+  Check(not Self.Headers.IsEmpty, 'IsEmpty after Add');
 end;
 
 procedure TestTIdSipHeaders.TestIsErrorInfo;
@@ -4708,14 +4774,14 @@ procedure TestTIdSipHeaders.TestIteratorVisitsAllHeaders;
 var
   X, Y, Z: TIdSipHeader;
 begin
-  X := Self.H.Add('X-X-X');
-  Y := Self.H.Add('X-X-Y');
-  Z := Self.H.Add('X-X-Z');
+  X := Self.Headers.Add('X-X-X');
+  Y := Self.Headers.Add('X-X-Y');
+  Z := Self.Headers.Add('X-X-Z');
 
-  Self.H.First;
-  while Self.H.HasNext do begin
-    Self.H.CurrentHeader.Params['foo'] := 'bar';
-    Self.H.Next;
+  Self.Headers.First;
+  while Self.Headers.HasNext do begin
+    Self.Headers.CurrentHeader.Params['foo'] := 'bar';
+    Self.Headers.Next;
   end;
 
   CheckEquals('bar', X.Params['foo'], 'X wasn''t visited by iterator');
@@ -4727,33 +4793,33 @@ procedure TestTIdSipHeaders.TestRemove;
 var
   X, Y, Z: TIdSipHeader;
 begin
-  X := Self.H.Add('X-X-X');
-  Y := Self.H.Add('X-X-Y');
-  Z := Self.H.Add('X-X-Z');
+  X := Self.Headers.Add('X-X-X');
+  Y := Self.Headers.Add('X-X-Y');
+  Z := Self.Headers.Add('X-X-Z');
 
-  Self.H.Remove(X);
-  CheckEquals(Self.H.Items[0].AsString, Y.AsString, 'Wrong header removed (0)');
-  CheckEquals(Self.H.Items[1].AsString, Z.AsString, 'Wrong header removed (1)');
+  Self.Headers.Remove(X);
+  CheckEquals(Self.Headers.Items[0].AsString, Y.AsString, 'Wrong header removed (0)');
+  CheckEquals(Self.Headers.Items[1].AsString, Z.AsString, 'Wrong header removed (1)');
 end;
 
 procedure TestTIdSipHeaders.TestRemoveAll;
 begin
-  Self.H.Add('Foo');
-  Self.H.Add('Bar');
-  Self.H.Add('Foo');
+  Self.Headers.Add('Foo');
+  Self.Headers.Add('Bar');
+  Self.Headers.Add('Foo');
 
-  Self.H.RemoveAll('foo');
-  CheckEquals(1, Self.H.Count, 'Header count');
-  CheckEquals('Bar', Self.H.Items[0].Name, 'Wrong headers removed');
+  Self.Headers.RemoveAll('foo');
+  CheckEquals(1, Self.Headers.Count, 'Header count');
+  CheckEquals('Bar', Self.Headers.Items[0].Name, 'Wrong headers removed');
 end;
 
 procedure TestTIdSipHeaders.TestSetMaxForwards;
 begin
-  Self.H.Headers[MaxForwardsHeader].Value := '1';
-  CheckEquals('1', Self.H.Headers[MaxForwardsHeader].Value, '1');
+  Self.Headers.Headers[MaxForwardsHeader].Value := '1';
+  CheckEquals('1', Self.Headers.Headers[MaxForwardsHeader].Value, '1');
 
   try
-    Self.H.Headers[MaxForwardsHeader].Value := 'a';
+    Self.Headers.Headers[MaxForwardsHeader].Value := 'a';
     Fail('Failed to bail out setting value to ''a''');
   except
     on EBadHeader do;

@@ -1,0 +1,63 @@
+  +--------------------+
+  |                    |
+  | User / Application |
+  |                    |
+  +--------------------+
+        |       ^
+        |       |
+        |       |
+        V       |
+      +------------+       +--------------+
+      |            |<------|              |
+      |  TU Core   |       |   Actions    |
+      |            |------>|              |
+      +------------+       +--------------+
+        |       ^
+        |       |
+        |       |
+        V       |
+      +------------+       +--------------+
+      |            |<------|              |
+      | Dispatcher |       | Transactions |
+      |            |------>|              |
+      +------------+       +--------------+
+        ^       |
+        |       |
+        |       |
+        |       V
+      +------------+
+      |            |
+      | Transports |
+      |            |
+      +------------+
+
+
+Possible alternative structure:
+-------------------------------
+
+Something needs to keep track of all the transactions. Why? Because
+otherwise (a) we could have identical branch IDs on different
+transports, (b) sending messages can sometimes change the transport
+
+    ^       |
+    |       |
+    |       |
+    |       V
+  +-------------+
+  |             |
+  | Transaction |
+  |             |
+  +-------------+
+    ^       |
+    |       |
+    |       |
+    |       V
+  +------------+
+  |            |
+  | Transport  |
+  |            |
+  +------------+
+    ^       |
+    |       |
+    |       |
+    |       V

@@ -351,6 +351,7 @@ type
     function  Call(Dest: TIdSipAddressHeader;
                    const InitialOffer: String;
                    const MimeType: String): TIdSipOutboundSession;
+    function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
                            const Body: String;
@@ -364,7 +365,7 @@ type
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
-    procedure HangUpAllCalls;
+    procedure TerminateAllCalls;
     function  OptionsCount: Integer;
     function  QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegistration;
@@ -398,11 +399,12 @@ type
     NonceCount:      Cardinal;
     UA:              TIdSipUserAgentCore;
 
+    function  AddAuthorizationHeader(ReAttempt: TIdSipRequest;
+                                     Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
+    function  AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
     procedure Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
     procedure AuthorizeAgainstProxy(Challenge: TIdSipResponse);
     procedure AuthorizeAgainstUser(Challenge: TIdSipResponse);
-    function  DigestFor(const Realm: String;
-                        const Password: String): String;
     function  GetUsername: String;
     procedure SetUsername(const Value: String);
   protected
@@ -1131,6 +1133,7 @@ begin
     Transport := TransportParamUDP // Todo: replace IdUri completely. It's just crap.
   else
     Transport := TransportParamTCP;
+//  Transport := TransportParamUDP;
 
   OutboundRequest.AddHeader(ViaHeaderFull).Value := SipVersion + '/' + Transport + ' ' + Self.HostName;
   OutboundRequest.LastHop.Branch := Self.NextBranch;
@@ -1390,6 +1393,18 @@ begin
   Result.Call(Dest, InitialOffer, MimeType);
 end;
 
+function TIdSipUserAgentCore.CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  try
+    Result := Dialog.CreateAck;
+    Self.AddLocalHeaders(Result);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
 function TIdSipUserAgentCore.CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
 begin
   try
@@ -1498,7 +1513,7 @@ begin
   Result.RegisterWith(Registrar, Self.Contact);
 end;
 
-procedure TIdSipUserAgentCore.HangUpAllCalls;
+procedure TIdSipUserAgentCore.TerminateAllCalls;
 var
   CopyOfSessions: TObjectList;
   I:              Integer;
@@ -2369,6 +2384,27 @@ end;
 
 //* TIdSipAction Private methods ***********************************************
 
+function TIdSipAction.AddAuthorizationHeader(ReAttempt: TIdSipRequest;
+                                             Challenge: TIdSipResponse): TIdSipAuthorizationHeader;
+begin
+  if Challenge.HasProxyAuthenticate then
+    Result := ReAttempt.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader
+  else if Challenge.HasWWWAuthenticate then
+    Result := ReAttempt.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
+  else
+    Result := nil;
+end;
+
+function TIdSipAction.AuthenticateHeader(Challenge: TIdSipResponse): TIdSipAuthenticateHeader;
+begin
+  if Challenge.HasProxyAuthenticate then
+    Result := Challenge.FirstProxyAuthenticate
+  else if Challenge.HasWWWAuthenticate then
+    Result := Challenge.FirstWWWAuthenticate
+  else
+    Result := nil;
+end;
+
 procedure TIdSipAction.Authorize(Challenge: TIdSipResponse; AgainstProxy: Boolean);
 var
   A1:              String;
@@ -2385,27 +2421,39 @@ begin
   try
     ReAttempt.CSeq.SequenceNo := Self.CurrentRequest.CSeq.SequenceNo + 1;
 
-    if AgainstProxy then begin
-      AuthHeader      := ReAttempt.AddHeader(ProxyAuthorizationHeader) as TIdSipAuthorizationHeader;
-      ChallengeHeader := Challenge.FirstProxyAuthenticate;
-    end
-    else begin
-      AuthHeader      := ReAttempt.AddHeader(AuthorizationHeader) as TIdSipAuthorizationHeader;
-      ChallengeHeader := Challenge.FirstWWWAuthenticate;
-    end;
+    AuthHeader      := Self.AddAuthorizationHeader(ReAttempt, Challenge);
+    ChallengeHeader := Self.AuthenticateHeader(Challenge);
 
     AuthHeader.DigestUri := ReAttempt.RequestUri.AsString;
     AuthHeader.Nonce     := ChallengeHeader.Nonce;
+    AuthHeader.Opaque    := ChallengeHeader.Opaque;
     AuthHeader.Realm     := ChallengeHeader.Realm;
     AuthHeader.Username  := Self.Username;
+
+    if   (ChallengeHeader.Algorithm = MD5Name)
+      or (ChallengeHeader.Algorithm = '') then
+      A1 := AuthHeader.Username + ':' + AuthHeader.Realm + ':' + Password
+    else
+      A1 := 'completely wrong';
 
     if (ChallengeHeader.Qop <> '') then begin
       // TODO: Put a real cnonce here
       AuthHeader.CNonce := 'f00f00';
       AuthHeader.NonceCount := Self.NonceCount;
+
+      A2 := ReAttempt.Method + ':'
+          + AuthHeader.DigestUri + ':'
+          + MD5(ReAttempt.Body);
+
+      AuthHeader.Response := KD(MD5(A1),
+                                AuthHeader.Nonce + ':'
+                              + AuthHeader.NC + ':'
+                              + AuthHeader.CNonce + ':'
+                              + AuthHeader.Qop + ':'
+                              + MD5(A2),
+                                MD5);
     end
     else begin
-      A1 := AuthHeader.Username + ':' + AuthHeader.Realm + ':' + Password;
       A2 := ReAttempt.Method + ':' + AuthHeader.DigestUri;
 
       AuthHeader.Response := KD(MD5(A1),
@@ -2428,21 +2476,6 @@ end;
 procedure TIdSipAction.AuthorizeAgainstUser(Challenge: TIdSipResponse);
 begin
   Self.Authorize(Challenge, false);
-end;
-
-function TIdSipAction.DigestFor(const Realm: String;
-                                const Password: String): String;
-var
-  MD5: TIdHashMessageDigest5;
-begin
-  MD5 := TIdHashMessageDigest5.Create;
-  try
-    Result := Lowercase(MD5.AsHex(MD5.HashValue(Self.Username + ':' +
-                                                Realm + ':' +
-                                                Password)));
-  finally
-    MD5.Free;
-  end;
 end;
 
 function TIdSipAction.GetUsername: String;
@@ -3150,7 +3183,6 @@ function TIdSipOutboundSession.ReceiveRedirectionResponse(Response: TIdSipRespon
                                                           UsingSecureTransport: Boolean): Boolean;
 begin
   Result := false;
-  Self.SendAck(Response);
 
   if Response.HasHeader(ContactHeaderFull) then begin
     Self.UA.Call(Response.FirstContact,
@@ -3191,8 +3223,20 @@ procedure TIdSipOutboundSession.SendAck(Final: TIdSipResponse);
 var
   Ack: TIdSipRequest;
 begin
-  Ack := Self.CurrentRequest.AckFor(Final);
+  Assert(Self.Dialog <> nil, 'Dialog not established when we send the ACK');
+
+  Ack := Self.UA.CreateAck(Self.Dialog);
   try
+    Ack.Body := Self.CurrentRequest.Body;
+    Ack.ContentDisposition.Value := DispositionSession;
+    Ack.ContentLength := Length(Ack.Body);
+    Ack.ContentType := Self.CurrentRequest.ContentType;
+
+    if Self.CurrentRequest.HasAuthorization then
+      Ack.FirstAuthorization.Value := Self.CurrentRequest.FirstAuthorization.FullValue;
+    if Self.CurrentRequest.HasProxyAuthorization then
+      Ack.FirstProxyAuthorization.Value := Self.CurrentRequest.FirstProxyAuthorization.FullValue;
+
     Self.SendRequest(Ack);
   finally
     Ack.Free;
@@ -3562,12 +3606,12 @@ var
 begin
   Response := Self.UA.CreateResponse(Request, SIPInternalServerError);
   try
-    Response.StatusText := 'TIdSipRegistrar.RejectUnauthorized not yet implemented';
+    Response.StatusText := 'Implement RejectUnauthorized, but in TIdSipAction';
     Self.SendResponse(Response);
   finally
     Response.Free;
   end;
-  raise Exception.Create('TIdSipRegistrar.RejectUnauthorized not yet implemented');
+  raise Exception.Create('Implement RejectUnauthorized, but in TIdSipAction');
 end;
 
 //******************************************************************************

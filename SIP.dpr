@@ -22,6 +22,7 @@ uses
   IdSipDialogID in 'src\IdSipDialogID.pas',
   IdSipLocator in 'src\IdSipLocator.pas',
   IdSipMessage in 'src\IdSipMessage.pas',
+  IdSipMockBindingDatabase in 'test\IdSipMockBindingDatabase.pas',
   IdSipMockCore in 'test\IdSipMockCore.pas',
   IdSipMockTransactionDispatcher in 'test\IdSipMockTransactionDispatcher.pas',
   IdSipMockTransport in 'test\IdSipMockTransport.pas',
@@ -38,6 +39,7 @@ uses
   IdTimerQueue in 'src\IdTimerQueue.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
+  SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   SysUtils,
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
@@ -60,6 +62,7 @@ uses
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipProxy in 'test\TestIdSipProxy.pas',
   TestIdSipRegistrar in 'test\TestIdSipRegistrar.pas',
+  TestIdSipRegistration in 'test\TestIdSipRegistration.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
   TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
   TestIdSipTimer in 'test\TestIdSipTimer.pas',
@@ -85,7 +88,6 @@ begin
   {$IFDEF SPIKE}
   Forms.Application.Initialize;
   Forms.Application.CreateForm(TrnidSpike, rnidSpike);
-//  Forms.Application.CreateForm(TfmBasicClient, fmBasicClient);
   Forms.Application.Run;
   {$ELSE}
     {$IFDEF GUI}

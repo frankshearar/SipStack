@@ -3,7 +3,7 @@ unit IdSipRegistration;
 interface
 
 uses
-  IdSipMessage;
+  IdObservable, IdSipMessage;
 
 type
   // I represent a binding between and address-of-record and a URI. A SIP
@@ -44,7 +44,7 @@ type
   // fails safe.
   //
   // Currently I only support the registration of SIP and SIPS URIs.
-  TIdSipAbstractBindingDatabase = class(TObject)
+  TIdSipAbstractBindingDatabase = class(TIdObservable)
   private
     fDefaultExpiryTime: Cardinal;
 
@@ -62,11 +62,13 @@ type
     procedure Rollback; virtual; abstract;
     procedure StartTransaction; virtual; abstract;
   public
-    constructor Create; virtual;
+    constructor Create; override;
 
     function  AddBindings(Request: TIdSipRequest): Boolean;
     function  IsAuthorized(User: TIdSipAddressHeader): Boolean; virtual; abstract;
     function  IsValid(Request: TIdSipRequest): Boolean; virtual; abstract;
+    function  BindingExpires(const AddressOfRecord: String;
+                             const CanonicalUri: String): TDateTime;
     function  BindingsFor(Request: TIdSipRequest;
                           Contacts: TIdSipContacts): Boolean; virtual; abstract;
     function  NotOutOfOrder(Request: TIdSipRequest;
@@ -170,6 +172,12 @@ begin
     Result := false;
     Self.Rollback;
   end;
+end;
+
+function TIdSipAbstractBindingDatabase.BindingExpires(const AddressOfRecord: String;
+                                                      const CanonicalUri: String): TDateTime;
+begin
+  Result := Self.Binding(AddressOfRecord, CanonicalUri).ValidUntil;
 end;
 
 function TIdSipAbstractBindingDatabase.NotOutOfOrder(Request: TIdSipRequest;
