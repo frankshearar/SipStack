@@ -6,18 +6,30 @@ uses
   Classes, IdSipMessage, IdTCPClient;
 
 type
-  TIdSipTcpClient = class;
-  TIdSipClientEvent = procedure(Sender: TIdSipTcpClient) of object;
+  TIdSipIPTarget = record
+    IP:   String;
+    Port: Integer;
+  end;
 
+  TIdSipTcpClient = class;
+  TIdSipClientEvent = procedure(Sender: TObject) of object;
+  TIdSipRequestEvent = procedure(Sender: TObject;
+                                 const R: TIdSipRequest) of object;
+  TIdSipResponseEvent = procedure(Sender: TObject;
+                                  const R: TIdSipResponse;
+                                  const ReceivedOn: TIdSipIPTarget) of object;
+
+  // Note that the Timeout property is not a global timeout - it's the maximum
+  // length of time to wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
-    fLocalHostName: String;
-    fOnFinished:    TIdSipClientEvent;
-    fOnResponse:    TIdSipResponseEvent;
-    fTimeout:       Cardinal;
+    fOnFinished: TIdSipClientEvent;
+    fOnResponse: TIdSipResponseEvent;
+    fTimeout:    Cardinal;
 
     procedure DoOnFinished;
-    procedure DoOnResponse(const R: TIdSipResponse);
+    procedure DoOnResponse(const R: TIdSipResponse;
+                           const ReceivedOn: TIdSipIPTarget);
     function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
@@ -29,7 +41,6 @@ type
     procedure Send(const Request: TIdSipRequest); overload;
     procedure Send(const Response: TIdSipResponse); overload;
 
-    property LocalHostName: String              read fLocalHostName write fLocalHostName;
     property OnFinished:    TIdSipClientEvent   read fOnFinished write fOnFinished;
     property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
     property Timeout:       Cardinal            read fTimeout write fTimeout;
@@ -61,11 +72,6 @@ end;
 
 procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);
 begin
-  if (Self.LocalHostName = '') then
-    Request.LastHop.SentBy := Self.BoundIP
-  else
-    Request.LastHop.SentBy := Self.LocalHostName;
-
   Self.Write(Request.AsString);
   Self.ReadResponses;
 end;
@@ -91,10 +97,11 @@ begin
     Self.OnFinished(Self);
 end;
 
-procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse);
+procedure TIdSipTcpClient.DoOnResponse(const R: TIdSipResponse;
+                                       const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, R);
+    Self.OnResponse(Self, R, ReceivedOn);
 end;
 
 function TIdSipTcpClient.ReadResponse(var TimedOut: Boolean): String;
@@ -115,12 +122,16 @@ end;
 
 procedure TIdSipTcpClient.ReadResponses;
 var
-  Finished: Boolean;
-  S:        String;
-  P:        TIdSipParser;
-  R:        TIdSipResponse;
+  Finished:   Boolean;
+  S:          String;
+  P:          TIdSipParser;
+  R:          TIdSipResponse;
+  ReceivedOn: TIdSipIPTarget;
 begin
   Finished := false;
+
+  ReceivedOn.IP   := Self.Socket.Binding.PeerIP;
+  ReceivedOn.Port := Self.Socket.Binding.PeerPort;
 
   try
     P := TIdSipParser.Create;
@@ -132,7 +143,7 @@ begin
           R := P.ParseAndMakeResponse(S);
           try
             R.Body := Self.ReadString(R.ContentLength);
-            Self.DoOnResponse(R);
+            Self.DoOnResponse(R, ReceivedOn);
 
             Finished := R.IsFinal;
           finally

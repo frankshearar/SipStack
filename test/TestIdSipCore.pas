@@ -149,6 +149,8 @@ type
                             const Transport: TIdSipTransport);
     procedure OnSendResponse(const Response: TIdSipResponse;
                              const Transport: TIdSipTransport);
+    procedure SimulateRemoteRinging(const Invite: TIdSipRequest);
+    procedure SimulateRemoteTryingWithNoToTag(const Invite: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -163,6 +165,7 @@ type
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestDialogNotEstablishedOnTryingResponse;
     procedure TestReceiveBye;
 //    procedure TestReceiveByeWithPendingRequests;
     procedure TestReceiveReInvite;
@@ -718,7 +721,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.lu';
-    Request := Self.Core.CreateInvite(Dest);
+    Request := Self.Core.CreateInvite(Dest, '', '');
     try
       Self.CheckCreateRequest(Dest, Request);
       CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
@@ -745,7 +748,7 @@ var
 begin
   Body := 'foo fighters';
 
-  Invite := Self.Core.CreateInvite(Self.Destination, Body);
+  Invite := Self.Core.CreateInvite(Self.Destination, Body, 'text/plain');
   try
     CheckEquals(Length(Body), Invite.ContentLength, 'Content-Length');
     CheckEquals(Body,         Invite.Body,          'Body');
@@ -1705,7 +1708,7 @@ begin
   Self.SentRequestTerminated  := false;
 
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
-  Self.SimpleSdp := Self.CreateSimpleSdp;
+  Self.SimpleSdp      := Self.CreateSimpleSdp;
 
   Self.RTPClient := TIdRTPClient.Create(nil);
   Self.RTPClient.Host := Self.SimpleSdp.Connection.Address;
@@ -1796,7 +1799,7 @@ begin
   Result.MediaDescriptions[0].Transport := AudioVisualProfile;
   Result.MediaDescriptions[0].AddFormat('98');
   Result.MediaDescriptions[0].Attributes.Add(TIdSdpRTPMapAttribute.Create);
-Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
+  Result.MediaDescriptions[0].Attributes[0].Value := '98 t140/1000';
 end;
 
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
@@ -1839,7 +1842,34 @@ procedure TestTIdSipSession.OnSendResponse(const Response: TIdSipResponse;
                                            const Transport: TIdSipTransport);
 begin
   if (Response.StatusCode = SIPRequestTerminated) then
-    Self.SentRequestTerminated := true;                  
+    Self.SentRequestTerminated := true;
+end;
+
+procedure TestTIdSipSession.SimulateRemoteRinging(const Invite: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Invite, SIPRinging);
+  try
+    Self.Dispatch.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.SimulateRemoteTryingWithNoToTag(const Invite: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Core.CreateResponse(Invite, SIPTrying);
+  try
+    // strip the To header tag
+    Response.ToHeader.Value := Response.ToHeader.Value;
+
+    Self.Dispatch.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
 end;
 
 //* TestTIdSipSession Published methods ****************************************
@@ -1955,7 +1985,7 @@ begin
   SessCount    := Self.Core.SessionCount;
   TranCount    := Self.Dispatch.TransactionCount;
 
-  Session := Self.Core.Call(Self.Destination);
+  Session := Self.Core.Call(Self.Destination, '', '');
 
   CheckEquals(RequestCount + 1,
               Self.Dispatch.Transport.SentRequestCount,
@@ -1970,7 +2000,7 @@ begin
               'no new session created');
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
-                                       SIPTrying);
+                                       SIPRinging);
   try
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -1979,10 +2009,6 @@ begin
     Check(not Session.Dialog.IsSecure,
           'Dialog secure when TLS not used');
 
-    Response.StatusCode := SIPOK;
-    Dispatch.Transport.FireOnResponse(Response);
-
-    Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
     CheckEquals(Response.CallID,
                 Session.Dialog.ID.CallID,
                 'Dialog''s Call-ID');
@@ -1992,6 +2018,16 @@ begin
     CheckEquals(Response.ToHeader.Tag,
                 Session.Dialog.ID.RemoteTag,
                 'Dialog''s Remote Tag');
+  finally
+    Response.Free;
+  end;
+
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SIPOK);
+  try
+    Self.Dispatch.Transport.FireOnResponse(Response);
+
+    Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state: shouldn''t be early');
   finally
     Response.Free;
   end;
@@ -2006,8 +2042,8 @@ begin
   SessCount := Self.Core.SessionCount;
   TranCount := Self.Dispatch.TransactionCount;
 
-  Session := Self.Core.Call(Self.Destination);
-  Session.Call(Self.Destination);
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Session.Call(Self.Destination, '', '');
 
   CheckEquals(SessCount + 1,
               Self.Core.SessionCount,
@@ -2022,7 +2058,7 @@ var
   Response: TIdSipResponse;
   Session:  TIdSipSession;
 begin
-  Session := Self.Core.Call(Self.Destination);
+  Session := Self.Core.Call(Self.Destination, '', '');
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                        SIPForbidden);
@@ -2045,7 +2081,7 @@ begin
   try
     Session.AddSessionListener(Self);
     Self.Dispatch.Transport.FailWith := EIdConnectTimeout;
-    Session.Call(Self.Destination);
+    Session.Call(Self.Destination, '', '');
 
     Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
                                          SIPForbidden);
@@ -2069,10 +2105,10 @@ begin
   Self.Dispatch.Transport.TransportType := sttTLS;
 
   Self.Destination.Address.Scheme := SipsScheme;
-  Session := Self.Core.Call(Self.Destination);
+  Session := Self.Core.Call(Self.Destination, '', '');
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
-                                       SIPTrying);
+                                       SIPRinging);
   try
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -2085,24 +2121,23 @@ end;
 
 procedure TestTIdSipSession.TestCallSipsUriOverTcp;
 var
-  Response: TIdSipResponse;
-  Session:  TIdSipSession;
+  RequestCount: Cardinal;
+  SentInvite:   TIdSipRequest;
+  Session:      TIdSipSession;
 begin
+  RequestCount := Self.Dispatch.Transport.SentRequestCount;
   Self.Dispatch.Transport.TransportType := sttTCP;
-
   Self.Destination.Address.Scheme := SipsScheme;
-  Session := Self.Core.Call(Self.Destination);
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
-                                       SipTrying);
-  try
-    Self.Dispatch.Transport.FireOnResponse(Response);
+  Session := Self.Core.Call(Self.Destination, '', '');
 
-    Response.StatusCode := SIPOK;
-    Check(not Session.Dialog.IsSecure, 'Dialog secure when TCP used');
-  finally
-    Response.Free;
-  end;
+  Check(RequestCount < Self.Dispatch.Transport.SentRequestCount,
+        'INVITE wasn''t sent');
+  SentInvite := Self.Dispatch.Transport.LastRequest;
+
+  Self.SimulateRemoteRinging(SentInvite);
+
+  Check(not Session.Dialog.IsSecure, 'Dialog secure when TCP used');
 end;
 
 procedure TestTIdSipSession.TestCallSipUriOverTls;
@@ -2112,10 +2147,10 @@ var
 begin
   Self.Dispatch.Transport.TransportType := sttTCP;
 
-  Session := Self.Core.Call(Self.Destination);
+  Session := Self.Core.Call(Self.Destination, '', '');
 
   Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
-                                       SipTrying);
+                                       SipRinging);
   try
     Response.FirstContact.Address.Scheme := SipsScheme;
     Response.StatusCode := SIPOK;
@@ -2125,6 +2160,30 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TestTIdSipSession.TestDialogNotEstablishedOnTryingResponse;
+var
+  RequestCount: Cardinal;
+  SentInvite:   TIdSipRequest;
+  Session:      TIdSipSession;
+begin
+  RequestCount := Self.Dispatch.Transport.SentRequestCount;
+
+  Session := Self.Core.Call(Self.Destination, '', '');
+  Check(not Session.DialogEstablished, 'Brand new session');
+
+  Check(RequestCount < Self.Dispatch.Transport.SentRequestCount,
+        'The INVITE wasn''t sent');
+  SentInvite := Self.Dispatch.Transport.LastRequest;
+
+  Self.SimulateRemoteTryingWithNoToTag(SentInvite);
+  Check(not Session.DialogEstablished,
+        'Dialog established after receiving a 100 Trying');
+
+  Self.SimulateRemoteRinging(SentInvite);
+  Check(Session.DialogEstablished,
+        'Dialog not established after receiving a 180 Ringing');
 end;
 
 procedure TestTIdSipSession.TestReceiveBye;

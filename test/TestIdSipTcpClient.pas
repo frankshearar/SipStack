@@ -17,16 +17,20 @@ type
     ReceivedResponseCount: Cardinal;
     Server:                TIdSipTcpServer;
 
-    procedure CheckReceiveOkResponse(Sender: TObject; const Response: TIdSipResponse);
-    procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure CheckReceiveOkResponse(Sender: TObject;
+                                     const Response: TIdSipResponse;
+                                     const ReceivedOn: TIdSipIPTarget);
+    procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject;
+                                                   const Response: TIdSipResponse;
+                                                   const ReceivedOn: TIdSipIPTarget);
     procedure CheckSendInvite(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckSendInviteNoHostName(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckSendInviteSpecifiedHostName(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
-    procedure DoOnFinished(Sender: TIdSipTcpClient);
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure DoOnFinished(Sender: TObject);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
     procedure PauseAndSendOkResponse(Sender: TObject; const Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
@@ -41,8 +45,6 @@ type
     procedure TestReceiveOkResponseWithPause;
     procedure TestReceiveProvisionalAndOkResponse;
     procedure TestSendInvite;
-    procedure TestSendInviteNoHostName;
-    procedure TestSendInviteSpecifiedHostName;
     procedure TestSendTwoInvites;
     procedure TestSendWithServerDisconnect;
   end;
@@ -107,7 +109,9 @@ end;
 
 //* TestTIdSipTcpClient Private methods ****************************************
 
-procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject;
+                                                     const Response: TIdSipResponse;
+                                                     const ReceivedOn: TIdSipIPTarget);
 begin
   try
     Self.ThreadEvent.SetEvent;
@@ -119,7 +123,9 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.CheckReceiveProvisionalAndOkResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TestTIdSipTcpClient.CheckReceiveProvisionalAndOkResponse(Sender: TObject;
+                                                                   const Response: TIdSipResponse;
+                                                                   const ReceivedOn: TIdSipIPTarget);
 begin
   try
     Inc(Self.ReceivedResponseCount);
@@ -147,34 +153,6 @@ begin
     CheckEquals(MethodInvite, Request.Method, 'Incorrect method');
 
     Self.SendOkResponse(Sender, Request);
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpClient.CheckSendInviteNoHostName(Sender: TObject; const Request: TIdSipRequest);
-begin
-  try
-    CheckEquals(GStack.LocalAddress, Request.LastHop.SentBy, 'Incorrect sent-by');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpClient.CheckSendInviteSpecifiedHostName(Sender: TObject; const Request: TIdSipRequest);
-begin
-  try
-    CheckEquals(Self.Client.LocalHostName, Request.LastHop.SentBy, 'Incorrect sent-by');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -223,7 +201,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.DoOnFinished(Sender: TIdSipTcpClient);
+procedure TestTIdSipTcpClient.DoOnFinished(Sender: TObject);
 begin
   try
     Self.Finished := true;
@@ -237,7 +215,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TestTIdSipTcpClient.OnReceiveRequest(const Request: TIdSipRequest;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -245,10 +224,11 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTcpClient.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TestTIdSipTcpClient.OnReceiveResponse(const Response: TIdSipResponse;
+                                                const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response);
+    Self.CheckingResponseEvent(Self, Response, ReceivedOn);
 
   Self.ThreadEvent.SetEvent;
 end;
@@ -377,30 +357,6 @@ begin
   Self.CheckingRequestEvent := Self.CheckSendInvite;
 
 //  Self.Client.OnResponse
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Send(Self.Invite);
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipTcpClient.TestSendInviteNoHostName;
-begin
-  Self.CheckingRequestEvent := Self.CheckSendInviteNoHostName;
-  Self.Client.LocalHostName := '';
-
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Send(Self.Invite);
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipTcpClient.TestSendInviteSpecifiedHostName;
-begin
-  Self.CheckingRequestEvent := Self.CheckSendInviteSpecifiedHostName;
-  Self.Client.LocalHostName := 'foo';
-
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 

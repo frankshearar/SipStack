@@ -2067,7 +2067,7 @@ procedure TestTIdSipUriHeader.TestValue;
 begin
   Self.U.Value := '<sip:case@jacks-bar.com>';
   CheckEquals('sip:case@jacks-bar.com',
-              Self.U.Address.GetFullURI,
+              Self.U.Address.URI,
               'Address.GetFullURI');
 
   try
@@ -2104,7 +2104,7 @@ begin
   Self.U.Value := '<sip:case@jacks-bar.com;value=name>';
   CheckEquals(0, Self.U.ParamCount, 'ParamCount');
   CheckEquals('sip:case@jacks-bar.com;value=name',
-              Self.U.Address.GetFullURI,
+              Self.U.Address.URI,
               'Address');
 end;
 

@@ -41,21 +41,18 @@ type
     procedure AcknowledgeEvent(Sender: TObject;
                                  const Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
-                                 const Response: TIdSipResponse); overload;
+                                 const Response: TIdSipResponse;
+                                 const ReceivedOn: TIdSipIPTarget); overload;
     procedure CheckInternalServerError(Sender: TObject;
-                                 const Response: TIdSipResponse);
+                                 const Response: TIdSipResponse;
+                                 const ReceivedOn: TIdSipIPTarget);
     procedure CheckMultipleMessages(Sender: TObject;
                               const Request: TIdSipRequest);
     procedure CheckMethodEvent(Sender: TObject;
-                         const Request: TIdSipRequest);
-    procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
-                                              const Request: TIdSipRequest);
-    procedure CheckReceivedParamFQDNSentBy(Sender: TObject;
-                                     const Request: TIdSipRequest);
-    procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
-                                     const Request: TIdSipRequest);
+                               const Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                               const Response: TIdSipResponse);
+                                                     const Response: TIdSipResponse;
+                                                     const ReceivedOn: TIdSipIPTarget);
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
@@ -64,11 +61,16 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
-    procedure ClientOnResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure ClientOnResponse(Sender: TObject;
+                               const Response: TIdSipResponse;
+                               const ReceivedOn: TIdSipIPTarget);
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
-                                             const Response: TIdSipResponse);
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+                                                   const Response: TIdSipResponse;
+                                                   const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
     procedure OnServerDisconnect(AThread: TIdPeerThread);
     procedure RaiseException(Sender: TObject; const Request: TIdSipRequest);
     function  ReadResponse: String;
@@ -87,7 +89,6 @@ type
     SipClient:              TIdSipTcpClient;
 
     function ServerType: TIdSipTcpServerClass; virtual;
-    function SipClientType: TIdSipTcpClientClass; virtual;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -100,9 +101,6 @@ type
     procedure TestMalformedRequest;
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
-    procedure TestReceivedParamDifferentIPv4SentBy;
-    procedure TestReceivedParamFQDNSentBy;
-    procedure TestReceivedParamIPv4SentBy;
     procedure TestRemoveMessageListener;
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
@@ -316,7 +314,7 @@ begin
   Self.Parser         := TIdSipParser.Create;
   Self.HighPortServer := Self.ServerType.Create(nil);
   Self.LowPortServer  := Self.ServerType.Create(nil);
-  Self.SipClient      := Self.SipClientType.Create(nil);
+  Self.SipClient      := Self.HighPortServer.CreateClient;
 
   Self.Client.Host := LocalHost;
   Self.Client.Port := LowPortServer.DefaultPort;
@@ -351,7 +349,7 @@ begin
   Self.HighPortServer.Active := false;
   Self.LowPortServer.Active := false;
 
-  Self.SipClient.Free;
+  Self.HighPortServer.DestroyClient(Self.SipClient);
   Self.LowPortServer.Free;
   Self.HighPortServer.Free;
   Self.Parser.Free;
@@ -367,11 +365,6 @@ begin
   Result := TIdSipTcpServer;
 end;
 
-function TestTIdSipTcpServer.SipClientType: TIdSipTcpClientClass;
-begin
-  Result := TIdSipTcpClient;
-end;
-
 //* TestTIdSipTcpServer Private methods ****************************************
 
 procedure TestTIdSipTcpServer.AcknowledgeEvent(Sender: TObject;
@@ -381,13 +374,15 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.AcknowledgeEvent(Sender: TObject;
-                                               const Response: TIdSipResponse);
+                                               const Response: TIdSipResponse;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpServer.CheckInternalServerError(Sender: TObject;
-                                                 const Response: TIdSipResponse);
+                                                 const Response: TIdSipResponse;
+                                                 const ReceivedOn: TIdSipIPTarget);
 begin
   CheckEquals(SIPInternalServerError, Response.StatusCode, 'Status-Code');
 end;
@@ -411,7 +406,7 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.CheckMethodEvent(Sender: TObject;
-                                         const Request: TIdSipRequest);
+                                               const Request: TIdSipRequest);
 begin
   try
     CheckEquals('INVITE',                               Request.Method,         'Method');
@@ -421,7 +416,7 @@ begin
     CheckEquals('a84b4c76e66710@gw1.leo-ix.org',        Request.CallID,         'CallID');
     CheckEquals(70,                                     Request.MaxForwards,    'Max-Forwards');
 
-    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds;received=127.0.0.1',
+    CheckEquals('Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds',
                 Request.HeaderAt(0).AsString,
                 'Via');
     CheckEquals('Max-Forwards: 70',                                       Request.HeaderAt(1).AsString, 'Max-Forwards');
@@ -444,44 +439,9 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
-                                                              const Request: TIdSipRequest);
-begin
-  Self.CheckReceivedParamFQDNSentBy(Sender, Request);
-end;
-
-procedure TestTIdSipTcpServer.CheckReceivedParamFQDNSentBy(Sender: TObject;
-                                                     const Request: TIdSipRequest);
-begin
-  try
-    CheckNotEquals('', Request.LastHop.Received, 'Received param not appended by transport layer');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.CheckReceivedParamIPv4SentBy(Sender: TObject;
-                                                     const Request: TIdSipRequest);
-begin
-  try
-    CheckEquals('', Request.LastHop.Received, 'Received param appended by transport layer');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
 procedure TestTIdSipTcpServer.CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                                               const Response: TIdSipResponse);
+                                                                     const Response: TIdSipResponse;
+                                                                     const ReceivedOn: TIdSipIPTarget);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -619,7 +579,9 @@ begin
   end;
 end;
 }
-procedure TestTIdSipTcpServer.ClientOnResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TestTIdSipTcpServer.ClientOnResponse(Sender: TObject;
+                                               const Response: TIdSipResponse;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
@@ -635,21 +597,24 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                             const Response: TIdSipResponse);
+                                                             const Response: TIdSipResponse;
+                                                             const ReceivedOn: TIdSipIPTarget);
 begin
   Fail('The connection is closed. The client should not receive a response');
 end;
 
-procedure TestTIdSipTcpServer.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TestTIdSipTcpServer.OnReceiveRequest(const Request: TIdSipRequest;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
 end;
 
-procedure TestTIdSipTcpServer.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TestTIdSipTcpServer.OnReceiveResponse(const Response: TIdSipResponse;
+                                                const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response);
+    Self.CheckingResponseEvent(Self, Response, ReceivedOn);
 end;
 
 procedure TestTIdSipTcpServer.OnServerDisconnect(AThread: TIdPeerThread);
@@ -840,39 +805,6 @@ begin
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
 end;
 
-procedure TestTIdSipTcpServer.TestReceivedParamDifferentIPv4SentBy;
-begin
-  Self.CheckingRequestEvent := Self.CheckReceivedParamDifferentIPv4SentBy;
-
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(Format(BasicRequest, [ViaDifferentIP]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipTcpServer.TestReceivedParamFQDNSentBy;
-begin
-  Self.CheckingRequestEvent := Self.CheckReceivedParamFQDNSentBy;
-
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipTcpServer.TestReceivedParamIPv4SentBy;
-begin
-  Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
-
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(Format(BasicRequest, [ViaIP]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
 procedure TestTIdSipTcpServer.TestRemoveMessageListener;
 begin
 //  Self.HighPortServer.AddMessageListener(Self);
@@ -1005,7 +937,7 @@ begin
 
   Request := Self.Parser.ParseAndMakeRequest(LocalLoopRequest);
   try
-    SipClient := TIdSipTcpClient.Create(nil);
+    SipClient := Self.HighPortServer.CreateClient;
     try
       SipClient.OnResponse := Self.ClientOnResponse;
       SipClient.Host       := '127.0.0.1';
@@ -1025,7 +957,7 @@ begin
         SipClient.Disconnect;
       end;
     finally
-      SipClient.Free;
+      Self.HighPortServer.DestroyClient(SipClient);
     end;
   finally
     Request.Free;
@@ -1034,8 +966,8 @@ end;
 
 procedure TestTIdSipTcpServer.TestTortureTest16;
 begin
-  LowPortServer.OnDisconnect := Self.OnServerDisconnect;
-  LowPortServer.ReadBodyTimeout := 50;
+  Self.LowPortServer.OnDisconnect := Self.OnServerDisconnect;
+  Self.LowPortServer.ReadBodyTimeout := 50;
 
   Self.Client.Connect(DefaultTimeout);
 

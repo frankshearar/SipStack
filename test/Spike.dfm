@@ -1,7 +1,7 @@
 object rnidSpike: TrnidSpike
   Left = 192
   Top = 103
-  Width = 696
+  Width = 700
   Height = 480
   Caption = 'rnidSpike'
   Color = clBtnFace
@@ -13,10 +13,18 @@ object rnidSpike: TrnidSpike
   OldCreateOrder = False
   PixelsPerInch = 96
   TextHeight = 13
+  object Splitter1: TSplitter
+    Left = 502
+    Top = 35
+    Width = 5
+    Height = 418
+    Cursor = crHSplit
+    Align = alRight
+  end
   object Log: TMemo
     Left = 0
     Top = 35
-    Width = 688
+    Width = 502
     Height = 418
     Align = alClient
     ScrollBars = ssVertical
@@ -25,7 +33,7 @@ object rnidSpike: TrnidSpike
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 688
+    Width = 692
     Height = 35
     Align = alTop
     BevelOuter = bvNone
@@ -98,6 +106,14 @@ object rnidSpike: TrnidSpike
       TabOrder = 2
       OnClick = ByeClick
     end
+  end
+  object ExtraLog: TMemo
+    Left = 507
+    Top = 35
+    Width = 185
+    Height = 418
+    Align = alRight
+    TabOrder = 2
   end
   object UiTimer: TTimer
     Interval = 100

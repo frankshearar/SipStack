@@ -19,7 +19,7 @@ type
 implementation
 
 uses
-  IdSSLOpenSSL, TestIdSipTransport, TestFramework;
+  IdSSLOpenSSL, TestFramework, TestFrameworkSip;
 
 function Suite: ITestSuite;
 begin

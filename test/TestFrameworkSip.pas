@@ -134,6 +134,14 @@ type
     property SentResponse: Boolean read fSentResponse;
   end;
 
+  // constants used in tests
+const
+  CertPasswd     = 'test';
+  DefaultTimeout = 1000;
+  RootCert       = '..\etc\cacert.pem';
+  ServerCert     = '..\etc\newcert.pem';
+  ServerKey      = '..\etc\newkey.pem';
+
 implementation
 
 uses

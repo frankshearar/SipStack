@@ -3,8 +3,8 @@ unit TestIdSipTransport;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTransport, IdSocketHandle, IdTcpServer, SyncObjs,
-  SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdSipMessage, IdSipTcpClient, IdSipTransport, IdSocketHandle,
+  IdTcpServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   TIdSipTransportSubclass = class(TIdSipTcpTransport)
@@ -49,10 +49,15 @@ type
     procedure TestRemoveTransportSendingListener;
   end;
 
+  TTestIdSipRequestEvent = procedure(Sender: TObject;
+                                     const R: TIdSipRequest) of object;
+  TTestIdSipResponseEvent = procedure(Sender: TObject;
+                                      const R: TIdSipResponse) of object;
+
   TestTIdSipTransport = class(TThreadingTestCase, IIdSipTransportListener)
   protected
-    CheckingRequestEvent:  TIdSipRequestEvent;
-    CheckingResponseEvent: TIdSipResponseEvent;
+    CheckingRequestEvent:  TTestIdSipRequestEvent;
+    CheckingResponseEvent: TTestIdSipResponseEvent;
     HighPortTransport:     TIdSipTransport;
     LowPortTransport:      TIdSipTransport;
     ReceivedRequest:       Boolean;
@@ -67,6 +72,12 @@ type
                                       const R: TIdSipResponse);
     procedure CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
                                                     const R: TIdSipResponse);
+    procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
+                                                    const Request: TIdSipRequest);
+    procedure CheckReceivedParamFQDNSentBy(Sender: TObject;
+                                           const Request: TIdSipRequest);
+    procedure CheckReceivedParamIPv4SentBy(Sender: TObject;
+                                           const Request: TIdSipRequest);
     procedure CheckSendRequestTopVia(Sender: TObject;
                                      const R: TIdSipRequest);
     function  DefaultPort: Cardinal; virtual;
@@ -74,8 +85,9 @@ type
                                const Transport: TIdSipTransport);
     procedure OnReceiveResponse(const Response: TIdSipResponse;
                                 const Transport: TIdSipTransport);
-    procedure ReturnResponse(Sender: TObject; const R: TIdSipRequest);
-    procedure SendOkResponse;
+    procedure ReturnResponse(Sender: TObject;
+                             const R: TIdSipRequest);
+    procedure SendOkResponse(const Transport: TIdSipTransport);
     function  TransportType: TIdSipTransportClass; virtual;
   public
     procedure SetUp; override;
@@ -83,8 +95,12 @@ type
   published
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
+    procedure TestCanReceiveUnsolicitedResponse;
     procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
+    procedure TestReceivedParamDifferentIPv4SentBy;
+    procedure TestReceivedParamFQDNSentBy;
+    procedure TestReceivedParamIPv4SentBy;
     procedure TestSendRequest;
     procedure TestSendRequestTopVia;
     procedure TestSendResponse;
@@ -118,10 +134,13 @@ type
   TestTIdSipUDPTransport = class(TestTIdSipTransport)
   protected
     function TransportType: TIdSipTransportClass; override;
+  public
+    procedure SetUp; override;
   published
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
+    procedure TestRportListening;
   end;
 {
   TestTIdSipSCTPTransport = class(TestTIdSipTransport)
@@ -134,13 +153,6 @@ type
   end;
 }
 
-const
-  DefaultTimeout       = 1000;
-  RootCert             = '..\etc\cacert.pem';
-  ServerCert           = '..\etc\newcert.pem';
-  ServerKey            = '..\etc\newkey.pem';
-  TestServerPortOffset = 10000;
-
 implementation
 
 uses
@@ -152,15 +164,15 @@ begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
-  Result.AddTest(TestTIdSipTLSTransport.Suite);
+//  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
 end;
 
 //******************************************************************************
-//* TIdSipTransportSubclass                                             *
+//* TIdSipTransportSubclass                                                    *
 //******************************************************************************
-//* TIdSipTransportSubclass Public methods ******************************
+//* TIdSipTransportSubclass Public methods *************************************
 
 procedure TIdSipTransportSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
 begin
@@ -377,6 +389,7 @@ begin
   Binding := Self.HighPortTransport.Bindings.Add;
   Binding.IP := GStack.LocalAddress;
   Binding.Port := Self.DefaultPort + 10000;
+  Self.HighPortTransport.Start;
 
   Self.LowPortTransport := Self.TransportType.Create(Self.DefaultPort);
   Self.LowPortTransport.AddTransportListener(Self);
@@ -386,6 +399,7 @@ begin
   Binding := Self.LowPortTransport.Bindings.Add;
   Binding.IP := '127.0.0.1';
   Binding.Port := Self.DefaultPort;
+  Self.LowPortTransport.Start;
 
   P := TIdSipParser.Create;
   try
@@ -395,7 +409,8 @@ begin
     P.Free;
   end;
   Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
-  Self.Request.RequestUri.Port := Self.HighPortTransport.DefaultPort;
+  Self.Request.RequestUri.Host := Self.HighPortTransport.HostName;
+  Self.Request.RequestUri.Port := Self.HighPortTransport.Bindings[0].Port;
 
   Self.ReceivedRequest  := false;
   Self.ReceivedResponse := false;
@@ -407,6 +422,9 @@ begin
   Self.Response.Free;
   Self.Request.Free;
 
+  Self.LowPortTransport.Stop;
+  Self.HighPortTransport.Stop;
+
   Self.LowPortTransport.Free;
   Self.HighPortTransport.Free;
 
@@ -416,11 +434,11 @@ end;
 //* TestTIdSipTransport Protected methods **************************************
 
 procedure TestTIdSipTransport.CheckCanReceiveRequest(Sender: TObject;
-                                                       const R:      TIdSipRequest);
+                                                     const R: TIdSipRequest);
 begin
   try
     Self.ReceivedRequest := true;
-    Self.SendOkResponse;
+    Self.SendOkResponse(Sender as TIdSipTransport);
 
     Self.ThreadEvent.SetEvent;
   except
@@ -452,6 +470,44 @@ begin
   Self.ReceivedResponse := true;
 end;
 
+procedure TestTIdSipTransport.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject;
+                                                                    const Request: TIdSipRequest);
+begin
+  Self.CheckReceivedParamFQDNSentBy(Sender, Request);
+end;
+
+procedure TestTIdSipTransport.CheckReceivedParamFQDNSentBy(Sender: TObject;
+                                                           const Request: TIdSipRequest);
+begin
+  try
+    Check(Request.LastHop.HasReceived,
+          'Received param not appended by transport layer');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTransport.CheckReceivedParamIPv4SentBy(Sender: TObject;
+                                                           const Request: TIdSipRequest);
+begin
+  try
+    Check(not Request.LastHop.HasReceived,
+          'Received param appended by transport layer');
+
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
 procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
                                                      const R: TIdSipRequest);
 begin
@@ -481,7 +537,7 @@ procedure TestTIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
                                                const Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingRequestEvent) then
-    Self.CheckingRequestEvent(Self, Request);
+    Self.CheckingRequestEvent(Transport, Request);
 
   Self.ThreadEvent.SetEvent;
 end;
@@ -490,16 +546,16 @@ procedure TestTIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
                                                 const Transport: TIdSipTransport);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response);
+    Self.CheckingResponseEvent(Transport, Response);
 
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
-                                               const R:      TIdSipRequest);
+                                             const R: TIdSipRequest);
 begin
   try
-    Self.SendOkResponse;
+    Self.SendOkResponse(Sender as TIdSipTransport);
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -508,11 +564,11 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransport.SendOkResponse;
+procedure TestTIdSipTransport.SendOkResponse(const Transport: TIdSipTransport);
 begin
   Self.Response.StatusCode := SIPOK;
 
-  Self.HighPortTransport.Send(Self.Response);
+  Transport.Send(Self.Response);
 end;
 
 function TestTIdSipTransport.TransportType: TIdSipTransportClass;
@@ -524,37 +580,44 @@ end;
 
 procedure TestTIdSipTransport.TestCanReceiveRequest;
 begin
+  // LowPortTransport sends an INVITE to HighPortTransport.
+  // We check that HighPortTransport did actually get it.
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.LowPortTransport.Start;
-  try
-    Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedRequest, 'Request not received');
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  Check(Self.ReceivedRequest, 'Request not received');
 end;
 
 procedure TestTIdSipTransport.TestCanReceiveResponse;
 begin
+  // LowPortTransport sends an INVITE to HighPortTransport.
+  // HighPortTransport is set to immediately respond with a 200 OK.
+  // We then check that LowPortTransport got the returned response.
   Self.CheckingRequestEvent  := Self.ReturnResponse;
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.LowPortTransport.Start;
-  try
-    Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedResponse, 'Response not received');
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  Check(Self.ReceivedResponse, 'Response not received');
+end;
+
+procedure TestTIdSipTransport.TestCanReceiveUnsolicitedResponse;
+begin
+  Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
+
+  Self.HighPortTransport.Send(Self.Response);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+
+  Check(Self.ReceivedResponse, 'Response not received');
 end;
 
 procedure TestTIdSipTransport.TestTransportFor;
@@ -569,69 +632,82 @@ procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
 begin
   Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
 
-  Self.LowPortTransport.Start;
-  try
-    // If we don't set the received param we won't be able to send
-    // the message to the right SIP server. No, you'd never do this
-    // in production, because it's wilfully wrong.
-    Self.Response.LastHop.SentBy := 'unknown.host';
-    Self.Response.LastHop.Received := '127.0.0.1';
-    Self.LowPortTransport.Send(Self.Response);
+  // If we don't set the received param we won't be able to send
+  // the message to the right SIP server. No, you'd never do this
+  // in production, because it's wilfully wrong.
+  Self.Response.LastHop.SentBy := 'unknown.host';
+  Self.Response.LastHop.Received := '127.0.0.1';
+  Self.LowPortTransport.Send(Self.Response);
 
-    Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
-          'Response not silently discarded');
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
+        'Response not silently discarded');
+end;
+
+procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
+begin
+  Self.CheckingRequestEvent := Self.CheckReceivedParamDifferentIPv4SentBy;
+
+  Self.Request.LastHop.SentBy := '127.0.0.2';
+  Self.LowPortTransport.Send(Self.Request);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipTransport.TestReceivedParamFQDNSentBy;
+begin
+  Self.CheckingRequestEvent := Self.CheckReceivedParamFQDNSentBy;
+
+  Self.Request.LastHop.SentBy := 'localhost';
+  Self.LowPortTransport.Send(Self.Request);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
+procedure TestTIdSipTransport.TestReceivedParamIPv4SentBy;
+begin
+  Self.CheckingRequestEvent := Self.CheckReceivedParamIPv4SentBy;
+
+  Self.Request.LastHop.SentBy := '127.0.0.1';
+  Self.LowPortTransport.Send(Self.Request);
+
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipTransport.TestSendRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
-  Self.LowPortTransport.Start;
-  try
-    Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedRequest, 'Request not received');
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  Check(Self.ReceivedRequest, 'Request not received');
 end;
 
 procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
 
-  Self.LowPortTransport.Start;
-  try
-    Self.LowPortTransport.Send(Self.Request);
+  Self.LowPortTransport.Send(Self.Request);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(DefaultTimeout)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipTransport.TestSendResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
-  Self.LowPortTransport.Start;
-  try
-    Self.LowPortTransport.Send(Self.Response);
+  Self.LowPortTransport.Send(Self.Response);
 
-    if (wrSignaled <> Self.ThreadEvent.WaitFor(5000)) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(5000)) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
-    Check(Self.ReceivedResponse, 'Response not received');
-  finally
-    Self.LowPortTransport.Stop;
-  end;
+  Check(Self.ReceivedResponse, 'Response not received');
 end;
 
 procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
@@ -647,31 +723,20 @@ begin
       try
         Self.LowPortTransport.AddTransportListener(LowPortListener);
         try
-          Self.HighPortTransport.Start;
-          try
-            Self.LowPortTransport.Start;
-            try
-              Check(Self.LowPortTransport.Bindings.Count > 0,
-                    'Sanity check on LowPortTransport''s bindings');
+          Check(Self.LowPortTransport.Bindings.Count > 0,
+                'Sanity check on LowPortTransport''s bindings');
 
-              Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
-              Self.HighPortTransport.Send(Self.Response);
+          Self.Response.LastHop.Received := Self.LowPortTransport.Bindings[0].IP;
+          Self.HighPortTransport.Send(Self.Response);
 
-              // It's not perfect, but anyway. We need to wait long enough for
-              // LowPortTransport to get its response.
-              Sleep(500);
+          // It's not perfect, but anyway. We need to wait long enough for
+          // LowPortTransport to get its response.
+          Sleep(500);
 
-              Check(LowPortListener.ReceivedResponse
-                    and not HighPortListener.ReceivedResponse,
-                    'Received param in top Via header ignored - '
-                  + 'wrong server got the message');
-
-            finally
-              Self.LowPortTransport.Stop;
-            end;
-          finally
-            Self.HighPortTransport.Stop;
-          end;
+          Check(LowPortListener.ReceivedResponse
+                and not HighPortListener.ReceivedResponse,
+                'Received param in top Via header ignored - '
+              + 'wrong server got the message');
         finally
           Self.LowPortTransport.RemoveTransportListener(LowPortListener);
         end;
@@ -727,10 +792,13 @@ begin
   Self.SetUpTls(Self.LowPortTransport);
 
   Self.Request.RequestUri.Scheme := SipsScheme;
+  Self.Response.LastHop.Transport := Self.HighPortTransport.GetTransportType;
+{
   Self.Response.LastHop.Value := StringReplace(Self.Response.LastHop.AsString,
                                                'TCP',
                                                'TLS',
                                                []);
+}
 end;
 
 //* TestTIdSipTLSTransport Protected methods ***********************************
@@ -749,15 +817,15 @@ end;
 
 procedure TestTIdSipTLSTransport.DoOnPassword(var Password: String);
 begin
-  Password := 'test';
+  Password := CertPasswd;
 end;
 
 procedure TestTIdSipTLSTransport.SetUpTls(Transport: TIdSipTransport);
 var
   TLS: TIdSipTLSTransport;
 begin
-  CheckEquals(TIdSipTLSTransport,
-              Transport.ClassType,
+  CheckEquals(TIdSipTLSTransport.ClassName,
+              Transport.ClassName,
               'TestTIdSipTLSTransport.SetUpTls');
 
   TLS := Transport as TIdSipTLSTransport;
@@ -790,6 +858,16 @@ end;
 //******************************************************************************
 //* TestTIdSipUDPTransport                                                     *
 //******************************************************************************
+//* TestTIdSipUDPTransport Public methods **************************************
+
+procedure TestTIdSipUDPTransport.SetUp;
+begin
+  inherited SetUp;
+
+  (Self.LowPortTransport as TIdSipUDPTransport).CleanerThreadPollTime  := 10;
+  (Self.HighPortTransport as TIdSipUDPTransport).CleanerThreadPollTime := 10;
+end;
+
 //* TestTIdSipUDPTransport Protected methods ***********************************
 
 function TestTIdSipUDPTransport.TransportType: TIdSipTransportClass;
@@ -815,6 +893,14 @@ begin
   Check(not Self.HighPortTransport.IsSecure,
         'UDP transport marked as secure');
 end;
+
+procedure TestTIdSipUDPTransport.TestRportListening;
+begin
+  // We test here that when a request is sent from port x, that we listen on
+  // port x for responses
+  Fail('not implemented yet');
+end;
+
 {
 //******************************************************************************
 //* TestTIdSipSCTPTransport                                                    *

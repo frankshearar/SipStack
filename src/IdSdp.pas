@@ -1476,7 +1476,8 @@ procedure TIdSdpPayload.PrintUriField(Dest: TStream);
 var
   S: String;
 begin
-  if (Self.URI.GetFullURI <> '') then begin
+  // TODO: I hate stinking TIdURI
+  if (Self.URI.Protocol <> '') then begin
     S := #13#10'u=' + Self.URI.GetFullURI;
 
     Dest.Write(PChar(S)^, Length(S));

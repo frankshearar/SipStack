@@ -3,10 +3,12 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipUdpServer, IdUDPClient, SysUtils, TestFrameworkEx;
+  Classes, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipUdpServer,
+  IdUDPClient, SysUtils, TestFrameworkEx;
 
 type
-  TestTIdSipUdpServer = class(TThreadingTestCase, IIdSipMessageListener)
+  TestTIdSipUdpServer = class(TThreadingTestCase,
+                              IIdSipMessageListener)
   private
     CheckReceivedRequest:  TIdSipRequestEvent;
     CheckReceivedResponse: TIdSipResponseEvent;
@@ -14,12 +16,13 @@ type
     Parser:                TIdSipParser;
     Server:                TIdSipUdpServer;
 
-    procedure AcknowledgeEvent(Sender: TObject; const Request: TIdSipRequest); overload;
-    procedure AcknowledgeEvent(Sender: TObject; const Response: TIdSipResponse); overload;
-    procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
-    procedure CheckRequest(Sender: TObject; const Request: TIdSipRequest);
+    procedure AcknowledgeEvent(Sender: TObject;
+                               const Request: TIdSipRequest); overload;
+    procedure AcknowledgeEvent(Sender: TObject;
+                               const Response: TIdSipResponse;
+                               const ReceivedOn: TIdSipIPTarget); overload;
+    procedure CheckRequest(Sender: TObject;
+                           const Request: TIdSipRequest);
     procedure CheckTortureTest16;
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
@@ -29,8 +32,10 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
     function  ReadResponse: String;
   public
     procedure SetUp; override;
@@ -41,9 +46,6 @@ type
     procedure TestListenerReceiveResponse;
     procedure TestMalformedRequest;
     procedure TestMalformedResponse;
-    procedure TestReceivedParamDifferentIPv4SentBy;
-    procedure TestReceivedParamFQDNSentBy;
-    procedure TestReceivedParamIPv4SentBy;
     procedure TestRemoveMessageListener;
     procedure TestRequest;
     procedure TestTortureTest16;
@@ -127,56 +129,27 @@ end;
 
 //* TestTIdSipUdpServer Private methods *****************************************
 
-procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
+                                               const Request: TIdSipRequest);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject; const Response: TIdSipResponse);
+procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
+                                               const Response: TIdSipResponse;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipUdpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
-begin
-  Self.CheckReceivedParamFQDNSentBy(Sender, Request);
-end;
-
-procedure TestTIdSipUdpServer.CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
+procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject;
+                                           const Request: TIdSipRequest);
 begin
   try
-    CheckNotEquals('', Request.LastHop.Received, 'Received param not appended by transport layer');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipUdpServer.CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
-begin
-  try
-    CheckEquals('', Request.LastHop.Received, 'Received param appended by transport layer');
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject; const Request: TIdSipRequest);
-begin
-  try
-    CheckEquals(MethodInvite, Request.Method,             'Method');
-    CheckEquals('SIP/2.0',    Request.SipVersion,         'SipVersion');
-    CheckEquals(29,           Request.ContentLength,      'ContentLength');
-    CheckEquals(70,           Request.MaxForwards,        'Max-Forwards');
+    CheckEquals(MethodInvite, Request.Method,        'Method');
+    CheckEquals('SIP/2.0',    Request.SipVersion,    'SipVersion');
+    CheckEquals(29,           Request.ContentLength, 'ContentLength');
+    CheckEquals(70,           Request.MaxForwards,   'Max-Forwards');
 
     CheckEquals('I am a message. Hear me roar!', Request.Body, 'Body');
 
@@ -289,7 +262,8 @@ begin
   try
     CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
     CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
+    CheckEquals(Format(MalformedToken,
+                       [ExpiresHeader, 'Expires: 0 0l@company.com']),
                 Response.StatusText,
                 'StatusText');
   finally
@@ -328,16 +302,18 @@ begin
 end;
 }
 
-procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest;
+                                               const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckReceivedRequest) then
     Self.CheckReceivedRequest(Self, Request);
 end;
 
-procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse;
+                                                const ReceivedOn: TIdSipIPTarget);
 begin
   if Assigned(Self.CheckReceivedResponse) then
-    Self.CheckReceivedResponse(Self, Response);
+    Self.CheckReceivedResponse(Self, Response, ReceivedOn);
 end;
 
 function TestTIdSipUdpServer.ReadResponse: String;
@@ -446,36 +422,6 @@ begin
   CheckEquals('',
               Client.ReceiveString(DefaultTimeout),
               'Response not just dropped on the floor');
-end;
-
-procedure TestTIdSipUdpServer.TestReceivedParamDifferentIPv4SentBy;
-begin
-  Self.CheckReceivedRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
-
-  Self.Client.Send(Format(BasicRequest, [ViaDifferentIP]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipUdpServer.TestReceivedParamFQDNSentBy;
-begin
-  Self.CheckReceivedRequest := Self.CheckReceivedParamFQDNSentBy;
-
-  Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-end;
-
-procedure TestTIdSipUdpServer.TestReceivedParamIPv4SentBy;
-begin
-  Self.CheckReceivedRequest := Self.CheckReceivedParamIPv4SentBy;
-
-  Self.Client.Send(Format(BasicRequest, [ViaIP]));
-
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipUdpServer.TestRemoveMessageListener;

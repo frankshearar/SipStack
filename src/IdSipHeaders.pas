@@ -357,9 +357,9 @@ type
 
   TIdSipUriHeader = class(TIdSipHeader)
   private
-    fAddress: TIdURI;
+    fAddress: TIdSipUri;
 
-    procedure SetAddress(const Value: TIdURI);
+    procedure SetAddress(const Value: TIdSipUri);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
@@ -367,7 +367,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    property Address: TIdURI read fAddress write SetAddress;
+    property Address: TIdSipUri read fAddress write SetAddress;
   end;
 
   TIdSipViaHeader = class(TIdSipHeader)
@@ -2108,7 +2108,7 @@ constructor TIdSipUriHeader.Create;
 begin
   inherited Create;
 
-  fAddress := TIdURI.Create('');
+  fAddress := TIdSipUri.Create('');
 end;
 
 destructor TIdSipUriHeader.Destroy;
@@ -2120,7 +2120,7 @@ end;
 
 function TIdSipUriHeader.GetValue: String;
 begin
-  Result := Self.Address.GetFullURI;
+  Result := Self.Address.URI;
 
   if   (IndyPos(';', Result) > 0)
     or (IndyPos(',', Result) > 0)
@@ -2154,7 +2154,7 @@ end;
 
 //* TIdSipUriHeader Private methods ********************************************
 
-procedure TIdSipUriHeader.SetAddress(const Value: TIdURI);
+procedure TIdSipUriHeader.SetAddress(const Value: TIdSipUri);
 begin
   fAddress.URI := Value.URI;
 end;

@@ -7,9 +7,12 @@ uses
   IdTCPConnection, IdTCPServer, SyncObjs, SysUtils;
 
 type
-  TIdSipIPTarget = record
-    IP:   String;
-    Port: Integer;
+  IIdSipMessageListener = interface
+    ['{941E4681-89F9-4491-825C-F6458F7E663C}']
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
   end;
 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
@@ -66,7 +69,7 @@ type
   // not recommended. ReadBodyTimeout = n implies we wait n milliseconds for
   // the body to be received. If we haven't read Content-Length bytes by the
   // time the timeout occurs, we sever the connection.
-  TIdSipTcpServer = class(TIdTCPServer, IIdSipMessageVisitor)
+  TIdSipTcpServer = class(TIdTCPServer)
   private
     ConnectionMap:      TIdSipConnectionTableLock;
     fConnectionTimeout: Cardinal;
@@ -74,16 +77,26 @@ type
     ListenerLock:       TCriticalSection;
     Listeners:          TList;
 
-    procedure AddConnection(const Connection: TIdTCPConnection; const Request: TIdSipRequest);
-    procedure NotifyListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyListeners(const Response: TIdSipResponse); overload;
+    procedure AddConnection(const Connection: TIdTCPConnection;
+                            const Request: TIdSipRequest);
+    procedure NotifyListeners(const Request: TIdSipRequest;
+                              const ReceivedOn: TIdSipIPTarget); overload;
+    procedure NotifyListeners(const Response: TIdSipResponse;
+                              const ReceivedOn: TIdSipIPTarget); overload;
     procedure OnReadBodyTimeout(Sender: TObject);
-    function  ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
+    function  ReadBody(Connection: TIdTCPConnection;
+                       Message: TIdSipMessage): String;
     function  ReadMessage(Connection: TIdTCPConnection): TStream;
-    procedure ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
-    procedure ReturnInternalServerError(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
-    procedure SendResponseTo(const Response: TIdSipResponse; Dest: TIdSipIPTarget);
-    procedure WriteMessage(Connection: TIdTCPConnection; AMessage: TIdSipMessage);
+    procedure ReturnBadRequest(Connection: TIdTCPConnection;
+                               Reason: String;
+                               Parser: TIdSipParser);
+    procedure ReturnInternalServerError(Connection: TIdTCPConnection;
+                                        Reason: String;
+                                        Parser: TIdSipParser);
+    procedure SendResponseTo(const Response: TIdSipResponse;
+                             Dest: TIdSipIPTarget);
+    procedure WriteMessage(Connection: TIdTCPConnection;
+                           AMessage: TIdSipMessage);
   protected
     procedure DoDisconnect(AThread: TIdPeerThread); override;
     function  DoExecute(AThread: TIdPeerThread): Boolean; override;
@@ -97,8 +110,6 @@ type
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure SendResponse(const Response: TIdSipResponse);
-    procedure VisitRequest(const Request: TIdSipRequest);
-    procedure VisitResponse(const Response: TIdSipResponse);
   published
     property ConnectionTimeout: Cardinal read fConnectionTimeout write fConnectionTimeout;
     property DefaultPort default IdPORT_SIP;
@@ -334,16 +345,6 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.VisitRequest(const Request: TIdSipRequest);
-begin
-  Self.NotifyListeners(Request);
-end;
-
-procedure TIdSipTcpServer.VisitResponse(const Response: TIdSipResponse);
-begin
-  Self.NotifyListeners(Response);
-end;
-
 //* TIdSipTcpServer Protected methods ******************************************
 
 procedure TIdSipTcpServer.DoDisconnect(AThread: TIdPeerThread);
@@ -362,11 +363,15 @@ end;
 
 function TIdSipTcpServer.DoExecute(AThread: TIdPeerThread): Boolean;
 var
-  Msg:    TIdSipMessage;
-  Parser: TIdSipParser;
-  S:      TStream;
+  Msg:        TIdSipMessage;
+  Parser:     TIdSipParser;
+  ReceivedOn: TIdSipIPTarget;
+  S:          TStream;
 begin
   Result := true;
+
+  ReceivedOn.IP   := AThread.Connection.Socket.Binding.PeerIP;
+  ReceivedOn.Port := AThread.Connection.Socket.Binding.PeerPort;
 
   while AThread.Connection.Connected do begin
     S := Self.ReadMessage(AThread.Connection);
@@ -382,14 +387,12 @@ begin
               Msg.ContentLength := 0;
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
-            if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
-              or (Msg.LastHop.SentBy <> AThread.Connection.Socket.Binding.PeerIP) then
-              Msg.LastHop.Received := AThread.Connection.Socket.Binding.PeerIP;
-
-            if Msg.IsRequest then
+            if Msg.IsRequest then begin
               Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-
-            Msg.Accept(Self);
+              Self.NotifyListeners(Msg as TIdSipRequest, ReceivedOn);
+            end
+            else
+              Self.NotifyListeners(Msg as TIdSipResponse, ReceivedOn);
           finally
             Msg.Free;
           end;
@@ -418,7 +421,8 @@ end;
 
 //* TIdSipTcpServer Private methods ********************************************
 
-procedure TIdSipTcpServer.AddConnection(const Connection: TIdTCPConnection; const Request: TIdSipRequest);
+procedure TIdSipTcpServer.AddConnection(const Connection: TIdTCPConnection;
+                                        const Request: TIdSipRequest);
 var
   Table:  TIdSipConnectionTable;
 begin
@@ -430,27 +434,31 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.NotifyListeners(const Request: TIdSipRequest);
+procedure TIdSipTcpServer.NotifyListeners(const Request: TIdSipRequest;
+                                          const ReceivedOn: TIdSipIPTarget);
 var
   I: Integer;
 begin
   Self.ListenerLock.Acquire;
   try
     for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request,
+                                                                ReceivedOn);
   finally
     Self.ListenerLock.Release;
   end;
 end;
 
-procedure TIdSipTcpServer.NotifyListeners(const Response: TIdSipResponse);
+procedure TIdSipTcpServer.NotifyListeners(const Response: TIdSipResponse;
+                                          const ReceivedOn: TIdSipIPTarget);
 var
   I: Integer;
 begin
   Self.ListenerLock.Acquire;
   try
     for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response,
+                                                                 ReceivedOn);
   finally
     Self.ListenerLock.Release;
   end;
@@ -461,7 +469,8 @@ begin
   (Sender as TIdSipTcpConnectionCutter).Connection.DisconnectSocket;
 end;
 
-function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection; Message: TIdSipMessage): String;
+function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection;
+                                  Message: TIdSipMessage): String;
 var
   Timer: TIdSipTcpConnectionCutter;
 begin
@@ -498,7 +507,9 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
+procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection;
+                                           Reason: String;
+                                           Parser: TIdSipParser);
 var
   OwnVia: TIdSipViaHeader;
   Res:    TIdSipResponse;
@@ -525,7 +536,9 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.ReturnInternalServerError(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);
+procedure TIdSipTcpServer.ReturnInternalServerError(Connection: TIdTCPConnection;
+                                                    Reason: String;
+                                                    Parser: TIdSipParser);
 var
   Res: TIdSipResponse;
 begin
@@ -563,7 +576,8 @@ begin
   end;
 end;
 
-procedure TIdSipTcpServer.WriteMessage(Connection: TIdTCPConnection; AMessage: TIdSipMessage);
+procedure TIdSipTcpServer.WriteMessage(Connection: TIdTCPConnection;
+                                       AMessage: TIdSipMessage);
 begin
   Connection.Write(AMessage.AsString);
 end;

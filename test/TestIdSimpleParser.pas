@@ -323,5 +323,6 @@ begin
 end;
 
 initialization
+
   RegisterTest('IdSimpleParser', Suite);
 end.

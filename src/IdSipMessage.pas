@@ -3,27 +3,19 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipDialogID,
-  IdSipHeaders, IdSipInterfacedObject, IdURI, SyncObjs, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdSimpleParser, IdSipHeaders,
+  IdSipInterfacedObject, SyncObjs, SysUtils;
 
 type
   TIdSipRequest = class;
   TIdSipResponse = class;
 
   TIdSipNotifyEvent = TNotifyEvent;
-  TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
-  TIdSipRequestEvent = procedure(Sender: TObject; const R: TIdSipRequest) of object;
 
   IIdSipMessageVisitor = interface
     ['{E2900B55-A1CA-47F1-9DB0-D72D6A846EA0}']
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
-  end;
-
-  IIdSipMessageListener = interface
-    ['{941E4681-89F9-4491-825C-F6458F7E663C}']
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
   end;
 
   TIdSipMessage = class(TPersistent)
@@ -114,6 +106,7 @@ type
     function  IsRequest: Boolean; override;
     function  MalformedException: ExceptClass; override;
     function  Match(const Msg: TIdSipMessage): Boolean;
+    function  RequiresResponse: Boolean;
 
     property MaxForwards: Byte      read GetMaxForwards write SetMaxForwards;
     property Method:      String    read fMethod write fMethod;
@@ -133,8 +126,10 @@ type
     procedure Assign(Src: TPersistent); override;
     function  IsEqualTo(const Msg: TIdSipMessage): Boolean; override;
     function  IsFinal: Boolean;
+    function  IsOK: Boolean;
     function  IsProvisional: Boolean;
     function  IsRequest: Boolean; override;
+    function  IsTrying: Boolean;
     function  MalformedException: ExceptClass; override;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
@@ -204,23 +199,6 @@ type
 
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
-  end;
-
-  // I am the Subject half of the Observer pattern as related to
-  // IIdSipMessageListener (the Observer, naturally enough).
-  TIdSipMessageSubject = class(TIdSipInterfacedObject)
-  private
-    MsgListenerLock: TCriticalSection;
-    MsgListeners:    TList;
-  protected
-    procedure NotifyMessageListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyMessageListeners(const Response: TIdSipResponse); overload;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    procedure AddMessageListener(const Listener: IIdSipMessageListener);
-    procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
   end;
 
   EBadHeader = class(EParser);
@@ -682,6 +660,11 @@ begin
   else Result := false;
 end;
 
+function TIdSipRequest.RequiresResponse: Boolean;
+begin
+  Result := not Self.IsAck;
+end;
+
 //* TIdSipRequest Protected methods ********************************************
 
 function TIdSipRequest.FirstLine: String;
@@ -752,6 +735,11 @@ begin
   Result := Self.StatusCode div 100 > 1;
 end;
 
+function TIdSipResponse.IsOK: Boolean;
+begin
+  Result := Self.StatusCode = SIPOK;
+end;
+
 function TIdSipResponse.IsProvisional: Boolean;
 begin
   Result := Self.StatusCode div 100 = 1;
@@ -760,6 +748,11 @@ end;
 function TIdSipResponse.IsRequest: Boolean;
 begin
   Result := false;
+end;
+
+function TIdSipResponse.IsTrying: Boolean;
+begin
+  Result := Self.StatusCode = SIPTrying;
 end;
 
 function TIdSipResponse.MalformedException: ExceptClass;
@@ -1315,75 +1308,6 @@ end;
 function TIdSipParser._Release: Integer;
 begin
   Result := -1;
-end;
-
-//******************************************************************************
-//* TIdSipMessageSubject                                                       *
-//******************************************************************************
-//* TIdSipMessageSubject Public methods ****************************************
-
-constructor TIdSipMessageSubject.Create;
-begin
-  inherited Create;
-
-  Self.MsgListenerLock := TCriticalSection.Create;
-  Self.MsgListeners    := TList.Create;
-end;
-
-destructor TIdSipMessageSubject.Destroy;
-begin
-  Self.MsgListeners.Free;
-  Self.MsgListenerLock.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipMessageSubject.AddMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.MsgListenerLock.Acquire;
-  try
-    Self.MsgListeners.Add(Pointer(Listener));
-  finally
-    Self.MsgListenerLock.Release;
-  end;
-end;
-
-procedure TIdSipMessageSubject.RemoveMessageListener(const Listener: IIdSipMessageListener);
-begin
-  Self.MsgListenerLock.Acquire;
-  try
-    Self.MsgListeners.Remove(Pointer(Listener));
-  finally
-    Self.MsgListenerLock.Release;
-  end;
-end;
-
-//* TIdSipMessageSubject Protected methods *************************************
-
-procedure TIdSipMessageSubject.NotifyMessageListeners(const Request: TIdSipRequest);
-var
-  I: Integer;
-begin
-  Self.MsgListenerLock.Acquire;
-  try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipMessageListener(Self.MsgListeners[I]).OnReceiveRequest(Request);
-  finally
-    Self.MsgListenerLock.Release;
-  end;
-end;
-
-procedure TIdSipMessageSubject.NotifyMessageListeners(const Response: TIdSipResponse);
-var
-  I: Integer;
-begin
-  Self.MsgListenerLock.Acquire;
-  try
-    for I := 0 to Self.MsgListeners.Count - 1 do
-      IIdSipMessageListener(Self.MsgListeners[I]).OnReceiveResponse(Response);
-  finally
-    Self.MsgListenerLock.Release;
-  end;
 end;
 
 end.

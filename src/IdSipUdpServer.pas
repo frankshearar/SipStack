@@ -3,29 +3,30 @@ unit IdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipMessage, IdSocketHandle, IdUDPServer, SyncObjs;
+  Classes, IdSipConsts, IdSipMessage, IdSipTcpClient, IdSipTcpServer,
+  IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
-  TIdSipUdpServer = class(TIdUDPServer, IIdSipMessageVisitor)
+  TIdSipUdpServer = class(TIdUDPServer)
   private
     ListenerLock: TCriticalSection;
     Listeners:    TList;
 
-    procedure NotifyListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyListeners(const Request: TIdSipRequest;
+                              const ReceivedOn: TIdSipIPTarget); overload;
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
-                         const Reason:  String;
-                               Parser:  TIdSipParser);
+                               const Reason: String;
+                               Parser: TIdSipParser);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
+    procedure NotifyListeners(const Response: TIdSipResponse;
+                              const ReceivedOn: TIdSipIPTarget); overload; virtual;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
     procedure AddMessageListener(const Listener: IIdSipMessageListener);
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
-    procedure VisitRequest(const Request: TIdSipRequest);
-    procedure VisitResponse(const Response: TIdSipResponse);
   end;
 
 implementation
@@ -76,16 +77,6 @@ begin
   end;
 end;
 
-procedure TIdSipUdpServer.VisitRequest(const Request: TIdSipRequest);
-begin
-  Self.NotifyListeners(Request);
-end;
-
-procedure TIdSipUdpServer.VisitResponse(const Response: TIdSipResponse);
-begin
-  Self.NotifyListeners(Response);
-end;
-
 //* TIdSipUdpServer Protected methods ******************************************
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
@@ -93,8 +84,12 @@ var
   RemainingBytes: Cardinal;
   Msg:            TIdSipMessage;
   Parser:         TIdSipParser;
+  ReceivedOn:     TIdSipIPTarget;
 begin
   inherited DoUDPRead(AData, ABinding);
+
+  ReceivedOn.IP   := ABinding.PeerIP;
+  ReceivedOn.Port := ABinding.PeerPort;
 
   Parser := TIdSipParser.Create;
   try
@@ -106,15 +101,15 @@ begin
         RemainingBytes := AData.Size - AData.Position;
         if Msg.HasHeader(ContentLengthHeaderFull) and
           (RemainingBytes <> Msg.ContentLength) then
-          raise EBadRequest.Create(Format(UnexpectedMessageLength, [RemainingBytes, Msg.ContentLength]));
+          raise EBadRequest.Create(Format(UnexpectedMessageLength,
+                                   [RemainingBytes, Msg.ContentLength]));
 
         Msg.ReadBody(Parser.Source);
 
-        if TIdSipParser.IsFQDN(Msg.LastHop.SentBy)
-          or (Msg.LastHop.SentBy <> ABinding.PeerIP) then
-          Msg.LastHop.Received := ABinding.PeerIP;
-
-        Msg.Accept(Self);
+        if Msg.IsRequest then
+          Self.NotifyListeners(Msg as TIdSipRequest, ReceivedOn)
+        else
+          Self.NotifyListeners(Msg as TIdSipResponse, ReceivedOn);
       finally
         Msg.Free;
       end;
@@ -131,37 +126,41 @@ begin
   end;
 end;
 
-//* TIdSipUdpServer Private methods ********************************************
-
-procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest);
+procedure TIdSipUdpServer.NotifyListeners(const Response: TIdSipResponse;
+                                          const ReceivedOn: TIdSipIPTarget);
 var
   I: Integer;
 begin
   Self.ListenerLock.Acquire;
   try
     for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response,
+                                                                 ReceivedOn);
   finally
     Self.ListenerLock.Release;
   end;
 end;
 
-procedure TIdSipUdpServer.NotifyListeners(const Response: TIdSipResponse);
+//* TIdSipUdpServer Private methods ********************************************
+
+procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest;
+                                          const ReceivedOn: TIdSipIPTarget);
 var
   I: Integer;
 begin
   Self.ListenerLock.Acquire;
   try
     for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request,
+                                                                ReceivedOn);
   finally
     Self.ListenerLock.Release;
   end;
 end;
 
 procedure TIdSipUdpServer.ReturnBadRequest(Binding: TIdSocketHandle;
-                                     const Reason:  String;
-                                           Parser:  TIdSipParser);
+                                           const Reason: String;
+                                           Parser: TIdSipParser);
 var
   OwnVia: TIdSipViaHeader;
   Res:    TIdSipResponse;

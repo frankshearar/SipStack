@@ -27,10 +27,12 @@ uses
   IdSipTlsServer in 'src\IdSipTlsServer.pas',
   IdSipTransaction in 'src\IdSipTransaction.pas',
   IdSipTransport in 'src\IdSipTransport.pas',
+  IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
   TestFrameworkEx in '..\IctWebsiteCgi\test\TestFrameworkEx.pas',
+  TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
   TestMessages in 'test\TestMessages.pas',
   TestIdRTP in 'test\TestIdRTP.pas',
@@ -46,13 +48,13 @@ uses
   TestIdSipMessage in 'test\TestIdSipMessage.pas',
   TestIdSipParser in 'test\TestIdSipParser.pas',
   TestIdSipTcpClient in 'test\TestIdSipTcpClient.pas',
-  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas',
+  TestIdSipTcpServer in 'test\TestIdSipTcpServer.pas'{,
+  TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'},
   TestIdSipTimer in 'test\TestIdSipTimer.pas',
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdSipUri in 'test\TestIdSipUri.pas',
-  TestIdUri in 'test\TestIdUri.pas';
+  TestIdSipUri in 'test\TestIdSipUri.pas';
 
 //{$DEFINE SPIKE}
 //{$DEFINE GUI}

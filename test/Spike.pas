@@ -3,8 +3,8 @@ unit Spike;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdSdp, IdSipCore, IdSipMessage,
-  IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs;
+  audioclasses, Classes, Controls, ExtCtrls, Forms, IdSdp, IdSipCore,
+  IdSipMessage, IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs;
 
 type
   TrnidSpike = class(TForm,
@@ -25,23 +25,28 @@ type
     Bye: TButton;
     Label3: TLabel;
     UDPDataCount: TLabel;
+    ExtraLog: TMemo;
+    Splitter1: TSplitter;
     procedure UiTimerTimer(Sender: TObject);
     procedure InviteClick(Sender: TObject);
     procedure ByeClick(Sender: TObject);
   private
-    RTPByteCount: Integer;
-    UDPByteCount: Integer;
+    AudioPlayer:  TAudioData;
+    AudioStream:  TStream;
     DataStore:    TStream;
     Dispatch:     TIdSipTransactionDispatcher;
     Lock:         TCriticalSection;
     Media:        TIdSdpPayloadProcessor;
+    RTPByteCount: Integer;
     TransportTCP: TIdSipTransport;
     TransportTLS: TIdSipTransport;
     TransportUDP: TIdSipTransport;
     UA:           TIdSipUserAgentCore;
+    UDPByteCount: Integer;
 
     procedure LogMessage(const Msg: TIdSipMessage);
     procedure OnChanged(const Observed: TObject);
+    procedure OnData(Origin: TAudioData; BlockCounter: Cardinal);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnModifiedSession(const Session: TIdSipSession;
@@ -85,6 +90,14 @@ var
   From:    TIdSipFromHeader;
 begin
   inherited Create(AOwner);
+
+  Self.AudioStream := TMemoryStream.Create;
+  Self.AudioPlayer := TAudioData.Create;
+  Self.AudioPlayer.AutoFreeSource := false;
+  Self.AudioPlayer.SetFormatParameters(afMuLaw, ChannelsMono, 8000, 8);
+  Self.AudioPlayer.Assign(Self.AudioStream);
+  Self.AudioPlayer.OnData := Self.OnData;
+  Self.AudioPlayer.Play(AnyAudioDevice);
 
   Self.RTPByteCount := 0;
   Self.DataStore := TFileStream.Create('..\etc\dump.wav', fmCreate or fmShareDenyWrite);
@@ -167,8 +180,13 @@ begin
   Self.TransportUDP.Free;
   Self.TransportTLS.Free;
   Self.TransportTCP.Free;
+
   Self.Lock.Free;
   Self.DataStore.Free;
+
+  Self.AudioPlayer.Stop;
+  Self.AudioPlayer.Free;
+  Self.AudioStream.Free;
 
   inherited Destroy;
 end;
@@ -184,6 +202,11 @@ end;
 procedure TrnidSpike.OnChanged(const Observed: TObject);
 begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
+end;
+
+procedure TrnidSpike.OnData(Origin: TAudioData; BlockCounter: Cardinal);
+begin
+  Self.ExtraLog.Lines.Add('OnData, BlockCounter=' + IntToStr(BlockCounter));
 end;
 
 procedure TrnidSpike.OnEstablishedSession(const Session: TIdSipSession);
@@ -206,6 +229,7 @@ begin
   try
     Inc(Self.RTPByteCount, Data.Size);
 
+    Self.AudioStream.CopyFrom(Data, 0);
     Self.DataStore.CopyFrom(Data, 0);
   finally
     Self.Lock.Release;

@@ -6,8 +6,8 @@ unit IdSipCore;
 //   interfaces are NOT reference counted.
 // * Value Objects are used when possible.
 // * If an object A receives some object B that it is expected to store as data
-//   then A must store a COPY of B. Typical objects are: TIdURI, TIdSipDialogID,
-//   TIdSipMessage.
+//   then A must store a COPY of B. Typical objects are: TIdSipURI,
+//   TIdSipDialogID, TIdSipMessage.
 // * Each layer is aware of the layers beneath it. We try to make each layer
 //   aware of ONLY the layer immediately below it, but that's not always
 //   possible.
@@ -167,11 +167,13 @@ type
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
     function  Call(const Dest: TIdSipToHeader;
-                   const InitialOffer: String = ''): TIdSipSession;
+                   const InitialOffer: String;
+                   const MimeType: String): TIdSipSession;
     function  CreateBye(const Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateCancel(const Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(const Dest: TIdSipToHeader;
-                           const Body: String = ''): TIdSipRequest;
+                           const Body: String;
+                           const MimeType: String): TIdSipRequest;
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; overload; override;
     function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(const Request: TIdSipRequest;
@@ -240,7 +242,6 @@ type
     function  CreateInboundDialog(const Response: TIdSipResponse): TIdSipDialog;
     function  CreateOutboundDialog(const Response: TIdSipResponse;
                                    const Receiver: TIdSipTransport): TIdSipDialog;
-    function  DialogEstablished: Boolean;
     procedure MarkAsTerminated;
     procedure MarkAsTerminatedProc(ObjectOrIntf: Pointer);
     procedure NotifyOfEndedSession;
@@ -274,7 +275,9 @@ type
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
     procedure Call(const Dest: TIdSipToHeader;
-                   const InitialOffer: String = '');
+                   const InitialOffer: String;
+                   const MimeType: String);
+    function  DialogEstablished: Boolean;                   
     procedure Terminate;
     procedure Modify;
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -470,10 +473,11 @@ begin
 end;
 
 function TIdSipUserAgentCore.Call(const Dest: TIdSipToHeader;
-                                  const InitialOffer: String = ''): TIdSipSession;
+                                  const InitialOffer: String;
+                                  const MimeType: String): TIdSipSession;
 begin
   Result := Self.AddOutboundSession;
-  Result.Call(Dest, InitialOffer);
+  Result.Call(Dest, InitialOffer, MimeType);
 end;
 
 function TIdSipUserAgentCore.CreateBye(const Dialog: TIdSipDialog): TIdSipRequest;
@@ -503,19 +507,22 @@ begin
 end;
 
 function TIdSipUserAgentCore.CreateInvite(const Dest: TIdSipToHeader;
-                                          const Body: String = ''): TIdSipRequest;
+                                          const Body: String;
+                                          const MimeType: String): TIdSipRequest;
 begin
   Result := CreateRequest(Dest);
   Result.Method := MethodInvite;
 
   Result.CSeq.Method     := MethodInvite;
-  Result.CSeq.SequenceNo := 0;
+  Result.CSeq.SequenceNo := TIdSipRandomNumber.Next($80000000 - 1);
 
   Result.Body := Body;
   Result.ContentLength := Length(Body);
 
-  if (Result.ContentLength > 0) then
+  if (Result.ContentLength > 0) then begin
     Result.Disposition.Value := DispositionSession;
+    Result.ContentType       := MimeType;
+  end;
 end;
 
 function TIdSipUserAgentCore.CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest;
@@ -1224,15 +1231,9 @@ end;
 
 procedure TIdSipSession.AcceptCall(const Offer, ContentType: String);
 var
-  HostName: String;
   Response: TIdSipResponse;
 begin
   if Self.IsInboundCall then begin
-    if Assigned(GStack) then
-      HostName := GStack.LocalAddress
-    else
-      HostName := 'localhost';
-
     Response := Self.Core.CreateResponse(Self.Invite, SIPOK);
     try
       Response.Body := Offer;
@@ -1271,12 +1272,13 @@ begin
 end;
 
 procedure TIdSipSession.Call(const Dest: TIdSipToHeader;
-                             const InitialOffer: String = '');
+                             const InitialOffer: String;
+                             const MimeType: String);
 var
   Invite: TIdSipRequest;
 begin
   if not Self.IsInboundCall and not Assigned(Self.InitialTran) then begin
-    Invite := Self.Core.CreateInvite(Dest, InitialOffer);
+    Invite := Self.Core.CreateInvite(Dest, InitialOffer, MimeType);
     try
       Self.Invite.Assign(Invite);
 
@@ -1524,14 +1526,17 @@ procedure TIdSipSession.OnReceiveResponse(const Response: TIdSipResponse;
                                           const Transaction: TIdSipTransaction;
                                           const Receiver: TIdSipTransport);
 begin
-  if not Self.DialogEstablished then begin
-    fDialog := Self.CreateOutboundDialog(Response, Receiver);
-    Self.NotifyOfEstablishedSession;
+  if not Response.IsTrying{ and Response.ToHeader.HasTag} then begin
+    if not Self.DialogEstablished then begin
+      fDialog := Self.CreateOutboundDialog(Response, Receiver);
+      Self.NotifyOfEstablishedSession;
+    end;
+
+    Self.Dialog.HandleMessage(Response);
   end;
 
-  Self.Dialog.HandleMessage(Response);
   if (Transaction = Self.InitialTran) then begin
-    if Response.IsFinal and (Response.StatusCode <> SIPOK) then begin
+    if Response.IsFinal and not Response.IsOK then begin
       Self.MarkAsTerminated;
       Self.NotifyOfEndedSession;
     end;

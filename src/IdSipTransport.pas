@@ -4,8 +4,9 @@ interface
 
 uses
   Classes, Contnrs, IdException, IdSipHeaders, IdSipInterfacedObject,
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
-  IdSocketHandle, IdSSLOpenSSL, IdTCPClient, IdTCPServer, SyncObjs, SysUtils;
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpClient,
+  IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, IdTCPClient, IdTCPServer,
+  IdThread, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -41,8 +42,10 @@ type
     TransportSendingListenerLock: TCriticalSection;
     TransportSendingListeners:    TList;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const ReceivedOn: TIdSipIPTarget);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const ReceivedOn: TIdSipIPTarget);
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
     function  GetBindings: TIdSocketHandles; virtual; abstract;
@@ -87,8 +90,10 @@ type
     ClientLock: TCriticalSection;
 
     function  AddClient: TIdSipTcpClient;
-    procedure DoOnClientFinished(Sender: TIdSipTcpClient);
-    procedure DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
+    procedure DoOnClientFinished(Sender: TObject);
+    procedure DoOnTcpResponse(Sender: TObject;
+                              const Response: TIdSipResponse;
+                              const ReceivedOn: TIdSipIPTarget);
     procedure RemoveClient(Client: TIdSipTcpClient);
   protected
     Transport: TIdSipTcpServer;
@@ -141,11 +146,39 @@ type
     function GetTransportType: TIdSipTransportType; override;
   end;
 
+  TIdSipUDPTransport = class;
+  TIdServerCleanupThread = class(TIdThread)
+  private
+    fOwner:            TIdSipUDPTransport;
+    fPollTime:         Cardinal;
+    TerminatedServers: TObjectList;
+    ListLock:          TCriticalSection;
+
+    procedure CleanOutTerminatedClients;
+  public
+    constructor Create(Owner: TIdSipUDPTransport); reintroduce;
+    destructor  Destroy; override;
+
+    function  DefaultPollTime: Cardinal;
+    procedure TerminateClient(Server: TIdSipUdpClient);
+    procedure Run; override;
+
+    property PollTime: Cardinal read fPollTime write fPollTime;
+  end;
+
   TIdSipUDPTransport = class(TIdSipTransport)
   private
-    Transport: TIdSipUdpServer;
+    ClientCleaner: TIdServerCleanupThread;
+    Clients:       TObjectList;
+    ClientLock:    TCriticalSection;
+    Transport:     TIdSipUdpServer;
 
-    procedure DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
+    function  AddClient: TIdSipUdpClient;
+    procedure DoOnClientFinished(Sender: TObject);
+    function  GetCleanerThreadPollTime: Cardinal;
+    procedure RemoveClient(Client: TIdSipUdpClient);
+    procedure SendResponseNotExpectingResponses(const R: TIdSipRequest);
+    procedure SetCleanerThreadPollTime(const Value: Cardinal);
   protected
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
@@ -160,6 +193,8 @@ type
     function  IsReliable: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
+
+    property CleanerThreadPollTime: Cardinal read GetCleanerThreadPollTime write SetCleanerThreadPollTime;
   end;
 
   EUnknownTransport = class(EIdException);
@@ -167,7 +202,7 @@ type
 implementation
 
 uses
-  IdSipConsts, IdUDPClient;
+  IdSipConsts, IdUdpClient;
 
 //******************************************************************************
 //* TIdSipTransport                                                            *
@@ -378,12 +413,19 @@ end;
 
 //* TIdSipTransport Private methods ********************************************
 
-procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
+                                           const ReceivedOn: TIdSipIPTarget);
 begin
+  // cf. RFC 3261 section 18.2.1
+  if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
+    or (Request.LastHop.SentBy <> ReceivedOn.IP) then
+    Request.LastHop.Received := ReceivedOn.IP;
+
   Self.NotifyTransportListeners(Request);
 end;
 
-procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
+                                            const ReceivedOn: TIdSipIPTarget);
 begin
   // cf. RFC 3261 section 18.1.2
 
@@ -462,10 +504,9 @@ begin
 
   Client := Self.AddClient;
 
-  Client.LocalHostName := Self.HostName;
-  Client.Host          := R.RequestUri.Host;
-  Client.Port          := R.RequestUri.Port;
-  Client.Timeout       := Self.Timeout;
+  Client.Host    := R.RequestUri.Host;
+  Client.Port    := R.RequestUri.Port;
+  Client.Timeout := Self.Timeout;
 
   Client.Connect(Self.Timeout);
   Client.Send(R);
@@ -528,14 +569,16 @@ begin
   end;
 end;
 
-procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TIdSipTcpClient);
+procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TObject);
 begin
-  Self.RemoveClient(Sender);
+  Self.RemoveClient(Sender as TIdSipTcpClient);
 end;
 
-procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
+procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
+                                             const Response: TIdSipResponse;
+                                             const ReceivedOn: TIdSipIPTarget);
 begin
-  Self.NotifyTransportListeners(Response);
+  Self.OnReceiveResponse(Response, ReceivedOn);
 end;
 
 procedure TIdSipTCPTransport.RemoveClient(Client: TIdSipTcpClient);
@@ -647,6 +690,70 @@ begin
 end;
 
 //******************************************************************************
+//* TIdServerCleanupThread                                                     *
+//******************************************************************************
+//* TIdServerCleanupThread Public methods **************************************
+
+constructor TIdServerCleanupThread.Create(Owner: TIdSipUDPTransport);
+begin
+  inherited Create(true);
+
+  Self.ListLock := TCriticalSection.Create;
+
+  Self.fOwner := Owner;
+  Self.PollTime := Self.DefaultPollTime;
+
+  Self.TerminatedServers := TObjectList.Create(false);
+end;
+
+destructor TIdServerCleanupThread.Destroy;
+begin
+  Self.TerminatedServers.Free;
+  Self.ListLock.Free;
+
+  inherited Destroy;
+end;
+
+function TIdServerCleanupThread.DefaultPollTime: Cardinal;
+begin
+  Result := 1000;
+end;
+
+procedure TIdServerCleanupThread.TerminateClient(Server: TIdSipUdpClient);
+begin
+  Self.ListLock.Acquire;
+  try
+    Self.TerminatedServers.Add(Server);
+  finally
+    Self.ListLock.Release;
+  end;
+end;
+
+procedure TIdServerCleanupThread.Run;
+begin
+  while not Terminated do begin
+    Sleep(Self.PollTime);
+
+    Self.CleanOutTerminatedClients;
+  end;
+end;
+
+//* TIdServerCleanupThread Private methods *************************************
+
+procedure TIdServerCleanupThread.CleanOutTerminatedClients;
+var
+  I: Integer;
+begin
+  Self.ListLock.Acquire;
+  try
+    for I := 0 to Self.TerminatedServers.Count - 1 do
+      Self.fOwner.RemoveClient(Self.TerminatedServers[I] as TIdSipUdpClient);
+  finally
+    Self.ListLock.Release;
+  end;
+end;
+
+//******************************************************************************
 //* TIdSipUDPTransport                                                         *
 //******************************************************************************
 //* TIdSipUDPTransport Public methods ******************************************
@@ -655,14 +762,26 @@ constructor TIdSipUDPTransport.Create(const Port: Cardinal);
 begin
   inherited Create(Port);
 
+  Self.ClientCleaner := TIdServerCleanupThread.Create(Self);
+  Self.Clients       := TObjectList.Create(true);
+  Self.ClientLock    := TCriticalSection.Create;
+
   Self.Transport := TIdSipUdpServer.Create(nil);
   Self.SetPort(Port);
   Self.Transport.AddMessageListener(Self);
+  Self.Transport.ThreadedEvent := true;
 end;
 
 destructor TIdSipUDPTransport.Destroy;
 begin
+  // We don't need to check Stopped - just calling Stop is safe.
+  Self.ClientCleaner.Stop;
+  Self.ClientCleaner.WaitFor;
+
   Self.Transport.Free;
+  Self.ClientLock.Free;
+  Self.Clients.Free;
+  Self.ClientCleaner.Free;
 
   inherited Destroy;
 end;
@@ -680,11 +799,13 @@ end;
 procedure TIdSipUDPTransport.Start;
 begin
   Self.Transport.Active := true;
+  Self.ClientCleaner.Start;
 end;
 
 procedure TIdSipUDPTransport.Stop;
 begin
   Self.Transport.Active := false;
+  Self.ClientCleaner.Stop;
 end;
 
 //* TIdSipUDPTransport Protected methods ***************************************
@@ -701,18 +822,20 @@ end;
 
 procedure TIdSipUDPTransport.SendRequest(const R: TIdSipRequest);
 var
+{
   Client:   TIdUdpClient;
   P:        TIdSipParser;
-  Response: TIdSipResponse;
   Reply:    String;
+  Response: TIdSipResponse;
+}
+  Client: TIdSipUdpServer;
 begin
   inherited SendRequest(R);
-
+{
   Client := TIdUdpClient.Create(nil);
   try
     Client.Host := R.RequestUri.Host;
     Client.Port := R.RequestUri.Port;
-
     Client.Send(R.AsString);
 
     P := TIdSipParser.Create;
@@ -721,7 +844,7 @@ begin
       while (Reply <> '') do begin
         Response := P.ParseAndMakeResponse(Reply);
         try
-          Self.DoOnReceiveResponse(Self, Response);
+          Self.NotifyTransportListeners(Response);
         finally
           Response.Free;
         end;
@@ -733,6 +856,20 @@ begin
     end;
   finally
     Client.Free;
+  end;
+}
+  if not R.RequiresResponse then
+    Self.SendResponseNotExpectingResponses(R)
+  else begin
+    // Really, this behaviour is expected from an RFC 3581 compliant agent.
+    // X-Lite is braindead though, and assumes blithely that anything that
+    // calls it is RFC 3581 compliant.
+    Client := Self.AddClient;
+
+    Client.Active := true;
+    Client.Send(R.RequestUri.Host,
+                R.RequestUri.Port,
+                R.AsString);
   end;
 end;
 
@@ -771,9 +908,71 @@ end;
 
 //* TIdSipUDPTransport Private methods *****************************************
 
-procedure TIdSipUDPTransport.DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
+function TIdSipUDPTransport.AddClient: TIdSipUdpClient;
 begin
-  Self.NotifyTransportListeners(Response);
+  Self.ClientLock.Acquire;
+  try
+    if not Self.ClientCleaner.Stopped then
+      Self.ClientCleaner.Start;
+
+    Result := TIdSipUdpClient.Create(nil);
+    try
+      Self.Clients.Add(Result);
+      Result.AddMessageListener(Self);
+      Result.DefaultPort := 0;
+      Result.OnFinished := Self.DoOnClientFinished;
+    except
+      // Remember, Self.Clients owns the object and will free it.
+      Self.Clients.Remove(Result);
+      Result := nil;
+
+      raise;
+    end;
+  finally
+    Self.ClientLock.Release;
+  end;
+end;
+
+procedure TIdSipUDPTransport.DoOnClientFinished(Sender: TObject);
+begin
+  Self.ClientCleaner.TerminateClient(Sender as TIdSipUdpClient);
+end;
+
+function TIdSipUDPTransport.GetCleanerThreadPollTime: Cardinal;
+begin
+  Result := Self.ClientCleaner.PollTime;
+end;
+
+procedure TIdSipUDPTransport.RemoveClient(Client: TIdSipUdpClient);
+begin
+  Self.ClientLock.Acquire;
+  try
+    Self.Clients.Remove(Client);
+
+    if (Self.Clients.Count = 0) then
+      Self.ClientCleaner.Stop;
+  finally
+    Self.ClientLock.Release;
+  end;
+end;
+
+procedure TIdSipUDPTransport.SendResponseNotExpectingResponses(const R: TIdSipRequest);
+var
+  Client: TIdUdpClient;
+begin
+  Client := TIdUdpClient.Create(nil);
+  try
+    Client.Host := R.RequestUri.Host;
+    Client.Port := R.RequestUri.Port;
+    Client.Send(R.AsString);
+  finally
+    Client.Free;
+  end;
+end;
+
+procedure TIdSipUDPTransport.SetCleanerThreadPollTime(const Value: Cardinal);
+begin
+  Self.ClientCleaner.PollTime := Value;
 end;
 
 end.

@@ -2,7 +2,6 @@ program SipClientSpike;
 
 uses
   Forms,
-  SpikeClient in 'test\SpikeClient.pas' {Spike},
   IdRTP in 'src\IdRTP.pas',
   IdRTPClient in 'src\IdRTPClient.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
@@ -21,13 +20,15 @@ uses
   IdSipTimer in 'src\IdSipTimer.pas',
   IdSipTransaction in 'src\IdSipTransaction.pas',
   IdSipTransport in 'src\IdSipTransport.pas',
-  IdSdpParser in 'src\IdSdpParser.pas',
-  IdSipTlsServer in 'src\IdSipTlsServer.pas';
+  IdSipTlsServer in 'src\IdSipTlsServer.pas',
+  IdSipUdpClient in 'src\IdSipUdpClient.pas',
+  IdSdp in 'src\IdSdp.pas',
+  SpikeClient in 'test\SpikeClient.pas' {Form1};
 
 {$R *.res}
 
 begin
   Application.Initialize;
-  Application.CreateForm(TSpike, Spike);
+  Application.CreateForm(TForm1, Form1);
   Application.Run;
 end.

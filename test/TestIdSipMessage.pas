@@ -3,7 +3,7 @@ unit TestIdSipMessage;
 interface
 
 uses
-  IdSipHeaders, IdSipDialogID, IdSipMessage, IdURI, SysUtils, TestFramework,
+  IdSipHeaders, IdSipDialogID, IdSipMessage, SysUtils, TestFramework,
   TestFrameworkSip;
 
 type
@@ -81,6 +81,7 @@ type
     procedure TestMatchInviteServer;
     procedure TestMatchNonInviteClient;
     procedure TestMatchNonInviteServer;
+    procedure TestRequiresResponse;
     procedure TestSetMaxForwards;
     procedure TestSetPath;
   end;
@@ -103,34 +104,10 @@ type
     procedure TestIsEqualToRequest;
     procedure TestIsEqualToTrivial;
     procedure TestIsFinal;
+    procedure TestIsOK;
     procedure TestIsProvisional;
     procedure TestIsRequest;
-  end;
-
-  TIdSipMessageSubjectSubclass = class(TIdSipMessageSubject)
-  public
-    procedure NotifyMessageListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyMessageListeners(const Response: TIdSipResponse); overload;
-  end;
-
-  TestTIdSipMessageSubject = class(TTestCase, IIdSipMessageListener)
-  private
-    ReceivedRequest:  Boolean;
-    ReceivedResponse: Boolean;
-    Request:          TIdSipRequest;
-    Response:         TIdSipResponse;
-    Subject:          TIdSipMessageSubjectSubclass;
-
-    procedure OnReceiveRequest(const Request: TIdSipRequest);
-    procedure OnReceiveResponse(const Response: TIdSipResponse);
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAddMessageListener;
-    procedure TestAllListenersReceiveRequests;
-    procedure TestAllListenersReceiveResponses;
-    procedure TestRemoveMessageListener;
+    procedure TestIsTrying;
   end;
 
 implementation
@@ -145,7 +122,6 @@ begin
   Result.AddTest(TestTIdSipMessage.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
-  Result.AddTest(TestTIdSipMessageSubject.Suite);
 end;
 
 //******************************************************************************
@@ -1009,6 +985,26 @@ begin
         'Different method');
 end;
 
+procedure TestTIdSipRequest.TestRequiresResponse;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.RequiresResponse, 'ACKs don''t need responses');
+  Self.Request.Method := MethodBye;
+  Check(Self.Request.RequiresResponse, 'BYEs need responses');
+  Self.Request.Method := MethodCancel;
+  Check(Self.Request.RequiresResponse, 'CANCELs need responses');
+  Self.Request.Method := MethodInvite;
+  Check(Self.Request.RequiresResponse, 'INVITEs need responses');
+  Self.Request.Method := MethodOptions;
+  Check(Self.Request.RequiresResponse, 'OPTIONS need responses');
+  Self.Request.Method := MethodRegister;
+  Check(Self.Request.RequiresResponse, 'REGISTERs need responses');
+
+  Self.Request.Method := 'NewFangledMethod';
+  Check(Self.Request.RequiresResponse,
+        'Unknown methods, by default (our assumption) require responses');
+end;
+
 procedure TestTIdSipRequest.TestSetMaxForwards;
 var
   OrigMaxForwards: Byte;
@@ -1324,6 +1320,26 @@ begin
   Check(Self.Response.IsFinal, IntToStr(Self.Response.StatusCode));
 end;
 
+procedure TestTIdSipResponse.TestIsOK;
+var
+  I: Integer;
+begin
+  for I := 100 to 199 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsOK,
+          IntToStr(I) + ' ' + Self.Response.StatusText);
+  end;
+
+  Self.Response.StatusCode := SIPOK;
+  Check(Self.Response.IsOK, RSSIPOK);
+
+  for I := 201 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsOK,
+          IntToStr(I) + ' ' + Self.Response.StatusText);
+  end;
+end;
+
 procedure TestTIdSipResponse.TestIsProvisional;
 begin
   Self.Response.StatusCode := SIPTrying;
@@ -1350,113 +1366,18 @@ begin
   Check(not Self.Response.IsRequest, 'IsRequest');
 end;
 
-//******************************************************************************
-//* TIdSipMessageSubjectSubclass                                               *
-//******************************************************************************
-//* TIdSipMessageSubjectSubclass Public methods ********************************
-
-procedure TIdSipMessageSubjectSubclass.NotifyMessageListeners(const Request: TIdSipRequest);
-begin
-  inherited NotifyMessageListeners(Request);
-end;
-
-procedure TIdSipMessageSubjectSubclass.NotifyMessageListeners(const Response: TIdSipResponse);
-begin
-  inherited NotifyMessageListeners(Response);
-end;
-
-//******************************************************************************
-//* TestTIdSipMessageSubject                                                   *
-//******************************************************************************
-//* TestTIdSipMessageSubject Public methods ************************************
-
-procedure TestTIdSipMessageSubject.SetUp;
-begin
-  inherited SetUp;
-
-  Self.ReceivedRequest  := false;
-  Self.ReceivedResponse := false;
-  Self.Request          := TIdSipRequest.Create;
-  Self.Response         := TIdSipResponse.Create;
-  Self.Subject          := TIdSipMessageSubjectSubclass.Create;
-end;
-
-procedure TestTIdSipMessageSubject.TearDown;
-begin
-  Self.Subject.Free;
-  Self.Response.Free;
-  Self.Request.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipMessageSubject Private methods ***********************************
-
-procedure TestTIdSipMessageSubject.OnReceiveRequest(const Request: TIdSipRequest);
-begin
-  Self.ReceivedRequest := true;
-end;
-
-procedure TestTIdSipMessageSubject.OnReceiveResponse(const Response: TIdSipResponse);
-begin
-  Self.ReceivedResponse := true;
-end;
-
-//* TestTIdSipMessageSubject Published methods *********************************
-
-procedure TestTIdSipMessageSubject.TestAddMessageListener;
-begin
-  Self.Subject.AddMessageListener(Self);
-
-  Self.Subject.NotifyMessageListeners(Self.Request);
-
-  Check(Self.ReceivedRequest, 'Listener wasn''t added');
-end;
-
-procedure TestTIdSipMessageSubject.TestAllListenersReceiveRequests;
+procedure TestTIdSipResponse.TestIsTrying;
 var
-  Listener: TIdSipTestMessageListener;
+  I: Integer;
 begin
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.Subject.AddMessageListener(Self);
-    Self.Subject.AddMessageListener(Listener);
-
-    Self.Subject.NotifyMessageListeners(Self.Request);
-
-    Check(Self.ReceivedRequest and Listener.ReceivedRequest,
-          'Not all Listeners received the request');
-  finally
-    Listener.Free;
+  for I := 101 to 699 do begin
+    Self.Response.StatusCode := I;
+    Check(not Self.Response.IsTrying,
+          'StatusCode ' + IntToStr(I) + ' ' + Self.Response.StatusText);
   end;
-end;
 
-procedure TestTIdSipMessageSubject.TestAllListenersReceiveResponses;
-var
-  Listener: TIdSipTestMessageListener;
-begin
-  Listener := TIdSipTestMessageListener.Create;
-  try
-    Self.Subject.AddMessageListener(Self);
-    Self.Subject.AddMessageListener(Listener);
-
-    Self.Subject.NotifyMessageListeners(Self.Response);
-
-    Check(Self.ReceivedResponse and Listener.ReceivedResponse,
-          'Not all Listeners received the Response');
-  finally
-    Listener.Free;
-  end;
-end;
-
-procedure TestTIdSipMessageSubject.TestRemoveMessageListener;
-begin
-  Self.Subject.AddMessageListener(Self);
-  Self.Subject.RemoveMessageListener(Self);
-
-  Self.Subject.NotifyMessageListeners(Self.Request);
-
-  Check(not Self.ReceivedRequest, 'Listener wasn''t removed');
+  Self.Response.StatusCode := SIPTrying;
+  Check(Self.Response.IsTrying, Self.Response.StatusText);
 end;
 
 initialization
