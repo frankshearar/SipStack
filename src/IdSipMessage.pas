@@ -266,14 +266,14 @@ type
   TIdSipAuthorizationHeader = class(TIdSipHttpAuthHeader)
   private
     function  GetCNonce: String;
-    function  GetDigestResponse: String;
     function  GetDigestUri: String;
     function  GetNonceCount: Cardinal;
+    function  GetResponse: String;
     function  GetUsername: String;
     procedure SetCNonce(const Value: String);
-    procedure SetDigestResponse(const Value: String);
     procedure SetDigestUri(const Value: String);
     procedure SetNonceCount(Value: Cardinal);
+    procedure SetResponse(const Value: String);
     procedure SetUsername(const Value: String);
   protected
     procedure CheckDigestResponses(Responses: TStrings); override;
@@ -283,11 +283,11 @@ type
     function IsBasic: Boolean;
     function IsDigest: Boolean;
 
-    property CNonce:              String   read GetCNonce write SetCNonce;
-    property DigestResponse:      String   read GetDigestResponse write SetDigestResponse;
-    property DigestUri:           String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
-    property NonceCount:          Cardinal read GetNonceCount write SetNonceCount;
-    property Username:            String   read GetUsername write SetUsername;
+    property CNonce:     String   read GetCNonce write SetCNonce;
+    property Response:   String   read GetResponse write SetResponse;
+    property DigestUri:  String   read GetDigestUri write SetDigestUri; // This should be a TIdURI
+    property NonceCount: Cardinal read GetNonceCount write SetNonceCount;
+    property Username:   String   read GetUsername write SetUsername;
   end;
 
 
@@ -2601,8 +2601,8 @@ procedure TIdSipAuthorizationHeader.CheckDigestResponses(Responses: TStrings);
 begin
   inherited CheckDigestResponses(Responses);
 
-  if (Self.DigestResponse <> '')
-    and not TIdSimpleParser.IsHexNumber(Self.DigestResponse) then
+  if (Self.Response <> '')
+    and not TIdSimpleParser.IsHexNumber(Self.Response) then
     Self.FailParse;
 end;
 
@@ -2618,11 +2618,6 @@ begin
   Result := Self.DigestResponseValue(CNonceParam);
 end;
 
-function TIdSipAuthorizationHeader.GetDigestResponse: String;
-begin
-  Result := Self.DigestResponseValue(DigestResponseParam);
-end;
-
 function TIdSipAuthorizationHeader.GetDigestUri: String;
 begin
   Result := Self.DigestResponseValue(DigestUriParam);
@@ -2631,6 +2626,11 @@ end;
 function TIdSipAuthorizationHeader.GetNonceCount: Cardinal;
 begin
   Result := HexToInt(Self.DigestResponseValue(NonceCountParam));
+end;
+
+function TIdSipAuthorizationHeader.GetResponse: String;
+begin
+  Result := Self.DigestResponseValue(DigestResponseParam);
 end;
 
 function TIdSipAuthorizationHeader.GetUsername: String;
@@ -2653,11 +2653,6 @@ begin
   Self.DigestResponses.Values[CNonceParam] := Value;
 end;
 
-procedure TIdSipAuthorizationHeader.SetDigestResponse(const Value: String);
-begin
-  Self.DigestResponses.Values[DigestResponseParam] := Value;
-end;
-
 procedure TIdSipAuthorizationHeader.SetDigestUri(const Value: String);
 begin
   Self.DigestResponses.Values[DigestUriParam] := Value;
@@ -2674,6 +2669,11 @@ begin
     Delete(H, 1, 1);
 
   Self.DigestResponses.Values[NonceCountParam] := H;
+end;
+
+procedure TIdSipAuthorizationHeader.SetResponse(const Value: String);
+begin
+  Self.DigestResponses.Values[DigestResponseParam] := Value;
 end;
 
 procedure TIdSipAuthorizationHeader.SetUsername(const Value: String);
