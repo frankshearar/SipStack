@@ -8,12 +8,15 @@ uses
 
 type
   TrnidSpike = class(TForm,
+                     IIdSipObserver,
                      IIdSipSessionListener,
                      IIdSipTransportListener,
                      IIdSipTransportSendingListener)
     Log: TMemo;
     Panel1: TPanel;
     InviteSelf: TButton;
+    Label1: TLabel;
+    SessionCounter: TLabel;
     procedure InviteSelfClick(Sender: TObject);
   private
     Dispatch:  TIdSipTransactionDispatcher;
@@ -21,6 +24,7 @@ type
     UA:        TIdSipUserAgentCore;
 
     procedure LogMessage(const Msg: TIdSipMessage);
+    procedure OnChanged(const Observed: TObject);
     procedure OnEstablishedSession(const Session: TIdSipSession);
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnNewSession(const Session: TIdSipSession);
@@ -45,7 +49,7 @@ implementation
 {$R *.dfm}
 
 uses
-  IdSipConsts, IdSipHeaders;
+  IdSipConsts, IdSipHeaders, SysUtils;
 
 //******************************************************************************
 //* TrnidSpike                                                                 *
@@ -69,6 +73,7 @@ begin
   Self.UA := TIdSipUserAgentCore.Create;
   Self.UA.Dispatcher := Self.Dispatch;
   Self.UA.AddSessionListener(Self);
+  Self.UA.AddObserver(Self);
 
   Contact := TIdSipContactHeader.Create;
   try
@@ -85,8 +90,6 @@ begin
   finally
     From.Free;
   end;
-
-//  Self.UA.OnInvite := Self.OnInvite;
 
   Self.Transport.Start;
 end;
@@ -108,6 +111,11 @@ procedure TrnidSpike.LogMessage(const Msg: TIdSipMessage);
 begin
   Self.Log.Lines.Add(Msg.AsString);
   Self.Log.Lines.Add('----');
+end;
+
+procedure TrnidSpike.OnChanged(const Observed: TObject);
+begin
+  Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgentCore).SessionCount);
 end;
 
 procedure TrnidSpike.OnEstablishedSession(const Session: TIdSipSession);

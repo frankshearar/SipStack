@@ -2,7 +2,7 @@ program SipClientSpike;
 
 uses
   Forms,
-  SpikeClient in 'test\SpikeClient.pas' {Form1},
+  SpikeClient in 'test\SpikeClient.pas' {Spike},
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
   IdSipConsts in 'src\IdSipConsts.pas',
@@ -25,6 +25,6 @@ uses
 
 begin
   Application.Initialize;
-  Application.CreateForm(TForm1, Form1);
+  Application.CreateForm(TSpike, Spike);
   Application.Run;
 end.

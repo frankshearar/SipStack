@@ -122,6 +122,11 @@ type
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
   // inappropriate messages, and inform my Dispatcher of interesting events.
   // These include the establishment of a new dialog, or my termination.
+  //
+  // Should I be terminated, for instance by a transport failure, my owning
+  // Dispatcher immediately destroys me. Therefore, be sure that if you call
+  // TrySendRequest it is the last call in a method as I could be dead before
+  // the next line of the method is executed!
   TIdSipTransaction = class(TIdSipInterfacedObject)
   private
     fInitialRequest:  TIdSipRequest;
@@ -1315,16 +1320,16 @@ begin
 
   if Self.FirstTime then begin
     Self.FirstTime := false;
-    
+
     Self.ChangeToCalling;
 
     Self.TimerB.Interval := Self.SessionTimeout;
     Self.TimerD.Interval := Self.SessionTimeout;
 
-    Self.TrySendRequest(Self.InitialRequest);
-
     Self.TimerA.Start;
     Self.TimerB.Start;
+
+    Self.TrySendRequest(Self.InitialRequest);
   end;
 end;
 

@@ -195,6 +195,7 @@ type
     procedure TestMultipleInviteSending;
     procedure TestNoInviteResendingInProceedingState;
     procedure TestNonInviteMethodInInitialRequest;
+    procedure TestPrematureDestruction;
     procedure TestReceive1xxInCallingState;
     procedure TestReceive1xxInCompletedState;
     procedure TestReceive1xxInProceedingState;
@@ -2151,6 +2152,19 @@ begin
   finally
     Tran.Free;
   end;
+end;
+
+procedure TestTIdSipClientInviteTransaction.TestPrematureDestruction;
+var
+  Tran: TIdSipTransaction;
+begin
+  // When the INVITE is sent, if there's a network error we go directly to the
+  // Terminated state. Terminated transactions are immediately killed by the
+  // dispatcher. This means that sending requests should be the last thing done
+  // by a method.
+  Tran := Self.MockDispatcher.AddClientTransaction(Self.Request);
+  Self.MockDispatcher.Transport.FailWith := EIdConnectTimeout;
+  Tran.SendRequest;
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestReceive1xxInCallingState;

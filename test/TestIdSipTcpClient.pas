@@ -24,9 +24,10 @@ type
     procedure CheckSendInviteSpecifiedHostName(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject; const Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject; const R: TIdSipRequest);
-    procedure DoOnFinished(Sender: TObject);
+    procedure DoOnFinished(Sender: TIdSipTcpClient);
     procedure OnReceiveRequest(const Request: TIdSipRequest);
     procedure OnReceiveResponse(const Response: TIdSipResponse);
+    procedure PauseAndSendOkResponse(Sender: TObject; const Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
   public
@@ -37,6 +38,7 @@ type
     procedure TestOnFinished;
     procedure TestOnFinishedWithServerDisconnect;
     procedure TestReceiveOkResponse;
+    procedure TestReceiveOkResponseWithPause;
     procedure TestReceiveProvisionalAndOkResponse;
     procedure TestSendInvite;
     procedure TestSendInviteNoHostName;
@@ -221,7 +223,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.DoOnFinished(Sender: TObject);
+procedure TestTIdSipTcpClient.DoOnFinished(Sender: TIdSipTcpClient);
 begin
   try
     Self.Finished := true;
@@ -251,16 +253,29 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
+procedure TestTIdSipTcpClient.PauseAndSendOkResponse(Sender: TObject; const Request: TIdSipRequest);
+var
+  Threads: TList;
+begin
+  Sleep(200);
+  Threads := Self.Server.Threads.LockList;
+  try
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
 procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject; const Request: TIdSipRequest);
 var
   Threads: TList;
 begin
-    Threads := Self.Server.Threads.LockList;
-    try
-      (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
-    finally
-      Self.Server.Threads.UnlockList;
-    end;
+  Threads := Self.Server.Threads.LockList;
+  try
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(LocalLoopResponse);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
 end;
 
 procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject; const Request: TIdSipRequest);
@@ -331,6 +346,18 @@ begin
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
+procedure TestTIdSipTcpClient.TestReceiveOkResponseWithPause;
+begin
+  Self.CheckingRequestEvent := Self.PauseAndSendOkResponse;
+  Self.Client.OnResponse    := Self.CheckReceiveOkResponse;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
+    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+end;
+
 procedure TestTIdSipTcpClient.TestReceiveProvisionalAndOkResponse;
 begin
   Self.CheckingRequestEvent := Self.SendProvisionalAndOkResponse;
@@ -349,6 +376,7 @@ procedure TestTIdSipTcpClient.TestSendInvite;
 begin
   Self.CheckingRequestEvent := Self.CheckSendInvite;
 
+//  Self.Client.OnResponse
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 

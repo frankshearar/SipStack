@@ -144,17 +144,18 @@ procedure TIdSipMockTransport.SendRequest(const R: TIdSipRequest);
 begin
   inherited SendRequest(R);
 
+  if R.IsAck then
+    Self.LastACK.Assign(R);
+
+  Self.LastRequest.Assign(R);
+
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipMockTransport.SendRequest');
 
-  if R.IsAck then begin
-    Self.LastACK.Assign(R);
+  if R.IsAck then 
     Inc(Self.fACKCount)
-  end
   else
     Inc(Self.fSentRequestCount);
-
-  Self.LastRequest.Assign(R);
 
   if Self.LocalEchoMessages then
     Self.NotifyTransportListeners(R);
@@ -164,10 +165,10 @@ procedure TIdSipMockTransport.SendResponse(const R: TIdSipResponse);
 begin
   inherited SendResponse(R);
 
+  Self.LastResponse.Assign(R);
+
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipMockTransport.SendResponse');
-
-  Self.LastResponse.Assign(R);
 
   Inc(Self.fSentResponseCount);
 

@@ -29,6 +29,20 @@ object rnidSpike: TrnidSpike
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 1
+    object Label1: TLabel
+      Left = 416
+      Top = 4
+      Width = 71
+      Height = 13
+      Caption = 'Session Count:'
+    end
+    object SessionCounter: TLabel
+      Left = 490
+      Top = 4
+      Width = 6
+      Height = 13
+      Caption = '0'
+    end
     object InviteSelf: TButton
       Left = 0
       Top = 0

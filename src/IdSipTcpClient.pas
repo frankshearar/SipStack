@@ -6,10 +6,13 @@ uses
   Classes, IdSipMessage, IdTCPClient;
 
 type
+  TIdSipTcpClient = class;
+  TIdSipClientEvent = procedure(Sender: TIdSipTcpClient) of object;
+
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fLocalHostName: String;
-    fOnFinished:    TNotifyEvent;
+    fOnFinished:    TIdSipClientEvent;
     fOnResponse:    TIdSipResponseEvent;
     fTimeout:       Cardinal;
 
@@ -26,12 +29,15 @@ type
     procedure Send(const Response: TIdSipResponse); overload;
 
     property LocalHostName: String              read fLocalHostName write fLocalHostName;
-    property OnFinished:    TNotifyEvent        read fOnFinished write fOnFinished;
+    property OnFinished:    TIdSipClientEvent   read fOnFinished write fOnFinished;
     property OnResponse:    TIdSipResponseEvent read fOnResponse write fOnResponse;
     property Timeout:       Cardinal            read fTimeout write fTimeout;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
+
+const
+  DefaultTimeout = 5000;
 
 implementation
 
@@ -47,7 +53,7 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.Timeout := 5000;
+  Self.Timeout := DefaultTimeout;
 end;
 
 procedure TIdSipTcpClient.Send(const Request: TIdSipRequest);

@@ -1773,7 +1773,6 @@ begin
   CheckEquals('Content-Type: text/plain',
               Msg.FirstHeader(ContentTypeHeaderFull).AsString,
               'Content-Type');
-  CheckEquals(9, Msg.HeaderCount, 'Header count');
 
   if CheckBody then
     CheckEquals('', Msg.Body, 'message-body');
@@ -1790,6 +1789,7 @@ begin
               (Msg as TIdSipRequest).RequestUri.GetFullURI,
               'Request-URI');
   CheckEquals(70, Msg.MaxForwards, 'MaxForwards');
+  CheckEquals(9,  Msg.HeaderCount, 'Header count');
 
   Self.CheckBasicMessage(Msg, CheckBody);
 end;
@@ -1800,6 +1800,7 @@ begin
 
   CheckEquals(486,         TIdSipResponse(Msg).StatusCode, 'StatusCode');
   CheckEquals('Busy Here', TIdSipResponse(Msg).StatusText, 'StatusText');
+  CheckEquals(8,           Msg.HeaderCount,                'Header count');
 
   Self.CheckBasicMessage(Msg, CheckBody);
 end;

@@ -44,7 +44,7 @@ implementation
 {$R *.dfm}
 
 uses
-  Dialogs, IdSipConsts, IdSipHeaders, IdTcpClient, IdURI, SysUtils;
+  Dialogs, IdSipConsts, IdSipHeaders, IdStack, IdTcpClient, IdURI, SysUtils;
 
 constructor TSpike.Create(AOwner: TComponent);
 begin
@@ -54,14 +54,16 @@ begin
   UA.Dispatcher := TIdSipTransactionDispatcher.Create;
 
   Tran := TIdSipTCPTransport.Create(IdPORT_SIP + 10000);
-  Tran.Bindings.Add.IP := '127.0.0.1';
+  Tran.Bindings.Add.IP := GStack.LocalAddress;
+  Tran.HostName := 'wsfrank';
   Tran.AddTransportListener(Self);
+  Tran.AddTransportSendingListener(Self);
   UA.Dispatcher.AddTransport(Tran);
 
-  UA.From.Address.URI    := 'sip:franks@127.0.0.1:' + IntToStr(Tran.Bindings[0].Port);
+  UA.From.Address.URI    := 'sip:franks@' + Tran.HostName + ':' + IntToStr(Tran.Bindings[0].Port);
   UA.From.Tag            := '1';
   UA.Contact.Address.URI := UA.From.Address.URI;
-  UA.HostName := '127.0.0.1';
+  UA.HostName := Tran.HostName;
 
   UA.AddSessionListener(Self);
 

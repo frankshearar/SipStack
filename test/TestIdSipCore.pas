@@ -20,6 +20,7 @@ type
 
   TestTIdSipUserAgentCore = class(TTestCaseSip, IIdSipSessionListener)
   private
+    CheckOnNewSession:         TIdSipSessionEvent;
     Core:                      TIdSipUserAgentCore;
     Dlg:                       TIdSipDialog;
     Destination:               TIdSipToHeader;
@@ -51,6 +52,7 @@ type
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+    procedure TestAddObserver;
     procedure TestAddSessionListener;
     procedure TestCreateBye;
     procedure TestCreateCancel;
@@ -79,6 +81,8 @@ type
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
+    procedure TestRemoveObserver;
+    procedure TestRemoveSession;
     procedure TestRemoveSessionListener;
     procedure TestRejectNoContact;
     procedure TestRejectUnknownContentEncoding;
@@ -96,11 +100,12 @@ type
 
   TestTIdSipSession = class(TTestCaseSip, IIdSipSessionListener)
   private
-    Core:     TIdSipUserAgentCore;
-    Dest:     TIdSipToHeader;
-    Dispatch: TIdSipMockTransactionDispatcher;
-    Invite:   TIdSipRequest;
-    Session:  TIdSipSession;
+    Core:                TIdSipUserAgentCore;
+    Dest:                TIdSipToHeader;
+    Dispatch:            TIdSipMockTransactionDispatcher;
+    Invite:              TIdSipRequest;
+    OnEndedSessionFired: Boolean;
+    Session:             TIdSipSession;
 
     procedure OnEndedSession(const Session: TIdSipSession);
     procedure OnEstablishedSession(const Session: TIdSipSession);
@@ -111,9 +116,14 @@ type
   published
     procedure TestAcceptCall;
     procedure TestCall;
+    procedure TestCallTwice;
+    procedure TestCallRemoteRefusal;
+    procedure TestCallNetworkFailure;
     procedure TestCallSecure;
     procedure TestCallSipsUriOverTcp;
     procedure TestCallSipUriOverTls;
+    procedure TestReceiveBye;
+//    procedure TestReceiveByeWithPendingRequests;
     procedure TestTerminate;
   end;
 
@@ -181,6 +191,8 @@ var
 begin
   inherited SetUp;
 
+  Self.CheckOnNewSession := nil;
+
   Self.ID := TIdSipDialogID.Create('1', '2', '3');
 
   Self.LocalSequenceNo := 13;
@@ -212,6 +224,7 @@ begin
 
   Self.Core := TIdSipUserAgentCore.Create;
   Self.Core.Dispatcher := Self.Dispatch;
+  Self.Core.AddSessionListener(Self);
 
   C := TIdSipContactHeader.Create;
   try
@@ -316,6 +329,9 @@ end;
 
 procedure TestTIdSipUserAgentCore.OnNewSession(const Session: TIdSipSession);
 begin
+  if Assigned(Self.CheckOnNewSession) then
+    Self.CheckOnNewSession(Session);
+
   Self.OnNewSessionFired := true;
 
   Self.Session := Session;
@@ -453,6 +469,30 @@ begin
     CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
   finally
     Schemes.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestAddObserver;
+var
+  L1, L2: TIdSipTestObserver;
+  Tran:   TIdSipTransaction;
+begin
+  L1 := TIdSipTestObserver.Create;
+  try
+    L2 := TIdSipTestObserver.Create;
+    try
+      Self.Core.AddObserver(L1);
+      Self.Core.AddObserver(L2);
+
+      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+
+      Check(L1.Changed and L2.Changed, 'Not all Listeners notified, hence not added');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
   end;
 end;
 
@@ -978,8 +1018,6 @@ procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;
 var
   Tran: TIdSipTransaction;
 begin
-  Self.Core.AddSessionListener(Self);
-
   Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
   Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
 
@@ -1022,7 +1060,6 @@ var
   ResponseCount: Cardinal;
   Temp:          String;
 begin
-  Self.Core.AddSessionListener(Self);
 
   Self.Dispatch.Transport.FireOnRequest(Self.Request);
 
@@ -1081,6 +1118,46 @@ begin
   finally
     Bye.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveObserver;
+var
+  L1, L2: TIdSipTestObserver;
+  Tran:   TIdSipTransaction;
+begin
+  L1 := TIdSipTestObserver.Create;
+  try
+    L2 := TIdSipTestObserver.Create;
+    try
+      Self.Core.AddObserver(L1);
+      Self.Core.AddObserver(L2);
+      Self.Core.RemoveObserver(L2);
+
+      Tran := Self.Dispatch.AddServerTransaction(Self.Request, Self.Dispatch.Transport);
+      Tran.ReceiveRequest(Self.Request, Self.Dispatch.Transport);
+
+      Check(L1.Changed and not L2.Changed,
+            'Listener notified, hence not removed');
+    finally
+      L2.Free
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveSession;
+var
+  SessionCount: Cardinal;
+begin
+  Self.Dispatch.Transport.FireOnRequest(Self.Request);
+
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  SessionCount := Self.Core.SessionCount;
+  Self.Core.RemoveSession(Self.Session);
+  CheckEquals(SessionCount - 1,
+              Self.Core.SessionCount,
+              'Session wasn''t removed');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRemoveSessionListener;
@@ -1382,6 +1459,8 @@ begin
   finally
     P.Free;
   end;
+
+  Self.OnEndedSessionFired := false;
 end;
 
 procedure TestTIdSipSession.TearDown;
@@ -1398,6 +1477,8 @@ end;
 
 procedure TestTIdSipSession.OnEndedSession(const Session: TIdSipSession);
 begin
+  Self.Session := Session;
+  Self.OnEndedSessionFired := true;
 end;
 
 procedure TestTIdSipSession.OnEstablishedSession(const Session: TIdSipSession);
@@ -1437,7 +1518,7 @@ end;
 
 procedure TestTIdSipSession.TestCall;
 var
-  RequestCount: Integer;
+  RequestCount: Cardinal;
   Response:     TIdSipResponse;
   SessCount:    Integer;
   Session:      TIdSipSession;
@@ -1461,7 +1542,8 @@ begin
               Self.Core.SessionCount,
               'no new session created');
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SIPTrying);
   try
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -1479,6 +1561,70 @@ begin
   end;
 end;
 
+procedure TestTIdSipSession.TestCallTwice;
+var
+  SessCount: Integer;
+  Session:   TIdSipSession;
+  TranCount: Integer;
+begin
+  SessCount := Self.Core.SessionCount;
+  TranCount := Self.Dispatch.TransactionCount;
+
+  Session := Self.Core.Call(Self.Dest);
+  Session.Call(Self.Dest);
+
+  CheckEquals(SessCount + 1,
+              Self.Core.SessionCount,
+              'A second session was created');
+  CheckEquals(TranCount + 1,
+              Self.Dispatch.TransactionCount,
+              'A second transaction was created');
+end;
+
+procedure TestTIdSipSession.TestCallRemoteRefusal;
+var
+  Response: TIdSipResponse;
+  Session:  TIdSipSession;
+begin
+  Session := Self.Core.Call(Self.Dest);
+
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SIPForbidden);
+  try
+    Session.AddSessionListener(Self);
+    Self.Dispatch.Transport.FireOnResponse(Response);
+
+    Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
+  finally
+    Response.Free;
+  end;
+end;
+
+procedure TestTIdSipSession.TestCallNetworkFailure;
+var
+  Response: TIdSipResponse;
+  Session:  TIdSipSession;
+begin
+  Session := TIdSipSession.Create(Self.Core);
+  try
+    Session.AddSessionListener(Self);
+    Self.Dispatch.Transport.FailWith := EIdConnectTimeout;
+    Session.Call(Self.Dest);
+
+    Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                         SIPForbidden);
+    try
+      Self.Dispatch.Transport.FireOnResponse(Response);
+
+      Check(Self.OnEndedSessionFired, 'OnEndedSession wasn''t triggered');
+    finally
+      Response.Free;
+    end;
+  finally
+    Session.Free;
+  end;
+end;
+
 procedure TestTIdSipSession.TestCallSecure;
 var
   Response: TIdSipResponse;
@@ -1489,7 +1635,8 @@ begin
   Self.Dest.Address.Protocol := SipsScheme;
   Session := Self.Core.Call(Self.Dest);
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SIPTrying);
   try
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -1510,7 +1657,8 @@ begin
   Self.Dest.Address.Protocol := SipsScheme;
   Session := Self.Core.Call(Self.Dest);
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SipTrying);
   try
     Self.Dispatch.Transport.FireOnResponse(Response);
 
@@ -1530,7 +1678,8 @@ begin
 
   Session := Self.Core.Call(Self.Dest);
 
-  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+  Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                       SipTrying);
   try
     Response.FirstContact.Address.Protocol := SipsScheme;
     Response.StatusCode := SIPOK;
@@ -1542,6 +1691,38 @@ begin
   end;
 end;
 
+procedure TestTIdSipSession.TestReceiveBye;
+var
+  Bye:  TIdSipRequest;
+  Temp: String;
+begin
+  Self.Dispatch.Transport.FireOnRequest(Self.Invite);
+
+  Check(Assigned(Self.Session), 'OnNewSession didn''t fire');
+  Self.Session.AcceptCall;
+  Self.Session.AddSessionListener(Self);
+
+  Bye := Self.Core.CreateBye(Self.Session.Dialog);
+  try
+    // Because this BYE actually comes from the network, its from/to headers will
+    // be the REVERSE of a locally generated BYE
+    Temp := Bye.ToHeader.Value + Bye.ToHeader.ParamsAsString;
+    Bye.ToHeader.Value := Bye.From.Value + Bye.From.ParamsAsString;
+    Bye.From.Value := Temp;
+
+    Self.Dispatch.Transport.FireOnRequest(Bye);
+  finally
+    Bye.Free;
+  end;
+
+  Check(Self.OnEndedSessionFired, 'OnEndedSession didn''t fire');
+end;
+{
+procedure TestTIdSipSession.TestReceiveByeWithPendingRequests;
+begin
+  Fail('How do we make a pending request for the soon-to-be-terminated dialog?');
+end;
+}
 procedure TestTIdSipSession.TestTerminate;
 var
   Request:      TIdSipRequest;

@@ -89,7 +89,7 @@ type
     ClientLock: TCriticalSection;
 
     function  AddClient: TIdSipTcpClient;
-    procedure DoOnClientFinished(Sender: TObject);
+    procedure DoOnClientFinished(Sender: TIdSipTcpClient);
     procedure DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure RemoveClient(Client: TIdSipTcpClient);
   protected
@@ -520,9 +520,9 @@ begin
   end;
 end;
 
-procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TObject);
+procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TIdSipTcpClient);
 begin
-  Self.RemoveClient(Sender as TIdSipTcpClient);
+  Self.RemoveClient(Sender);
 end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
