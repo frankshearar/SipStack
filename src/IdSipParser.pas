@@ -36,12 +36,10 @@ type
     procedure CheckRequiredHeaders(const Request: TIdSipRequest);
     procedure InitialiseMessage(Msg: TIdSipMessage);
     procedure ParseCommaSeparatedHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
-    procedure ParseContactHeader(const Msg: TIdSipMessage; ContactParms: String);
     procedure ParseHeader(const Msg: TIdSipMessage; const Header: String);
     procedure ParseHeaders(const Msg: TIdSipMessage);
     procedure ParseRequestLine(const Request: TIdSipRequest);
     procedure ParseStatusLine(const Response: TIdSipResponse);
-    procedure ParseViaHeader(const Msg: TIdSipMessage; ViaParms: String);
   public
     class function IsIPv6Reference(const Token: String): Boolean;
     class function IsMethod(Method: String): Boolean;
@@ -609,12 +607,6 @@ begin
     Msg.Headers.Add(Header).Value := Fetch(Parms, ',');
 end;
 
-procedure TIdSipParser.ParseContactHeader(const Msg: TIdSipMessage; ContactParms: String);
-begin
-  while (ContactParms <> '') do
-    Msg.Headers.Add(ContactHeaderFull).Value := Trim(Fetch(ContactParms, ','));
-end;
-
 procedure TIdSipParser.ParseHeader(const Msg: TIdSipMessage; const Header: String);
 begin
   try
@@ -709,12 +701,6 @@ begin
   Response.StatusCode := StrToIntDef(StatusCode, BadStatusCode);
 
   Response.StatusText := Line;
-end;
-
-procedure TIdSipParser.ParseViaHeader(const Msg: TIdSipMessage; ViaParms: String);
-begin
-  while (ViaParms <> '') do
-    Msg.Headers.Add(ViaHeaderFull).Value := Fetch(ViaParms, ',');
 end;
 
 end.

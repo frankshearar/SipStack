@@ -235,6 +235,7 @@ type
     fHeaderClass: TIdSipHeaderClass;
   public
     constructor Create(HeaderName: String; HeaderClass: TIdSipHeaderClass);
+    
     property HeaderName:  String            read fHeaderName;
     property HeaderClass: TIdSipHeaderClass read fHeaderClass;
   end;
@@ -244,8 +245,9 @@ type
     List: TObjectList;
 
     class function HeaderTypes: TObjectList;
+    class function IsHeader(const Header, ExpectedHeaderName: String): Boolean;
 
-    function  ConstructHeader(const HeaderName: String): TIdSipHeader;
+    function  ConstructHeader(HeaderName: String): TIdSipHeader;
     function  GetHeaders(const Name: String): TIdSipHeader;
     function  GetItems(const I: Integer): TIdSipHeader;
     function  GetValues(const Name: String): String;
@@ -276,7 +278,6 @@ type
     procedure Clear;
     procedure Delete(const I: Integer);
     function  Count: Integer;
-
     function  HasHeader(const HeaderName: String): Boolean;
 
     property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
@@ -358,8 +359,8 @@ type
 
   TIdSipRequest = class(TIdSipMessage)
   private
-    fMethod:     String;
-    fRequest:    String;
+    fMethod:  String;
+    fRequest: String;
   protected
     function FirstLine: String; override;
   public
@@ -372,8 +373,8 @@ type
 
   TIdSipResponse = class(TIdSipMessage)
   private
-    fStatusCode:    Integer;
-    fStatusText:    String;
+    fStatusCode: Integer;
+    fStatusText: String;
 
     procedure SetStatusCode(const Value: Integer);
   protected
@@ -1478,12 +1479,8 @@ begin
 end;
 
 class function TIdSipHeaders.IsCallID(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, CallIDHeaderFull)
-         or IsEqual(Name, CallIDHeaderShort);
+  Result := Self.IsHeader(Header, CallIDHeaderFull);
 end;
 
 class function TIdSipHeaders.IsCommaSeparatedHeader(Header: String): Boolean;
@@ -1496,88 +1493,53 @@ begin
 end;
 
 class function TIdSipHeaders.IsContact(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, ContactHeaderFull)
-         or IsEqual(Name, ContactHeaderShort);
+  Result := Self.IsHeader(Header, ContactHeaderFull);
 end;
 
 class function TIdSipHeaders.IsContentLength(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, ContentLengthHeaderFull)
-         or IsEqual(Name, ContentLengthHeaderShort);
+  Result := Self.IsHeader(Header, ContentLengthHeaderFull);
 end;
 
 class function TIdSipHeaders.IsCSeq(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, CSeqHeader);
+  Result := Self.IsHeader(Header, CseqHeader);
 end;
 
 class function TIdSipHeaders.IsErrorInfo(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, ErrorInfoHeader);
+  Result := Self.IsHeader(Header, ErrorInfoHeader);
 end;
 
 class function TIdSipHeaders.IsFrom(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, FromHeaderFull)
-         or IsEqual(Name, FromHeaderShort);
+  Result := Self.IsHeader(Header, FromHeaderFull);
 end;
 
 class function TIdSipHeaders.IsMaxForwards(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, MaxForwardsHeader);
+  Result := Self.IsHeader(Header, MaxForwardsHeader);
 end;
 
 class function TIdSipHeaders.IsRecordRoute(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, RecordRouteHeader);
+  Result := Self.IsHeader(Header, RecordRouteHeader);
 end;
 
 class function TIdSipHeaders.IsRoute(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, RouteHeader);
+  Result := Self.IsHeader(Header, RouteHeader);
 end;
 
 class function TIdSipHeaders.IsTo(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, ToHeaderFull)
-         or IsEqual(Name, ToHeaderShort);
+  Result := Self.IsHeader(Header, ToHeaderFull);
 end;
 
 class function TIdSipHeaders.IsVia(Header: String): Boolean;
-var
-  Name: String;
 begin
-  Name := Self.GetHeaderName(Header);
-  Result := IsEqual(Name, ViaHeaderFull)
-         or IsEqual(Name, ViaHeaderShort);
+  Result := Self.IsHeader(Header, ViaHeaderFull);
 end;
 
 constructor TIdSipHeaders.Create;
@@ -1671,14 +1633,24 @@ begin
   Result := GIdSipHeadersMap;
 end;
 
-function TIdSipHeaders.ConstructHeader(const HeaderName: String): TIdSipHeader;
+class function TIdSipHeaders.IsHeader(const Header, ExpectedHeaderName: String): Boolean;
+var
+  Name: String;
+begin
+  Name := Self.GetHeaderName(Header);
+  Result := IsEqual(Self.CanonicaliseName(Name), ExpectedHeaderName);
+end;
+
+function TIdSipHeaders.ConstructHeader(HeaderName: String): TIdSipHeader;
 var
   I: Integer;
 begin
+  HeaderName := Self.CanonicaliseName(HeaderName);
+
   Result := nil;
   I := 0;
   while (I < Self.HeaderTypes.Count) and not Assigned(Result) do
-    if IsEqual(TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderName, HeaderName) then
+    if Self.IsHeader(TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderName, HeaderName) then
       Result := TIdSipHeaderMap(Self.HeaderTypes[I]).HeaderClass.Create
     else
       Inc(I);
