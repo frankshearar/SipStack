@@ -733,7 +733,7 @@ type
     class function GetHeaderName(Header: String): String;
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
-    procedure Add(Header: TIdSipHeader); overload; virtual; abstract;
+    procedure Add(Copy: TIdSipHeader); overload; virtual; abstract;
     procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
     procedure AddInReverseOrder(Headers: TIdSipHeaderList);
     function  AsString: String;
@@ -769,7 +769,7 @@ type
                        const HeaderName: String);
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; override;
-    procedure Add(Header: TIdSipHeader); overload; override;
+    procedure Add(Copy: TIdSipHeader); overload; override;
     procedure Add(Headers: TIdSipHeaderList); overload; override;
     procedure Clear; override;
     function  Count: Integer; override;
@@ -811,7 +811,7 @@ type
     destructor  Destroy; override;
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; override;
-    procedure Add(Header: TIdSipHeader); overload; override;
+    procedure Add(Copy: TIdSipHeader); overload; override;
     procedure Add(Headers: TIdSipHeaderList); overload; override;
     procedure Clear; override;
     function  CurrentHeader: TIdSipHeader; override;
@@ -4943,9 +4943,9 @@ begin
   Result := Self.Headers.Add(HeaderName);
 end;
 
-procedure TIdSipHeadersFilter.Add(Header: TIdSipHeader);
+procedure TIdSipHeadersFilter.Add(Copy: TIdSipHeader);
 begin
-  Self.Headers.Add(Header);
+  Self.Headers.Add(Copy);
 end;
 
 procedure TIdSipHeadersFilter.Add(Headers: TIdSipHeaderList);
@@ -5131,14 +5131,14 @@ begin
   end;
 end;
 
-procedure TIdSipHeaders.Add(Header: TIdSipHeader);
+procedure TIdSipHeaders.Add(Copy: TIdSipHeader);
 var
   H: TIdSipHeader;
 begin
-  H := Self.Add(Header.Name);
+  H := Self.Add(Copy.Name);
 
   if Assigned(H) then
-    H.Assign(Header);
+    H.Assign(Copy);
 end;
 
 procedure TIdSipHeaders.Add(Headers: TIdSipHeaderList);
