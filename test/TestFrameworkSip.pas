@@ -215,24 +215,19 @@ type
   TIdSipTestSessionListener = class(TIdSipMockListener,
                                     IIdSipSessionListener)
   private
-    fAnswerParam:             TIdSipResponse;
-    fAuthenticationChallenge: Boolean;
-    fEndedSession:            Boolean;
-    fEstablishedSession:      Boolean;
-    fModifiedSession:         Boolean;
-    fModifySession:           Boolean;
-    fNewSession:              Boolean;
-    fModifyParam:             TIdSipInboundInvite;
-    fReasonParam:             String;
-    fRedirect:                Boolean;
-    fSessionParam:            TIdSipSession;
+    fAnswerParam:        TIdSipResponse;
+    fEndedSession:       Boolean;
+    fEstablishedSession: Boolean;
+    fModifiedSession:    Boolean;
+    fModifySession:      Boolean;
+    fNewSession:         Boolean;
+    fModifyParam:        TIdSipInboundInvite;
+    fReasonParam:        String;
+    fRedirect:           Boolean;
+    fSessionParam:       TIdSipSession;
   public
     constructor Create; override;
 
-    procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse;
-                                        var Username: String;
-                                        var Password: String);
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
@@ -243,17 +238,16 @@ type
     procedure OnModifySession(Modify: TIdSipInboundInvite);
     procedure OnNewSession(Session: TIdSipSession);
 
-    property AnswerParam:             TIdSipResponse      read fAnswerParam;
-    property AuthenticationChallenge: Boolean             read fAuthenticationChallenge;
-    property EndedSession:            Boolean             read fEndedSession;
-    property EstablishedSession:      Boolean             read fEstablishedSession;
-    property ModifiedSession:         Boolean             read fModifiedSession;
-    property ModifySession:           Boolean             read fModifySession;
-    property NewSession:              Boolean             read fNewSession;
-    property ModifyParam:             TIdSipInboundInvite read fModifyParam;
-    property Redirect:                Boolean             read fRedirect;
-    property ReasonParam:             String              read fReasonParam;
-    property SessionParam:            TIdSipSession       read fSessionParam;
+    property AnswerParam:        TIdSipResponse      read fAnswerParam;
+    property EndedSession:       Boolean             read fEndedSession;
+    property EstablishedSession: Boolean             read fEstablishedSession;
+    property ModifiedSession:    Boolean             read fModifiedSession;
+    property ModifySession:      Boolean             read fModifySession;
+    property NewSession:         Boolean             read fNewSession;
+    property ModifyParam:        TIdSipInboundInvite read fModifyParam;
+    property Redirect:           Boolean             read fRedirect;
+    property ReasonParam:        String              read fReasonParam;
+    property SessionParam:       TIdSipSession       read fSessionParam;
   end;
 
   TIdSipTestSessionListenerEndedCounter = class(TIdSipTestSessionListener)
@@ -569,7 +563,7 @@ end;
 
 procedure TIdSipExceptionRaisingHeader.Parse(const Value: String);
 begin
-  raise EBadHeader.Create('TIdSipExceptionRaisingHeader.Parse');
+  raise EBadHeader.Create(Self.ClassName + '.Parse');
 end;
 
 //******************************************************************************
@@ -601,7 +595,7 @@ begin
   Self.fNewData := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestDataListener.OnNewData');
+    raise Self.FailWith.Create(Self.ClassName + '.OnNewData');
 end;
 
 procedure TIdSipTestDataListener.OnNewUdpData(Data: TStream);
@@ -609,7 +603,7 @@ begin
   Self.fNewUdpData := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestDataListener.OnNewUdpData');
+    raise Self.FailWith.Create(Self.ClassName + '.OnNewUdpData');
 end;
 
 //******************************************************************************
@@ -637,7 +631,7 @@ begin
   Self.fReasonParam    := Reason;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestMessageListener.OnException');
+    raise Self.FailWith.Create(Self.ClassName + '.OnException');
 end;
 
 procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
@@ -648,7 +642,7 @@ begin
   Self.fReasonParam           := Reason;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestMessageListener.OnMalformedMessage');
+    raise Self.FailWith.Create(Self.ClassName + '.OnMalformedMessage');
 end;
 
 procedure TIdSipTestMessageListener.OnReceiveRequest(Request: TIdSipRequest;
@@ -659,7 +653,7 @@ begin
   Self.fReceivedFromParam := ReceivedFrom;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestMessageListener.OnReceiveRequest');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveRequest');
 end;
 
 procedure TIdSipTestMessageListener.OnReceiveResponse(Response: TIdSipResponse;
@@ -670,7 +664,7 @@ begin
   Self.fReceivedFromParam := ReceivedFrom;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestMessageListener.OnReceiveResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');
 end;
 
 //******************************************************************************
@@ -692,7 +686,7 @@ begin
   Self.fChanged := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestObserver.OnChanged');
+    raise Self.FailWith.Create(Self.ClassName + '.OnChanged');
 end;
 
 //******************************************************************************
@@ -723,7 +717,7 @@ procedure TIdSipTestInboundInviteListener.OnSuccess(InviteAgent: TIdSipInboundIn
 begin
   Self.fAckParam         := Ack;
   Self.fInviteAgentParam := InviteAgent;
-  Self.fSucceeded        := true;  
+  Self.fSucceeded        := true;
 end;
 
 //******************************************************************************
@@ -750,7 +744,7 @@ begin
   Self.fDialogParam       := NewDialog;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestInviteListener.OnDialogEstablished');
+    raise Self.FailWith.Create(Self.ClassName + '.OnDialogEstablished');
 end;
 
 procedure TIdSipTestInviteListener.OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -763,7 +757,7 @@ begin
   Self.fReasonParam      := Reason;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestInviteListener.OnFailure');
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
 end;
 
 procedure TIdSipTestInviteListener.OnRedirect(InviteAgent: TIdSipOutboundInvite;
@@ -774,7 +768,7 @@ begin
   Self.fResponseParam    := Redirect;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestInviteListener.OnRedirect');
+    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
 end;
 
 procedure TIdSipTestInviteListener.OnSuccess(InviteAgent: TIdSipOutboundInvite;
@@ -785,7 +779,7 @@ begin
   Self.fSuccess           := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestInviteListener.OnSuccess');
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
 end;
 
 //******************************************************************************
@@ -810,7 +804,7 @@ begin
   Self.fResponse          := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestOptionsListener.OnResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnResponse');
 end;
 
 //******************************************************************************
@@ -838,7 +832,7 @@ begin
   Self.fReasonParam          := Reason;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestRegistrationListener.OnFailure');
+    raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
 end;
 
 procedure TIdSipTestRegistrationListener.OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
@@ -849,7 +843,7 @@ begin
   Self.fSuccess              := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestRegistrationListener.OnSuccess');
+    raise Self.FailWith.Create(Self.ClassName + '.OnSuccess');
 end;
 
 //******************************************************************************
@@ -861,23 +855,11 @@ constructor TIdSipTestSessionListener.Create;
 begin
   inherited Create;
 
-  Self.fAuthenticationChallenge := true;
-  Self.fEndedSession            := false;
-  Self.fEstablishedSession      := false;
-  Self.fModifiedSession         := false;
-  Self.fNewSession              := false;
-  Self.fRedirect                := false;
-end;
-
-procedure TIdSipTestSessionListener.OnAuthenticationChallenge(Action: TIdSipAction;
-                                                              Response: TIdSipResponse;
-                                                              var Username: String;
-                                                              var Password: String);
-begin
-  Self.fAuthenticationChallenge := true;
-
-  if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnAuthenticationChallenge');
+  Self.fEndedSession       := false;
+  Self.fEstablishedSession := false;
+  Self.fModifiedSession    := false;
+  Self.fNewSession         := false;
+  Self.fRedirect           := false;
 end;
 
 procedure TIdSipTestSessionListener.OnRedirect(Action: TIdSipAction;
@@ -886,7 +868,7 @@ begin
   Self.fRedirect := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnRedirect');
+    raise Self.FailWith.Create(Self.ClassName + '.OnRedirect');
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;
@@ -897,7 +879,7 @@ begin
   Self.fSessionParam := Session;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnEndedSession');
+    raise Self.FailWith.Create(Self.ClassName + '.OnEndedSession');
 end;
 
 procedure TIdSipTestSessionListener.OnEstablishedSession(Session: TIdSipSession);
@@ -906,7 +888,7 @@ begin
   Self.fSessionParam       := Session;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnEstablishedSession');
+    raise Self.FailWith.Create(Self.ClassName + '.OnEstablishedSession');
 end;
 
 procedure TIdSipTestSessionListener.OnModifiedSession(Session: TIdSipSession;
@@ -917,7 +899,7 @@ begin
   Self.fSessionParam    := Session;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnModifiedSession');
+    raise Self.FailWith.Create(Self.ClassName + '.OnModifiedSession');
 end;
 
 procedure TIdSipTestSessionListener.OnModifySession(Modify: TIdSipInboundInvite);
@@ -926,7 +908,7 @@ begin
   Self.fModifyParam   := Modify;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnModifiedSession');
+    raise Self.FailWith.Create(Self.ClassName + '.OnModifiedSession');
 end;
 
 procedure TIdSipTestSessionListener.OnNewSession(Session: TIdSipSession);
@@ -935,7 +917,7 @@ begin
   Self.fSessionParam := Session;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestSessionListener.OnNewSession');
+    raise Self.FailWith.Create(Self.ClassName + '.OnNewSession');
 end;
 
 //******************************************************************************
@@ -954,6 +936,7 @@ procedure TIdSipTestSessionListenerEndedCounter.OnEndedSession(Session: TIdSipSe
                                                                const Reason: String);
 begin
   inherited OnEndedSession(Session, Reason);
+
   Inc(Self.fEndedNotificationCount);
 end;
 
@@ -982,7 +965,7 @@ begin
   Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionListener.OnFail');
+    raise Self.FailWith.Create(Self.ClassName + '.OnFail');
 end;
 
 procedure TIdSipTestTransactionListener.OnReceiveRequest(Request: TIdSipRequest;
@@ -991,11 +974,11 @@ procedure TIdSipTestTransactionListener.OnReceiveRequest(Request: TIdSipRequest;
 begin
   Self.fReceivedRequest  := true;
   Self.fReceiverParam    := Receiver;
-  Self.fRequestParam     := Request;  
+  Self.fRequestParam     := Request;
   Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionListener.OnReceiveRequest');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveRequest');
 end;
 
 procedure TIdSipTestTransactionListener.OnReceiveResponse(Response: TIdSipResponse;
@@ -1008,7 +991,7 @@ begin
   Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionListener.OnReceiveResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');
 end;
 
 procedure TIdSipTestTransactionListener.OnTerminated(Transaction: TIdSipTransaction);
@@ -1017,7 +1000,7 @@ begin
   Self.fTransactionParam := Transaction;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionListener.OnTerminated');
+    raise Self.FailWith.Create(Self.ClassName + '.OnTerminated');
 end;
 
 //******************************************************************************
@@ -1045,7 +1028,7 @@ begin
   Self.fReasonParam    := Reason;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnException');
+    raise Self.FailWith.Create(Self.ClassName + '.OnException');
 end;
 
 procedure TIdSipTestTransportListener.OnReceiveRequest(Request: TIdSipRequest;
@@ -1056,7 +1039,7 @@ begin
   Self.fReceivedRequest := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnReceiveRequest');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveRequest');
 end;
 
 procedure TIdSipTestTransportListener.OnReceiveResponse(Response: TIdSipResponse;
@@ -1067,7 +1050,7 @@ begin
   Self.fReceivedResponse := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnReceiveResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');
 end;
 
 procedure TIdSipTestTransportListener.OnRejectedMessage(const Msg: String;
@@ -1078,7 +1061,7 @@ begin
   Self.fRejectedMessage := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnRejectedMessage');
+    raise Self.FailWith.Create(Self.ClassName + '.OnRejectedMessage');
 
 end;
 
@@ -1106,7 +1089,7 @@ begin
   Self.fSentRequest  := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnSendRequest');
+    raise Self.FailWith.Create(Self.ClassName + '.OnSendRequest');
 end;
 
 procedure TIdSipTestTransportSendingListener.OnSendResponse(Response: TIdSipResponse;
@@ -1117,7 +1100,7 @@ begin
   Self.fSentResponse  := true;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransportListener.OnSendResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnSendResponse');
 end;
 
 //******************************************************************************
@@ -1155,7 +1138,7 @@ begin
   TryAgain := Self.TryAgain;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionDispatcherListener.OnAuthenticationChallenge');
+    raise Self.FailWith.Create(Self.ClassName + '.OnAuthenticationChallenge');
 end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveRequest(Request: TIdSipRequest;
@@ -1166,7 +1149,7 @@ begin
   Self.fRequestParam    := Request;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionDispatcherListener.OnReceiveRequest');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveRequest');
 end;
 
 procedure TIdSipTestTransactionDispatcherListener.OnReceiveResponse(Response: TIdSipResponse;
@@ -1177,7 +1160,7 @@ begin
   Self.fResponseParam    := Response;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestTransactionDispatcherListener.OnReceiveResponse');
+    raise Self.FailWith.Create(Self.ClassName + '.OnReceiveResponse');
 end;
 
 //******************************************************************************
@@ -1223,7 +1206,7 @@ begin
   Self.fMessageParam            := Message;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestUserAgentListener.OnDroppedUnmatchedMessage');
+    raise Self.FailWith.Create(Self.ClassName + '.OnDroppedUnmatchedMessage');
 end;
 
 procedure TIdSipTestUserAgentListener.OnInboundCall(Session: TIdSipInboundSession);
@@ -1232,7 +1215,7 @@ begin
   Self.fSessionParam := Session;
 
   if Assigned(Self.FailWith) then
-    raise Self.FailWith.Create('TIdSipTestUserAgentListener.OnInboundCall');
+    raise Self.FailWith.Create(Self.ClassName + '.OnInboundCall');
 end;
 
 end.
