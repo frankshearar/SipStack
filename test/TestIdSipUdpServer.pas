@@ -35,10 +35,10 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
     function  ReadResponse: String;
   public
     procedure SetUp; override;
@@ -305,15 +305,15 @@ begin
 end;
 }
 
-procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedRequest) then
     Self.CheckReceivedRequest(Self, Request);
 end;
 
-procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipUdpServer.OnReceiveResponse(Response: TIdSipResponse;
+                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedResponse) then
     Self.CheckReceivedResponse(Self, Response, ReceivedFrom);

@@ -34,10 +34,10 @@ type
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
 
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
   public
     constructor Create;
 
@@ -219,14 +219,14 @@ end;
 
 //* TIdSipTestMessageListener Private methods **********************************
 
-procedure TIdSipTestMessageListener.OnReceiveRequest(const Request: TIdSipRequest;
-                                                     const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTestMessageListener.OnReceiveRequest(Request: TIdSipRequest;
+                                                     ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.fReceivedRequest := true;
 end;
 
-procedure TIdSipTestMessageListener.OnReceiveResponse(const Response: TIdSipResponse;
-                                                      const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTestMessageListener.OnReceiveResponse(Response: TIdSipResponse;
+                                                      ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.fReceivedResponse := true;
 end;

@@ -50,10 +50,10 @@ type
     procedure NotifyTransportListeners(Response: TIdSipResponse); overload;
     procedure NotifyTransportSendingListeners(Request: TIdSipRequest); overload;
     procedure NotifyTransportSendingListeners(Response: TIdSipResponse); overload;
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings); virtual;
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings); virtual;
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
     procedure SendRequest(R: TIdSipRequest); virtual;
     procedure SendResponse(R: TIdSipResponse); virtual;
     function  SentByIsRecognised(Via: TIdSipViaHeader): Boolean; virtual;
@@ -183,8 +183,8 @@ type
   protected
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings); override;
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings); override;
     procedure SendRequest(R: TIdSipRequest); override;
     procedure SendResponse(R: TIdSipResponse); override;
     procedure SetPort(Value: Cardinal); override;
@@ -385,8 +385,8 @@ begin
   end;
 end;
 
-procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                           const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                           ReceivedFrom: TIdSipConnectionBindings);
 begin
   // cf. RFC 3261 section 18.2.1
   if TIdSipParser.IsFQDN(Request.LastHop.SentBy)
@@ -396,8 +396,8 @@ begin
   Self.NotifyTransportListeners(Request);
 end;
 
-procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                            const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
+                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
   // cf. RFC 3261 section 18.1.2
 
@@ -827,8 +827,8 @@ begin
   Result := Self.Transport.DefaultPort;
 end;
 
-procedure TIdSipUDPTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                              const ReceivedFrom: TIdSipConnectionBindings);
+procedure TIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                              ReceivedFrom: TIdSipConnectionBindings);
 begin
   // RFC 3581 section 4
   if Request.LastHop.HasRPort then begin

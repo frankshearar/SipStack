@@ -148,10 +148,10 @@ type
                              const R: TIdSipResponse);
     procedure NoteSourcePort(Sender: TObject;
                              const R: TIdSipRequest);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
   protected
     function TransportType: TIdSipTransportClass; override;
   public
@@ -980,13 +980,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipUDPTransport.OnReceiveRequest(const Request: TIdSipRequest;
-                                                  const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
 begin
 end;
 
-procedure TestTIdSipUDPTransport.OnReceiveResponse(const Response: TIdSipResponse;
-                                                   const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipUDPTransport.OnReceiveResponse(Response: TIdSipResponse;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Self.RPort := ReceivedFrom.PeerPort;

@@ -9,10 +9,10 @@ uses
 type
   IIdSipMessageListener = interface
     ['{941E4681-89F9-4491-825C-F6458F7E663C}']
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
   end;
 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)

@@ -70,10 +70,10 @@ type
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
                                                    Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnServerDisconnect(AThread: TIdPeerThread);
     procedure RaiseException(Sender: TObject;
                              Request: TIdSipRequest);
@@ -614,15 +614,15 @@ begin
   Fail('The connection is closed. The client should not receive a response');
 end;
 
-procedure TestTIdSipTcpServer.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipTcpServer.OnReceiveRequest(Request: TIdSipRequest;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
 end;
 
-procedure TestTIdSipTcpServer.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipTcpServer.OnReceiveResponse(Response: TIdSipResponse;
+                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response, ReceivedFrom);

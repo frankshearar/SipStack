@@ -33,10 +33,10 @@ type
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure DoOnFinished(Sender: TObject);
-    procedure OnReceiveRequest(const Request: TIdSipRequest;
-                               const ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnReceiveResponse(const Response: TIdSipResponse;
-                                const ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveRequest(Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnReceiveResponse(Response: TIdSipResponse;
+                                ReceivedFrom: TIdSipConnectionBindings);
     procedure PauseAndSendOkResponse(Sender: TObject;
                                      Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject;
@@ -227,8 +227,8 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.OnReceiveRequest(const Request: TIdSipRequest;
-                                               const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipTcpClient.OnReceiveRequest(Request: TIdSipRequest;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -236,8 +236,8 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTcpClient.OnReceiveResponse(const Response: TIdSipResponse;
-                                                const ReceivedFrom: TIdSipConnectionBindings);
+procedure TestTIdSipTcpClient.OnReceiveResponse(Response: TIdSipResponse;
+                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response, ReceivedFrom);
