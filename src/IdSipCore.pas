@@ -1737,7 +1737,7 @@ begin
 end;
 
 procedure TIdSipAbstractCore.RejectBadRequest(Request: TIdSipRequest;
-                                               const Reason: String);
+                                              const Reason: String);
 var
   Response: TIdSipResponse;
 begin
