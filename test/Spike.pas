@@ -126,11 +126,11 @@ type
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     procedure OnPlaybackStopped(Origin: TAudioData);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
@@ -438,7 +438,7 @@ begin
 end;
 
 procedure TrnidSpike.OnNewData(Data: TIdRTPPayload;
-                               Binding: TIdSocketHandle);
+                               Binding: TIdConnection);
 var
   S: TStringStream;
 begin
@@ -456,12 +456,12 @@ begin
 end;
 
 procedure TrnidSpike.OnRTCP(Packet: TIdRTCPPacket;
-                            Binding: TIdSocketHandle);
+                            Binding: TIdConnection);
 begin
 end;
 
 procedure TrnidSpike.OnRTP(Packet: TIdRTPPacket;
-                           Binding: TIdSocketHandle);
+                           Binding: TIdConnection);
 begin
   Self.CounterLock.Acquire;
   try

@@ -17,10 +17,10 @@ uses
 type
   TIdRTCPReadEvent = procedure(Sender: TObject;
                                APacket: TIdRTCPPacket;
-                               ABinding: TIdSocketHandle) of object;
+                               ABinding: TIdConnection) of object;
   TIdRTPReadEvent = procedure(Sender: TObject;
                               APacket: TIdRTPPacket;
-                              ABinding: TIdSocketHandle) of object;
+                              ABinding: TIdConnection) of object;
 
   // While I look like a Server, I really represent a peer in an RTP session.
   // You may use me not only to receive RTP/RTCP data, but also to send data.
@@ -46,9 +46,9 @@ type
 
     function  GetProfile: TIdRTPProfile;
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                    Binding: TIdSocketHandle);
+                                    Binding: TIdConnection);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                   Binding: TIdSocketHandle);
+                                   Binding: TIdConnection);
     procedure SetProfile(Value: TIdRTPProfile);
   protected
     procedure DoUDPRead(AData: TStream;
@@ -129,19 +129,25 @@ end;
 procedure TIdRTPServer.DoUDPRead(AData: TStream;
                                  ABinding: TIdSocketHandle);
 var
-  Pkt: TIdRTPBasePacket;
+  Binding: TIdConnection;
+  Pkt:     TIdRTPBasePacket;
 begin
   inherited DoUDPRead(AData, ABinding);
   AData.Seek(0, soFromBeginning);
+
+  Binding.LocalIP   := ABinding.IP;
+  Binding.LocalPort := ABinding.Port;
+  Binding.PeerIP    := ABinding.PeerIP;
+  Binding.PeerPort  := ABinding.PeerPort;
 
   Pkt := Self.Profile.CreatePacket(AData);
   try
     Pkt.ReadFrom(AData);
 
     if Pkt.IsRTP then
-      Self.NotifyListenersOfRTP(Pkt as TIdRTPPacket, ABinding)
+      Self.NotifyListenersOfRTP(Pkt as TIdRTPPacket, Binding)
     else
-      Self.NotifyListenersOfRTCP(Pkt as TIdRTCPPacket, ABinding);
+      Self.NotifyListenersOfRTCP(Pkt as TIdRTCPPacket, Binding);
   finally
     Pkt.Free;
   end;
@@ -155,7 +161,7 @@ begin
 end;
 
 procedure TIdRTPServer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                             Binding: TIdSocketHandle);
+                                             Binding: TIdConnection);
 var
   Compound: TIdCompoundRTCPPacket;
   I:        Integer;
@@ -179,7 +185,7 @@ begin
 end;
 
 procedure TIdRTPServer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                            Binding: TIdSocketHandle);
+                                            Binding: TIdConnection);
 begin
   Self.Peer.NotifyListenersOfRTP(Packet, Binding);
 

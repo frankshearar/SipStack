@@ -55,7 +55,7 @@ type
     procedure DoOnResize(Sender: TObject);
     procedure Flash(Event: TIdRTPTelephoneEventPayload);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure SendDTMF(Event: Byte);
     procedure SendDTMF0(Sender: TObject);
     procedure SendDTMF1(Sender: TObject);
@@ -277,7 +277,7 @@ begin
 end;
 
 procedure TIdDTMFPanel.OnNewData(Data: TIdRTPPayload;
-                                 Binding: TIdSocketHandle);
+                                 Binding: TIdConnection);
 begin
   // TODO: Could this indicate the need for a Visitor pattern?
   if Data is TIdRTPTelephoneEventPayload then

@@ -34,6 +34,13 @@ type
   TIdRTPVersion           = 0..3;
   TIdT140BlockCount       = Word;
 
+  TIdConnection = record
+    LocalIP:   String;
+    LocalPort: Integer;
+    PeerIP:    String;
+    PeerPort:  Integer;
+  end;
+
   TIdRTPPayload = class;
   TIdRTPPayloadClass = class of TIdRTPPayload;
 
@@ -822,10 +829,10 @@ type
     function  SenderTimeout(Session: TIdRTPSession): TDateTime;
     function  SendInterval(Session: TIdRTPSession): TDateTime;
     procedure SetControlBinding(SSRC: Cardinal;
-                                Binding: TIdSocketHandle);
+                                Binding: TIdConnection);
     procedure SetControlBindings(SSRCs: TCardinalDynArray;
-                                 Binding: TIdSocketHandle);
-    procedure SetDataBinding(SSRC: Cardinal; Binding: TIdSocketHandle);
+                                 Binding: TIdConnection);
+    procedure SetDataBinding(SSRC: Cardinal; Binding: TIdConnection);
 
     property Members[Index: Cardinal]: TIdRTPMember read MemberAt;
   end;
@@ -858,7 +865,7 @@ type
   IIdRTPDataListener = interface
     ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
   end;
 
   // I provide a protocol for things that listen for RTP packets. RTP agents,
@@ -866,9 +873,9 @@ type
   IIdRTPListener = interface
     ['{2B5E040A-0B8E-4C44-9769-80E3AAE35C41}']
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
   end;
 
   // I provide a protocol for sending RTP/RTCP data as well as notifying
@@ -877,9 +884,9 @@ type
     ['{10608EEF-CE5B-44AE-9B22-34CC19D0BE07}']
     procedure AddListener(const Listener: IIdRTPListener);
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                    Binding: TIdSocketHandle);
+                                    Binding: TIdConnection);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                   Binding: TIdSocketHandle);
+                                   Binding: TIdConnection);
     procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(const Host: String;
                          Port: Cardinal;
@@ -897,9 +904,9 @@ type
 
     procedure AddListener(const Listener: IIdRTPListener);
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                    Binding: TIdSocketHandle);
+                                    Binding: TIdConnection);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                   Binding: TIdSocketHandle);
+                                   Binding: TIdConnection);
     procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(const Host: String;
                          Port: Cardinal;
@@ -947,10 +954,10 @@ type
     TransmissionLock:           TCriticalSection;
 
     function  AddAppropriateReportTo(Packet: TIdCompoundRTCPPacket): TIdRTCPReceiverReport;
-    procedure AddControlSource(ID: Cardinal; Binding: TIdSocketHandle);
+    procedure AddControlSource(ID: Cardinal; Binding: TIdConnection);
     procedure AddControlSources(RTCP: TIdRTCPMultiSSRCPacket;
-                                Binding: TIdSocketHandle);
-    procedure AddDataSource(ID: Cardinal; Binding: TIdSocketHandle);
+                                Binding: TIdConnection);
+    procedure AddDataSource(ID: Cardinal; Binding: TIdConnection);
     procedure AddReports(Packet: TIdCompoundRTCPPacket);
     procedure AddSourceDesc(Packet: TIdCompoundRTCPPacket);
     procedure AdjustAvgRTCPSize(Control: TIdRTCPPacket);
@@ -964,11 +971,11 @@ type
     procedure IncSentOctetCount(N: Cardinal);
     procedure IncSentPacketCount;
     procedure NotifyListenersOfData(Data: TIdRTPPayload;
-                                    Binding: TIdSocketHandle);
+                                    Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     procedure RemoveSources(Bye: TIdRTCPBye);
     procedure ResetSentOctetCount;
     procedure ResetSentPacketCount;
@@ -987,7 +994,9 @@ type
     function  CreateNextReport: TIdCompoundRTCPPacket;
     function  DeterministicSendInterval(ForSender: Boolean): TDateTime;
     procedure Initialize;
-    function  IsMember(SSRC: Cardinal): Boolean;
+    function  IsMember(SSRC: Cardinal): Boolean; overload;
+    function  IsMember(const Host: String;
+                       Port: Cardinal): Boolean; overload;
     function  IsSender: Boolean; overload;
     function  IsSender(SSRC: Cardinal): Boolean; overload;
     procedure LeaveSession(const Reason: String = '');
@@ -1000,9 +1009,9 @@ type
     function  NextSequenceNo: TIdRTPSequenceNo;
     function  NothingSent: Boolean;
     procedure ReceiveControl(RTCP: TIdRTCPPacket;
-                             Binding: TIdSocketHandle);
+                             Binding: TIdConnection);
     procedure ReceiveData(RTP: TIdRTPPacket;
-                          Binding: TIdSocketHandle);
+                          Binding: TIdConnection);
     function  ReceiverCount: Cardinal;
     procedure RemoveListener(const Listener: IIdRTPDataListener);
     procedure RemoveMember(SSRC: Cardinal);
@@ -1055,9 +1064,9 @@ type
 
   TIdRTPMethod = class(TIdMethod)
   private
-    fBinding: TIdSocketHandle;
+    fBinding: TIdConnection;
   public
-    property Binding: TIdSocketHandle read fBinding write fBinding;
+    property Binding: TIdConnection read fBinding write fBinding;
   end;
 
   TIdRTPListenerReceiveRTCPMethod = class(TIdRTPMethod)
@@ -4394,7 +4403,7 @@ begin
 end;
 
 procedure TIdRTPMemberTable.SetControlBinding(SSRC: Cardinal;
-                                              Binding: TIdSocketHandle);
+                                              Binding: TIdConnection);
 var
   ID: TCardinalDynArray;
 begin
@@ -4404,7 +4413,7 @@ begin
 end;
 
 procedure TIdRTPMemberTable.SetControlBindings(SSRCs: TCardinalDynArray;
-                                               Binding: TIdSocketHandle);
+                                               Binding: TIdConnection);
 var
   I:      Cardinal;
   Member: TIdRTPMember;
@@ -4424,7 +4433,7 @@ begin
 end;
 
 procedure TIdRTPMemberTable.SetDataBinding(SSRC: Cardinal;
-                                           Binding: TIdSocketHandle);
+                                           Binding: TIdConnection);
 var
   Member: TIdRTPMember;
 begin
@@ -4590,7 +4599,7 @@ begin
 end;
 
 procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
-                                                       Binding: TIdSocketHandle);
+                                                       Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
@@ -4611,7 +4620,7 @@ begin
 end;
 
 procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
-                                                      Binding: TIdSocketHandle);
+                                                      Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTPMethod;
 begin
@@ -4787,6 +4796,12 @@ begin
   end;
 end;
 
+function TIdRTPSession.IsMember(const Host: String;
+                                Port: Cardinal): Boolean;
+begin
+  Result := Assigned(Self.Member(Host, Port));
+end;
+
 function TIdRTPSession.IsSender: Boolean;
 begin
   Result := Self.IsSender(Self.SyncSrcID);
@@ -4908,7 +4923,7 @@ begin
 end;
 
 procedure TIdRTPSession.ReceiveControl(RTCP: TIdRTCPPacket;
-                                       Binding: TIdSocketHandle);
+                                       Binding: TIdConnection);
 begin
   if RTCP.IsBye then begin
     Self.RemoveSources(RTCP as TIdRTCPBye);
@@ -4926,13 +4941,22 @@ begin
 end;
 
 procedure TIdRTPSession.ReceiveData(RTP: TIdRTPPacket;
-                                    Binding: TIdSocketHandle);
+                                    Binding: TIdConnection);
 var
   I:    Integer;
   SSRC: TIdRTPMember;
 begin
   if RTP.CollidesWith(Self.SyncSrcID) then
     Self.ResolveSSRCCollision;
+
+  // We cheat a bit: If we have a member that has a known IP/port,
+  // IsMember(SSRC) tells us if we know that member's SSRC.
+  if Self.IsMember(Binding.PeerIP, Binding.PeerPort) and not Self.IsMember(RTP.SyncSrcID) then begin
+    SSRC := Self.Member(Binding.PeerIP, Binding.PeerPort);
+    SSRC.HasSyncSrcID := true;
+    SSRC.IsSender     := true;
+    SSRC.SyncSrcID    := RTP.SyncSrcID;
+  end;
 
   if not Self.IsMember(RTP.SyncSrcID) then
     Self.AddDataSource(RTP.SyncSrcID, Binding);
@@ -5113,7 +5137,7 @@ begin
     Result := Packet.AddReceiverReport;
 end;
 
-procedure TIdRTPSession.AddControlSource(ID: Cardinal; Binding: TIdSocketHandle);
+procedure TIdRTPSession.AddControlSource(ID: Cardinal; Binding: TIdConnection);
 var
   Members: TIdRTPMemberTable;
 begin
@@ -5126,7 +5150,7 @@ begin
 end;
 
 procedure TIdRTPSession.AddControlSources(RTCP: TIdRTCPMultiSSRCPacket;
-                                          Binding: TIdSocketHandle);
+                                          Binding: TIdConnection);
 var
   IDs:     TCardinalDynArray;
   Members: TIdRTPMemberTable;
@@ -5141,7 +5165,7 @@ begin
   end;
 end;
 
-procedure TIdRTPSession.AddDataSource(ID: Cardinal; Binding: TIdSocketHandle);
+procedure TIdRTPSession.AddDataSource(ID: Cardinal; Binding: TIdConnection);
 var
   Members: TIdRTPMemberTable;
 begin
@@ -5274,7 +5298,7 @@ begin
 end;
 
 procedure TIdRTPSession.NotifyListenersOfData(Data: TIdRTPPayload;
-                                              Binding: TIdSocketHandle);
+                                              Binding: TIdConnection);
 var
   Notification: TIdRTPDataListenerNewDataMethod;
 begin
@@ -5290,13 +5314,13 @@ begin
 end;
 
 procedure TIdRTPSession.OnRTCP(Packet: TIdRTCPPacket;
-                               Binding: TIdSocketHandle);
+                               Binding: TIdConnection);
 begin
   Self.ReceiveControl(Packet, Binding);
 end;
 
 procedure TIdRTPSession.OnRTP(Packet: TIdRTPPacket;
-                              Binding: TIdSocketHandle);
+                              Binding: TIdConnection);
 begin
   Self.ReceiveData(Packet, Binding);
 end;

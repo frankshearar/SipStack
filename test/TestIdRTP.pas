@@ -545,7 +545,7 @@ type
 
   TestTIdRTPMemberTable = class(TTestCase)
   private
-    Binding: TIdSocketHandle;
+    Binding: TIdConnection;
     Host:    String;
     Members: TIdRTPMemberTable;
     Port:    Cardinal;
@@ -633,7 +633,7 @@ type
 
   TSessionDataTestCase = class(TRTPSessionTestCase)
   protected
-    Binding: TIdSocketHandle;
+    Binding: TIdConnection;
     Data:    TIdRTPPacket;
 
     procedure ValidateSource(Member: TIdRTPMember);
@@ -649,7 +649,7 @@ type
     NewDataArrived: Boolean;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
   public
     procedure SetUp; override;
   published
@@ -700,6 +700,7 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddReceiverGetsItsSsrc;
     procedure TestCollisionTriggersBye;
     procedure TestInitialState;
     procedure TestInitialDeterministicSendInterval;
@@ -733,15 +734,16 @@ type
 
   TRTPListenerTestCase = class(TTestCase)
   protected
-    Binding: TIdSocketHandle;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
+    Binding: TIdConnection;
+
+    procedure CheckEquals(Expected,
+                          Received: TIdConnection;
+                          Msg: String); overload;
   end;
 
   TestTIdRTPListenerReceiveRTCPMethod = class(TRTPListenerTestCase)
   private
-    Binding: TIdSocketHandle;
+    Binding: TIdConnection;
     Method:  TIdRTPListenerReceiveRTCPMethod;
     Packet:  TIdRTCPPacket;
   public
@@ -753,7 +755,7 @@ type
 
   TestTIdRTPListenerReceiveRTPMethod = class(TRTPListenerTestCase)
   private
-    Binding: TIdSocketHandle;
+    Binding: TIdConnection;
     Method:  TIdRTPListenerReceiveRTPMethod;
     Packet:  TIdRTPPacket;
   public
@@ -6384,9 +6386,10 @@ procedure TestTIdRTPMemberTable.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSocketHandle.Create(nil);
-  Self.Binding.IP   := '127.0.0.1';
-  Self.Binding.Port := 5000;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 5000;
+  Self.Binding.PeerIP    := '127.0.0.1';
+  Self.Binding.PeerPort  := 5002;
 
   Self.Host    := '127.0.0.1';
   Self.Members := TIdRTPMemberTable.Create;
@@ -6397,7 +6400,6 @@ end;
 procedure TestTIdRTPMemberTable.TearDown;
 begin
   Self.Members.Free;
-  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -6608,7 +6610,7 @@ begin
   Check(Member.SentControl, 'Control binding not set');
 
   // We can't check the binding itself becausewe can't change the Peer(IP|Port)
-  // of the TIdSocketHandle
+  // of the TIdConnection
 end;
 
 procedure TestTIdRTPMemberTable.TestSetDataBinding;
@@ -6622,7 +6624,7 @@ begin
   Check(Member.SentData, 'Data binding not set');
 
   // We can't check the binding itself becausewe can't change the Peer(IP|Port)
-  // of the TIdSocketHandle
+  // of the TIdConnection
 end;
 
 //******************************************************************************
@@ -6776,7 +6778,8 @@ end;
 
 procedure TestTIdBaseRTPAbstractPeer.TestAddListener;
 var
-  L1, L2: TIdRTPTestRTPListener;
+  L1, L2:        TIdRTPTestRTPListener;
+  UnusedBinding: TIdConnection;
 begin
   L1 := TIdRTPTestRTPListener.Create;
   try
@@ -6786,11 +6789,11 @@ begin
     try
       Self.Peer.AddListener(L2);
 
-      Self.Peer.NotifyListenersOfRTCP(nil, nil);
+      Self.Peer.NotifyListenersOfRTCP(nil, UnusedBinding);
       Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
       Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
 
-      Self.Peer.NotifyListenersOfRTP(nil, nil);
+      Self.Peer.NotifyListenersOfRTP(nil, UnusedBinding);
       Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
       Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
     finally
@@ -6803,14 +6806,15 @@ end;
 
 procedure TestTIdBaseRTPAbstractPeer.TestRemoveListener;
 var
-  Listener: TIdRTPTestRTPListener;
+  Listener:      TIdRTPTestRTPListener;
+  UnusedBinding: TIdConnection;
 begin
   Listener := TIdRTPTestRTPListener.Create;
   try
     Self.Peer.AddListener(Listener);
     Self.Peer.RemoveListener(Listener);
 
-    Self.Peer.NotifyListenersOfRTCP(nil, nil);
+    Self.Peer.NotifyListenersOfRTCP(nil, UnusedBinding);
     Check(not Listener.ReceivedRTCP,
           'Listener received RTCP');
   finally
@@ -7096,9 +7100,10 @@ procedure TSessionDataTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding := TIdSocketHandle.Create(nil);
-  Self.Binding.IP   := '1.2.3.4';
-  Self.Binding.Port := 4321;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 4321;
+  Self.Binding.PeerIP    := '1.2.3.4';
+  Self.Binding.PeerPort  := 4321;
 
   Self.Data := TIdRTPPacket.Create(Self.Profile);
   Self.Data.SequenceNo := $f00d;
@@ -7108,7 +7113,6 @@ end;
 procedure TSessionDataTestCase.TearDown;
 begin
   Self.Data.Free;
-  Self.Binding.Free;
 
   inherited TearDown;
 end;
@@ -7143,7 +7147,7 @@ end;
 //* TestTIdRTPSession Private methods ******************************************
 
 procedure TestTIdRTPSession.OnNewData(Data: TIdRTPPayload;
-                                      Binding: TIdSocketHandle);
+                                      Binding: TIdConnection);
 begin
   Self.NewDataArrived := true;
 end;
@@ -7372,7 +7376,7 @@ begin
 
     CheckEquals(1,
                 (Pkt.PacketAt(0) as TIdRTCPReceiverReport).ReceptionReportCount,
-                'Wrong number of report blocks');
+                'Wrong number of report blocks (for senders)');
     RR := Pkt.PacketAt(0) as TIdRTCPReceiverReport;
 
     CheckEquals(IntToHex(Member.SyncSrcID, 8),
@@ -7645,8 +7649,10 @@ procedure TestSessionSendReceiveRules.SetUp;
 begin
   inherited SetUp;
 
-  Self.Binding.IP   := '1.2.3.4';
-  Self.Binding.Port := 4321;
+  Self.Binding.LocalIP   := '127.0.0.1';
+  Self.Binding.LocalPort := 4321;
+  Self.Binding.PeerIP    := '1.2.3.4';
+  Self.Binding.PeerPort  := 4321;
 
   Self.Data.SyncSrcID  := $decafbad;
   Self.Data.CsrcCount  := 2;
@@ -7672,6 +7678,30 @@ begin
 end;
 
 //* TestSessionSendReceiveRules Published methods ******************************
+
+procedure TestSessionSendReceiveRules.TestAddReceiverGetsItsSsrc;
+var
+  OriginalMemberCount: Cardinal;
+begin
+  // You want to enter an RTP session. You know the IP/port of the remote end.
+  // Since you've received no data yet, you don't know its SSRC. You cunningly
+  // use Session.AddReceiver to tell the session about the IP/port. But when
+  // you receive RTP/RTCP from the remote end, you must update the existing
+  // entry in the member table, not add a new one.
+
+  Self.Data.CsrcCount := 0;
+
+  OriginalMemberCount := Self.Session.MemberCount;
+  Self.Session.AddReceiver(Self.Binding.PeerIP,
+                           Self.Binding.PeerPort);
+  CheckEquals(1 + OriginalMemberCount,
+              Self.Session.MemberCount,
+              'AddReceiver should add member');
+  Self.Session.ReceiveData(Self.Data, Self.Binding);
+  CheckEquals(1 + OriginalMemberCount,
+              Self.Session.MemberCount,
+              'Received data should update existing member');
+end;
 
 procedure TestSessionSendReceiveRules.TestCollisionTriggersBye;
 begin
@@ -7719,7 +7749,7 @@ begin
   Self.Session.ReceiveData(Self.Data, Self.Binding);
   CheckEquals(4,
               Self.Session.MemberCount,
-              'Session member count SSRC + 2 CSRCSs + self');
+              'Session member count: SSRC + 2 CSRCSs + self');
 
   Check(Self.Session.IsMember(Self.Data.SyncSrcID), 'Data.SyncSrcID');
 
@@ -7938,18 +7968,14 @@ end;
 //******************************************************************************
 //* TRTPListenerTestCase Public methods ****************************************
 
-procedure TRTPListenerTestCase.SetUp;
+procedure TRTPListenerTestCase.CheckEquals(Expected,
+                                           Received: TIdConnection;
+                                           Msg: String);
 begin
-  inherited SetUp;
-
-  Self.Binding := TIdSocketHandle.Create(nil);
-end;
-
-procedure TRTPListenerTestCase.TearDown;
-begin
-  Self.Binding.Free;
-
-  inherited TearDown;
+  CheckEquals(Expected.LocalIP,   Received.LocalIP,   Msg + ' (LocalIP)');
+  CheckEquals(Expected.LocalPort, Received.LocalPort, Msg + ' (LocalPort)');
+  CheckEquals(Expected.PeerIP,    Received.PeerIP,    Msg + ' (PeerIP)');
+  CheckEquals(Expected.PeerPort,  Received.PeerPort,  Msg + ' (PeerPort)');
 end;
 
 //******************************************************************************
@@ -7988,8 +8014,9 @@ begin
 
     Check(Listener.ReceivedRTCP,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Binding = Listener.BindingParam,
-          Self.ClassName + ': Binding param');
+    CheckEquals(Self.Method.Binding,
+                Listener.BindingParam,
+                Self.ClassName + ': Binding param');
     Check(Self.Method.Packet = Listener.RTCPPacketParam,
           Self.ClassName + ': Packet param');
   finally
@@ -8033,8 +8060,9 @@ begin
 
     Check(Listener.ReceivedRTP,
           Self.ClassName + ': Listener not notified');
-    Check(Self.Method.Binding = Listener.BindingParam,
-          Self.ClassName + ': Binding param');
+    CheckEquals(Self.Method.Binding,
+                Listener.BindingParam,
+                Self.ClassName + ': Binding param');
     Check(Self.Method.Packet = Listener.RTPPacketParam,
           Self.ClassName + ': Packet param');
   finally
@@ -8078,8 +8106,9 @@ begin
           Self.ClassName + ': Listener not notified');
     Check(Self.Method.Data = Listener.DataParam,
           Self.ClassName + ': Data param');
-    Check(Self.Method.Binding = Listener.BindingParam,
-          Self.ClassName + ': Binding param');
+    CheckEquals(Self.Method.Binding,
+                Listener.BindingParam,
+                Self.ClassName + ': Binding param');
   finally
     Listener.Free;
   end;

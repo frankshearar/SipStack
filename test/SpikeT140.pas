@@ -49,7 +49,7 @@ type
                        Binding: TIdSocketHandle);
     procedure ReadRTP(Sender: TObject;
                       APacket: TIdRTPPacket;
-                      ABinding: TIdSocketHandle);
+                      ABinding: TIdConnection);
     procedure Reset;
   public
     constructor Create(AOwner: TComponent); override;
@@ -148,7 +148,7 @@ end;
 
 procedure TIdSpikeT140.ReadRTP(Sender: TObject;
                                APacket: TIdRTPPacket;
-                               ABinding: TIdSocketHandle);
+                               ABinding: TIdConnection);
 begin
   Self.Lock.Acquire;
   try

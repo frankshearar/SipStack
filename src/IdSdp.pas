@@ -546,17 +546,17 @@ type
     function  DefaultHost: String;
     function  DefaultUsername: String;
     procedure NotifyOfNewRTPData(Data: TIdRTPPayload;
-                                 Binding: TIdSocketHandle);
+                                 Binding: TIdConnection);
     procedure NotifyRTPListenersOfRTCP(Packet: TIdRTCPPacket;
-                                       Binding: TIdSocketHandle);
+                                       Binding: TIdConnection);
     procedure NotifyRTPListenersOfRTP(Packet: TIdRTPPacket;
-                                      Binding: TIdSocketHandle);
+                                      Binding: TIdConnection);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     function  ServerAt(Index: Integer): TIdRTPServer;
     procedure SetRemoteSessionDescription(const Value: String);
     procedure SetUpMediaStreams(RemoteDescription: TIdSdpPayload);
@@ -600,11 +600,11 @@ type
     Server:             TIdRTPServer;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
   public
@@ -3595,7 +3595,7 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyOfNewRTPData(Data: TIdRTPPayload;
-                                                    Binding: TIdSocketHandle);
+                                                    Binding: TIdConnection);
 var
   Notification: TIdRTPDataListenerNewDataMethod;
 begin
@@ -3611,7 +3611,7 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTCP(Packet: TIdRTCPPacket;
-                                                          Binding: TIdSocketHandle);
+                                                          Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
@@ -3627,7 +3627,7 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.NotifyRTPListenersOfRTP(Packet: TIdRTPPacket;
-                                                         Binding: TIdSocketHandle);
+                                                         Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTPMethod;
 begin
@@ -3643,19 +3643,19 @@ begin
 end;
 
 procedure TIdSdpPayloadProcessor.OnNewData(Data: TIdRTPPayload;
-                                           Binding: TIdSocketHandle);
+                                           Binding: TIdConnection);
 begin
   Self.NotifyOfNewRTPData(Data, Binding);
 end;
 
 procedure TIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
-                                        Binding: TIdSocketHandle);
+                                        Binding: TIdConnection);
 begin
   Self.NotifyRTPListenersOfRTCP(Packet, Binding);
 end;
 
 procedure TIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
-                                       Binding: TIdSocketHandle);
+                                       Binding: TIdConnection);
 begin
   Self.NotifyRTPListenersOfRTP(Packet, Binding);
 end;
@@ -3831,7 +3831,7 @@ end;
 //* TIdSDPMediaStream Private methods ******************************************
 
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
-                                      Binding: TIdSocketHandle);
+                                      Binding: TIdConnection);
 var
   Notification: TIdRTPDataListenerNewDataMethod;
 begin
@@ -3849,7 +3849,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
-                                   Binding: TIdSocketHandle);
+                                   Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTCPMethod;
 begin
@@ -3865,7 +3865,7 @@ begin
 end;
 
 procedure TIdSDPMediaStream.OnRTP(Packet: TIdRTPPacket;
-                                  Binding: TIdSocketHandle);
+                                  Binding: TIdConnection);
 var
   Notification: TIdRTPListenerReceiveRTPMethod;
 begin

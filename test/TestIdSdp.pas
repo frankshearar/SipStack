@@ -465,11 +465,11 @@ type
     procedure CheckServerActiveOn(Port: Cardinal);
     procedure CheckServerNotActiveOn(Port: Cardinal);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     procedure ValidateSource(Session: TIdRTPSession;
                              Member: TIdRTPMember);
   public
@@ -498,11 +498,11 @@ type
     SentBye:   Boolean;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
     procedure SendRTCP;
     procedure SendRTP;
     procedure SetLocalMediaDesc(Stream: TIdSDPMediaStream;
@@ -5736,18 +5736,18 @@ begin
 end;
 
 procedure TestTIdSdpPayloadProcessor.OnNewData(Data: TIdRTPPayload;
-                                               Binding: TIdSocketHandle);
+                                               Binding: TIdConnection);
 begin
   Self.DataEvent.SetEvent;
 end;
 
 procedure TestTIdSdpPayloadProcessor.OnRTCP(Packet: TIdRTCPPacket;
-                                            Binding: TIdSocketHandle);
+                                            Binding: TIdConnection);
 begin
 end;
 
 procedure TestTIdSdpPayloadProcessor.OnRTP(Packet: TIdRTPPacket;
-                                           Binding: TIdSocketHandle);
+                                           Binding: TIdConnection);
 begin
   Self.ThreadEvent.SetEvent;
 end;
@@ -6067,13 +6067,13 @@ end;
 //* TestTIdSDPMediaStream Private methods **************************************
 
 procedure TestTIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
-                                          Binding: TIdSocketHandle);
+                                          Binding: TIdConnection);
 begin
   Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSDPMediaStream.OnRTCP(Packet: TIdRTCPPacket;
-                                       Binding: TIdSocketHandle);
+                                       Binding: TIdConnection);
 begin
   Self.SentBye := Packet.IsBye;
 
@@ -6081,7 +6081,7 @@ begin
 end;
 
 procedure TestTIdSDPMediaStream.OnRTP(Packet: TIdRTPPacket;
-                                      Binding: TIdSocketHandle);
+                                      Binding: TIdConnection);
 begin
   Self.RTPEvent.SetEvent;
 end;

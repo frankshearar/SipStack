@@ -28,10 +28,10 @@ type
                                  ABinding: TIdSocketHandle);
     procedure CheckOnRTCPRead(Sender: TObject;
                               APacket: TIdRTCPPacket;
-                              ABinding: TIdSocketHandle);
+                              ABinding: TIdConnection);
     procedure CheckOnRTPRead(Sender: TObject;
                              APacket: TIdRTPPacket;
-                             ABinding: TIdSocketHandle);
+                             ABinding: TIdConnection);
     procedure SendRTCPToServer;
     procedure SendRTPToServer;
     procedure SetEvent;
@@ -58,10 +58,10 @@ type
 
     procedure ReceiveAnyOldJunk(Sender: TObject;
                                 Packet: TIdRTCPPacket;
-                                Binding: TIdSocketHandle);
+                                Binding: TIdConnection);
     procedure StoreT140Data(Sender: TObject;
                             Packet: TIdRTPPacket;
-                            Binding: TIdSocketHandle);
+                            Binding: TIdConnection);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -185,14 +185,14 @@ end;
 
 procedure TestTIdRTPServer.CheckOnRTCPRead(Sender: TObject;
                                            APacket: TIdRTCPPacket;
-                                           ABinding: TIdSocketHandle);
+                                           ABinding: TIdConnection);
 begin
   Self.SetEvent;
 end;
 
 procedure TestTIdRTPServer.CheckOnRTPRead(Sender: TObject;
                                           APacket: TIdRTPPacket;
-                                          ABinding: TIdSocketHandle);
+                                          ABinding: TIdConnection);
 begin
   Self.SetEvent;
 end;
@@ -412,14 +412,14 @@ end;
 
 procedure TestT140.ReceiveAnyOldJunk(Sender: TObject;
                                      Packet: TIdRTCPPacket;
-                                     Binding: TIdSocketHandle);
+                                     Binding: TIdConnection);
 begin
   Self.RTCPEvent.SetEvent;
 end;
 
 procedure TestT140.StoreT140Data(Sender: TObject;
                                  Packet: TIdRTPPacket;
-                                 Binding: TIdSocketHandle);
+                                 Binding: TIdConnection);
 begin
   try
     CheckEquals(TIdRTPT140Payload.ClassName,

@@ -84,9 +84,9 @@ type
     Data: TIdHistogram;
 
     procedure OnRTCP(Packet: TIdRTCPPacket;
-                     Binding: TIdSocketHandle);
+                     Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
-                    Binding: TIdSocketHandle);
+                    Binding: TIdConnection);
   public
     constructor Create; override;
     destructor  Destroy; override;
@@ -412,12 +412,12 @@ end;
 //* TIdRTPPayloadHistogram Private methods *************************************
 
 procedure TIdRTPPayloadHistogram.OnRTCP(Packet: TIdRTCPPacket;
-                                        Binding: TIdSocketHandle);
+                                        Binding: TIdConnection);
 begin
 end;
 
 procedure TIdRTPPayloadHistogram.OnRTP(Packet: TIdRTPPacket;
-                                       Binding: TIdSocketHandle);
+                                       Binding: TIdConnection);
 begin
   Self.RecordEvent(Packet.Payload.EncodingName);
 end;

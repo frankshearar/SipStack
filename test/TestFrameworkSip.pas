@@ -79,7 +79,7 @@ type
     constructor Create; override;
 
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnNewUdpData(Data: TStream);
 
     property NewData:    Boolean read fNewData;
@@ -526,7 +526,7 @@ begin
 end;
 
 procedure TIdSipTestDataListener.OnNewData(Data: TIdRTPPayload;
-                                           Binding: TIdSocketHandle);
+                                           Binding: TIdConnection);
 begin
   Self.fNewData := true;
 

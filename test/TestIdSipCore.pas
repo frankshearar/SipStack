@@ -307,7 +307,7 @@ type
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
     procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+                        Binding: TIdConnection);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
     procedure OnSendResponse(Response: TIdSipResponse;
@@ -3625,7 +3625,7 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnNewData(Data: TIdRTPPayload;
-                                             Binding: TIdSocketHandle);
+                                             Binding: TIdConnection);
 begin
   Self.ThreadEvent.SetEvent;
 end;
