@@ -347,8 +347,8 @@ procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
                                                var Username: String;
                                                var Password: String);
 begin
-  Username := 'rnid01';
-  Password := 'rnid01';
+  Username := Self.UA.Contact.Address.Username;
+  Password := Self.Password.Text;
 end;
 
 procedure TrnidSpike.OnChanged(Observed: TObject);
