@@ -46,7 +46,7 @@ uses
   IdTimerQueue, SyncObjs;
 
 const
-  SipStackVersion = '0.3';
+  SipStackVersion = '0.4';
 
 type
   TIdSipAction = class;
