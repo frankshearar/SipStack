@@ -3,8 +3,8 @@ unit IdSipTransaction;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdRTPTimerQueue, IdSipMessage,
-  IdSipTimer, IdSipTransport, IdThread, SyncObjs, SysUtils;
+  Classes, Contnrs, IdInterfacedObject, IdSipMessage, IdSipTimer,
+  IdSipTransport, IdThread, IdTimerQueue, SyncObjs, SysUtils;
 
 const
   DefaultT1    = 500;   // ms
@@ -254,7 +254,7 @@ type
     Owner:            TIdSipServerInviteTransaction;
     State:            TIdSipTransactionState;
     T2:               Cardinal;
-    Timer:            TIdRTPTimerQueue;
+    Timer:            TIdTimerQueue;
 
     procedure OnException(T: TIdThread;
                           E: Exception);
@@ -352,7 +352,7 @@ type
     Lock:             TCriticalSection;
     Owner:            TIdSipClientInviteTransaction;
     State:            TIdSipTransactionState;
-    Timer:            TIdRTPTimerQueue;
+    Timer:            TIdTimerQueue;
 
     procedure OnException(T: TIdThread;
                           E: Exception);
@@ -422,7 +422,7 @@ type
     Owner:            TIdSipClientNonInviteTransaction;
     State:            TIdSipTransactionState;
     T2:               Cardinal;
-    Timer:            TIdRTPTimerQueue;
+    Timer:            TIdTimerQueue;
 
     procedure OnException(T: TIdThread;
                           E: Exception);
@@ -1311,7 +1311,7 @@ begin
   inherited Create;
   Self.Owner := OwnerTran;
 
-  Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer := TIdTimerQueue.Create(false);
   Self.Timer.OnException := Self.OnException;
 
   Self.fTimerGInterval := T1;
@@ -1762,7 +1762,7 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.Owner := OwnerTran;
 
-  Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer := TIdTimerQueue.Create(false);
   Self.Timer.OnException := Self.OnException;
 
   Self.fTimerAInterval := T1;
@@ -2098,7 +2098,7 @@ begin
   Self.Lock := TCriticalSection.Create;
   Self.Owner := OwnerTran;
 
-  Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer := TIdTimerQueue.Create(false);
   Self.Timer.OnException := Self.OnException;
 
   Self.fTimerEInterval := T1;

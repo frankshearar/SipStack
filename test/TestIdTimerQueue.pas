@@ -1,9 +1,9 @@
-unit TestIdRTPTimerQueue;
+unit TestIdTimerQueue;
 
 interface
 
 uses
-  Classes, IdRTPTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
+  Classes, IdTimerQueue, SyncObjs, SysUtils, TestFramework, TestFrameworkEx;
 
 type
   // I wait in a separate thread for something to set Event. Then I
@@ -21,7 +21,7 @@ type
                        MaxWait: Cardinal);
   end;
 
-  TestTIdRTPTimerQueue = class(TThreadingTestCase)
+  TestTIdTimerQueue = class(TThreadingTestCase)
   private
     CallbackEventOne: TEvent;
     CallbackEventTwo: TEvent;
@@ -30,7 +30,7 @@ type
     Lock:             TCriticalSection;
     Notified:         Boolean;
     OrderOfFire:      String;
-    Queue:            TIdRTPTimerQueue;
+    Queue:            TIdTimerQueue;
     T1:               TThreadEvent;
     T2:               TThreadEvent;
 
@@ -68,7 +68,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdRTPTimerQueue unit tests');
-  Result.AddTest(TestTIdRTPTimerQueue.Suite);
+  Result.AddTest(TestTIdTimerQueue.Suite);
 end;
 
 //******************************************************************************
@@ -100,11 +100,11 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdRTPTimerQueue                                                       *
+//* TestTIdTimerQueue                                                       *
 //******************************************************************************
-//* TestTIdRTPTimerQueue Public methods ****************************************
+//* TestTIdTimerQueue Public methods ****************************************
 
-procedure TestTIdRTPTimerQueue.SetUp;
+procedure TestTIdTimerQueue.SetUp;
 begin
   inherited SetUp;
 
@@ -119,7 +119,7 @@ begin
   Self.EventOne         := TSimpleEvent.Create;
   Self.EventTwo         := TSimpleEvent.Create;
   Self.Lock             := TCriticalSection.Create;
-  Self.Queue            := TIdRTPTimerQueue.Create;
+  Self.Queue            := TIdTimerQueue.Create;
 
   Self.T1 := TThreadEvent.Create(Self.EventOne,
                                  Self.OnEventOneSet,
@@ -131,7 +131,7 @@ begin
   Self.T2.Resume;
 end;
 
-procedure TestTIdRTPTimerQueue.TearDown;
+procedure TestTIdTimerQueue.TearDown;
 begin
   Self.T2.Free;
   Self.T1.Free;
@@ -146,15 +146,15 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdRTPTimerQueue Private methods ***************************************
+//* TestTIdTimerQueue Private methods ***************************************
 
-procedure TestTIdRTPTimerQueue.CheckNotifyEvent(Sender: TObject);
+procedure TestTIdTimerQueue.CheckNotifyEvent(Sender: TObject);
 begin
   Self.Notified := true;
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdRTPTimerQueue.NotifyEventOne(Sender: TObject);
+procedure TestTIdTimerQueue.NotifyEventOne(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -164,7 +164,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.NotifyEventTwo(Sender: TObject);
+procedure TestTIdTimerQueue.NotifyEventTwo(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -175,7 +175,7 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdRTPTimerQueue.OnEventOneSet(Sender: TObject);
+procedure TestTIdTimerQueue.OnEventOneSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -186,7 +186,7 @@ begin
   Self.CallbackEventOne.SetEvent;
 end;
 
-procedure TestTIdRTPTimerQueue.OnEventTwoSet(Sender: TObject);
+procedure TestTIdTimerQueue.OnEventTwoSet(Sender: TObject);
 begin
   Self.Lock.Acquire;
   try
@@ -197,7 +197,7 @@ begin
   Self.CallbackEventTwo.SetEvent;
 end;
 
-procedure TestTIdRTPTimerQueue.WaitForAll(Events: array of TEvent;
+procedure TestTIdTimerQueue.WaitForAll(Events: array of TEvent;
                                           Timeout: Cardinal);
 var
   I:   Integer;
@@ -213,9 +213,9 @@ begin
   Self.ExceptionMessage := Msg;
 end;
 
-//* TestTIdRTPTimerQueue Published methods *************************************
+//* TestTIdTimerQueue Published methods *************************************
 
-procedure TestTIdRTPTimerQueue.TestBefore;
+procedure TestTIdTimerQueue.TestBefore;
 begin
   Check(    Self.Queue.Before(10, 20), '10, 20');
   Check(not Self.Queue.Before(20, 10), '20, 10');
@@ -240,7 +240,7 @@ begin
         '10, High(Cardinal) - 10');
 end;
 
-procedure TestTIdRTPTimerQueue.TestNotifyEvent;
+procedure TestTIdTimerQueue.TestNotifyEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout, Self.CheckNotifyEvent);
 
@@ -254,7 +254,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestOneEvent;
+procedure TestTIdTimerQueue.TestOneEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout, Self.EventOne);
 
@@ -267,7 +267,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestRemoveEvent;
+procedure TestTIdTimerQueue.TestRemoveEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
   Self.Queue.AddEvent(ShortTimeout*2, Self.EventOne);
@@ -287,7 +287,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestRemoveNotifyEvent;
+procedure TestTIdTimerQueue.TestRemoveNotifyEvent;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.CheckNotifyEvent);
   Self.Queue.AddEvent(ShortTimeout*2, Self.CheckNotifyEvent);
@@ -304,7 +304,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestTwoNotifyEvents;
+procedure TestTIdTimerQueue.TestTwoNotifyEvents;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.NotifyEventOne);
   Self.Queue.AddEvent(2*ShortTimeout, Self.NotifyEventTwo);
@@ -323,7 +323,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestTwoEvents;
+procedure TestTIdTimerQueue.TestTwoEvents;
 begin
   Self.Queue.AddEvent(ShortTimeout,   Self.EventOne);
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventTwo);
@@ -343,7 +343,7 @@ begin
   end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestTwoOutOfOrderEvents;
+procedure TestTIdTimerQueue.TestTwoOutOfOrderEvents;
 begin
   Self.Queue.AddEvent(2*ShortTimeout, Self.EventOne);
   Self.Queue.AddEvent(ShortTimeout,   Self.EventTwo);
@@ -363,7 +363,7 @@ begin
     end;
 end;
 
-procedure TestTIdRTPTimerQueue.TestWaitForEarliestEvent;
+procedure TestTIdTimerQueue.TestWaitForEarliestEvent;
 begin
   Self.Queue.Start;
   try

@@ -3,8 +3,8 @@ unit IdDTMFPanel;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdRTPTimerQueue, IdSdp,
-  IdSocketHandle, StdCtrls;
+  Classes, Controls, ExtCtrls, Graphics, IdRTP, IdSdp, IdSocketHandle,
+  IdTimerQueue, StdCtrls;
 
 type
   TIdColourButton = class(TPanel)
@@ -35,7 +35,7 @@ type
     ButtonHeight:     Integer;
     CurrentRowHeight: Integer;
     fProcessor:       TIdSDPPayloadProcessor;
-    Timer:            TIdRTPTimerQueue;
+    Timer:            TIdTimerQueue;
 
     procedure AddRow(Buttons: array of TPanel);
     function  CreateButton(Name: String;
@@ -134,7 +134,7 @@ constructor TIdDTMFPanel.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.Timer := TIdRTPTimerQueue.Create(false);
+  Self.Timer := TIdTimerQueue.Create(false);
 
   Self.ButtonHeight     := 25;
   Self.Height           := 120;

@@ -10,7 +10,6 @@ uses
   IdRandom in 'src\IdRandom.pas',
   IdRTP in 'src\IdRTP.pas',
   IdRTPServer in 'src\IdRTPServer.pas',
-  IdRTPTimerQueue in 'src\IdRTPTimerQueue.pas',
   IdSdp in 'src\IdSdp.pas',
   IdSimpleParser in 'src\IdSimpleParser.pas',
   IdSipConsts in 'src\IdSipConsts.pas',
@@ -31,6 +30,7 @@ uses
   IdSipTransport in 'src\IdSipTransport.pas',
   IdSipUdpClient in 'src\IdSipUdpClient.pas',
   IdSipUdpServer in 'src\IdSipUdpServer.pas',
+  IdTimerQueue in 'src\IdTimerQueue.pas',
   Spike in 'test\Spike.pas' {rnidSpike},
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
@@ -41,7 +41,6 @@ uses
   TestMessages in 'test\TestMessages.pas',
   TestIdRTP in 'test\TestIdRTP.pas',
   TestIdRTPServer in 'test\TestIdRTPServer.pas',
-  TestIdRTPTimerQueue in 'test\TestIdRTPTimerQueue.pas',
   TestIdSdp in 'test\TestIdSdp.pas',
   TestIdSimpleParser in 'test\TestIdSimpleParser.pas',
   TestIdSipCore in 'test\TestIdSipCore.pas',
@@ -58,7 +57,8 @@ uses
   TestIdSipTransaction in 'test\TestIdSipTransaction.pas',
   TestIdSipTransport in 'test\TestIdSipTransport.pas',
   TestIdSipUdpServer in 'test\TestIdSipUdpServer.pas',
-  TestIdSipUri in 'test\TestIdSipUri.pas';
+  TestIdSipUri in 'test\TestIdSipUri.pas',
+  TestIdTimerQueue in 'test\TestIdTimerQueue.pas';
 
 {,
   TestIdSipTlsServer in 'test\TestIdSipTlsServer.pas'}

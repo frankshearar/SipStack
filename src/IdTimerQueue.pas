@@ -1,4 +1,4 @@
-unit IdRTPTimerQueue;
+unit IdTimerQueue;
 
 interface
 
@@ -6,7 +6,7 @@ uses
   Classes, Contnrs, IdThread, SyncObjs;
 
 type
-  TIdRTPWait = class(TObject)
+  TIdWait = class(TObject)
     fTriggerTime: Cardinal;
   public
     function  Due: Boolean;
@@ -16,7 +16,7 @@ type
     property TriggerTime: Cardinal read fTriggerTime write fTriggerTime;    
   end;
 
-  TIdRTPEventWait = class(TIdRTPWait)
+  TIdEventWait = class(TIdWait)
   private
     fEvent: TEvent;
   public
@@ -25,7 +25,7 @@ type
     property Event: TEvent read fEvent write fEvent;
   end;
 
-  TIdRTPNotifyEventWait = class(TIdRTPWait)
+  TIdNotifyEventWait = class(TIdWait)
   private
     fEvent: TNotifyEvent;
   public
@@ -43,16 +43,16 @@ type
   //
   // WaitEvent lets me re-evaluate the shortest wait time whenever something
   //  adds or removes events. Or when something's Terminated me.
-  TIdRTPTimerQueue = class(TIdThread)
+  TIdTimerQueue = class(TIdThread)
   private
     EventList: TObjectList;
     Lock:      TCriticalSection;
     WaitEvent: TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
-                  Event: TIdRTPWait);
-    function  EarliestEvent: TIdRTPWait;
-    function  EventAt(Index: Integer): TIdRTPWait;
+                  Event: TIdWait);
+    function  EarliestEvent: TIdWait;
+    function  EventAt(Index: Integer): TIdWait;
     function  ShortestWait: Cardinal;
     procedure TriggerEarliestEvent;
   protected
@@ -78,16 +78,16 @@ uses
   IdGlobal, IdRTP, SysUtils;
 
 //******************************************************************************
-//* TIdRTPWait                                                                 *
+//* TIdWait                                                                    *
 //******************************************************************************
-//* TIdRTPWait Public methods **************************************************
+//* TIdWait Public methods *****************************************************
 
-function TIdRTPWait.Due: Boolean;
+function TIdWait.Due: Boolean;
 begin
   Result := GetTickCount >= Self.TriggerTime;
 end;
 
-function TIdRTPWait.TimeToWait: Cardinal;
+function TIdWait.TimeToWait: Cardinal;
 begin
   if Self.Due then
     Result := 0
@@ -96,33 +96,33 @@ begin
 end;
 
 //******************************************************************************
-//* TIdRTPEventWait                                                            *
+//* TIdEventWait                                                               *
 //******************************************************************************
-//* TIdRTPEventWait Public methods *********************************************
+//* TIdEventWait Public methods ************************************************
 
-procedure TIdRTPEventWait.Trigger;
+procedure TIdEventWait.Trigger;
 begin
   if Assigned(Self.Event) then
     Self.Event.SetEvent;
 end;
 
 //******************************************************************************
-//* TIdRTPNotifyEventWait                                                      *
+//* TIdNotifyEventWait                                                         *
 //******************************************************************************
-//* TIdRTPNotifyEventWait Public methods ***************************************
+//* TIdNotifyEventWait Public methods ******************************************
 
-procedure TIdRTPNotifyEventWait.Trigger;
+procedure TIdNotifyEventWait.Trigger;
 begin
   if Assigned(Self.Event) then
     Self.Event(Self);
 end;
 
 //******************************************************************************
-//* TIdRTPTimerQueue                                                           *
+//* TIdTimerQueue                                                              *
 //******************************************************************************
-//* TIdRTPTimerQueue Public methods ********************************************
+//* TIdTimerQueue Public methods ***********************************************
 
-constructor TIdRTPTimerQueue.Create(ACreateSuspended: Boolean = True);
+constructor TIdTimerQueue.Create(ACreateSuspended: Boolean = True);
 begin
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
@@ -133,7 +133,7 @@ begin
   inherited Create(ACreateSuspended);
 end;
 
-destructor TIdRTPTimerQueue.Destroy;
+destructor TIdTimerQueue.Destroy;
 begin
   Self.WaitEvent.Free;
 
@@ -148,29 +148,29 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdRTPTimerQueue.AddEvent(MillisecsWait: Cardinal;
+procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                     Event: TEvent);
 var
-  EventWait: TIdRTPEventWait;
+  EventWait: TIdEventWait;
 begin
   // Add will free EventWait in the event of an exception
-  EventWait := TIdRTPEventWait.Create;
+  EventWait := TIdEventWait.Create;
   EventWait.Event := Event;
   Self.Add(MillisecsWait, EventWait);
 end;
 
-procedure TIdRTPTimerQueue.AddEvent(MillisecsWait: Cardinal;
+procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
                                     Event: TNotifyEvent);
 var
-  EventWait: TIdRTPNotifyEventWait;
+  EventWait: TIdNotifyEventWait;
 begin
   // Add will free EventWait in the event of an exception
-  EventWait := TIdRTPNotifyEventWait.Create;
+  EventWait := TIdNotifyEventWait.Create;
   EventWait.Event := Event;
   Self.Add(MillisecsWait, EventWait);
 end;
 
-function TIdRTPTimerQueue.Before(TimeA,
+function TIdTimerQueue.Before(TimeA,
                                  TimeB: Cardinal): Boolean;
 begin
   // You can't use Before() to determine the ordering of ticks
@@ -178,7 +178,7 @@ begin
   Result := GetTickDiff(TimeA, TimeB) < MSecsPerDay;
 end;
 
-procedure TIdRTPTimerQueue.RemoveEvent(Event: TEvent);
+procedure TIdTimerQueue.RemoveEvent(Event: TEvent);
 var
   I: Integer;
 begin
@@ -186,8 +186,8 @@ begin
   try
     I := 0;
     while (I < Self.EventList.Count) do
-      if (Self.EventAt(I) is TIdRTPEventWait)
-        and ((Self.EventAt(I) as TIdRTPEventWait).Event = Event) then
+      if (Self.EventAt(I) is TIdEventWait)
+        and ((Self.EventAt(I) as TIdEventWait).Event = Event) then
         Self.EventList.Delete(I)
       else
         Inc(I);
@@ -197,7 +197,7 @@ begin
   Self.WaitEvent.SetEvent;
 end;
 
-procedure TIdRTPTimerQueue.RemoveEvent(Event: TNotifyEvent);
+procedure TIdTimerQueue.RemoveEvent(Event: TNotifyEvent);
 var
   I:         Integer;
   ThisEvent: TNotifyEvent;
@@ -206,8 +206,8 @@ begin
   try
     I := 0;
     while (I < Self.EventList.Count) do
-      if (Self.EventAt(I) is TIdRTPNotifyEventWait) then begin
-        ThisEvent := (Self.EventAt(I) as TIdRTPNotifyEventWait).Event;
+      if (Self.EventAt(I) is TIdNotifyEventWait) then begin
+        ThisEvent := (Self.EventAt(I) as TIdNotifyEventWait).Event;
         if (@ThisEvent = @Event) then
           Self.EventList.Delete(I)
       end
@@ -219,16 +219,16 @@ begin
   Self.WaitEvent.SetEvent;
 end;
 
-procedure TIdRTPTimerQueue.Terminate;
+procedure TIdTimerQueue.Terminate;
 begin
   inherited Terminate;
 
   Self.WaitEvent.SetEvent;
 end;
 
-//* TIdRTPTimerQueue Protected methods *****************************************
+//* TIdTimerQueue Protected methods ********************************************
 
-procedure TIdRTPTimerQueue.Run;
+procedure TIdTimerQueue.Run;
 begin
   while not Self.Stopped do begin
     Self.WaitEvent.WaitFor(Self.ShortestWait);
@@ -238,10 +238,10 @@ begin
   end;
 end;
 
-//* TIdRTPTimerQueue Private methods *******************************************
+//* TIdTimerQueue Private methods **********************************************
 
-procedure TIdRTPTimerQueue.Add(MillisecsWait: Cardinal;
-                               Event: TIdRTPWait);
+procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
+                               Event: TIdWait);
 begin
   Self.Lock.Acquire;
   try
@@ -264,7 +264,7 @@ begin
   Self.WaitEvent.SetEvent;
 end;
 
-function TIdRTPTimerQueue.EarliestEvent: TIdRTPWait;
+function TIdTimerQueue.EarliestEvent: TIdWait;
 var
   I: Integer;
 begin
@@ -280,15 +280,15 @@ begin
       Result := Self.EventAt(I);
 end;
 
-function TIdRTPTimerQueue.EventAt(Index: Integer): TIdRTPWait;
+function TIdTimerQueue.EventAt(Index: Integer): TIdWait;
 begin
   // Precondition: Something acquired Self.Lock
-  Result := Self.EventList[Index] as TIdRTPWait;
+  Result := Self.EventList[Index] as TIdWait;
 end;
 
-function TIdRTPTimerQueue.ShortestWait: Cardinal;
+function TIdTimerQueue.ShortestWait: Cardinal;
 var
-  NextEvent: TIdRTPWait;
+  NextEvent: TIdWait;
 begin
   Self.Lock.Acquire;
   try
@@ -302,9 +302,9 @@ begin
   end;
 end;
 
-procedure TIdRTPTimerQueue.TriggerEarliestEvent;
+procedure TIdTimerQueue.TriggerEarliestEvent;
 var
-  NextEvent: TIdRTPWait;
+  NextEvent: TIdWait;
 begin
   Self.Lock.Acquire;
   try

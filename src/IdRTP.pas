@@ -3,7 +3,7 @@ unit IdRTP;
 interface
 
 uses
-  Classes, Contnrs, IdInterfacedObject, IdRTPTimerQueue, IdSocketHandle,
+  Classes, Contnrs, IdInterfacedObject, IdSocketHandle, IdTimerQueue, 
   IdUDPServer, SyncObjs, SysUtils, Types;
 
 type
@@ -926,7 +926,7 @@ type
     NoDataSent:                 Boolean;
     PreviousTransmissionTime:   TDateTime;
     SequenceNo:                 TIdRTPSequenceNo;
-    Timer:                      TIdRTPTimerQueue;
+    Timer:                      TIdTimerQueue;
     TransmissionLock:           TCriticalSection;
 
     function  AddAppropriateReportTo(Packet: TIdCompoundRTCPPacket): TIdRTCPReceiverReport;
@@ -4551,7 +4551,7 @@ begin
   Self.Members    := TIdRTPMemberTable.Create;
 
   Self.TransmissionLock := TCriticalSection.Create;
-  Self.Timer            := TIdRTPTimerQueue.Create;
+  Self.Timer            := TIdTimerQueue.Create;
 
   Self.AssumedMTU            := Self.DefaultAssumedMTU;
   Self.MissedReportTolerance := Self.DefaultMissedReportTolerance;

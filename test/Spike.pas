@@ -4,9 +4,8 @@ interface
 
 uses
   audioclasses, Classes, Contnrs, Controls, ExtCtrls, Forms, IdDTMFPanel,
-  IdRTP, IdRTPTimerQueue, IdSdp, IdSipCore, IdSipMessage, IdSipTransaction,
-  IdSipTransport, IdSocketHandle,
-  StdCtrls, SyncObjs, SysUtils;
+  IdRTP, IdSdp, IdSipCore, IdSipMessage, IdSipTransaction, IdSipTransport,
+  IdSocketHandle, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpike = class(TForm,
