@@ -35,7 +35,8 @@ type
     fUsername:        String;
     Parameters:       TStrings;
 
-    class function IsEscapedOrInSet(const Token: String; AcceptableChars: TIdSipChars): Boolean;
+    class function IsEscapedOrInSet(const Token: String;
+                                    AcceptableChars: TIdSipChars): Boolean;
 
     function  EqualParameters(const Uri: TIdSipUri): Boolean;
     function  GetMaddr: String;
@@ -68,7 +69,8 @@ type
   public
     class function CreateUri(URI: String = ''): TIdUri;
     class function Decode(const Src: String): String;
-    class function Encode(const Src: String; const SafeChars: TIdSipChars): String;
+    class function Encode(const Src: String;
+                          const SafeChars: TIdSipChars): String;
     class function HeaderEncode(const NameOrValue: String): String;
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
@@ -79,14 +81,15 @@ type
     constructor Create(URI: String = ''); virtual;
     destructor  Destroy; override;
 
-    procedure AddParameter(const Name: String; const Value: String = '');
+    procedure AddParameter(const Name: String;
+                           const Value: String = '');
     function  AsString: String; override;
     function  CanonicaliseAsAddressOfRecord: String;
     procedure ClearHeaders;
     procedure ClearParameters;
     function  DefaultPort: Cardinal; virtual;
     function  DefaultTransport: String; virtual;
-    function  Equals(const Uri: TIdSipUri): Boolean;
+    function  Equals(Uri: TIdSipUri): Boolean;
     function  HasValidSyntax: Boolean;
     function  HasHeaders: Boolean;
     function  HasParameter(const Name: String): Boolean;
@@ -94,8 +97,8 @@ type
     function  IsSecure: Boolean; virtual;
     function  IsSipUri: Boolean; override;
     function  ParamCount: Integer;
-    function  ParamName(const Index: Cardinal): String;
-    function  ParamValue(const Index: Cardinal): String; overload;
+    function  ParamName(Index: Cardinal): String;
+    function  ParamValue(Index: Cardinal): String; overload;
     function  ParamValue(const Name: String): String; overload;
     function  PortIsSpecified: Boolean;
     procedure RemoveParameter(const Name: String);
@@ -134,7 +137,7 @@ type
     function  GetParam(const Name: String): String;
     function  GetParameters: TStrings;
     procedure SetParam(const Name, Value: String);
-    procedure SetParameters(const Value: TStrings);
+    procedure SetParameters(Value: TStrings);
 
     property Parameters: TStrings read GetParameters write SetParameters;
   protected
@@ -155,7 +158,7 @@ type
     function  HasParam(Name: String): Boolean;
     function  IndexOfParam(Name: String): Integer;
     function  IsContact: Boolean; virtual;
-    function  IsEqualTo(const Header: TIdSipHeader): Boolean; virtual;
+    function  IsEqualTo(Header: TIdSipHeader): Boolean; virtual;
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
 
@@ -170,7 +173,7 @@ type
   private
     fAddress: TIdSipUri;
 
-    procedure SetAddress(const Value: TIdSipUri);
+    procedure SetAddress(Value: TIdSipUri);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
@@ -197,7 +200,7 @@ type
   protected
     procedure SetValue(const Value: String); override;
   public
-    function IsEqualTo(const Header: TIdSipHeader): Boolean; override;
+    function IsEqualTo(Header: TIdSipHeader): Boolean; override;
   end;
 
   TIdSipCommaSeparatedHeader = class(TIdSipHeader)
@@ -234,8 +237,9 @@ type
   private
     fValues: TObjectList;
 
-    function  GetValues(const Index: Integer): TIdSipWeightedValue;
-    procedure SetValues(const Index: Integer; const Value: TIdSipWeightedValue);
+    function  GetValues(Index: Integer): TIdSipWeightedValue;
+    procedure SetValues(Index: Integer;
+                        Value: TIdSipWeightedValue);
   protected
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
@@ -243,11 +247,12 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    procedure AddValue(const Value: String; const Weight: TIdSipQValue = High(TIdSipQValue));
+    procedure AddValue(const Value: String;
+                       Weight: TIdSipQValue = High(TIdSipQValue));
     procedure ClearValues;
     function  ValueCount: Integer;
 
-    property Values[const Index: Integer]: TIdSipWeightedValue read GetValues write SetValues;
+    property Values[Index: Integer]: TIdSipWeightedValue read GetValues write SetValues;
   end;
 
   TIdSipContactHeader = class(TIdSipAddressHeader)
@@ -256,8 +261,8 @@ type
 
     function  GetExpires: Cardinal;
     function  GetQ: TIdSipQValue;
-    procedure SetExpires(const Value: Cardinal);
-    procedure SetQ(const Value: TIdSipQValue);
+    procedure SetExpires(Value: Cardinal);
+    procedure SetQ(Value: TIdSipQValue);
   protected
     function  GetName: String; override;
     procedure SetValue(const Value: String); override;
@@ -319,7 +324,7 @@ type
     procedure SetValue(const Value: String); override;
   public
     function HasTag: Boolean;
-    function IsEqualTo(const Header: TIdSipHeader): Boolean; override;
+    function IsEqualTo(Header: TIdSipHeader): Boolean; override;
 
     property Tag: String read GetTag write SetTag;
   end;
@@ -350,7 +355,7 @@ type
     fAddress:     TIdSipURI;
     fDisplayName: String;
 
-    procedure SetAddress(const Value: TIdSipURI);
+    procedure SetAddress(Value: TIdSipURI);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
@@ -424,20 +429,21 @@ type
     procedure SetBranch(const Value: String);
     procedure SetMaddr(const Value: String);
     procedure SetReceived(const Value: String);
-    procedure SetRport(const Value: Cardinal);
-    procedure SetTTL(const Value: Byte);
+    procedure SetRport(Value: Cardinal);
+    procedure SetTTL(Value: Byte);
   protected
     function  GetName: String; override;
     function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     procedure Assign(Src: TPersistent); override;
-    function  DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
+    function  DefaultPortForTransport(T: TIdSipTransportType): Cardinal;
     function  HasBranch: Boolean;
     function  HasMaddr: Boolean;
     function  HasReceived: Boolean;
     function  HasRport: Boolean;
-    function  IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
+    function  IsDefaultPortForTransport(Port: Cardinal;
+                                        T: TIdSipTransportType): Boolean;
     function  IsRFC3261Branch: Boolean;
 
     property Branch:     String              read GetBranch write SetBranch;
@@ -482,29 +488,30 @@ type
   TIdSipHeaderList = class(TObject)
   protected
     class function HeaderTypes: TObjectList;
-    class function IsHeader(const Header, ExpectedHeaderName: String): Boolean;
+    class function IsHeader(const Header,
+                            ExpectedHeaderName: String): Boolean;
 
     function ConstructHeader(HeaderName: String): TIdSipHeader;
-    function GetItems(const I: Integer): TIdSipHeader; virtual; abstract;
+    function GetItems(I: Integer): TIdSipHeader; virtual; abstract;
   public
     class function CanonicaliseName(HeaderName: String): String;
     class function GetHeaderName(Header: String): String;
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; virtual; abstract;
-    procedure Add(const Header: TIdSipHeader); overload; virtual; abstract;
-    procedure Add(const Headers: TIdSipHeaderList); overload; virtual; abstract;
+    procedure Add(Header: TIdSipHeader); overload; virtual; abstract;
+    procedure Add(Headers: TIdSipHeaderList); overload; virtual; abstract;
     procedure Clear; virtual; abstract;
     function  Count: Integer; virtual; abstract;
     function  CurrentHeader: TIdSipHeader; virtual; abstract;
     procedure First; virtual; abstract;
     function  HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
     function  HasNext: Boolean; virtual; abstract;
-    function  IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+    function  IsEqualTo(OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsEmpty: Boolean;
     procedure Next; virtual; abstract;
     procedure Remove(Header: TIdSipHeader); virtual; abstract;
 
-    property Items[const I: Integer]: TIdSipHeader read GetItems;
+    property Items[I: Integer]: TIdSipHeader read GetItems;
   end;
 
   // I am a filter over an underlying set of headers. If you iterate over me
@@ -517,13 +524,14 @@ type
     Headers:      TIdSipHeaders;
 
   protected
-    function GetItems(const Index: Integer): TIdSipHeader; override;
+    function GetItems(Index: Integer): TIdSipHeader; override;
   public
-    constructor Create(const Headers: TIdSipHeaders; const HeaderName: String);
+    constructor Create(Headers: TIdSipHeaders;
+                       const HeaderName: String);
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; override;
-    procedure Add(const Header: TIdSipHeader); overload; override;
-    procedure Add(const Headers: TIdSipHeaderList); overload; override;
+    procedure Add(Header: TIdSipHeader); overload; override;
+    procedure Add(Headers: TIdSipHeaderList); overload; override;
     procedure Clear; override;
     function  Count: Integer; override;
     function  CurrentHeader: TIdSipHeader; override;
@@ -544,33 +552,33 @@ type
     function FindFirst(const HeaderName: String): TIdSipHeader;
     function GetHeaders(const Name: String): TIdSipHeader;
   protected
-    function GetItems(const I: Integer): TIdSipHeader; override;
+    function GetItems(I: Integer): TIdSipHeader; override;
   public
-    class function IsCallID(Header: String): Boolean;
-    class function IsCompoundHeader(Header: String): Boolean;
-    class function IsContact(Header: String): Boolean;
-    class function IsContentLength(Header: String): Boolean;
-    class function IsCSeq(Header: String): Boolean;
-    class function IsErrorInfo(Header: String): Boolean;
-    class function IsFrom(Header: String): Boolean;
-    class function IsMaxForwards(Header: String): Boolean;
-    class function IsRecordRoute(Header: String): Boolean;
-    class function IsRoute(Header: String): Boolean;
-    class function IsTo(Header: String): Boolean;
-    class function IsVia(Header: String): Boolean;
-    class function IsWarning(Header: String): Boolean;
+    class function IsCallID(const Header: String): Boolean;
+    class function IsCompoundHeader(const Header: String): Boolean;
+    class function IsContact(const Header: String): Boolean;
+    class function IsContentLength(const Header: String): Boolean;
+    class function IsCSeq(const Header: String): Boolean;
+    class function IsErrorInfo(const Header: String): Boolean;
+    class function IsFrom(const Header: String): Boolean;
+    class function IsMaxForwards(const Header: String): Boolean;
+    class function IsRecordRoute(const Header: String): Boolean;
+    class function IsRoute(const Header: String): Boolean;
+    class function IsTo(const Header: String): Boolean;
+    class function IsVia(const Header: String): Boolean;
+    class function IsWarning(const Header: String): Boolean;
 
     constructor Create; virtual;
     destructor  Destroy; override;
 
     function  Add(const HeaderName: String): TIdSipHeader; overload; override;
-    procedure Add(const Header: TIdSipHeader); overload; override;
-    procedure Add(const Headers: TIdSipHeaderList); overload; override;
-    procedure AddInReverseOrder(const Headers: TIdSipHeadersFilter);
+    procedure Add(Header: TIdSipHeader); overload; override;
+    procedure Add(Headers: TIdSipHeaderList); overload; override;
+    procedure AddInReverseOrder(Headers: TIdSipHeadersFilter);
     function  AsString: String;
     procedure Clear; override;
     function  CurrentHeader: TIdSipHeader; override;
-    procedure Delete(const I: Integer);
+    procedure Delete(I: Integer);
     function  Count: Integer; override;
     procedure First; override;
     function  GetAllButFirst: TIdSipHeaderList;
@@ -588,7 +596,7 @@ type
   private
     BlankHeaders: TIdSipHeaders;
   public
-    constructor Create(const Headers: TIdSipHeaders); overload;
+    constructor Create(Headers: TIdSipHeaders); overload;
     constructor Create; overload;
     destructor  Destroy; override;
 
@@ -597,14 +605,14 @@ type
 
   TIdSipExpiresHeaders = class(TIdSipHeadersFilter)
   public
-    constructor Create(const Headers: TIdSipHeaders);
+    constructor Create(Headers: TIdSipHeaders);
 
     function CurrentExpires: Cardinal;
   end;
 
   TIdSipViaPath = class(TIdSipHeadersFilter)
   public
-    constructor Create(const Headers: TIdSipHeaders);
+    constructor Create(Headers: TIdSipHeaders);
 
     function  LastHop: TIdSipViaHeader;
     function  Length: Integer;
@@ -867,7 +875,8 @@ begin
   end;
 end;
 
-class function TIdSipUri.Encode(const Src: String; const SafeChars: TIdSipChars): String;
+class function TIdSipUri.Encode(const Src: String;
+                                const SafeChars: TIdSipChars): String;
 var
   I: Integer;
 begin
@@ -927,7 +936,8 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipUri.AddParameter(const Name: String; const Value: String = '');
+procedure TIdSipUri.AddParameter(const Name: String;
+                                 const Value: String = '');
 begin
   Self.Parameters.Add(Name + '=' + Self.Decode(Value));
 end;
@@ -979,7 +989,7 @@ begin
     Result := TransportParamUDP;
 end;
 
-function TIdSipUri.Equals(const Uri: TIdSipUri): Boolean;
+function TIdSipUri.Equals(Uri: TIdSipUri): Boolean;
 begin
   // a SIP and SIPS URI are never equivalent
   Result := Lowercase(Self.Scheme) = Lowercase(Uri.Scheme);
@@ -1035,12 +1045,12 @@ begin
   Result := Self.Parameters.Count;
 end;
 
-function TIdSipUri.ParamName(const Index: Cardinal): String;
+function TIdSipUri.ParamName(Index: Cardinal): String;
 begin
   Result := Self.Parameters.Names[Index];
 end;
 
-function TIdSipUri.ParamValue(const Index: Cardinal): String;
+function TIdSipUri.ParamValue(Index: Cardinal): String;
 begin
   Result := Self.Parameters.Values[Self.ParamName(Index)];
 end;
@@ -1078,7 +1088,8 @@ end;
 
 //* TIdSipUri Private methods **************************************************
 
-class function TIdSipUri.IsEscapedOrInSet(const Token: String; AcceptableChars: TIdSipChars): Boolean;
+class function TIdSipUri.IsEscapedOrInSet(const Token: String;
+                                          AcceptableChars: TIdSipChars): Boolean;
 var
   EndOfString: Integer;
   I:           Integer;
@@ -1506,7 +1517,7 @@ begin
   Result := TIdSipHeaders.IsContact(Self.Name);
 end;
 
-function TIdSipHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+function TIdSipHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Self.AsString, Header.AsString);
 end;
@@ -1631,7 +1642,7 @@ begin
   end;
 end;
 
-procedure TIdSipHeader.SetParameters(const Value: TStrings);
+procedure TIdSipHeader.SetParameters(Value: TStrings);
 begin
   Self.Parameters.Assign(Value);
 end;
@@ -1691,7 +1702,7 @@ end;
 
 //* TIdSipUriHeader Private methods ********************************************
 
-procedure TIdSipUriHeader.SetAddress(const Value: TIdSipUri);
+procedure TIdSipUriHeader.SetAddress(Value: TIdSipUri);
 begin
   fAddress.URI := Value.URI;
 end;
@@ -1772,7 +1783,7 @@ end;
 //******************************************************************************
 //* TIdSipCallIdHeader Public methods ******************************************
 
-function TIdSipCallIdHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+function TIdSipCallIdHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
 begin
   Result := IsEqual(Header.Name, Self.Name)
         and (Self.Value = Header.Value);
@@ -1898,7 +1909,8 @@ begin
   inherited Destroy;
 end;
 
-procedure TIdSipWeightedCommaSeparatedHeader.AddValue(const Value: String; const Weight: TIdSipQValue = High(TIdSipQValue));
+procedure TIdSipWeightedCommaSeparatedHeader.AddValue(const Value: String;
+                                                      Weight: TIdSipQValue = High(TIdSipQValue));
 var
   NewValue: TIdSipWeightedValue;
   OldCount: Integer;
@@ -1986,12 +1998,13 @@ end;
 
 //* TIdSipWeightedCommaSeparatedHeader Private methods *************************
 
-function TIdSipWeightedCommaSeparatedHeader.GetValues(const Index: Integer): TIdSipWeightedValue;
+function TIdSipWeightedCommaSeparatedHeader.GetValues(Index: Integer): TIdSipWeightedValue;
 begin
   Result := fValues[Index] as TIdSipWeightedValue;
 end;
 
-procedure TIdSipWeightedCommaSeparatedHeader.SetValues(const Index: Integer; const Value: TIdSipWeightedValue);
+procedure TIdSipWeightedCommaSeparatedHeader.SetValues(Index: Integer;
+                                                       Value: TIdSipWeightedValue);
 begin
   (fValues[Index] as TIdSipWeightedValue).Value  := Value.Value;
   (fValues[Index] as TIdSipWeightedValue).Weight := Value.Weight;
@@ -2044,12 +2057,12 @@ begin
   Result := StrToQValue(Self.Params[QParam]);
 end;
 
-procedure TIdSipContactHeader.SetExpires(const Value: Cardinal);
+procedure TIdSipContactHeader.SetExpires(Value: Cardinal);
 begin
   Self.Params[ExpiresParam] := IntToStr(Value);
 end;
 
-procedure TIdSipContactHeader.SetQ(const Value: TIdSipQValue);
+procedure TIdSipContactHeader.SetQ(Value: TIdSipQValue);
 begin
   Self.Params[QParam] := QValueToStr(Value);
 end;
@@ -2195,7 +2208,7 @@ begin
   Result := Self.IndexOfParam(TagParam) <> -1;
 end;
 
-function TIdSipFromToHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+function TIdSipFromToHeader.IsEqualTo(Header: TIdSipHeader): Boolean;
 var
   From: TIdSipFromToHeader;
 begin
@@ -2381,7 +2394,7 @@ end;
 
 //* TIdSipRouteHeader Private methods ******************************************
 
-procedure TIdSipRouteHeader.SetAddress(const Value: TIdSipURI);
+procedure TIdSipRouteHeader.SetAddress(Value: TIdSipURI);
 begin
   fAddress.URI := Value.URI;
 end;
@@ -2545,7 +2558,7 @@ begin
     inherited Assign(Src);
 end;
 
-function TIdSipViaHeader.DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
+function TIdSipViaHeader.DefaultPortForTransport(T: TIdSipTransportType): Cardinal;
 begin
   if (T = sttTLS) then
     Result := IdPort_SIPS
@@ -2573,7 +2586,8 @@ begin
   Result := Self.HasParam(RPortParam);
 end;
 
-function TIdSipViaHeader.IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
+function TIdSipViaHeader.IsDefaultPortForTransport(Port: Cardinal;
+                                                   T: TIdSipTransportType): Boolean;
 begin
   Result := ((T = sttTLS) and (Port = IdPORT_SIPS))
          or (Port = IdPORT_SIP);
@@ -2731,12 +2745,12 @@ begin
   Self.AssertReceivedWellFormed;
 end;
 
-procedure TIdSipViaHeader.SetRport(const Value: Cardinal);
+procedure TIdSipViaHeader.SetRport(Value: Cardinal);
 begin
   Self.Params[RportParam] := IntToStr(Value);
 end;
 
-procedure TIdSipViaHeader.SetTTL(const Value: Byte);
+procedure TIdSipViaHeader.SetTTL(Value: Byte);
 begin
   Self.Params[TTLParam] := IntToStr(Value);
 end;
@@ -2890,7 +2904,7 @@ begin
   end;
 end;
 
-function TIdSipHeaderList.IsEqualTo(const OtherHeaders: TIdSipHeaderList): Boolean;
+function TIdSipHeaderList.IsEqualTo(OtherHeaders: TIdSipHeaderList): Boolean;
   procedure DumpHeaders(Headers: TIdSipHeaderList; List: TStringList);
   begin
     Headers.First;
@@ -2984,7 +2998,8 @@ begin
   Result := GIdSipHeadersMap;
 end;
 
-class function TIdSipHeaderList.IsHeader(const Header, ExpectedHeaderName: String): Boolean;
+class function TIdSipHeaderList.IsHeader(const Header,
+                                         ExpectedHeaderName: String): Boolean;
 var
   Name: String;
 begin
@@ -3015,7 +3030,8 @@ end;
 //******************************************************************************
 //* TIdSipHeadersFilter Public methods *****************************************
 
-constructor TIdSipHeadersFilter.Create(const Headers: TIdSipHeaders; const HeaderName: String);
+constructor TIdSipHeadersFilter.Create(Headers: TIdSipHeaders;
+                                       const HeaderName: String);
 begin
   Self.fHeaderName := HeaderName;
   Self.Headers     := Headers;
@@ -3026,12 +3042,12 @@ begin
   Result := Self.Headers.Add(HeaderName);
 end;
 
-procedure TIdSipHeadersFilter.Add(const Header: TIdSipHeader);
+procedure TIdSipHeadersFilter.Add(Header: TIdSipHeader);
 begin
   Self.Headers.Add(Header);
 end;
 
-procedure TIdSipHeadersFilter.Add(const Headers: TIdSipHeaderList);
+procedure TIdSipHeadersFilter.Add(Headers: TIdSipHeaderList);
 begin
   Self.Headers.Add(Headers);
 end;
@@ -3088,7 +3104,7 @@ end;
 
 //* TIdSipHeadersFilter Protected methods **************************************
 
-function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
+function TIdSipHeadersFilter.GetItems(Index: Integer): TIdSipHeader;
 var
   ItemCount: Integer;
 begin
@@ -3112,12 +3128,12 @@ end;
 //******************************************************************************
 //* TIdSipHeaders Public methods ***********************************************
 
-class function TIdSipHeaders.IsCallID(Header: String): Boolean;
+class function TIdSipHeaders.IsCallID(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, CallIDHeaderFull);
 end;
 
-class function TIdSipHeaders.IsCompoundHeader(Header: String): Boolean;
+class function TIdSipHeaders.IsCompoundHeader(const Header: String): Boolean;
 begin
   Result := Self.IsContact(Header)
          or Self.IsErrorInfo(Header)
@@ -3127,57 +3143,57 @@ begin
          or Self.IsWarning(Header);
 end;
 
-class function TIdSipHeaders.IsContact(Header: String): Boolean;
+class function TIdSipHeaders.IsContact(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ContactHeaderFull);
 end;
 
-class function TIdSipHeaders.IsContentLength(Header: String): Boolean;
+class function TIdSipHeaders.IsContentLength(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ContentLengthHeaderFull);
 end;
 
-class function TIdSipHeaders.IsCSeq(Header: String): Boolean;
+class function TIdSipHeaders.IsCSeq(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, CseqHeader);
 end;
 
-class function TIdSipHeaders.IsErrorInfo(Header: String): Boolean;
+class function TIdSipHeaders.IsErrorInfo(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ErrorInfoHeader);
 end;
 
-class function TIdSipHeaders.IsFrom(Header: String): Boolean;
+class function TIdSipHeaders.IsFrom(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, FromHeaderFull);
 end;
 
-class function TIdSipHeaders.IsMaxForwards(Header: String): Boolean;
+class function TIdSipHeaders.IsMaxForwards(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, MaxForwardsHeader);
 end;
 
-class function TIdSipHeaders.IsRecordRoute(Header: String): Boolean;
+class function TIdSipHeaders.IsRecordRoute(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, RecordRouteHeader);
 end;
 
-class function TIdSipHeaders.IsRoute(Header: String): Boolean;
+class function TIdSipHeaders.IsRoute(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, RouteHeader);
 end;
 
-class function TIdSipHeaders.IsTo(Header: String): Boolean;
+class function TIdSipHeaders.IsTo(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ToHeaderFull);
 end;
 
-class function TIdSipHeaders.IsVia(Header: String): Boolean;
+class function TIdSipHeaders.IsVia(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, ViaHeaderFull);
 end;
 
-class function TIdSipHeaders.IsWarning(Header: String): Boolean;
+class function TIdSipHeaders.IsWarning(const Header: String): Boolean;
 begin
   Result := Self.IsHeader(Header, WarningHeader);
 end;
@@ -3214,7 +3230,7 @@ begin
   end;
 end;
 
-procedure TIdSipHeaders.Add(const Header: TIdSipHeader);
+procedure TIdSipHeaders.Add(Header: TIdSipHeader);
 var
   H: TIdSipHeader;
 begin
@@ -3224,7 +3240,7 @@ begin
     H.Assign(Header);
 end;
 
-procedure TIdSipHeaders.Add(const Headers: TIdSipHeaderList);
+procedure TIdSipHeaders.Add(Headers: TIdSipHeaderList);
 begin
   Headers.First;
   while Headers.HasNext do begin
@@ -3233,7 +3249,7 @@ begin
   end;
 end;
 
-procedure TIdSipHeaders.AddInReverseOrder(const Headers: TIdSipHeadersFilter);
+procedure TIdSipHeaders.AddInReverseOrder(Headers: TIdSipHeadersFilter);
 var
   I: Integer;
 begin
@@ -3263,7 +3279,7 @@ begin
     Result := Self.List[Self.CurrentIndex] as TIdSipHeader;
 end;
 
-procedure TIdSipHeaders.Delete(const I: Integer);
+procedure TIdSipHeaders.Delete(I: Integer);
 begin
   Self.List.Delete(I);
 end;
@@ -3335,7 +3351,7 @@ end;
 
 //* TIdSipHeaders Protected methods ********************************************
 
-function TIdSipHeaders.GetItems(const I: Integer): TIdSipHeader;
+function TIdSipHeaders.GetItems(I: Integer): TIdSipHeader;
 begin
   Result := Self.List[I] as TIdSipHeader;
 end;
@@ -3369,7 +3385,7 @@ end;
 //******************************************************************************
 //* TIdSipContacts Public methods **********************************************
 
-constructor TIdSipContacts.Create(const Headers: TIdSipHeaders);
+constructor TIdSipContacts.Create(Headers: TIdSipHeaders);
 begin
   inherited Create(Headers, ContactHeaderFull);
 end;
@@ -3398,7 +3414,7 @@ end;
 //******************************************************************************
 //* TIdSipExpiresHeaders Public methods ****************************************
 
-constructor TIdSipExpiresHeaders.Create(const Headers: TIdSipHeaders);
+constructor TIdSipExpiresHeaders.Create(Headers: TIdSipHeaders);
 begin
   inherited Create(Headers, ExpiresHeader);
 end;
@@ -3413,7 +3429,7 @@ end;
 //******************************************************************************
 //* TIdSipViaPath Public methods ***********************************************
 
-constructor TIdSipViaPath.Create(const Headers: TIdSipHeaders);
+constructor TIdSipViaPath.Create(Headers: TIdSipHeaders);
 begin
   inherited Create(Headers, ViaHeaderFull);
 end;
