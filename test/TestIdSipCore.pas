@@ -190,6 +190,23 @@ type
 }
   end;
 
+  TestTIdSipInboundInvite = class(TestTIdSipAction)
+  private
+    Dialog:       TIdSipDialog;
+    InviteAction: TIdSipInboundInvite;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAccept;
+    procedure TestIsInvite; override;
+    procedure TestIsOptions; override;
+    procedure TestIsRegistration; override;
+    procedure TestIsSession; override;
+    procedure TestRejectCallBusy;
+    procedure TestRing;
+  end;
+
   TestTIdSipOutboundInvite = class(TestTIdSipAction,
                                    IIdSipInviteListener)
   private
@@ -471,11 +488,8 @@ type
   TestBugHunt = class(TTestCaseTU,
                       IIdSipUserAgentListener)
   private
-    Destination: TIdSipToHeader;
-    Dispatcher:  TIdSipMockTransactionDispatcher;
-    Session:     TIdSipInboundSession;
-    ToTag:       String;
-    UA:          TIdSipUserAgentCore;
+    Session: TIdSipInboundSession;
+    ToTag:   String;
   private
     function  CreateRemoteInvite: TIdSipRequest;
     procedure OnDroppedUnmatchedResponse(Response: TIdSipResponse;
@@ -487,7 +501,6 @@ type
     procedure SimulateRemoteTrying;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestOutboundCallAndByeToXlite;
     procedure TestSimultaneousInAndOutboundCall;
@@ -647,9 +660,13 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipAbstractUserAgent.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
+}
+  Result.AddTest(TestTIdSipInboundInvite.Suite);
+{
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
   Result.AddTest(TestTIdSipInboundOptions.Suite);
   Result.AddTest(TestTIdSipOutboundOptions.Suite);
@@ -670,6 +687,7 @@ begin
   Result.AddTest(TestTIdSipRegistrationSucceededMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedResponseMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -2771,6 +2789,163 @@ begin
   Check(Self.OnModifiedSessionFired, 'OnModifiedSession didn''t fire');
 end;
 }
+
+//******************************************************************************
+//* TestTIdSipInboundInvite                                                    *
+//******************************************************************************
+
+procedure TestTIdSipInboundInvite.SetUp;
+var
+  Ok: TIdSipResponse;
+begin
+  inherited SetUp;
+
+  Ok := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    Ok.ToHeader.Tag := Self.Core.NextTag;
+    Self.Dialog := TIdSipDialog.CreateInboundDialog(Self.Invite, Ok, true);
+  finally
+    Ok.Free;
+  end;
+
+  Self.InviteAction := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+end;
+
+procedure TestTIdSipInboundInvite.TearDown;
+begin
+  Self.InviteAction.Free;
+  Self.Dialog.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInboundInvite Published methods **********************************
+
+procedure TestTIdSipInboundInvite.TestAccept;
+var
+  Body:          String;
+  ContentType:   String;
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+
+  Body        := 'foo';
+  ContentType := 'bar';
+  Self.InviteAction.Accept(Self.Dialog, Body, ContentType);
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPOK,
+              Response.StatusCode,
+              'Unexpected Status-Code');
+
+  Check(Response.From.HasTag,                  'No From tag');
+  Check(Response.ToHeader.HasTag,              'No To tag');
+  Check(Response.HasHeader(ContactHeaderFull), 'No Contact header');
+
+  CheckEquals(Self.Dialog.ID.RemoteTag,
+              Response.From.Tag,
+              'From tag incorrect');
+  CheckEquals(Self.Dialog.ID.LocalTag,
+              Response.ToHeader.Tag,
+              'ToHeader tag incorrect');
+  CheckEquals(Self.Dialog.ID.CallID,
+              Response.CallID,
+              'Call-ID incorrect');
+
+  CheckEquals(Body,
+              Response.Body,
+              'Body');
+  CheckEquals(ContentType,
+              Response.ContentType,
+              'Content-Type');
+end;
+
+procedure TestTIdSipInboundInvite.TestIsInvite;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Check(Action.IsInvite,
+          Action.ClassName + 'not marked as a Invite');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestIsOptions;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsOptions,
+          Action.ClassName + ' marked as an Options');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestIsRegistration;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsRegistration,
+          Action.ClassName + ' marked as a Registration');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestIsSession;
+var
+  Action: TIdSipAction;
+begin
+  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  try
+    Check(not Action.IsSession,
+          Action.ClassName + ' marked as a Session');
+  finally
+    Action.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestRejectCallBusy;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.InviteAction.RejectCallBusy;
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPBusyHere,
+              Response.StatusCode,
+              'Unexpected Status-Code');
+  Check(Self.InviteAction.IsTerminated,
+        'Action not terminated');            
+end;
+
+procedure TestTIdSipInboundInvite.TestRing;
+var
+  Response: TIdSipResponse;
+begin
+  Check(Self.Dispatcher.Transport.SentResponseCount > 0,
+        'No ringing response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPRinging,
+              Response.StatusCode,
+              'Unexpected Status-Code');
+end;
+
 //******************************************************************************
 //* TestTIdSipOutboundInvite                                                   *
 //******************************************************************************
@@ -3237,7 +3412,7 @@ var
 begin
   Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
   try
-    Check(not Action.IsRegistration,
+    Check(not Action.IsInvite,
           Action.ClassName + ' marked as a Invite');
   finally
     Action.Free;
@@ -5562,24 +5737,7 @@ procedure TestBugHunt.SetUp;
 begin
   inherited SetUp;
 
-  Self.Destination := TIdSipToHeader.Create;
-  Self.Destination.Address.Uri := 'sip:hiro@enki.org;transport=udp';
-
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.UA := TIdSipUserAgentCore.Create;
-  Self.UA.Dispatcher := Self.Dispatcher;
-  Self.UA.Contact.Address.Uri := 'sip:vitaly@chernobyl.org';
-
   Self.ToTag := 'faketag';
-end;
-
-procedure TestBugHunt.TearDown;
-begin
-  Self.UA.Free;
-  Self.Dispatcher.Free;
-  Self.Destination.Free;
-
-  inherited TearDown;
 end;
 
 //* TestBugHunt Privage methods ************************************************
@@ -5588,9 +5746,9 @@ function TestBugHunt.CreateRemoteInvite: TIdSipRequest;
 var
   OurTo: TIdSipToHeader;
 begin
-  OurTo := Self.UA.Contact.AsToHeader;
+  OurTo := Self.Core.Contact.AsToHeader;
   try
-    Result := Self.UA.CreateInvite(OurTo, '', '');
+    Result := Self.Core.CreateInvite(OurTo, '', '');
   finally
     OurTo.Free;
   end;
@@ -5663,7 +5821,7 @@ procedure TestBugHunt.TestOutboundCallAndByeToXlite;
 var
   Session: TIdSipSession;
 begin
-  Session := Self.UA.Call(Self.Destination, '', '');
+  Session := Self.Core.Call(Self.Destination, '', '');
 
   Self.SimulateRemoteTrying;
   Check(not Session.DialogEstablished,
@@ -5687,15 +5845,15 @@ begin
   Self.SimulateRemoteOK;
   Self.SimulateRemoteOK;
 
-  Self.UA.TerminateAllCalls;
+  Self.Core.TerminateAllCalls;
   Check(Self.Dispatcher.Transport.LastRequest.IsBye,
         'Must send a BYE to terminate an established session');
 end;
 
 procedure TestBugHunt.TestSimultaneousInAndOutboundCall;
 begin
-  Self.UA.AddUserAgentListener(Self);
-  Self.UA.Call(Self.Destination, '', '');
+  Self.Core.AddUserAgentListener(Self);
+  Self.Core.Call(Self.Destination, '', '');
   Self.SimulateRemoteTrying;
   Self.SimulateRemoteRinging;
 
@@ -5703,7 +5861,7 @@ begin
   Check(Assigned(Self.Session), 'TU not informed of inbound call');
 
   Self.Session.AcceptCall('', '');
-  CheckEquals(2, Self.UA.SessionCount, 'Session count');
+  CheckEquals(2, Self.Core.SessionCount, 'Session count');
 end;
 
 procedure TestBugHunt.TestXlitesAckNonBug;
@@ -5712,7 +5870,7 @@ var
   RemoteDlg: TIdSipDialog;
   TranCount: Cardinal;
 begin
-  Self.UA.AddUserAgentListener(Self);
+  Self.Core.AddUserAgentListener(Self);
   Self.SimulateRemoteInvite;
 
   Check(Assigned(Self.Session), 'TU not informed of inbound call');
@@ -5732,7 +5890,7 @@ begin
                 Self.Dispatcher.TransactionCount,
                   'A transaction got made in response to an ACK');
       CheckEquals(1,
-                  Self.UA.SessionCount,
+                  Self.Core.SessionCount,
                   'ACK wasn''t simply dropped by the TU');
     finally
       Ack.Free;

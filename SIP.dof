@@ -85,33 +85,3 @@ OriginalFilename=
 ProductName=
 ProductVersion=1.0.0.0
 Comments=
-[HistoryLists\hlDebugSourcePath]
-Count=2
-Item0=$(DELPHI)\Source\Indy
-Item1=$DELPHI\Source\Indy
-[HistoryLists\hlConditionals]
-Count=1
-Item0=ICTGROUP_VIS
-[HistoryLists\hlUnitAliases]
-Count=1
-Item0=WinTypes=Windows;WinProcs=Windows;DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE;
-[HistoryLists\hlSearchPath]
-Count=3
-Item0=$(DELPHI)\Lib\Debug
-Item1=$(DELPHI)\Source\Indy
-Item2=($DELPHI)\Source\Indy
-[HistoryLists\hlUnitOutputDirectory]
-Count=3
-Item0=./build
-Item1=.\build
-Item2=F:\Projects\Video Interpreting Service\Source Code\lib
-[HistoryLists\hlOutputDirectorry]
-Count=3
-Item0=./bin
-Item1=.\bin
-Item2=F:\Projects\Video Interpreting Service\Source Code\bin
-[HistoryLists\hlBPLOutput]
-Count=3
-Item0=./bin
-Item1=.\bin
-Item2=F:\Projects\Video Interpreting Service\Source Code\bin

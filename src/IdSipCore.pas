@@ -535,10 +535,36 @@ type
     property Username:       String        read GetUsername write SetUsername;
   end;
 
-  // I encapsulate the call flows around an outbound INVITE.
+  TIdSipInvite = class(TIdSipAction)
+  public
+    class function Method: String; override;
+
+    function IsInvite: Boolean; override;
+  end;
+
+  // I encapsulate the call flows around an inbound INVITE, both in-dialog and
+  // not.
+  TIdSipInboundInvite = class(TIdSipInvite)
+  private
+    procedure SendSimpleResponse(StatusCode: Cardinal);
+  protected
+    procedure ReceiveCancel(Cancel: TIdSipRequest); override;
+    procedure ReceiveInvite(Invite: TIdSipRequest); override;
+  public
+    constructor Create(UA: TIdSipUserAgentCore;
+                       Invite: TIdSipRequest); reintroduce;
+
+    procedure Accept(Dialog: TIdSipDialog;
+                     const Offer, ContentType: String);
+    procedure RejectCallBusy;
+    procedure Ring;
+  end;
+
+  // I encapsulate the call flows around an outbound INVITE, both in-dialog
+  // and not.
   // I guarantee that I will notify my listeners of the OnDialogEvent before the
   // OnSuccess event.
-  TIdSipOutboundInvite = class(TIdSipAction)
+  TIdSipOutboundInvite = class(TIdSipInvite)
   private
     Cancelling:                     Boolean;
     CancelRequest:                  TIdSipRequest;
@@ -567,8 +593,6 @@ type
     function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; override;
     procedure SendRequest(Request: TIdSipRequest); override;
   public
-    class function Method: String; override;
-
     constructor Create(UA: TIdSipUserAgentCore); override;
     destructor  Destroy; override;
 
@@ -577,7 +601,6 @@ type
     procedure Invite(Destination: TIdSipAddressHeader;
                      const Offer: String;
                      const MimeType: String);
-    function  IsInvite: Boolean; override;
     procedure RedirectedInvite(Destination: TIdSipAddressHeader;
                                OriginalInvite: TIdSipRequest);
     procedure ReInvite(Dialog: TIdSipDialog;
@@ -2969,14 +2992,95 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipOutboundInvite                                                       *
+//* TIdSipInvite                                                               *
 //******************************************************************************
-//* TIdSipOutboundInvite Public methods ****************************************
+//* TIdSipInvite Public methods ************************************************
 
-class function TIdSipOutboundInvite.Method: String;
+class function TIdSipInvite.Method: String;
 begin
   Result := MethodInvite;
 end;
+
+function TIdSipInvite.IsInvite: Boolean;
+begin
+  Result := true;
+end;
+
+//******************************************************************************
+//* TIdSipInboundInvite                                                        *
+//******************************************************************************
+//* TIdSipInboundInvite Public methods *****************************************
+
+constructor TIdSipInboundInvite.Create(UA: TIdSipUserAgentCore;
+                                       Invite: TIdSipRequest);
+begin
+  inherited Create(UA);
+
+  Self.InitialRequest.Assign(Invite);
+
+  Self.Ring;
+end;
+
+procedure TIdSipInboundInvite.Accept(Dialog: TIdSipDialog;
+                                     const Offer, ContentType: String);
+var
+  Ok: TIdSipResponse;
+begin
+  Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
+  try
+    Ok.Body          := Offer;
+    Ok.ContentType   := ContentType;
+    Ok.ContentLength := Length(Offer);
+    Ok.ToHeader.Tag  := Dialog.ID.LocalTag;
+
+    Self.SendResponse(Ok);
+  finally
+    Ok.Free;
+  end;
+end;
+
+procedure TIdSipInboundInvite.RejectCallBusy;
+begin
+  Self.SendSimpleResponse(SIPBusyHere);
+  Self.MarkAsTerminated;
+end;
+
+procedure TIdSipInboundInvite.Ring;
+begin
+  Self.SendSimpleResponse(SIPRinging);
+end;
+
+//* TIdSipInboundInvite Protected methods **************************************
+
+procedure TIdSipInboundInvite.ReceiveCancel(Cancel: TIdSipRequest);
+begin
+  inherited ReceiveCancel(Cancel);
+end;
+
+procedure TIdSipInboundInvite.ReceiveInvite(Invite: TIdSipRequest);
+begin
+  inherited ReceiveInvite(Invite);
+end;
+
+//* TIdSipInboundInvite Private methods ****************************************
+
+procedure TIdSipInboundInvite.SendSimpleResponse(StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.UA.CreateResponse(Self.InitialRequest,
+                                     StatusCode);
+  try
+    Self.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipOutboundInvite                                                       *
+//******************************************************************************
+//* TIdSipOutboundInvite Public methods ****************************************
 
 constructor TIdSipOutboundInvite.Create(UA: TIdSipUserAgentCore);
 begin
@@ -3025,11 +3129,6 @@ begin
   finally
     Invite.Free;
   end;
-end;
-
-function TIdSipOutboundInvite.IsInvite: Boolean;
-begin
-  Result := true;
 end;
 
 procedure TIdSipOutboundInvite.RedirectedInvite(Destination: TIdSipAddressHeader;
@@ -3337,6 +3436,8 @@ procedure TIdSipInboundOptions.ReceiveOptions(Options: TIdSipRequest);
 var
   Response: TIdSipResponse;
 begin
+  inherited ReceiveOptions(Options);
+
   Response := Self.UA.CreateResponse(Options,
                                      Self.UA.ResponseForInvite);
   try
@@ -3350,6 +3451,7 @@ begin
     // For OPTIONS "traceroute"-like functionality. cf RFC 3261, section 11.2
     Response.FirstWarning.Code  := WarningMisc;
     Response.FirstWarning.Agent := Self.UA.HostName;
+    // This should contain the IP of the transport that received the OPTIONS.
     Response.FirstWarning.Text  := '';
 
     Self.SendResponse(Response);
