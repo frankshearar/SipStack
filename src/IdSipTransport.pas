@@ -3,24 +3,32 @@ unit IdSipTransport;
 interface
 
 uses
-  IdSipMessage, SysUtils;
+  Classes, IdSipMessage, SysUtils;
 
 type
+  TIdSipNotifyEvent = TNotifyEvent;
   TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
+  TIdSipRequestEvent = procedure(Sender: TObject; const R: TIdSipRequest) of object;
 
   TIdSipAbstractTransport = class(TObject)
   private
+    fOnRequest: TIdSipRequestEvent;
     fOnResponse: TIdSipResponseEvent;
   protected
+    procedure DoOnRequest(const R: TIdSipRequest);
     procedure DoOnResponse(const R: TIdSipResponse);
   public
     // This should raise an appropriate exception if a transport or suchlike
     // error occurs.
     procedure SendRequest(const R: TIdSipRequest); virtual; abstract;
     procedure SendResponse(const R: TIdSipResponse); virtual; abstract;
+    function  WillUseReliableTranport(const R: TIdSipMessage): Boolean;
 
+    property OnRequest:  TIdSipRequestEvent read fOnRequest write fOnRequest;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
+
+  TIdSipTransportClass = class of TIdSipAbstractTransport;
 
   TIdSipMockTransport = class(TIdSipAbstractTransport)
   private
@@ -33,6 +41,7 @@ type
     constructor Create;
     destructor  Destroy; override;
 
+    procedure FireOnRequest(const R: TIdSipRequest);
     procedure FireOnResponse(const R: TIdSipResponse);
     procedure RaiseException(const E: ExceptClass);
     procedure ResetACKCount;
@@ -56,7 +65,22 @@ uses
 //******************************************************************************
 //* TIdSipAbstractTransport                                                    *
 //******************************************************************************
+//* TIdSipAbstractTransport Public methods *************************************
+
+function TIdSipAbstractTransport.WillUseReliableTranport(const R: TIdSipMessage): Boolean;
+begin
+  Assert(R.Path.Length > 0, 'Messages must have at least one Via header');
+
+  Result := R.Path.LastHop.Transport <> sttUDP;
+end;
+
 //* TIdSipAbstractTransport Protected methods **********************************
+
+procedure TIdSipAbstractTransport.DoOnRequest(const R: TIdSipRequest);
+begin
+  if Assigned(Self.OnRequest) then
+    Self.OnRequest(Self, R)
+end;
 
 procedure TIdSipAbstractTransport.DoOnResponse(const R: TIdSipResponse);
 begin
@@ -82,6 +106,11 @@ begin
   Self.fLastACK.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipMockTransport.FireOnRequest(const R: TIdSipRequest);
+begin
+  Self.DoOnRequest(R);
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
@@ -120,6 +149,8 @@ begin
   end
   else
     Inc(Self.fSentRequestCount);
+
+  Self.DoOnRequest(R);
 end;
 
 procedure TIdSipMockTransport.SendResponse(const R: TIdSipResponse);
