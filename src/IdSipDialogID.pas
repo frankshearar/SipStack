@@ -43,18 +43,18 @@ constructor TIdSipDialogID.Create(const CallID: String;
 begin
   inherited Create;
 
-  fCallID    := CallID;
-  fLocalTag  := LocalTag;
-  fRemoteTag := RemoteTag;
+  Self.fCallID    := CallID;
+  Self.fLocalTag  := LocalTag;
+  Self.fRemoteTag := RemoteTag;
 end;
 
 constructor TIdSipDialogID.Create(ID: TIdSipDialogID);
 begin
   inherited Create;
 
-  fCallID    := ID.CallID;
-  fLocalTag  := ID.LocalTag;
-  fRemoteTag := ID.RemoteTag;
+  Self.fCallID    := ID.CallID;
+  Self.fLocalTag  := ID.LocalTag;
+  Self.fRemoteTag := ID.RemoteTag;
 end;
 
 function TIdSipDialogID.Equals(ID: TIdSipDialogID): Boolean;
