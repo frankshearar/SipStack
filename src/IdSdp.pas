@@ -11,6 +11,10 @@ unit IdSdp;
 
 interface
 
+// Typically you don't manually instantiate the SDP objects (media
+// descriptions, connections, attributes, etc). Usually you'll just have a
+// string containing an SDP description, and you'll use a TIdSdpParser on it.
+
 uses
   Classes, Contnrs, IdSNTP, IdAssignedNumbers, IdEmailAddress,
   IdInterfacedObject, IdNotification, IdRTP, IdRTPServer, IdSimpleParser, 
@@ -420,7 +424,6 @@ type
 
     destructor Destroy; override;
 
-    procedure AddConnection(NewConnection: TIdSdpConnection); overload;
     function  AddConnection: TIdSdpConnection; overload;
     function  AddMediaDescription(Desc: TIdSdpMediaDescription): TIdSdpMediaDescription; overload;
     function  AddMediaDescription: TIdSdpMediaDescription; overload;
@@ -1996,16 +1999,6 @@ begin
   fTimes.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSdpPayload.AddConnection(NewConnection: TIdSdpConnection);
-var
-  I: Integer;
-begin
-  Self.Connections.Add(NewConnection);
-
-  for I := 0 to Self.MediaDescriptionCount - 1 do
-    Self.MediaDescriptionAt(I).Connections.Add(NewConnection);
 end;
 
 function TIdSdpPayload.AddConnection: TIdSdpConnection;
