@@ -17,6 +17,7 @@ type
     procedure TearDown; override;
   published
     procedure TestNextCallID;
+    procedure TestNextTag;
   end;
 
   TTestCaseTU = class(TTestCaseSip)
@@ -41,14 +42,7 @@ type
     procedure TearDown; override;
   end;
 
-  TestTIdSipAbstractUserAgent = class(TTestCase)
-  private
-    Dispatcher: TIdSipMockTransactionDispatcher;
-    Request:    TIdSipRequest;
-    UA:         TIdSipAbstractUserAgent;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
+  TestTIdSipAbstractUserAgent = class(TTestCaseTU)
   published
     procedure TestAddAllowedContentType;
     procedure TestAddAllowedContentTypeMalformed;
@@ -58,6 +52,7 @@ type
     procedure TestAddAllowedMethodMethodAlreadyPresent;
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
+    procedure TestRejectUnauthorizedRequest;
   end;
 
   TestTIdSipUserAgentCore = class(TTestCaseTU,
@@ -129,7 +124,6 @@ type
     procedure TestIsMethodAllowed;
     procedure TestIsSchemeAllowed;
     procedure TestLoopDetection;
-    procedure TestNextTag;
     procedure TestNotificationOfNewSession;
     procedure TestReceiveByeForUnmatchedDialog;
     procedure TestReceiveByeForDialog;
@@ -412,6 +406,32 @@ begin
   CheckEquals(Self.Core.HostName, CallID, 'HostName not used');
 end;
 
+procedure TestTIdSipAbstractCore.TestNextTag;
+var
+  I:    Integer;
+  Tags: TStringList;
+begin
+  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
+
+  Tags := TStringList.Create;
+  try
+    for I := 1 to 100 do
+      Tags.Add(Self.Core.NextTag);
+
+    // Find duplicates
+    Tags.Sort;
+    CheckNotEquals('', Tags[0], 'No null tags may be generated');
+
+    for I := 1 to Tags.Count - 1 do begin
+      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
+                                + IntToStr(I) + ')');
+
+      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
+    end;
+  finally
+  end;
+end;
+
 //******************************************************************************
 //* TTestCaseTU                                                                *
 //******************************************************************************
@@ -548,32 +568,9 @@ begin
   Msg.ContentLength := 0;
 end;
 
-procedure TestTIdSipAbstractUserAgent.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Dispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.UA := TIdSipAbstractUserAgent.Create;
-  Self.UA.Dispatcher := Self.Dispatcher;
-
-  Self.Request := TIdSipTestResources.CreateBasicRequest;
-  Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-  Self.Request.Body := '';
-  Self.Request.ToHeader.Value := Self.Request.ToHeader.DisplayName
-                               + ' <' + Self.Request.ToHeader.Address.URI + '>';
-  Self.Request.RemoveAllHeadersNamed(ContentTypeHeaderFull);
-  Self.Request.ContentLength := 0;
-end;
-
-procedure TestTIdSipAbstractUserAgent.TearDown;
-begin
-  Self.Request.Free;
-  Self.UA.Free;
-  Self.Dispatcher.Free;
-
-  inherited TearDown;
-end;
-
+//******************************************************************************
+//* TestTIdSipAbstractUserAgent                                                *
+//******************************************************************************
 //* TestTIdSipAbstractUserAgent Published methods ******************************
 
 procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentType;
@@ -582,10 +579,10 @@ var
 begin
   ContentTypes := TStringList.Create;
   try
-    Self.UA.AddAllowedContentType(SdpMimeType);
-    Self.UA.AddAllowedContentType(PlainTextMimeType);
+    Self.Core.AddAllowedContentType(SdpMimeType);
+    Self.Core.AddAllowedContentType(PlainTextMimeType);
 
-    ContentTypes.CommaText := Self.UA.AllowedContentTypes;
+    ContentTypes.CommaText := Self.Core.AllowedContentTypes;
 
     CheckEquals(2, ContentTypes.Count, 'Number of allowed ContentTypes');
 
@@ -600,10 +597,10 @@ procedure TestTIdSipAbstractUserAgent.TestAddAllowedContentTypeMalformed;
 var
   ContentTypes: String;
 begin
-  ContentTypes := Self.UA.AllowedContentTypes;
-  Self.UA.AddAllowedContentType(' ');
+  ContentTypes := Self.Core.AllowedContentTypes;
+  Self.Core.AddAllowedContentType(' ');
   CheckEquals(ContentTypes,
-              Self.UA.AllowedContentTypes,
+              Self.Core.AllowedContentTypes,
               'Malformed Content-Type was allowed');
 end;
 
@@ -613,10 +610,10 @@ var
 begin
   Languages := TStringList.Create;
   try
-    Self.UA.AddAllowedLanguage('en');
-    Self.UA.AddAllowedLanguage('af');
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('af');
 
-    Languages.CommaText := Self.UA.AllowedLanguages;
+    Languages.CommaText := Self.Core.AllowedLanguages;
 
     CheckEquals(2, Languages.Count, 'Number of allowed Languages');
 
@@ -627,7 +624,7 @@ begin
   end;
 
   try
-    Self.UA.AddAllowedLanguage(' ');
+    Self.Core.AddAllowedLanguage(' ');
     Fail('Failed to forbid adding a malformed language ID');
   except
     on EIdException do;
@@ -640,10 +637,10 @@ var
 begin
   Languages := TStringList.Create;
   try
-    Self.UA.AddAllowedLanguage('en');
-    Self.UA.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('en');
+    Self.Core.AddAllowedLanguage('en');
 
-    Languages.CommaText := Self.UA.AllowedLanguages;
+    Languages.CommaText := Self.Core.AllowedLanguages;
 
     CheckEquals(1, Languages.Count, 'en was re-added');
   finally
@@ -657,12 +654,12 @@ var
 begin
   Methods := TStringList.Create;
   try
-    Self.UA.AddAllowedMethod(MethodBye);
-    Self.UA.AddAllowedMethod(MethodCancel);
-    Self.UA.AddAllowedMethod(MethodInvite);
-    Self.UA.AddAllowedMethod(MethodOptions);
+    Self.Core.AddAllowedMethod(MethodBye);
+    Self.Core.AddAllowedMethod(MethodCancel);
+    Self.Core.AddAllowedMethod(MethodInvite);
+    Self.Core.AddAllowedMethod(MethodOptions);
 
-    Methods.CommaText := Self.UA.AllowedMethods;
+    Methods.CommaText := Self.Core.AllowedMethods;
 
     CheckEquals(4, Methods.Count, 'Number of allowed methods');
 
@@ -675,7 +672,7 @@ begin
   end;
 
   try
-    Self.UA.AddAllowedMethod(' ');
+    Self.Core.AddAllowedMethod(' ');
     Fail('Failed to forbid adding a non-token Method');
   except
     on EIdException do;
@@ -689,12 +686,12 @@ var
 begin
   Methods := TStringList.Create;
   try
-    Self.UA.AddAllowedMethod(MethodInvite);
-    Methods.CommaText := Self.UA.AllowedMethods;
+    Self.Core.AddAllowedMethod(MethodInvite);
+    Methods.CommaText := Self.Core.AllowedMethods;
     MethodCount := Methods.Count;
 
-    Self.UA.AddAllowedMethod(MethodInvite);
-    Methods.CommaText := Self.UA.AllowedMethods;
+    Self.Core.AddAllowedMethod(MethodInvite);
+    Methods.CommaText := Self.Core.AllowedMethods;
 
     CheckEquals(MethodCount, Methods.Count, MethodInvite + ' was re-added');
   finally
@@ -708,10 +705,10 @@ var
 begin
   Schemes := TStringList.Create;
   try
-    Self.UA.AddAllowedScheme(SipScheme);
-    Self.UA.AddAllowedScheme(SipsScheme);
+    Self.Core.AddAllowedScheme(SipScheme);
+    Self.Core.AddAllowedScheme(SipsScheme);
 
-    Schemes.CommaText := Self.UA.AllowedSchemes;
+    Schemes.CommaText := Self.Core.AllowedSchemes;
 
     CheckEquals(2, Schemes.Count, 'Number of allowed Schemes');
 
@@ -722,7 +719,7 @@ begin
   end;
 
   try
-    Self.UA.AddAllowedScheme(' ');
+    Self.Core.AddAllowedScheme(' ');
     Fail('Failed to forbid adding a malformed URI scheme');
   except
     on EIdException do;
@@ -735,14 +732,34 @@ var
 begin
   Schemes := TStringList.Create;
   try
-    Self.UA.AddAllowedScheme(SipScheme);
+    Self.Core.AddAllowedScheme(SipScheme);
 
-    Schemes.CommaText := Self.UA.AllowedSchemes;
+    Schemes.CommaText := Self.Core.AllowedSchemes;
 
     CheckEquals(1, Schemes.Count, 'SipScheme was re-added');
   finally
     Schemes.Free;
   end;
+end;
+
+procedure TestTIdSipAbstractUserAgent.TestRejectUnauthorizedRequest;
+var
+  Response:      TIdSipResponse;
+  ResponseCount: Cardinal;
+begin
+  Self.Core.RequireAuthentication := true;
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Self.SimulateRemoteInvite;
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  Response := Self.Dispatcher.Transport.LastResponse;
+  CheckEquals(SIPUnauthorized,
+              Response.StatusCode,
+              'Status code');
+  Check(Response.HasWWWAuthenticate,
+        'No WWW-Authenticate header');
 end;
 
 //******************************************************************************
@@ -1597,32 +1614,6 @@ begin
 
   Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPLoopDetected, Response.StatusCode, 'Status-Code');
-end;
-
-procedure TestTIdSipUserAgentCore.TestNextTag;
-var
-  I:    Integer;
-  Tags: TStringList;
-begin
-  // This is a woefully inadequate test. cf. RFC 3261, section 19.3
-
-  Tags := TStringList.Create;
-  try
-    for I := 1 to 100 do
-      Tags.Add(Self.Core.NextTag);
-
-    // Find duplicates
-    Tags.Sort;
-    CheckNotEquals('', Tags[0], 'No null tags may be generated');
-
-    for I := 1 to Tags.Count - 1 do begin
-      CheckNotEquals('', Tags[I], 'No null tags may be generated (Tag #'
-                                + IntToStr(I) + ')');
-
-      CheckNotEquals(Tags[I-1], Tags[I], 'Duplicate tag generated');
-    end;
-  finally
-  end;
 end;
 
 procedure TestTIdSipUserAgentCore.TestNotificationOfNewSession;

@@ -117,8 +117,10 @@ type
   TIdSipAbstractCore = class(TIdInterfacedObject,
                              IIdSipUnhandledMessageListener)
   private
-    fDispatcher: TIdSipTransactionDispatcher;
-    fHostName:   String;
+    fDispatcher:            TIdSipTransactionDispatcher;
+    fHostName:              String;
+    fRequireAuthentication: Boolean;
+    fUserAgentName:         String;
 
     function  DefaultHostName: String;
     procedure OnReceiveUnhandledRequest(Request: TIdSipRequest;
@@ -131,25 +133,33 @@ type
                            Receiver: TIdSipTransport); virtual;
     procedure ActOnResponse(Response: TIdSipResponse;
                            Receiver: TIdSipTransport); virtual;
+    function  Authenticate(Request: TIdSipRequest): Boolean; virtual;
+    function  HasAuthentication(Request: TIdSipRequest): Boolean; virtual;
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport); virtual;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); virtual;
+    procedure PrepareResponse(Response: TIdSipResponse;
+                              Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); virtual;
+    procedure RejectRequestUnauthorized(Request: TIdSipRequest); virtual;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; virtual;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; virtual;
   public
     constructor Create; virtual;
 
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
-    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
-    function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
-    function  NextCallID: String;
+    function CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
+    function CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
+    function CreateResponse(Request: TIdSipRequest;
+                            ResponseCode: Cardinal): TIdSipResponse; virtual;
+    function NextCallID: String;
+    function NextTag: String;
 
-    property Dispatcher: TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
-    property HostName:   String                      read fHostName write fHostName;
+    property Dispatcher:            TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
+    property HostName:              String                      read fHostName write fHostName;
+    property RequireAuthentication: Boolean                     read fRequireAuthentication write fRequireAuthentication;
+    property UserAgentName:         String                      read fUserAgentName write fUserAgentName;
   end;
 
   // I represent the heart of a User Agent. We split User Agent functionality
@@ -167,7 +177,6 @@ type
     fAllowedMethodList:      TStrings;
     fAllowedSchemeList:      TStrings;
     fFrom:                   TIdSipFromHeader;
-    fUserAgentName:          String;
 
     function  GetFrom: TIdSipFromHeader;
     procedure RejectRequestMethodNotAllowed(Request: TIdSipRequest);
@@ -178,11 +187,10 @@ type
     procedure SetFrom(Value: TIdSipFromHeader);
   protected
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
-    procedure PrepareResponse(Response: TIdSipResponse;
-                              Request: TIdSipRequest);
     procedure RejectRequest(Reaction: TIdSipUserAgentReaction;
                             Request: TIdSipRequest); override;
     procedure RejectRequestBadExtension(Request: TIdSipRequest);
+    procedure RejectRequestUnauthorized(Request: TIdSipRequest); override;
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
 
     property AllowedContentTypeList: TStrings read fAllowedContentTypeList;
@@ -203,8 +211,6 @@ type
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
     function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
-    function  CreateResponse(Request: TIdSipRequest;
-                             ResponseCode: Cardinal): TIdSipResponse; overload; override;
     function  HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentLanguage(Request: TIdSipRequest): Boolean;
     function  HasUnknownContentType(Request: TIdSipRequest): Boolean;
@@ -213,12 +219,10 @@ type
     function  IsSchemeAllowed(const Scheme: String): Boolean;
     function  NextBranch: String;
     function  NextInitialSequenceNo: Cardinal;
-    function  NextTag: String;
     procedure ReturnResponse(Request: TIdSipRequest;
                              Reason: Cardinal);
 
-    property From:          TIdSipFromHeader read GetFrom write SetFrom;
-    property UserAgentName: String           read fUserAgentName write fUserAgentName;
+    property From: TIdSipFromHeader read GetFrom write SetFrom;
   end;
 
   // I keep track of information a User Agent needs when making a REGISTER to
@@ -612,12 +616,27 @@ constructor TIdSipAbstractCore.Create;
 begin
   inherited Create;
 
-  Self.HostName := Self.DefaultHostName;
+  Self.HostName              := Self.DefaultHostName;
+  Self.RequireAuthentication := false;
+end;
+
+function TIdSipAbstractCore.CreateResponse(Request: TIdSipRequest;
+                                           ResponseCode: Cardinal): TIdSipResponse;
+begin
+  Result := TIdSipResponse.InResponseTo(Request,
+                                        ResponseCode);
+
+  Self.PrepareResponse(Result, Request);
 end;
 
 function TIdSipAbstractCore.NextCallID: String;
 begin
   Result := GRandomNumber.NextHexString + '@' + Self.HostName;
+end;
+
+function TIdSipAbstractCore.NextTag: String;
+begin
+  Result := GRandomNumber.NextSipUserAgentTag;
 end;
 
 //* TIdSipAbstractCore Protected methods ***************************************
@@ -632,6 +651,22 @@ procedure TIdSipAbstractCore.ActOnResponse(Response: TIdSipResponse;
 begin
 end;
 
+function TIdSipAbstractCore.Authenticate(Request: TIdSipRequest): Boolean;
+begin
+  // Proxies and User Agent Servers use different headers to
+  // challenge/authenticate.
+
+  Result := false;
+end;
+
+function TIdSipAbstractCore.HasAuthentication(Request: TIdSipRequest): Boolean;
+begin
+  // Proxies and User Agent Servers use different headers to
+  // challenge/authenticate.
+  
+  Result := false;
+end;
+
 procedure TIdSipAbstractCore.OnReceiveRequest(Request: TIdSipRequest;
                                               Receiver: TIdSipTransport);
 begin
@@ -642,14 +677,36 @@ procedure TIdSipAbstractCore.OnReceiveResponse(Response: TIdSipResponse;
 begin
 end;
 
+procedure TIdSipAbstractCore.PrepareResponse(Response: TIdSipResponse;
+                                             Request: TIdSipRequest);
+begin
+  if not Request.ToHeader.HasTag then
+    Response.ToHeader.Tag := Self.NextTag;
+
+  if (Self.UserAgentName <> '') then
+    Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
+end;
+
 procedure TIdSipAbstractCore.RejectRequest(Reaction: TIdSipUserAgentReaction;
                                            Request: TIdSipRequest);
 begin
   // Do nothing - subclasses will return the necessary response.
+  if (Reaction = uarUnauthorized) then
+    Self.RejectRequestUnauthorized(Request);
+end;
+
+procedure TIdSipAbstractCore.RejectRequestUnauthorized(Request: TIdSipRequest);
+begin
+  // Proxies and User Agent Servers use different headers to
+  // challenge/authenticate.
 end;
 
 function TIdSipAbstractCore.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
+  if Self.RequireAuthentication and (not Self.HasAuthentication(Request) or not Self.Authenticate(Request)) then
+    Result := uarUnauthorized
+  else
+
   Result := uarAccept;
 end;
 
@@ -801,15 +858,6 @@ begin
   end;
 end;
 
-function TIdSipAbstractUserAgent.CreateResponse(Request: TIdSipRequest;
-                                                ResponseCode: Cardinal): TIdSipResponse;
-begin
-  Result := TIdSipResponse.InResponseTo(Request,
-                                        ResponseCode);
-
-  Self.PrepareResponse(Result, Request);
-end;
-
 function TIdSipAbstractUserAgent.HasUnknownContentEncoding(Request: TIdSipRequest): Boolean;
 begin
   Result := Request.HasHeader(ContentEncodingHeaderFull);
@@ -852,11 +900,6 @@ begin
   Result := GRandomNumber.NextCardinal($7FFFFFFF);
 end;
 
-function TIdSipAbstractUserAgent.NextTag: String;
-begin
-  Result := GRandomNumber.NextSipUserAgentTag;
-end;
-
 procedure TIdSipAbstractUserAgent.ReturnResponse(Request: TIdSipRequest;
                                                  Reason: Cardinal);
 var
@@ -888,16 +931,6 @@ begin
 
   if (Self.UserAgentName <> '') then
     OutboundRequest.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
-end;
-
-procedure TIdSipAbstractUserAgent.PrepareResponse(Response: TIdSipResponse;
-                                                  Request: TIdSipRequest);
-begin
-  if not Request.ToHeader.HasTag then
-    Response.ToHeader.Tag := Self.NextTag;
-
-  if (Self.UserAgentName <> '') then
-    Response.AddHeader(ServerHeader).Value := Self.UserAgentName;
 end;
 
 procedure TIdSipAbstractUserAgent.RejectRequest(Reaction: TIdSipUserAgentReaction;
@@ -939,6 +972,20 @@ begin
     Response.Free;
   end;
 end;
+
+procedure TIdSipAbstractUserAgent.RejectRequestUnauthorized(Request: TIdSipRequest);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.CreateResponse(Request, SIPUnauthorized);
+  try
+    Response.AddHeader(WWWAuthenticateHeader);
+
+    Self.Dispatcher.SendResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;  
 
 function TIdSipAbstractUserAgent.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction;
 begin
