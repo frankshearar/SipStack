@@ -4463,7 +4463,7 @@ begin
 
   // NAPTR record points to SCTP SRV record whose target resolves to the A
   // record.
-  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, SipSctpService, SrvSctpPrefix + Domain);
+  Self.Locator.AddNAPTR(Domain, 0, 0, NaptrDefaultFlags, NaptrSctpService, SrvSctpPrefix + Domain);
   Self.Locator.AddSRV(Domain, SrvSctpPrefix, 0, 0, IdPORT_SIP, Domain);
   Self.Locator.AddSRV(Domain, SrvTcpPrefix,  1, 0, IdPORT_SIP, Domain);
 

@@ -244,6 +244,13 @@ begin
   Check(NaptrServiceIsSecure('SIPS+D2S'),    'SIPS+D2S');
   Check(not NaptrServiceIsSecure('SIP+D2T'), 'SIP+D2T');
   Check(not NaptrServiceIsSecure('SIP+D2U'), 'SIP+D2U');
+
+  Check(NaptrServiceIsSecure('SIPS+'), 'SIPS+');
+  Check(NaptrServiceIsSecure('SIPS'),  'SIPS');
+
+  Check(not NaptrServiceIsSecure(''),             'The empty string');
+  Check(not NaptrServiceIsSecure('+'),            '+');
+  Check(not NaptrServiceIsSecure('gobbledegook'), 'gobbledegook');
 end;
 
 //******************************************************************************
@@ -1219,9 +1226,9 @@ begin
   //    IN NAPTR 50   50  "s"  "SIPS+D2T"     ""  _sips._tcp.example.com.
   //    IN NAPTR 90   50  "s"  "SIP+D2T"      ""  _sip._tcp.example.com
   //    IN NAPTR 100  50  "s"  "SIP+D2U"      ""  _sip._udp.example.com.
-  Self.Loc.AddNAPTR(Self.IP,  50, 50, 's', SipsTlsService, '_sips._tcp.example.com');
-  Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', SipTcpService,   '_sip._tcp.example.com');
-  Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', SipUdpService,   '_sip._udp.example.com');
+  Self.Loc.AddNAPTR(Self.IP,  50, 50, 's', NaptrTlsService, '_sips._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP,  90, 50, 's', NaptrTcpService, '_sip._tcp.example.com');
+  Self.Loc.AddNAPTR(Self.IP, 100, 50, 's', NaptrUdpService, '_sip._udp.example.com');
 
   CheckEquals(NaptrServiceToTransport(Self.Loc.NAPTR[0].Service),
               Self.Loc.TransportFor(Self.Target,
@@ -1738,7 +1745,7 @@ const
   Order      = 0;
   Preference = 1;
   Flags      = NaptrDefaultFlags;
-  Service    = SipsTlsService;
+  Service    = NaptrTlsService;
   Regex      = '';
   Value      = '_sips._tcp.leo-ix.net';
 begin

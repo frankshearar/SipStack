@@ -321,11 +321,11 @@ const
   NaptrTcpTransport      = 'T';
   NaptrUdpTransport      = 'U';
 
-  SipSctpService         = NaptrSipService  + NaptrServiceMiddleToken + NaptrSctpTransport;
-  SipTcpService          = NaptrSipService  + NaptrServiceMiddleToken + NaptrTcpTransport;
-  SipsTlsService         = NaptrSipsService + NaptrServiceMiddleToken + NaptrTcpTransport;
-  SipsTlsOverSctpService = NaptrSipsService + NaptrServiceMiddleToken + NaptrSctpTransport;
-  SipUdpService          = NaptrSipService  + NaptrServiceMiddleToken + NaptrUdpTransport;
+  NaptrSctpService        = NaptrSipService  + NaptrServiceMiddleToken + NaptrSctpTransport;
+  NaptrTcpService         = NaptrSipService  + NaptrServiceMiddleToken + NaptrTcpTransport;
+  NaptrTlsService         = NaptrSipsService + NaptrServiceMiddleToken + NaptrTcpTransport;
+  NaptrTlsOverSctpService = NaptrSipsService + NaptrServiceMiddleToken + NaptrSctpTransport;
+  NaptrUdpService         = NaptrSipService  + NaptrServiceMiddleToken + NaptrUdpTransport;
 
 // SRV (RFC 2782) constants
 const
@@ -420,13 +420,13 @@ end;
 function NaptrServiceToTransport(const NaptrService: String): String;
 begin
   // TODO: We really need to reference a transport registry of some kind.
-  if      IsEqual(NaptrService, SipsTlsService) then
+  if      IsEqual(NaptrService, NaptrTlsService) then
     Result := TlsTransport
-  else if IsEqual(NaptrService, SipTcpService) then
+  else if IsEqual(NaptrService, NaptrTcpService) then
     Result := TcpTransport
-  else if IsEqual(NaptrService, SipUdpService) then
+  else if IsEqual(NaptrService, NaptrUdpService) then
     Result := UdpTransport
-  else if IsEqual(NaptrService, SipSctpService) then
+  else if IsEqual(NaptrService, NaptrSctpService) then
     Result := SctpTransport
   else
     raise Exception.Create('Don''t know what transport to use for a NAPTR service ''' + NaptrService + '''');
