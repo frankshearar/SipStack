@@ -1,7 +1,7 @@
 object rnidSpike: TrnidSpike
-  Left = 277
-  Top = 167
-  Width = 928
+  Left = 25
+  Top = 208
+  Width = 932
   Height = 505
   Caption = 'rnidSpike'
   Color = clBtnFace
@@ -16,7 +16,7 @@ object rnidSpike: TrnidSpike
   PixelsPerInch = 96
   TextHeight = 13
   object Splitter1: TSplitter
-    Left = 535
+    Left = 627
     Top = 0
     Width = 5
     Height = 478
@@ -24,9 +24,9 @@ object rnidSpike: TrnidSpike
     Align = alRight
   end
   object IOPanel: TPanel
-    Left = 540
+    Left = 632
     Top = 0
-    Width = 380
+    Width = 292
     Height = 478
     Align = alRight
     BevelOuter = bvNone
@@ -34,7 +34,7 @@ object rnidSpike: TrnidSpike
     object InputSplitter: TSplitter
       Left = 0
       Top = 169
-      Width = 380
+      Width = 292
       Height = 5
       Cursor = crVSplit
       Align = alTop
@@ -42,7 +42,7 @@ object rnidSpike: TrnidSpike
     object UpperInput: TPanel
       Left = 0
       Top = 0
-      Width = 380
+      Width = 292
       Height = 169
       Align = alTop
       BevelOuter = bvNone
@@ -59,7 +59,7 @@ object rnidSpike: TrnidSpike
       object InputText: TMemo
         Left = 5
         Top = 0
-        Width = 375
+        Width = 287
         Height = 169
         Align = alClient
         TabOrder = 0
@@ -69,7 +69,7 @@ object rnidSpike: TrnidSpike
     object LowerInput: TPanel
       Left = 0
       Top = 174
-      Width = 380
+      Width = 292
       Height = 304
       Align = alClient
       BevelOuter = bvNone
@@ -86,7 +86,7 @@ object rnidSpike: TrnidSpike
       object OutputText: TMemo
         Left = 5
         Top = 0
-        Width = 375
+        Width = 287
         Height = 304
         Align = alClient
         TabOrder = 0
@@ -96,7 +96,7 @@ object rnidSpike: TrnidSpike
   object DebugPanel: TPanel
     Left = 0
     Top = 0
-    Width = 535
+    Width = 627
     Height = 478
     Align = alClient
     BevelOuter = bvNone
@@ -105,7 +105,7 @@ object rnidSpike: TrnidSpike
     object Log: TMemo
       Left = 0
       Top = 99
-      Width = 535
+      Width = 627
       Height = 379
       Align = alClient
       ScrollBars = ssVertical
@@ -114,48 +114,48 @@ object rnidSpike: TrnidSpike
     object Panel1: TPanel
       Left = 0
       Top = 0
-      Width = 535
+      Width = 627
       Height = 99
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
       object Label1: TLabel
-        Left = 448
+        Left = 516
         Top = 2
         Width = 71
         Height = 13
         Caption = 'Session Count:'
       end
       object SessionCounter: TLabel
-        Left = 522
+        Left = 590
         Top = 2
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label2: TLabel
-        Left = 467
+        Left = 535
         Top = 18
         Width = 50
         Height = 13
         Caption = 'RTP bytes'
       end
       object RTPDataCount: TLabel
-        Left = 522
+        Left = 590
         Top = 18
         Width = 6
         Height = 13
         Caption = '0'
       end
       object Label3: TLabel
-        Left = 465
+        Left = 533
         Top = 34
         Width = 51
         Height = 13
         Caption = 'UDP bytes'
       end
       object UDPDataCount: TLabel
-        Left = 522
+        Left = 590
         Top = 34
         Width = 6
         Height = 13
@@ -176,7 +176,7 @@ object rnidSpike: TrnidSpike
         Caption = 'Base Port:'
       end
       object Label6: TLabel
-        Left = 382
+        Left = 450
         Top = 53
         Width = 25
         Height = 13
@@ -273,7 +273,7 @@ object rnidSpike: TrnidSpike
         OnChange = ContactUriChange
       end
       object HostName: TEdit
-        Left = 409
+        Left = 477
         Top = 49
         Width = 121
         Height = 21
@@ -282,7 +282,7 @@ object rnidSpike: TrnidSpike
         OnChange = HostNameChange
       end
       object MasqAsNat: TCheckBox
-        Left = 410
+        Left = 478
         Top = 73
         Width = 87
         Height = 17
@@ -290,6 +290,16 @@ object rnidSpike: TrnidSpike
         Checked = True
         State = cbChecked
         TabOrder = 11
+      end
+      object Answer: TButton
+        Left = 368
+        Top = 48
+        Width = 75
+        Height = 25
+        Caption = 'Answer'
+        Enabled = False
+        TabOrder = 12
+        OnClick = AnswerClick
       end
     end
   end

@@ -22,6 +22,7 @@ type
                      IIdRTPDataListener,
                      IIdRTPListener,
                      IIdObserver,
+                     IIdSipActionListener,
                      IIdSipOptionsListener,
                      IIdSipRegistrationListener,
                      IIdSipSessionListener,
@@ -64,6 +65,7 @@ type
     HostName: TEdit;
     Label6: TLabel;
     MasqAsNat: TCheckBox;
+    Answer: TButton;
     procedure ByeClick(Sender: TObject);
     procedure FormKeyPress(Sender: TObject; var Key: Char);
     procedure InviteClick(Sender: TObject);
@@ -79,6 +81,7 @@ type
     procedure UseAsProxyClick(Sender: TObject);
     procedure PasswordChange(Sender: TObject);
     procedure HostNameChange(Sender: TObject);
+    procedure AnswerClick(Sender: TObject);
   private
     CounterLock:    TCriticalSection;
     Lock:           TCriticalSection;
@@ -90,6 +93,7 @@ type
     DTMFPanel:      TIdDTMFPanel;
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
+    LatestSession:  TIdSipSession;
     RTPByteCount:   Integer;
     RTPProfile:     TIdRTPProfile;
     RunningPort:    Cardinal;
@@ -144,7 +148,7 @@ type
     procedure OnSendResponse(Response: TIdSipResponse;
                              Sender: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
-                        CurrentBindings: TIdSipContacts); 
+                        CurrentBindings: TIdSipContacts);
     procedure ProcessPCM(Data: TStream);
     procedure ProcessText(Text: String);
     procedure ResetCounters;
@@ -369,8 +373,11 @@ begin
     Self.Lock.Release;
   end;
 
+  Self.LatestSession := nil;
+
   Self.AudioPlayer.Stop;
   Self.StopReadingData;
+  Self.Answer.Enabled := false;
 end;
 
 procedure TrnidSpike.OnException(E: Exception;
@@ -393,36 +400,10 @@ begin
 end;
 
 procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
-var
-  Answer: String;
-  I:      Integer;
-  SDP:    TIdSdpPayload;
 begin
-  SDP := TIdSdpPayload.CreateFrom(Session.InitialRequest.Body);
-  try
-    SDP.Origin.Address := Self.Address;
-    for I := 0 to SDP.MediaDescriptionCount - 1 do
-      SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
-
-    Answer := SDP.AsString;
-  finally
-    SDP.Free;
-  end;
-
-  Self.ResetCounters;
   Session.AddSessionListener(Self);
-
-  Self.AudioPlayer.Play(AnyAudioDevice);
-
-  // Offer contains a description of what data we expect to receive. Sometimes
-  // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
-  // port 8000's already bound. We thus try to honour the offer as closely as
-  // possible.
-  Self.PayloadProcessor.StartListening(Answer);
-  Self.PayloadProcessor.SetRemoteDescription(Session.InitialRequest.Body);
-//  Session.RejectCallBusy;
-
-  Session.AcceptCall(Answer, SdpMimeType);
+  Self.LatestSession := Session;
+  Self.Answer.Enabled := true;
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -508,7 +489,8 @@ procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;
 begin
   // Don't ever do this: we're on a private LAN accessing the SIP network
   // through a NATting firewall. Doing the below makes us look like the
-  // firewall itself to things in the Internet.
+  // firewall itself to things in the Internet. If you want to have a NATting
+  // firewall, use a SIP proxy on the firewall.
 
   if Self.MasqAsNat.Checked then
     Request.LastHop.SentBy := Self.HostName.Text;
@@ -587,17 +569,21 @@ end;
 
 procedure TrnidSpike.ByeClick(Sender: TObject);
 begin
-  Self.UA.TerminateAllCalls;
+  if Assigned(Self.LatestSession) then
+    Self.LatestSession.Terminate;
+
   Self.StopReadingData;
 end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
 var
-  SDP:     String;
-  Session: TIdSipSession;
-  Target:  TIdSipToHeader;
+  OurHostName: String;
+  SDP:         String;
+  Target:      TIdSipToHeader;
 begin
-  SDP := Self.LocalSDP(Self.HostName.Text);
+  OurHostName := (Self.Transports[0] as TIdSipTransport).Address;
+
+  SDP := Self.LocalSDP(OurHostName);
 
   Target := TIdSipToHeader.Create;
   try
@@ -605,15 +591,18 @@ begin
 
     Self.ResetCounters;
 
-    Self.AudioPlayer.Play(AnyAudioDevice);
-    Self.PayloadProcessor.StartListening(SDP);
+//    Self.AudioPlayer.Play(AnyAudioDevice);
+//    Self.PayloadProcessor.StartListening(SDP);
 
-    Session := Self.UA.Call(Target,
+    if Self.MasqAsNat.Checked then
+      SDP := StringReplace(SDP, OurHostName, Self.HostName.Text, [rfReplaceAll, rfIgnoreCase]);
+
+    Self.LatestSession := Self.UA.Call(Target,
                             SDP,
                             SdpMimeType);
 
-    Session.AddSessionListener(Self);
-    Session.Send;
+    Self.LatestSession.AddSessionListener(Self);
+    Self.LatestSession.Send;
   finally
     Target.Free;
   end;
@@ -772,6 +761,39 @@ begin
   Self.UA.HostName := Self.HostName.Text;
 
   Self.StartTransports;
+end;
+
+procedure TrnidSpike.AnswerClick(Sender: TObject);
+var
+  Answer: String;
+  I:      Integer;
+  SDP:    TIdSdpPayload;
+begin
+  if Assigned(Self.LatestSession) then begin
+    SDP := TIdSdpPayload.CreateFrom(Self.LatestSession.InitialRequest.Body);
+    try
+      SDP.Origin.Address := Self.Address;
+      for I := 0 to SDP.MediaDescriptionCount - 1 do
+        SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
+
+      Answer := SDP.AsString;
+    finally
+      SDP.Free;
+    end;
+
+    Self.ResetCounters;
+
+//    Self.AudioPlayer.Play(AnyAudioDevice);
+
+    // Offer contains a description of what data we expect to receive. Sometimes
+    // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
+    // port 8000's already bound. We thus try to honour the offer as closely as
+    // possible.
+    Self.PayloadProcessor.StartListening(Answer);
+    Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
+
+    (Self.LatestSession as TIdSipInboundSession).AcceptCall(Answer, SdpMimeType);
+  end;
 end;
 
 end.
