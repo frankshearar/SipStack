@@ -838,6 +838,7 @@ const
 procedure ApplyTo(List: TList;
                   Lock: TCriticalSection;
                   Proc: TIdSipProcedure); overload;
+
 implementation
 
 uses
@@ -2127,6 +2128,7 @@ var
   Action: TIdSipAction;
 begin
   Result := nil;
+
   Self.ActionLock.Acquire;
   try
     I := 0;
@@ -2258,18 +2260,19 @@ var
   Session: TIdSipAction;
 begin
   ExpiredRequest := (Sender as TIdSipSingleShotTimer).Data as TIdSipRequest;
-
-  Self.ActionLock.Acquire;
   try
-    Session := Self.FindAction(ExpiredRequest);
+    Self.ActionLock.Acquire;
+    try
+      Session := Self.FindAction(ExpiredRequest);
 
-    if Assigned(Session) then
-      (Session as TIdSipInboundSession).TimeOut;
+      if Assigned(Session) then
+        (Session as TIdSipInboundSession).TimeOut;
+    finally
+      Self.ActionLock.Release;
+    end;
   finally
-    Self.ActionLock.Release;
+    ExpiredRequest.Free;
   end;
-
-  ExpiredRequest.Free;
 end;
 
 function TIdSipUserAgentCore.RegistrarAt(Index: Integer): TIdSipRegistrationInfo;
