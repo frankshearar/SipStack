@@ -835,7 +835,7 @@ type
 
   // I provide a protocol for things that listen for RTP packets. RTP agents,
   // monitors, etc., can use me to keep track of an RTP session.
-  IIdRTPListener = interface(IInterface)
+  IIdRTPListener = interface
     ['{2B5E040A-0B8E-4C44-9769-80E3AAE35C41}']
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdSocketHandle);
@@ -845,7 +845,7 @@ type
 
   // I provide a protocol for sending RTP/RTCP data as well as notifying
   // reception of same.
-  IIdAbstractRTPPeer = interface(IInterface)
+  IIdAbstractRTPPeer = interface
     ['{10608EEF-CE5B-44AE-9B22-34CC19D0BE07}']
     procedure AddListener(const Listener: IIdRTPListener);
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
