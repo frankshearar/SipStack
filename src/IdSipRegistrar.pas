@@ -353,6 +353,17 @@ var
   Date:     TIdSipDateHeader;
   Response: TIdSipResponse;
 begin
+  if (Request.ContactCount = 1)
+    and Request.FirstContact.IsWildCard
+    and (Request.QuickestExpiry = 0) then begin
+
+    if not Self.BindingDB.RemoveAllBindings(Request) then
+      Self.RejectFailedRequest(Request, Transaction)
+    else
+      Self.ReturnResponse(Request, SIPOK, Transaction);
+    Exit;
+  end;
+
   if not Self.BindingDB.AddBindings(Request) then begin
     Self.RejectFailedRequest(Request, Transaction);
     Exit;
@@ -411,16 +422,21 @@ function TIdSipRegistrar.WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAg
 begin
   Result := inherited WillAcceptRequest(Request);
 
+  // cf RFC 3261 section 10.3
   if (Result = uarAccept) then begin
 {
+    // Step 3
     if not Request.HasAuthenticationInfo
     or not Self.BindingDB.IsAuthenticated(Request) then
       Result := uarUnauthorized
 }
+    // Step 4
     if not Self.BindingDB.IsAuthorized(Request.From) then
       Result := uarForbidden
+    // Step 5
     else if not Self.BindingDB.IsValid(Request) then
       Result := uarNotFound
+    // Step 6 (or part thereof)
     else if Request.HasHeader(ContactHeaderFull) then begin
       if Request.FirstContact.IsWildCard then begin
         if (Request.ContactCount > 1) then
@@ -437,6 +453,8 @@ begin
         Result := uarExpireTooBrief
     end;
   end;
+
+  // The rest of Step 6 takes place in ActOnRequest
 end;
 
 //* TIdSipRegistrar Private methods ********************************************
