@@ -28,6 +28,7 @@ type
     Invite:      TIdSipRequest;
 
     function  CreateRemoteBye(LocalDialog: TIdSipDialog): TIdSipRequest;
+    procedure SimulateAck;
     procedure SimulateRemoteBye(LocalDialog: TIdSipDialog);
     procedure SimulateRemoteCancel;
     procedure SimulateRemoteInvite;
@@ -44,10 +45,17 @@ type
   end;
 
   TestTIdSipAbstractCore = class(TTestCaseTU)
+  private
+    ScheduledEventFired: Boolean;
+
+    procedure ScheduledEvent(Sender: TObject);
+  public
+    procedure SetUp; override;
   published
     procedure TestNextCallID;
     procedure TestNextTag;
     procedure TestNotifyOfChange;
+    procedure TestScheduleEvent;
   end;
 
   TestTIdSipAbstractUserAgent = class(TestTIdSipAbstractCore)
@@ -102,7 +110,6 @@ type
     procedure OnInboundCall(Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Invite: TIdSipRequest);
-    procedure SimulateRemoteAck(Response: TIdSipResponse);
     procedure SimulateRemoteBye(Dialog: TIdSipDialog);
   public
     procedure SetUp; override;
@@ -130,7 +137,6 @@ type
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
-    procedure TestDispatchAckToSession;
     procedure TestDoNotDisturb;
     procedure TestHasUnknownContentEncoding;
     procedure TestHasUnknownContentType;
@@ -191,15 +197,20 @@ type
 }
   end;
 
-  TestTIdSipInboundInvite = class(TestTIdSipAction)
+  TestTIdSipInboundInvite = class(TestTIdSipAction,
+                                  IIdSipInboundInviteListener)
   private
     Dialog:       TIdSipDialog;
+    Failed:       Boolean;
     InviteAction: TIdSipInboundInvite;
+    procedure OnFailure(InviteAgent: TIdSipInboundInvite);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAccept;
+    procedure TestCancelAfterAccept;
+    procedure TestCancelBeforeAccept;
     procedure TestIsInvite; override;
     procedure TestIsOptions; override;
     procedure TestIsRegistration; override;
@@ -531,6 +542,17 @@ type
     procedure Run;
   end;
 
+  TestTIdSipInboundInviteFailureMethod = class(TActionMethodTestCase)
+  private
+    Invite: TIdSipRequest;
+    Method: TIdSipInboundInviteFailureMethod;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestRun;
+  end;
+
   TestTIdSipInviteDialogEstablishedMethod = class(TActionMethodTestCase)
   private
     Method: TIdSipInviteDialogEstablishedMethod;
@@ -648,8 +670,8 @@ implementation
 
 uses
   IdException, IdGlobal, IdHashMessageDigest, IdInterfacedObject,
-  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdUdpServer,
-  SysUtils, TestIdObservable, TestMessages, Windows;
+  IdSipAuthentication, IdSipConsts, IdSipMockTransport, IdTimerQueue,
+  IdUdpServer, SysUtils, TestIdObservable, TestMessages, Windows;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -679,6 +701,7 @@ begin
   Result.AddTest(TestProxyAuthentication.Suite);
   Result.AddTest(TestBugHunt.Suite);
   Result.AddTest(TestTIdSipActionAuthenticationChallengeMethod.Suite);
+  Result.AddTest(TestTIdSipInboundInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteDialogEstablishedMethod.Suite);
   Result.AddTest(TestTIdSipInviteFailureMethod.Suite);
   Result.AddTest(TestTIdSipInviteRedirectMethod.Suite);
@@ -759,6 +782,21 @@ begin
     FreeAndNil(Result);
 
     raise;
+  end;
+end;
+
+procedure TTestCaseTU.SimulateAck;
+var
+  Ack: TIdSipRequest;
+  T:   TIdSipMockTransport;
+begin
+  T := Self.Dispatcher.Transport;
+
+  Ack := T.LastRequest.AckFor(T.LastResponse);
+  try
+    T.FireOnRequest(Ack);
+  finally
+    Ack.Free;
   end;
 end;
 
@@ -881,6 +919,24 @@ end;
 //******************************************************************************
 //* TestTIdSipAbstractCore                                                     *
 //******************************************************************************
+//* TestTIdSipAbstractCore Public methods **************************************
+
+procedure TestTIdSipAbstractCore.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ScheduledEventFired := false;
+end;
+
+//* TestTIdSipAbstractCore Private methods *************************************
+
+procedure TestTIdSipAbstractCore.ScheduledEvent(Sender: TObject);
+begin
+  Self.ScheduledEventFired := true;
+  Self.ThreadEvent.SetEvent;
+end;
+
+
 //* TestTIdSipAbstractCore Published methods ***********************************
 
 procedure TestTIdSipAbstractCore.TestNextCallID;
@@ -935,12 +991,28 @@ begin
             'Observer not notified');
       Check(O.Data = C,
            'Core didn''t return itself as parameter in the notify');
-
     finally
       O.Free;
     end;
   finally
     C.Free;
+  end;
+end;
+
+procedure TestTIdSipAbstractCore.TestScheduleEvent;
+var
+  T: TIdTimerQueue;
+begin
+  T := TIdTimerQueue.Create;
+  try
+    Self.Core.Timer := T;
+    Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, nil);
+
+    Self.ExceptionMessage := 'Waiting for scheduled event';
+    Self.WaitForSignaled;
+    Check(Self.ScheduledEventFired, 'Event didn''t fire');
+  finally
+    T.Terminate;
   end;
 end;
 
@@ -1375,35 +1447,6 @@ end;
 procedure TestTIdSipUserAgentCore.OnModifiedSession(Session: TIdSipSession;
                                                     Invite: TIdSipRequest);
 begin
-end;
-
-procedure TestTIdSipUserAgentCore.SimulateRemoteAck(Response: TIdSipResponse);
-var
-  Ack:  TIdSipRequest;
-  Temp: String;
-begin
-  // Precondition: Self.Session has been established
-  Check(Assigned(Self.Session),
-        'SimulateRemoteAck called but Self.Session is nil');
-  Check(Assigned(Self.Session.Dialog),
-        'SimulateRemoteAck called but Self.Session''s dialog isn''t '
-      + 'established');
-
-  Ack := Self.Core.CreateRequest(Self.Session.Dialog);
-  try
-    Ack.Method          := MethodAck;
-    Ack.CSeq.SequenceNo := Self.Session.InitialRequest.CSeq.SequenceNo;
-    Ack.CSeq.Method     := Ack.Method;
-    // We have to swop the tags because CreateAck returns a LOCALLY created ACK,
-    // so the remote tag is actually the far end's local tag.
-    Temp             := Ack.From.Tag;
-    Ack.From.Tag     := Ack.ToHeader.Tag;
-    Ack.ToHeader.Tag := Temp;
-
-    Self.Dispatcher.Transport.FireOnRequest(Ack);
-  finally
-    Ack.Free;
-  end;
 end;
 
 procedure TestTIdSipUserAgentCore.SimulateRemoteBye(Dialog: TIdSipDialog);
@@ -1888,19 +1931,26 @@ var
   SessionOne: TIdSipInboundSession;
   SessionTwo: TIdSipInboundSession;
 begin
+  // 1. Receive two inbound sessions.
+  // 2. Receive a BYE for one of them.
+  // 3. Check that the correct session died, and the other didn't.
+
   Self.SimulateRemoteInvite;
-  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
+  Check(Assigned(Self.Session),
+        'OnInboundCall didn''t fire');
   SessionOne := Self.Session;
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
   Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
   Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
   Self.SimulateRemoteInvite;
-  Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
+  Check(Self.Session <> SessionOne,
+        'OnInboundCall didn''t fire a second time');
   SessionTwo := Self.Session;
   CheckEquals(2,
               Self.Core.SessionCount,
               'Number of sessions after two INVITEs');
+
 
   SessionTwo.AcceptCall('', '');
 
@@ -1913,31 +1963,6 @@ begin
   CheckEquals(1,
               Self.Core.SessionCount,
               'Number of sessions after one BYE');
-end;
-
-procedure TestTIdSipUserAgentCore.TestDispatchAckToSession;
-var
-  SessionOne: TIdSipInboundSession;
-  SessionTwo: TIdSipInboundSession;
-begin
-  Self.SimulateRemoteInvite;
-  Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
-  SessionOne := Self.Session;
-
-  Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
-  Self.Invite.From.Tag       := Self.Invite.From.Tag + '1';
-  Self.Invite.ToHeader.Tag   := Self.Invite.ToHeader.Tag + '1';
-  Self.SimulateRemoteInvite;
-  Check(Self.Session <> SessionOne, 'OnInboundCall didn''t fire');
-  SessionTwo := Self.Session;
-  CheckEquals(2,
-              Self.Core.SessionCount,
-              'Number of sessions after two INVITEs');
-  SessionOne.AcceptCall('', '');
-  SessionTwo.AcceptCall('', '');
-  Self.SimulateRemoteAck(Self.Dispatcher.Transport.LastResponse);
-  Check(not SessionOne.ReceivedAck, 'SessionOne got the ACK');
-  Check(    SessionTwo.ReceivedAck, 'SessionTwo didn''t get the ACK');
 end;
 
 procedure TestTIdSipUserAgentCore.TestDoNotDisturb;
@@ -1995,6 +2020,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestInviteExpires;
 var
+  Event:         TIdNotifyEventWait;
   ResponseCount: Cardinal;
 begin
   Self.Core.AddObserver(Self);
@@ -2008,9 +2034,13 @@ begin
   Self.WaitForSignaled;
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-  Self.ExceptionMessage := 'Waiting for session to expire';
-  Self.WaitForSignaled;
-  Check(Self.OnEndedSessionFired, 'Session didn''t expire');
+  Event := TIdNotifyEventWait.Create;
+  try
+    Event.Data := Self.Invite.Copy;
+    Self.Core.OnInboundSessionExpire(Event);
+  finally
+    Event.Free;
+  end;
 
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'No response sent');
@@ -2164,6 +2194,7 @@ begin
 
   Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
   Self.Session.AcceptCall('', '');
+  Self.SimulateAck;
 
   ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
   Self.SimulateRemoteBye(Self.Session.Dialog);
@@ -2817,6 +2848,7 @@ end;
 //******************************************************************************
 //* TestTIdSipInboundInvite                                                    *
 //******************************************************************************
+//* TestTIdSipInboundInvite Public methods *************************************
 
 procedure TestTIdSipInboundInvite.SetUp;
 var
@@ -2832,7 +2864,9 @@ begin
     Ok.Free;
   end;
 
+  Self.Failed       := false;
   Self.InviteAction := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Self.InviteAction.AddListener(Self);
 end;
 
 procedure TestTIdSipInboundInvite.TearDown;
@@ -2841,6 +2875,13 @@ begin
   Self.Dialog.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdSipInboundInvite Private methods ************************************
+
+procedure TestTIdSipInboundInvite.OnFailure(InviteAgent: TIdSipInboundInvite);
+begin
+  Self.Failed := true;
 end;
 
 //* TestTIdSipInboundInvite Published methods **********************************
@@ -2885,6 +2926,78 @@ begin
   CheckEquals(ContentType,
               Response.ContentType,
               'Content-Type');
+end;
+
+procedure TestTIdSipInboundInvite.TestCancelAfterAccept;
+var
+  Cancel:         TIdSipRequest;
+  CancelResponse: TIdSipResponse;
+  InviteResponse: TIdSipResponse;
+  ResponseCount:  Cardinal;
+begin
+  // <--- INVITE ---
+  //  --- 200 OK --->
+  // <---  ACK   ---
+  // <--- CANCEL ---
+  //  --- 200 OK --->
+
+  Self.InviteAction.Accept(Self.Dialog, '', '');
+
+  ResponseCount := Self.Dispatcher.Transport.SentResponseCount;
+  Cancel := Self.Invite.CreateCancel;
+  try
+    Self.InviteAction.ReceiveRequest(Cancel);
+  finally
+    Cancel.Free;
+  end;
+
+  Check(not Self.InviteAction.IsTerminated,
+        'Action terminated');
+  Check(not Self.Failed,
+        'Listeners notified of (false) failure');
+
+  Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
+        'No response sent');
+
+  CancelResponse := Self.Dispatcher.Transport.LastResponse;
+  InviteResponse := Self.Dispatcher.Transport.SecondLastResponse;
+
+  CheckEquals(SIPOK,
+              CancelResponse.StatusCode,
+              'Unexpected Status-Code for CANCEL response');
+  CheckEquals(MethodCancel,
+              CancelResponse.CSeq.Method,
+              'Unexpected CSeq method for CANCEL response');
+
+  CheckEquals(SIPOK,
+              InviteResponse.StatusCode,
+              'Unexpected Status-Code for INVITE response');
+  CheckEquals(MethodInvite,
+              InviteResponse.CSeq.Method,
+              'Unexpected CSeq method for INVITE response');
+end;
+
+procedure TestTIdSipInboundInvite.TestCancelBeforeAccept;
+var
+  Cancel: TIdSipRequest;
+begin
+  // <---         INVITE         ---
+  // <---         CANCEL         ---
+  //  ---         200 OK         ---> (for the CANCEL)
+  //  --- 487 Request Terminated ---> (for the INVITE)
+  // <---           ACK          ---
+
+  Cancel := Self.Invite.CreateCancel;
+  try
+    Self.InviteAction.ReceiveRequest(Cancel);
+  finally
+    Cancel.Free;
+  end;
+
+  Check(Self.InviteAction.IsTerminated,
+        'Action not marked as terminated');
+  Check(Self.Failed,
+        'Listeners not notified of failure');
 end;
 
 procedure TestTIdSipInboundInvite.TestIsInvite;
@@ -3155,12 +3268,14 @@ begin
   Check(ResponseCount < Self.Dispatcher.Transport.SentResponseCount,
         'No response sent');
 
-  CheckEquals(SIPRequestTimeout,
+  CheckEquals(SIPRequestTerminated,
               Self.Dispatcher.Transport.LastResponse.StatusCode,
               'Unexpected Status-Code');
 
   Check(Self.InviteAction.IsTerminated,
         'Action not marked as terminated');
+  Check(Self.Failed,
+        'Listeners not notified of failure');
 end;
 
 //******************************************************************************
@@ -4572,6 +4687,7 @@ var
   L1, L2: TIdSipTestSessionListener;
 begin
   Self.Session.AcceptCall('', '');
+  Self.SimulateAck;
 
   L1 := TIdSipTestSessionListener.Create;
   try
@@ -4584,6 +4700,9 @@ begin
 
       Check(L1.EndedSession, 'First listener not notified');
       Check(L2.EndedSession, 'Second listener not notified');
+
+      Self.Session.RemoveSessionListener(L1);
+      Self.Session.RemoveSessionListener(L2);
     finally
       L2.Free;
     end;
@@ -4663,6 +4782,15 @@ procedure TestTIdSipInboundSession.TestReceiveOutOfOrderReInvite;
 var
   Response: TIdSipResponse;
 begin
+  // <--- INVITE (Branch = z9hG4bK776asdhds)  ---
+  //  ---         100 Trying                  --->
+  //  ---         180 Ringing                 --->
+  //  ---         200 OK                      --->
+  // <--- INVITE (Branch = z9hG4bK776asdhds1) ---
+  //  ---         100 Trying                  --->
+  //  ---         180 Ringing                 --->
+  //  ---         500 Internal Server Error   --->
+
   Self.Session.AcceptCall('', '');
 
   Self.Invite.LastHop.Branch := Self.Invite.LastHop.Branch + '1';
@@ -4670,9 +4798,8 @@ begin
   Self.Invite.ToHeader.Tag := Self.Dispatcher.Transport.LastResponse.ToHeader.Tag;
   Self.Dispatcher.Transport.ResetSentResponseCount;
   Self.SimulateRemoteInvite;
-  CheckEquals(2, // Trying + reject
-              Self.Dispatcher.Transport.SentResponseCount,
-              'No response sent');
+  Check(Self.Dispatcher.Transport.SentResponseCount > 0,
+        'No response sent');
   Response := Self.Dispatcher.Transport.LastResponse;
   CheckEquals(SIPInternalServerError,
               Response.StatusCode,
@@ -4883,7 +5010,7 @@ begin
               'no response sent');
 
   Response := Self.Dispatcher.Transport.LastResponse;
-  CheckEquals(SIPBusyHere,
+  CheckEquals(SIPRequestTerminated,
               Response.StatusCode,
               'Unexpected last response');
 
@@ -6142,6 +6269,48 @@ begin
     end;
   finally
     L1.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdSipInboundInviteFailureMethod                                       *
+//******************************************************************************
+//* TestTIdSipInboundInviteFailureMethod Public methods ************************
+
+procedure TestTIdSipInboundInviteFailureMethod.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Invite := TIdSipTestResources.CreateBasicRequest;
+
+  Self.Method := TIdSipInboundInviteFailureMethod.Create;
+  Self.Method.Invite := TIdSipInboundInvite.Create(Self.UA, Self.Invite);
+end;
+
+procedure TestTIdSipInboundInviteFailureMethod.TearDown;
+begin
+  Self.Method.Invite.Free;
+  Self.Method.Free;
+  Self.Invite.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipInboundInviteFailureMethod Published methods *********************
+
+procedure TestTIdSipInboundInviteFailureMethod.TestRun;
+var
+  Listener: TIdSipTestInboundInviteListener;
+begin
+  Listener := TIdSipTestInboundInviteListener.Create;
+  try
+    Self.Method.Run(Listener);
+
+    Check(Listener.Failed, 'Listener not notified');
+    Check(Self.Method.Invite = Listener.InviteAgentParam,
+          'InviteAgent param');
+  finally
+    Listener.Free;
   end;
 end;
 

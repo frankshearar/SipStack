@@ -135,6 +135,21 @@ type
     property Changed: Boolean read fChanged;
   end;
 
+  TIdSipTestInboundInviteListener = class(TIDSipTestActionListener,
+                                          IIdSipInboundInviteListener)
+  private
+    fFailed:            Boolean;
+    fInviteAgentParam:  TIdSipInboundInvite;
+
+    procedure OnFailure(InviteAgent: TIdSipInboundInvite);
+  public
+    constructor Create; override;
+
+    property Failed:           Boolean             read fFailed;
+    property InviteAgentParam: TIdSipInboundInvite read fInviteAgentParam;
+  end;
+
+
   TIdSipTestInviteListener = class(TIdSipTestActionListener,
                                    IIdSipInviteListener)
   private
@@ -658,6 +673,28 @@ begin
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create('TIdSipTestObserver.OnChanged');
 end;
+
+//******************************************************************************
+//* TIdSipTestInboundInviteListener                                            *
+//******************************************************************************
+//* TIdSipTestInboundInviteListener Public methods *****************************
+
+constructor TIdSipTestInboundInviteListener.Create;
+begin
+  inherited Create;
+
+  Self.fFailed           := false;
+  Self.fInviteAgentParam := nil;
+end;
+
+//* TIdSipTestInboundInviteListener Private methods ****************************
+
+procedure TIdSipTestInboundInviteListener.OnFailure(InviteAgent: TIdSipInboundInvite);
+begin
+  Self.fFailed      := true;
+  fInviteAgentParam := InviteAgent;
+end;
+
 
 //******************************************************************************
 //* TIdSipTestInviteListener                                                   *
