@@ -3,8 +3,8 @@ unit TestFrameworkSip;
 interface
 
 uses
-  IdURI, IdSipInterfacedObject, IdSipMessage, IdSipTransaction, IdSipTransport,
-  TestFrameworkEx;
+  IdURI, IdSipInterfacedObject, IdSipMessage, IdSipCore, IdSipTransaction,
+  IdSipTransport, TestFrameworkEx;
 
 type
   TTestCaseSip = class(TThreadingTestCase)
@@ -23,6 +23,23 @@ type
 
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
+  end;
+
+  TIdSipTestSessionListener = class(TIdSipInterfacedObject, IIdSipSessionListener)
+  private
+    fEndedSession:       Boolean;
+    fEstablishedSession: Boolean;
+    fNewSession:         Boolean;
+  public
+    constructor Create;
+
+    procedure OnEndedSession(const Session: TIdSipSession);
+    procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnNewSession(const Session: TIdSipSession);
+
+    property EndedSession:       Boolean read fEndedSession;
+    property EstablishedSession: Boolean read fEstablishedSession;
+    property NewSession:         Boolean read fNewSession;
   end;
 
   TIdSipTestTransactionListener = class(TIdSipInterfacedObject, IIdSipTransactionListener)
@@ -101,6 +118,35 @@ end;
 procedure TIdSipTestMessageListener.OnReceiveResponse(const Response: TIdSipResponse);
 begin
   Self.fReceivedResponse := true;
+end;
+
+//******************************************************************************
+//* TIdSipTestSessionListener                                                  *
+//******************************************************************************
+//* TIdSipTestSessionListener Public methods ***********************************
+
+constructor TIdSipTestSessionListener.Create;
+begin
+  inherited Create;
+
+  Self.fNewSession         := false;
+  Self.fEstablishedSession := false;
+  Self.fEndedSession       := false;
+end;
+
+procedure TIdSipTestSessionListener.OnEndedSession(const Session: TIdSipSession);
+begin
+  Self.fEndedSession := true;
+end;
+
+procedure TIdSipTestSessionListener.OnEstablishedSession(const Session: TIdSipSession);
+begin
+  Self.fEstablishedSession := true;
+end;
+
+procedure TIdSipTestSessionListener.OnNewSession(const Session: TIdSipSession);
+begin
+  Self.fNewSession := true;
 end;
 
 //******************************************************************************

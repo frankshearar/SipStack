@@ -26,19 +26,12 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestCreateBye;
-    procedure TestCreateCancel;
     procedure TestCreateFromAnotherDialog;
-    procedure TestCreateRequest;
-    procedure TestCreateRequestRouteSetEmpty;
-    procedure TestCreateRequestRouteSetWithLrParam;
-    procedure TestCreateRequestRouteSetWithoutLrParam;
     procedure TestCreateWithStrings;
     procedure TestDialogID;
     procedure TestEarlyState;
     procedure TestEmptyRemoteTargetAfterResponse;
     procedure TestIsSecure;
-    procedure TestLocalSequenceNoMonotonicallyIncreases;
     procedure TestOnEstablishedFired;
     procedure TestRemoteTarget;
   end;
@@ -152,30 +145,6 @@ end;
 
 //* TestTIdSipDialog Published methods *****************************************
 
-procedure TestTIdSipDialog.TestCreateBye;
-var
-  Bye: TIdSipRequest;
-begin
-  Bye := Self.Dlg.CreateBye;
-  try
-    CheckEquals(MethodBye, Bye.Method, 'Unexpected method');
-  finally
-    Bye.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestCreateCancel;
-var
-  Cancel: TIdSipRequest;
-begin
-  Cancel := Self.Dlg.CreateCancel;
-  try
-    CheckEquals(MethodCancel, Cancel.Method, 'Unexpected method');
-  finally
-    Cancel.Free;
-  end;
-end;
-
 procedure TestTIdSipDialog.TestCreateFromAnotherDialog;
 var
   D: TIdSipDialog;
@@ -205,113 +174,6 @@ begin
           'RouteSet');
   finally
     D.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestCreateRequest;
-var
-  R: TIdSipRequest;
-begin
-  R := Self.Dlg.CreateRequest;
-  try
-    CheckEquals(Self.Dlg.RemoteURI,    R.ToHeader.Address, 'To URI');
-    CheckEquals(Self.Dlg.ID.RemoteTag, R.ToHeader.Tag,     'To tag');
-    CheckEquals(Self.Dlg.LocalURI,     R.From.Address,     'From URI');
-    CheckEquals(Self.Dlg.ID.LocalTag,  R.From.Tag,         'From tag');
-    CheckEquals(Self.Dlg.ID.CallID,    R.CallID,           'Call-ID');
-
-    // we should somehow check that CSeq.SequenceNo has been (randomly) generated. How?
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestCreateRequestRouteSetEmpty;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.Res.StatusCode := SIPTrying;
-  Self.Dlg.HandleMessage(Self.Res);
-
-  Self.Dlg.RouteSet.Clear;
-
-  R := Self.Dlg.CreateRequest;
-  try
-    CheckEquals(Self.Dlg.RemoteTarget,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Check(Routes.IsEmpty, 'Route headers are present');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestCreateRequestRouteSetWithLrParam;
-var
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.Dlg.RouteSet.Clear;
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server10.biloxi.com;lr>';
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server9.biloxi.com>';
-  Self.Dlg.RouteSet.Add(RouteHeader).Value := '<sip:server8.biloxi.com;lr>';
-
-  R := Self.Dlg.CreateRequest;
-  try
-    CheckEquals(Self.Dlg.RemoteTarget,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      Check(Routes.IsEqualTo(Self.Dlg.RouteSet),
-            'Route headers not set to the Dialog route set');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestCreateRequestRouteSetWithoutLrParam;
-var
-  I:      Integer;
-  R:      TIdSipRequest;
-  Routes: TIdSipHeadersFilter;
-begin
-  Self.Res.StatusCode := SIPTrying;
-  Self.Dlg.HandleMessage(Self.Res);
-
-  R := Self.Dlg.CreateRequest;
-  try
-    CheckEquals((Self.Dlg.RouteSet.Items[0] as TIdSipRouteHeader).Address,
-                R.RequestUri,
-                'Request-URI');
-
-    Routes := TIdSipHeadersFilter.Create(R.Headers, RouteHeader);
-    try
-      // These are the manipulations the dialog's meant to perform on its route
-      // set. Just so you know we're not fiddling our test data.
-      Self.Dlg.RouteSet.Delete(0);
-      Self.Dlg.RouteSet.Add(RouteHeader).Value := '<' + Self.Dlg.RemoteURI.GetFullURI + '>';
-
-      for I := 0 to Routes.Count - 1 do
-        CheckEquals(Self.Dlg.RouteSet.Items[I].Value,
-                    Routes.Items[I].Value,
-                    'Route ' + IntToStr(I + 1) + ' value');
-    finally
-      Routes.Free;
-    end;
-  finally
-    R.Free;
   end;
 end;
 
@@ -438,28 +300,6 @@ begin
     Check(not D.IsSecure, 'Not set secure');
   finally
     D.Free;
-  end;
-end;
-
-procedure TestTIdSipDialog.TestLocalSequenceNoMonotonicallyIncreases;
-var
-  BaseSeqNo: Cardinal;
-  R:         TIdSipRequest;
-begin
-  R := Self.Dlg.CreateRequest;
-  try
-     BaseSeqNo := R.CSeq.SequenceNo;
-  finally
-    R.Free;
-  end;
-
-  R := Self.Dlg.CreateRequest;
-  try
-    CheckEquals(BaseSeqNo + 1,
-                R.CSeq.SequenceNo,
-                'Not monotonically increasing by one');
-  finally
-    R.Free;
   end;
 end;
 

@@ -38,17 +38,17 @@ type
   IIdSipSessionListener = interface
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnNewSession(const Session: TIdSipSession);
-    procedure OnSessionEstablished(const Session: TIdSipSession);
-    procedure OnSessionEnded(const Session: TIdSipSession);
+    procedure OnEstablishedSession(const Session: TIdSipSession);
+    procedure OnEndedSession(const Session: TIdSipSession);
   end;
 
   TIdSipAbstractCore = class(TIdSipInterfacedObject,
                              IIdSipMessageListener,
                              IIdSipTransactionListener)
   private
-    fDispatcher:        TIdSipTransactionDispatcher;
-    fHostName:          String;
-    fOnTransactionFail: TIdSipFailEvent;
+    fDispatcher:         TIdSipTransactionDispatcher;
+    fHostName:           String;
+    fOnTransactionFail:  TIdSipFailEvent;
     procedure OnReceiveRequest(const Request: TIdSipRequest); overload;
     procedure OnReceiveResponse(const Response: TIdSipResponse); overload;
     procedure OnFail(const Transaction: TIdSipTransaction;
@@ -64,16 +64,17 @@ type
   public
     constructor Create; virtual;
 
-    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; virtual; abstract;
+    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; overload; virtual; abstract;
+    function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
     function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; virtual; abstract;
+    function  NextCallID: String;
     procedure ReceiveRequest(const Request: TIdSipRequest;
                              const Transaction: TIdSipTransaction;
                              const Transport: TIdSipTransport); virtual; abstract;
     procedure ReceiveResponse(const Response: TIdSipResponse;
                               const Transaction: TIdSipTransaction;
                               const Transport: TIdSipTransport); virtual; abstract;
-    function  NextCallID: String;
 
     property Dispatcher:        TIdSipTransactionDispatcher read fDispatcher write SetDispatcher;
     property HostName:          String                      read fHostName write fHostName;
@@ -94,6 +95,8 @@ type
     fFrom:                TIdSipFromHeader;
     fLastBranch:          Cardinal;
     fUserAgentName:       String;
+    SessionListenerLock:  TCriticalSection;
+    SessionListeners:     TList;
     SessionLock:          TCriticalSection;
     Sessions:             TObjectList;
 
@@ -102,6 +105,7 @@ type
     function  AddSession(const Invite: TIdSipRequest): TIdSipSession; overload;
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
+    procedure NotifyOfNewSession(const Session: TIdSipSession);
     procedure RejectBadRequest(const Request: TIdSipRequest;
                                const Reason: String;
                                const Transaction: TIdSipTransaction);
@@ -116,8 +120,6 @@ type
     procedure RejectRequestUnknownContentType(const Request: TIdSipRequest;
                                               const Transaction: TIdSipTransaction);
     procedure ResetLastBranch;
-    procedure SendRinging(const Request: TIdSipRequest;
-                          const Transaction: TIdSipTransaction);
     procedure SetContact(const Value: TIdSipContactHeader);
     procedure SetFrom(const Value: TIdSipFromHeader);
 
@@ -128,18 +130,19 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
-    function  AcceptCall(const Request: TIdSipRequest;
-                         const Transaction: TIdSipTransaction;
-                         const Transport: TIdSipTransport): TIdSipSession;
     procedure AddAllowedLanguage(const LanguageID: String);
     procedure AddAllowedMethod(const Method: String);
     procedure AddAllowedScheme(const Scheme: String);
+    procedure AddSessionListener(const Listener: IIdSipSessionListener);
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
     function  Call(const Dest: TIdSipToHeader): TIdSipSession;
+    function  CreateBye(const Dialog: TIdSipDialog): TIdSipRequest;
+    function  CreateCancel(const Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
-    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
+    function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(const Request: TIdSipRequest;
                              const ResponseCode: Cardinal): TIdSipResponse; override;
     procedure ReceiveRequest(const Request: TIdSipRequest;
@@ -160,6 +163,7 @@ type
                             const Reason: Cardinal;
                             const Transaction: TIdSipTransaction;
                             const Transport: TIdSipTransport);
+    procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
     function  SessionCount: Integer;
 
     property Contact:       TIdSipContactHeader read GetContact write SetContact;
@@ -169,13 +173,15 @@ type
 
   TIdSipSession = class(TIdSipInterfacedObject, IIdSipTransactionListener)
   private
-    fCore:   TIdSipUserAgentCore;
-    fDialog: TIdSipDialog;
-    fInvite: TIdSipRequest;
+    fCore:               TIdSipUserAgentCore;
+    fDialog:             TIdSipDialog;
+    fInvite:             TIdSipRequest;
+    SessionListenerLock: TCriticalSection;
+    SessionListeners:    TList;
 
     procedure CreateInternal(const UA: TIdSipUserAgentCore;
-                             const Invite: TIdSipRequest;
-                             const InitialTransaction: TIdSipTransaction);
+                             const Invite: TIdSipRequest);
+    procedure NotifyOfEstablishedSession;
     procedure OnFail(const Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(const Request: TIdSipRequest;
@@ -197,10 +203,14 @@ type
     destructor  Destroy; override;
 
     procedure AcceptCall(const Invite: TIdSipRequest;
+                         const Transaction: TIdSipTransaction;
                          const Transport: TIdSipTransport);
+    procedure AddSessionListener(const Listener: IIdSipSessionListener);
     procedure Cancel;
-    procedure HangUp;
+    procedure Call(const Dest: TIdSipToHeader);
+    procedure Terminate;
     procedure Modify;
+    procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
 
     property Dialog: TIdSipDialog read fDialog;
   end;
@@ -222,6 +232,7 @@ uses
 
 constructor TIdSipAbstractCore.Create;
 begin
+  inherited Create;
 end;
 
 function TIdSipAbstractCore.NextCallID: String;
@@ -281,9 +292,11 @@ constructor TIdSipUserAgentCore.Create;
 begin
   inherited Create;
 
-  Self.BranchLock  := TCriticalSection.Create;
-  Self.SessionLock := TCriticalSection.Create;
-  Self.Sessions    := TObjectList.Create;
+  Self.BranchLock          := TCriticalSection.Create;
+  Self.SessionListenerLock := TCriticalSection.Create;
+  Self.SessionListeners    := TList.Create;
+  Self.SessionLock         := TCriticalSection.Create;
+  Self.Sessions            := TObjectList.Create;
 
   Self.ResetLastBranch;
   Self.fAllowedLanguageList := TStringList.Create;
@@ -308,17 +321,11 @@ begin
   Self.From.Free;
   Self.Sessions.Free;
   Self.SessionLock.Free;
+  Self.SessionListeners.Free;
+  Self.SessionListenerLock.Free;
   Self.BranchLock.Free;
 
   inherited Destroy;
-end;
-
-function TIdSipUserAgentCore.AcceptCall(const Request: TIdSipRequest;
-                                        const Transaction: TIdSipTransaction;
-                                        const Transport: TIdSipTransport): TIdSipSession;
-begin
-  Result := Self.AddSession(Request, Transaction);
-  Result.AcceptCall(Request, Transport);
 end;
 
 procedure TIdSipUserAgentCore.AddAllowedLanguage(const LanguageID: String);
@@ -348,6 +355,16 @@ begin
     Self.AllowedSchemeList.Add(Scheme);
 end;
 
+procedure TIdSipUserAgentCore.AddSessionListener(const Listener: IIdSipSessionListener);
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    Self.SessionListeners.Add(Pointer(Listener));
+  finally
+    Self.SessionListenerLock.Release;
+  end;
+end;
+
 function TIdSipUserAgentCore.AllowedLanguages: String;
 begin
   Result := Self.AllowedLanguageList.CommaText;
@@ -370,8 +387,35 @@ begin
   Invite := Self.CreateInvite(Dest);
   try
     Result := Self.AddSession(Invite);
+    Result.Call(Dest);
   finally
     Invite.Free;
+  end;
+end;
+
+function TIdSipUserAgentCore.CreateBye(const Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  try
+    Result := Self.CreateRequest(Dialog);
+    Result.Method      := MethodBye;
+    Result.CSeq.Method := Result.Method;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipUserAgentCore.CreateCancel(const Dialog: TIdSipDialog): TIdSipRequest;
+begin
+  try
+    Result := Self.CreateRequest(Dialog);
+    Result.Method      := MethodCancel;
+    Result.CSeq.Method := Result.Method;
+  except
+    FreeAndNil(Result);
+
+    raise;
   end;
 end;
 
@@ -405,7 +449,59 @@ begin
     if (Self.UserAgentName <> '') then
       Result.AddHeader(UserAgentHeader).Value := Self.UserAgentName;
   except
-    Result.Free;
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+function TIdSipUserAgentCore.CreateRequest(const Dialog: TIdSipDialog): TIdSipRequest;
+var
+  FirstRoute: TIdSipRouteHeader;
+  I:          Integer;
+begin
+  Result := TIdSipRequest.Create;
+  try
+    Result.ToHeader.Address := Dialog.RemoteURI;
+    Result.ToHeader.Tag     := Dialog.ID.RemoteTag;
+    Result.From.Address     := Dialog.LocalURI;
+    Result.From.Tag         := Dialog.ID.LocalTag;
+    Result.CallID           := Dialog.ID.CallID;
+
+    Result.CSeq.SequenceNo := Dialog.LocalSequenceNo;
+    Result.CSeq.Method     := Result.Method;
+
+    Dialog.IncLocalSequenceNo;
+
+    if (Dialog.RouteSet.IsEmpty) then begin
+      Result.RequestUri := Dialog.RemoteTarget;
+    end
+    else begin
+      FirstRoute := Dialog.RouteSet.Items[0] as TIdSipRouteHeader;
+
+      if FirstRoute.IsLooseRoutable then begin
+        Result.RequestUri := Dialog.RemoteTarget;
+
+        for I := 0 to Dialog.RouteSet.Count - 1 do
+          Result.AddHeader(RouteHeader).Assign(Dialog.RouteSet.Items[I]);
+      end
+      else begin
+        Result.RequestUri := FirstRoute.Address;
+
+        // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
+        // remember?
+        // No, we can't just Assign() here because (a) we're not adding ALL
+        // the headers, and (b) we're adding Route headers, and RouteSet
+        // contains Record-Route headers.
+        for I := 1 to Dialog.RouteSet.Count - 1 do begin
+          Result.AddHeader(RouteHeader).Value := Dialog.RouteSet.Items[I].Value
+        end;
+
+        (Result.AddHeader(RouteHeader) as TIdSipRouteHeader).Address := Dialog.RemoteURI;
+      end;
+    end;
+  except
+    FreeAndNil(Result);
 
     raise;
   end;
@@ -472,8 +568,6 @@ end;
 procedure TIdSipUserAgentCore.ReceiveRequest(const Request: TIdSipRequest;
                                              const Transaction: TIdSipTransaction;
                                              const Transport: TIdSipTransport);
-var
-  Session: TIdSipSession;
 begin
   // cf RFC 3261 section 8.2
   // inspect the method - 8.2.1
@@ -525,7 +619,7 @@ begin
     if not Request.HasHeader(ContactHeaderFull) then
       Self.RejectBadRequest(Request, MissingContactHeader, Transaction)
     else begin
-      Session := Self.AddSession(Request, Transaction);
+      Self.AddSession(Request, Transaction);
     end;
   end
   else if Request.IsBye then
@@ -611,9 +705,19 @@ var
 begin
   Response := Self.CreateResponse(Request, Reason);
   try
-    Transaction.SendResponse(Response, Transport);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+procedure TIdSipUserAgentCore.RemoveSessionListener(const Listener: IIdSipSessionListener);
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    Self.SessionListeners.Remove(Pointer(Listener));
+  finally
+    Self.SessionListenerLock.Release;
   end;
 end;
 
@@ -637,6 +741,7 @@ begin
     Result := TIdSipSession.Create(Self, Invite, Transaction);
     try
       Self.Sessions.Add(Result);
+      Self.NotifyOfNewSession(Result);
     except
       FreeAndNil(Result);
 
@@ -654,6 +759,7 @@ begin
     Result := TIdSipSession.Create(Self, Invite);
     try
       Self.Sessions.Add(Result);
+      Self.NotifyOfNewSession(Result);
     except
       FreeAndNil(Result);
 
@@ -680,6 +786,19 @@ begin
   Result := fFrom;
 end;
 
+procedure TIdSipUserAgentCore.NotifyOfNewSession(const Session: TIdSipSession);
+var
+  I: Integer;
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    for I := 0 to Self.SessionListeners.Count - 1 do
+      IIdSipSessionListener(Self.SessionListeners[I]).OnNewSession(Session);
+  finally
+    Self.SessionListenerLock.Release;
+  end;
+end;
+
 procedure TIdSipUserAgentCore.RejectBadRequest(const Request: TIdSipRequest;
                                                const Reason: String;
                                                const Transaction: TIdSipTransaction);
@@ -690,7 +809,7 @@ begin
   try
     Response.StatusText := Reason;
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -705,7 +824,7 @@ begin
   try
     Response.AddHeader(UnsupportedHeader).Value := Request.FirstHeader(RequireHeader).Value;
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -720,7 +839,7 @@ begin
   try
     Response.AddHeader(AllowHeader).Value := Self.AllowedMethods;
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -735,7 +854,7 @@ begin
   try
     Response.AddHeader(AcceptEncodingHeader).Value := '';
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -750,7 +869,7 @@ begin
   try
     Response.AddHeader(AcceptLanguageHeader).Value := Self.AllowedLanguages;
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -765,7 +884,7 @@ begin
   try
     Response.AddHeader(AcceptHeader).Value := SdpMimeType;
 
-    Transaction.SendResponse(Response, nil);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
   end;
@@ -778,19 +897,6 @@ begin
     Self.fLastBranch := 0;
   finally
     Self.BranchLock.Release;
-  end;
-end;
-
-procedure TIdSipUserAgentCore.SendRinging(const Request: TIdSipRequest;
-                                          const Transaction: TIdSipTransaction);
-var
-  Response: TIdSipResponse;
-begin
-  Response := Self.CreateResponse(Request, SIPRinging);
-  try
-    Transaction.SendResponse(Response, nil);
-  finally
-    Response.Free;
   end;
 end;
 
@@ -823,9 +929,7 @@ constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
 begin
   inherited Create;
 
-  Self.CreateInternal(UA,
-                      Invite,
-                      UA.Dispatcher.AddClientTransaction(Invite, nil));
+  Self.CreateInternal(UA, Invite);
 end;
 
 constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
@@ -834,19 +938,22 @@ constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore;
 begin
   inherited Create;
 
-  Self.CreateInternal(UA,
-                      Invite,
-                      InitialTransaction);
+  Self.CreateInternal(UA, Invite);
+
+  InitialTransaction.AddTransactionListener(Self);
 end;
 
 destructor TIdSipSession.Destroy;
 begin
+  Self.SessionListeners.Free;
+  Self.SessionListenerLock.Free;
   Self.Invite.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipSession.AcceptCall(const Invite: TIdSipRequest;
+                                   const Transaction: TIdSipTransaction;
                                    const Transport: TIdSipTransport);
 var
   ID:       TIdSipDialogID;
@@ -871,6 +978,7 @@ begin
                                          Invite.FirstContact.Address,
                                          Transport.IsSecure and (Invite.HasSipsUri),
                                          RouteSet);
+          Self.NotifyOfEstablishedSession;                               
         finally
           RouteSet.Free;
         end;
@@ -882,9 +990,19 @@ begin
     Self.Dialog.HandleMessage(Invite);
     Self.Dialog.HandleMessage(Response);
 
-    Self.Core.Dispatcher.SendToTransaction(Response);
+    Transaction.SendResponse(Response);
   finally
     Response.Free;
+  end;
+end;
+
+procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    Self.SessionListeners.Add(Pointer(Listener));
+  finally
+    Self.SessionListenerLock.Release;
   end;
 end;
 
@@ -892,13 +1010,25 @@ procedure TIdSipSession.Cancel;
 begin
 end;
 
-procedure TIdSipSession.HangUp;
+procedure TIdSipSession.Call(const Dest: TIdSipToHeader);
 var
-  Bye: TIdSipRequest;
+  Tran: TIdSipTransaction;
 begin
-  Bye := Self.Dialog.CreateBye;
+  Tran := Self.Core.Dispatcher.AddClientTransaction(Self.Invite);
+  Tran.AddTransactionListener(Self);
+  Tran.SendRequest;
+end;
+
+procedure TIdSipSession.Terminate;
+var
+  Bye:        TIdSipRequest;
+  ClientTran: TIdSipTransaction;
+begin
+  Bye := Self.Core.CreateBye(Self.Dialog);
   try
-    Self.Core.Dispatcher.SendToTransaction(Bye);
+    Bye.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP ' + Self.Core.HostName + ';' + BranchParam + '=' + BranchMagicCookie + Self.Core.NextBranch;
+    ClientTran := Self.Core.Dispatcher.AddClientTransaction(Bye);
+    ClientTran.SendRequest;
   finally
     Bye.Free;
   end;
@@ -908,17 +1038,40 @@ procedure TIdSipSession.Modify;
 begin
 end;
 
+procedure TIdSipSession.RemoveSessionListener(const Listener: IIdSipSessionListener);
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    Self.SessionListeners.Remove(Pointer(Listener));
+  finally
+    Self.SessionListenerLock.Release;
+  end;
+end;
+
 //* TIdSipSession Private methods **********************************************
 
 procedure TIdSipSession.CreateInternal(const UA: TIdSipUserAgentCore;
-                                       const Invite: TIdSipRequest;
-                                       const InitialTransaction: TIdSipTransaction);
+                                       const Invite: TIdSipRequest);
 begin
   Self.fCore := UA;
   Self.fInvite := TIdSipRequest.Create;
   Self.Invite.Assign(Invite);
 
-  InitialTransaction.AddTransactionListener(Self);
+  Self.SessionListenerLock := TCriticalSection.Create;
+  Self.SessionListeners    := TList.Create;
+end;
+
+procedure TIdSipSession.NotifyOfEstablishedSession;
+var
+  I: Integer;
+begin
+  Self.SessionListenerLock.Acquire;
+  try
+    for I := 0 to Self.SessionListeners.Count - 1 do
+      IIdSipSessionListener(Self.SessionListeners[I]).OnEstablishedSession(Self);
+  finally
+    Self.SessionListenerLock.Release;
+  end;
 end;
 
 procedure TIdSipSession.OnFail(const Transaction: TIdSipTransaction;
@@ -954,6 +1107,7 @@ begin
                                        Response.FirstContact.Address,
                                        Transport.IsSecure and Invite.FirstContact.HasSipsUri,
                                        RouteSet);
+        Self.NotifyOfEstablishedSession;
       finally
         RouteSet.Free;
       end;

@@ -17,7 +17,7 @@ type
     Transport: TIdSipTcpTransport;
     UA:        TIdSipUserAgentCore;
 
-    procedure OnInvite(Sender: TObject; const Request: TIdSipRequest);
+//    procedure OnInvite(Sender: TObject; const Request: TIdSipRequest);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -86,14 +86,14 @@ begin
 end;
 
 //* TrnidSpike Private methods *************************************************
-
+{
 procedure TrnidSpike.OnInvite(Sender: TObject; const Request: TIdSipRequest);
 begin
   Self.Log.Text := Self.Log.Text + Request.AsString;
 
 //  Self.UA.AcceptCall(Request, Self.Transport);
 end;
-
+}
 procedure TrnidSpike.InviteSelfClick(Sender: TObject);
 var
   Local: TIdSipToHeader;

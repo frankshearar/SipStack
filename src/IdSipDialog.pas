@@ -42,7 +42,6 @@ type
     procedure SetIsSecure(const Value: Boolean);
   protected
     procedure DoOnEstablished;
-    procedure IncLocalSequenceNo;
     procedure SetLocalSequenceNo(const Value: Cardinal);
     procedure SetRemoteSequenceNo(const Value: Cardinal);
     procedure SetRemoteTarget(const Value: TIdURI);
@@ -70,11 +69,9 @@ type
     constructor Create(const Dialog: TIdSipDialog); overload;
     destructor  Destroy; override;
 
-    function  CreateBye: TIdSipRequest;
-    function  CreateCancel: TIdSipRequest;
-    function  CreateRequest: TIdSipRequest; virtual;
     procedure HandleMessage(const Request: TIdSipRequest); overload; virtual;
     procedure HandleMessage(const Response: TIdSipResponse); overload; virtual;
+    procedure IncLocalSequenceNo;
     function  IsNull: Boolean; virtual;
 
     property ID:               TIdSipDialogID read fID;
@@ -191,82 +188,6 @@ begin
   inherited Destroy;
 end;
 
-function TIdSipDialog.CreateBye: TIdSipRequest;
-begin
-  try
-    Result := Self.CreateRequest;
-    Result.Method := MethodBye;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipDialog.CreateCancel: TIdSipRequest;
-begin
-  try
-    Result := Self.CreateRequest;
-    Result.Method      := MethodCancel;
-    Result.CSeq.Method := MethodInvite;
-  except
-    FreeAndNil(Result);
-
-    raise;
-  end;
-end;
-
-function TIdSipDialog.CreateRequest: TIdSipRequest;
-var
-  FirstRoute: TIdSipRouteHeader;
-  I:          Integer;
-begin
-  Result := TIdSipRequest.Create;
-  try
-    Result.ToHeader.Address := Self.RemoteURI;
-    Result.ToHeader.Tag     := Self.ID.RemoteTag;
-    Result.From.Address     := Self.LocalURI;
-    Result.From.Tag         := Self.ID.LocalTag;
-    Result.CallID           := Self.ID.CallID;
-
-    Result.CSeq.SequenceNo := Self.LocalSequenceNo;
-    Result.CSeq.Method     := Result.Method;
-
-    Self.IncLocalSequenceNo;
-
-    if (Self.RouteSet.IsEmpty) then begin
-      Result.RequestUri := Self.RemoteTarget;
-    end
-    else begin
-      FirstRoute := Self.RouteSet.Items[0] as TIdSipRouteHeader;
-
-      if FirstRoute.IsLooseRoutable then begin
-        Result.RequestUri := Self.RemoteTarget;
-
-        for I := 0 to Self.RouteSet.Count - 1 do
-          Result.AddHeader(RouteHeader).Assign(Self.RouteSet.Items[I]);
-      end
-      else begin
-        Result.RequestUri := FirstRoute.Address;
-
-        // Yes, from 1 to count - 1. We use the 1st entry as the Request-URI,
-        // remember?
-        // No, we can't just Assign() here because (a) we're not adding ALL
-        // the headers, and (b) we're adding Route headers, and RouteSet
-        // contains Record-Route headers.
-        for I := 1 to Self.RouteSet.Count - 1 do begin
-          Result.AddHeader(RouteHeader).Value := Self.RouteSet.Items[I].Value
-        end;
-
-        (Result.AddHeader(RouteHeader) as TIdSipRouteHeader).Address := Self.RemoteURI;
-      end;
-    end;
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
 procedure TIdSipDialog.HandleMessage(const Request: TIdSipRequest);
 begin
   if Request.IsInvite then
@@ -292,6 +213,11 @@ begin
     Self.SetIsEarly(true);
 end;
 
+procedure TIdSipDialog.IncLocalSequenceNo;
+begin
+  Self.SetLocalSequenceNo(Self.LocalSequenceNo + 1);
+end;
+
 function TIdSipDialog.IsNull: Boolean;
 begin
   Result := false;
@@ -303,11 +229,6 @@ procedure TIdSipDialog.DoOnEstablished;
 begin
   if Assigned(Self.OnEstablished) then
     Self.OnEstablished(Self);
-end;
-
-procedure TIdSipDialog.IncLocalSequenceNo;
-begin
-  Self.SetLocalSequenceNo(Self.LocalSequenceNo + 1);
 end;
 
 procedure TIdSipDialog.SetLocalSequenceNo(const Value: Cardinal);
