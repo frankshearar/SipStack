@@ -42,6 +42,7 @@ type
     procedure TestFirstContact;
     procedure TestFirstExpires;
     procedure TestFirstHeader;
+    procedure TestFirstMinExpires;
     procedure TestHasExpiry;
     procedure TestHeaderCount;
     procedure TestLastHop;
@@ -423,6 +424,21 @@ begin
   H := Self.Msg.AddHeader(RouteHeader);
   Check(H <> Self.Msg.FirstHeader(RouteHeader),
         'Wrong result returned for first Route of two');
+end;
+
+procedure TestTIdSipMessage.TestFirstMinExpires;
+var
+  E: TIdSipHeader;
+begin
+  Self.Msg.ClearHeaders;
+
+  CheckNotNull(Self.Msg.FirstMinExpires, 'Min-Expires not present');
+  CheckEquals(1, Self.Msg.HeaderCount, 'Min-Expires not auto-added');
+
+  E := Self.Msg.FirstHeader(MinExpiresHeader);
+  Self.Msg.AddHeader(MinExpiresHeader);
+
+  Check(E = Self.Msg.FirstMinExpires, 'Wrong Min-Expires');
 end;
 
 procedure TestTIdSipMessage.TestHasExpiry;

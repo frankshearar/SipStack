@@ -60,6 +60,7 @@ type
     function  FirstContact: TIdSipContactHeader;
     function  FirstExpires: TIdSipNumericHeader;
     function  FirstHeader(const HeaderName: String): TIdSipHeader;
+    function  FirstMinExpires: TIdSipNumericHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
     function  HeaderCount: Integer;
@@ -435,6 +436,11 @@ end;
 function TIdSipMessage.FirstHeader(const HeaderName: String): TIdSipHeader;
 begin
   Result := Self.Headers[HeaderName];
+end;
+
+function TIdSipMessage.FirstMinExpires: TIdSipNumericHeader;
+begin
+  Result := Self.FirstHeader(MinExpiresHeader) as TIdSipNumericHeader;
 end;
 
 function TIdSipMessage.HasExpiry: Boolean;
