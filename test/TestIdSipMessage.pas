@@ -126,6 +126,8 @@ type
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
+    procedure TestInSameDialogAsRequest;
+    procedure TestInSameDialogAsResponse;
     procedure TestIsMalformedCSeqMethod;
     procedure TestIsMalformedSipVersion;
     procedure TestIsMalformedMethod;
@@ -204,6 +206,8 @@ type
     procedure TestInResponseToSipsRequestUri;
     procedure TestInResponseToTryingWithTimestamps;
     procedure TestInResponseToWithContact;
+    procedure TestInSameDialogAsRequest;
+    procedure TestInSameDialogAsResponse;
     procedure TestIsAuthenticationChallenge;
     procedure TestIsMalformedStatusCode;
     procedure TestIsFinal;
@@ -1585,6 +1589,60 @@ begin
   Check(Self.Request.HasSipsUri, 'sips URI');
 end;
 
+procedure TestTIdSipRequest.TestInSameDialogAsRequest;
+var
+  Req: TIdSipRequest;
+begin
+  Req := TIdSipRequest.Create;
+  try
+    Req.Assign(Self.Request);
+    Check(Req.InSameDialogAs(Self.Request),
+          'Req not in same dialog as Self.Request');
+    Check(Self.Request.InSameDialogAs(Req),
+          'Self.Request not in same dialog as Req');
+
+    Req.From.Tag := Self.Request.From.Tag + '1';
+    Check(not Self.Request.InSameDialogAs(Req),
+          'From tag differs');
+
+     Req.From.Tag := Self.Request.From.Tag;
+     Req.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+     Check(not Self.Request.InSameDialogAs(Req),
+           'To tag differs');
+
+     Req.ToHeader.Tag := Self.Request.ToHeader.Tag;
+     Req.CallID := '1' + Self.Request.CallID;
+     Check(not Self.Request.InSameDialogAs(Req),
+           'Call-ID tag differs');
+  finally
+    Req.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestInSameDialogAsResponse;
+begin
+  Self.Response.CallID       := Self.Request.CallID;
+  Self.Response.From.Tag     := Self.Request.From.Tag;
+  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag;
+
+  Check(Self.Request.InSameDialogAs(Self.Response),
+        'Response not in same dialog as request');
+
+  Self.Response.CallID := '1' + Self.Request.CallID;
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'Call-ID differs');
+
+  Self.Response.CallID   := Self.Request.CallID;
+  Self.Response.From.Tag := Self.Request.From.Tag + '1';
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'From tag differs');
+
+  Self.Response.From.Tag     := Self.Request.From.Tag;
+  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag + '1';
+  Check(not Self.Request.InSameDialogAs(Self.Response),
+        'To tag differs');
+end;
+
 procedure TestTIdSipRequest.TestIsMalformedCSeqMethod;
 begin
   Self.Request.Method := MethodInvite;
@@ -2883,6 +2941,61 @@ begin
     end;
   finally
     P.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestInSameDialogAsRequest;
+begin
+  Self.Response.CallID       := Self.Request.CallID;
+  Self.Response.From.Tag     := Self.Request.From.Tag;
+  Self.Response.ToHeader.Tag := Self.Request.ToHeader.Tag;
+
+  Check(Self.Response.InSameDialogAs(Self.Request),
+        'Response not in same dialog as request');
+
+  Self.Request.CallID := '1' + Self.Response.CallID;
+  Check(not Self.Response.InSameDialogAs(Self.Request),
+        'Call-ID differs');
+
+  Self.Request.CallID   := Self.Response.CallID;
+  Self.Request.From.Tag := Self.Response.From.Tag + '1';
+  Check(not Self.Response.InSameDialogAs(Self.Request),
+        'From tag differs');
+
+  Self.Request.From.Tag     := Self.Response.From.Tag;
+  Self.Request.ToHeader.Tag := Self.Response.ToHeader.Tag + '1';
+  Check(not Self.Response.InSameDialogAs(Self.Request),
+        'To tag differs');
+end;
+
+procedure TestTIdSipResponse.TestInSameDialogAsResponse;
+var
+  Res: TIdSipResponse;
+begin
+  Res := TIdSipResponse.Create;
+  try
+    Res.Assign(Self.Response);
+
+    Check(Self.Response.InSameDialogAs(Res),
+          'Self.Response not in same dialog as Res');
+    Check(Res.InSameDialogAs(Self.Response),
+          'Res not in same dialog as Self.Response');
+
+    Res.CallID := '1' + Self.Response.CallID;
+    Check(not Self.Response.InSameDialogAs(Res),
+          'Call-ID differs');
+
+    Res.CallID   := Self.Response.CallID;
+    Res.From.Tag := Self.Response.From.Tag + '1';
+    Check(not Self.Response.InSameDialogAs(Res),
+          'From tag differs');
+
+    Res.From.Tag     := Self.Response.From.Tag;
+    Res.ToHeader.Tag := Self.Response.ToHeader.Tag + '1';
+    Check(not Self.Response.InSameDialogAs(Res),
+          'To tag differs');
+  finally
+    Res.Free;
   end;
 end;
 

@@ -972,6 +972,7 @@ type
     function  FirstRetryAfter: TIdSipRetryAfterHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
+    function  InSameDialogAs(Msg: TIdSipMessage): Boolean;
     function  IsMalformed: Boolean; virtual;
     function  HeaderCount: Integer;
     function  QuickestExpiry: Cardinal;
@@ -5316,6 +5317,13 @@ end;
 function TIdSipMessage.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.Headers.HasHeader(HeaderName);
+end;
+
+function TIdSipMessage.InSameDialogAs(Msg: TIdSipMessage): Boolean;
+begin
+  Result := (Self.CallID = Msg.CallID)
+        and (Self.From.Tag = Msg.From.Tag)
+        and (Self.ToHeader.Tag = Msg.ToHeader.Tag);
 end;
 
 function TIdSipMessage.IsMalformed: Boolean;
