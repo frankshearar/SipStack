@@ -107,6 +107,7 @@ type
     procedure TestHasAuthorization;
     procedure TestHasProxyAuthorization;
     procedure TestIsInvite;
+    procedure TestIsOptions;
     procedure TestIsRegister;
     procedure TestIsRequest;
     procedure TestNewRequestHasContentLength;
@@ -1502,6 +1503,30 @@ begin
 
   Self.Request.Method := 'XXX';
   Check(not Self.Request.IsInvite, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsOptions;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsOptions, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsOptions, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsOptions, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsOptions, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(Self.Request.IsOptions, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsOptions, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsOptions, 'XXX');
 end;
 
 procedure TestTIdSipRequest.TestIsRegister;

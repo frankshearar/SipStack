@@ -900,6 +900,7 @@ type
     function  IsCancel: Boolean;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
+    function  IsOptions: Boolean;
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
@@ -5108,6 +5109,11 @@ end;
 function TIdSipRequest.IsInvite: Boolean;
 begin
   Result := Self.Method = MethodInvite;
+end;
+
+function TIdSipRequest.IsOptions: Boolean;
+begin
+  Result := Self.Method = MethodOptions;
 end;
 
 function TIdSipRequest.IsRegister: Boolean;
