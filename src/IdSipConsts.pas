@@ -14,12 +14,6 @@ interface
 // for IdResourceStrings ?
 const
   BranchMagicCookie = 'z9hG4bK';
-  MethodToken       = 'Method';
-
-const
-  SipName     = 'SIP';
-  SIPVersion  = SipName + '/2.0';
-  SIPVersion1 = SIPVersion;
 
 // for IdAssignedNumbers
 const

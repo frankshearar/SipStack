@@ -12,8 +12,8 @@ unit IdSipMessage;
 interface
 
 uses
-  Classes, Contnrs, IdDateTimeStamp, IdGlobal, IdInterfacedObject,
-  IdSimpleParser, SyncObjs, SysUtils;
+  Classes, Contnrs, IdDateTimeStamp, IdInterfacedObject,
+  IdSimpleParser, IdSipConsts, SyncObjs, SysUtils;
 
 type
   TIdSipQValue = 0..1000;
@@ -1233,6 +1233,11 @@ function TransportToStr(const T: TIdSipTransportType): String;
 function WithoutFirstAndLastChars(const S: String): String;
 function WithoutFirstAndLastCharsW(const W: WideString): WideString;
 
+// Widely known constants
+const
+  SipName    = 'SIP';
+  SIPVersion = SipName + '/2.0';
+
 // Header and parameter names
 const
   AcceptHeader               = 'Accept';
@@ -1528,6 +1533,7 @@ const
 
 // Grammar definitions
 const
+  CRLF                  = #$D#$A;
   HeaderUnreservedChars = ['[', ']', '/', '?', ':', '+', '$'];
   HeaderChars           = HeaderUnreservedChars + UnreservedChars;
   LegalTokenChars       = Alphabet + Digits
@@ -1573,6 +1579,7 @@ const
   InvalidWarnAgent            = 'Invalid warn-agent';
   InvalidWarnCode             = 'Invalid warn-code';
   InvalidWarnText             = 'Invalid warn-text';
+  MethodToken                 = 'Method';  
   MissingAngleBrackets        = 'Missing angle brackets';
   MissingCallID               = 'Missing Call-ID header';
   MissingContentType          = 'Missing Content-Type header with a non-empty message-body';
@@ -1583,10 +1590,10 @@ const
   MissingTo                   = 'Missing To header';
   MissingSipVersion           = 'Missing SIP-Version';
   MissingVia                  = 'Missing Via header';
-  RequestLine                 = '%s %s %s' + EOL;
+  RequestLine                 = '%s %s %s' + CRLF;
   RequestUriNoAngleBrackets   = 'Request-URI may not be enclosed in <>';
   RequestUriNoSpaces          = 'Request-URI may not contain spaces';
-  StatusLine                  = '%s %d %s' + EOL;
+  StatusLine                  = '%s %d %s' + CRLF;
   UnexpectedDisplayName       = 'Unexpected display-name';
   UnexpectedMessageLength     = 'Expected message-body length of %d but was %d';
   UnmatchedParentheses        = 'Unmatched parentheses';
@@ -1597,7 +1604,7 @@ const
 implementation
 
 uses
-  IdRandom, IdSipConsts, IdSipDialog, IdUnicode;
+  IdGlobal, IdSipDialog, IdUnicode;
 
 // class variables
 var
@@ -5599,7 +5606,7 @@ begin
   fRecordRoute := TIdSipRecordRoutePath.Create(Self.Headers);
 
   Self.fParseFailReason := '';
-  Self.SIPVersion       := IdSipConsts.SIPVersion;
+  Self.SIPVersion       := IdSipMessage.SIPVersion;
 end;
 
 destructor TIdSipMessage.Destroy;
@@ -6703,7 +6710,7 @@ var
 begin
   Result := TIdSipResponse.Create;
   try
-    Result.SIPVersion := IdSipConsts.SIPVersion;
+    Result.SIPVersion := IdSipMessage.SIPVersion;
     Result.StatusCode := StatusCode;
 
     // cf RFC 3261 section 8.2.6.1
