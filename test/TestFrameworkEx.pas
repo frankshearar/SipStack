@@ -15,6 +15,8 @@ type
 
     procedure WaitForSignaled; overload;
     procedure WaitForSignaled(Event: TEvent); overload;
+    procedure WaitForTimeout(Msg: String); overload;
+    procedure WaitForTimeout(Event: TEvent; Msg: String); overload;
   public
     procedure CheckEquals(Expected, Received: TStrings; Msg: String); overload;
     procedure SetUp; override;
@@ -79,6 +81,17 @@ begin
     raise Self.ExceptionType.Create(Self.ExceptionMessage);
 
   Event.ResetEvent;
+end;
+
+procedure TThreadingTestCase.WaitForTimeout(Msg: String);
+begin
+  Self.WaitForTimeout(Self.ThreadEvent, Msg);
+end;
+
+procedure TThreadingTestCase.WaitForTimeout(Event: TEvent; Msg: String);
+begin
+  if (wrTimeout <> Event.WaitFor(DefaultTimeout)) then
+    Fail(Msg);
 end;
 
 end.

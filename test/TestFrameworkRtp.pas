@@ -3,8 +3,8 @@ unit TestFrameworkRtp;
 interface
 
 uses
-  Classes, Contnrs, IdRTP, IdInterfacedObject, SyncObjs, SysUtils,
-  TestFrameworkEx;
+  Classes, Contnrs, IdInterfacedObject, IdRTP, IdSocketHandle, SyncObjs,
+  SysUtils, TestFrameworkEx;
 
 type
   TTestRTP = class(TThreadingTestCase)
@@ -15,10 +15,12 @@ type
   TIdMockRTPPeer = class(TIdInterfacedObject,
                          IIdAbstractRTPPeer)
   private
-    fLastRTP:   TIdRTPPacket;
-    fProfile:   TIdRTPProfile;
-    fRTCPCount: Cardinal;
-    RTCPBuffer: TObjectList;
+    ListenerLock: TCriticalSection;
+    Listeners:    TList;
+    fLastRTP:     TIdRTPPacket;
+    fProfile:     TIdRTPProfile;
+    fRTCPCount:   Cardinal;
+    RTCPBuffer:   TObjectList;
 
     function  GetLastRTCP: TIdRTCPPacket;
     function  GetRTCPCount: Cardinal;
@@ -28,6 +30,12 @@ type
     constructor Create;
     destructor  Destroy; override;
 
+    procedure AddListener(const Listener: IIdRTPListener);
+    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdSocketHandle);
+    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdSocketHandle);
+    procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
@@ -56,6 +64,23 @@ type
   public
     function  AllowsHeaderExtensions: Boolean; override;
     procedure SetAllowExtension(const Allow: Boolean);
+  end;
+
+  TIdRTPTestRTPListener = class(TIdInterfacedObject,
+                                IIdRTPListener)
+  private
+    fReceivedRTCP: Boolean;
+    fReceivedRTP:  Boolean;
+  public
+    constructor Create;
+
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
+
+    property ReceivedRTCP: Boolean read fReceivedRTCP;
+    property ReceivedRTP:  Boolean read fReceivedRTP;
   end;
 
 implementation
@@ -93,6 +118,9 @@ constructor TIdMockRTPPeer.Create;
 begin
   inherited Create;
 
+  Self.ListenerLock := TCriticalSection.Create;
+  Self.Listeners    := TList.Create;
+
   Self.fRTCPCount := 0;
   Self.RTCPBuffer := TObjectList.Create(true);
 end;
@@ -101,8 +129,58 @@ destructor TIdMockRTPPeer.Destroy;
 begin
   Self.RTCPBuffer.Free;
   Self.LastRTP.Free;
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdMockRTPPeer.AddListener(const Listener: IIdRTPListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdMockRTPPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                               Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdRTPListener(Self.Listeners[I]).OnRTCP(Packet, Binding);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdMockRTPPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                              Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdRTPListener(Self.Listeners[I]).OnRTP(Packet, Binding);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdMockRTPPeer.RemoveListener(const Listener: IIdRTPListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
 end;
 
 procedure TIdMockRTPPeer.SendPacket(Host: String;
@@ -185,6 +263,31 @@ end;
 procedure TIdMockProfile.SetAllowExtension(const Allow: Boolean);
 begin
   fAllowExtension := Allow;
+end;
+
+//******************************************************************************
+//* TIdRTPTestRTPListener                                                      *
+//******************************************************************************
+//* TIdRTPTestRTPListener Public methods ***************************************
+
+constructor TIdRTPTestRTPListener.Create;
+begin
+  inherited Create;
+
+  fReceivedRTCP := false;
+  fReceivedRTP  := false;
+end;
+
+procedure TIdRTPTestRTPListener.OnRTCP(Packet: TIdRTCPPacket;
+                                       Binding: TIdSocketHandle);
+begin
+  fReceivedRTCP := true;
+end;
+
+procedure TIdRTPTestRTPListener.OnRTP(Packet: TIdRTPPacket;
+                                      Binding: TIdSocketHandle);
+begin
+  fReceivedRTP := true;
 end;
 
 end.

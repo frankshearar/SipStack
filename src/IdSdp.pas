@@ -113,7 +113,7 @@ type
     fInfo:        String;
     fKey:         TIdSdpKey;
     fMediaType:   TIdSdpMediaType;
-    FormatList:   array of String;
+    FormatList:   TStrings;
     fPort:        Cardinal;
     fPortCount:   Cardinal;
     fTransport:   String;
@@ -138,6 +138,7 @@ type
     function  FormatCount: Integer;
     procedure ClearFormats;
     function  HasConnection: Boolean;
+    function  HasFormat(Fmt: String): Boolean;
     function  HasKey: Boolean;
     procedure PrintOn(Dest: TStream); override;
 
@@ -426,31 +427,30 @@ type
     procedure Parse(const Payload: TIdSdpPayload);
   end;
 
-  TIdFilteredRTPPeer = class(TObject)
+  TIdFilteredRTPPeer = class(TIdBaseRTPAbstractPeer,
+                             IIdRTPListener)
   private
     fLocalDescription:  TIdSdpMediaDescription;
-    fOnRTCPRead:        TIdRTCPReadEvent;
-    fOnRTPRead:         TIdRTPReadEvent;
     fRemoteDescription: TIdSdpMediaDescription;
-    fServer:            TIdRTPServer;
+    fPeer:              Pointer;
 
-    procedure ReceiveRTCP(Sender: TObject;
-                          Packet: TIdRTCPPacket;
-                          Binding: TIdSocketHandle);
-    procedure ReceiveRTP(Sender: TObject;
-                         Packet: TIdRTPPacket;
-                         Binding: TIdSocketHandle);
+    function  GetPeer: IIdAbstractRTPPeer;
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
   public
-    constructor Create(Server: TIdRTPServer;
+    constructor Create(Peer: IIdAbstractRTPPeer;
                        LocalDescription,
-                       RemoteDescription: TIdSdpMediaDescription);
+                       RemoteDescription: TIdSdpMediaDescription); reintroduce;
+
+    procedure SendPacket(Host: String;
+                         Port: Cardinal;
+                         Packet: TIdRTPBasePacket); override;
 
     property LocalDescription:  TIdSdpMediaDescription read fLocalDescription;
     property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription;
-    property Server:            TIdRTPServer           read fServer;
-
-    property OnRTCPRead: TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
-    property OnRTPRead:  TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
+    property Peer:              IIdAbstractRTPPeer     read GetPeer;
   end;
 
   TIdSdpPayloadProcessor = class(TObject)
@@ -913,6 +913,7 @@ constructor TIdSdpMediaDescription.Create;
 begin
   inherited Create;
 
+  Self.FormatList := TStringList.Create;
   Self.PortCount := 1;
 end;
 
@@ -922,6 +923,8 @@ begin
   fBandwidths.Free;
   fConnections.Free;
   fKey.Free;
+
+  Self.FormatList.Free;  
 
   inherited Destroy;
 end;
@@ -942,27 +945,28 @@ begin
 end;
 
 procedure TIdSdpMediaDescription.AddFormat(const Fmt: String);
-var
-  InsertPos: Integer;
 begin
-  InsertPos := Self.FormatCount;
-  SetLength(Self.FormatList, InsertPos + 1);
-  Self.FormatList[InsertPos] := Fmt;
+  Self.FormatList.Add(Fmt);
 end;
 
 function TIdSdpMediaDescription.FormatCount: Integer;
 begin
-  Result := Length(Self.FormatList);
+  Result := Self.FormatList.Count;
 end;
 
 procedure TIdSdpMediaDescription.ClearFormats;
 begin
-  SetLength(Self.FormatList, 0);
+  Self.FormatList.Clear;
 end;
 
 function TIdSdpMediaDescription.HasConnection: Boolean;
 begin
   Result := Self.Connections.Count > 0;
+end;
+
+function TIdSdpMediaDescription.HasFormat(Fmt: String): Boolean;
+begin
+  Result := Self.FormatList.IndexOf(Fmt) <> -1;
 end;
 
 function TIdSdpMediaDescription.HasKey: Boolean;
@@ -2578,7 +2582,7 @@ end;
 //******************************************************************************
 //* TIdFilteredRTPPeer Public methods ******************************************
 
-constructor TIdFilteredRTPPeer.Create(Server: TIdRTPServer;
+constructor TIdFilteredRTPPeer.Create(Peer: IIdAbstractRTPPeer;
                                       LocalDescription,
                                       RemoteDescription: TIdSdpMediaDescription);
 begin
@@ -2586,28 +2590,36 @@ begin
 
   fLocalDescription  := LocalDescription;
   fRemoteDescription := RemoteDescription;
-  fServer            := Server;
+  fPeer              := Pointer(Peer);
 
-  fServer.OnRTCPRead := Self.ReceiveRTCP;
-  fServer.OnRTPRead  := Self.ReceiveRTP;
+  Self.Peer.AddListener(Self);
+end;
+
+procedure TIdFilteredRTPPeer.SendPacket(Host: String;
+                                        Port: Cardinal;
+                                        Packet: TIdRTPBasePacket);
+begin
+  Self.Peer.SendPacket(Host, Port, Packet);
 end;
 
 //* TIdFilteredRTPPeer Private methods *****************************************
 
-procedure TIdFilteredRTPPeer.ReceiveRTCP(Sender: TObject;
-                                         Packet: TIdRTCPPacket;
-                                         Binding: TIdSocketHandle);
+function TIdFilteredRTPPeer.GetPeer: IIdAbstractRTPPeer;
 begin
-  if Assigned(Self.OnRTCPRead) then
-    Self.OnRTCPRead(Self, Packet, Binding);
+  Result := IIdAbstractRTPPeer(Self.fPeer);
 end;
 
-procedure TIdFilteredRTPPeer.ReceiveRTP(Sender: TObject;
-                                        Packet: TIdRTPPacket;
-                                        Binding: TIdSocketHandle);
+procedure TIdFilteredRTPPeer.OnRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdSocketHandle);
 begin
-  if Assigned(Self.OnRTPRead) then
-    Self.OnRTPRead(Self, Packet, Binding);
+  Self.NotifyListenersOfRTCP(Packet, Binding);
+end;
+
+procedure TIdFilteredRTPPeer.OnRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdSocketHandle);
+begin
+  if Self.LocalDescription.HasFormat(IntToStr(Packet.PayloadType)) then
+    Self.NotifyListenersOfRTP(Packet, Binding);
 end;
 
 //******************************************************************************

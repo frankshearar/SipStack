@@ -3,7 +3,7 @@ unit IdRTPServer;
 interface
 
 uses
-  Classes, IdRTP, IdSocketHandle, IdUDPServer;
+  Classes, IdRTP, IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdRTCPReadEvent = procedure(Sender: TObject;
@@ -27,13 +27,14 @@ type
     fControlPort: Cardinal;
     fOnRTCPRead:  TIdRTCPReadEvent;
     fOnRTPRead:   TIdRTPReadEvent;
-    fProfile:     TIdRTPProfile;
     fSession:     TIdRTPSession;
+    Peer:         TIdBaseRTPAbstractPeer;
 
-    procedure DoOnRTCPRead(APacket: TIdRTCPPacket;
-                           ABinding: TIdSocketHandle);
-    procedure DoOnRTPRead(APacket: TIdRTPPacket;
-                          ABinding: TIdSocketHandle);
+    function  GetProfile: TIdRTPProfile;
+    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdSocketHandle);
+    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdSocketHandle);
     procedure SetProfile(const Value: TIdRTPProfile);
   protected
     procedure DoUDPRead(AData: TStream;
@@ -42,16 +43,18 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
 
+    procedure AddListener(const Listener: IIdRTPListener);
+    procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(Host: String;
                          Port: Cardinal;
-                         Packet: TIdRTPBasePacket); 
+                         Packet: TIdRTPBasePacket);
 
   published
-    property ControlPort:   Cardinal         read fControlPort write fControlPort;
-    property Profile:       TIdRTPProfile    read fProfile write SetProfile;
-    property OnRTCPRead:    TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
-    property OnRTPRead:     TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
-    property Session:       TIdRTPSession    read fSession;
+    property ControlPort: Cardinal         read fControlPort write fControlPort;
+    property OnRTCPRead:  TIdRTCPReadEvent read fOnRTCPRead write fOnRTCPRead;
+    property OnRTPRead:   TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
+    property Profile:     TIdRTPProfile    read GetProfile write SetProfile;
+    property Session:     TIdRTPSession    read fSession;
   end;
 
 implementation
@@ -65,6 +68,11 @@ constructor TIdRTPServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.Peer := TIdBaseRTPAbstractPeer.Create;
+
+  Self.fSession := TIdRTPSession.Create(Self);
+  Self.AddListener(Self.Session);
+
   Self.ThreadedEvent := true;
 
   Self.DefaultPort := 8000;
@@ -74,8 +82,19 @@ end;
 destructor TIdRTPServer.Destroy;
 begin
   Self.Session.Free;
+  Self.Peer.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdRTPServer.AddListener(const Listener: IIdRTPListener);
+begin
+  Self.Peer.AddListener(Listener);
+end;
+
+procedure TIdRTPServer.RemoveListener(const Listener: IIdRTPListener);
+begin
+  Self.Peer.RemoveListener(Listener);
 end;
 
 procedure TIdRTPServer.SendPacket(Host: String;
@@ -108,9 +127,9 @@ begin
     Pkt.ReadFrom(AData);
 
     if Pkt.IsRTP then
-      Self.DoOnRTPRead(Pkt as TIdRTPPacket, ABinding)
+      Self.NotifyListenersOfRTP(Pkt as TIdRTPPacket, ABinding)
     else
-      Self.DoOnRTCPRead(Pkt as TIdRTCPPacket, ABinding);
+      Self.NotifyListenersOfRTCP(Pkt as TIdRTCPPacket, ABinding);
   finally
     Pkt.Free;
   end;
@@ -118,28 +137,33 @@ end;
 
 //* TIdRTPServer Private methods ***********************************************
 
-procedure TIdRTPServer.DoOnRTCPRead(APacket: TIdRTCPPacket;
-                                   ABinding: TIdSocketHandle);
+function TIdRTPServer.GetProfile: TIdRTPProfile;
 begin
-  Self.Session.ReceiveControl(APacket, ABinding);
-
-  if Assigned(Self.OnRTCPRead) then
-    Self.OnRTCPRead(Self, APacket, ABinding);
+  Result := Self.Peer.Profile;
 end;
 
-procedure TIdRTPServer.DoOnRTPRead(APacket: TIdRTPPacket;
-                                   ABinding: TIdSocketHandle);
+procedure TIdRTPServer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                             Binding: TIdSocketHandle);
 begin
-  Self.Session.ReceiveData(APacket, ABinding);
+  Self.Peer.NotifyListenersOfRTCP(Packet, Binding);
+
+  if Assigned(Self.OnRTCPRead) then
+    Self.OnRTCPRead(Self, Packet, Binding);
+end;
+
+procedure TIdRTPServer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                            Binding: TIdSocketHandle);
+begin
+  Self.Peer.NotifyListenersOfRTP(Packet, Binding);
 
   if Assigned(Self.OnRTPRead) then
-    Self.OnRTPRead(Self, APacket, ABinding);
+    Self.OnRTPRead(Self, Packet, Binding);
 end;
 
 procedure TIdRTPServer.SetProfile(const Value: TIdRTPProfile);
 begin
-  Self.fProfile := Value;
-  Self.fSession := TIdRTPSession.Create(Self, Value);
+  Self.Session.Profile := Value;
+  Self.Peer.Profile := Self.Session.Profile;
 end;
 
 end.

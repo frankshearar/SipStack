@@ -3,8 +3,8 @@ unit IdRTP;
 interface
 
 uses
-  Classes, Contnrs, IdRTPTimerQueue, IdSocketHandle, IdUDPServer, SyncObjs,
-  SysUtils, Types;
+  Classes, Contnrs, IdInterfacedObject, IdRTPTimerQueue, IdSocketHandle,
+  IdUDPServer, SyncObjs, SysUtils, Types;
 
 type
   TIdCardinalArray        = array of Cardinal;
@@ -325,6 +325,7 @@ type
     procedure ReplacePayload(const Payload: TIdRTPPayload);
     procedure SetCsrcCount(const Value: TIdRTPCsrcCount);
     procedure SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
+    procedure SetPayload(const Value: TIdRTPPayload);
   public
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
@@ -348,7 +349,7 @@ type
     property HasExtension:                    Boolean               read fHasExtension write fHasExtension;
     property HeaderExtension:                 TIdRTPHeaderExtension read fHeaderExtension;
     property IsMarker:                        Boolean               read fIsMarker write fIsMarker;
-    property Payload:                         TIdRTPPayload         read fPayload;
+    property Payload:                         TIdRTPPayload         read fPayload write SetPayload;
     property PayloadType:                     TIdRTPPayloadType     read fPayloadType write fPayloadType;
     property SequenceNo:                      TIdRTPSequenceNo      read fSequenceNo write fSequenceNo;
     property Timestamp:                       Cardinal              read fTimestamp write fTimestamp;
@@ -817,17 +818,61 @@ type
     procedure RemoveAll;
   end;
 
+  // I provide a protocol for things that listen for RTP data, that is, for
+  // things that have no interest in the infrastructure of RTP, but just the
+  // data.
+  IIdRTPDataListener = interface
+    ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
+    procedure OnNewData(Data: TIdRTPPayload;
+                        Binding: TIdSocketHandle);
+  end;
+
+  // I provide a protocol for things that listen for RTP packets. RTP agents,
+  // monitors, etc., can use me to keep track of an RTP session.
+  IIdRTPListener = interface(IInterface)
+    ['{2B5E040A-0B8E-4C44-9769-80E3AAE35C41}']
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
+  end;
+
+  // I provide a protocol for sending RTP/RTCP data as well as notifying
+  // reception of same.
   IIdAbstractRTPPeer = interface(IInterface)
+    ['{10608EEF-CE5B-44AE-9B22-34CC19D0BE07}']
+    procedure AddListener(const Listener: IIdRTPListener);
+    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdSocketHandle);
+    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdSocketHandle);
+    procedure RemoveListener(const Listener: IIdRTPListener);
     procedure SendPacket(Host: String;
                          Port: Cardinal;
                          Packet: TIdRTPBasePacket);
   end;
 
-  // I provide a protocol for things that listen for RTP data.
-  IIdRTPDataListener = interface
-    ['{B378CDAA-1B15-4BE9-8C41-D7B90DEAD654}']
-    procedure OnNewData(Data: TIdRTPPayload;
-                        Binding: TIdSocketHandle);
+  TIdBaseRTPAbstractPeer = class(TIdInterfacedObject,
+                                 IIdAbstractRTPPeer)
+  private
+    fProfile:     TIdRTPProfile;
+    ListenerLock: TCriticalSection;
+    Listeners:    TList;
+  public
+    constructor Create; virtual;
+    destructor  Destroy; override;
+
+    procedure AddListener(const Listener: IIdRTPListener);
+    procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                    Binding: TIdSocketHandle);
+    procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                   Binding: TIdSocketHandle);
+    procedure RemoveListener(const Listener: IIdRTPListener);
+    procedure SendPacket(Host: String;
+                         Port: Cardinal;
+                         Packet: TIdRTPBasePacket); virtual;
+
+    property Profile: TIdRTPProfile read fProfile write fProfile;
   end;
 
   // I provide a self-contained SSRC space.
@@ -837,7 +882,8 @@ type
   // * Keep track of members/senders
   // * Keep track of timing stuff
   // * Keep track of session state
-  TIdRTPSession = class(TObject)
+  TIdRTPSession = class(TIdInterfacedObject,
+                        IIdRTPListener)
   private
     Agent:                      IIdAbstractRTPPeer;
     BaseTime:                   TDateTime;
@@ -884,6 +930,10 @@ type
     function  DefaultSenderBandwidthFraction: Double;
     procedure IncSentOctetCount(N: Cardinal);
     procedure IncSentPacketCount;
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
     procedure RemoveSources(Bye: TIdRTCPBye);
     procedure ResetSentOctetCount;
     procedure ResetSentPacketCount;
@@ -891,8 +941,7 @@ type
     procedure SetSyncSrcId(const Value: Cardinal);
     procedure TransmissionTimeExpire(Sender: TObject);
   public
-    constructor Create(Agent: IIdAbstractRTPPeer;
-                       Profile: TIdRTPProfile);
+    constructor Create(Agent: IIdAbstractRTPPeer);
     destructor  Destroy; override;
 
     function  AcceptableSSRC(SSRC: Cardinal): Boolean;
@@ -939,7 +988,7 @@ type
     property MinimumRTCPSendInterval:   TDateTime     read fMinimumRTCPSendInterval write fMinimumRTCPSendInterval;
     property PreviousMemberCount:       Cardinal      read fPreviousMemberCount;
     property MissedReportTolerance:     Cardinal      read fMissedReportTolerance write fMissedReportTolerance;
-    property Profile:                   TIdRTPProfile read fProfile;
+    property Profile:                   TIdRTPProfile read fProfile write fProfile;
     property ReceiverBandwidthFraction: Double        read fReceiverBandwidthFraction write fReceiverBandwidthFraction;
     property SenderBandwidthFraction:   Double        read fSenderBandwidthFraction write fSenderBandwidthFraction;
     property SentOctetCount:            Cardinal      read fSentOctetCount;
@@ -2416,6 +2465,13 @@ end;
 procedure TIdRTPPacket.SetCsrcID(Index: TIdRTPCsrcCount; const Value: Cardinal);
 begin
   fCsrcIDs[Index] := Value;
+end;
+
+procedure TIdRTPPacket.SetPayload(const Value: TIdRTPPayload);
+begin
+  // Make sure you set Self.PayloadType! Otherwise you'll run into problems
+  // because the payload type doesn't match the type of the payload! 
+  Self.ReplacePayload(Value);
 end;
 
 //******************************************************************************
@@ -4286,12 +4342,94 @@ begin
 end;
 
 //******************************************************************************
+//* TIdBaseRTPAbstractPeer                                                     *
+//******************************************************************************
+//* TIdBaseRTPAbstractPeer Public methods **************************************
+
+constructor TIdBaseRTPAbstractPeer.Create;
+begin
+  inherited Create;
+
+  Self.ListenerLock := TCriticalSection.Create;
+  Self.Listeners    := TList.Create;
+end;
+
+destructor TIdBaseRTPAbstractPeer.Destroy;
+begin
+  Self.Listeners.Free;
+  Self.ListenerLock.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdBaseRTPAbstractPeer.AddListener(const Listener: IIdRTPListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Add(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
+                                                       Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  // In Smalltalk:
+  // self listenerLock critical:
+  //     [self listeners do:
+  //         [ :each | each receiveRTCP: packet on: binding ]]
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdRTPListener(Self.Listeners[I]).OnRTCP(Packet, Binding);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.NotifyListenersOfRTP(Packet: TIdRTPPacket;
+                                                      Binding: TIdSocketHandle);
+var
+  I: Integer;
+begin
+  // In Smalltalk:
+  // self listenerLock critical:
+  //     [self listeners do:
+  //         [ :each | each receiveRTP: packet on: binding ]]
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdRTPListener(Self.Listeners[I]).OnRTP(Packet, Binding);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.RemoveListener(const Listener: IIdRTPListener);
+begin
+  Self.ListenerLock.Acquire;
+  try
+    Self.Listeners.Remove(Pointer(Listener));
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdBaseRTPAbstractPeer.SendPacket(Host: String;
+                                            Port: Cardinal;
+                                            Packet: TIdRTPBasePacket);
+begin
+end;
+
+//******************************************************************************
 //* TIdRTPSession                                                              *
 //******************************************************************************
 //* TIdRTPSession Public methods ***********************************************
 
-constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer;
-                                 Profile: TIdRTPProfile);
+constructor TIdRTPSession.Create(Agent: IIdAbstractRTPPeer);
 begin
   inherited Create;
 
@@ -4299,7 +4437,6 @@ begin
   Self.fNoControlSent := true;
   Self.MinimumRTCPSendInterval := Self.DefaultMinimumRTCPSendInterval;
   Self.NoDataSent     := true;
-  Self.fProfile       := Profile;
 
   Self.DataListenerLock := TCriticalSection.Create;
 
@@ -4893,6 +5030,18 @@ end;
 procedure TIdRTPSession.IncSentPacketCount;
 begin
   Inc(Self.fSentPacketCount);
+end;
+
+procedure TIdRTPSession.OnRTCP(Packet: TIdRTCPPacket;
+                               Binding: TIdSocketHandle);
+begin
+  Self.ReceiveControl(Packet, Binding);
+end;
+
+procedure TIdRTPSession.OnRTP(Packet: TIdRTPPacket;
+                              Binding: TIdSocketHandle);
+begin
+  Self.ReceiveData(Packet, Binding);
 end;
 
 procedure TIdRTPSession.RemoveSources(Bye: TIdRTCPBye);

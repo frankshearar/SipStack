@@ -23,13 +23,19 @@ type
     procedure CheckOnRTPRead(Sender: TObject;
                              APacket: TIdRTPPacket;
                              ABinding: TIdSocketHandle);
+    procedure SendRTCPToServer;
+    procedure SendRTPToServer;
+    procedure SetEvent;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestAddListener;
+    procedure TestRemoveListener;
     procedure TestOnRTCPRead;
     procedure TestOnRTPRead;
     procedure TestOnUDPRead;
+    procedure TestSessionGetsPackets;
   end;
 
   TestT140 = class(TThreadingTestCase)
@@ -42,11 +48,11 @@ type
     T140PT:    TIdRTPPayloadType;
 
     procedure ReceiveAnyOldJunk(Sender: TObject;
-                                APacket: TIdRTCPPacket;
-                                ABinding: TIdSocketHandle);
+                                Packet: TIdRTCPPacket;
+                                Binding: TIdSocketHandle);
     procedure StoreT140Data(Sender: TObject;
-                            APacket: TIdRTPPacket;
-                            ABinding: TIdSocketHandle);
+                            Packet: TIdRTPPacket;
+                            Binding: TIdSocketHandle);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -83,7 +89,9 @@ begin
   PT := 96;
 
   Self.Profile := TIdAudioVisualProfile.Create;
-  Self.Server := TIdRTPServer.Create(nil);
+  Self.Server  := TIdRTPServer.Create(nil);
+  Self.Server.OnRTCPRead := Self.CheckOnRTCPRead;
+  Self.Server.OnRTPRead := Self.CheckOnRTPRead;
   Self.Session := Self.Server.Session;
 
   NoEncoding := TIdRTPPayload.CreatePayload('No encoding/0');
@@ -100,11 +108,16 @@ begin
     T140.Free;
   end;
 
-//  Self.Server := TIdRTPServer.Create(nil);
   Self.Server.Profile := Self.Profile;
   Binding := Self.Server.Bindings.Add;
   Binding.IP   := '127.0.0.1';
   Binding.Port := 5004;
+
+  Self.Client := TIdRTPServer.Create(nil);
+  Self.Client.Profile := Self.Profile;
+  Binding := Self.Client.Bindings.Add;
+  Binding.IP   := '127.0.0.1';
+  Binding.Port := 6543; // arbitrary value
 
   Self.Packet := TIdRTPPacket.Create(Self.Profile);
   Self.Packet.Version      := 2;
@@ -119,12 +132,6 @@ begin
   Self.Packet.Timestamp    := $0A0B0C0D;
   Self.Packet.SyncSrcID    := $decafbad;
 
-  Self.Client := TIdRTPServer.Create(nil);
-  Self.Client.Profile := Self.Profile;
-  Binding := Self.Client.Bindings.Add;
-  Binding.IP   := '127.0.0.1';
-  Binding.Port := 6543; // arbitrary value
-
   Self.Client.Active := true;
   Self.Server.Active := true;
 end;
@@ -133,11 +140,9 @@ procedure TestTIdRTPServer.TearDown;
 begin
   Self.Server.Active := false;
   Self.Client.Active := false;
-
-  Self.Client.Free;
   Self.Packet.Free;
+  Self.Client.Free;
   Self.Server.Free;
-  Self.Session.Free;
   Self.Profile.Free;
 
   inherited TearDown;
@@ -173,19 +178,55 @@ procedure TestTIdRTPServer.CheckOnRTCPRead(Sender: TObject;
                                            APacket: TIdRTCPPacket;
                                            ABinding: TIdSocketHandle);
 begin
-  try
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
+  Self.SetEvent;
 end;
 
 procedure TestTIdRTPServer.CheckOnRTPRead(Sender: TObject;
                                           APacket: TIdRTPPacket;
                                           ABinding: TIdSocketHandle);
+begin
+  Self.SetEvent;
+end;
+
+procedure TestTIdRTPServer.SendRTCPToServer;
+var
+  S:    TStringStream;
+  RTCP: TIdRTCPApplicationDefined;
+begin
+  S := TStringStream.Create('');
+  try
+    RTCP := TIdRTCPApplicationDefined.Create;
+    try
+      RTCP.PrintOn(S);
+
+      Self.Client.Send(Self.Server.Bindings[0].IP,
+                       Self.Server.Bindings[0].Port,
+                       S.DataString);
+    finally
+      RTCP.Free;
+    end;
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.SendRTPToServer;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Packet.PrintOn(S);
+
+    Self.Client.Send(Self.Server.Bindings[0].IP,
+                     Self.Server.Bindings[0].Port,
+                     S.DataString);
+  finally
+    S.Free;
+  end;
+end;
+
+procedure TestTIdRTPServer.SetEvent;
 begin
   try
     Self.ThreadEvent.SetEvent;
@@ -199,55 +240,75 @@ end;
 
 //* TestTIdRTPServer Published methods *****************************************
 
-procedure TestTIdRTPServer.TestOnRTCPRead;
+procedure TestTIdRTPServer.TestAddListener;
 var
-  S:    TStringStream;
-  RTCP: TIdRTCPApplicationDefined;
+  L1, L2: TIdRTPTestRTPListener;
 begin
-  Self.Server.OnRTCPRead := Self.CheckOnRTCPRead;
-  S := TStringStream.Create('');
+  L1 := TIdRTPTestRTPListener.Create;
   try
-    RTCP := TIdRTCPApplicationDefined.Create;
+    Self.Server.AddListener(L1);
+
+    L2 := TIdRTPTestRTPListener.Create;
     try
-      RTCP.PrintOn(S);
+      Self.Server.AddListener(L2);
 
-      Self.Client.Send(Self.Server.Bindings[0].IP,
-                       Self.Server.Bindings[0].Port,
-                       S.DataString);
-
+      Self.ExceptionMessage := 'Waiting for RTCP';
+      Self.SendRTCPToServer;
       Self.WaitForSignaled;
+      Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
+      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
+
+      Self.ExceptionMessage := 'Waiting for RTP';
+      Self.SendRTPToServer;
+      Self.WaitForSignaled;
+      Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
+      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
     finally
-      RTCP.Free;
+      L2.Free;
     end;
   finally
-    S.Free;
+    L1.Free;
   end;
 end;
 
-procedure TestTIdRTPServer.TestOnRTPRead;
+procedure TestTIdRTPServer.TestRemoveListener;
 var
-  S: TStringStream;
+  Listener: TIdRTPTestRTPListener;
 begin
-  Self.Server.OnRTPRead := Self.CheckOnRTPRead;
-  S := TStringStream.Create('');
+  Listener := TIdRTPTestRTPListener.Create;
   try
-    Self.Packet.PrintOn(S);
+    Self.Server.AddListener(Listener);
+    Self.Server.RemoveListener(Listener);
 
-    Self.Client.Send(Self.Server.Bindings[0].IP,
-                     Self.Server.Bindings[0].Port,
-                     S.DataString);
-
+    Self.ExceptionMessage := 'Waiting for RTCP';
+    Self.SendRTCPToServer;
     Self.WaitForSignaled;
+    Check(not Listener.ReceivedRTCP,
+          'Listener received RTCP');
   finally
-    S.Free;
+    Listener.Free;
   end;
+end;
+
+procedure TestTIdRTPServer.TestOnRTCPRead;
+begin
+  Self.SendRTCPToServer;
+  Self.WaitForSignaled;
+end;
+
+procedure TestTIdRTPServer.TestOnRTPRead;
+begin
+  Self.SendRTPToServer;
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdRTPServer.TestOnUDPRead;
 var
   S: TStringStream;
 begin
-  Self.Server.OnUDPRead := Self.CheckReceivePacket;
+  Self.Server.OnRTCPRead := nil;
+  Self.Server.OnRTPRead  := nil;
+  Self.Server.OnUDPRead  := Self.CheckReceivePacket;
   Self.Server.Active := true;
   try
     S := TStringStream.Create('');
@@ -265,6 +326,21 @@ begin
   finally
     Self.Server.Active := false;
   end;
+end;
+
+procedure TestTIdRTPServer.TestSessionGetsPackets;
+var
+  OriginalMemberCount: Cardinal;
+begin
+  Self.ExceptionMessage := 'Session waiting for RTCP';
+  OriginalMemberCount := Self.Server.Session.MemberCount;
+
+  Self.SendRTCPToServer;
+  Self.WaitForSignaled;
+  
+  CheckEquals(OriginalMemberCount + 1,
+              Self.Server.Session.MemberCount,
+              'Session didn''t get RTCP');
 end;
 
 //******************************************************************************
@@ -326,22 +402,22 @@ end;
 //* TestT140 Private methods ***************************************************
 
 procedure TestT140.ReceiveAnyOldJunk(Sender: TObject;
-                                     APacket: TIdRTCPPacket;
-                                     ABinding: TIdSocketHandle);
+                                     Packet: TIdRTCPPacket;
+                                     Binding: TIdSocketHandle);
 begin
   Self.RTCPEvent.SetEvent;
 end;
 
 procedure TestT140.StoreT140Data(Sender: TObject;
-                                 APacket: TIdRTPPacket;
-                                 ABinding: TIdSocketHandle);
+                                 Packet: TIdRTPPacket;
+                                 Binding: TIdSocketHandle);
 begin
   try
     CheckEquals(TIdRTPT140Payload.ClassName,
-                APacket.Payload.ClassName,
+                Packet.Payload.ClassName,
                 'Payload type');
     CheckEquals(Self.Msg,
-                TIdRTPT140Payload(APacket.Payload).Block,
+                TIdRTPT140Payload(Packet.Payload).Block,
                 'Payload');
 
     Self.ThreadEvent.SetEvent;

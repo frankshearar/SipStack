@@ -568,6 +568,17 @@ type
     procedure TestRemoveAll;
   end;
 
+  TestTIdBaseRTPAbstractPeer = class(TTestCase)
+  private
+    Peer: TIdBaseRTPAbstractPeer;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddListener;
+    procedure TestRemoveListener;
+  end;
+
   TRTPSessionTestCase = class(TTestCase)
   protected
     Agent:   TIdMockRTPPeer;
@@ -745,6 +756,7 @@ begin
   Result.AddTest(TestTIdRTPMember.Suite);
   Result.AddTest(TestTIdRTPMemberTable.Suite);
   Result.AddTest(TestTIdRTPSenderTable.Suite);
+  Result.AddTest(TestTIdBaseRTPAbstractPeer.Suite);
   Result.AddTest(TestSessionDelegationMethods.Suite);
   Result.AddTest(TestSessionSequenceNumberRules.Suite);
   Result.AddTest(TestSessionReportRules.Suite);
@@ -5234,8 +5246,9 @@ begin
   try
     Profile := TIdAudioVisualProfile.Create;
     try
-      Session := TIdRTPSession.Create(MockAgent, Profile);
+      Session := TIdRTPSession.Create(MockAgent);
       try
+        Session.Profile := Profile;
         Self.Bye.PrepareForTransmission(Session);
         Check(Self.Bye.SourceCount > 0,
               'BYE must have source counts');
@@ -6480,6 +6493,71 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdBaseRTPAbstractPeer                                                 *
+//******************************************************************************
+//* TestTIdBaseRTPAbstractPeer Public methods **********************************
+
+procedure TestTIdBaseRTPAbstractPeer.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Peer := TIdBaseRTPAbstractPeer.Create;
+end;
+
+procedure TestTIdBaseRTPAbstractPeer.TearDown;
+begin
+  Self.Peer.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdBaseRTPAbstractPeer Published methods *******************************
+
+procedure TestTIdBaseRTPAbstractPeer.TestAddListener;
+var
+  L1, L2: TIdRTPTestRTPListener;
+begin
+  L1 := TIdRTPTestRTPListener.Create;
+  try
+    Self.Peer.AddListener(L1);
+
+    L2 := TIdRTPTestRTPListener.Create;
+    try
+      Self.Peer.AddListener(L2);
+
+      Self.Peer.NotifyListenersOfRTCP(nil, nil);
+      Check(L1.ReceivedRTCP, 'First listener didn''t receive RTCP');
+      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTCP');
+
+      Self.Peer.NotifyListenersOfRTP(nil, nil);
+      Check(L1.ReceivedRTP,  'First listener didn''t receive RTP');
+      Check(L2.ReceivedRTCP, 'Second listener didn''t receive RTP');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdBaseRTPAbstractPeer.TestRemoveListener;
+var
+  Listener: TIdRTPTestRTPListener;
+begin
+  Listener := TIdRTPTestRTPListener.Create;
+  try
+    Self.Peer.AddListener(Listener);
+    Self.Peer.RemoveListener(Listener);
+
+    Self.Peer.NotifyListenersOfRTCP(nil, nil);
+    Check(not Listener.ReceivedRTCP,
+          'Listener received RTCP');
+  finally
+    Listener.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TRTPSessionTestCase                                                        *
 //******************************************************************************
 //* TRTPSessionTestCase Public methods *****************************************
@@ -6495,7 +6573,8 @@ begin
   Self.Agent   := TIdMockRTPPeer.Create;
   Self.Agent.Profile := Self.Profile;
 
-  Self.Session := TIdRTPSession.Create(Self.Agent, Self.Profile);
+  Self.Session := TIdRTPSession.Create(Self.Agent);
+  Self.Session.Profile := Self.Profile;
 
   Self.T140PT := Self.Profile.FirstFreePayloadType;
   T140 := TIdRTPT140Payload.Create('');

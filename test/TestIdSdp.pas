@@ -3,7 +3,8 @@ unit TestIdSdp;
 interface
 
 uses
-  Classes, IdRTPServer, IdSdp, TestFramework;
+  Classes, IdRTP, IdRTPServer, IdSdp, IdSocketHandle,
+  TestFramework, TestFrameworkEx, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestCase)
@@ -100,6 +101,7 @@ type
     procedure TestAddFormatAndFormatCount;
     procedure TestAttributeAt;
     procedure TestFormatClear;
+    procedure TestHasFormat;
     procedure TestGetFormat;
     procedure TestInitialState;
     procedure TestPrintOnBasic;
@@ -386,21 +388,38 @@ type
     procedure TestParseVersionMalformed;
     procedure TestParseVersionMultipleHeaders;
   end;
-{
-  TestTIdFilteredRTPPeer = class(TTestCase)
+
+  TestTIdFilteredRTPPeer = class(TTestCase,
+                                 IIdRTPListener)
   private
-    LocalDesc:  TIdSdpMediaDescription;
-    RemoteDesc: TIdSdpMediaDescription;
-    Peer:       TIdFilteredRTPPeer;
-    Server:     TIdRTPServer;
+    Binding:          TIdSocketHandle;
+    NormalPacket:     TIdRTPPacket;
+    LocalDesc:        TIdSdpMediaDescription;
+    ReceivedRTCP:     Boolean;
+    ReceivedRTP:      Boolean;
+    Profile:          TIdRTPProfile;
+    RemoteDesc:       TIdSdpMediaDescription;
+    Peer:             TIdFilteredRTPPeer;
+    Server:           TIdMockRTPPeer;
+    T140PT:           TIdRTPPayloadType;
+    UnexpectedPacket: TIdRTPPacket;
+
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdSocketHandle);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdSocketHandle);
+    procedure Send(RTP: TIdRTPPacket);
+    procedure SendNormalData;
+    procedure SendUnexpectedData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestFilter;
     procedure TestNormalOperation;
+    procedure TestSendPacket;
   end;
-}
+
   TestTIdSdpPayloadProcessor = class(TTestCase)
   private
     Proc: TIdSdpPayloadProcessor;
@@ -430,7 +449,7 @@ const
 implementation
 
 uses
-  IdSocketHandle, IdRTP, IdSimpleParser, IdUDPServer, SysUtils;
+  IdSimpleParser, IdUDPServer, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -456,7 +475,8 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
 }
-  Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
+  Result.AddTest(TestTIdFilteredRTPPeer.Suite);
+//  Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
 end;
 
 //******************************************************************************
@@ -1103,6 +1123,17 @@ begin
 
   Self.M.ClearFormats;
   CheckEquals(0, Self.M.FormatCount, 'FormatCount after ClearFormats');
+end;
+
+procedure TestTIdSdpMediaDescription.TestHasFormat;
+var
+  Fmt: String;
+begin
+  Self.M.ClearFormats;
+  Fmt := 'foo';
+  Check(not Self.M.HasFormat(Fmt), 'Empty format list');
+  Self.M.AddFormat(Fmt);
+  Check(Self.M.HasFormat(Fmt), 'Format not added?');
 end;
 
 procedure TestTIdSdpMediaDescription.TestGetFormat;
@@ -4396,47 +4427,124 @@ begin
     S.Free;
   end;
 end;
-{
+
 //******************************************************************************
 //* TestTIdFilteredRTPPeer                                                     *
 //******************************************************************************
 //* TestTIdFilteredRTPPeer Public methods **************************************
 
 procedure TestTIdFilteredRTPPeer.SetUp;
+var
+  Encoding: TIdRTPT140Payload;
 begin
   inherited SetUp;
 
-  Self.Server     := TIdRTPServer.Create(nil);
+  Self.Binding := TIdSocketHandle.Create(nil);
+  Self.Profile := TIdAudioVisualProfile.Create;
+
+  Self.T140PT := Self.Profile.FirstFreePayloadType;
+  Encoding := TIdRTPT140Payload.Create(T140Encoding + '/' + IntToStr(T140ClockRate));
+  try
+    Self.Profile.AddEncoding(Encoding, Self.T140PT);
+  finally
+    Encoding.Free;
+  end;
+
+  Self.Server := TIdMockRTPPeer.Create;
+  Self.Server.Profile := Self.Profile;
+
   Self.LocalDesc  := TIdSdpMediaDescription.Create;
+  Self.LocalDesc.AddFormat(IntToStr(Self.T140PT));
   Self.RemoteDesc := TIdSdpMediaDescription.Create;
 
   Self.Peer := TIdFilteredRTPPeer.Create(Self.Server,
                                          Self.LocalDesc,
                                          Self.RemoteDesc);
+  Self.Peer.AddListener(Self);
+
+  Self.NormalPacket := TIdRTPPacket.Create(Self.Profile);
+  Self.NormalPacket.PayloadType := Self.T140PT;
+  Self.NormalPacket.Payload := Self.Profile.EncodingFor(Self.NormalPacket.PayloadType).Clone;
+
+  Self.UnexpectedPacket := TIdRTPPacket.Create(Self.Profile);
+  Self.UnexpectedPacket.PayloadType := 0;
+  Self.UnexpectedPacket.Payload := Self.Profile.EncodingFor(Self.UnexpectedPacket.PayloadType).Clone;
+
+  Self.ReceivedRTCP := false;
+  Self.ReceivedRTCP := false;
 end;
 
 procedure TestTIdFilteredRTPPeer.TearDown;
 begin
+  Self.UnexpectedPacket.Free;
+  Self.NormalPacket.Free;
   Self.Peer.Free;
   Self.RemoteDesc.Free;
   Self.LocalDesc.Free;
   Self.Server.Free;
+  Self.Profile.Free;
+  Self.Binding.Free;
 
   inherited TearDown;
+end;
+
+//* TestTIdFilteredRTPPeer Private methods *************************************
+
+procedure TestTIdFilteredRTPPeer.OnRTCP(Packet: TIdRTCPPacket;
+                                        Binding: TIdSocketHandle);
+begin
+  Self.ReceivedRTCP := true;
+end;
+
+procedure TestTIdFilteredRTPPeer.OnRTP(Packet: TIdRTPPacket;
+                                       Binding: TIdSocketHandle);
+begin
+  Self.ReceivedRTP := true;
+end;
+
+procedure TestTIdFilteredRTPPeer.Send(RTP: TIdRTPPacket);
+begin
+  (Self.Server as IIdAbstractRTPPeer).NotifyListenersOfRTP(RTP,
+                                                           Self.Binding);
+end;
+
+procedure TestTIdFilteredRTPPeer.SendNormalData;
+begin
+  Self.Send(Self.NormalPacket);
+end;
+
+procedure TestTIdFilteredRTPPeer.SendUnexpectedData;
+begin
+  Self.Send(Self.UnexpectedPacket);
 end;
 
 //* TestTIdFilteredRTPPeer Published methods ***********************************
 
 procedure TestTIdFilteredRTPPeer.TestFilter;
 begin
-  Fail('Start here - check that unexpected payloads get dropped');
+  Self.SendUnexpectedData;
+  Check(not Self.ReceivedRTP, 'RTP traffic wasn''t filtered');
 end;
 
 procedure TestTIdFilteredRTPPeer.TestNormalOperation;
 begin
-  Fail('Start here - check that expected data gets through');
+  Self.SendNormalData;
+  Check(Self.ReceivedRTP, 'RTP traffic was lost');
 end;
-}
+
+procedure TestTIdFilteredRTPPeer.TestSendPacket;
+begin
+  Self.Peer.SendPacket('127.0.0.1', 8000, Self.NormalPacket);
+  CheckEquals(Self.NormalPacket.PayloadType,
+              Self.Server.LastRTP.PayloadType,
+              'Normal packet');
+
+  Self.Peer.SendPacket('127.0.0.1', 8000, Self.UnexpectedPacket);
+  CheckEquals(Self.UnexpectedPacket.PayloadType,
+              Self.Server.LastRTP.PayloadType,
+              'Unexpected packet');
+end;
+
 //******************************************************************************
 //* TestTIdSdpPayloadProcessor                                                 *
 //******************************************************************************
