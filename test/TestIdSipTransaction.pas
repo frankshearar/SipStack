@@ -999,7 +999,7 @@ begin
   Self.Response.CSeq.Method                        := 'INVITE';
   Self.Response.CSeq.SequenceNo                    := 314159;
   Self.Response.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.lu';
-  Self.Request.ContentLength                := 0;
+  Self.Request.ContentLength                       := 0;
 
   Self.Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
   Self.Tran.AddTransactionListener(Self);
@@ -1171,7 +1171,8 @@ var
 begin
   Self.CheckReceiveRequest := Self.OnInitialRequestSentToTU;
 
-  Tran := Self.TransactionType.Create(Self.MockDispatcher, Self.Request);
+  Tran := Self.TransactionType.Create(Self.MockDispatcher,
+                                      Self.Request);
   try
     Tran.AddTransactionListener(Self);
     Tran.ReceiveRequest(Self.Request, Self.MockDispatcher.Transport);
@@ -1435,7 +1436,7 @@ begin
   Self.Request.AddHeader(TimestampHeader).Value := '100';
 
   Tran := Self.TransactionType.Create(Self.MockDispatcher,
-                                               Self.Request);
+                                      Self.Request);
   try
     ResponseCount := Self.MockDispatcher.Transport.SentResponseCount;
 
