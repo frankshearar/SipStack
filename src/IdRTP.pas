@@ -7,6 +7,7 @@ uses
 
 type
   TIdCardinalArray        = array of Cardinal;
+  TIdDTMFTone             = 0..16;
   TIdTelephoneEventVolume = 0..63;
   TIdNTPTimestamp         = Cardinal;
   TIdRTCPSourceCount      = 0..31;
