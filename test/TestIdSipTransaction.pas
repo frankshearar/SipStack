@@ -13,12 +13,28 @@ uses
 type
   TestTIdSipTransactionDispatcher = class(TTestCase)
   private
-    D: TIdSipTransactionDispatcher;
+    D:                TIdSipTransactionDispatcher;
+    ReceivedRequest:  TIdSipRequest;
+    ReceivedResponse: TIdSipResponse;
+    TranRequest:      TIdSipRequest;
+
+//    procedure UseRFC2543Requests;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
     procedure TestAddAndCountTransport;
+    procedure TestClearTransports;
+    procedure TestLiveTransactionCount;
+    procedure TestMatchInviteClient;
+    procedure TestMatchInviteClientAckWithInvite;
+    procedure TestMatchInviteClientDifferentCSeqMethod;
+    procedure TestMatchInviteClientDifferentViaBranch;
+    procedure TestMatchInviteServer;
+//    procedure TestMatchInviteRFC2543;
+    procedure TestMatchNonInviteClient;
+    procedure TestMatchNonInviteServer;
+//    procedure TestMatchNonInviteRFC2543;
   end;
 
   TestTIdSipTransaction = class(TTestCase)
@@ -199,17 +215,17 @@ type
 implementation
 
 uses
-  IdException, SysUtils, TypInfo;
+  Classes, IdException, SysUtils, TestMessages, TypInfo;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransaction unit tests');
   Result.AddTest(TestTIdSipTransactionDispatcher.Suite);
-//  Result.AddTest(TestTIdSipTransaction.Suite);
-//  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
-//  Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
-//  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
-//  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipTransaction.Suite);
+  Result.AddTest(TestTIdSipClientInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipServerInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipClientNonInviteTransaction.Suite);
+  Result.AddTest(TestTIdSipServerNonInviteTransaction.Suite);
 end;
 
 function InviteStateToStr(const S: TIdSipTransactionState): String;
@@ -223,19 +239,58 @@ end;
 //* TestTIdSipTransactionDispatcher Public methods *****************************
 
 procedure TestTIdSipTransactionDispatcher.SetUp;
+var
+  P: TIdSipParser;
+  S: TStringStream;
 begin
   inherited SetUp;
 
   Self.D := TIdSipTransactionDispatcher.Create;
+
+  P := TIdSipParser.Create;
+  try
+    S := TStringStream.Create(BasicRequest);
+    try
+      P.Source := S;
+
+      Self.ReceivedRequest := P.ParseAndMakeMessage as TIdSipRequest;
+      S.Seek(0, soFromBeginning);
+      Self.TranRequest := P.ParseAndMakeMessage as TIdSipRequest;
+    finally
+      S.Free;
+    end;
+  finally
+    P.Free;
+  end;
+
+  Self.ReceivedResponse := TIdSipResponse.Create;
+  Self.ReceivedResponse.StatusCode := SIPTrying;
+
+  Self.ReceivedResponse.Headers.Add(Self.ReceivedRequest.Headers);
 end;
 
 procedure TestTIdSipTransactionDispatcher.TearDown;
 begin
+  Self.ReceivedResponse.Free;
+  Self.TranRequest.Free;
+  Self.ReceivedRequest.Free;
+
   Self.D.Free;
 
   inherited TearDown;
 end;
 
+//* TestTIdSipTransactionDispatcher Private methods ****************************
+{
+procedure TestTIdSipTransactionDispatcher.UseRFC2543Requests;
+begin
+  Self.ReceivedRequest.SIPVersion := 'SIP/1.0';
+  Self.TranRequest.SIPVersion     := 'SIP/1.0';
+
+  Self.ReceivedRequest.Path.LastHop.Value := 'SIP/1.0/TCP localhost';
+  Self.TranRequest.Path.LastHop.Value     := 'SIP/1.0/TCP localhost';
+end;
+}
 //* TestTIdSipTransactionDispatcher Published methods **************************
 
 procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
@@ -259,6 +314,169 @@ begin
   finally
     T1.Free;
   end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestClearTransports;
+var
+  T1, T2: TIdSipMockTransport;
+begin
+  CheckEquals(0, Self.D.TransportCount, 'Initial value of TransportCount');
+
+  T1 := TIdSipMockTransport.Create;
+  try
+    Self.D.AddTransport(T1);
+
+    T2 := TIdSipMockTransport.Create;
+    try
+      Self.D.AddTransport(T1);
+      CheckEquals(2, Self.D.TransportCount, 'After two AddTransports');
+      Self.D.ClearTransports;
+      CheckEquals(0, Self.D.TransportCount, 'After Clear');
+    finally
+      T2.Free;
+    end;
+  finally
+    T1.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestLiveTransactionCount;
+var
+  Mock: TIdSipMockTransport;
+  R:    TIdSipRequest;
+begin
+  Mock := TIdSipMockTransport.Create;
+  try
+    Self.D.AddTransport(Mock);
+
+    R := TIdSipRequest.Create;
+    try
+      R.Method := MethodInvite;
+      R.SIPVersion := SIPVersion;
+      R.Headers.Add(ViaHeaderFull).Value     := 'SIP/2.0/TCP localhost;branch=z9hG4bK776asdhds';
+      R.Headers.Add(MaxForwardsHeader).Value := '70';
+      R.Headers.Add(ToHeaderFull).Value      := 'Wintermute <sip:wintermute@tessier-ashpool.co.lu>';
+      R.Headers.Add(FromHeaderFull).Value    := 'Case <sip:case@fried.neurons.org>';
+      R.Headers.Add(CallIDHeaderFull).Value  := 'a84b4c76e66710@gw1.leo-ix.org';
+      R.Headers.Add(CSeqHeader).Value        := '314159 INVITE';
+      Mock.SendRequest(R);
+    finally
+      R.Free;
+    end;
+
+    CheckEquals(1, Self.D.LiveTransactionCount, 'No new transaction created');
+  finally
+    Mock.Free;
+  end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchInviteClient;
+begin
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Identical headers');
+
+  Self.ReceivedResponse.Headers.Add(ContentLanguageHeader).Value := 'es';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Identical headers + irrelevant headers');
+
+  (Self.ReceivedResponse.Headers[FromHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different From tag');
+  Self.ReceivedResponse.Headers[FromHeaderFull].Value := Self.TranRequest.Headers[FromHeaderFull].Value;
+
+  (Self.ReceivedResponse.Headers[ToHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different To tag');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientAckWithInvite;
+begin
+  Self.ReceivedResponse.CSeq.Method := MethodAck;
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'ACK match against INVITE');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientDifferentCSeqMethod;
+begin
+  Self.ReceivedResponse.CSeq.Method := MethodCancel;
+
+  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different CSeq method');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchInviteClientDifferentViaBranch;
+begin
+  Self.ReceivedResponse.Path.LastHop.Branch := BranchMagicCookie + 'foo';
+
+  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different Via branch');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchInviteServer;
+begin
+  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'Identical INVITE request');
+
+  Self.ReceivedRequest.Path.LastHop.SentBy := 'cougar';
+  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'Different sent-by');
+  Self.ReceivedRequest.Path.LastHop.SentBy := Self.TranRequest.Path.LastHop.SentBy;
+
+  Self.ReceivedRequest.Path.LastHop.Branch := 'z9hG4bK6';
+  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'Different branch');
+
+  Self.ReceivedRequest.Path.LastHop.Branch := Self.TranRequest.Path.LastHop.Branch;
+  Self.ReceivedRequest.Method := MethodAck;
+  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest), 'ACK');
+
+  Self.ReceivedRequest.Path.LastHop.SentBy := 'cougar';
+  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'ACK but different sent-by');
+  Self.ReceivedRequest.Path.LastHop.SentBy := Self.TranRequest.Path.LastHop.SentBy;
+
+  Self.ReceivedRequest.Path.LastHop.Branch := 'z9hG4bK6';
+  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'ACK but different branch');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchNonInviteClient;
+begin
+  Self.ReceivedResponse.CSeq.Method := MethodCancel;
+  Self.TranRequest.Method           := MethodCancel;
+
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Identical headers');
+
+  Self.ReceivedResponse.Headers.Add(ContentLanguageHeader).Value := 'es';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Identical headers + irrelevant headers');
+
+  (Self.ReceivedResponse.Headers[FromHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different From tag');
+  Self.ReceivedResponse.Headers[FromHeaderFull].Value := Self.TranRequest.Headers[FromHeaderFull].Value;
+
+  (Self.ReceivedResponse.Headers[ToHeaderFull] as TIdSipFromToHeader).Tag := '1';
+  Check(Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different To tag');
+
+  Self.ReceivedResponse.CSeq.Method := MethodRegister;
+  Check(not Self.D.Match(Self.ReceivedResponse, Self.TranRequest),
+        'Different method');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestMatchNonInviteServer;
+begin
+  Self.ReceivedRequest.Method := MethodCancel;
+  Self.TranRequest.Method     := MethodCancel;
+
+  Check(Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'Identical CANCEL request');
+
+  Self.ReceivedRequest.Method := MethodRegister;
+  Check(not Self.D.Match(Self.ReceivedRequest, Self.TranRequest),
+        'Different method');
 end;
 
 //******************************************************************************
@@ -379,7 +597,7 @@ begin
   CheckEquals(R.ToHeader.Value,               Ack.ToHeader.Value, 'To');
 
   CheckEquals(1, Ack.Path.Length, 'Number of Via headers');
-  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
+  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
               Ack.Path.LastHop.Value,
               'Topmost Via');
 
@@ -751,7 +969,7 @@ begin
   CheckEquals(SIPRinging, R.StatusCode, 'Unexpected response sent');
 
   CheckEquals(1, R.Path.Length, 'Too many Via headers');
-  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
+  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
               R.Path.LastHop.Value,
               'Topmost Via');
 
@@ -781,7 +999,7 @@ begin
   CheckEquals('100', R.Headers[TimestampHeader].Value, 'Timestamp');
 
   CheckEquals(1, R.Path.Length, 'Via path');
-  CheckEquals(Self.InitialRequest.Path.FirstHop.Value,
+  CheckEquals(Self.InitialRequest.Path.LastHop.Value,
               R.Path.LastHop.Value,
               'Topmost Via');
 

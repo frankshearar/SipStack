@@ -126,7 +126,10 @@ begin
   try
     Inc(Self.MethodCallCount);
 
-    Self.ThreadEvent.SetEvent;
+    // Otherwise we'll set the event the very first time we parse a message.
+    // We expect this method to be called TWICE though.
+    if (Self.MethodCallCount > 1) then
+      Self.ThreadEvent.SetEvent;
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -219,13 +222,16 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
+    try
+      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
 
-    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-
-    CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
-                Response.StatusText,
-                'StatusText');
+      CheckEquals(Format(MalformedToken, [ToHeaderFull, 'To: "Mr. J. User <sip:j.user@company.com>']),
+                  Response.StatusText,
+                  'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -241,10 +247,13 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest,             Response.StatusCode, 'StatusCode');
-    CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
+    try
+      CheckEquals(SipVersion,                Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest,             Response.StatusCode, 'StatusCode');
+      CheckEquals(RequestUriNoAngleBrackets, Response.StatusText, 'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -260,10 +269,13 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+    try
+      CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
+      CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -279,10 +291,13 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
-    CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+    try
+      CheckEquals(SipVersion,         Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest,      Response.StatusCode, 'StatusCode');
+      CheckEquals(RequestUriNoSpaces, Response.StatusText, 'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -298,12 +313,15 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
-                Response.StatusText,
-                'StatusText');
+    try
+      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+      CheckEquals(Format(MalformedToken, [ExpiresHeader, 'Expires: 0 0l@company.com']),
+                  Response.StatusText,
+                  'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -319,12 +337,15 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
-    CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
-                Response.StatusText,
-                'StatusText');
+    try
+      CheckEquals(SipVersion,    Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPBadRequest, Response.StatusCode, 'StatusCode');
+      CheckEquals(Format(MalformedToken, [FromHeaderFull, 'From:    Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43']),
+                  Response.StatusText,
+                  'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -340,10 +361,13 @@ begin
     Parser.Source := Str;
 
     Response := Parser.ParseAndMakeMessage as TIdSipResponse;
-
-    CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
-    CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
-    CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
+    try
+      CheckEquals(SipVersion,                  Response.SipVersion, 'SipVersion');
+      CheckEquals(SIPSIPVersionNotSupported,   Response.StatusCode, 'StatusCode');
+      CheckEquals(RSSIPSIPVersionNotSupported, Response.StatusText, 'StatusText');
+    finally
+      Response.Free;
+    end;
   finally
     Str.Free;
   end;
@@ -417,9 +441,6 @@ begin
   finally
     Expected.Free;
   end;
-
-//  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-//    raise Self.ExceptionType.Create(Self.ExceptionMessage);
 end;
 
 procedure TestTIdSipTcpServer.TestMethodEvent;

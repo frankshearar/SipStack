@@ -83,8 +83,8 @@ begin
               Msg.ContentLength := 0;
             Msg.Body := Self.ReadBody(AThread.Connection, Msg);
 
-            if TIdSipParser.IsFQDN(Msg.Path.LastHop.Host)
-              or (Msg.Path.LastHop.Host <> AThread.Connection.Socket.Binding.IP) then
+            if TIdSipParser.IsFQDN(Msg.Path.LastHop.SentBy)
+              or (Msg.Path.LastHop.SentBy <> AThread.Connection.Socket.Binding.IP) then
               Msg.Path.LastHop.Received := AThread.Connection.Socket.Binding.IP;
 
             Self.DoOnMethod(AThread, Msg)
@@ -145,14 +145,19 @@ function TIdSipTcpServer.ReadMessage(Connection: TIdTCPConnection): TStream;
 var
   Str: TStringStream;
 begin
-  Str := TStringStream.Create('');
+  Result := TStringStream.Create('');
+  try
+    Str := Result as TStringStream;
 
-  // we skip any leading CRLFs
-  while (Str.DataString = '') do
-    Connection.Capture(Str, '');
-  Str.Seek(0, soFromBeginning);
+    // we skip any leading CRLFs
+    while (Str.DataString = '') do
+      Connection.Capture(Str, '');
+    Str.Seek(0, soFromBeginning);
+  except
+    Result.Free;
 
-  Result := Str;
+    raise;
+  end;
 end;
 
 procedure TIdSipTcpServer.ReturnBadRequest(Connection: TIdTCPConnection; Reason: String; Parser: TIdSipParser);

@@ -6,6 +6,12 @@ uses
   Classes, IdSipMessage, SysUtils;
 
 type
+  IIdSipPacketListener = interface
+  ['{DFB6D261-16DE-4387-BD92-A01689D1851C}']
+    procedure ProcessRequest(const R: TIdSipRequest);
+    procedure ProcessResponse(const R: TIdSipResponse);
+  end;
+
   TIdSipNotifyEvent = TNotifyEvent;
   TIdSipResponseEvent = procedure(Sender: TObject; const R: TIdSipResponse) of object;
   TIdSipRequestEvent = procedure(Sender: TObject; const R: TIdSipRequest) of object;

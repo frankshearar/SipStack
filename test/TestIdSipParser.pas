@@ -585,7 +585,7 @@ begin
                 Self.Request.Headers[ViaHeaderFull].ClassName,
                 'Via class');
     CheckEquals('gw1.leo-ix.org',
-                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Host,
+                (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).SentBy,
                 'Via Host');
     CheckEquals(5060,
                 (Self.Request.Headers[ViaHeaderFull] as TIdSipViaHeader).Port,
@@ -1114,7 +1114,7 @@ begin
     CheckEquals('Via',                   Request.Path.LastHop.Name,             'LastHop.Name');
     CheckEquals('SIP/2.0',               Request.Path.LastHop.SipVersion,       'LastHop.SipVersion');
     Check      (sttTCP =                 Request.Path.LastHop.Transport,        'LastHop.Transport');
-    CheckEquals('gw1.leo-ix.org',        Request.Path.LastHop.Host,             'LastHop.Host');
+    CheckEquals('gw1.leo-ix.org',        Request.Path.LastHop.SentBy,           'LastHop.SentBy');
     CheckEquals(5061,                    Request.Path.LastHop.Port,             'LastHop.Port');
     CheckEquals('z9hG4bK776asdhds',      Request.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
     CheckEquals('SIP/2.0/TCP gw1.leo-ix.org:5061',
@@ -1127,7 +1127,7 @@ begin
     CheckEquals('Via',                   Request.Path.FirstHop.Name,             'FirstHop.Name');
     CheckEquals('SIP/3.0',               Request.Path.FirstHop.SipVersion,       'FirstHop.SipVersion');
     Check      (sttTLS =                 Request.Path.FirstHop.Transport,        'FirstHop.Transport');
-    CheckEquals('gw5.cust1.leo_ix.org',  Request.Path.FirstHop.Host,             'FirstHop.Host');
+    CheckEquals('gw5.cust1.leo_ix.org',  Request.Path.FirstHop.SentBy,           'FirstHop.SentBy');
     CheckEquals(IdPORT_SIP_TLS,          Request.Path.FirstHop.Port,             'FirstHop.Port');
     CheckEquals('z9hG4bK776aheh',        Request.Path.FirstHop.Params['branch'], 'FirstHop.Params[''branch'']');
     CheckEquals('SIP/3.0/TLS gw5.cust1.leo_ix.org',
@@ -1552,7 +1552,7 @@ begin
   Check      (Msg.Path.FirstHop = Msg.Path.LastHop,                  'Sanity check on Path');
   CheckEquals('SIP/2.0',          Msg.Path.LastHop.SipVersion,       'LastHop.SipVersion');
   Check      (sttTCP =            Msg.Path.LastHop.Transport,        'LastHop.Transport');
-  CheckEquals('gw1.leo-ix.org',   Msg.Path.LastHop.Host,             'LastHop.Host');
+  CheckEquals('gw1.leo-ix.org',   Msg.Path.LastHop.SentBy,           'LastHop.SentBy');
   CheckEquals(IdPORT_SIP,         Msg.Path.LastHop.Port,             'LastHop.Port');
   CheckEquals('z9hG4bK776asdhds', Msg.Path.LastHop.Params['branch'], 'LastHop.Params[''branch'']');
 

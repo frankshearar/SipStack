@@ -74,6 +74,7 @@ type
   private
     fValues: TStrings;
   protected
+    function  GetValue: String; override;
     procedure SetValue(const Value: String); override;
   public
     constructor Create; override;
@@ -169,6 +170,8 @@ type
   protected
     procedure SetValue(const Value: String); override;
   public
+    function  IsEqualTo(const Header: TIdSipHeader): Boolean; override;
+
     property Tag: String read GetTag write SetTag;
   end;
 
@@ -258,7 +261,7 @@ type
 
   TIdSipViaHeader = class(TIdSipHeader)
   private
-    fHost:       String;
+    fSentBy:       String;
     fSipVersion: String;
     fPort:       Cardinal;
     fTransport:  TIdSipTransportType;
@@ -282,10 +285,10 @@ type
   public
     function DefaultPortForTransport(const T: TIdSipTransportType): Cardinal;
     function IsDefaultPortForTransport(const Port: Cardinal; const T: TIdSipTransportType): Boolean;
-    function IsEqualTo(const Header: TIdSipHeader): Boolean; override;
+    function IsRFC3261Branch: Boolean;
 
     property Branch:     String              read GetBranch write SetBranch;
-    property Host:       String              read fHost write fHost;
+    property SentBy:     String              read fSentBy write fSentBy;
     property Maddr:      String              read GetMaddr write SetMaddr;
     property Port:       Cardinal            read fPort write fPort;
     property Received:   String              read GetReceived write SetReceived;
@@ -354,15 +357,17 @@ type
 
     function  Add(const HeaderName: String): TIdSipHeader; overload;
     procedure Add(const Header: TIdSipHeader); overload;
+    procedure Add(const Headers: TIdSipHeaders); overload;
     function  AsString: String;
     procedure Clear;
     procedure Delete(const I: Integer);
     function  Count: Integer;
     function  HasHeader(const HeaderName: String): Boolean;
+    procedure Remove(const Header: TIdSipHeader);
 
     property  Headers[const Name: String]:  TIdSipHeader read GetHeaders; default;
     property  Items[const I: Integer]:      TIdSipHeader read GetItems;
-    property  Values[const Header: String]: String read GetValues write SetValues;
+    property  Values[const Header: String]: String       read GetValues write SetValues;
   end;
 
   TIdSipHeadersFilter = class(TObject)
@@ -376,6 +381,7 @@ type
 
     procedure Add(Header: TIdSipHeader);
     function  Count: Integer;
+    procedure Remove(Header: TIdSipHeader);
 
     property Items[const Index: Integer]: TIdSipHeader read GetItems;
   end;
@@ -388,6 +394,7 @@ type
     function  FirstHop: TIdSipViaHeader;
     function  LastHop: TIdSipViaHeader;
     function  Length: Integer;
+    procedure RemoveLastHop;
   end;
 
   TIdSipMessage = class(TPersistent)
@@ -445,6 +452,8 @@ type
     function FirstLine: String; override;
   public
     procedure Assign(Src: TPersistent); override;
+    function  IsAck: Boolean;
+    function  IsInvite: Boolean;
     function  MalformedException: ExceptClass; override;
 
     property Method:  String read fMethod write fMethod;
@@ -976,6 +985,19 @@ end;
 
 //* TIdSipCommaSeparatedHeader Protected methods *******************************
 
+function TIdSipCommaSeparatedHeader.GetValue: String;
+var
+  I: Integer;
+begin
+  Result := '';
+
+  for I := 0 to Self.Values.Count - 2 do
+    Result := Result + Self.Values[I] + ', ';
+
+  if (Self.Values.Count > 0) then
+    Result := Result + Self.Values[Self.Values.Count - 1];
+end;
+
 procedure TIdSipCommaSeparatedHeader.SetValue(const Value: String);
 var
   S: String;
@@ -1259,6 +1281,22 @@ end;
 //******************************************************************************
 //* TIdSipFromToHeader                                                         *
 //******************************************************************************
+//* TIdSipFromToHeader Public methods ******************************************
+
+function TIdSipFromToHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+var
+  From: TIdSipFromToHeader;
+begin
+  Result := Header is TIdSipFromToHeader;
+
+  if Result then begin
+    From := Header as TIdSipFromToHeader;
+
+    Result := (Self.Address.GetFullURI = From.Address.GetFullURI)
+          and (Self.Tag = From.Tag);
+  end;
+end;
+
 //* TIdSipFromToHeader Protected methods ***************************************
 
 procedure TIdSipFromToHeader.SetValue(const Value: String);
@@ -1608,18 +1646,9 @@ begin
          or (Port = IdPORT_SIP);
 end;
 
-function TIdSipViaHeader.IsEqualTo(const Header: TIdSipHeader): Boolean;
+function TIdSipViaHeader.IsRFC3261Branch: Boolean;
 begin
-  Result := inherited IsEqualTo(Header);
-{
-  if not (Header is Self.ClassType) then
-    Result := false
-  else
-    Result := (Self.Host = TIdSipViaHeader(Header).Host)
-          and (Self.Port = TIdSipViaHeader(Header).Port)
-          and (Self.SipVersion = TIdSipViaHeader(Header).SipVersion)
-          and (Self.Transport = TIdSipViaHeader(Header).Transport);
-}
+  Result := Copy(Self.Branch, 1, Length(BranchMagicCookie)) = BranchMagicCookie;
 end;
 
 //* TIdSipViaHeader Protected methods ******************************************
@@ -1632,7 +1661,7 @@ end;
 function TIdSipViaHeader.GetValue: String;
 begin
   Result := Self.SipVersion + '/' + TransportToStr(Self.Transport)
-          + ' ' + Self.Host;
+          + ' ' + Self.SentBy;
 
   if not Self.IsDefaultPortForTransport(Self.Port, Self.Transport) then
     Result := Result + ':' + IntToStr(Self.Port);
@@ -1665,7 +1694,7 @@ begin
   Self.Transport := StrToTransport(Token);
 
   Token := Trim(Fetch(S, ';'));
-  Self.Host := Fetch(Token, ':');
+  Self.SentBy := Fetch(Token, ':');
 
   if (Token = '') then
     Self.Port := Self.DefaultPortForTransport(Self.Transport)
@@ -2001,6 +2030,14 @@ begin
   Self.List.Add(H);
 end;
 
+procedure TIdSipHeaders.Add(const Headers: TIdSipHeaders);
+var
+  I: Integer;
+begin
+  for I := 0 to Headers.Count - 1 do
+    Self.Add(Headers.Items[I]);
+end;
+
 function TIdSipHeaders.AsString: String;
 var
   I: Integer;
@@ -2028,6 +2065,11 @@ end;
 function TIdSipHeaders.HasHeader(const HeaderName: String): Boolean;
 begin
   Result := Self.IndexOf(HeaderName) <> -1;
+end;
+
+procedure TIdSipHeaders.Remove(const Header: TIdSipHeader);
+begin
+  Self.List.Remove(Header);
 end;
 
 //* TIdSipHeaders Private methods **********************************************
@@ -2186,6 +2228,11 @@ begin
       Inc(Result);
 end;
 
+procedure TIdSipHeadersFilter.Remove(Header: TIdSipHeader);
+begin
+  Self.Headers.Remove(Header);
+end;
+
 //* TIdSipHeadersFilter Private methods ****************************************
 
 function TIdSipHeadersFilter.GetItems(const Index: Integer): TIdSipHeader;
@@ -2223,12 +2270,17 @@ var
   I: Integer;
 begin
   I := 0;
+
   while (I < Self.Headers.Count) do
     if TIdSipHeaders.IsVia(Self.Headers.Items[I].Name) then
       Self.Headers.Delete(I)
     else
       Inc(I);
 
+// Done MUCH more elegantly as:
+//  while (Self.Length > 0) do
+//    Self.Remove(Self.LastHop);
+// but with MUCH worse performance (potentially)
 end;
 
 function TIdSipViaPath.FirstHop: TIdSipViaHeader;
@@ -2264,6 +2316,11 @@ begin
   Result := Self.Count;
 end;
 
+procedure TIdSipViaPath.RemoveLastHop;
+begin
+  Self.Remove(Self.LastHop);
+end;
+
 //******************************************************************************
 //* TIdSipMessage                                                              *
 //******************************************************************************
@@ -2276,7 +2333,6 @@ begin
   fHeaders := TIdSipHeaders.Create;
   fPath := TIdSipViaPath.Create(Self.Headers);
 
-//  Self.MaxForwards := DefaultMaxForwards;
   Self.SIPVersion  := IdSipParser.SIPVersion;
 end;
 
@@ -2338,9 +2394,6 @@ end;
 
 function TIdSipMessage.GetContentLength: Cardinal;
 begin
-//  if (Self.Headers[ContentLengthHeaderFull].Value = '') then
-//    Self.ContentLength := 0;
-
   Result := StrToInt(Self.Headers[ContentLengthHeaderFull].Value);
 end;
 
@@ -2429,9 +2482,19 @@ begin
   inherited Assign(Src);
 
   R := Src as TIdSipRequest;
-  
+
   Self.Method  := R.Method;
   Self.Request := R.Request;
+end;
+
+function TIdSipRequest.IsAck: Boolean;
+begin
+  Result := Self.Method = MethodAck;
+end;
+
+function TIdSipRequest.IsInvite: Boolean;
+begin
+  Result := Self.Method = MethodInvite;
 end;
 
 function TIdSipRequest.MalformedException: ExceptClass;

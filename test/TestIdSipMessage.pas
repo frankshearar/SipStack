@@ -125,6 +125,9 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestIsEqualDifferentURI;
+    procedure TestIsEqualSameURINoParams;
+    procedure TestIsEqualSameURIWithParams;
     procedure TestValueWithTag;
     procedure TestGetSetTag;
   end;
@@ -215,6 +218,7 @@ type
     procedure TearDown; override;
   published
     procedure TestBranch;
+    procedure TestIsRFC3261Branch;
     procedure TestIsEqualTo;
     procedure TestMaddr;
     procedure TestName;
@@ -263,6 +267,9 @@ type
     procedure TearDown; override;
   published
     procedure TestAddAndCount;
+    procedure TestAddHeader;
+    procedure TestAddHeaderName;
+    procedure TestAddHeaders;
     procedure TestAddResultTypes;
     procedure TestAsString;
     procedure TestCanonicaliseName;
@@ -284,21 +291,9 @@ type
     procedure TestIsTo;
     procedure TestIsVia;
     procedure TestIsWarning;
+    procedure TestRemove;
     procedure TestSetMaxForwards;
     procedure TestValues;
-  end;
-
-  TestTIdSipViaPath = class(TTestCase)
-  private
-    Headers: TIdSipHeaders;
-    Path:    TIdSipViaPath;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAddAndLastHop;
-    procedure TestClear;
-    procedure TestFirstHop;
   end;
 
   TestTIdSipHeadersFilter = class(TTestCase)
@@ -312,6 +307,21 @@ type
     procedure TestAdd;
     procedure TestCount;
     procedure TestItems;
+    procedure TestRemove;
+  end;
+
+  TestTIdSipViaPath = class(TTestCase)
+  private
+    Headers: TIdSipHeaders;
+    Path:    TIdSipViaPath;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndLastHop;
+    procedure TestClear;
+    procedure TestFirstHop;
+    procedure TestRemoveLastHop;
   end;
 
   TestTIdSipRequest = class(TExtendedTestCase)
@@ -324,6 +334,8 @@ type
     procedure TestAssign;
     procedure TestAssignBad;
     procedure TestAsString;
+    procedure TestIsAck;
+    procedure TestIsInvite;
     procedure TestReadBody;
     procedure TestSetPath;
   end;
@@ -366,11 +378,11 @@ begin
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
-  Result.AddTest(TestTIdSipViaPath.Suite);
   Result.AddTest(TestTIdSipWarningHeader.Suite);
   Result.AddTest(TestTIdSipWeightedCommaSeparatedHeader.Suite);
   Result.AddTest(TestTIdSipHeaders.Suite);
   Result.AddTest(TestTIdSipHeadersFilter.Suite);
+  Result.AddTest(TestTIdSipViaPath.Suite);
   Result.AddTest(TestTIdSipRequest.Suite);
   Result.AddTest(TestTIdSipResponse.Suite);
 end;
@@ -1047,27 +1059,51 @@ end;
 
 procedure TestTIdSipCommaSeparatedHeader.TestValue;
 begin
+  Self.C.Name := ContentLanguageHeader;
+
   Self.C.Value := '';
   CheckEquals(0, Self.C.Values.Count, 'Empty value');
+  CheckEquals(Self.C.Name + ': ',
+              Self.C.AsString,
+              'Empty value AsString');
+
+  Self.C.Value := 'a';
+  CheckEquals(1, Self.C.Values.Count, 'a');
+  CheckEquals('a', Self.C.Values[0], '1: First value');
+  CheckEquals(Self.C.Name + ': a',
+              Self.C.AsString,
+              '''a'' AsString');
 
   Self.C.Value := 'a b';
   CheckEquals(1, Self.C.Values.Count, 'a b');
-  CheckEquals('a b', Self.C.Values[0], '1: First value');
+  CheckEquals('a b', Self.C.Values[0], '2: First value');
+  CheckEquals(Self.C.Name + ': a b',
+              Self.C.AsString,
+              '''a b'' AsString');
 
   Self.C.Value := 'a,b';
   CheckEquals(2, Self.C.Values.Count, 'a,b');
-  CheckEquals('a', Self.C.Values[0], '2: First value');
-  CheckEquals('b', Self.C.Values[1], '2: Second value');
+  CheckEquals('a', Self.C.Values[0], '3: First value');
+  CheckEquals('b', Self.C.Values[1], '3: Second value');
+  CheckEquals(Self.C.Name + ': a, b',
+              Self.C.AsString,
+              '''a,b'' AsString');
 
   Self.C.Value := 'a, b';
   CheckEquals(2, Self.C.Values.Count, 'a, b');
-  CheckEquals('a', Self.C.Values[0], '3: First value');
-  CheckEquals('b', Self.C.Values[1], '3: Second value');
+  CheckEquals('a', Self.C.Values[0], '4: First value');
+  CheckEquals('b', Self.C.Values[1], '4: Second value');
+  CheckEquals(Self.C.Name + ': a, b',
+              Self.C.AsString,
+              '''a, b'' AsString');
 
   Self.C.Value := 'a;q=0.1, b;q=1';
   CheckEquals(2, Self.C.Values.Count, 'a;q=0.1, b;q=1');
-  CheckEquals('a;q=0.1', Self.C.Values[0], '4: First value');
-  CheckEquals('b;q=1', Self.C.Values[1],   '4: Second value');
+  CheckEquals('a;q=0.1', Self.C.Values[0], '5: First value');
+  CheckEquals('b;q=1', Self.C.Values[1],   '5: Second value');
+  CheckEquals(Self.C.Name + ': a;q=0.1, b;q=1',
+              Self.C.AsString,
+              '''a;q=0.1, b;q=1'' AsString');
 end;
 
 //******************************************************************************
@@ -1357,11 +1393,75 @@ end;
 procedure TestTIdSipFromToHeader.TearDown;
 begin
   Self.F.Free;
-  
+
   inherited TearDown;
 end;
 
 //* TestTIdSipFromToHeader Published methods ***********************************
+
+procedure TestTIdSipFromToHeader.TestIsEqualDifferentURI;
+var
+  From: TIdSipFromToHeader;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+
+  From := TIdSipFromToHeader.Create;
+  try
+    From.Value := 'sip:wintermute@tessier-ashpool.co.lu';
+    Check(not Self.F.IsEqualTo(From), 'different URI');
+
+    From.Value := 'sips:case@fried.neurons.org';
+    Check(not Self.F.IsEqualTo(From), 'same user but different scheme; hence different URI');
+  finally
+    From.Free;
+  end;
+end;
+
+procedure TestTIdSipFromToHeader.TestIsEqualSameURINoParams;
+var
+  From: TIdSipFromToHeader;
+begin
+  Self.F.Value := 'Case <sip:case@fried.neurons.org>';
+
+  From := TIdSipFromToHeader.Create;
+  try
+    From.Value := 'Case <sip:case@fried.neurons.org>';
+    Check(Self.F.IsEqualTo(From), 'Identical headers');
+
+    From.Value := '"Caseless Ammo" <sip:case@fried.neurons.org>';
+    Check(Self.F.IsEqualTo(From), 'Different display names');
+
+    From.Value := 'sip:case@fried.neurons.org';
+    Check(Self.F.IsEqualTo(From), 'No display name');
+
+    From.Value := 'sip:case@fried.neurons.org;tag=1';
+    Check(not Self.F.IsEqualTo(From), 'One has a tag, the other not');
+  finally
+    From.Free;
+  end;
+end;
+
+procedure TestTIdSipFromToHeader.TestIsEqualSameURIWithParams;
+var
+  From: TIdSipFromToHeader;
+begin
+  Self.F.Value := 'sip:case@fried.neurons.org;tag=1234';
+
+  From := TIdSipFromToHeader.Create;
+  try
+    From.Value := 'sip:case@fried.neurons.org;x-extend=00;tag=1234';
+    Check(Self.F.IsEqualTo(From), 'No display name, extension param');
+
+    From.Value := 'sip:case@fried.neurons.org;tag=1234;x-extend=00';
+    Check(Self.F.IsEqualTo(From),
+          'No display name, extension param; order is irrelevant');
+
+    From.Value := 'sip:case@fried.neurons.org;tag=1235';
+    Check(not Self.F.IsEqualTo(From), 'different tags');
+  finally
+    From.Free;
+  end;
+end;
 
 procedure TestTIdSipFromToHeader.TestValueWithTag;
 begin
@@ -1942,18 +2042,33 @@ begin
   end;
 end;
 
+procedure TestTIdSipViaHeader.TestIsRFC3261Branch;
+begin
+  Self.V.Value := 'SIP/2.0/TCP gw1.leo-ix.org';
+  Check(not Self.V.IsRFC3261Branch, 'No branch');
+
+  Self.V.Branch := 'z9hG4b';
+  Check(not Self.V.IsRFC3261Branch, 'z9hG4b');
+
+  Self.V.Branch := BranchMagicCookie;
+  Check(Self.V.IsRFC3261Branch, 'RFC 3261 magic cookie');
+
+  Self.V.Branch := BranchMagicCookie + '1234';
+  Check(Self.V.IsRFC3261Branch, 'RFC 3261 magic cookie + ''1234''');
+end;
+
 procedure TestTIdSipViaHeader.TestIsEqualTo;
 var
   Hop2: TIdSipViaHeader;
 begin
   Hop2 := TIdSipViaHeader.Create;
   try
-    Self.V.Host       := '127.0.0.1';
+    Self.V.SentBy     := '127.0.0.1';
     Self.V.Port       := 5060;
     Self.V.SipVersion := 'SIP/2.0';
     Self.V.Transport  := sttSCTP;
 
-    Hop2.Host       := '127.0.0.1';
+    Hop2.SentBy     := '127.0.0.1';
     Hop2.Port       := 5060;
     Hop2.SipVersion := 'SIP/2.0';
     Hop2.Transport  := sttSCTP;
@@ -1961,10 +2076,10 @@ begin
     Check(V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2)');
     Check(Hop2.IsEqualTo(V), 'Hop2.IsEqualTo(V)');
 
-    Self.V.Host := '127.0.0.2';
+    Self.V.SentBy := '127.0.0.2';
     Check(not Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host');
     Check(not Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Host');
-    Self.V.Host := '127.0.0.1';
+    Self.V.SentBy := '127.0.0.1';
     Check(Self.V.IsEqualTo(Hop2), 'V.IsEqualTo(Hop2); Host reset');
     Check(Hop2.IsEqualTo(Self.V), 'Hop2.IsEqualTo(V); Host reset');
 
@@ -2052,35 +2167,35 @@ end;
 procedure TestTIdSipViaHeader.TestValue;
 begin
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;tag=heehee';
-  CheckEquals('127.0.0.1',   Self.V.Host,           '1: Host');
+  CheckEquals('127.0.0.1',   Self.V.SentBy,         '1: SentBy');
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '1: Parameters');
   CheckEquals(IdPORT_SIP,    Self.V.Port,           '1: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '1: SipVersion');
   Check      (sttUDP =       Self.V.Transport,      '1: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1';
-  CheckEquals('127.0.0.1',     Self.V.Host,           '2: Host');
+  CheckEquals('127.0.0.1',     Self.V.SentBy,         '2: SentBy');
   CheckEquals('',              Self.V.ParamsAsString, '2: Parameters');
   CheckEquals(IdPORT_SIP_TLS,  Self.V.Port,           '2: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '2: SipVersion');
   Check      (sttTLS =         Self.V.Transport,      '2: Transport');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1:666;tag=heehee';
-  CheckEquals('127.0.0.1',   Self.V.Host,           '3: Host');
+  CheckEquals('127.0.0.1',   Self.V.SentBy,         '3: SentBy');
   CheckEquals(';tag=heehee', Self.V.ParamsAsString, '3: Parameters');
   CheckEquals(666,           Self.V.Port,           '3: Port');
   CheckEquals('SIP/1.5',     Self.V.SipVersion,     '3: SipVersion');
   Check      (sttUDP =       Self.V.Transport,      '3: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1:666;haha=heehee';
-  CheckEquals('127.0.0.1',     Self.V.Host,           '4: Host');
+  CheckEquals('127.0.0.1',     Self.V.SentBy,         '4: SentBy');
   CheckEquals(';haha=heehee',  Self.V.ParamsAsString, '4: Parameters');
   CheckEquals(666,             Self.V.Port,           '4: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '4: SipVersion');
   Check      (sttTLS =         Self.V.Transport,      '4: Transport');
 
   Self.V.Value := 'SIP/1.5/TLS 127.0.0.1:666 '#13#10' ; haha=heehee';
-  CheckEquals('127.0.0.1',     Self.V.Host,           '5: Host');
+  CheckEquals('127.0.0.1',     Self.V.SentBy,         '5: SentBy');
   CheckEquals(';haha=heehee',  Self.V.ParamsAsString, '5: Parameters');
   CheckEquals(666,             Self.V.Port,           '5: Port');
   CheckEquals('SIP/1.5',       Self.V.SipVersion,     '5: SipVersion');
@@ -2435,6 +2550,58 @@ begin
               Self.H.Add(OrganizationHeader).ClassName,
               'Incorrect return type');
   CheckEquals(1, Self.H.Count, 'Failed to add new header');
+end;
+
+procedure TestTIdSipHeaders.TestAddHeader;
+var
+  NewHeader: TIdSipHeader;
+begin
+  NewHeader := TIdSipHeader.Create;
+  try
+    NewHeader.Name  := 'X-Header';
+    NewHeader.Value := 'boogaloo;foo=bar';
+
+    CheckEquals(0, Self.H.Count, 'Count before Add(Header)');
+    Self.H.Add(NewHeader);
+    CheckEquals(1, Self.H.Count, 'Count after Add(Header)');
+
+    CheckEquals(NewHeader.AsString,
+                Self.H.Items[0].AsString,
+                'Data not copied');
+  finally
+    NewHeader.Free;
+  end;
+end;
+
+procedure TestTIdSipHeaders.TestAddHeaderName;
+begin
+  CheckEquals(0, Self.H.Count, 'Count before Add(HeaderName)');
+  Self.H.Add('NewHeader').Value := 'FooBar';
+  CheckEquals(1, Self.H.Count, 'Count after Add(HeaderName)');
+
+  CheckEquals('NewHeader: FooBar', Self.H.Items[0].AsString, 'AsString');
+end;
+
+procedure TestTIdSipHeaders.TestAddHeaders;
+var
+  NewHeaders: TIdSipHeaders;
+begin
+  NewHeaders := TIdSipHeaders.Create;
+  try
+    NewHeaders.Add(ContentLanguageHeader).Value := 'en';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'es';
+    NewHeaders.Add(ContentLanguageHeader).Value := 'fr';
+
+    CheckEquals(0, Self.H.Count, 'Count before Add(Headers)');
+    Self.H.Add(NewHeaders);
+    CheckEquals(NewHeaders.Count, Self.H.Count, 'Count after Add(Headers)');
+
+    CheckEquals('en', Self.H.Items[0].Value, '1st header');
+    CheckEquals('es', Self.H.Items[1].Value, '2nd header');
+    CheckEquals('fr', Self.H.Items[2].Value, '3rd header');
+  finally
+    NewHeaders.Free;
+  end;
 end;
 
 procedure TestTIdSipHeaders.TestAddResultTypes;
@@ -2975,6 +3142,19 @@ begin
   Check(    TIdSipHeaders.IsWarning(WarningHeader), 'WarningHeader constant');
 end;
 
+procedure TestTIdSipHeaders.TestRemove;
+var
+  X, Y, Z: TIdSipHeader;
+begin
+  X := Self.H.Add('X-X-X');
+  Y := Self.H.Add('X-X-Y');
+  Z := Self.H.Add('X-X-Z');
+
+  Self.H.Remove(X);
+  CheckEquals(Self.H.Items[0].AsString, Y.AsString, 'Wrong header removed (0)');
+  CheckEquals(Self.H.Items[1].AsString, Z.AsString, 'Wrong header removed (1)');
+end;
+
 procedure TestTIdSipHeaders.TestSetMaxForwards;
 begin
   Self.H.Headers[MaxForwardsHeader].Value := '1';
@@ -3005,95 +3185,6 @@ begin
   CheckEquals('Content-Type',
               Self.H.Values[ContentTypeHeaderFull],
               'New header value not set');
-end;
-
-//******************************************************************************
-//* TestTIdSipViaPath                                                             *
-//******************************************************************************
-//* TestTIdSipViaPath Public methods **********************************************
-
-procedure TestTIdSipViaPath.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Headers := TIdSipHeaders.Create;
-  Self.Path := TIdSipViaPath.Create(Self.Headers);
-end;
-
-procedure TestTIdSipViaPath.TearDown;
-begin
-  Self.Path.Free;
-  Self.Headers.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipViaPath Published methods *******************************************
-
-procedure TestTIdSipViaPath.TestAddAndLastHop;
-var
-  Hop: TIdSipViaHeader;
-begin
-  CheckEquals(0, Self.Path.Length, 'Has hops, but is newly created');
-
-  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-
-  Hop.Host       := '127.0.0.1';
-  Hop.Port       := 5060;
-  Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttSCTP;
-
-  CheckEquals(1, Self.Path.Length, 'Has no hops after Add');
-
-  CheckEquals(ViaHeaderFull, Self.Path.LastHop.Name,       'Name');
-  CheckEquals('127.0.0.1',   Self.Path.LastHop.Host,       'Host');
-  CheckEquals(5060,          Self.Path.LastHop.Port,       'Port');
-  CheckEquals('SIP/2.0',     Self.Path.LastHop.SipVersion, 'SipVersion');
-  Check      (sttSCTP =      Self.Path.LastHop.Transport,  'Transport');
-end;
-
-procedure TestTIdSipViaPath.TestClear;
-begin
-  CheckEquals(0, Self.Headers.Count, 'Unexpected headers');
-  Self.Headers.Add(ViaHeaderFull);
-  Self.Headers.Add(ViaHeaderFull);
-  Self.Headers.Add(ViaHeaderFull);
-  CheckEquals(3, Self.Headers.Count, 'After 3 Add()s');
-
-  Self.Path.Clear;
-  CheckEquals(0, Self.Headers.Count, 'After Clear()');
-end;
-
-procedure TestTIdSipViaPath.TestFirstHop;
-var
-  Hop: TIdSipViaHeader;
-begin
-  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-
-  Hop.Host       := '127.0.0.1';
-  Hop.Port       := 5060;
-  Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttSCTP;
-
-  CheckEquals('127.0.0.1', Self.Path.FirstHop.Host,       'Host');
-  CheckEquals(5060,        Self.Path.FirstHop.Port,       'Port');
-  CheckEquals('SIP/2.0',   Self.Path.FirstHop.SipVersion, 'SipVersion');
-  Check      (sttSCTP =    Self.Path.FirstHop.Transport,  'Transport');
-
-  Check(Self.Path.FirstHop = Self.Path.LastHop, 'Sanity check on single-node Path');
-
-  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
-  Hop.Host       := '192.168.0.1';
-  Hop.Port       := 5061;
-  Hop.SipVersion := 'SIP/2.0';
-  Hop.Transport  := sttTLS;
-
-  CheckEquals('192.168.0.1', Self.Path.FirstHop.Host,       'Host');
-  CheckEquals(5061,          Self.Path.FirstHop.Port,       'Port');
-  CheckEquals('SIP/2.0',     Self.Path.FirstHop.SipVersion, 'SipVersion');
-  Check      (sttTLS =       Self.Path.FirstHop.Transport,  'Transport');
-
-  Check(Self.Path.FirstHop <> Self.Path.LastHop, 'Sanity check on two-node Path');
 end;
 
 //******************************************************************************
@@ -3137,10 +3228,13 @@ var
   Route: TIdSipRouteHeader;
 begin
   Route := TIdSipRouteHeader.Create;
-
-  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
-  Self.Filter.Add(Route);
-  CheckEquals(3, Self.Filter.Count, 'Count after Add');
+  try
+    CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+    Self.Filter.Add(Route);
+    CheckEquals(3, Self.Filter.Count, 'Count after Add');
+  finally
+    Route.Free;
+  end;
 end;
 
 procedure TestTIdSipHeadersFilter.TestCount;
@@ -3161,6 +3255,127 @@ begin
   Self.Headers.Add(RouteHeader).Value := '<sip:127.0.0.3>';
   CheckEquals('<sip:127.0.0.2>',  Self.Filter.Items[2].Value, '3rd Route');
   CheckEquals('<sip:127.0.0.3>',  Self.Filter.Items[3].Value, '4h Route');
+end;
+
+procedure TestTIdSipHeadersFilter.TestRemove;
+var
+  Route: TIdSipRouteHeader;
+begin
+  // MemProof thinks this is a memory leak. It's not. Self.Headers owns the
+  // object and frees it.
+  Route := TIdSipRouteHeader.Create;
+
+  CheckEquals(2, Self.Filter.Count, 'Count with two headers');
+
+  Self.Filter.Add(Route);
+  CheckEquals(3, Self.Filter.Count, 'Count after Add');
+
+  Self.Filter.Remove(Self.Filter.Items[2]);
+  CheckEquals(2, Self.Filter.Count, 'Count after Remove');
+
+  Self.Filter.Remove(Self.Headers[ContentLengthHeaderFull]);
+  CheckEquals(2, Self.Filter.Count, 'Count after Remove''ing a non-Route header');
+end;
+
+//******************************************************************************
+//* TestTIdSipViaPath                                                          *
+//******************************************************************************
+//* TestTIdSipViaPath Public methods *******************************************
+
+procedure TestTIdSipViaPath.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Headers := TIdSipHeaders.Create;
+  Self.Path := TIdSipViaPath.Create(Self.Headers);
+end;
+
+procedure TestTIdSipViaPath.TearDown;
+begin
+  Self.Path.Free;
+  Self.Headers.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipViaPath Published methods ****************************************
+
+procedure TestTIdSipViaPath.TestAddAndLastHop;
+var
+  Hop: TIdSipViaHeader;
+begin
+  CheckEquals(0, Self.Path.Length, 'Has hops, but is newly created');
+
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+
+  Hop.SentBy       := '127.0.0.1';
+  Hop.Port       := 5060;
+  Hop.SipVersion := 'SIP/2.0';
+  Hop.Transport  := sttSCTP;
+
+  CheckEquals(1, Self.Path.Length, 'Has no hops after Add');
+
+  CheckEquals(ViaHeaderFull, Self.Path.LastHop.Name,       'Name');
+  CheckEquals('127.0.0.1',   Self.Path.LastHop.SentBy,     'SentBy');
+  CheckEquals(5060,          Self.Path.LastHop.Port,       'Port');
+  CheckEquals('SIP/2.0',     Self.Path.LastHop.SipVersion, 'SipVersion');
+  Check      (sttSCTP =      Self.Path.LastHop.Transport,  'Transport');
+end;
+
+procedure TestTIdSipViaPath.TestClear;
+begin
+  CheckEquals(0, Self.Headers.Count, 'Unexpected headers');
+  Self.Headers.Add(ViaHeaderFull);
+  Self.Headers.Add(ViaHeaderFull);
+  Self.Headers.Add(ViaHeaderFull);
+  CheckEquals(3, Self.Headers.Count, 'After 3 Add()s');
+
+  Self.Path.Clear;
+  CheckEquals(0, Self.Headers.Count, 'After Clear()');
+end;
+
+procedure TestTIdSipViaPath.TestFirstHop;
+var
+  Hop: TIdSipViaHeader;
+begin
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+
+  Hop.SentBy       := '127.0.0.1';
+  Hop.Port       := 5060;
+  Hop.SipVersion := 'SIP/2.0';
+  Hop.Transport  := sttSCTP;
+
+  CheckEquals('127.0.0.1', Self.Path.FirstHop.SentBy,       'SentBy');
+  CheckEquals(5060,        Self.Path.FirstHop.Port,       'Port');
+  CheckEquals('SIP/2.0',   Self.Path.FirstHop.SipVersion, 'SipVersion');
+  Check      (sttSCTP =    Self.Path.FirstHop.Transport,  'Transport');
+
+  Check(Self.Path.FirstHop = Self.Path.LastHop, 'Sanity check on single-node Path');
+
+  Hop := Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader;
+  Hop.SentBy     := '192.168.0.1';
+  Hop.Port       := 5061;
+  Hop.SipVersion := 'SIP/2.0';
+  Hop.Transport  := sttTLS;
+
+  CheckEquals('192.168.0.1', Self.Path.FirstHop.SentBy,     'SentBy');
+  CheckEquals(5061,          Self.Path.FirstHop.Port,       'Port');
+  CheckEquals('SIP/2.0',     Self.Path.FirstHop.SipVersion, 'SipVersion');
+  Check      (sttTLS =       Self.Path.FirstHop.Transport,  'Transport');
+
+  Check(Self.Path.FirstHop <> Self.Path.LastHop, 'Sanity check on two-node Path');
+end;
+
+procedure TestTIdSipViaPath.TestRemoveLastHop;
+begin
+  (Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader).SentBy := '1';
+  (Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader).SentBy := '2';
+  (Self.Headers.Add(ViaHeaderFull) as TIdSipViaHeader).SentBy := '3';
+
+  CheckEquals('1', Self.Path.LastHop.SentBy, 'Sanity check');
+  Self.Path.RemoveLastHop;
+  CheckEquals('2', (Self.Headers.Items[0] as TIdSipViaHeader).SentBy, 'new LastHop');
+  CheckEquals('3', (Self.Headers.Items[1] as TIdSipViaHeader).SentBy, 'FirstHop');
 end;
 
 //******************************************************************************
@@ -3284,6 +3499,54 @@ begin
   finally
     Expected.Free;
   end;
+end;
+
+procedure TestTIdSipRequest.TestIsAck;
+begin
+  Self.Request.Method := MethodAck;
+  Check(Self.Request.IsAck, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsAck, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsAck, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsAck, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsAck, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsAck, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsAck, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsInvite;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsInvite, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsInvite, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsInvite, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(Self.Request.IsInvite, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsInvite, MethodOptions);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsInvite, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsInvite, 'XXX');
 end;
 
 procedure TestTIdSipRequest.TestReadBody;
