@@ -54,6 +54,7 @@ type
     OnTerminatedFired:      Boolean;
     Options:                TIdSipRequest;
     Password:               String;
+    Reauthenticate:         Boolean;
     ReceivedRequest:        TIdSipRequest;
     ReceivedResponse:       TIdSipResponse;
     RejectedRequest:        TIdSipRequest;
@@ -124,6 +125,7 @@ type
     procedure TestHandUnmatchedResponseToCore;
     procedure TestInviteYieldsTrying;
     procedure TestListenerSaysDontTryAgain;
+    procedure TestListenersDontGiveAuthorizationCredentials;
     procedure TestLoopDetected;
     procedure TestNotifyOnAuthenticationChallengeHasRejectedRequest;
     procedure TestOnClientInviteTransactionTimerA;
@@ -671,6 +673,7 @@ begin
   Self.OnReceiveResponseFired := false;
   Self.OnTerminatedFired      := false;
   Self.Password               := 'mycotoxin';
+  Self.Reauthenticate         := true;
   Self.Username               := 'case';
 end;
 
@@ -908,6 +911,8 @@ var
   Target:          String;
 begin
   TryAgain := true;
+
+  if not Self.Reauthenticate then Exit;
 
   Self.RejectedRequest.Assign(ChallengeResponse);
 
@@ -1300,6 +1305,18 @@ begin
     Self.D.RemoveTransactionDispatcherListener(LazyListener);
     LazyListener.Free;
   end;
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestListenersDontGiveAuthorizationCredentials;
+begin
+  Self.Reauthenticate := false;
+
+  Self.D.AddClientTransaction(Self.Invite).SendRequest;
+
+  Self.MarkSentRequestCount;
+  Self.ReceiveUnauthorized(ProxyAuthenticateHeader, QopAuthInt);
+
+  CheckRequestSent('Didn''t resend request');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestLoopDetected;

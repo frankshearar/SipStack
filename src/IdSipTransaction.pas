@@ -1158,9 +1158,6 @@ begin
     ReAttempt.Assign(Transaction.InitialRequest);
     Self.NotifyOfAuthenticationChallenge(Challenge, ReAttempt, TryAgain);
 
-    Assert(ReAttempt.HasAuthorization or ReAttempt.HasProxyAuthorization,
-           MustHaveAuthorization);
-
     if TryAgain then begin
       NewAttempt := Self.AddClientTransaction(ReAttempt);
       NewAttempt.SendRequest;
