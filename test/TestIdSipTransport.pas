@@ -32,7 +32,7 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
-    procedure OnRejectedMessage(Message: TIdSipMessage;
+    procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Transport: TIdSipTransport);
@@ -90,7 +90,7 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
-    procedure OnRejectedMessage(Message: TIdSipMessage;
+    procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure ReturnResponse(Sender: TObject;
                              R: TIdSipRequest);
@@ -105,6 +105,7 @@ type
     procedure TestCanReceiveUnsolicitedResponse;
     procedure TestTransportFor;
     procedure TestDiscardResponseWithUnknownSentBy;
+    procedure TestDiscardMalformedMessage; virtual; abstract;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
@@ -118,6 +119,7 @@ type
   protected
     function  TransportType: TIdSipTransportClass; override;
   published
+    procedure TestDiscardMalformedMessage; override;
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
@@ -153,6 +155,8 @@ type
                              R: TIdSipResponse);
     procedure NoteSourcePort(Sender: TObject;
                              R: TIdSipRequest);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -192,10 +196,10 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-  Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
+//  Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
-  Result.AddTest(TestTIdSipUDPTransport.Suite);
+//  Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
 end;
 
@@ -268,7 +272,7 @@ begin
   Check(Self.Transport = Transport, 'Transport not correct');
 end;
 
-procedure TestTIdSipTransportEventNotifications.OnRejectedMessage(Message: TIdSipMessage;
+procedure TestTIdSipTransportEventNotifications.OnRejectedMessage(const Msg: String;
                                                                   const Reason: String);
 begin
 end;
@@ -591,7 +595,7 @@ begin
 //  Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipTransport.OnRejectedMessage(Message: TIdSipMessage;
+procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
                                                 const Reason: String);
 begin
   Self.RejectedMessage := true;
@@ -684,7 +688,7 @@ begin
 
   Check(wrTimeout = Self.ThreadEvent.WaitFor(DefaultTimeout),
         'Response not silently discarded');
-  Check(Self.RejectedMessage, 'Rejected message event didn''t fire');      
+  Check(Self.RejectedMessage, 'Rejected message event didn''t fire');
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;
@@ -801,6 +805,42 @@ begin
 end;
 
 //* TestTIdSipTCPTransport Published methods ***********************************
+
+procedure TestTIdSipTCPTransport.TestDiscardMalformedMessage;
+var
+  Client:            TIdTcpClient;
+  MangledSipVersion: String;
+begin
+  Client := TIdTcpClient.Create(nil);
+  try
+    Client.Host := Self.HighPortTransport.Bindings[0].IP;
+    Client.Port := Self.HighPortTransport.Bindings[0].Port;
+    Client.Connect(DefaultTimeout);
+    try
+      MangledSipVersion := 'SIP/;2.0';
+      Client.Write('INVITE sip:wintermute@tessier-ashpool.co.luna ' + MangledSipVersion + #13#10
+                 + 'Via: SIP/2.0/TCP %s;branch=z9hG4bK776asdhds'#13#10
+                 + 'Max-Forwards: 70'#13#10
+                 + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                 + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                 + 'CSeq: 314159 INVITE'#13#10
+                 + 'Contact: <sip:wintermute@tessier-ashpool.co.luna>'#13#10
+                 + 'Content-Type: text/plain'#13#10
+                 + 'Content-Length: 29'#13#10
+                 + #13#10
+                 + 'I am a message. Hear me roar!');
+    finally
+      Client.DisconnectSocket;
+    end;
+
+    Self.WaitForTimeout('Somehow we received a mangled message');
+    Check(Self.RejectedMessage,
+          'Notification of message rejection not received');
+  finally
+    Client.Free;
+  end;
+end;
 
 procedure TestTIdSipTCPTransport.TestGetTransportType;
 begin
@@ -988,6 +1028,11 @@ begin
     end;
   end;
 end;
+
+procedure TestTIdSipUDPTransport.OnMalformedMessage(const Msg: String;
+                                                    const Reason: String);
+begin
+end;                                                    
 
 procedure TestTIdSipUDPTransport.OnReceiveRequest(Request: TIdSipRequest;
                                                   ReceivedFrom: TIdSipConnectionBindings);

@@ -251,8 +251,6 @@ const
   //   This is a request message with a negative value for Content-Length.
   //
   //   The server should respond with an error.
-
-
   TortureTest17 = 'INVITE sip:user@company.com SIP/2.0'#13#10
                 + 'Max-Forwards: 254'#13#10
                 + 'To: sip:j.user@company.com'#13#10

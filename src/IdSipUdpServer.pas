@@ -12,8 +12,11 @@ type
     ListenerLock: TCriticalSection;
     Listeners:    TList;
 
+    procedure DoOnParserError(const RawMessage, Reason: String);
     procedure NotifyListeners(const Request: TIdSipRequest;
                               const ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure NotifyListenersOfMalformedMessage(const Msg: String;
+                                                const Reason: String);
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
                                const Reason: String;
                                Parser: TIdSipParser);
@@ -89,6 +92,8 @@ var
   RemainingBytes: Cardinal;
   Msg:            TIdSipMessage;
   Parser:         TIdSipParser;
+  RawMsg:         String;
+  Reason:         String;
   ReceivedFrom:   TIdSipConnectionBindings;
 begin
   inherited DoUDPRead(AData, ABinding);
@@ -101,15 +106,21 @@ begin
   Parser := TIdSipParser.Create;
   try
     Parser.Source := AData;
+    Parser.OnParserError := Self.DoOnParserError;
 
     try
       Msg := Parser.ParseAndMakeMessage;
       try
         RemainingBytes := AData.Size - AData.Position;
         if Msg.HasHeader(ContentLengthHeaderFull) and
-          (RemainingBytes <> Msg.ContentLength) then
-          raise EBadRequest.Create(Format(UnexpectedMessageLength,
-                                   [RemainingBytes, Msg.ContentLength]));
+          (RemainingBytes <> Msg.ContentLength) then begin
+
+          Reason := Format(UnexpectedMessageLength,
+                           [RemainingBytes, Msg.ContentLength]);
+          RawMsg := StreamToStr(AData);
+          Self.NotifyListenersOfMalformedMessage(RawMsg, Reason);
+          raise EBadRequest.Create(Reason, RawMsg);
+        end;
 
         Msg.ReadBody(Parser.Source);
 
@@ -150,6 +161,11 @@ end;
 
 //* TIdSipUdpServer Private methods ********************************************
 
+procedure TIdSipUdpServer.DoOnParserError(const RawMessage, Reason: String);
+begin
+  Self.NotifyListenersOfMalformedMessage(RawMessage, Reason);
+end;
+
 procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest;
                                           const ReceivedFrom: TIdSipConnectionBindings);
 var
@@ -160,6 +176,20 @@ begin
     for I := 0 to Self.Listeners.Count - 1 do
       IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request,
                                                                 ReceivedFrom);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipUdpServer.NotifyListenersOfMalformedMessage(const Msg: String;
+                                                            const Reason: String);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnMalformedMessage(Msg, Reason);
   finally
     Self.ListenerLock.Release;
   end;

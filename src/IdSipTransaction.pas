@@ -104,7 +104,7 @@ type
                                Receiver: TIdSipTransport); overload;
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Receiver: TIdSipTransport); overload;
-    procedure OnRejectedMessage(Message: TIdSipMessage;
+    procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
   public
     constructor Create; virtual;
@@ -711,7 +711,7 @@ begin
   Self.DeliverToTransaction(Response, Receiver);
 end;
 
-procedure TIdSipTransactionDispatcher.OnRejectedMessage(Message: TIdSipMessage;
+procedure TIdSipTransactionDispatcher.OnRejectedMessage(const Msg: String;
                                                         const Reason: String);
 begin
 end;

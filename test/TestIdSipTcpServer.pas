@@ -41,6 +41,8 @@ type
 
   TestTIdSipTcpServer = class(TThreadingTestCase, IIdSipMessageListener)
   private
+    NotifiedMalformedMessage: Boolean;
+
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest); overload;
     procedure AcknowledgeEvent(Sender: TObject;
@@ -70,6 +72,8 @@ type
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
                                                    Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -344,6 +348,8 @@ begin
 
   Self.LowPortServer.AddMessageListener(Self);
   Self.HighPortServer.AddMessageListener(Self);
+
+  Self.NotifiedMalformedMessage := false;
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
@@ -614,6 +620,12 @@ begin
   Fail('The connection is closed. The client should not receive a response');
 end;
 
+procedure TestTIdSipTcpServer.OnMalformedMessage(const Msg: String;
+                                                 const Reason: String);
+begin
+  Self.NotifiedMalformedMessage := true;
+end;
+
 procedure TestTIdSipTcpServer.OnReceiveRequest(Request: TIdSipRequest;
                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
@@ -676,8 +688,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(BasicRequest);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpServer.TestInternalServerError;
@@ -712,8 +723,7 @@ begin
   Self.Client.Write(#13#10#13#10#13#10
                   + Format(BasicRequest, [ViaFQDN]));
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpServer.TestListenerReceiveRequest;
@@ -730,8 +740,7 @@ begin
     Self.Client.Connect(DefaultTimeout);
     Self.Client.Write(BasicRequest);
 
-    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
     Check(Listener.ReceivedRequest, 'Not all listeners received the request');
   finally
     Listener.Free;
@@ -752,8 +761,7 @@ begin
     Self.Client.Connect(DefaultTimeout);
     Self.Client.Write(BasicResponse);
 
-    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
     Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
   finally
     Listener.Free;
@@ -791,6 +799,9 @@ begin
   finally
     P.Free;
   end;
+
+  Check(Self.NotifiedMalformedMessage,
+        'Malformed message notification never arrived');
 end;
 
 procedure TestTIdSipTcpServer.TestMethodEvent;
@@ -800,8 +811,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(Format(BasicRequest, [ViaFQDN]));
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpServer.TestMultipleMessages;
@@ -812,9 +822,7 @@ begin
   Self.Client.Write(Format(BasicRequest, [ViaFQDN])
                   + Format(BasicRequest, [ViaFQDN]));
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
-
+  Self.WaitForSignaled;
   CheckEquals(2, Self.MethodCallCount, 'Method call count')
 end;
 
@@ -826,8 +834,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(BasicRequest);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrTimeout) then
-    Fail('Listener wasn''t removed');
+  Self.WaitForTimeout('Listener wasn''t removed');
 end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnection;
@@ -863,8 +870,7 @@ begin
       Response.Free;
     end;
 
-    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
 
     Check(Self.ServerReceivedResponse,
           'Response wasn''t sent down a new connection');
@@ -961,8 +967,7 @@ begin
       try
         SipClient.Send(Request);
 
-        if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-          raise Self.ExceptionType.Create(Self.ExceptionMessage);
+        Self.WaitForSignaled;
 
         Check(Self.ClientReceivedResponse,
               'No response received on same connection');

@@ -33,6 +33,8 @@ type
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure DoOnFinished(Sender: TObject);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -225,6 +227,11 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
+end;
+
+procedure TestTIdSipTcpClient.OnMalformedMessage(const Msg: String;
+                                                 const Reason: String);
+begin
 end;
 
 procedure TestTIdSipTcpClient.OnReceiveRequest(Request: TIdSipRequest;

@@ -88,7 +88,7 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
-    procedure OnRejectedMessage(Message: TIdSipMessage;
+    procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Transport: TIdSipTransport);
@@ -383,11 +383,12 @@ begin
   Self.LogMessage(Response);
 end;
 
-procedure TrnidSpike.OnRejectedMessage(Message: TIdSipMessage;
+procedure TrnidSpike.OnRejectedMessage(const Msg: String;
                                        const Reason: String);
 begin
   Self.Log.Lines.Add('----REJECTED MESSAGE: ' + Reason + '----');
-  Self.LogMessage(Message);
+  Self.Log.Lines.Add(Msg);
+  Self.Log.Lines.Add('----');
 end;
 
 procedure TrnidSpike.OnSendRequest(Request: TIdSipRequest;

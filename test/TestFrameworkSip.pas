@@ -31,9 +31,12 @@ type
   TIdSipTestMessageListener = class(TIdInterfacedObject,
                                     IIdSipMessageListener)
   private
+    fMalformedMessage: Boolean;
     fReceivedRequest:  Boolean;
     fReceivedResponse: Boolean;
 
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -41,6 +44,7 @@ type
   public
     constructor Create;
 
+    property MalformedMessage: Boolean read fMalformedMessage;
     property ReceivedRequest:  Boolean read fReceivedRequest;
     property ReceivedResponse: Boolean read fReceivedResponse;
   end;
@@ -137,7 +141,7 @@ type
                                Transport: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 Transport: TIdSipTransport);
-    procedure OnRejectedMessage(Message: TIdSipMessage;
+    procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
   public
     constructor Create;
@@ -251,11 +255,18 @@ constructor TIdSipTestMessageListener.Create;
 begin
   inherited Create;
 
+  Self.fMalformedMessage := false;
   Self.fReceivedRequest  := false;
   Self.fReceivedResponse := false;
 end;
 
 //* TIdSipTestMessageListener Private methods **********************************
+
+procedure TIdSipTestMessageListener.OnMalformedMessage(const Msg: String;
+                                                       const Reason: String);
+begin
+  Self.fMalformedMessage := true;
+end;
 
 procedure TIdSipTestMessageListener.OnReceiveRequest(Request: TIdSipRequest;
                                                      ReceivedFrom: TIdSipConnectionBindings);
@@ -426,7 +437,7 @@ begin
   Self.fReceivedResponse := true;
 end;
 
-procedure TIdSipTestTransportListener.OnRejectedMessage(Message: TIdSipMessage;
+procedure TIdSipTestTransportListener.OnRejectedMessage(const Msg: String;
                                                         const Reason: String);
 begin
   Self.fRejectedMessage := true;

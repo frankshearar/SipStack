@@ -18,6 +18,9 @@ type
     procedure VisitResponse(Response: TIdSipResponse);
   end;
 
+  EBadMessage = class;
+  EBadMessageClass = class of EBadMessage;
+
   TIdSipMessage = class(TPersistent)
   private
     fBody:       String;
@@ -68,7 +71,7 @@ type
     function  IsEqualTo(Msg: TIdSipMessage): Boolean; virtual; abstract;
     function  IsRequest: Boolean; virtual; abstract;
     function  LastHop: TIdSipViaHeader;
-    function  MalformedException: ExceptClass; virtual; abstract;
+    function  MalformedException: EBadMessageClass; virtual; abstract;
     procedure ReadBody(Src: TStream);
     procedure RemoveHeader(Header: TIdSipHeader);
     procedure RemoveAllHeadersNamed(const Name: String);
@@ -113,7 +116,7 @@ type
     function  IsInvite: Boolean;
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
-    function  MalformedException: ExceptClass; override;
+    function  MalformedException: EBadMessageClass; override;
     function  Match(Msg: TIdSipMessage): Boolean;
     function  RequiresResponse: Boolean;
 
@@ -139,7 +142,7 @@ type
     function  IsProvisional: Boolean;
     function  IsRequest: Boolean; override;
     function  IsTrying: Boolean;
-    function  MalformedException: ExceptClass; override;
+    function  MalformedException: EBadMessageClass; override;
 
     property StatusCode: Integer read fStatusCode write SetStatusCode;
     property StatusText: String  read fStatusText write fStatusText;
@@ -222,8 +225,16 @@ type
   end;
 
   EBadHeader = class(EParserError);
-  EBadRequest = class(EParserError);
-  EBadResponse = class(EParserError);
+  EBadMessage = class(EParserError)
+  private
+    fRawMessage: String;
+  public
+    constructor Create(const Msg: String;
+                       const RawMessage: String);
+    property RawMessage: String read fRawMessage write fRawMessage;
+  end;
+  EBadRequest = class(EBadMessage);
+  EBadResponse = class(EBadMessage);
 
 const
   LegalTokenChars = Alphabet + Digits
@@ -259,6 +270,7 @@ function FirstChar(const S: String): String;
 function IsEqual(const S1, S2: String): Boolean;
 function LastChar(const S: String): String;
 function ShortMonthToInt(const Month: String): Integer;
+function StreamToStr(Data: TStream): String;
 function WithoutFirstAndLastChars(const S: String): String;
 
 implementation
@@ -337,6 +349,26 @@ begin
 
   if not Found then
     raise EConvertError.Create('Failed to convert ''' + Month + ''' to type Integer');
+end;
+
+function StreamToStr(Data: TStream): String;
+var
+  OriginalPosition: Int64;
+  S:                TStringStream;
+begin
+  OriginalPosition := Data.Position;
+  Data.Seek(0, soFromBeginning);
+  try
+    S := TStringStream.Create('');
+    try
+      S.CopyFrom(Data, 0);
+      Result := S.DataString;
+    finally
+      S.Free;
+    end;
+  finally
+    Data.Seek(OriginalPosition, soFromBeginning);
+  end;
 end;
 
 function WithoutFirstAndLastChars(const S: String): String;
@@ -750,7 +782,7 @@ begin
   Result := true;
 end;
 
-function TIdSipRequest.MalformedException: ExceptClass;
+function TIdSipRequest.MalformedException: EBadMessageClass;
 begin
   Result := EBadRequest;
 end;
@@ -895,7 +927,7 @@ begin
   Result := Self.StatusCode = SIPTrying;
 end;
 
-function TIdSipResponse.MalformedException: ExceptClass;
+function TIdSipResponse.MalformedException: EBadMessageClass;
 begin
   Result := EBadResponse;
 end;
@@ -1359,7 +1391,7 @@ end;
 
 procedure TIdSipParser.FailParse(Msg: TIdSipMessage; const Reason: String);
 begin
-  raise Msg.MalformedException.Create(Reason);
+  raise Msg.MalformedException.Create(Reason, StreamToStr(Self.Source));
 end;
 
 procedure TIdSipParser.InitializeMessage(Msg: TIdSipMessage);
@@ -1487,6 +1519,18 @@ end;
 function TIdSipParser._Release: Integer;
 begin
   Result := -1;
+end;
+
+//******************************************************************************
+//* EBadMessage                                                                *
+//******************************************************************************
+//* EBadMessage Public methods *************************************************
+
+constructor EBadMessage.Create(const Msg: String;
+                               const RawMessage: String);
+begin
+  inherited Create(Msg);
+  Self.RawMessage := RawMessage;
 end;
 
 end.

@@ -13,11 +13,12 @@ type
   TestTIdSipUdpServer = class(TThreadingTestCase,
                               IIdSipMessageListener)
   private
-    CheckReceivedRequest:  TIdSipRequestEvent;
-    CheckReceivedResponse: TIdSipResponseEvent;
-    Client:                TIdUDPClient;
-    Parser:                TIdSipParser;
-    Server:                TIdSipUdpServer;
+    CheckReceivedRequest:     TIdSipRequestEvent;
+    CheckReceivedResponse:    TIdSipResponseEvent;
+    Client:                   TIdUDPClient;
+    NotifiedMalformedMessage: Boolean;
+    Parser:                   TIdSipParser;
+    Server:                   TIdSipUdpServer;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest); overload;
@@ -35,6 +36,8 @@ type
     procedure CheckTortureTest35;
     procedure CheckTortureTest40;
 //    procedure CheckTortureTest41;
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -116,6 +119,8 @@ begin
   Self.Client.Port := Server.DefaultPort;
 
   Self.Parser := TIdSipParser.Create;
+
+  Self.NotifiedMalformedMessage := false;
 end;
 
 procedure TestTIdSipUdpServer.TearDown;
@@ -305,6 +310,12 @@ begin
 end;
 }
 
+procedure TestTIdSipUdpServer.OnMalformedMessage(const Msg: String;
+                                                 const Reason: String);
+begin
+  Self.NotifiedMalformedMessage := true;
+end;
+
 procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
@@ -334,8 +345,7 @@ begin
 
   Self.Client.Send(BasicRequest);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipUdpServer.TestListenerReceiveRequest;
@@ -352,8 +362,8 @@ begin
 
     Self.Client.Send(BasicRequest);
 
-    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
+    
     Check(Listener.ReceivedRequest, 'Not all listeners received the Request');
   finally
     Listener.Free;
@@ -374,8 +384,8 @@ begin
 
     Self.Client.Send(BasicResponse);
 
-    if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-      raise Self.ExceptionType.Create(Self.ExceptionMessage);
+    Self.WaitForSignaled;
+    
     Check(Listener.ReceivedResponse, 'Not all listeners received the Response');
   finally
     Listener.Free;
@@ -409,6 +419,9 @@ begin
   finally
     Response.Free;
   end;
+
+  Check(Self.NotifiedMalformedMessage,
+        'Malformed message notification never arrived');
 end;
 
 procedure TestTIdSipUdpServer.TestMalformedResponse;
@@ -425,6 +438,9 @@ begin
   CheckEquals('',
               Client.ReceiveString(DefaultTimeout),
               'Response not just dropped on the floor');
+
+  Check(Self.NotifiedMalformedMessage,
+        'Malformed message notification never arrived');
 end;
 
 procedure TestTIdSipUdpServer.TestRemoveMessageListener;
@@ -434,8 +450,7 @@ begin
 
   Self.Client.Send(BasicRequest);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrTimeout) then
-    Fail('Listener wasn''t removed');
+  Self.WaitForTimeout('Listener wasn''t removed');
 end;
 
 procedure TestTIdSipUdpServer.TestRequest;
@@ -444,8 +459,7 @@ begin
 
   Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipUdpServer.TestTortureTest16;

@@ -13,6 +13,8 @@ type
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnMalformedMessage(const Msg: String;
+                                 const Reason: String);
   end;
 
   TIdSipTcpConnectionCutter = class(TIdSipTimer)
@@ -80,10 +82,13 @@ type
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
+    procedure DoOnParserError(const RawMessage, Reason: String);
     procedure NotifyListeners(Request: TIdSipRequest;
                               ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure NotifyListeners(Response: TIdSipResponse;
                               ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure NotifyListenersOfMalformedMessage(const Msg: String;
+                                                const Reason: String);
     procedure OnReadBodyTimeout(Sender: TObject);
     function  ReadBody(Connection: TIdTCPConnection;
                        Message: TIdSipMessage): String;
@@ -380,6 +385,7 @@ begin
       Parser := TIdSipParser.Create;
       try
         Parser.Source := S;
+        Parser.OnParserError := Self.DoOnParserError;
 
         try
           Msg := Parser.ParseAndMakeMessage;
@@ -435,6 +441,11 @@ begin
   end;
 end;
 
+procedure TIdSipTcpServer.DoOnParserError(const RawMessage, Reason: String);
+begin
+  Self.NotifyListenersOfMalformedMessage(RawMessage, Reason);
+end;
+
 procedure TIdSipTcpServer.NotifyListeners(Request: TIdSipRequest;
                                           ReceivedFrom: TIdSipConnectionBindings);
 var
@@ -460,6 +471,20 @@ begin
     for I := 0 to Self.Listeners.Count - 1 do
       IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response,
                                                                  ReceivedFrom);
+  finally
+    Self.ListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipTcpServer.NotifyListenersOfMalformedMessage(const Msg: String;
+                                                            const Reason: String);
+var
+  I: Integer;
+begin
+  Self.ListenerLock.Acquire;
+  try
+    for I := 0 to Self.Listeners.Count - 1 do
+      IIdSipMessageListener(Self.Listeners[I]).OnMalformedMessage(Msg, Reason);
   finally
     Self.ListenerLock.Release;
   end;

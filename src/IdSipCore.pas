@@ -82,7 +82,6 @@ type
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
     procedure OnInboundCall(Session: TIdSipSession);
-//    procedure OnRegistrationRequest(Registration: TIdSipRegistration);
   end;
 
   // TODO: there's redundance with this Hostname, and the Hostnames of the
@@ -123,6 +122,14 @@ type
     property HostName:   String                      read fHostName write fHostName;
   end;
 
+  // I represent the heart of a User Agent. We split User Agent functionality
+  // into multiple levels because some SIP entities (like registrars) behave
+  // very similarly to "normal" User Agents. In fact, we can regard a registrar
+  // as simply a User Agent that responds to REGISTER methods.
+
+  // I provide the canonical place to reject messages that have correct syntax
+  // but that we don't or can't accept. This includes unsupported SIP versions,
+  // unrecognised methods, etc.
   TIdSipAbstractUserAgent = class(TIdSipAbstractCore)
   private
     BranchLock:              TCriticalSection;
