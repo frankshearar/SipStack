@@ -5,8 +5,8 @@ interface
 uses
   Classes, IdRTP, IdSdp, IdSimpleParser, IdSipCore, IdSipDialog,
   IdSipDialogID, IdSipHeaders, IdSipMessage, IdSipMockCore,
-  IdSipMockTransactionDispatcher, IdSipTransaction, IdSipTransport,
-  IdSocketHandle, TestFramework, TestFrameworkSip;
+  IdSipMockTransactionDispatcher, IdSipRegistrar, IdSipTransaction,
+  IdSipTransport, IdSocketHandle, TestFramework, TestFrameworkSip;
 
 type
   TestTIdSipAbstractCore = class(TTestCase)
@@ -124,6 +124,7 @@ type
     procedure TestReceiveByeForDialog;
     procedure TestReceiveByeWithoutTags;
     procedure TestRemoveObserver;
+    procedure TestRemoveRegistration;
     procedure TestRemoveSession;
     procedure TestRemoveSessionListener;
     procedure TestRejectNoContact;
@@ -219,22 +220,56 @@ type
     procedure TestTimerIntervalIncreases;
   end;
 
+  TestTIdSipRegistration = class(TTestCase,
+                                 IIdSipRegistrationListener)
+  private
+    Challenged:  Boolean;
+    Contacts:    TIdSipContacts;
+    Dispatch:    TIdSipMockTransactionDispatcher;
+    Failed:      Boolean;
+    Reg:         TIdSipRegistration;
+    Registrar:   TIdSipRegistrar;
+    Request:     TIdSipRequest;
+    Succeeded:   Boolean;
+    UA:          TIdSipUserAgentCore;
+
+    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                        Response: TIdSipResponse);
+    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        const Reason: String);
+    procedure OnSuccess(CurrentBindings: TIdSipContacts);
+    procedure SimulateRemoteOK;
+    procedure SimulateRemoteResponse(StatusCode: Cardinal);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddListener;
+    procedure TestRegister;
+    procedure TestReceiveFail;
+    procedure TestReceiveOK;
+    procedure TestReceiveUnauthorized;
+    procedure TestSequenceNumberIncrements;
+  end;
+
 const
   DefaultTimeout = 5000;
 
 implementation
 
 uses
-  IdException, IdGlobal, IdSipConsts, IdUdpServer, SyncObjs, SysUtils,
-  TestMessages, IdSipMockTransport;
+  IdException, IdGlobal, IdInterfacedObject, IdSipConsts, IdUdpServer, SyncObjs,
+  SysUtils, TestMessages, IdSipMockTransport;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-//  Result.AddTest(TestTIdSipAbstractCore.Suite);
+  Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipUserAgentCore.Suite);
-//  Result.AddTest(TestTIdSipSession.Suite);
-//  Result.AddTest(TestTIdSipSessionTimer.Suite);
+  Result.AddTest(TestTIdSipSession.Suite);
+  Result.AddTest(TestTIdSipSessionTimer.Suite);
+  Result.AddTest(TestTIdSipRegistration.Suite);
 end;
 
 //******************************************************************************
@@ -893,7 +928,8 @@ var
 begin
   Register := Self.Core.CreateRegister(Self.Destination);
   try
-    CheckEquals(MethodRegister, Register.Method, 'Incorrect method');
+    CheckEquals(MethodRegister, Register.Method,      'Incorrect method');
+    CheckEquals(MethodRegister, Register.CSeq.Method, 'Incorrect CSeq method');
     CheckEquals('', Register.RequestUri.Username, 'Request-URI Username');
     CheckEquals('', Register.RequestUri.Password, 'Request-URI Password');
 
@@ -1594,6 +1630,23 @@ begin
   finally
     L1.Free;
   end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestRemoveRegistration;
+var
+  Registration:      TIdSipRegistration;
+  RegistrationCount: Cardinal;
+begin
+  // Yes, this seems crazy. The fact that a SipRegistration
+  // gets created concerns us, not where we're sending the
+  // registration.
+  Registration := Self.Core.RegisterWith(Self.Core.Contact.Address);
+
+  RegistrationCount := Self.Core.RegistrationCount;
+  Self.Core.RemoveRegistration(Registration);
+  CheckEquals(RegistrationCount - 1,
+              Self.Core.RegistrationCount,
+              'Registration wasn''t removed');
 end;
 
 procedure TestTIdSipUserAgentCore.TestRemoveSession;
@@ -2851,6 +2904,159 @@ begin
   CheckEquals(DefaultT2,   Self.Timer.Interval, 'Fire thrice');
   Self.Timer.Fire;
   CheckEquals(DefaultT2,   Self.Timer.Interval, 'Fire four times');
+end;
+
+//******************************************************************************
+//*  TestTIdSipRegistration                                                    *
+//******************************************************************************
+//*  TestTIdSipRegistration Public methods *************************************
+
+procedure TestTIdSipRegistration.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Registrar := TIdSipRegistrar.Create;
+  Self.Registrar.From.Address.Uri := 'sip:talking-head.tessier-ashpool.co.luna';
+  Self.Dispatch := TIdSipMockTransactionDispatcher.Create;
+
+  Self.UA := TIdSipUserAgentCore.Create;
+  Self.UA.Dispatcher := Self.Dispatch;
+
+  Self.Request := TIdSipRequest.Create;
+  Self.Request.Method := MethodRegister;
+  Self.Request.RequestUri.Uri := 'sip:tessier-ashpool.co.luna';
+  Self.Request.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP talking-head.tessier-ashpool.co.luna;branch='
+                                               + BranchMagicCookie + 'f00L';
+  Self.Request.ToHeader.Address.Uri := 'sip:wintermute@tessier-ashpool.co.luna';
+  Self.Request.AddHeader(ContactHeaderFull).Value := 'sip:wintermute@talking-head.tessier-ashpool.co.luna';
+  Self.Request.CSeq.Method := Self.Request.Method;
+  Self.Request.CSeq.SequenceNo := 1024;
+  Self.Request.CallID := '1@selftest.foo';
+
+  Self.Contacts := TIdSipContacts.Create(Self.Request.Headers);
+
+  Self.Reg := TIdSipRegistration.Create(Self.UA);
+  Self.Reg.AddListener(Self);
+
+  Self.Challenged := false;
+  Self.Failed     := false;
+  Self.Succeeded  := false;
+end;
+
+procedure TestTIdSipRegistration.TearDown;
+begin
+  Self.Reg.Free;
+  Self.Contacts.Free;
+  Self.Request.Free;
+  Self.UA.Free;
+  Self.Dispatch.Free;
+  Self.Registrar.Free;
+
+  inherited TearDown;
+end;
+
+//*  TestTIdSipRegistration Private methods ************************************
+
+procedure TestTIdSipRegistration.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                                           Response: TIdSipResponse);
+begin
+  Self.Challenged := true;
+end;
+
+procedure TestTIdSipRegistration.OnFailure(RegisterAgent: TIdSipRegistration;
+                                           CurrentBindings: TIdSipContacts;
+                                           const Reason: String);
+begin
+  Self.Failed := true;
+end;                                           
+
+procedure TestTIdSipRegistration.OnSuccess(CurrentBindings: TIdSipContacts);
+begin
+  Self.Succeeded := true;
+end;
+
+procedure TestTIdSipRegistration.SimulateRemoteOK;
+begin
+  Self.SimulateRemoteResponse(SIPOK);
+end;
+
+procedure TestTIdSipRegistration.SimulateRemoteResponse(StatusCode: Cardinal);
+var
+  Response: TIdSipResponse;
+begin
+  Response := Self.Registrar.CreateResponse(Self.Dispatch.Transport.LastRequest,
+                                            StatusCode);
+  try
+    Self.Dispatch.Transport.FireOnResponse(Response);
+  finally
+    Response.Free;
+  end;
+end;
+
+//*  TestTIdSipRegistration Published methods **********************************
+
+procedure TestTIdSipRegistration.TestAddListener;
+var
+  L1, L2: TIdSipTestRegistrationListener;
+begin
+  L1 := TIdSipTestRegistrationListener.Create;
+  try
+    L2 := TIdSipTestRegistrationListener.Create;
+    try
+      Self.Reg.AddListener(L1);
+      Self.Reg.AddListener(L2);
+
+      Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+      Self.SimulateRemoteOK;
+
+      Check(L1.Success, 'L1 not informed of success');
+      Check(L2.Success, 'L2 not informed of success');
+    finally
+      L2.Free;
+    end;
+  finally
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipRegistration.TestRegister;
+begin
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Check(Self.Dispatch.Transport.SentRequestCount > 0,
+        'No request sent');
+end;
+
+procedure TestTIdSipRegistration.TestReceiveFail;
+begin
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.SimulateRemoteResponse(SIPInternalServerError);
+  Check(Self.Failed, 'Registration succeeded');
+end;
+
+procedure TestTIdSipRegistration.TestReceiveOK;
+begin
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.SimulateRemoteOK;
+  Check(Self.Succeeded, 'Registration failed');
+end;
+
+procedure TestTIdSipRegistration.TestReceiveUnauthorized;
+begin
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Self.SimulateRemoteResponse(SIPUnauthorized);
+  Check(Self.Challenged,
+        'Authentication challenge');
+end;
+
+procedure TestTIdSipRegistration.TestSequenceNumberIncrements;
+var
+  SeqNo: Cardinal;
+begin
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  SeqNo := Self.Dispatch.Transport.LastRequest.CSeq.SequenceNo;
+  Self.Reg.Register(Self.Registrar.From.Address, Self.Contacts);
+  Check(SeqNo + 1 = Self.Dispatch.Transport.LastRequest.CSeq.SequenceNo,
+        'CSeq sequence number didn''t increment');
 end;
 
 initialization

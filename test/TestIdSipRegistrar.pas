@@ -3,7 +3,7 @@ unit TestIdSipRegistrar;
 interface
 
 uses
-  Classes, IdSipConsts, IdSipHeaders, IdSipMessage,
+  Classes, Contnrs, IdSipConsts, IdSipHeaders, IdSipMessage,
   IdSipMockTransactionDispatcher, IdSipRegistrar, TestFramework;
 
 type
@@ -53,7 +53,7 @@ type
 
   TIdSipMockBindingDatabase = class(TIdSipAbstractBindingDatabase)
   private
-    BindingStore:       TStrings;
+    BindingStore:       TObjectList;
     fAuthorized:        Boolean;
     fFailAddBinding:    Boolean;
     fFailBindingsFor:   Boolean;
@@ -554,7 +554,7 @@ constructor TIdSipMockBindingDatabase.Create;
 begin
   inherited Create;
 
-  Self.BindingStore := TStringList.Create;
+  Self.BindingStore := TObjectList.Create(true);
 
   Self.Authorized        := true;
   Self.FailAddBinding    := false;
@@ -564,12 +564,7 @@ begin
 end;
 
 destructor TIdSipMockBindingDatabase.Destroy;
-var
-  I: Integer;
 begin
-  for I := 0 to Self.BindingStore.Count - 1 do
-    Self.BindingStore.Objects[I].Free;
-
   Self.BindingStore.Free;
 
   inherited Destroy;
@@ -592,7 +587,7 @@ begin
   AddressOfRecord := Request.AddressOfRecord;
 
   for I := 0 to Self.BindingStore.Count - 1 do
-    if IsEqual(Self.BindingStore[I], AddressOfRecord) then begin
+    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) then begin
       ContactValue := Self.Bindings[I].Uri
                     + ';' + ExpiresParam + '=';
 
@@ -637,14 +632,15 @@ var
   Index:      Integer;
   NewBinding: TIdRegistrarBinding;
 begin
-  NewBinding := TIdRegistrarBinding.Create(Contact.AsAddressOfRecord,
+  NewBinding := TIdRegistrarBinding.Create(AddressOfRecord,
+                                           Contact.AsAddressOfRecord,
                                            CallID,
                                            SequenceNo,
                                            Now + OneSecond*ExpiryTime);
   try
-    Self.BindingStore.AddObject(AddressOfRecord, NewBinding);
+    Self.BindingStore.Add(NewBinding);
   except
-    Index := Self.BindingStore.IndexOfObject(NewBinding);
+    Index := Self.BindingStore.IndexOf(NewBinding);
     if (Index <> -1) then
       Self.DeleteBinding(Index)
     else
@@ -664,8 +660,8 @@ begin
   Result := nil;
   I := 0;
 
-  while (I < Self.BindingStore.Count) and not Assigned(Result) do begin
-    if (Self.BindingStore[I] = AddressOfRecord) and
+  while (I < Self.BindingCount) and not Assigned(Result) do begin
+    if (Self.Bindings[I].AddressOfRecord = AddressOfRecord) and
       (Self.Bindings[I].Uri = CanonicalUri) then
       Result := Self.Bindings[I]
     else
@@ -689,15 +685,13 @@ end;
 
 procedure TIdSipMockBindingDatabase.DeleteBinding(Index: Integer);
 begin
-  if (Index >= 0) then begin
-    Self.BindingStore.Objects[Index].Free;
+  if (Index >= 0) then
     Self.BindingStore.Delete(Index);
-  end;
 end;
 
 function TIdSipMockBindingDatabase.GetBindings(Index: Integer): TIdRegistrarBinding;
 begin
-  Result := Self.BindingStore.Objects[Index] as TIdRegistrarBinding;
+  Result := Self.BindingStore[Index] as TIdRegistrarBinding;
 end;
 
 function TIdSipMockBindingDatabase.IndexOfBinding(const AddressOfRecord: String;
@@ -705,7 +699,7 @@ function TIdSipMockBindingDatabase.IndexOfBinding(const AddressOfRecord: String;
 begin
   Result := 0;
   while (Result < Self.BindingCount)
-    and not IsEqual(Self.BindingStore[Result], AddressOfRecord)
+    and not (Self.Bindings[Result].AddressOfRecord = AddressOfRecord)
     and not (Self.Bindings[Result].Uri = Contact.AsAddressOfRecord) do
     Inc(Result);
 

@@ -56,6 +56,27 @@ type
     property Changed: Boolean read fChanged;
   end;
 
+  TIdSipTestRegistrationListener = class(TIdInterfacedObject,
+                                         IIdSipRegistrationListener)
+  private
+    fAuthenticationChallenge: Boolean;
+    fFailure:                 Boolean;
+    fSuccess:                 Boolean;
+  public
+    constructor Create;
+
+    procedure OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                        Response: TIdSipResponse);
+    procedure OnFailure(RegisterAgent: TIdSipRegistration;
+                        CurrentBindings: TIdSipContacts;
+                        const Reason: String);
+    procedure OnSuccess(CurrentBindings: TIdSipContacts);
+
+    property AuthenticationChallenge: Boolean read fAuthenticationChallenge;
+    property Failure:                 Boolean read fSuccess;
+    property Success:                 Boolean read fSuccess;
+  end;
+
   TIdSipTestSessionListener = class(TIdInterfacedObject,
                                     IIdSipSessionListener)
   private
@@ -247,6 +268,39 @@ procedure TIdSipTestObserver.OnChanged(Observed: TObject);
 begin
   Self.fChanged := true;
 end;
+
+//******************************************************************************
+//* TIdSipTestRegistrationListener                                             *
+//******************************************************************************
+//* TIdSipTestRegistrationListener Public methods ******************************
+
+constructor TIdSipTestRegistrationListener.Create;
+begin
+  inherited Create;
+
+  Self.fAuthenticationChallenge := false;
+  Self.fFailure                 := false;
+  Self.fSuccess                 := false;
+end;
+
+procedure TIdSipTestRegistrationListener.OnAuthenticationChallenge(RegisterAgent: TIdSipRegistration;
+                                                                   Response: TIdSipResponse);
+begin
+  Self.fAuthenticationChallenge := true;
+end;
+
+procedure TIdSipTestRegistrationListener.OnFailure(RegisterAgent: TIdSipRegistration;
+                                                   CurrentBindings: TIdSipContacts;
+                                                   const Reason: String);
+begin
+  Self.fFailure := true;
+end;
+
+procedure TIdSipTestRegistrationListener.OnSuccess(CurrentBindings: TIdSipContacts);
+begin
+  Self.fSuccess := true;
+end;
+
 
 //******************************************************************************
 //* TIdSipTestSessionListener                                                  *

@@ -12,16 +12,19 @@ type
   // registrations.
   TIdRegistrarBinding = class(TObject)
   private
-    fCallID:     String;
-    fSequenceNo: Cardinal;
-    fUri:        String;
-    fValidUntil: TDateTime;
+    fAddressOfRecord: String;
+    fCallID:          String;
+    fSequenceNo:      Cardinal;
+    fUri:             String;
+    fValidUntil:      TDateTime;
   public
-    constructor Create(const CanonicalisedUri: String;
+    constructor Create(const AddressOfRecord: String;
+                       const CanonicalisedUri: String;
                        const CallID: String;
                        SequenceNo: Cardinal;
                        AbsoluteTimeout: TDateTime);
 
+    property AddressOfRecord: String read fAddressOfRecord write fAddressOfRecord;
     property CallID:     String    read fCallID write fCallID;
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
     property Uri:        String    read fUri write fUri;
@@ -123,24 +126,26 @@ uses
   IdSipConsts, SysUtils;
 
 const
-  TenMinutes = 600; // seconds  
+  TenMinutes = 600; // seconds
 
 //******************************************************************************
 //* TIdRegistrarBinding                                                        *
 //******************************************************************************
 //* TIdRegistrarBinding Public methods *****************************************
 
-constructor TIdRegistrarBinding.Create(const CanonicalisedUri: String;
+constructor TIdRegistrarBinding.Create(const AddressOfRecord: String;
+                                       const CanonicalisedUri: String;
                                        const CallID: String;
                                        SequenceNo: Cardinal;
                                        AbsoluteTimeout: TDateTime);
 begin
   inherited Create;
 
-  Self.fCallID     := CallID;
-  Self.fSequenceNo := SequenceNo;
-  Self.fUri        := CanonicalisedUri;
-  Self.fValidUntil := AbsoluteTimeout;
+  Self.fAddressOfRecord := AddressOfRecord;
+  Self.fCallID          := CallID;
+  Self.fSequenceNo      := SequenceNo;
+  Self.fUri             := CanonicalisedUri;
+  Self.fValidUntil      := AbsoluteTimeout;
 end;
 
 //******************************************************************************
