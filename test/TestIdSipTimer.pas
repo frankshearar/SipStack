@@ -28,7 +28,7 @@ type
   published
     procedure TestExceptionHandling;
     procedure TestTick;
-    procedure TestReset;
+    procedure TestResetTime;
   end;
 
   TestTIdSipSingleShotTimer = class(TThreadingTestCase)
@@ -121,18 +121,18 @@ begin
   Self.WaitForSignaled;
 end;
 
-procedure TestTIdSipTimer.TestReset;
+procedure TestTIdSipTimer.TestResetTime;
 begin
   Self.Timer.OnTimer := Self.OnTickTimer;
   Self.Timer.Interval := 1000;
   Self.Timer.Start;
-  Self.WaitForTimeout('Ticked prematurely before Reset');
+  Self.WaitForTimeout('Ticked prematurely before ResetTime');
 //  IdGlobal.Sleep(500);
-//  Check(not Self.Tick, 'Ticked prematurely before Reset');
-  Self.Timer.Reset;
-  Self.WaitForTimeout('Ticked prematurely after Reset');
+//  Check(not Self.Tick, 'Ticked prematurely before ResetTime');
+  Self.Timer.ResetTime;
+  Self.WaitForTimeout('Ticked prematurely after ResetTime');
 //  IdGlobal.Sleep(500);
-//  Check(not Self.Tick, 'Ticked prematurely after Reset');
+//  Check(not Self.Tick, 'Ticked prematurely after ResetTime');
 end;
 
 //******************************************************************************

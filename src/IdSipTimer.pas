@@ -31,7 +31,7 @@ type
                        CoarseTiming: Boolean = True); reintroduce;
 
     function  ElapsedTime: TDateTime;
-    procedure Reset;
+    procedure ResetTime;
 
     property Interval: Cardinal     read fInterval write fInterval;
     property OnTimer:  TNotifyEvent read fOnTimer write fOnTimer;
@@ -84,7 +84,7 @@ begin
   Result := Now - Self.fStart
 end;
 
-procedure TIdSipTimer.Reset;
+procedure TIdSipTimer.ResetTime;
 begin
   Self.fStart := Now;
 end;
@@ -93,13 +93,13 @@ end;
 
 procedure TIdSipTimer.Run;
 begin
-  Self.Reset;
+  Self.ResetTime;
   while not Self.Terminated do begin
     if Self.CoarseTiming then begin
       IdGlobal.Sleep(Self.Resolution);
 
       if (Self.ElapsedTime > (OneMillisecond * Self.Interval)) then begin
-        Self.Reset;
+        Self.ResetTime;
         Self.OnTimer(Self);
       end;
     end
