@@ -928,8 +928,6 @@ begin
   finally
     KeyRing.Free;
   end;
-  Password := Self.Password;
-  Username := Self.Username;
 end;
 
 procedure TestTIdSipTransactionDispatcher.OnFail(Transaction: TIdSipTransaction;
