@@ -818,7 +818,7 @@ type
 
 const
   BadAuthorizationTokens = 'Bad Authorization tokens';
-  MissingContactHeader =   'Missing Contact Header';
+  MissingContactHeader   = 'Missing Contact Header';
 
 procedure ApplyTo(List: TList;
                   Lock: TCriticalSection;
