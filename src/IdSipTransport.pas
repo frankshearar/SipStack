@@ -422,7 +422,7 @@ procedure TIdSipTransport.NotifyTransportListeners(Request: TIdSipRequest);
 var
   Notification: TIdSipTransportReceiveRequestMethod;
 begin
-  Assert(not Request.HasInvalidSyntax,
+  Assert(not Request.IsMalformed,
          'A Transport must NEVER send invalid requests up the stack');
 
   Notification := TIdSipTransportReceiveRequestMethod.Create;
@@ -440,7 +440,7 @@ procedure TIdSipTransport.NotifyTransportListeners(Response: TIdSipResponse);
 var
   Notification: TIdSipTransportReceiveResponseMethod;
 begin
-  Assert(not Response.HasInvalidSyntax,
+  Assert(not Response.IsMalformed,
          'A Transport must NEVER send invalid responses up the stack');
 
   Notification := TIdSipTransportReceiveResponseMethod.Create;
@@ -531,7 +531,7 @@ end;
 procedure TIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
                                            ReceivedFrom: TIdSipConnectionBindings);
 begin
-  if Request.HasInvalidSyntax then begin
+  if Request.IsMalformed then begin
     Self.NotifyTransportListenersOfRejectedMessage(Request.AsString,
                                                    Request.ParseFailReason);
     Self.ReturnBadRequest(Request, ReceivedFrom);
@@ -552,7 +552,7 @@ end;
 procedure TIdSipTransport.OnReceiveResponse(Response: TIdSipResponse;
                                             ReceivedFrom: TIdSipConnectionBindings);
 begin
-  if Response.HasInvalidSyntax then begin
+  if Response.IsMalformed then begin
     Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
                                                    Response.ParseFailReason);
     // Drop the malformed response.                                               

@@ -441,7 +441,7 @@ begin
 
     Msg := Self.P.ParseAndMakeMessage;
     try
-      Check(Msg.HasInvalidSyntax,
+      Check(Msg.IsMalformed,
             'Msg has invalid syntax, but not branded as such');
     finally
       Msg.Free;
@@ -468,7 +468,7 @@ begin
 
     Msg := Self.P.ParseAndMakeMessage;
     try
-      Check(Msg.HasInvalidSyntax,
+      Check(Msg.IsMalformed,
             'Failed to bail out of empty string');
     finally
       Msg.Free;
@@ -503,7 +503,7 @@ begin
 
     Msg := Self.P.ParseAndMakeMessage;
     try
-      Check(Msg.HasInvalidSyntax,
+      Check(Msg.IsMalformed,
             'Failed to bail out on parsing a malformed message');
     finally
       Msg.Free;
@@ -709,7 +709,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Failed to bail out on parsing an empty string');
   finally
     Str.Free;
@@ -752,7 +752,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Failed to bail out creating a request from a malformed response');
   finally
     Str.Free;
@@ -771,7 +771,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Failed to bail out');
   finally
     Str.Free;
@@ -792,7 +792,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Failed to bail out on a Bad Request');
   finally
     Str.Free;
@@ -809,7 +809,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Malformed start line (too many spaces between Method and Request-URI) parsed without error');
   finally
     Str.Free;
@@ -821,7 +821,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Malformed start line (no spaces between Method and Request-URI) parsed without error');
   finally
     Str.Free;
@@ -833,7 +833,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Malformed start line (no Method) parsed without error');
   finally
     Str.Free;
@@ -845,7 +845,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Malformed start line (no Request-URI, no SIP-Version) parsed without error');
   finally
     Str.Free;
@@ -856,7 +856,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Malformed start line (malformed SIP-Version) parsed without error');
   finally
     Str.Free;
@@ -906,7 +906,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out');
   finally
     Str.Free;
@@ -931,7 +931,7 @@ begin
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out');
   finally
     Str.Free;
@@ -956,7 +956,7 @@ begin
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out');
   finally
     Str.Free;
@@ -1007,7 +1007,7 @@ begin
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out');
   finally
     Str.Free;
@@ -1032,7 +1032,7 @@ begin
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out');
   finally
     Str.Free;
@@ -1103,7 +1103,7 @@ begin
   try
     Self.P.Source := Str;
      Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Malformed start line (Request-URI has spaces) parsed without error');
   finally
     Str.Free;
@@ -1118,7 +1118,7 @@ begin
   try
     Self.P.Source := Str;
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Malformed start line (Request-URI enclosed in angle brackets) parsed without error');
   finally
     Str.Free;
@@ -1152,7 +1152,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
           'Failed to bail out');
   finally
     Str.Free;
@@ -1270,7 +1270,7 @@ begin
     Self.P.Source := Str;
     Self.P.ParseResponse(Self.Response);
 
-    Check(Self.Response.HasInvalidSyntax,
+    Check(Self.Response.IsMalformed,
           'Failed to reject a non-numeric Status-Code');
     CheckEquals(Format(InvalidStatusCode, ['Aheh']),
                 Self.Response.ParseFailReason,
@@ -1304,7 +1304,7 @@ begin
     Self.P.Source := Str;
     Self.P.ParseResponse(Self.Response);
 
-    Check(Self.Response.HasInvalidSyntax,
+    Check(Self.Response.IsMalformed,
           'Response not marked as invalid');
 
     CheckEquals(ExpectedReason,
@@ -1777,7 +1777,7 @@ begin
     Self.P.Source := Str;
 
     Self.P.ParseRequest(Self.Request);
-    Check(Self.Request.HasInvalidSyntax,
+    Check(Self.Request.IsMalformed,
                 'Failed to bail out of a bad request');
   finally
     Str.Free;

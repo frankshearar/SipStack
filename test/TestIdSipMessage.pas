@@ -56,12 +56,12 @@ type
     procedure TestFirstMinExpires;
     procedure TestFirstRequire;
     procedure TestHasExpiry;
-    procedure TestHasInvalidSyntaxContentLength;
-    procedure TestHasInvalidSyntaxMissingCallID;
-    procedure TestHasInvalidSyntaxMissingCseq;
-    procedure TestHasInvalidSyntaxMissingFrom;
-    procedure TestHasInvalidSyntaxMissingTo;
-    procedure TestHasInvalidSyntaxMissingVia;
+    procedure TestIsMalformedContentLength;
+    procedure TestIsMalformedMissingCallID;
+    procedure TestIsMalformedMissingCseq;
+    procedure TestIsMalformedMissingFrom;
+    procedure TestIsMalformedMissingTo;
+    procedure TestIsMalformedMissingVia;
     procedure TestHeaderCount;
     procedure TestLastHop;
     procedure TestQuickestExpiry;
@@ -111,7 +111,7 @@ type
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
     procedure TestHasSipsUri;
-    procedure TestHasInvalidSyntaxMissingVia;
+    procedure TestIsMalformedMissingVia;
     procedure TestIsAck;
     procedure TestIsBye;
     procedure TestIsCancel;
@@ -582,7 +582,7 @@ begin
         'Expires header and Contact with Expires parameter');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxContentLength;
+procedure TestTIdSipMessage.TestIsMalformedContentLength;
 begin
   Self.Msg.AddHeader(CallIDHeaderFull).Value  := 'foo';
   Self.Msg.AddHeader(CSeqHeader).Value        := '1 INVITE';
@@ -592,57 +592,57 @@ begin
   Self.Msg.AddHeader(ViaHeaderFull).Value     := 'SIP/2.0/UDP foo';
 
   Self.Msg.ContentLength := 0;
-  Check(not Self.Msg.HasInvalidSyntax,
+  Check(not Self.Msg.IsMalformed,
         'Content-Length = 0; empty body');
 
   Self.Msg.Body := 'foo';
-  Check(Self.Msg.HasInvalidSyntax,
+  Check(Self.Msg.IsMalformed,
         'Content-Length = 0; body = ''foo''');
 
   Self.Msg.Body := 'foo';
   Self.Msg.ContentLength := 3;
-  Check(not Self.Msg.HasInvalidSyntax,
+  Check(not Self.Msg.IsMalformed,
         'Content-Length = 3; body = ''foo''');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingCallID;
+procedure TestTIdSipMessage.TestIsMalformedMissingCallID;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(CallIDHeaderFull);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing Call-ID header');
+  Check(Self.Msg.IsMalformed, 'Missing Call-ID header');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingCseq;
+procedure TestTIdSipMessage.TestIsMalformedMissingCseq;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(CSeqHeader);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing CSeq header');
+  Check(Self.Msg.IsMalformed, 'Missing CSeq header');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingFrom;
+procedure TestTIdSipMessage.TestIsMalformedMissingFrom;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(FromHeaderFull);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing From header');
+  Check(Self.Msg.IsMalformed, 'Missing From header');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingTo;
+procedure TestTIdSipMessage.TestIsMalformedMissingTo;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(ToHeaderFull);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing To header');
+  Check(Self.Msg.IsMalformed, 'Missing To header');
 end;
 
-procedure TestTIdSipMessage.TestHasInvalidSyntaxMissingVia;
+procedure TestTIdSipMessage.TestIsMalformedMissingVia;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing Via header');
+  Check(Self.Msg.IsMalformed, 'Missing Via header');
 end;
 
 procedure TestTIdSipMessage.TestHeaderCount;
@@ -1376,12 +1376,12 @@ begin
   Check(Self.Request.HasSipsUri, 'sips URI');
 end;
 
-procedure TestTIdSipRequest.TestHasInvalidSyntaxMissingVia;
+procedure TestTIdSipRequest.TestIsMalformedMissingVia;
 begin
   Self.AddRequiredHeaders(Self.Msg);
   Self.Msg.RemoveAllHeadersNamed(ViaHeaderFull);
 
-  Check(Self.Msg.HasInvalidSyntax, 'Missing Via header');
+  Check(Self.Msg.IsMalformed, 'Missing Via header');
 end;
 
 procedure TestTIdSipRequest.TestIsAck;

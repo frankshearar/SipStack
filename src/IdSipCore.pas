@@ -1474,7 +1474,7 @@ procedure TIdSipAbstractUserAgent.SetFrom(Value: TIdSipFromHeader);
 begin
   Self.From.Assign(Value);
   
-  if Self.From.HasInvalidSyntax then
+  if Self.From.IsMalformed then
     raise EBadHeader.Create(Self.From.Name);
 end;
 
@@ -2256,7 +2256,7 @@ begin
 
   Self.Contact.Assign(Value);
   
-  if Self.Contact.HasInvalidSyntax then
+  if Self.Contact.IsMalformed then
     raise EBadHeader.Create(Self.Contact.Name);
 end;
 

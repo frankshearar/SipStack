@@ -473,7 +473,7 @@ type
     procedure TestFirst;
     procedure TestGetAllButFirst;
     procedure TestHasHeader;
-    procedure TestHasInvalidSyntax;
+    procedure TestIsMalformed;
     procedure TestHeaders;
     procedure TestItems;
     procedure TestIsCallID;
@@ -1296,17 +1296,17 @@ procedure TestTIdSipAddressHeader.TestValueWithMalformedQuotedName;
 begin
   // missing close quote
   Self.A.Value := '"Count Zero <sip:countzero@jacks-bar.com>';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out because of unmatched quotes #1');
 
   // missing close quote
   Self.A.Value := '"Count Zero \" <sip:countzero@jacks-bar.com>';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out because of unmatched quotes #2');
 
   // missing close quote
   Self.A.Value := '"Count Zero \\\\\\\" <sip:countzero@jacks-bar.com>';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out because of unmatched quotes #3');
 end;
 
@@ -1397,7 +1397,7 @@ end;
 procedure TestTIdSipAddressHeader.TestValueWithUnquotedNonTokensPlusParam;
 begin
   Self.A.Value := 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out with unquoted non-tokens');
 end;
 
@@ -1617,11 +1617,11 @@ end;
 procedure TestTIdSipAuthorizationHeader.TestUnquotedResponse;
 begin
   Self.A.Value := 'Digest username=Alice"';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out on quoted-string without leading quote');
 
   Self.A.Value := 'Digest username="Alice';
-  Check(Self.A.HasInvalidSyntax,
+  Check(Self.A.IsMalformed,
         'Failed to bail out on quoted-string without trailing quote');
 end;
 
@@ -1757,22 +1757,22 @@ begin
   CheckEquals('fdjhasdfa@sda', Self.C.Value, 'fdjhasdfa@sda');
 
   Self.C.Value := '';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out on empty string');
 
   Self.C.Value := 'aaaaaaaaaaaaaaaa;';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
        'Failed to bail out on non-word');
 
   Self.C.Value := 'aaaaaaaa@@bbbbb';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out optional non-word');
 end;
 
 procedure TestTIdSipCallIDHeader.TestValueWithParams;
 begin
   Self.C.Value := 'one@two;tag=f00';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with params - semicolon is an invalid character');
 end;
 
@@ -1989,15 +1989,15 @@ begin
   CheckEquals(65536, C.Expires, 'expires=65536');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;expires=a';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with letters');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;expires=-1';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with negative number');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;expires=';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with empty string');
 end;
 
@@ -2033,19 +2033,19 @@ begin
   CheckEquals(1000, C.Q, 'q=1.000');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;q=';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out on empty string');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;q=a';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out on letters');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;q=0.1234';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out on too many digits');
 
   Self.C.Value := 'sip:wintermute@tessier-ashpool.co.luna;q=1.1';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out on number too big');
 end;
 
@@ -2187,26 +2187,26 @@ begin
   CheckEquals('INVITE', Self.C.Method,     '3: Method');
 
   Self.C.Value := 'a';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with a non-numeric sequence number, ''a''');
 
   Self.C.Value := 'cafebabe INVITE';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with a non-numeric sequence number, ''cafebabe INVITE''');
 
   Self.C.Value := '42 ';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with a non-method, ''42 ''');
 
   Self.C.Value := '42 "INVITE"';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with a non-method, ''42 "INVITE"');
 end;
 
 procedure TestTIdSipCSeqHeader.TestVeryLargeValue;
 begin
   Self.C.Value := '4294967297 INVITE';
-  Check(Self.C.HasInvalidSyntax,
+  Check(Self.C.IsMalformed,
         'Failed to bail out with a ridiculously large CSeq sequence number');
 end;
 
@@ -2262,14 +2262,14 @@ end;
 procedure TestTIdSipDateHeader.TestValueMalformedAbsoluteTime;
 begin
   Self.D.Value := 'Thu, 44 Dec 19999 16:00:00 EDT';
-  Check(Self.D.HasInvalidSyntax,
+  Check(Self.D.IsMalformed,
         'Failed to bail out');
 end;
 
 procedure TestTIdSipDateHeader.TestValueRelativeTime;
 begin
   Self.D.Value := '1';
-  Check(Self.D.HasInvalidSyntax,
+  Check(Self.D.IsMalformed,
         'Failed to bail out');
 end;
 
@@ -2400,7 +2400,7 @@ begin
   CheckEquals('1928301774', Self.F.Tag, '1928301774');
 
   Self.F.Value := 'Case <sip:case@fried.neurons.org>;tag=19283@01774';
-  Check(Self.F.HasInvalidSyntax,
+  Check(Self.F.IsMalformed,
         'Failed to bail out with malformed token');
 end;
 
@@ -2476,21 +2476,21 @@ end;
 procedure TestTIdSipMaxForwardsHeader.TestValueNonNumber;
 begin
   Self.M.Value := 'alpha';
-  Check(Self.M.HasInvalidSyntax,
+  Check(Self.M.IsMalformed,
         'Failed to bail out on non-numeric value for Max-Forwards');
 end;
 
 procedure TestTIdSipMaxForwardsHeader.TestValueTooBig;
 begin
   Self.M.Value := '256';
-  Check(Self.M.HasInvalidSyntax,
+  Check(Self.M.IsMalformed,
         'Failed to bail out on numeric value > 255 for Max-Forwards');
 end;
 
 procedure TestTIdSipMaxForwardsHeader.TestValueWithParam;
 begin
   Self.M.Value := '13;tag=f00';
-  Check(Self.M.HasInvalidSyntax,
+  Check(Self.M.IsMalformed,
         'Failed to bail out on non-numeric value for Max-Forwards (no params allowed)');
 end;
 
@@ -2528,28 +2528,28 @@ end;
 procedure TestTIdSipNumericHeader.TestValueWithMultipleTokens;
 begin
   Self.N.Value := '1 1';
-  Check(Self.N.HasInvalidSyntax,
+  Check(Self.N.IsMalformed,
         'Failed to bail out with multiple tokens');
 end;
 
 procedure TestTIdSipNumericHeader.TestValueWithNegativeNumber;
 begin
   Self.N.Value := '-1';
-  Check(Self.N.HasInvalidSyntax,
+  Check(Self.N.IsMalformed,
         'Failed to bail out with negative integer');
 end;
 
 procedure TestTIdSipNumericHeader.TestValueWithString;
 begin
   Self.N.Value := 'one';
-  Check(Self.N.HasInvalidSyntax,
+  Check(Self.N.IsMalformed,
         'Failed to bail out with string value');
 end;
 
 procedure TestTIdSipNumericHeader.TestVeryLargeValue;
 begin
   Self.N.Value := '4294967297';
-  Check(Self.N.HasInvalidSyntax,
+  Check(Self.N.IsMalformed,
         'Failed to bail out with a ridiculously large number');
 end;
 
@@ -2747,15 +2747,15 @@ begin
   CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
 
   Self.R.Value := '';
-  Check(Self.R.HasInvalidSyntax,
+  Check(Self.R.IsMalformed,
         'Failed to bail on empty string');
 
   Self.R.Value := 'sip:127.0.0.1';
-  Check(Self.R.HasInvalidSyntax,
+  Check(Self.R.IsMalformed,
         'Failed to bail on lack of angle brackets');
 
   Self.R.Value := '<127.0.0.1>';
-  Check(Self.R.HasInvalidSyntax,
+  Check(Self.R.IsMalformed,
         'Failed to bail on no scheme');
 end;
 
@@ -2810,11 +2810,11 @@ begin
   CheckEquals('localhost',     Self.R.DisplayName, 'DisplayName');
 
   Self.R.Value := '';
-  Check(Self.R.HasInvalidSyntax,
+  Check(Self.R.IsMalformed,
         'Failed to bail on empty string');
 
   Self.R.Value := '127.0.0.1';
-  Check(Self.R.HasInvalidSyntax,
+  Check(Self.R.IsMalformed,
         'Failed to bail on lack of angle brackets');
 end;
 
@@ -2941,23 +2941,23 @@ end;
 procedure TestTIdSipTimestampHeader.TestValueMalformed;
 begin
   Self.T.Value := 'a';
-  Check(Self.T.HasInvalidSyntax,
+  Check(Self.T.IsMalformed,
         'Failed to bail out on non-integer');
 
   Self.T.Value := '1..1';
-  Check(Self.T.HasInvalidSyntax,
+  Check(Self.T.IsMalformed,
         'Failed to bail out on too many periods');
 
   Self.T.Value := '.1';
-  Check(Self.T.HasInvalidSyntax,
+  Check(Self.T.IsMalformed,
         'Failed to bail out on no digits before period');
 
   Self.T.Value := '1 a';
-  Check(Self.T.HasInvalidSyntax,
+  Check(Self.T.IsMalformed,
         'Failed to bail out on malformed delay');
 
   Self.T.Value := '1 1.1;tag';
-  Check(Self.T.HasInvalidSyntax,
+  Check(Self.T.IsMalformed,
         'Failed to bail out on params');
 end;
 
@@ -3011,15 +3011,15 @@ begin
               'Address.GetFullURI');
 
   Self.U.Value := '';
-  Check(Self.U.HasInvalidSyntax,
+  Check(Self.U.IsMalformed,
         'Empty string');
 
   Self.U.Value := 'sip:case@jacks-bar.com';
-  Check(Self.U.HasInvalidSyntax,
+  Check(Self.U.IsMalformed,
         'un <>''d URI');
 
   Self.U.Value := 'Case <sip:case@jacks-bar.com>';
-  Check(Self.U.HasInvalidSyntax,
+  Check(Self.U.IsMalformed,
         'No display names allowed');
 end;
 
@@ -3341,11 +3341,11 @@ begin
   CheckEquals('www.google.com', Self.V.Branch, 'FQDN');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;branch=';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with empty string');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;branch=one two';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with multiple tokens');
 end;
 
@@ -3364,7 +3364,7 @@ begin
   CheckEquals('www.google.com', Self.V.Maddr, 'FQDN');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;maddr=fe80::201:2ff:fef0';
-  Check(Self.V.HasInvalidSyntax,'Failed to bail out with IPv6 address');
+  Check(Self.V.IsMalformed,'Failed to bail out with IPv6 address');
 end;
 
 procedure TestTIdSipViaHeader.TestValueWithReceived;
@@ -3379,19 +3379,19 @@ begin
   CheckEquals('fe80::201:2ff:fef0', Self.V.Received, 'IPv6 address');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;received=';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with empty string');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;received=www.google.com';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with FQDN');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;received=256.0.0.0';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with malformed IPv4 address');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;received=skjfhdlskfhsdfshdfhs';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail out with nonsense');
 end;
 
@@ -3407,11 +3407,11 @@ begin
   CheckEquals(0, Self.V.TTL, 'TTL of 0');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;ttl=256';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail on invalid TTL (''256'') via SetValue');
 
   Self.V.Value := 'SIP/1.5/UDP 127.0.0.1;ttl=a';
-  Check(Self.V.HasInvalidSyntax,
+  Check(Self.V.IsMalformed,
         'Failed to bail on invalid TTL (''a'') via SetValue');
 end;
 
@@ -3488,31 +3488,31 @@ end;
 procedure TestTIdSipWarningHeader.TestSetValueMalformed;
 begin
   Self.W.Value := 'a bad "header"';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a non-numeric warn-code');
 
   Self.W.Value := '22 a "bad header"';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a too-short warn-code');
 
   Self.W.Value := '2222 a "bad header"';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a too-long warn-code');
 
   Self.W.Value := '301 a bad header';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on an unquoted warn-text');
 
   Self.W.Value := '302 a "bad header';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a malquoted warn-text');
 
   Self.W.Value := '301 a "bad header";tag=xyz';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a malquoted warn-text (parameters)');
 
   Self.W.Value := '301 gw1.leo-ix.net:ababa Case is not home';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail on a malquoted hostport');
 end;
 
@@ -3631,11 +3631,11 @@ end;
 procedure TestTIdSipWeightedCommaSeparatedHeader.TestValueMalformed;
 begin
   Self.W.Value := 'text/plain;q=1.7';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail out on malformed qvalue (q > 1)');
 
   Self.W.Value := 'text/plain;q=a';
-  Check(Self.W.HasInvalidSyntax,
+  Check(Self.W.IsMalformed,
         'Failed to bail out on malformed qvalue (q not numeric)');
 end;
 
@@ -4477,21 +4477,21 @@ begin
   Check(Self.Headers.HasHeader('Content-Length'), 'Content-Length not added');
 end;
 
-procedure TestTIdSipHeaders.TestHasInvalidSyntax;
+procedure TestTIdSipHeaders.TestIsMalformed;
 begin
-  Check(not Self.Headers.HasInvalidSyntax,
+  Check(not Self.Headers.IsMalformed,
         'Empty list vacuously has valid syntax');
 
   Self.Headers.Add(MaxForwardsHeader).Value := '10';
-  Check(not Self.Headers.HasInvalidSyntax,
+  Check(not Self.Headers.IsMalformed,
         'Valid Max-Forwards');
 
   Self.Headers.Add(ExpiresHeader).Value := 'a';
-  Check(Self.Headers.HasInvalidSyntax,
+  Check(Self.Headers.IsMalformed,
         'Invalid Expires');
 
   Self.Headers[ExpiresHeader].Value := '10';
-  Check(not Self.Headers.HasInvalidSyntax,
+  Check(not Self.Headers.IsMalformed,
         'Expires header made valid');
 end;
 

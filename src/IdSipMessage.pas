@@ -176,7 +176,7 @@ type
   //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   TIdSipHeader = class(TPersistent)
   private
-    fHasInvalidSyntax: Boolean;
+    fIsMalformed: Boolean;
     fName:             String;
     fParams:           TStrings;
     fParseFailReason:  String;
@@ -216,7 +216,7 @@ type
     function  ParamCount: Integer;
     function  ParamsAsString: String; virtual;
 
-    property HasInvalidSyntax:           Boolean read fHasInvalidSyntax;
+    property IsMalformed:           Boolean read fIsMalformed;
     property Name:                       String  read GetName write SetName;
     property Value:                      String  read GetValue write SetValue;
     property Params[const Name: String]: String  read GetParam write SetParam;
@@ -683,7 +683,7 @@ type
     function  CurrentHeader: TIdSipHeader; virtual; abstract;
     procedure First; virtual; abstract;
     function  HasEqualValues(const OtherHeaders: TIdSipHeaderList): Boolean;
-    function  HasInvalidSyntax: Boolean;
+    function  IsMalformed: Boolean;
     function  HasNext: Boolean; virtual; abstract;
     function  Equals(OtherHeaders: TIdSipHeaderList): Boolean;
     function  IsEmpty: Boolean;
@@ -829,7 +829,7 @@ type
     fContacts:         TIdSipContacts;
     fPath:             TIdSipViaPath;
     fRecordRoute:      TIdSipRecordRoutePath;
-    fHasInvalidSyntax: Boolean;
+    fIsMalformed: Boolean;
     fHeaders:          TIdSipHeaders;
     fParseFailReason:  String;
     fSIPVersion:       String;
@@ -883,7 +883,7 @@ type
     function  FirstRequire: TIdSipCommaSeparatedHeader;
     function  HasExpiry: Boolean;
     function  HasHeader(const HeaderName: String): Boolean;
-    function  HasInvalidSyntax: Boolean;
+    function  IsMalformed: Boolean;
     function  HeaderCount: Integer;
     function  QuickestExpiry: Cardinal;
     function  Equals(Msg: TIdSipMessage): Boolean; virtual; abstract;
@@ -2135,7 +2135,7 @@ begin
   // because TIdSipViaHeader overrides GetName.
   Self.Name := Self.GetName;
 
-  Self.fHasInvalidSyntax := false;
+  Self.fIsMalformed := false;
 end;
 
 destructor TIdSipHeader.Destroy;
@@ -2253,7 +2253,7 @@ end;
 
 procedure TIdSipHeader.MarkAsInvalid(const Reason: String);
 begin
-  Self.fHasInvalidSyntax := true;
+  Self.fIsMalformed := true;
   Self.fParseFailReason  := Reason;
 end;
 
@@ -2310,7 +2310,7 @@ end;
 
 procedure TIdSipHeader.SetValue(const Value: String);
 begin
-  Self.fHasInvalidSyntax := false;
+  Self.fIsMalformed := false;
   Self.fUnparsedValue    := Value;
 
   try
@@ -4121,13 +4121,13 @@ begin
   end;
 end;
 
-function TIdSipHeaderList.HasInvalidSyntax: Boolean;
+function TIdSipHeaderList.IsMalformed: Boolean;
 begin
   Result := false;
 
   Self.First;
   while Self.HasNext and not Result do begin
-    Result := Result or Self.CurrentHeader.HasInvalidSyntax;
+    Result := Result or Self.CurrentHeader.IsMalformed;
 
     Self.Next;
   end;
@@ -4778,7 +4778,7 @@ constructor TIdSipMessage.Create;
 begin
   inherited Create;
 
-  fHasInvalidSyntax := false;
+  fIsMalformed := false;
 
   fHeaders := TIdSipHeaders.Create;
 
@@ -4920,11 +4920,11 @@ begin
   Result := Self.Headers.HasHeader(HeaderName);
 end;
 
-function TIdSipMessage.HasInvalidSyntax: Boolean;
+function TIdSipMessage.IsMalformed: Boolean;
 begin
-  Result := Self.fHasInvalidSyntax    // something went wrong parsing the first line
+  Result := Self.fIsMalformed    // something went wrong parsing the first line
     or Self.MissingRequiredHeaders
-    or Self.Headers.HasInvalidSyntax
+    or Self.Headers.IsMalformed
     or (Self.ContentLength <> Length(Self.Body));
 end;
 
@@ -4950,7 +4950,7 @@ end;
 
 procedure TIdSipMessage.MarkAsInvalid(const Reason: String);
 begin
-  Self.fHasInvalidSyntax := true;
+  Self.fIsMalformed := true;
   Self.fParseFailReason  := Reason;
 end;
 
@@ -5026,7 +5026,7 @@ begin
 
   Self.Headers.First;
   while not Assigned(Result) and Self.Headers.HasNext do begin
-    if Self.Headers.CurrentHeader.HasInvalidSyntax then
+    if Self.Headers.CurrentHeader.IsMalformed then
       Result := Self.Headers.CurrentHeader;
     Self.Headers.Next;
   end;
@@ -6162,7 +6162,7 @@ begin
   H := Msg.AddHeader(Name);
   H.Value := Trim(S);
 
-  if H.HasInvalidSyntax then
+  if H.IsMalformed then
     Self.DoOnParseError(Msg.ParseFailReason);
 end;
 
@@ -6229,7 +6229,7 @@ end;
 
 procedure TIdSipParser.FailParse(Msg: TIdSipMessage; const Reason: String);
 begin
-  if not Msg.HasInvalidSyntax then begin
+  if not Msg.IsMalformed then begin
     Msg.MarkAsInvalid(Reason);
     Self.DoOnParseError(Reason);
   end;
