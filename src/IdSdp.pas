@@ -640,6 +640,9 @@ type
   end;
 
 const
+  BlankSession = '-';
+
+const
   BadHeaderOrder        = 'Headers in the wrong order: found %s after %s';
   ConvertEnumErrorMsg   = 'Couldn''t convert a %s with Ord() = %d to type %s';
   ConvertStrErrorMsg    = 'Couldn''t convert ''%s'' to type %s';
@@ -2302,13 +2305,16 @@ end;
 
 procedure TIdSdpPayload.PrintSessionNameField(Dest: TStream);
 var
-  S: String;
+  S:                 String;
+  MungedSessionName: String;
 begin
-  if (Self.SessionName <> '') then begin
-    S := 's=' + Self.SessionName + #13#10;
+  if (Self.SessionName <> '') then
+    MungedSessionName := Self.SessionName
+  else
+    MungedSessionName := BlankSession;
 
-    Dest.Write(PChar(S)^, Length(S));
-  end;
+  S := 's=' + MungedSessionName + #13#10;
+  Dest.Write(PChar(S)^, Length(S));
 end;
 
 procedure TIdSdpPayload.PrintUriField(Dest: TStream);
@@ -3461,6 +3467,12 @@ end;
 
 procedure TIdSdpPayloadProcessor.SendData(Payload: TIdRTPPayload);
 begin
+  // TODO: Put something real here. Each server bears responsibility for certain
+  // kinds of traffic, and we here must ensure that, for instance, text/t140
+  // data goes down the text/t140 server.
+  // Which then makes us ask: if we have two channels of text, how do we know
+  // which channel to use? Possibly we must expose these channels and let the
+  // user decide!
   Self.RTPClientLock.Acquire;
   try
     (Self.RTPClients[0] as TIdRTPServer).Session.SendData(Payload);
@@ -3549,7 +3561,7 @@ begin
 end;
 
 function TIdSdpPayloadProcessor.AddPeer(MediaDesc: TIdSdpMediaDescription;
-                                         List: TObjectList): TIdRTPServer;
+                                        List: TObjectList): TIdRTPServer;
 var
   I:    Cardinal;
 begin
@@ -3739,7 +3751,8 @@ begin
         NewPeer.Session.AddListener(Self);
         NewPeer.AddListener(Self);
 
-        Self.ActivateServerOnNextFreePort(NewPeer, MediaDesc.Port);
+        Self.ActivateServerOnNextFreePort(NewPeer,
+                                          MediaDesc.Port);
       except
         if (Self.RTPServers.IndexOf(NewPeer) <> -1) then
           Self.RTPServers.Remove(NewPeer)

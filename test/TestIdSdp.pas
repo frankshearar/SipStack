@@ -316,6 +316,7 @@ type
     procedure TestMediaDescriptionGetsSessionConnections;
     procedure TestMimeType;
     procedure TestNewSessionConnectionGetsCopiedToMediaDescriptions;
+    procedure TestNoSessionNamePrintsDash;
     procedure TestPrintOnBasic;
     procedure TestPrintOnWithAttributes;
     procedure TestPrintOnWithBandwidth;
@@ -3243,6 +3244,21 @@ begin
   CheckEquals(1,
               MD.Connections.Count,
               'No connection added to an existing media description');
+end;
+
+procedure TestTIdSdpPayload.TestNoSessionNamePrintsDash;
+var
+  S: TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    Self.Payload.PrintOn(S);
+
+    Check(Pos('s=-', S.DataString) > 0,
+          '''s=-'' not present in payload');
+  finally
+    S.Free;
+  end;
 end;
 
 procedure TestTIdSdpPayload.TestPrintOnBasic;
