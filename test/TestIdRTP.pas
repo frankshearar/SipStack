@@ -49,6 +49,7 @@ type
     procedure TearDown; override;
   published
     procedure TestCreate;
+    procedure TestCreateFromBadEncodingName;
     procedure TestClone;
     procedure TestCloneCopiesData;
     procedure TestEncodingName;
@@ -1390,6 +1391,16 @@ begin
                 'Parameters');
   finally
     NewPayload.Free;
+  end;
+end;
+
+procedure TPayloadTestCase.TestCreateFromBadEncodingName;
+begin
+  try
+    TIdRTPPayload.CreatePayload(T140Encoding);
+    Fail('Failed to bail out on malformed encoding name (no clock rate)');
+  except
+    on EBadEncodingName do;
   end;
 end;
 

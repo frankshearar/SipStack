@@ -1036,6 +1036,7 @@ type
     procedure RemoveLast;
   end;
 
+  EBadEncodingName = class(Exception);
   ENoAgent = class(Exception);
   ENoPayloadTypeFound = class(Exception);
   EStreamTooShort = class(Exception);
@@ -1491,13 +1492,18 @@ end;
 class function TIdRTPPayload.CreatePayload(Name: String): TIdRTPPayload;
 var
   EncodingName: String;
+  Clock:        String;
   ClockRate:    Cardinal;
   Parameters:   String;
 begin
   // Name should be something like "L16/44100/2"
   Parameters   := Name;
   EncodingName := Fetch(Parameters, '/');
-  ClockRate    := StrToInt(Fetch(Parameters, '/'));
+
+  Clock := Fetch(Parameters, '/');
+  if (Clock = '') then
+    raise EBadEncodingName.Create(Name);
+  ClockRate    := StrToInt(Clock);
 
   if (Lowercase(EncodingName) = Lowercase(T140Encoding)) then
     Result := TIdRTPT140Payload.Create
