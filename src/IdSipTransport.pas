@@ -409,8 +409,9 @@ end;
 procedure TIdSipTransport.Send(Msg: TIdSipMessage);
 begin
   try
-    Assert(Msg.ContentLength = Length(Msg.Body),
-           'Content-Length MUST equal length of body');
+    Assert(not Msg.IsMalformed,
+           'A Transport must NEVER send invalid messages onto the network ('
+         + Msg.ParseFailReason + ')');
     Msg.Accept(Self);
   except
     on E: EIdException do
