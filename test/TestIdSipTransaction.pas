@@ -24,8 +24,8 @@ type
     Response200:            TIdSipResponse;
     TranRequest:            TIdSipRequest;
 
-    function  CreateAck(const Response: TIdSipResponse): TIdSipRequest;
-    function  CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
+    function  CreateAck(Response: TIdSipResponse): TIdSipRequest;
+    function  CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
     procedure OnEndedSession(Session: TIdSipSession;
                              const Reason: String);
     procedure OnEstablishedSession(Session: TIdSipSession);
@@ -109,9 +109,9 @@ type
   TIdSipTransactionEvent = procedure(Sender: TIdSipTransaction) of object;
 
   TTestIdSipRequestEvent = procedure(Sender: TObject;
-                                     const R: TIdSipRequest) of object;
+                                     R: TIdSipRequest) of object;
   TTestIdSipResponseEvent = procedure(Sender: TObject;
-                                      const R: TIdSipResponse) of object;
+                                      R: TIdSipResponse) of object;
 
   // Transactions behave slightly differently if a reliable transport is used -
   // certain messages are not resent. To this end, we test unreliable transports
@@ -134,7 +134,7 @@ type
     TransactionTerminated: Boolean;
 
     procedure Completed(Sender: TObject;
-                        const R: TIdSipResponse);
+                        R: TIdSipResponse);
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -144,8 +144,10 @@ type
                                 Transaction: TIdSipTransaction;
                                 Transport: TIdSipTransport);
     procedure OnTerminated(Transaction: TIdSipTransaction);
-    procedure Proceeding(Sender: TObject; const R: TIdSipResponse);
-    procedure TransactionFail(Sender: TObject; const Reason: String);
+    procedure Proceeding(Sender: TObject;
+                         R: TIdSipResponse);
+    procedure TransactionFail(Sender: TObject;
+                              const Reason: String);
     procedure Terminated(Sender: TIdSipTransaction);
     function  TransactionType: TIdSipTransactionClass; virtual; abstract;
   public
@@ -162,7 +164,8 @@ type
 
     procedure MoveToCompletedState;
     procedure MoveToConfirmedState;
-    procedure OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
+    procedure OnInitialRequestSentToTU(Sender: TObject;
+                                       R: TIdSipRequest);
     procedure ReceiveInvite;
     procedure Terminate(Tran: TIdSipTransaction);
   protected
@@ -202,9 +205,10 @@ type
   private
     TransactionTrying: Boolean;
 
-    procedure MoveToCompletedState(const Tran: TIdSipTransaction);
-    procedure MoveToProceedingState(const Tran: TIdSipTransaction);
-    procedure Trying(Sender: TObject; const R: TIdSipRequest);
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+    procedure MoveToProceedingState(Tran: TIdSipTransaction);
+    procedure Trying(Sender: TObject;
+                     R: TIdSipRequest);
   protected
     function TransactionType: TIdSipTransactionClass; override;
   public
@@ -234,9 +238,10 @@ type
   private
     ClientInviteTran: TIdSipClientInviteTransaction;
 
-    procedure CheckACK(Sender: TObject; const R: TIdSipResponse);
-    procedure MoveToCompletedState(const Tran: TIdSipTransaction);
-    procedure MoveToProceedingState(const Tran: TIdSipTransaction);
+    procedure CheckACK(Sender: TObject;
+                       R: TIdSipResponse);
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
+    procedure MoveToProceedingState(Tran: TIdSipTransaction);
   protected
     procedure Terminate(Tran: TIdSipTransaction);
     function TransactionType: TIdSipTransactionClass; override;
@@ -275,8 +280,8 @@ type
 
   TestTIdSipClientNonInviteTransaction = class(TTestTransaction)
   private
-    procedure MoveToProceedingState(const Tran: TIdSipTransaction);
-    procedure MoveToCompletedState(const Tran: TIdSipTransaction);
+    procedure MoveToProceedingState(Tran: TIdSipTransaction);
+    procedure MoveToCompletedState(Tran: TIdSipTransaction);
   protected
     procedure Terminate(Tran: TIdSipTransaction);
     function TransactionType: TIdSipTransactionClass; override;
@@ -390,7 +395,7 @@ begin
   Result.AddTest(TestTIdSipClientNonInviteTransactionTimer.Suite);
 end;
 
-function Transaction(const S: TIdSipTransactionState): String;
+function Transaction(S: TIdSipTransactionState): String;
 begin
   Result := GetEnumName(TypeInfo(TIdSipTransactionState), Integer(S));
 end;
@@ -457,12 +462,12 @@ end;
 
 //* TestTIdSipTransactionDispatcher Private methods ****************************
 
-function TestTIdSipTransactionDispatcher.CreateAck(const Response: TIdSipResponse): TIdSipRequest;
+function TestTIdSipTransactionDispatcher.CreateAck(Response: TIdSipResponse): TIdSipRequest;
 begin
   Result := Self.Invite.AckFor(Response);
 end;
 
-function TestTIdSipTransactionDispatcher.CreateMultipleChoices(const Request: TIdSipRequest): TIdSipResponse;
+function TestTIdSipTransactionDispatcher.CreateMultipleChoices(Request: TIdSipRequest): TIdSipResponse;
 var
   UA: TIdSipUserAgentCore;
 begin
@@ -1650,7 +1655,7 @@ end;
 //* TTestTransaction Protected methods *****************************************
 
 procedure TTestTransaction.Completed(Sender: TObject;
-                                     const R: TIdSipResponse);
+                                     R: TIdSipResponse);
 begin
   Self.TransactionCompleted := true;
   Self.ThreadEvent.SetEvent;
@@ -1685,13 +1690,15 @@ begin
     Self.CheckTerminated(Transaction);
 end;
 
-procedure TTestTransaction.Proceeding(Sender: TObject; const R: TIdSipResponse);
+procedure TTestTransaction.Proceeding(Sender: TObject;
+                                      R: TIdSipResponse);
 begin
   Self.TransactionProceeding := true;
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TTestTransaction.TransactionFail(Sender: TObject; const Reason: String);
+procedure TTestTransaction.TransactionFail(Sender: TObject;
+                                           const Reason: String);
 begin
   Self.TransactionFailed := true;
   Self.ThreadEvent.SetEvent;
@@ -1787,7 +1794,8 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
-procedure TestTIdSipServerInviteTransaction.OnInitialRequestSentToTU(Sender: TObject; const R: TIdSipRequest);
+procedure TestTIdSipServerInviteTransaction.OnInitialRequestSentToTU(Sender: TObject;
+                                                                     R: TIdSipRequest);
 begin
   Self.TransactionProceeding := true;
 end;
@@ -2357,7 +2365,7 @@ end;
 
 //* TestTIdSipServerNonInviteTransaction Private methods ***********************
 
-procedure TestTIdSipServerNonInviteTransaction.MoveToCompletedState(const Tran: TIdSipTransaction);
+procedure TestTIdSipServerNonInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
   CheckEquals(Transaction(itsProceeding),
               Transaction(Tran.State),
@@ -2372,7 +2380,7 @@ begin
 
 end;
 
-procedure TestTIdSipServerNonInviteTransaction.MoveToProceedingState(const Tran: TIdSipTransaction);
+procedure TestTIdSipServerNonInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
   CheckEquals(Transaction(itsTrying),
               Transaction(Tran.State),
@@ -2386,7 +2394,8 @@ begin
               'MoveToProceedingState postcondition');
 end;
 
-procedure TestTIdSipServerNonInviteTransaction.Trying(Sender: TObject; const R: TIdSipRequest);
+procedure TestTIdSipServerNonInviteTransaction.Trying(Sender: TObject;
+                                                      R: TIdSipRequest);
 begin
   Self.TransactionTrying := true;
   Self.ThreadEvent.SetEvent;
@@ -2768,7 +2777,8 @@ end;
 
 //* TestTIdSipClientInviteTransaction Private methods **************************
 
-procedure TestTIdSipClientInviteTransaction.CheckACK(Sender: TObject; const R: TIdSipResponse);
+procedure TestTIdSipClientInviteTransaction.CheckACK(Sender: TObject;
+                                                     R: TIdSipResponse);
 var
   Ack:    TIdSipRequest;
   Routes: TIdSipHeadersFilter;
@@ -2821,7 +2831,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipClientInviteTransaction.MoveToCompletedState(const Tran: TIdSipTransaction);
+procedure TestTIdSipClientInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
   CheckEquals(Transaction(itsProceeding),
               Transaction(Tran.State),
@@ -2835,7 +2845,7 @@ begin
               'MoveToCompletedState postcondition');
 end;
 
-procedure TestTIdSipClientInviteTransaction.MoveToProceedingState(const Tran: TIdSipTransaction);
+procedure TestTIdSipClientInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
   CheckEquals(Transaction(itsCalling),
               Transaction(Tran.State),
@@ -3334,7 +3344,7 @@ end;
 
 //* TestTIdSipClientNonInviteTransaction Private methods ***********************
 
-procedure TestTIdSipClientNonInviteTransaction.MoveToProceedingState(const Tran: TIdSipTransaction);
+procedure TestTIdSipClientNonInviteTransaction.MoveToProceedingState(Tran: TIdSipTransaction);
 begin
   CheckEquals(Transaction(itsTrying),
               Transaction(Tran.State),
@@ -3348,7 +3358,7 @@ begin
               'MoveToProceedingState postcondition');
 end;
 
-procedure TestTIdSipClientNonInviteTransaction.MoveToCompletedState(const Tran: TIdSipTransaction);
+procedure TestTIdSipClientNonInviteTransaction.MoveToCompletedState(Tran: TIdSipTransaction);
 begin
   Check(Self.Tran.State in [itsTrying, itsProceeding],
         'Unexpected state '
