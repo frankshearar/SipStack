@@ -16,8 +16,8 @@ interface
 // string containing an SDP description, and you'll use a TIdSdpParser on it.
 
 uses
-  Classes, Contnrs, IdAssignedNumbers, IdEmailAddress, IdInterfacedObject,
-  IdNotification, IdRTP, IdRTPServer, IdSimpleParser, IdUDPServer, SyncObjs;
+  Classes, Contnrs, IdEmailAddress, IdInterfacedObject, IdNotification, IdRTP,
+  IdRTPServer, IdSimpleParser, SyncObjs;
 
 type
   TIdNtpTimestamp     = Int64;
