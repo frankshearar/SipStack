@@ -130,6 +130,7 @@ type
     procedure TestListenerSaysDontTryAgain;
     procedure TestListenersDontGiveAuthorizationCredentials;
     procedure TestLoopDetected;
+    procedure TestLoopDetectedRFC2543RequestWithNoBranch;
     procedure TestNotifyOnAuthenticationChallengeHasRejectedRequest;
     procedure TestOnClientInviteTransactionTimerA;
     procedure TestOnClientInviteTransactionTimerB;
@@ -1339,6 +1340,26 @@ end;
 procedure TestTIdSipTransactionDispatcher.TestLoopDetected;
 begin
   // cf. RFC 3261, section 8.2.2.2
+  Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
+
+  Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
+
+  Self.D.AddServerTransaction(Self.TranRequest, Self.MockTransport);
+  Check(not Self.D.LoopDetected(Self.Invite),
+        'Loop should not be detected - requests match (same branch)');
+
+  Self.Invite.LastHop.Branch := Self.TranRequest.LastHop.Branch + '1';
+  Check(Self.D.LoopDetected(Self.Invite),
+        'Loop should be detected - same From tag, Call-ID, CSeq but no match '
+      + '(differing branch)');
+end;
+
+procedure TestTIdSipTransactionDispatcher.TestLoopDetectedRFC2543RequestWithNoBranch;
+begin
+  // This is illegal according to RFC 3261, but not according to RFC 2543.
+  Self.Invite.LastHop.RemoveParameter(BranchParam);
+  Self.TranRequest.LastHop.Assign(Self.Invite.LastHop);
+
   Check(not Self.D.LoopDetected(Self.Invite), 'No transactions hence no loop');
 
   Self.Invite.ToHeader.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
