@@ -999,7 +999,7 @@ begin
   Ack := Self.Core.CreateRequest(Self.Session.Dialog);
   try
     Ack.Method          := MethodAck;
-    Ack.CSeq.SequenceNo := Self.Session.InitialRequest.CSeq.SequenceNo;
+    Ack.CSeq.SequenceNo := Self.Session.CurrentRequest.CSeq.SequenceNo;
     Ack.CSeq.Method     := Ack.Method;
     // We have to swop the tags because CreateAck returns a LOCALLY created ACK,
     // so the remote tag is actually the far end's local tag.
@@ -3055,7 +3055,7 @@ var
   Fork: TIdSipOutboundSession;
   Ok:   TIdSipResponse;
 begin
-  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
+  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
 
   Ok := Self.Core.CreateResponse(Self.Invite, SIPOK);
   try
@@ -3065,14 +3065,14 @@ begin
 
     Fork := Self.Session.Fork(Ok);
     try
-      CheckEquals(Self.Session.InitialRequest.CallID,
-                  Fork.InitialRequest.CallID,
+      CheckEquals(Self.Session.CurrentRequest.CallID,
+                  Fork.CurrentRequest.CallID,
                   'Call-ID');
-      CheckEquals(Self.Session.InitialRequest.From.Tag,
-                  Fork.InitialRequest.From.Tag,
+      CheckEquals(Self.Session.CurrentRequest.From.Tag,
+                  Fork.CurrentRequest.From.Tag,
                   'From tag');
-      CheckEquals(Self.Session.InitialRequest.LastHop.Branch,
-                  Fork.InitialRequest.LastHop.Branch,
+      CheckEquals(Self.Session.CurrentRequest.LastHop.Branch,
+                  Fork.CurrentRequest.LastHop.Branch,
                   'Topmost Via branch');
     finally
       Fork.Free;
@@ -3120,7 +3120,7 @@ end;
 
 procedure TestTIdSipOutboundSession.TestPendingTransactionCount;
 begin
-  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
+  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
   CheckEquals(0,
               Self.Session.PendingTransactionCount,
               'Session should have no pending transactions');
@@ -3139,7 +3139,7 @@ var
   RequestCount: Cardinal;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
+  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized(Self.Session);
   Check(RequestCount < Self.Dispatcher.Transport.SentRequestCount,
@@ -3160,7 +3160,7 @@ var
   RequestCount: Cardinal;
 begin
   RequestCount := Self.Dispatcher.Transport.SentRequestCount;
-  SequenceNo   := Self.Session.InitialRequest.CSeq.SequenceNo;
+  SequenceNo   := Self.Session.CurrentRequest.CSeq.SequenceNo;
 
   Self.SimulateRejectProxyUnauthorized(Self.Session);
   CheckEquals(RequestCount + 1,
@@ -3187,7 +3187,7 @@ var
   Ack:    TIdSipRequest;
   Invite: TIdSipRequest;
 begin
-  Self.SimulateRemoteAccept(Self.Session.InitialRequest);
+  Self.SimulateRemoteAccept(Self.Session.CurrentRequest);
 
  CheckEquals(1,
               Self.Dispatcher.Transport.ACKCount,
@@ -3200,7 +3200,7 @@ begin
 
   Ack := Self.Dispatcher.Transport.LastRequest;
   CheckEquals(MethodAck, Ack.Method, 'Unexpected method');
-  Invite := Self.Session.InitialRequest;
+  Invite := Self.Session.CurrentRequest;
   CheckEquals(Invite.CSeq.SequenceNo,
               Ack.CSeq.SequenceNo,
               'CSeq numerical portion');
@@ -3240,7 +3240,7 @@ begin
 
   // We don't actually send CANCELs when we've not received a provisional
   // response.
-  Ringing := TIdSipResponse.InResponseTo(Self.Session.InitialRequest, SIPRinging);
+  Ringing := TIdSipResponse.InResponseTo(Self.Session.CurrentRequest, SIPRinging);
   try
     Self.Dispatcher.Transport.FireOnResponse(Ringing);
   finally
