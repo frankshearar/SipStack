@@ -18,6 +18,7 @@ const
   CallInfoHeader             = 'Call-Info';
   ContactHeaderFull          = 'Contact';
   ContactHeaderShort         = 'm';
+  ContactWildCard            = '*';
   ContentDispositionHeader   = 'Content-Disposition';
   ContentEncodingHeaderFull  = 'Content-Encoding';
   ContentEncodingHeaderShort = 'e';

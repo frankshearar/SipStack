@@ -7,24 +7,66 @@ uses
   IdSipTransport;
 
 type
+  // I represent a binding between and address-of-record and a URI. A SIP
+  // Registrar (via a Binding Database) uses me to keep track of
+  // registrations.
+  TIdRegistrarBinding = class(TObject)
+  private
+    fCallID:     String;
+    fSequenceNo: Cardinal;
+    fUri:        String;
+    fValidUntil: TDateTime;
+  public
+    constructor Create(const CanonicalisedUri: String;
+                       const CallID: String;
+                       SequenceNo: Cardinal;
+                       AbsoluteTimeout: TDateTime);
+
+    property CallID:     String    read fCallID;
+    property SequenceNo: Cardinal  read fSequenceNo;
+    property Uri:        String    read fUri;
+    property ValidUntil: TDateTime read fValidUntil;
+  end;
+
   // I provide a database that matches a SIP Address-of-record (a SIP or SIPS
   // URI) with one or more "bindings" (usually SIP/SIPS URIs, but they can
   // follow any URI scheme).
   //
   // My subclasses guarantee ACID properties for all of their implementations
   // of my methods.
+  //
+  // Currently I only support the registration of SIP and SIPS URIs.
   TIdSipAbstractBindingDatabase = class(TObject)
-  public
+  private
+    fDefaultExpiryTime: Cardinal;
+
+    function CorrectExpiry(Request: TIdSipRequest;
+                           Contact: TIdSipContactHeader): Cardinal;
+  protected
     function  AddBinding(const AddressOfRecord: String;
-                         Binding: TIdSipContactHeader): Boolean; virtual; abstract;
-    function  AddBindings(const AddressOfRecord: String;
-                          Bindings: TIdSipHeaderList): Boolean; virtual; abstract;
-    function  IsValid(AddressOfRecord: TIdSipUri): Boolean; virtual; abstract;
-    procedure BindingsFor(const AddressOfRecord: String;
-                          Bindings: TIdSipHeaders); virtual; abstract;
-    function  RemoveAllBindings(const AddressOfRecord: String): Boolean; virtual; abstract;
-    function  RemoveBinding(const AddressOfRecord: String;
-                            Binding: TIdSipContactHeader): Boolean; virtual; abstract;
+                         Contact: TIdSipUri;
+                         const CallID: String;
+                         SequenceNo: Cardinal;
+                         ExpiryTime: TDateTime): Boolean; virtual; abstract;
+    function  Binding(const AddressOfRecord: String;
+                      CanonicalUri: String): TIdRegistrarBinding; virtual; abstract;
+    procedure Commit; virtual; abstract;
+    procedure Rollback; virtual; abstract;
+    procedure StartTransaction; virtual; abstract;
+  public
+    constructor Create; virtual;
+
+    function  AddBindings(Request: TIdSipRequest): Boolean;
+    function  IsValid(Request: TIdSipRequest): Boolean; virtual; abstract;
+    procedure BindingsFor(Request: TIdSipRequest;
+                          Contacts: TIdSipContacts); virtual; abstract;
+    function  MayRemoveBinding(Request: TIdSipRequest;
+                               Contact: TIdSipContactHeader): Boolean;
+    function  RemoveAllBindings(Request: TIdSipRequest): Boolean;
+    function  RemoveBinding(Request: TIdSipRequest;
+                            Contact: TIdSipContactHeader): Boolean; virtual; abstract;
+
+    property DefaultExpiryTime: Cardinal read fDefaultExpiryTime write fDefaultExpiryTime;
   end;
 
   // I'm a User Agent Server that only accepts REGISTER requests. I provide a
@@ -40,14 +82,15 @@ type
 
     procedure Accept(Request: TIdSipRequest;
                      Transaction: TIdSipTransaction);
-    function  ProcessContacts(Request: TIdSipRequest;
-                              Contacts: TIdSipHeaderList): Boolean;
+    function  GetDefaultExpiryTime: Cardinal;
+    function  ProcessContacts(Request: TIdSipRequest): Boolean;
     procedure RejectExpireTooBrief(Request: TIdSipRequest;
                                    Transaction: TIdSipTransaction);
     procedure RejectNonRegister(Request: TIdSipRequest;
                                 Transaction: TIdSipTransaction);
     procedure RejectNotFound(Request: TIdSipRequest;
                              Transaction: TIdSipTransaction);
+    procedure SetDefaultExpiryTime(Value: Cardinal);
   public
     constructor Create; override;
 
@@ -60,6 +103,7 @@ type
                               Receiver: TIdSipTransport); override;
 
     property BindingDB:         TIdSipAbstractBindingDatabase read fBindingDB write fBindingDB;
+    property DefaultExpiryTime: Cardinal                      read GetDefaultExpiryTime write SetDefaultExpiryTime;
     property MinimumExpiryTime: Cardinal                      read fMinimumExpiryTime write fMinimumExpiryTime;
   end;
 
@@ -67,6 +111,140 @@ implementation
 
 uses
   IdSipConsts, SysUtils;
+
+const
+  TenMinutes = 600; // seconds  
+
+//******************************************************************************
+//* TIdRegistrarBinding                                                        *
+//******************************************************************************
+//* TIdRegistrarBinding Public methods *****************************************
+
+constructor TIdRegistrarBinding.Create(const CanonicalisedUri: String;
+                                       const CallID: String;
+                                       SequenceNo: Cardinal;
+                                       AbsoluteTimeout: TDateTime);
+begin
+  inherited Create;
+
+  Self.fCallID     := CallID;
+  Self.fSequenceNo := SequenceNo;
+  Self.fUri        := CanonicalisedUri;
+  Self.fValidUntil := AbsoluteTimeout;
+end;
+
+//******************************************************************************
+//* TIdSipAbstractBindingDatabase                                              *
+//******************************************************************************
+//* TIdSipAbstractBindingDatabase Public methods *******************************
+
+constructor TIdSipAbstractBindingDatabase.Create;
+begin
+  inherited Create;
+
+  Self.DefaultExpiryTime := TenMinutes;
+end;
+
+function TIdSipAbstractBindingDatabase.AddBindings(Request: TIdSipRequest): Boolean;
+var
+  AddressOfRecord: String;
+  Binding:         TIdRegistrarBinding;
+  Contacts:        TIdSipContacts;
+begin
+  AddressOfRecord := Request.RequestUri.CanonicaliseAsAddressOfRecord;
+
+  Self.StartTransaction;
+  try
+    Result := true;
+    Contacts := TIdSipContacts.Create(Request.Headers);
+    try
+      Contacts.First;
+      while Contacts.HasNext do begin
+        Binding := Self.Binding(AddressOfRecord,
+                                Contacts.CurrentContact.Address.CanonicaliseAsAddressOfRecord);
+                                
+        if Assigned(Binding) then
+          Result := Result and Self.MayRemoveBinding(Request,
+                                                     Contacts.CurrentContact)
+        else
+          Result := Result and Self.AddBinding(AddressOfRecord,
+                                               Contacts.CurrentContact.Address,
+                                               Request.CallID,
+                                               Request.CSeq.SequenceNo,
+                                               Self.CorrectExpiry(Request,
+                                                                  Contacts.CurrentContact));
+
+        Contacts.Next;
+      end;
+    finally
+      Contacts.Free;
+    end;
+
+    if Result then
+      Self.Commit
+    else
+      Self.Rollback;
+  except
+    Result := false;
+    Self.Rollback;
+  end;
+end;
+
+function TIdSipAbstractBindingDatabase.MayRemoveBinding(Request: TIdSipRequest;
+                                                        Contact: TIdSipContactHeader): Boolean;
+var
+  BindingRecord: TIdRegistrarBinding;
+begin
+  BindingRecord := Self.Binding(Request.RequestUri.CanonicaliseAsAddressOfRecord,
+                                Contact.Address.CanonicaliseAsAddressOfRecord);
+
+  Result := BindingRecord.CallID <> Request.CallID;
+
+  if not Result then
+    Result := BindingRecord.SequenceNo < Request.CSeq.SequenceNo;
+end;
+
+function TIdSipAbstractBindingDatabase.RemoveAllBindings(Request: TIdSipRequest): Boolean;
+var
+  Contacts: TIdSipContacts;
+begin
+  Self.StartTransaction;
+  try
+    Contacts := TIdSipContacts.Create;
+    try
+      Self.BindingsFor(Request, Contacts);
+      Contacts.First;
+      while Contacts.HasNext do begin
+        if Self.MayRemoveBinding(Request, Contacts.CurrentContact) then
+          Self.RemoveBinding(Request, Contacts.CurrentContact)
+        else
+          raise Exception.Create('Error removing binding');
+        Contacts.Next;
+      end;
+    finally
+      Contacts.Free;
+    end;
+
+    Result := true;
+    Self.Commit;
+  except
+    Result := false;
+    Self.Rollback;
+  end;
+end;
+
+function TIdSipAbstractBindingDatabase.CorrectExpiry(Request: TIdSipRequest;
+                                                     Contact: TIdSipContactHeader): Cardinal;
+begin
+  if Contact.WillExpire then
+    Result := Contact.Expires
+  else begin
+    if Request.HasHeader(ExpiresHeader) then
+      Result := Request.FirstExpires.NumericValue
+    else
+      Result := Self.DefaultExpiryTime;
+  end;
+end;
 
 //******************************************************************************
 //* TIdSipRegistrar                                                            *
@@ -90,8 +268,6 @@ end;
 function TIdSipRegistrar.ReceiveRequest(Request: TIdSipRequest;
                                         Transaction: TIdSipTransaction;
                                         Receiver: TIdSipTransport): Boolean;
-var
-  Contacts: TIdSipHeadersFilter;
 begin
 //      1. The registrar inspects the Request-URI to determine whether it
 //         has access to bindings for the domain identified in the
@@ -102,7 +278,7 @@ begin
   Result := inherited ReceiveRequest(Request, Transaction, Receiver);
 
   if not Result then Exit;
-  
+
   if Request.IsRegister then begin
 //      3. A registrar SHOULD authenticate the UAC.  Mechanisms for the
 //         authentication of SIP user agents are described in Section 22.
@@ -120,29 +296,42 @@ begin
 //         the registrar MUST return a 403 (Forbidden) and skip the
 //         remaining steps.
 
-    if not Self.BindingDB.IsValid(Request.RequestUri) then begin
+    if not Self.BindingDB.IsValid(Request) then begin
       Self.RejectNotFound(Request, Transaction);
       Exit;
     end;
 
     if Request.HasHeader(ContactHeaderFull) then begin
-      if Request.FirstContact.IsWildCard and Request.HasHeader(ExpiresHeader) then begin
+      if Request.FirstContact.IsWildCard then begin
+        if (Request.ContactCount > 1) then begin
+          Self.ReturnResponse(Request, SIPBadRequest, Transaction);
+        end
+        else if Request.FirstContact.WillExpire
+            and (Request.FirstContact.Expires = 0) then begin
+          // Actually do the handling of the wildcard
+          // For each of the bindings, check the Call-ID stored with the
+          // binding. If that's not the same as Request.CallID then remove the
+          // binding, otherwise remove the binding if the stored
+          // CSeq < Request.CSeq.SequenceNo. Otherwise abort (with a 400?)
+          Self.BindingDB.RemoveAllBindings(Request);
+          Self.Accept(Request, Transaction);
+        end
+        else begin
+          Self.ReturnResponse(Request, SIPBadRequest, Transaction);
+        end;
+        Exit;
       end;
 
-      Contacts := TIdSipHeadersFilter.Create(Request.Headers, ContactHeaderFull);
-      try
-        // Self.BindingDatabase provides this step's atomicity, as required by
-        // RFC 3261, section 10.3
-        if Request.HasExpiry and (Request.MinimumExpiry < Self.MinimumExpiryTime) then begin
-          Self.RejectExpireTooBrief(Request, Transaction);
-          Exit;
-        end;
+      if Request.HasExpiry and (Request.MinimumExpiry < Self.MinimumExpiryTime) then begin
+        Self.RejectExpireTooBrief(Request, Transaction);
+        Exit;
+      end;
 
-        if not Self.ProcessContacts(Request, Contacts) then begin
-          // Adding the contacts failed. What to do?
-        end;
-      finally
-        Contacts.Free;
+      // Self.BindingDatabase provides this step's atomicity, as required by
+      // RFC 3261, section 10.3
+      if not Self.ProcessContacts(Request) then begin
+        // Adding the contacts failed. What to do?
+        // return a 500!
       end;
     end;
 
@@ -164,12 +353,12 @@ end;
 procedure TIdSipRegistrar.Accept(Request: TIdSipRequest;
                                  Transaction: TIdSipTransaction);
 var
-  Bindings: TIdSipHeaders;
+  Bindings: TIdSipContacts;
   Response: TIdSipResponse;
 begin
-  Bindings := TIdSipHeaders.Create;
+  Bindings := TIdSipContacts.Create;
   try
-    Self.BindingDB.BindingsFor(Request.RequestUri.CanonicaliseAsAddressOfRecord,
+    Self.BindingDB.BindingsFor(Request,
                                Bindings);
 
     Response := Self.CreateResponse(Request, SIPOK);
@@ -183,19 +372,14 @@ begin
   end;
 end;
 
-function TIdSipRegistrar.ProcessContacts(Request: TIdSipRequest;
-                                         Contacts: TIdSipHeaderList): Boolean;
+function TIdSipRegistrar.GetDefaultExpiryTime: Cardinal;
 begin
-  if Request.HasExpiry then
-    Result := (Request.MinimumExpiry < Self.MinimumExpiryTime)
-  else
-    Result := true;
+  Result := Self.BindingDB.DefaultExpiryTime;
+end;
 
-//  Result := not Request.HasExpiry or (Request.MinimumExpiry < Self.MinimumExpiryTime);
-
-  if Result then
-    Result := Self.BindingDB.AddBindings(Request.RequestUri.CanonicaliseAsAddressOfRecord,
-                                         Contacts);
+function TIdSipRegistrar.ProcessContacts(Request: TIdSipRequest): Boolean;
+begin
+  Result := Self.BindingDB.AddBindings(Request);
 end;
 
 procedure TIdSipRegistrar.RejectExpireTooBrief(Request: TIdSipRequest;
@@ -222,6 +406,11 @@ procedure TIdSipRegistrar.RejectNotFound(Request: TIdSipRequest;
                                          Transaction: TIdSipTransaction);
 begin
   Self.ReturnResponse(Request, SIPNotFound, Transaction);
+end;
+
+procedure TIdSipRegistrar.SetDefaultExpiryTime(Value: Cardinal);
+begin
+  Self.BindingDB.DefaultExpiryTime := Value;
 end;
 
 end.
