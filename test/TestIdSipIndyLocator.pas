@@ -3,7 +3,8 @@ unit TestIdSipIndyLocator;
 interface
 
 uses
-  Classes, IdSipIndyLocator, IdSocketHandle, IdUdpServer, TestFramework;
+  Classes, IdSipIndyLocator, IdSipLocator, IdSocketHandle, IdUdpServer,
+  TestFramework;
 
 type
   // The NameServer provides hard-coded answers to the questions. The important
@@ -13,7 +14,10 @@ type
   private
     Answer:     String;
     Loc:        TIdSipIndyLocator;
+    NameRecs:   TIdDomainNameRecords;
     NameServer: TIdUdpServer;
+    NaptrRecs:  TIdNaptrRecords;
+    SrvRecs:    TIdSrvRecords;
 
     function  ARecords: String;
     function  NaptrRecords: String;
@@ -41,7 +45,7 @@ type
 implementation
 
 uses
-  IdSipLocator, IdSipMessage;
+  IdSipMessage;
 
 function Suite: ITestSuite;
 begin
@@ -69,6 +73,10 @@ begin
   LocalHost.IP   := '127.0.0.1';
   LocalHost.Port := 53;
 
+  Self.NameRecs  := TIdDomainNameRecords.Create;
+  Self.NaptrRecs := TIdNaptrRecords.Create;
+  Self.SrvRecs   := TIdSrvRecords.Create;
+
   Self.NameServer.OnUDPRead     := Self.ProvideAnswer;
   Self.NameServer.ThreadedEvent := true;
   Self.NameServer.Active        := true;
@@ -76,6 +84,10 @@ end;
 
 procedure TestTIdSipIndyLocator.TearDown;
 begin
+  Self.SrvRecs.Free;
+  Self.NaptrRecs.Free;
+  Self.NameRecs.Free;
+
   Self.NameServer.Active := false;
   Self.NameServer.Free;
   Self.Loc.Free;
@@ -264,105 +276,78 @@ end;
 //* TestTIdSipIndyLocator Published methods ************************************
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecords;
-var
-  Records: TIdDomainNameRecords;
 begin
   Self.Answer := Self.ARecords;
 
-  Records := TIdDomainNameRecords.Create;
-  try
-    Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Records);
+  Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Self.NameRecs);
 
-    // See the comment in Self.ARecords.
-    CheckEquals(2, Records.Count, 'Record count');
+  // See the comment in Self.ARecords.
+  CheckEquals(2, Self.NameRecs.Count, 'Record count');
 
-    CheckEquals(DnsARecord,            Records[0].RecordType, '1st record record type');
-    CheckEquals('paranoid.leo-ix.net', Records[0].Domain,     '1st record domain');
-    CheckEquals('127.0.0.1',           Records[0].IPAddress,  '1st record IP address');
+  CheckEquals(DnsARecord,            Self.NameRecs[0].RecordType, '1st record record type');
+  CheckEquals('paranoid.leo-ix.net', Self.NameRecs[0].Domain,     '1st record domain');
+  CheckEquals('127.0.0.1',           Self.NameRecs[0].IPAddress,  '1st record IP address');
 
-    CheckEquals(DnsARecord,            Records[1].RecordType, '2nd record record type');
-    CheckEquals('paranoid.leo-ix.net', Records[1].Domain,     '2nd record domain');
-    CheckEquals('127.0.0.2',           Records[1].IPAddress,  '2nd record IP address');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(DnsARecord,            Self.NameRecs[1].RecordType, '2nd record record type');
+  CheckEquals('paranoid.leo-ix.net', Self.NameRecs[1].Domain,     '2nd record domain');
+  CheckEquals('127.0.0.2',           Self.NameRecs[1].IPAddress,  '2nd record IP address');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsNetworkFailure;
-var
-  Records: TIdDomainNameRecords;
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
   Self.NameServer.Active := false;
 
-  Records := TIdDomainNameRecords.Create;
-  try
-    Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Records);
+  Self.Loc.ResolveNameRecords('paranoid.leo-ix.net', Self.NameRecs);
 
-    CheckEquals(0, Records.Count, 'Record count');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(0, Self.NameRecs.Count, 'Record count');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveNameRecordsOnNonexistentDomain;
-var
-  Records: TIdDomainNameRecords;
 begin
   Self.Answer := Self.NoSuchRecord;
 
-  Records := TIdDomainNameRecords.Create;
-  try
-    Self.Loc.ResolveNameRecords('foo.bar', Records);
+  Self.Loc.ResolveNameRecords('foo.bar', Self.NameRecs);
 
-    CheckEquals(0, Records.Count, 'Record count');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(0, Self.NameRecs.Count, 'Record count');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveNAPTR;
 var
-  Records: TIdNaptrRecords;
-  Uri:     TIdSipUri;
+  Uri: TIdSipUri;
 begin
   Self.Answer := Self.NaptrRecords;
 
   Uri := TIdSipUri.Create('sip:leo-ix.net');
   try
-    Records := TIdNaptrRecords.Create;
-    try
-      Self.Loc.ResolveNAPTR(Uri, Records);
-      // See the comment in Self.NaptrRecords.
-      CheckEquals(3, Records.Count, 'Record count');
+    Self.Loc.ResolveNAPTR(Uri, Self.NaptrRecs);
+    // See the comment in Self.NaptrRecords.
+    CheckEquals(3, Self.NaptrRecs.Count, 'Record count');
 
-      CheckEquals('s',                     Records[0].Flags,      '1st record Flag');
-      CheckEquals('leo-ix.net',            Records[0].Key,        '1st record Key');
-      CheckEquals(0,                       Records[0].Order,      '1st record Order');
-      CheckEquals(0,                       Records[0].Preference, '1st record Preference');
-      CheckEquals('',                      Records[0].Regex,      '1st record Regex');
-      CheckEquals('SIPS+D2T',              Records[0].Service,    '1st record Service');
-      CheckEquals('_sips._tcp.leo-ix.net', Records[0].Value,      '1st record Value');
+    CheckEquals('s',                     Self.NaptrRecs[0].Flags,      '1st record Flag');
+    CheckEquals('leo-ix.net',            Self.NaptrRecs[0].Key,        '1st record Key');
+    CheckEquals(0,                       Self.NaptrRecs[0].Order,      '1st record Order');
+    CheckEquals(0,                       Self.NaptrRecs[0].Preference, '1st record Preference');
+    CheckEquals('',                      Self.NaptrRecs[0].Regex,      '1st record Regex');
+    CheckEquals('SIPS+D2T',              Self.NaptrRecs[0].Service,    '1st record Service');
+    CheckEquals('_sips._tcp.leo-ix.net', Self.NaptrRecs[0].Value,      '1st record Value');
 
-      CheckEquals('s',                     Records[1].Flags,      '2nd record Flag');
-      CheckEquals('leo-ix.net',            Records[1].Key,        '2nd record Key');
-      CheckEquals(0,                       Records[1].Order,      '2nd record Order');
-      CheckEquals(0,                       Records[1].Preference, '2nd record Preference');
-      CheckEquals('',                      Records[1].Regex,      '2nd record Regex');
-      CheckEquals('SIP+D2T',               Records[1].Service,    '2nd record Service');
-      CheckEquals('_sip._tcp.leo-ix.net',  Records[1].Value,      '2nd record Value');
+    CheckEquals('s',                     Self.NaptrRecs[1].Flags,      '2nd record Flag');
+    CheckEquals('leo-ix.net',            Self.NaptrRecs[1].Key,        '2nd record Key');
+    CheckEquals(0,                       Self.NaptrRecs[1].Order,      '2nd record Order');
+    CheckEquals(0,                       Self.NaptrRecs[1].Preference, '2nd record Preference');
+    CheckEquals('',                      Self.NaptrRecs[1].Regex,      '2nd record Regex');
+    CheckEquals('SIP+D2T',               Self.NaptrRecs[1].Service,    '2nd record Service');
+    CheckEquals('_sip._tcp.leo-ix.net',  Self.NaptrRecs[1].Value,      '2nd record Value');
 
-      CheckEquals('s',                     Records[2].Flags,      '3rd record Flag');
-      CheckEquals('leo-ix.net',            Records[2].Key,        '3rd record Key');
-      CheckEquals(0,                       Records[2].Order,      '3rd record Order');
-      CheckEquals(0,                       Records[2].Preference, '3rd record Preference');
-      CheckEquals('',                      Records[2].Regex,      '3rd record Regex');
-      CheckEquals('SIP+D2U',               Records[2].Service,    '3rd record Service');
-      CheckEquals('_sip._udp.leo-ix.net',  Records[2].Value,      '3rd record Value');
-    finally
-      Records.Free;
-    end;
+    CheckEquals('s',                     Self.NaptrRecs[2].Flags,      '3rd record Flag');
+    CheckEquals('leo-ix.net',            Self.NaptrRecs[2].Key,        '3rd record Key');
+    CheckEquals(0,                       Self.NaptrRecs[2].Order,      '3rd record Order');
+    CheckEquals(0,                       Self.NaptrRecs[2].Preference, '3rd record Preference');
+    CheckEquals('',                      Self.NaptrRecs[2].Regex,      '3rd record Regex');
+    CheckEquals('SIP+D2U',               Self.NaptrRecs[2].Service,    '3rd record Service');
+    CheckEquals('_sip._udp.leo-ix.net',  Self.NaptrRecs[2].Value,      '3rd record Value');
   finally
     Uri.Free;
   end;
@@ -370,8 +355,7 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNAPTRNetworkFailure;
 var
-  Records: TIdNaptrRecords;
-  Uri:     TIdSipUri;
+  Uri: TIdSipUri;
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
@@ -379,14 +363,9 @@ begin
 
   Uri := TIdSipUri.Create('sip:foo.bar');
   try
-    Records := TIdNaptrRecords.Create;
-    try
-      Self.Loc.ResolveNAPTR(Uri, Records);
+    Self.Loc.ResolveNAPTR(Uri, Self.NaptrRecs);
 
-      CheckEquals(0, Records.Count, 'Record count');
-    finally
-      Records.Free;
-    end;
+    CheckEquals(0, Self.NaptrRecs.Count, 'Record count');
   finally
     Uri.Free;
   end;
@@ -394,121 +373,94 @@ end;
 
 procedure TestTIdSipIndyLocator.TestResolveNAPTROnNonexistentDomain;
 var
-  Records: TIdNaptrRecords;
-  Uri:     TIdSipUri;
+  Uri: TIdSipUri;
 begin
   Self.Answer := Self.NoSuchRecord;
 
   Uri := TIdSipUri.Create('sip:foo.bar');
   try
-    Records := TIdNaptrRecords.Create;
-    try
-      Self.Loc.ResolveNAPTR(Uri, Records);
+    Self.Loc.ResolveNAPTR(Uri, Self.NaptrRecs);
 
-      CheckEquals(0, Records.Count, 'Record count');
-    finally
-      Records.Free;
-    end;
+    CheckEquals(0, Self.NaptrRecs.Count, 'Record count');
   finally
     Uri.Free;
   end;
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRV;
-var
-  Records: TIdSrvRecords;
 begin
   Self.Answer := Self.SrvRecords;
 
-  Records := TIdSrvRecords.Create;
-  try
-    Self.Loc.ResolveSRV('_sip._tcp.leo-ix.net', Records);
+  Self.Loc.ResolveSRV('_sip._tcp.leo-ix.net', Self.SrvRecs);
 
-    // See the comment in Self.SrvRecords.
-    CheckEquals(2, Records.Count, 'Record count');
+  // See the comment in Self.SrvRecords.
+  CheckEquals(2, Self.SrvRecs.Count, 'Record count');
 
-    CheckEquals('leo-ix.net',          Records[0].Domain,   '1st record Domain');
-    CheckEquals(5061,                  Records[0].Port,     '1st record Port');
-    CheckEquals(1,                     Records[0].Priority, '1st record Priority');
-    CheckEquals('_sips._tcp',          Records[0].Service,  '1st record Service');
-    CheckEquals('paranoid.leo-ix.net', Records[0].Target,   '1st record Target');
-    CheckEquals(2,                     Records[0].Weight,   '1st record Weight');
+  CheckEquals('leo-ix.net',          Self.SrvRecs[0].Domain,   '1st record Domain');
+  CheckEquals(5061,                  Self.SrvRecs[0].Port,     '1st record Port');
+  CheckEquals(1,                     Self.SrvRecs[0].Priority, '1st record Priority');
+  CheckEquals('_sips._tcp',          Self.SrvRecs[0].Service,  '1st record Service');
+  CheckEquals('paranoid.leo-ix.net', Self.SrvRecs[0].Target,   '1st record Target');
+  CheckEquals(2,                     Self.SrvRecs[0].Weight,   '1st record Weight');
 
-    CheckEquals(2, Records[0].NameRecords.Count, '1st record name record count');
-    CheckEquals('paranoid.leo-ix.net',
-                Records[0].NameRecords[0].Domain,
-                '1st record 1st name record');
-    CheckEquals('127.0.0.1',
-                Records[0].NameRecords[0].IPAddress,
-                '1st record 1st name record IP address');
-    CheckEquals(DnsARecord,
-                Records[0].NameRecords[0].RecordType,
-                '1st record 1st name record type');
+  CheckEquals(2, Self.SrvRecs[0].NameRecords.Count, '1st record name record count');
+  CheckEquals('paranoid.leo-ix.net',
+              Self.SrvRecs[0].NameRecords[0].Domain,
+              '1st record 1st name record');
+  CheckEquals('127.0.0.1',
+              Self.SrvRecs[0].NameRecords[0].IPAddress,
+              '1st record 1st name record IP address');
+  CheckEquals(DnsARecord,
+              Self.SrvRecs[0].NameRecords[0].RecordType,
+              '1st record 1st name record type');
 
-    CheckEquals('paranoid.leo-ix.net',
-                Records[0].NameRecords[1].Domain,
-                '1st record 2nd name record');
-    CheckEquals('127.0.0.2',
-                Records[0].NameRecords[1].IPAddress,
-                '1st record 2nd name record IP address');
-    CheckEquals(DnsARecord,
-                Records[0].NameRecords[1].RecordType,
-                '1st record 2nd name record type');
+  CheckEquals('paranoid.leo-ix.net',
+              Self.SrvRecs[0].NameRecords[1].Domain,
+              '1st record 2nd name record');
+  CheckEquals('127.0.0.2',
+              Self.SrvRecs[0].NameRecords[1].IPAddress,
+              '1st record 2nd name record IP address');
+  CheckEquals(DnsARecord,
+              Self.SrvRecs[0].NameRecords[1].RecordType,
+              '1st record 2nd name record type');
 
-    CheckEquals('leo-ix.net',              Records[1].Domain,   '2nd record Domain');
-    CheckEquals(5061,                      Records[1].Port,     '2nd record Port');
-    CheckEquals(1,                         Records[1].Priority, '2nd record Priority');
-    CheckEquals('_sips._tcp',              Records[1].Service,  '2nd record Service');
-    CheckEquals('paranoid-bak.leo-ix.net', Records[1].Target,   '2nd record Target');
-    CheckEquals(1,                         Records[1].Weight,   '2nd record Weight');
+  CheckEquals('leo-ix.net',              Self.SrvRecs[1].Domain,   '2nd record Domain');
+  CheckEquals(5061,                      Self.SrvRecs[1].Port,     '2nd record Port');
+  CheckEquals(1,                         Self.SrvRecs[1].Priority, '2nd record Priority');
+  CheckEquals('_sips._tcp',              Self.SrvRecs[1].Service,  '2nd record Service');
+  CheckEquals('paranoid-bak.leo-ix.net', Self.SrvRecs[1].Target,   '2nd record Target');
+  CheckEquals(1,                         Self.SrvRecs[1].Weight,   '2nd record Weight');
 
-    CheckEquals(1, Records[1].NameRecords.Count, '2nd record name record count');
-    CheckEquals('paranoid-bak.leo-ix.net',
-                Records[1].NameRecords[0].Domain,
-                '2nd record 1st name record');
-    CheckEquals('127.0.1.1',
-                Records[1].NameRecords[0].IPAddress,
-                '2nd record 1st name record IP address');
-    CheckEquals(DnsARecord,
-                Records[1].NameRecords[0].RecordType,
-                '2nd record 1st name record type');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(1, Self.SrvRecs[1].NameRecords.Count, '2nd record name record count');
+  CheckEquals('paranoid-bak.leo-ix.net',
+              Self.SrvRecs[1].NameRecords[0].Domain,
+              '2nd record 1st name record');
+  CheckEquals('127.0.1.1',
+              Self.SrvRecs[1].NameRecords[0].IPAddress,
+              '2nd record 1st name record IP address');
+  CheckEquals(DnsARecord,
+              Self.SrvRecs[1].NameRecords[0].RecordType,
+              '2nd record 1st name record type');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRVNetworkFailure;
-var
-  Records: TIdSrvRecords;
 begin
   // This shows what happens when something on the network goes wrong (like,
   // say, the name server disappearing).
   Self.NameServer.Active := false;
 
-  Records := TIdSrvRecords.Create;
-  try
-    Self.Loc.ResolveSRV('foo.bar', Records);
+  Self.Loc.ResolveSRV('foo.bar', Self.SrvRecs);
 
-    CheckEquals(0, Records.Count, 'Record count');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(0, Self.SrvRecs.Count, 'Record count');
 end;
 
 procedure TestTIdSipIndyLocator.TestResolveSRVOnNonexistentDomain;
-var
-  Records: TIdSrvRecords;
 begin
   Self.Answer := Self.NoSuchRecord;
 
-  Records := TIdSrvRecords.Create;
-  try
-    Self.Loc.ResolveSRV('foo.bar', Records);
+  Self.Loc.ResolveSRV('foo.bar', Self.SrvRecs);
 
-    CheckEquals(0, Records.Count, 'Record count');
-  finally
-    Records.Free;
-  end;
+  CheckEquals(0, Self.SrvRecs.Count, 'Record count');
 end;
 
 initialization
