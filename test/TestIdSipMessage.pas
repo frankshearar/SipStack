@@ -888,15 +888,21 @@ begin
   try
     Check(Ack.IsAck, 'Method');
     CheckEquals(Self.Request.CallID, Ack.CallID, 'Call-ID');
-    CheckEquals(Self.Request.From.AsString,
-                Ack.From.AsString,
-                'From');
+    CheckEquals(Self.Request.From.Address.AsString,
+                Ack.From.Address.AsString,
+                'From address');
+    CheckEquals(Self.Request.From.Tag,
+                Ack.From.Tag,
+                'From tag');
     CheckEquals(Self.Request.RequestUri.Uri,
                 Ack.RequestUri.Uri,
                 'Request-URI');
-    CheckEquals(Self.Response.ToHeader.AsString,
-                Ack.ToHeader.AsString,
-                'To');
+    CheckEquals(Self.Request.ToHeader.Address.AsString,
+                Ack.ToHeader.Address.AsString,
+                'To address');
+    CheckEquals(Self.Request.ToHeader.Tag,
+                Ack.ToHeader.Tag,
+                'To tag');
     CheckEquals(1, Ack.Path.Count, 'Via path hop count');
     CheckEquals(Self.Response.LastHop.Value,
                 Ack.LastHop.Value,
@@ -982,7 +988,7 @@ var
   Ack: TIdSipRequest;
 begin
   Self.Request.Method      := MethodInvite;
-  Self.Response.StatusCode := SIPOK;
+  Self.Response.StatusCode := SIPRequestTimeout;
 
   Self.Request.AddHeader(RouteHeader).Value := '<sip:gw1.tessier-ashpool.co.luna;lr>';
   Self.Request.AddHeader(RouteHeader).Value := '<sip:gw2.tessier-ashpool.co.luna>';
