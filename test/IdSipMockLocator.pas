@@ -10,7 +10,7 @@ type
   private
     fNAPTR:       TIdNaptrRecords;
     fNameRecords: TIdDomainNameRecords;
-    SRV:          TIdSrvRecords;
+    fSRV:         TIdSrvRecords;
   protected
     procedure PerformNameLookup(const DomainName: String;
                                 Result: TIdDomainNameRecords); override;
@@ -41,6 +41,7 @@ type
 
     property NameRecords: TIdDomainNameRecords read fNameRecords;
     property NAPTR:       TIdNaptrRecords      read fNAPTR;
+    property SRV:          TIdSrvRecords       read fSRV;
   end;
 
 implementation
@@ -56,7 +57,7 @@ begin
 
   Self.fNameRecords := TIdDomainNameRecords.Create;
   Self.fNAPTR       := TIdNaptrRecords.Create;
-  Self.SRV          := TIdSrvRecords.Create;
+  Self.fSRV         := TIdSrvRecords.Create;
 end;
 
 destructor TIdSipMockLocator.Destroy;
