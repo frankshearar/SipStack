@@ -2415,7 +2415,6 @@ begin
     Self.SimulateRemoteInvite;
     Check(Assigned(Self.Session), 'OnInboundCall didn''t fire');
 
-    // Wait here. For what? How do we avoid waiting for an entire minute?
     Self.WaitForSignaled(Self.SendEvent);
 
     CheckResponseSent('No response sent');
