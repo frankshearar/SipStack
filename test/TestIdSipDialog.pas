@@ -293,6 +293,9 @@ begin
                 Self.Dlg.LocalSequenceNo,
                 'Sequence number must not change when generating an ACK');
 
+    CheckNotEquals('',
+                   Ack.RequestUri.Uri,
+                  'ACK Request-URI cannot be the empty string');
     CheckEquals(Self.Req.LastHop.Value,
                 Ack.LastHop.Value,
                 'ACK topmost Via');
