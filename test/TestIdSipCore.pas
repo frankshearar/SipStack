@@ -1069,21 +1069,21 @@ end;
 procedure TestTIdSipUserAgentCore.TestCreateRegisterReusesCallIDForSameRegistrar;
 var
   FirstCallID:  String;
-  Register:     TIdSipRequest;
+  Reg:          TIdSipRequest;
   SecondCallID: String;
 begin
-  Register := Self.Core.CreateRegister(Self.Destination);
+  Reg := Self.Core.CreateRegister(Self.Destination);
   try
-    FirstCallID := Register.CallID;
+    FirstCallID := Reg.CallID;
   finally
-    Register.Free;
+    Reg.Free;
   end;
 
-  Register := Self.Core.CreateRegister(Self.Destination);
+  Reg := Self.Core.CreateRegister(Self.Destination);
   try
-    SecondCallID := Register.CallID;
+    SecondCallID := Reg.CallID;
   finally
-    Register.Free;
+    Reg.Free;
   end;
 
   CheckEquals(FirstCallID,
@@ -1091,13 +1091,13 @@ begin
               'Call-ID SHOULD be the same for same registrar');
 
   Self.Destination.Address.Uri := 'sip:enki.org';
-  Register := Self.Core.CreateRegister(Self.Destination);
+  Reg := Self.Core.CreateRegister(Self.Destination);
   try
     CheckNotEquals(FirstCallID,
-                   Register.CallID,
+                   Reg.CallID,
                    'Call-ID SHOULD be different for new registrar');
   finally
-    Register.Free;
+    Reg.Free;
   end;
 end;
 
