@@ -6,7 +6,7 @@ uses
   IdSipHeaders, IdSipMessage, IdSipTransport, IdSocketHandle, SysUtils;
 
 type
-  TIdSipMockTransport = class(TIdSipAbstractTransport)
+  TIdSipMockTransport = class(TIdSipTransport)
   private
     fACKCount:          Cardinal;
     fBindings:          TIdSocketHandles;
@@ -75,18 +75,19 @@ begin
   Self.LastResponse.Free;
   Self.LastRequest.Free;
   Self.LastACK.Free;
+  Self.Bindings.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipMockTransport.FireOnRequest(const R: TIdSipRequest);
 begin
-  Self.DoOnRequest(R);
+  Self.NotifyTransportListeners(R);
 end;
 
 procedure TIdSipMockTransport.FireOnResponse(const R: TIdSipResponse);
 begin
-  Self.DoOnResponse(R);
+  Self.NotifyTransportListeners(R);
 end;
 
 function TIdSipMockTransport.GetTransportType: TIdSipTransportType;
@@ -156,7 +157,7 @@ begin
   Self.LastRequest.Assign(R);
 
   if Self.LocalEchoMessages then
-    Self.DoOnRequest(R);
+    Self.NotifyTransportListeners(R);
 end;
 
 procedure TIdSipMockTransport.SendResponse(const R: TIdSipResponse);
@@ -171,7 +172,7 @@ begin
   Inc(Self.fSentResponseCount);
 
   if Self.LocalEchoMessages then
-    Self.DoOnResponse(R);
+    Self.NotifyTransportListeners(R);
 end;
 
 function TIdSipMockTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;

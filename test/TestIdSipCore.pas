@@ -43,6 +43,7 @@ type
     procedure TestAddAllowedScheme;
     procedure TestAddAllowedSchemeSchemeAlreadyPresent;
     procedure TestCall;
+    procedure TestCallSecure;
     procedure TestCallTimedOut;
     procedure TestCreateInvite;
     procedure TestCreateRequest;
@@ -180,7 +181,7 @@ begin
 
   P := TIdSipParser.Create;
   try
-    Self.Request := P.ParseAndMakeRequest(LocalLoopRequest);
+    Self.Request  := P.ParseAndMakeRequest(LocalLoopRequest);
   finally
     P.Free;
   end;
@@ -320,7 +321,7 @@ end;
 
 procedure TestTIdSipUserAgentCore.TestAcceptSecureCall;
 begin
-  Self.Core.OnInvite     := Self.AcceptCallImmediately;
+  Self.Core.OnInvite := Self.AcceptCallImmediately;
 
   Self.Dispatch.Transport.TransportType := sttTLS;
   Self.Request.LastHop.Transport := sttTLS;
@@ -470,15 +471,19 @@ procedure TestTIdSipUserAgentCore.TestCall;
 var
   Destination:  TIdSipToHeader;
   RequestCount: Integer;
+  Response:     TIdSipResponse;
+  SessCount:    Integer;
+  Session:      TIdSipSession;
   TranCount:    Integer;
 begin
   RequestCount := Self.Dispatch.Transport.SentRequestCount;
+  SessCount    := Self.Core.SessionCount;
   TranCount    := Self.Dispatch.TransactionCount;
 
   Destination := TIdSipToHeader.Create;
   try
     Destination.Value := 'sip:franks@localhost';
-    Self.Core.Call(Destination);
+    Session := Self.Core.Call(Destination);
 
     CheckEquals(RequestCount + 1,
                 Self.Dispatch.Transport.SentRequestCount,
@@ -487,6 +492,53 @@ begin
     CheckEquals(TranCount + 1,
                 Self.Dispatch.TransactionCount,
                 'no client INVITE transaction created');
+
+    CheckEquals(SessCount + 1,
+                Self.Core.SessionCount,
+                'no new session created');
+
+    Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+    try
+      Self.Dispatch.Transport.FireOnResponse(Response);
+
+      Check(Session.Dialog.IsEarly,
+            'Dialog in incorrect state');
+      Check(not Session.Dialog.IsSecure,
+            'Dialog secure when TLS not used');
+
+      Response.StatusCode := SIPOK;
+      Dispatch.Transport.FireOnResponse(Response);
+
+      Check(not Session.Dialog.IsEarly, 'Dialog in incorrect state');
+    finally
+      Response.Free;
+    end;
+  finally
+    Destination.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgentCore.TestCallSecure;
+var
+  Destination:  TIdSipToHeader;
+  Response:     TIdSipResponse;
+  Session:      TIdSipSession;
+begin
+  Self.Dispatch.Transport.TransportType := sttTLS;
+
+  Destination := TIdSipToHeader.Create;
+  try
+    Destination.Value := 'sips:franks@localhost';
+    Session := Self.Core.Call(Destination);
+
+    Response := Self.Core.CreateResponse(Self.Dispatch.Transport.LastRequest, 100);
+    try
+      Self.Dispatch.Transport.FireOnResponse(Response);
+
+      Check(Session.Dialog.IsSecure, 'Dialog not secure when TLS used');
+    finally
+      Response.Free;
+    end;
   finally
     Destination.Free;
   end;
@@ -1118,7 +1170,7 @@ begin
                            false,
                            RouteSet);
   try
-    Self.Session := TIdSipSession.Create(D, Self.Core);
+    Self.Session := TIdSipSession.Create(Self.Core);
   finally
     D.Free;
   end;

@@ -3,7 +3,7 @@ unit IdSipTcpClient;
 interface
 
 uses
-  Classes, IdSipMessage, IdTCPClient, IdSipUdpServer;
+  Classes, IdSipMessage, IdTCPClient;
 
 type
   TIdSipTcpClient = class(TIdTCPClient)

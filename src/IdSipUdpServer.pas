@@ -11,18 +11,11 @@ type
     Port: Integer;
   end;
 
-  TIdSipRequestEvent  = procedure(Sender: TObject; const Request: TIdSipRequest) of object;
-  TIdSipResponseEvent = procedure(Sender: TObject; const Response: TIdSipResponse) of object;
-
   TIdSipUdpServer = class(TIdUDPServer, IIdSipMessageVisitor)
   private
-    fOnRequest:   TIdSipRequestEvent;
-    fOnResponse:  TIdSipResponseEvent;
     ListenerLock: TCriticalSection;
     Listeners:    TList;
 
-    procedure DoOnRequest(const Request: TIdSipRequest);
-    procedure DoOnResponse(const Response: TIdSipResponse);
     procedure NotifyListeners(const Request: TIdSipRequest); overload;
     procedure NotifyListeners(const Response: TIdSipResponse); overload;
     procedure ReturnBadRequest(Binding: TIdSocketHandle;
@@ -38,9 +31,6 @@ type
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
     procedure VisitRequest(const Request: TIdSipRequest);
     procedure VisitResponse(const Response: TIdSipResponse);
-  published
-    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
 
 implementation
@@ -93,12 +83,12 @@ end;
 
 procedure TIdSipUdpServer.VisitRequest(const Request: TIdSipRequest);
 begin
-  Self.DoOnRequest(Request);
+  Self.NotifyListeners(Request);
 end;
 
 procedure TIdSipUdpServer.VisitResponse(const Response: TIdSipResponse);
 begin
-  Self.DoOnResponse(Response);
+  Self.NotifyListeners(Response);
 end;
 
 //* TIdSipUdpServer Protected methods ******************************************
@@ -147,22 +137,6 @@ begin
 end;
 
 //* TIdSipUdpServer Private methods ********************************************
-
-procedure TIdSipUdpServer.DoOnRequest(const Request: TIdSipRequest);
-begin
-  if Assigned(Self.OnRequest) then
-    Self.OnRequest(Self, Request);
-
-  Self.NotifyListeners(Request);
-end;
-
-procedure TIdSipUdpServer.DoOnResponse(const Response: TIdSipResponse);
-begin
-  if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, Response);
-
-  Self.NotifyListeners(Response);
-end;
 
 procedure TIdSipUdpServer.NotifyListeners(const Request: TIdSipRequest);
 var

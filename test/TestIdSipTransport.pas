@@ -7,16 +7,44 @@ uses
   SysUtils, TestFramework, TestFrameworkEx;
 
 type
-  TestTIdSipAbstractTransport = class(TThreadingTestCase, IIdSipMessageListener)
+  TIdSipTransportSubjectSubclass = class(TIdSipTcpTransport)
+  public
+    procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
+  end;
+
+  TestTIdSipTransportSubject = class(TTestCase, IIdSipTransportListener)
+  private
+    ReceivedRequest:  Boolean;
+    ReceivedResponse: Boolean;
+    Request:          TIdSipRequest;
+    Response:         TIdSipResponse;
+    Transport:        TIdSipTransportSubjectSubclass;
+
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const Transport: TIdSipTransport);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const Transport: TIdSipTransport);
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddTransportListener;
+    procedure TestAllListenersReceiveRequests;
+    procedure TestAllListenersReceiveResponses;
+    procedure TestRemoveTransportListener;
+  end;
+
+  TestTIdSipTransport = class(TThreadingTestCase, IIdSipMessageListener)
   protected
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
-    LocalLoopTransport:    TIdSipAbstractTransport;
+    LocalLoopTransport:    TIdSipTransport;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
-    Transport:             TIdSipAbstractTransport;
+    Transport:             TIdSipTransport;
     WrongServer:           Boolean;
 
     procedure CheckCanReceiveRequest(Sender: TObject; const R: TIdSipRequest);
@@ -43,7 +71,7 @@ type
     procedure TestSendResponseWithReceivedParam;
   end;
 
-  TestTIdSipTCPTransport = class(TestTIdSipAbstractTransport)
+  TestTIdSipTCPTransport = class(TestTIdSipTransport)
   protected
     function  TransportType: TIdSipTransportClass; override;
   published
@@ -52,10 +80,10 @@ type
     procedure TestIsSecure;
   end;
 
-  TestTIdSipTLSTransport = class(TestTIdSipAbstractTransport)
+  TestTIdSipTLSTransport = class(TestTIdSipTransport)
   private
     procedure DoOnPassword(var Password: String);
-    procedure SetUpTls(Transport: TIdSipAbstractTransport);
+    procedure SetUpTls(Transport: TIdSipTransport);
   protected
     function  DefaultPort: Cardinal; override;
     function  TransportType: TIdSipTransportClass; override;
@@ -67,7 +95,7 @@ type
     procedure TestIsSecure;
   end;
 
-  TestTIdSipUDPTransport = class(TestTIdSipAbstractTransport)
+  TestTIdSipUDPTransport = class(TestTIdSipTransport)
   protected
     function TransportType: TIdSipTransportClass; override;
   published
@@ -76,7 +104,7 @@ type
     procedure TestIsSecure;
   end;
 {
-  TestTIdSipSCTPTransport = class(TestTIdSipAbstractTransport)
+  TestTIdSipSCTPTransport = class(TestTIdSipTransport)
   protected
     function  TransportType: TIdSipTransportClass; override;
   published
@@ -102,6 +130,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
+  Result.AddTest(TestTIdSipTransportSubject.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
   Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
@@ -109,11 +138,127 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipAbstractTransport                                                *
+//* TIdSipTransportSubjectSubclass                                             *
 //******************************************************************************
-//* TestTIdSipAbstractTransport Public methods *********************************
+//* TIdSipTransportSubjectSubclass Public methods ******************************
 
-procedure TestTIdSipAbstractTransport.SetUp;
+procedure TIdSipTransportSubjectSubclass.NotifyTransportListeners(const Request: TIdSipRequest);
+begin
+  inherited NotifyTransportListeners(Request);
+end;
+
+procedure TIdSipTransportSubjectSubclass.NotifyTransportListeners(const Response: TIdSipResponse);
+begin
+  inherited NotifyTransportListeners(Response);
+end;
+
+//******************************************************************************
+//* TestTIdSipTransportSubject                                                 *
+//******************************************************************************
+//* TestTIdSipTransportSubject Public methods **********************************
+
+procedure TestTIdSipTransportSubject.SetUp;
+begin
+  inherited SetUp;
+
+  Self.ReceivedRequest  := false;
+  Self.ReceivedResponse := false;
+  Self.Request          := TIdSipRequest.Create;
+  Self.Response         := TIdSipResponse.Create;
+  Self.Transport        := TIdSipTransportSubjectSubclass.Create(0);
+end;
+
+procedure TestTIdSipTransportSubject.TearDown;
+begin
+  Self.Transport.Free;
+  Self.Response.Free;
+  Self.Request.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransportSubject Private methods *********************************
+
+procedure TestTIdSipTransportSubject.OnReceiveRequest(const Request: TIdSipRequest;
+                                                      const Transport: TIdSipTransport);
+begin
+  Self.ReceivedRequest := true;
+  Check(Self.Request = Request,     'Request not correct');
+  Check(Self.Transport = Transport, 'Transport not correct');
+end;
+
+procedure TestTIdSipTransportSubject.OnReceiveResponse(const Response: TIdSipResponse;
+                                                       const Transport: TIdSipTransport);
+begin
+  Self.ReceivedResponse := true;
+
+  Check(Self.Response = Response,   'Response not correct');
+  Check(Self.Transport = Transport, 'Transport not correct');
+end;
+
+//* TestTIdSipTransportSubject Published methods *******************************
+
+procedure TestTIdSipTransportSubject.TestAddTransportListener;
+begin
+  Self.Transport.AddTransportListener(Self);
+
+  Self.Transport.NotifyTransportListeners(Self.Request);
+
+  Check(Self.ReceivedRequest, 'Listener wasn''t added');
+end;
+
+procedure TestTIdSipTransportSubject.TestAllListenersReceiveRequests;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Transport.AddTransportListener(Self);
+    Self.Transport.AddTransportListener(Listener);
+
+    Self.Transport.NotifyTransportListeners(Self.Request);
+
+    Check(Self.ReceivedRequest and Listener.ReceivedRequest,
+          'Not all Listeners received the request');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransportSubject.TestAllListenersReceiveResponses;
+var
+  Listener: TIdSipTestTransportListener;
+begin
+  Listener := TIdSipTestTransportListener.Create;
+  try
+    Self.Transport.AddTransportListener(Self);
+    Self.Transport.AddTransportListener(Listener);
+
+    Self.Transport.NotifyTransportListeners(Self.Response);
+
+    Check(Self.ReceivedResponse and Listener.ReceivedResponse,
+          'Not all Listeners received the Response');
+  finally
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipTransportSubject.TestRemoveTransportListener;
+begin
+  Self.Transport.AddTransportListener(Self);
+  Self.Transport.RemoveTransportListener(Self);
+
+  Self.Transport.NotifyTransportListeners(Self.Request);
+
+  Check(not Self.ReceivedRequest, 'Listener wasn''t removed');
+end;
+
+//******************************************************************************
+//* TestTIdSipTransport                                                        *
+//******************************************************************************
+//* TestTIdSipTransport Public methods *****************************************
+
+procedure TestTIdSipTransport.SetUp;
 var
   Binding: TIdSocketHandle;
   P:       TIdSipParser;
@@ -154,7 +299,7 @@ begin
   Self.WrongServer      := false;
 end;
 
-procedure TestTIdSipAbstractTransport.TearDown;
+procedure TestTIdSipTransport.TearDown;
 begin
   Self.Response.Free;
   Self.Request.Free;
@@ -165,9 +310,9 @@ begin
   inherited TearDown;
 end;
 
-//* TestTIdSipAbstractTransport Protected methods ******************************
+//* TestTIdSipTransport Protected methods **************************************
 
-procedure TestTIdSipAbstractTransport.CheckCanReceiveRequest(Sender: TObject;
+procedure TestTIdSipTransport.CheckCanReceiveRequest(Sender: TObject;
                                                        const R:      TIdSipRequest);
 begin
   try
@@ -183,7 +328,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.CheckCanReceiveResponse(Sender: TObject;
+procedure TestTIdSipTransport.CheckCanReceiveResponse(Sender: TObject;
                                                         const R:      TIdSipResponse);
 begin
   try
@@ -198,13 +343,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
+procedure TestTIdSipTransport.CheckDiscardResponseWithUnknownSentBy(Sender: TObject;
                                                                       const R:      TIdSipResponse);
 begin
   Self.ReceivedResponse := true;
 end;
 
-procedure TestTIdSipAbstractTransport.CheckSendRequestTopVia(Sender: TObject;
+procedure TestTIdSipTransport.CheckSendRequestTopVia(Sender: TObject;
                                                        const R:      TIdSipRequest);
 begin
   try
@@ -224,12 +369,12 @@ begin
   end;
 end;
 
-function TestTIdSipAbstractTransport.DefaultPort: Cardinal;
+function TestTIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
 end;
 
-procedure TestTIdSipAbstractTransport.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TestTIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest);
 begin
   if Assigned(Self.CheckingRequestEvent) then
     Self.CheckingRequestEvent(Self, Request);
@@ -237,7 +382,7 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipAbstractTransport.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TestTIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse);
 begin
   if Assigned(Self.CheckingResponseEvent) then
     Self.CheckingResponseEvent(Self, Response);
@@ -245,7 +390,7 @@ begin
   Self.ThreadEvent.SetEvent;
 end;
 
-procedure TestTIdSipAbstractTransport.ReturnResponse(Sender: TObject;
+procedure TestTIdSipTransport.ReturnResponse(Sender: TObject;
                                                const R:      TIdSipRequest);
 begin
   try
@@ -258,21 +403,21 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.SendOkResponse;
+procedure TestTIdSipTransport.SendOkResponse;
 begin
   Self.Response.StatusCode := SIPOK;
 
   Self.Transport.Send(Self.Response);
 end;
 
-function TestTIdSipAbstractTransport.TransportType: TIdSipTransportClass;
+function TestTIdSipTransport.TransportType: TIdSipTransportClass;
 begin
   Result := nil;
 end;
 
-//* TestTIdSipAbstractTransport Published methods ******************************
+//* TestTIdSipTransport Published methods **************************************
 
-procedure TestTIdSipAbstractTransport.TestCanReceiveRequest;
+procedure TestTIdSipTransport.TestCanReceiveRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
@@ -289,7 +434,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestCanReceiveResponse;
+procedure TestTIdSipTransport.TestCanReceiveResponse;
 begin
   Self.CheckingRequestEvent  := Self.ReturnResponse;
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
@@ -307,15 +452,15 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestTransportFor;
+procedure TestTIdSipTransport.TestTransportFor;
 begin
-  CheckEquals(TIdSipTCPTransport,  TIdSipAbstractTransport.TransportFor(sttTCP),  'TCP');
-  CheckEquals(TIdSipTLSTransport,  TIdSipAbstractTransport.TransportFor(sttTLS),  'TLS');
-  CheckEquals(TIdSipUDPTransport,  TIdSipAbstractTransport.TransportFor(sttUDP),  'UDP');
-  CheckEquals(TIdSipSCTPTransport, TIdSipAbstractTransport.TransportFor(sttSCTP), 'SCTP');
+  CheckEquals(TIdSipTCPTransport,  TIdSipTransport.TransportFor(sttTCP),  'TCP');
+  CheckEquals(TIdSipTLSTransport,  TIdSipTransport.TransportFor(sttTLS),  'TLS');
+  CheckEquals(TIdSipUDPTransport,  TIdSipTransport.TransportFor(sttUDP),  'UDP');
+  CheckEquals(TIdSipSCTPTransport, TIdSipTransport.TransportFor(sttSCTP), 'SCTP');
 end;
 
-procedure TestTIdSipAbstractTransport.TestDiscardResponseWithUnknownSentBy;
+procedure TestTIdSipTransport.TestDiscardResponseWithUnknownSentBy;
 begin
   Self.CheckingResponseEvent := Self.CheckDiscardResponseWithUnknownSentBy;
 
@@ -335,7 +480,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestSendRequest;
+procedure TestTIdSipTransport.TestSendRequest;
 begin
   Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
 
@@ -352,7 +497,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestSendRequestTopVia;
+procedure TestTIdSipTransport.TestSendRequestTopVia;
 begin
   Self.CheckingRequestEvent := Self.CheckSendRequestTopVia;
 
@@ -367,7 +512,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestSendResponse;
+procedure TestTIdSipTransport.TestSendResponse;
 begin
   Self.CheckingResponseEvent := Self.CheckCanReceiveResponse;
 
@@ -384,7 +529,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipAbstractTransport.TestSendResponseWithReceivedParam;
+procedure TestTIdSipTransport.TestSendResponseWithReceivedParam;
 var
   Listener:      TIdSipTestMessageListener;
   LocalListener: TIdSipTestMessageListener;
@@ -497,7 +642,7 @@ begin
   Password := 'test';
 end;
 
-procedure TestTIdSipTLSTransport.SetUpTls(Transport: TIdSipAbstractTransport);
+procedure TestTIdSipTLSTransport.SetUpTls(Transport: TIdSipTransport);
 var
   TLS: TIdSipTLSTransport;
 begin

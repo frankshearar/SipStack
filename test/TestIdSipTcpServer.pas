@@ -56,8 +56,6 @@ type
                                      const Request: TIdSipRequest);
     procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
                                                const Response: TIdSipResponse);
-    procedure CheckSendResponsesReceivedParam(Sender: TObject;
-                                        const Response: TIdSipResponse);
     procedure CheckTortureTest17;
     procedure CheckTortureTest19;
     procedure CheckTortureTest21;
@@ -347,6 +345,9 @@ end;
 
 procedure TestTIdSipTcpServer.TearDown;
 begin
+  Self.LocalAddressServer.RemoveMessageListener(Self);
+  Self.LocalHostServer.RemoveMessageListener(Self);
+
   Self.LocalAddressServer.Active := false;
   Self.LocalHostServer.Active := false;
 
@@ -485,21 +486,6 @@ begin
   try
     CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
     Self.ServerReceivedResponse := true;
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.CheckSendResponsesReceivedParam(Sender: TObject;
-                                                        const Response: TIdSipResponse);
-begin
-  try
-    Check(Sender = Self.LocalAddressServer, 'Wrong server received response');
 
     Self.ThreadEvent.SetEvent;
   except
@@ -706,9 +692,8 @@ end;
 
 procedure TestTIdSipTcpServer.TestAddMessageListener;
 begin
+  // SetUp already adds Self as a listener to LocalHostServer
   Self.CheckingRequestEvent := Self.AcknowledgeEvent;
-
-  Self.LocalHostServer.AddMessageListener(Self);
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Write(BasicRequest);

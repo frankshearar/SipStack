@@ -162,7 +162,8 @@ type
     procedure AddHeader(const Msg: TIdSipMessage; Header: String);
     procedure CheckContentLengthContentType(const Msg: TIdSipMessage);
     procedure CheckCSeqMethod(const Request: TIdSipRequest);
-    procedure CheckRequiredHeaders(const Request: TIdSipRequest);
+    procedure CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
+    procedure CheckRequiredResponseHeaders(const Msg: TIdSipMessage);
     function  CreateResponseOrRequest(const Token: String): TIdSipMessage;
     procedure InitialiseMessage(Msg: TIdSipMessage);
     procedure ParseCompoundHeader(const Msg: TIdSipMessage; const Header: String; Parms: String);
@@ -208,11 +209,11 @@ type
   // IIdSipMessageListener (the Observer, naturally enough).
   TIdSipMessageSubject = class(TIdSipInterfacedObject)
   private
-    ListenerLock: TCriticalSection;
-    Listeners:    TList;
+    MsgListenerLock: TCriticalSection;
+    MsgListeners:    TList;
   protected
-    procedure NotifyListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyMessageListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyMessageListeners(const Response: TIdSipResponse); overload;
   public
     constructor Create;
     destructor  Destroy; override;
@@ -1088,7 +1089,7 @@ begin
     Self.ParseHeaders(Request);
   end;
 
-  Self.CheckRequiredHeaders(Request);
+  Self.CheckRequiredRequestHeaders(Request);
   Self.CheckContentLengthContentType(Request);
   Self.CheckCSeqMethod(Request);
 end;
@@ -1104,6 +1105,7 @@ begin
   end;
 
   Self.CheckContentLengthContentType(Response);
+//  Self.CheckRequiredResponseHeaders(Response);
 end;
 
 procedure TIdSipParser.VisitRequest(const Request: TIdSipRequest);
@@ -1142,25 +1144,30 @@ begin
     raise Request.MalformedException.Create(CSeqMethodMismatch);
 end;
 
-procedure TIdSipParser.CheckRequiredHeaders(const Request: TIdSipRequest);
+procedure TIdSipParser.CheckRequiredRequestHeaders(const Msg: TIdSipMessage);
 begin
-  if not Request.HasHeader(CallIDHeaderFull) then
-    raise Request.MalformedException.Create(MissingCallID);
+  Self.CheckRequiredResponseHeaders(Msg);
 
-  if not Request.HasHeader(CSeqHeader) then
-    raise Request.MalformedException.Create(MissingCSeq);
+  if not Msg.HasHeader(MaxForwardsHeader) then
+    raise Msg.MalformedException.Create(MissingMaxForwards);
+end;
 
-  if not Request.HasHeader(FromHeaderFull) then
-    raise Request.MalformedException.Create(MissingFrom);
+procedure TIdSipParser.CheckRequiredResponseHeaders(const Msg: TIdSipMessage);
+begin
+  if not Msg.HasHeader(CallIDHeaderFull) then
+    raise Msg.MalformedException.Create(MissingCallID);
 
-  if not Request.HasHeader(MaxForwardsHeader) then
-    raise Request.MalformedException.Create(MissingMaxForwards);
+  if not Msg.HasHeader(CSeqHeader) then
+    raise Msg.MalformedException.Create(MissingCSeq);
 
-  if not Request.HasHeader(ToHeaderFull) then
-    raise Request.MalformedException.Create(MissingTo);
+  if not Msg.HasHeader(FromHeaderFull) then
+    raise Msg.MalformedException.Create(MissingFrom);
 
-  if not Request.HasHeader(ViaHeaderFull) then
-    raise Request.MalformedException.Create(MissingVia);
+  if not Msg.HasHeader(ToHeaderFull) then
+    raise Msg.MalformedException.Create(MissingTo);
+
+  if not Msg.HasHeader(ViaHeaderFull) then
+    raise Msg.MalformedException.Create(MissingVia);
 end;
 
 function TIdSipParser.CreateResponseOrRequest(const Token: String): TIdSipMessage;
@@ -1219,8 +1226,6 @@ begin
     if (FoldedHeader <> '') then
       Self.ParseHeader(Msg, FoldedHeader);
   end;
-
-  //TODO: check for required headers - To, From, Call-ID, Call-Seq, Max-Forwards, Via
 end;
 
 procedure TIdSipParser.ParseRequestLine(const Request: TIdSipRequest);
@@ -1307,63 +1312,63 @@ constructor TIdSipMessageSubject.Create;
 begin
   inherited Create;
 
-  Self.ListenerLock := TCriticalSection.Create;
-  Self.Listeners    := TList.Create;
+  Self.MsgListenerLock := TCriticalSection.Create;
+  Self.MsgListeners    := TList.Create;
 end;
 
 destructor TIdSipMessageSubject.Destroy;
 begin
-  Self.Listeners.Free;
-  Self.ListenerLock.Free;
+  Self.MsgListeners.Free;
+  Self.MsgListenerLock.Free;
 
   inherited Destroy;
 end;
 
 procedure TIdSipMessageSubject.AddMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.ListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    Self.Listeners.Add(Pointer(Listener));
+    Self.MsgListeners.Add(Pointer(Listener));
   finally
-    Self.ListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
 procedure TIdSipMessageSubject.RemoveMessageListener(const Listener: IIdSipMessageListener);
 begin
-  Self.ListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    Self.Listeners.Remove(Pointer(Listener));
+    Self.MsgListeners.Remove(Pointer(Listener));
   finally
-    Self.ListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
 //* TIdSipMessageSubject Protected methods *************************************
 
-procedure TIdSipMessageSubject.NotifyListeners(const Request: TIdSipRequest);
+procedure TIdSipMessageSubject.NotifyMessageListeners(const Request: TIdSipRequest);
 var
   I: Integer;
 begin
-  Self.ListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveRequest(Request);
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipMessageListener(Self.MsgListeners[I]).OnReceiveRequest(Request);
   finally
-    Self.ListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 
-procedure TIdSipMessageSubject.NotifyListeners(const Response: TIdSipResponse);
+procedure TIdSipMessageSubject.NotifyMessageListeners(const Response: TIdSipResponse);
 var
   I: Integer;
 begin
-  Self.ListenerLock.Acquire;
+  Self.MsgListenerLock.Acquire;
   try
-    for I := 0 to Self.Listeners.Count - 1 do
-      IIdSipMessageListener(Self.Listeners[I]).OnReceiveResponse(Response);
+    for I := 0 to Self.MsgListeners.Count - 1 do
+      IIdSipMessageListener(Self.MsgListeners[I]).OnReceiveResponse(Response);
   finally
-    Self.ListenerLock.Release;
+    Self.MsgListenerLock.Release;
   end;
 end;
 

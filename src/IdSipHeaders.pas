@@ -712,35 +712,21 @@ begin
 end;
 
 procedure TIdSipHeader.ParseParameters(Value: String; Parameters: TStrings);
-  procedure AddParam(Parameters: TStrings; ParamName, ParamValue: String);
-  begin
-    ParamName  := Trim(ParamName);
-    ParamValue := Trim(ParamValue);
-
-    if (ParamValue = '') then
-        Parameters.Add(ParamName)
-    else
-      Parameters.Values[ParamName] := ParamValue;
-  end;
 var
   ParamName:  String;
   ParamValue: String;
 begin
-  if (Value <> '') then begin
-    if (IndyPos(';', Value) = 0) then begin
-      ParamValue := Value;
-      ParamName := Fetch(ParamValue, '=');
+  while (Value <> '') do begin
+    ParamValue := Fetch(Value, ';');
+    ParamName  := Fetch(ParamValue, '=');
 
-      AddParam(Parameters, ParamName, ParamValue);
-    end
-    else begin
-      while (Value <> '') do begin
-        ParamValue := Fetch(Value, ';');
-        ParamName  := Fetch(ParamValue, '=');
+    ParamName  := Trim(ParamName);
+    ParamValue := Trim(ParamValue);
 
-        AddParam(Parameters, ParamName, ParamValue);
-      end;
-    end;
+    if (ParamValue = '') then
+      Parameters.Add(ParamName)
+    else
+      Parameters.Values[ParamName] := ParamValue;
   end;
 end;
 

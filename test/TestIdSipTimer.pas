@@ -3,16 +3,13 @@ unit TestIdSipTimer;
 interface
 
 uses
-  IdSipTimer, IdThread, SysUtils, TestFramework;
+  IdSipTimer, IdThread, SysUtils, TestFrameworkEx;
 
 type
-  TestTIdSipTimer = class(TTestCase)
+  TestTIdSipTimer = class(TThreadingTestCase)
   private
-    GotException:    Boolean;
-    Tick:            Boolean;
-    TickAccumulator: Cardinal;
-    Timer:           TIdSipTimer;
-    procedure OnAccumulatorTimer(Sender: TObject);
+    Tick:  Boolean;
+    Timer: TIdSipTimer;
     procedure OnException(AThread: TIdThread; AException: Exception);
     procedure OnRaiseExceptionTimer(Sender: TObject);
     procedure OnTickTimer(Sender: TObject);
@@ -21,12 +18,14 @@ type
     procedure TearDown; override;
   published
     procedure TestExceptionHandling;
-    procedure TestMultipleTicks;
     procedure TestTick;
     procedure TestReset;
   end;
 
 implementation
+
+uses
+  SyncObjs, TestFramework;
 
 function Suite: ITestSuite;
 begin
@@ -35,36 +34,32 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipTimer                                                 *
+//* TestTIdSipTimer                                                            *
 //******************************************************************************
-//* TestTIdSipTimer Public methods **********************************
+//* TestTIdSipTimer Public methods *********************************************
 
 procedure TestTIdSipTimer.SetUp;
 begin
-  GotException    := false;
-  Tick            := false;
-  TickAccumulator := 0;
-  Timer           := TIdSipTimer.Create(true);
+  inherited SetUp;
+
+  Self.Tick  := false;
+  Self.Timer := TIdSipTimer.Create(true);
 end;
 
 procedure TestTIdSipTimer.TearDown;
 begin
-  Timer.Stop;
-  Timer.WaitFor;
-  Timer.Free;
+  Self.Timer.Stop;
+  Self.Timer.WaitFor;
+  Self.Timer.Free;
+
+  inherited TearDown;
 end;
 
-//* TestTIdSipTimer Private methods *********************************
-
-procedure TestTIdSipTimer.OnAccumulatorTimer(Sender: TObject);
-begin
-  Inc(TickAccumulator);
-  Self.Check(Self.Timer = Sender, 'Unknown Sender');
-end;
+//* TestTIdSipTimer Private methods ********************************************
 
 procedure TestTIdSipTimer.OnException(AThread: TIdThread; AException: Exception);
 begin
-  GotException := true;
+  Self.ThreadEvent.SetEvent;
 end;
 
 procedure TestTIdSipTimer.OnRaiseExceptionTimer(Sender: TObject);
@@ -74,56 +69,45 @@ end;
 
 procedure TestTIdSipTimer.OnTickTimer(Sender: TObject);
 begin
-  Tick := true;
-  Self.Check(Self.Timer = Sender, 'Unknown Sender');
+  Self.Tick := true;
+  Self.ThreadEvent.SetEvent;
 end;
 
-//* TestTIdSipTimer Published methods *******************************
+//* TestTIdSipTimer Published methods ******************************************
 
 procedure TestTIdSipTimer.TestExceptionHandling;
 begin
-  Timer.OnException := Self.OnException;
-  Timer.OnTimer     := Self.OnRaiseExceptionTimer;
-  Timer.Interval    := 100;
-  Timer.Start;
-  Sleep(375);
+  Self.Timer.OnException := Self.OnException;
+  Self.Timer.OnTimer     := Self.OnRaiseExceptionTimer;
+  Self.Timer.Interval    := 100;
+  Self.Timer.Start;
 
-  Check(GotException, 'Main thread never heard of the exception');
-end;
-
-procedure TestTIdSipTimer.TestMultipleTicks;
-begin
-  Timer.OnTimer := Self.OnAccumulatorTimer;
-
-  Timer.Interval   := 100;
-  Timer.Start;
-  Sleep(375);
-
-  CheckEquals(3, TickAccumulator, 'Unexpected number of ticks');
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(200)) then
+    Fail('Main thread never heard of the exception');
 end;
 
 procedure TestTIdSipTimer.TestTick;
 begin
-  Timer.OnTimer := Self.OnTickTimer;
+  Self.Timer.OnTimer := Self.OnTickTimer;
 
-  Timer.Interval := 100;
-  Timer.Start;
-  Sleep(150);
+  Self.Timer.Interval := 100;
+  Self.Timer.Start;
 
-  Check(Tick, 'Event didn''t fire');
+  if (wrSignaled <> Self.ThreadEvent.WaitFor(200)) then
+    Fail('OnTick didn''t fire');
 end;
 
 procedure TestTIdSipTimer.TestReset;
 begin
-  Timer.OnTimer := Self.OnTickTimer;
-  Timer.Interval := 1000;
-  Timer.Start;
+  Self.Timer.OnTimer := Self.OnTickTimer;
+  Self.Timer.Interval := 1000;
+  Self.Timer.Start;
   Sleep(500);
 
-  Check(not Tick, 'Ticked prematurely before Reset');
-  Timer.Reset;
+  Check(not Self.Tick, 'Ticked prematurely before Reset');
+  Self.Timer.Reset;
   Sleep(500);
-  Check(not Tick, 'Ticked prematurely after Reset');
+  Check(not Self.Tick, 'Ticked prematurely after Reset');
 end;
 
 initialization

@@ -8,10 +8,14 @@ uses
 type
   TestTIdSipUdpServer = class(TThreadingTestCase, IIdSipMessageListener)
   private
-    Client: TIdUDPClient;
-    Parser: TIdSipParser;
-    Server: TIdSipUdpServer;
+    CheckReceivedRequest:  TIdSipRequestEvent;
+    CheckReceivedResponse: TIdSipResponseEvent;
+    Client:                TIdUDPClient;
+    Parser:                TIdSipParser;
+    Server:                TIdSipUdpServer;
 
+    procedure AcknowledgeEvent(Sender: TObject; const Request: TIdSipRequest); overload;
+    procedure AcknowledgeEvent(Sender: TObject; const Response: TIdSipResponse); overload;
     procedure CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamFQDNSentBy(Sender: TObject; const Request: TIdSipRequest);
     procedure CheckReceivedParamIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
@@ -27,7 +31,7 @@ type
 //    procedure CheckTortureTest41;
     procedure OnReceiveRequest(const Request: TIdSipRequest);
     procedure OnReceiveResponse(const Response: TIdSipResponse);
-    function ReadResponse: String;
+    function  ReadResponse: String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -101,6 +105,7 @@ begin
   Binding.IP := '127.0.0.1';
   Binding.Port := IdPORT_SIP;
 
+  Self.Server.AddMessageListener(Self);
   Self.Server.Active := true;
   Self.Client.Host := '127.0.0.1';
   Self.Client.Port := Server.DefaultPort;
@@ -121,6 +126,16 @@ begin
 end;
 
 //* TestTIdSipUdpServer Private methods *****************************************
+
+procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject; const Request: TIdSipRequest);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject; const Response: TIdSipResponse);
+begin
+  Self.ThreadEvent.SetEvent;
+end;
 
 procedure TestTIdSipUdpServer.CheckReceivedParamDifferentIPv4SentBy(Sender: TObject; const Request: TIdSipRequest);
 begin
@@ -315,12 +330,14 @@ end;
 
 procedure TestTIdSipUdpServer.OnReceiveRequest(const Request: TIdSipRequest);
 begin
-  Self.ThreadEvent.SetEvent;
+  if Assigned(Self.CheckReceivedRequest) then
+    Self.CheckReceivedRequest(Self, Request);
 end;
 
 procedure TestTIdSipUdpServer.OnReceiveResponse(const Response: TIdSipResponse);
 begin
-  Self.ThreadEvent.SetEvent;
+  if Assigned(Self.CheckReceivedResponse) then
+    Self.CheckReceivedResponse(Self, Response);
 end;
 
 function TestTIdSipUdpServer.ReadResponse: String;
@@ -332,7 +349,9 @@ end;
 
 procedure TestTIdSipUdpServer.TestAddMessageListener;
 begin
-  Self.Server.AddMessageListener(Self);
+  Self.CheckReceivedRequest := Self.AcknowledgeEvent;
+
+  // We don't need to add the listener because that's done in the SetUp method
 
   Self.Client.Send(BasicRequest);
 
@@ -344,6 +363,9 @@ procedure TestTIdSipUdpServer.TestListenerReceiveRequest;
 var
   Listener: TIdSipTestMessageListener;
 begin
+  Self.Server.RemoveMessageListener(Self);
+  Self.CheckReceivedRequest := Self.AcknowledgeEvent;
+
   Listener := TIdSipTestMessageListener.Create;
   try
     Self.Server.AddMessageListener(Listener);
@@ -353,7 +375,7 @@ begin
 
     if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
       raise Self.ExceptionType.Create(Self.ExceptionMessage);
-    Check(Listener.ReceivedRequest, 'Not all listeners received the request');
+    Check(Listener.ReceivedRequest, 'Not all listeners received the Request');
   finally
     Listener.Free;
   end;
@@ -363,6 +385,9 @@ procedure TestTIdSipUdpServer.TestListenerReceiveResponse;
 var
   Listener: TIdSipTestMessageListener;
 begin
+  Self.Server.RemoveMessageListener(Self);
+  Self.CheckReceivedResponse := Self.AcknowledgeEvent;
+
   Listener := TIdSipTestMessageListener.Create;
   try
     Self.Server.AddMessageListener(Listener);
@@ -425,7 +450,7 @@ end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamDifferentIPv4SentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
+  Self.CheckReceivedRequest := Self.CheckReceivedParamDifferentIPv4SentBy;
 
   Self.Client.Send(Format(BasicRequest, [ViaDifferentIP]));
 
@@ -435,7 +460,7 @@ end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamFQDNSentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamFQDNSentBy;
+  Self.CheckReceivedRequest := Self.CheckReceivedParamFQDNSentBy;
 
   Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
 
@@ -445,7 +470,7 @@ end;
 
 procedure TestTIdSipUdpServer.TestReceivedParamIPv4SentBy;
 begin
-  Self.Server.OnRequest := Self.CheckReceivedParamIPv4SentBy;
+  Self.CheckReceivedRequest := Self.CheckReceivedParamIPv4SentBy;
 
   Self.Client.Send(Format(BasicRequest, [ViaIP]));
 
@@ -455,7 +480,7 @@ end;
 
 procedure TestTIdSipUdpServer.TestRemoveMessageListener;
 begin
-  Self.Server.AddMessageListener(Self);
+  Self.CheckReceivedRequest := Self.AcknowledgeEvent;
   Self.Server.RemoveMessageListener(Self);
 
   Self.Client.Send(BasicRequest);
@@ -466,7 +491,7 @@ end;
 
 procedure TestTIdSipUdpServer.TestRequest;
 begin
-  Self.Server.OnRequest := Self.CheckRequest;
+  Self.CheckReceivedRequest := Self.CheckRequest;
 
   Self.Client.Send(Format(BasicRequest, [ViaFQDN]));
 

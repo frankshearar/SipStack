@@ -14,13 +14,16 @@ type
     property Connection: TIdTCPConnection read fConnection write fConnection;
   end;
 
+  // I am an entry in a Connection Table. I relate a request with a TCP
+  // connection. A quirk in my setup is that I store a COPY of a request
+  // while storing a REFERENCE to a connection.
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;
     fRequest:    TIdSipRequest;
   public
-    constructor Create(const Connection: TIdTCPConnection;
-                       const Request:    TIdSipRequest);
+    constructor Create(const Connection:    TIdTCPConnection;
+                       const CopyOfRequest: TIdSipRequest);
     destructor  Destroy; override;
 
     property Connection: TIdTCPConnection read fConnection;
@@ -109,14 +112,14 @@ uses
 //******************************************************************************
 //* TIdSipConnectionTableEntry Public methods **********************************
 
-constructor TIdSipConnectionTableEntry.Create(const Connection: TIdTCPConnection;
-                                              const Request:    TIdSipRequest);
+constructor TIdSipConnectionTableEntry.Create(const Connection:    TIdTCPConnection;
+                                              const CopyOfRequest: TIdSipRequest);
 begin
   inherited Create;
 
   Self.fConnection := Connection;
   Self.fRequest := TIdSipRequest.Create;
-  Self.fRequest.Assign(Request);
+  Self.fRequest.Assign(CopyOfRequest);
 end;
 
 destructor TIdSipConnectionTableEntry.Destroy;
@@ -502,6 +505,8 @@ begin
     OwnVia.SentBy     := Connection.Socket.Binding.IP;
     OwnVia.SipVersion := 'SIP/2.0';
     OwnVia.Transport  := sttUDP;
+
+    // We need From, To, CSeq, Call-ID headers!
 
     Self.WriteMessage(Connection, Res);
   finally

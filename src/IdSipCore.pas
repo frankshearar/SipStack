@@ -20,22 +20,23 @@ unit IdSipCore;
 interface
 
 uses
-  Classes, Contnrs, IdSipDialog, IdException, IdSipHeaders, IdSipMessage,
-  IdSipTransaction, IdUri, SyncObjs;
+  Classes, Contnrs, IdSipDialog, IdException, IdSipHeaders,
+  IdSipInterfacedObject, IdSipMessage, IdSipTransaction, IdSipTransport, IdUri,
+  SyncObjs;
 
 type
   TIdSipSession = class;
   TIdSipSessionEvent = procedure(Sender: TObject; const Session: TIdSipSession) of object;
 
-  TIdSipAbstractCore = class(TObject)
+  TIdSipAbstractCore = class(TIdSipInterfacedObject, IIdSipMessageListener)
   private
     fDispatcher: TIdSipTransactionDispatcher;
     fHostName:   String;
     fOnFail:     TIdSipFailEvent;
 
-    procedure DoOnReceiveRequest(Sender: TObject; const Request: TIdSipRequest);
-    procedure DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
     procedure DoOnTransactionFail(Sender: TObject; const Reason: String);
+    procedure OnReceiveRequest(const Request: TIdSipRequest);
+    procedure OnReceiveResponse(const Response: TIdSipResponse);
     procedure SetDispatcher(const Value: TIdSipTransactionDispatcher);
   protected
     procedure DoOnNewDialog(Sender: TObject; const Dialog: TIdSipDialog); virtual;
@@ -61,8 +62,6 @@ type
   TIdSipUserAgentCore = class(TIdSipAbstractCore)
   private
     BranchLock:           TCriticalSection;
-    DialogLock:           TCriticalSection;
-    Dialogs:              TIdSipDialogs;
     fAllowedLanguageList: TStrings;
     fAllowedMethodList:   TStrings;
     fAllowedSchemeList:   TStrings;
@@ -71,7 +70,10 @@ type
     fLastBranch:          Cardinal;
     fOnInvite:            TIdSipRequestEvent;
     fUserAgentName:       String;
+    SessionLock:          TCriticalSection;
+    Sessions:             TObjectList;
 
+    function  AddSession: TIdSipSession;
     procedure DoOnInvite(const Request: TIdSipRequest);
     function  GetContact: TIdSipContactHeader;
     function  GetFrom: TIdSipFromHeader;
@@ -100,7 +102,7 @@ type
     function  AllowedLanguages: String;
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
-    procedure Call(const Dest: TIdSipToHeader);
+    function  Call(const Dest: TIdSipToHeader): TIdSipSession;
     function  CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
     function  CreateRequest(const Dest: TIdSipToHeader): TIdSipRequest; override;
     function  CreateResponse(const Request: TIdSipRequest;
@@ -116,6 +118,7 @@ type
     function  NextBranch: String;
     function  NextTag: String;
     procedure RejectRequest(const Request: TIdSipRequest; const Reason: Cardinal);
+    function  SessionCount: Integer;
 
     property OnInvite:       TIdSipRequestEvent  read fOnInvite write fOnInvite;
     property Contact:        TIdSipContactHeader read GetContact write SetContact;
@@ -123,17 +126,28 @@ type
     property UserAgentName:  String              read fUserAgentName write fUserAgentName;
   end;
 
-  TIdSipSession = class(TPersistent)
+  TIdSipSession = class(TIdSipInterfacedObject, IIdSipTransactionListener)
   private
     fCore:   TIdSipUserAgentCore;
     fDialog: TIdSipDialog;
+    fInvite: TIdSipRequest;
 
-    property Core: TIdSipUserAgentCore read fCore;
+    procedure OnFail(const Transaction: TIdSipTransaction;
+                     const Reason: String);
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const Transaction: TIdSipTransaction);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const Transaction: TIdSipTransaction;
+                                const Transport: TIdSipTransport);
+    procedure OnTerminated(const Transaction: TIdSipTransaction);
+
+    property Core:   TIdSipUserAgentCore read fCore;
+    property Invite: TIdSipRequest       read fInvite;
   public
-    constructor Create(const Dialog: TIdSipDialog;
-                       const UA:     TIdSipUserAgentCore);
+    constructor Create(const UA: TIdSipUserAgentCore);
     destructor  Destroy; override;
 
+    procedure Call(const Dest: TIdSipToHeader);
     procedure Cancel;
     function  CreateBye: TIdSipRequest;
     procedure HangUp;
@@ -150,7 +164,7 @@ const
 implementation
 
 uses
-  IdGlobal, IdSipConsts, IdSipRandom, IdStack, SysUtils;
+  IdGlobal, IdSipConsts, IdSipDialogID, IdSipRandom, IdStack, SysUtils;
 
 //******************************************************************************
 //* TIdSipAbstractCore                                                         *
@@ -174,28 +188,28 @@ end;
 
 //* TIdSipAbstractCore Private methods *****************************************
 
-procedure TIdSipAbstractCore.DoOnReceiveRequest(Sender: TObject; const Request: TIdSipRequest);
-begin
-  Self.HandleRequest(Request);
-end;
-
-procedure TIdSipAbstractCore.DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
-begin
-  Self.HandleResponse(Response);
-end;
-
 procedure TIdSipAbstractCore.DoOnTransactionFail(Sender: TObject; const Reason: String);
 begin
   if Assigned(Self.OnFail) then
     Self.OnFail(Self, Reason);
 end;
 
+procedure TIdSipAbstractCore.OnReceiveRequest(const Request: TIdSipRequest);
+begin
+  Self.HandleRequest(Request);
+end;
+
+procedure TIdSipAbstractCore.OnReceiveResponse(const Response: TIdSipResponse);
+begin
+  Self.HandleResponse(Response);
+end;
+
 procedure TIdSipAbstractCore.SetDispatcher(const Value: TIdSipTransactionDispatcher);
 begin
   fDispatcher := Value;
-  fDispatcher.OnTransactionFail   := Self.DoOnTransactionFail;
-  fDispatcher.OnUnhandledRequest  := Self.DoOnReceiveRequest;
-  fDispatcher.OnUnhandledResponse := Self.DoOnReceiveResponse;
+  fDispatcher.OnTransactionFail := Self.DoOnTransactionFail;
+
+  fDispatcher.AddMessageListener(Self);
 end;
 
 //******************************************************************************
@@ -208,8 +222,8 @@ begin
   inherited Create;
 
   Self.BranchLock  := TCriticalSection.Create;
-  Self.DialogLock  := TCriticalSection.Create;
-  Self.Dialogs     := TIdSipDialogs.Create;
+  Self.SessionLock := TCriticalSection.Create;
+  Self.Sessions    := TObjectList.Create;
 
   Self.ResetLastBranch;
   Self.fAllowedLanguageList := TStringList.Create;
@@ -230,8 +244,8 @@ begin
   Self.AllowedLanguageList.Free;
   Self.Contact.Free;
   Self.From.Free;
-  Self.Dialogs.Free;
-  Self.DialogLock.Free;
+  Self.Sessions.Free;
+  Self.SessionLock.Free;
   Self.BranchLock.Free;
 
   inherited Destroy;
@@ -293,16 +307,10 @@ begin
   Result := Self.AllowedSchemeList.CommaText;
 end;
 
-procedure TIdSipUserAgentCore.Call(const Dest: TIdSipToHeader);
-var
-  Invite: TIdSipRequest;
+function TIdSipUserAgentCore.Call(const Dest: TIdSipToHeader): TIdSipSession;
 begin
-  Invite := Self.CreateInvite(Dest);
-  try
-    Self.Dispatcher.AddClientTransaction(Invite);
-  finally
-    Invite.Free;
-  end;
+  Result := Self.AddSession;
+  Result.Call(Dest);
 end;
 
 function TIdSipUserAgentCore.CreateInvite(const Dest: TIdSipToHeader): TIdSipRequest;
@@ -539,7 +547,34 @@ begin
   end;
 end;
 
+function TIdSipUserAgentCore.SessionCount: Integer;
+begin
+  Self.SessionLock.Acquire;
+  try
+    Result := Self.Sessions.Count;
+  finally
+    Self.SessionLock.Release;
+  end;
+end;
+
 //* TIdSipUserAgentCore Private methods ****************************************
+
+function TIdSipUserAgentCore.AddSession: TIdSipSession;
+begin
+  Self.SessionLock.Acquire;
+  try
+    Result := TIdSipSession.Create(Self);
+    try
+      Self.Sessions.Add(Result);
+    except
+      FreeAndNil(Result);
+
+      raise;
+    end;
+  finally
+    Self.SessionLock.Release;
+  end;
+end;
 
 procedure TIdSipUserAgentCore.DoOnInvite(const Request: TIdSipRequest);
 begin
@@ -696,20 +731,26 @@ end;
 //******************************************************************************
 //* TIdSipSession Public methods ***********************************************
 
-constructor TIdSipSession.Create(const Dialog: TIdSipDialog;
-                                 const UA:     TIdSipUserAgentCore);
+constructor TIdSipSession.Create(const UA: TIdSipUserAgentCore);
 begin
   inherited Create;
 
   Self.fCore := UA;
-  Self.fDialog := TIdSipDialog.Create(Dialog);
 end;
 
 destructor TIdSipSession.Destroy;
 begin
-  Self.Dialog.Free;
-
   inherited Destroy;
+end;
+
+procedure TIdSipSession.Call(const Dest: TIdSipToHeader);
+var
+  Tran: TIdSipTransaction;
+begin
+  Self.fInvite := Self.Core.CreateInvite(Dest);
+
+  Tran := Self.Core.Dispatcher.AddClientTransaction(Invite);
+  Tran.AddTransactionListener(Self);
 end;
 
 procedure TIdSipSession.Cancel;
@@ -735,6 +776,55 @@ begin
 end;
 
 procedure TIdSipSession.Modify;
+begin
+end;
+
+//* TIdSipSession Private methods **********************************************
+
+procedure TIdSipSession.OnFail(const Transaction: TIdSipTransaction;
+                               const Reason: String);
+begin
+end;
+
+procedure TIdSipSession.OnReceiveRequest(const Request: TIdSipRequest;
+                                         const Transaction: TIdSipTransaction);
+begin
+  Self.Dialog.HandleMessage(Request);
+end;
+
+procedure TIdSipSession.OnReceiveResponse(const Response: TIdSipResponse;
+                                          const Transaction: TIdSipTransaction;
+                                          const Transport: TIdSipTransport);
+var
+  ID:       TIdSipDialogID;
+  RouteSet: TIdSipHeadersFilter;
+begin
+  if not Assigned(Self.Dialog) then begin
+    ID := Invite.CreateDialogID;
+    try
+      RouteSet := TIdSipHeadersFilter.Create(Invite.Headers,
+                                             RecordRouteHeader);
+      try
+        fDialog := TIdSipDialog.Create(ID,
+                                       Invite.CSeq.SequenceNo,
+                                       0,
+                                       Invite.From.Address,
+                                       Invite.ToHeader.Address,
+                                       Response.FirstContact.Address,
+                                       Transport.IsSecure and Invite.FirstContact.HasSipsUri,
+                                       RouteSet);
+      finally
+        RouteSet.Free;
+      end;
+    finally
+      ID.Free;
+    end;
+  end;
+
+  Self.Dialog.HandleMessage(Response);
+end;
+
+procedure TIdSipSession.OnTerminated(const Transaction: TIdSipTransaction);
 begin
 end;
 

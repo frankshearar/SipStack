@@ -11,38 +11,49 @@ const
   DefaultTimeout = 5000;
 
 type
-  TIdSipAbstractTransport = class;
-  TIdSipAbstractTransportClass = class of TIdSipAbstractTransport;
+  TIdSipTransport = class;
+  TIdSipTransportClass = class of TIdSipTransport;
 
-  TIdSipAbstractTransport = class(TIdSipMessageSubject,
-                                  IIdSipMessageVisitor,
-                                  IIdSipMessageListener)
+  IIdSipTransportListener = interface
+    ['{D3F0A0D5-A4E9-42BD-B337-D5B3C652F340}']
+    procedure OnReceiveRequest(const Request: TIdSipRequest;
+                               const Transport: TIdSipTransport);
+    procedure OnReceiveResponse(const Response: TIdSipResponse;
+                                const Transport: TIdSipTransport);
+  end;
+
+  TIdSipTransport = class(TIdSipMessageSubject,
+                          IIdSipMessageVisitor,
+                          IIdSipMessageListener)
   private
-    fHostName:   String;
-    fOnRequest:   TIdSipRequestEvent;
-    fOnResponse:  TIdSipResponseEvent;
-    fTimeout:     Cardinal;
+    fHostName:             String;
+    fTimeout:              Cardinal;
+    TransportListenerLock: TCriticalSection;
+    TransportListeners:    TList;
 
     procedure OnReceiveRequest(const Request: TIdSipRequest);
     procedure OnReceiveResponse(const Response: TIdSipResponse);
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
-    procedure DoOnRequest(const R: TIdSipRequest);
-    procedure DoOnResponse(const R: TIdSipResponse);
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual; abstract;
+    procedure NotifyTransportListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyTransportListeners(const Response: TIdSipResponse); overload;
     procedure SendRequest(const R: TIdSipRequest); virtual;
     procedure SendResponse(const R: TIdSipResponse); virtual;
     function  SentByIsRecognised(const Via: TIdSipViaHeader): Boolean; virtual;
     procedure SetPort(const Value: Cardinal); virtual; abstract;
   public
-    class function TransportFor(const TT: TIdSipTransportType): TIdSipAbstractTransportClass;
+    class function TransportFor(const TT: TIdSipTransportType): TIdSipTransportClass;
     constructor Create(const Port: Cardinal); virtual;
+    destructor  Destroy; override;
 
+    procedure AddTransportListener(const Listener: IIdSipTransportListener);
     function  DefaultPort: Cardinal; virtual;
     function  GetTransportType: TIdSipTransportType; virtual; abstract;
     function  IsReliable: Boolean; virtual;
     function  IsSecure: Boolean; virtual;
+    procedure RemoveTransportListener(const Listener: IIdSipTransportListener);
     procedure Send(const Msg: TIdSipMessage);
     procedure Start; virtual;
     procedure Stop; virtual;
@@ -50,16 +61,12 @@ type
     procedure VisitResponse(const Response: TIdSipResponse);
 
     property Bindings:   TIdSocketHandles    read GetBindings;
-    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
-    property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
     property HostName:   String              read fHostName write fHostName;
     property Port:       Cardinal            read GetPort write SetPort;
     property Timeout:    Cardinal            read fTimeout write fTimeout;
   end;
 
-  TIdSipTransportClass = class of TIdSipAbstractTransport;
-
-  TIdSipTCPTransport = class(TIdSipAbstractTransport)
+  TIdSipTCPTransport = class(TIdSipTransport)
   private
     Clients:    TObjectList;
     ClientLock: TCriticalSection;
@@ -118,12 +125,12 @@ type
     property ServerKey:         TFileName read GetServerKey write SetServerKey;
   end;
 
-  TIdSipSCTPTransport = class(TIdSipAbstractTransport)
+  TIdSipSCTPTransport = class(TIdSipTransport)
   public
     function GetTransportType: TIdSipTransportType; override;
   end;
 
-  TIdSipUDPTransport = class(TIdSipAbstractTransport)
+  TIdSipUDPTransport = class(TIdSipTransport)
   private
     Transport: TIdSipUdpServer;
 
@@ -152,11 +159,11 @@ uses
   IdSipConsts, IdSipTlsServer, IdUDPClient;
 
 //******************************************************************************
-//* TIdSipAbstractTransport                                                    *
+//* TIdSipTransport                                                            *
 //******************************************************************************
-//* TIdSipAbstractTransport Public methods *************************************
+//* TIdSipTransport Public methods *********************************************
 
-class function TIdSipAbstractTransport.TransportFor(const TT: TIdSipTransportType): TIdSipAbstractTransportClass;
+class function TIdSipTransport.TransportFor(const TT: TIdSipTransportType): TIdSipTransportClass;
 begin
   case TT of
     sttSCTP: Result := TIdSipSCTPTransport;
@@ -164,86 +171,122 @@ begin
     sttTLS:  Result := TIdSipTLSTransport;
     sttUDP:  Result := TIdSipUDPTransport;
   else
-    raise EUnknownTransport.Create('TIdSipAbstractTransport.TransportFor');
+    raise EUnknownTransport.Create('TIdSipTransport.TransportFor');
   end;
 end;
 
-constructor TIdSipAbstractTransport.Create(const Port: Cardinal);
+constructor TIdSipTransport.Create(const Port: Cardinal);
 begin
   inherited Create;
+
+  Self.TransportListenerLock := TCriticalSection.Create;
+  Self.TransportListeners    := TList.Create;
 end;
 
-function TIdSipAbstractTransport.DefaultPort: Cardinal;
+destructor TIdSipTransport.Destroy;
+begin
+  Self.TransportListeners.Free;
+  Self.TransportListenerLock.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipTransport.AddTransportListener(const Listener: IIdSipTransportListener);
+begin
+  Self.TransportListenerLock.Acquire;
+  try
+    Self.TransportListeners.Add(Pointer(Listener))
+  finally
+    Self.TransportListenerLock.Release;
+  end;
+end;
+
+function TIdSipTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIP;
 end;
 
-function TIdSipAbstractTransport.IsReliable: Boolean;
+function TIdSipTransport.IsReliable: Boolean;
 begin
   Result := true;
 end;
 
-function TIdSipAbstractTransport.IsSecure: Boolean;
+function TIdSipTransport.IsSecure: Boolean;
 begin
   Result := false;
 end;
 
-procedure TIdSipAbstractTransport.Send(const Msg: TIdSipMessage);
+procedure TIdSipTransport.RemoveTransportListener(const Listener: IIdSipTransportListener);
+begin
+  Self.TransportListenerLock.Acquire;
+  try
+    Self.TransportListeners.Remove(Pointer(Listener))
+  finally
+    Self.TransportListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipTransport.Send(const Msg: TIdSipMessage);
 begin
   Msg.Accept(Self);
 end;
 
-procedure TIdSipAbstractTransport.Start;
+procedure TIdSipTransport.Start;
 begin
 end;
 
-procedure TIdSipAbstractTransport.Stop;
+procedure TIdSipTransport.Stop;
 begin
 end;
 
-procedure TIdSipAbstractTransport.VisitRequest(const Request: TIdSipRequest);
+procedure TIdSipTransport.VisitRequest(const Request: TIdSipRequest);
 begin
   Self.SendRequest(Request);
 end;
 
-procedure TIdSipAbstractTransport.VisitResponse(const Response: TIdSipResponse);
+procedure TIdSipTransport.VisitResponse(const Response: TIdSipResponse);
 begin
   Self.SendResponse(Response);
 end;
 
-//* TIdSipAbstractTransport Protected methods **********************************
+//* TIdSipTransport Protected methods ******************************************
 
-procedure TIdSipAbstractTransport.DoOnRequest(const R: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportListeners(const Request: TIdSipRequest);
+var
+  I: Integer;
 begin
-  if Assigned(Self.OnRequest) then
-    Self.OnRequest(Self, R);
-
-  Self.NotifyListeners(R);
-end;
-
-procedure TIdSipAbstractTransport.DoOnResponse(const R: TIdSipResponse);
-begin
-  // Look for top Via header. If sent-by <> Self.Hostname then discard the
-  // request. cf. RFC 3261 section 18.1.2
-
-  if Self.SentByIsRecognised(R.LastHop) then begin
-    if Assigned(Self.OnResponse) then
-      Self.OnResponse(Self, R);
-
-    Self.NotifyListeners(R);
+  Self.TransportListenerLock.Acquire;
+  try
+    for I := 0 to Self.TransportListeners.Count - 1 do
+      IIdSipTransportListener(Self.TransportListeners[I]).OnReceiveRequest(Request, Self);
+  finally
+    Self.TransportListenerLock.Release;
   end;
 end;
 
-procedure TIdSipAbstractTransport.SendRequest(const R: TIdSipRequest);
+procedure TIdSipTransport.NotifyTransportListeners(const Response: TIdSipResponse);
+var
+  I: Integer;
+begin
+  Self.TransportListenerLock.Acquire;
+  try
+    for I := 0 to Self.TransportListeners.Count - 1 do
+      IIdSipTransportListener(Self.TransportListeners[I]).OnReceiveResponse(Response, Self);
+  finally
+    Self.TransportListenerLock.Release;
+  end;
+end;
+
+procedure TIdSipTransport.SendRequest(const R: TIdSipRequest);
 begin
   Self.RewriteOwnVia(R);
 end;
 
-procedure TIdSipAbstractTransport.SendResponse(const R: TIdSipResponse);
+procedure TIdSipTransport.SendResponse(const R: TIdSipResponse);
 begin
 end;
 
-function TIdSipAbstractTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;
+function TIdSipTransport.SentByIsRecognised(const Via: TIdSipViaHeader): Boolean;
 var
   I: Integer;
 begin
@@ -260,19 +303,24 @@ begin
   end;
 end;
 
-//* TIdSipAbstractTransport Private methods ************************************
+//* TIdSipTransport Private methods ********************************************
 
-procedure TIdSipAbstractTransport.OnReceiveRequest(const Request: TIdSipRequest);
+procedure TIdSipTransport.OnReceiveRequest(const Request: TIdSipRequest);
 begin
-  Self.DoOnRequest(Request);
+  Self.NotifyMessageListeners(Request);
 end;
 
-procedure TIdSipAbstractTransport.OnReceiveResponse(const Response: TIdSipResponse);
+procedure TIdSipTransport.OnReceiveResponse(const Response: TIdSipResponse);
 begin
-  Self.DoOnResponse(Response);
+  // Look for top Via header. If sent-by <> Self.Hostname then discard the
+  // request. cf. RFC 3261 section 18.1.2
+
+  if Self.SentByIsRecognised(Response.LastHop) then begin
+    Self.NotifyMessageListeners(Response);
+  end;
 end;
 
-procedure TIdSipAbstractTransport.RewriteOwnVia(Msg: TIdSipMessage);
+procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
 begin
   Msg.LastHop.Transport := Self.GetTransportType;
   Msg.LastHop.SentBy    := Self.HostName;
@@ -409,7 +457,7 @@ end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
-  Self.DoOnResponse(Response);
+  Self.NotifyTransportListeners(Response);
 end;
 
 procedure TIdSipTCPTransport.RemoveClient(Client: TIdSipTcpClient);
@@ -651,7 +699,7 @@ end;
 
 procedure TIdSipUDPTransport.DoOnReceiveResponse(Sender: TObject; const Response: TIdSipResponse);
 begin
-  Self.DoOnResponse(Response);
+  Self.NotifyTransportListeners(Response);
 end;
 
 end.

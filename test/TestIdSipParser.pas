@@ -76,6 +76,12 @@ type
     procedure TestParseResponseEmptyString;
     procedure TestParseResponseFoldedHeader;
     procedure TestParseResponseInvalidStatusCode;
+{    procedure TestParseResponseMissingCallID;
+    procedure TestParseResponseMissingCSeq;
+    procedure TestParseResponseMissingFrom;
+    procedure TestParseResponseMissingMaxForwards;
+    procedure TestParseResponseMissingTo;
+    procedure TestParseResponseMissingVia;}
     procedure TestParseResponseWithLeadingCrLfs;
     procedure TestParseShortFormContentLength;
     procedure TestTortureTest1;
@@ -1296,11 +1302,17 @@ begin
   Str := TStringStream.Create('');
   try
     Self.P.Source := Str;
-    Self.P.ParseResponse(Response);
 
-    CheckEquals(0,  Response.StatusCode, 'StatusCode');
-    CheckEquals('', Response.StatusText, 'StatusText');
-    CheckEquals('', Response.SipVersion, 'SipVersion');
+//    try
+      Self.P.ParseResponse(Response);
+
+      CheckEquals('', Response.SipVersion, 'Sip-Version');
+      CheckEquals(0,  Response.StatusCode, 'Status-Code');
+      CheckEquals('', Response.StatusText, 'Status-Text');
+//      Fail('Failed to bail out on parsing an empty string');
+//    except
+//      on EBadResponse do;
+//    end;
   finally
     Str.Free;
   end;
@@ -1315,6 +1327,9 @@ begin
                           + ' <sip:case@fried.neurons.org>'#13#10
                           + #9';tag=1928301774'#13#10
                           + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                          + 'Via: SIP/2.0/TCP gw1.leo-ix.org'#13#10
+                          + 'CSeq: 271828 INVITE'#13#10
+                          + 'Call-ID: cafebabe@sip.neurons.org'#13#10
                           + #13#10);
   try
     Self.P.Source := Str;
@@ -1355,7 +1370,180 @@ begin
     Str.Free;
   end;
 end;
+{
+procedure TestTIdSipParser.TestParseResponseMissingCallID;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+    try
+      Self.P.ParseResponse(Self.Response);
+      Fail('Failed to bail out');
+    except
+      on E: EBadResponse do
+        CheckEquals(MissingCallID,
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
 
+procedure TestTIdSipParser.TestParseResponseMissingCSeq;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+    try
+      Self.P.ParseResponse(Self.Response);
+      Fail('Failed to bail out');
+    except
+      on E: EBadResponse do
+        CheckEquals(MissingCSeq,
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseResponseMissingFrom;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+    try
+      Self.P.ParseResponse(Self.Response);
+      Fail('Failed to bail out');
+    except
+      on E: EBadResponse do
+        CheckEquals(MissingFrom,
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseResponseMissingMaxForwards;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+
+    Self.P.ParseResponse(Self.Response);
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseResponseMissingTo;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Via: SIP/2.0/TCP gw1.leo-ix.org;branch=z9hG4bK776asdhds'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+    try
+      Self.P.ParseResponse(Self.Response);
+      Fail('Failed to bail out');
+    except
+      on E: EBadResponse do
+        CheckEquals(MissingTo,
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+
+procedure TestTIdSipParser.TestParseResponseMissingVia;
+var
+  Str: TStringStream;
+begin
+  Str := TStringStream.Create('SIP/2.0 200 OK'#13#10
+                            + 'Max-Forwards: 70'#13#10
+                            + 'To: Wintermute <sip:wintermute@tessier-ashpool.co.lu>'#13#10
+                            + 'From: Case <sip:case@fried.neurons.org>;tag=1928301774'#13#10
+                            + 'Call-ID: a84b4c76e66710@gw1.leo-ix.org'#13#10
+                            + 'CSeq: 314159 INVITE'#13#10
+                            + 'Contact: sip:wintermute@tessier-ashpool.co.lu'#13#10
+                            + 'Content-Type: text/plain'#13#10
+                            + 'Content-Length: 29'#13#10
+                            + #13#10);
+  try
+    Self.P.Source := Str;
+    try
+      Self.P.ParseResponse(Self.Response);
+      Fail('Failed to bail out');
+    except
+      on E: EBadResponse do
+        CheckEquals(MissingVia,
+                    E.Message,
+                    'Unexpected exception');
+    end;
+  finally
+    Str.Free;
+  end;
+end;
+}
 procedure TestTIdSipParser.TestParseResponseWithLeadingCrLfs;
 var
   Str: TStringStream;

@@ -61,7 +61,7 @@ end;
 
 procedure TestTIdSipDialogID.TestCreationFromDialogID;
 var
-  Dlg:    TIdSipDialogID;
+  Dlg: TIdSipDialogID;
 begin
   Dlg := TIdSipDialogID.Create(Self.ID);
   try

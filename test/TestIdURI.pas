@@ -18,6 +18,7 @@ type
     procedure TestIPv4;
     procedure TestMailTo;
 //    procedure TestMalformedAuthority;
+    procedure TestSipUri;
     procedure TestTest1;
     procedure TestTest2;
     procedure TestTest3;
@@ -188,6 +189,30 @@ begin
   end;
 end;
 }
+
+procedure TestTIdURI.TestSipUri;
+var
+  URI: TIdURI;
+begin
+  URI := TIdURI.Create;
+  try
+    URI.URI := 'sip:wintermute@tessier-ashpool.co.lu';
+
+    CheckEquals('sip:wintermute@tessier-ashpool.co.lu', URI.GetFullURI,     'GetFullURI');
+    CheckEquals('sip',                                  URI.Protocol,       'Protocol');
+    CheckEquals('tessier-ashpool.co.lu',                URI.Host,           'Host');
+    Check      (                                    not URI.IsHeirarchical, 'IsHeirarchical');
+    CheckEquals('',                                     URI.Path,           'Path');
+    CheckEquals('',                                     URI.Document,       'Document');
+    CheckEquals('',                                     URI.Port,           'Port');
+    CheckEquals('wintermute',                           URI.Username,       'Username');
+    CheckEquals('',                                     URI.Password,       'Password');
+    CheckEquals('',                                     URI.Params,         'Params');
+    CheckEquals('',                                     URI.Bookmark,       'Bookmark');
+  finally
+    URI.Free;
+  end;
+end;
 
 procedure TestTIdURI.TestTest1;
 var

@@ -97,8 +97,8 @@ type
 
   TIdSipMessageSubjectSubclass = class(TIdSipMessageSubject)
   public
-    procedure NotifyListeners(const Request: TIdSipRequest); overload;
-    procedure NotifyListeners(const Response: TIdSipResponse); overload;
+    procedure NotifyMessageListeners(const Request: TIdSipRequest); overload;
+    procedure NotifyMessageListeners(const Response: TIdSipResponse); overload;
   end;
 
   TestTIdSipMessageSubject = class(TTestCase, IIdSipMessageListener)
@@ -1263,14 +1263,14 @@ end;
 //******************************************************************************
 //* TIdSipMessageSubjectSubclass Public methods ********************************
 
-procedure TIdSipMessageSubjectSubclass.NotifyListeners(const Request: TIdSipRequest);
+procedure TIdSipMessageSubjectSubclass.NotifyMessageListeners(const Request: TIdSipRequest);
 begin
-  inherited NotifyListeners(Request);
+  inherited NotifyMessageListeners(Request);
 end;
 
-procedure TIdSipMessageSubjectSubclass.NotifyListeners(const Response: TIdSipResponse);
+procedure TIdSipMessageSubjectSubclass.NotifyMessageListeners(const Response: TIdSipResponse);
 begin
-  inherited NotifyListeners(Response);
+  inherited NotifyMessageListeners(Response);
 end;
 
 //******************************************************************************
@@ -1291,9 +1291,9 @@ end;
 
 procedure TestTIdSipMessageSubject.TearDown;
 begin
+  Self.Subject.Free;
   Self.Response.Free;
   Self.Request.Free;
-  Self.Subject.Free;
 
   inherited TearDown;
 end;
@@ -1316,7 +1316,7 @@ procedure TestTIdSipMessageSubject.TestAddMessageListener;
 begin
   Self.Subject.AddMessageListener(Self);
 
-  Self.Subject.NotifyListeners(Self.Request);
+  Self.Subject.NotifyMessageListeners(Self.Request);
 
   Check(Self.ReceivedRequest, 'Listener wasn''t added');
 end;
@@ -1330,7 +1330,7 @@ begin
     Self.Subject.AddMessageListener(Self);
     Self.Subject.AddMessageListener(Listener);
 
-    Self.Subject.NotifyListeners(Self.Request);
+    Self.Subject.NotifyMessageListeners(Self.Request);
 
     Check(Self.ReceivedRequest and Listener.ReceivedRequest,
           'Not all Listeners received the request');
@@ -1348,7 +1348,7 @@ begin
     Self.Subject.AddMessageListener(Self);
     Self.Subject.AddMessageListener(Listener);
 
-    Self.Subject.NotifyListeners(Self.Response);
+    Self.Subject.NotifyMessageListeners(Self.Response);
 
     Check(Self.ReceivedResponse and Listener.ReceivedResponse,
           'Not all Listeners received the Response');
@@ -1362,7 +1362,7 @@ begin
   Self.Subject.AddMessageListener(Self);
   Self.Subject.RemoveMessageListener(Self);
 
-  Self.Subject.NotifyListeners(Self.Request);
+  Self.Subject.NotifyMessageListeners(Self.Request);
 
   Check(not Self.ReceivedRequest, 'Listener wasn''t removed');
 end;
