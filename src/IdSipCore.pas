@@ -373,19 +373,17 @@ type
   TIdUserAgentClosure = class(TIdSipActionClosure)
   private
     fReceiver:  TIdSipTransport;
+    fRequest:   TIdSipRequest;
     fUserAgent: TIdSipAbstractUserAgent;
   public
     property Receiver:  TIdSipTransport         read fReceiver write fReceiver;
+    property Request:   TIdSipRequest           read fRequest write fRequest;
     property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
   TIdSipUserAgentActOnRequest = class(TIdUserAgentClosure)
-  private
-    fRequest: TIdSipRequest;
   public
     procedure Execute(Action: TIdSipAction); override;
-
-    property Request: TIdSipRequest read fRequest write fRequest;
   end;
 
   TIdSipUserAgentActOnResponse = class(TIdUserAgentClosure)
@@ -395,6 +393,11 @@ type
     procedure Execute(Action: TIdSipAction); override;
 
     property Response: TIdSipResponse read fResponse write fResponse;
+  end;
+
+  TIdSipUserAgentUpdateAction = class(TIdUserAgentClosure)
+  public
+    procedure Execute(Action: TIdSipAction); override;
   end;
 
   TIdSipInboundOptions = class;
@@ -468,6 +471,8 @@ type
     procedure TurnIntoInvite(OutboundRequest: TIdSipRequest;
                              const Offer: String;
                              const OfferMimeType: String);
+    procedure UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
+                                              NewRequest: TIdSipRequest);
   protected
     procedure ActOnRequest(Request: TIdSipRequest;
                            Receiver: TIdSipTransport); override;
@@ -2351,6 +2356,16 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipUserAgentUpdateAction                                                *
+//******************************************************************************
+//* TIdSipUserAgentUpdateAction Public methods *********************************
+
+procedure TIdSipUserAgentUpdateAction.Execute(Action: TIdSipAction);
+begin
+  Action.InitialRequest.Assign(Self.Request);
+end;
+
+//******************************************************************************
 //* TIdSipAbstractUserAgent                                                    *
 //******************************************************************************
 //* TIdSipAbstractUserAgent Public methods *************************************
@@ -2989,12 +3004,11 @@ procedure TIdSipAbstractUserAgent.OnAuthenticationChallenge(Dispatcher: TIdSipTr
                                                             ChallengeResponse: TIdSipRequest;
                                                             var TryAgain: Boolean);
 var
-  AffectedAction:  TIdSipAction;
   AuthHeader:      TIdSipAuthorizationHeader;
   ChallengeHeader: TIdSipAuthenticateHeader;
+  Password:        String;
   RealmInfo:       TIdRealmInfo;
   Username:        String;
-  Password:        String;
 begin
   // We've received a 401 or 407 response. At this level of the stack we know
   // this response matches a request that we sent out since the transaction
@@ -3043,9 +3057,7 @@ begin
       AuthHeader.Free;
     end;
 
-    AffectedAction := Self.Actions.FindAction(Challenge);
-    if Assigned(AffectedAction) then
-      AffectedAction.InitialRequest.Assign(ChallengeResponse);
+    Self.UpdateAffectedActionWithRequest(Challenge, ChallengeResponse);
   finally
     // Write over the buffer that held the password.
     FillChar(Password, Length(Password), 0);
@@ -3389,6 +3401,30 @@ begin
   // TODO: We need to add a proper extension support thing
   OutboundRequest.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   OutboundRequest.AddHeader(SupportedHeaderFull).Value := Self.AllowedExtensions;
+end;
+
+procedure TIdSipAbstractUserAgent.UpdateAffectedActionWithRequest(FindMsg: TIdSipMessage;
+                                                                  NewRequest: TIdSipRequest);
+var
+  FakeEvent:            TIdSipMessageWait;
+  UpdateAffectedAction: TIdSipUserAgentUpdateAction;
+begin
+  UpdateAffectedAction := TIdSipUserAgentUpdateAction.Create;
+  try
+    UpdateAffectedAction.UserAgent := Self;
+    UpdateAffectedAction.Request   := NewRequest;
+
+    FakeEvent := TIdSipMessageWait.Create;
+    try
+      FakeEvent.Message := FindMsg.Copy;
+
+      Self.Actions.FindActionAndPerform(FakeEvent, UpdateAffectedAction);
+    finally
+      FakeEvent.Free;
+    end;
+  finally
+    UpdateAffectedAction.Free;
+  end;
 end;
 
 //******************************************************************************
