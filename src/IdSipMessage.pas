@@ -6256,7 +6256,9 @@ end;
 procedure TIdSipParser.ParseHeader(Msg: TIdSipMessage; const Header: String);
 begin
   if TIdSipHeaders.IsCompoundHeader(Header) then
-    Self.ParseCompoundHeader(Msg, Self.GetHeaderName(Header), Self.GetHeaderValue(Header))
+    Self.ParseCompoundHeader(Msg,
+                             Self.GetHeaderName(Header),
+                             Self.GetHeaderValue(Header))
   else
     Self.AddHeader(Msg, Header);
 end;
