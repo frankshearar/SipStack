@@ -179,16 +179,18 @@ type
    *    we write out the headers we write them in the simplest possible way. As
    *    a result we CANNOT duplicate the exact form of the original message, even
    *    though the new message will be identical, semantically speaking.
-   *  * We do (because we have to) keep the order of headers. Any newly created
-   *    headers are simply appended.
-   *  * Any and all parsing errors are raised as exceptions that descend from
-   *    EParser as soon as we can.
-   *  * New headers can be created that weren't present in the original message.
+   *  * We do (because we have to) keep the order of headers. We simple append
+   *    any newly created headers.
+   *  * We raise any and all parsing errors as exceptions that descend from
+   *    EParser as soon as possible.
+   *  * New headers can be created that the original message didn't have.
    *    These messages will, by default, have the empty string as value. For example,
    *    querying the value of Content-Type will create a TIdSipHeader with Value ''.
-   *  * Each header is regarded as using a particular language, and the header
-   *    classes are parsers for that language (in the SetValue method).
-   *  * Comma-separated headers are always separated into separate headers.
+   *  * We regard each header as using a value from a particular grammar, and the
+   *    header classes each contain parsers for that language (in the SetValue
+   *    method).
+   *  * We always separate comma-separated headers (that is, headers like Contact
+   *    or Via) into separate headers. We do not do this for headers like Accept.
    *}
   TIdSipParser = class(TIdSimpleParser, IIdSipMessageVisitor)
   private
