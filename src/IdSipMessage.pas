@@ -1146,6 +1146,7 @@ type
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  DestinationUri: String;
+    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
@@ -1159,7 +1160,6 @@ type
     function  IsAck: Boolean;
     function  IsBye: Boolean;
     function  IsCancel: Boolean;
-    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsInvite: Boolean;
     function  IsMalformed: Boolean; override;
     function  IsOptions: Boolean;
@@ -1216,12 +1216,12 @@ type
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
     function  Copy: TIdSipMessage; override;
     function  Description: String;
+    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
     function  FirstUnsupported: TIdSipCommaSeparatedHeader;
     function  FirstWarning: TIdSipWarningHeader;
     function  FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
-    function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  HasAuthenticationInfo: Boolean;
     function  HasProxyAuthenticate: Boolean;
     function  HasWarning: Boolean;
@@ -6756,6 +6756,23 @@ begin
     Result := Self.RequestUri.AsString;
 end;
 
+function TIdSipRequest.Equals(Msg: TIdSipMessage): Boolean;
+var
+  Request: TIdSipRequest;
+begin
+  if (Msg is Self.ClassType) then begin
+    Request := Msg as TIdSipRequest;
+
+    Result := (Self.SIPVersion     = Request.SIPVersion)
+          and (Self.Method         = Request.Method)
+          and (Self.RequestUri.URI = Request.RequestUri.URI)
+          and (Self.Headers.Equals(Request.Headers))
+          and (Self.Body           = Request.Body);
+  end
+  else
+    Result := false;
+end;
+
 function TIdSipRequest.FirstAuthorization: TIdSipAuthorizationHeader;
 begin
   Result := Self.FirstHeader(AuthorizationHeader) as TIdSipAuthorizationHeader
@@ -6850,23 +6867,6 @@ end;
 function TIdSipRequest.IsCancel: Boolean;
 begin
   Result := Self.Method = MethodCancel;
-end;
-
-function TIdSipRequest.Equals(Msg: TIdSipMessage): Boolean;
-var
-  Request: TIdSipRequest;
-begin
-  if (Msg is Self.ClassType) then begin
-    Request := Msg as TIdSipRequest;
-
-    Result := (Self.SIPVersion     = Request.SIPVersion)
-          and (Self.Method         = Request.Method)
-          and (Self.RequestUri.URI = Request.RequestUri.URI)
-          and (Self.Headers.Equals(Request.Headers))
-          and (Self.Body           = Request.Body);
-  end
-  else
-    Result := false;
 end;
 
 function TIdSipRequest.IsInvite: Boolean;
@@ -7292,6 +7292,22 @@ begin
   Result := IntToStr(Self.StatusCode) + ' ' + Self.StatusText;
 end;
 
+function TIdSipResponse.Equals(Msg: TIdSipMessage): Boolean;
+var
+  Response: TIdSipResponse;
+begin
+  if (Msg is Self.ClassType) then begin
+    Response := Msg as TIdSipResponse;
+
+    Result := (Self.SIPVersion = Response.SipVersion)
+          and (Self.StatusCode = Response.StatusCode)
+          and (Self.StatusText = Response.StatusText)
+          and (Self.Headers.Equals(Response.Headers));
+  end
+  else
+    Result := false;
+end;
+
 function TIdSipResponse.FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
 begin
   Result := Self.FirstHeader(AuthenticationInfoHeader) as TIdSipAuthenticationInfoHeader;
@@ -7315,22 +7331,6 @@ end;
 function TIdSipResponse.FirstWWWAuthenticate: TIdSipWWWAuthenticateHeader;
 begin
   Result := Self.FirstHeader(WWWAuthenticateHeader) as TIdSipWWWAuthenticateHeader;
-end;
-
-function TIdSipResponse.Equals(Msg: TIdSipMessage): Boolean;
-var
-  Response: TIdSipResponse;
-begin
-  if (Msg is Self.ClassType) then begin
-    Response := Msg as TIdSipResponse;
-
-    Result := (Self.SIPVersion = Response.SipVersion)
-          and (Self.StatusCode = Response.StatusCode)
-          and (Self.StatusText = Response.StatusText)
-          and (Self.Headers.Equals(Response.Headers));
-  end
-  else
-    Result := false;
 end;
 
 function TIdSipResponse.HasAuthenticationInfo: Boolean;
