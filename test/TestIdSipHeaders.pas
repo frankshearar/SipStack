@@ -48,6 +48,7 @@ type
     procedure SetUp; override;
   published
     procedure TestAsString;
+    procedure TestAssignCopiesParseInfo;
     procedure TestEncodeQuotedStr;
     procedure TestFullValue;
     procedure TestGetSetParam;
@@ -1018,6 +1019,35 @@ begin
   CheckEquals('Foo: Fighters;tag=haha;hidden',
               Self.H.AsString,
               '''Foo: Fighters'' with tag & hidden');
+end;
+
+procedure TestTIdSipHeader.TestAssignCopiesParseInfo;
+var
+  C:    TIdSipNumericHeader;
+  NewC: TIdSipNumericHeader;
+begin
+  C := TIdSipNumericHeader.Create;
+  try
+    NewC := TIdSipNumericHeader.Create;
+    try
+      C.Value := 'a';
+
+      Check(C.IsMalformed, 'Numeric header not marked as malformed');
+
+      NewC.Assign(C);
+      Check(C.IsMalformed = NewC.IsMalformed, 'IsMalformed not copied');
+      CheckEquals(C.ParseFailReason,
+                  NewC.ParseFailReason,
+                  'ParseFailReason not copied');
+      CheckEquals(C.UnparsedValue,
+                  NewC.UnparsedValue,
+                  'UnparsedValue not copied');
+    finally
+      NewC.Free;
+    end;
+  finally
+    C.Free;
+  end;
 end;
 
 procedure TestTIdSipHeader.TestEncodeQuotedStr;

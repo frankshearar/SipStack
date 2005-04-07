@@ -1061,7 +1061,7 @@ type
     function  AsString: String;
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
-    function  Copy: TIdSipMessage;
+    function  Copy: TIdSipMessage; virtual; abstract;
     procedure CopyHeaders(Src: TIdSipMessage;
                           const HeaderName: String);
     function  FirstContact: TIdSipContactHeader;
@@ -1142,6 +1142,7 @@ type
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
+    function  Copy: TIdSipMessage; override;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  DestinationUri: String;
@@ -1213,6 +1214,7 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
+    function  Copy: TIdSipMessage; override;
     function  Description: String;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
     function  FirstProxyAuthenticate: TIdSipProxyAuthenticateHeader;
@@ -1319,16 +1321,26 @@ type
     function GetHeaderValue(Header: String): String;
   end;
 
-  TIdSipMessageWait = class(TIdNotifyEventWait)
+  // Note: When you set the Message property, give it a COPY of the message. I
+  // will free the copy.
+  TIdSipMessageNotifyEventWait = class(TIdNotifyEventWait)
   private
     fMessage: TIdSipMessage;
-
-    procedure SetMessage(Value: TIdSipMessage);
   public
-    constructor Create; virtual;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
-    property Message: TIdSipMessage read fMessage write SetMessage;
+    property Message: TIdSipMessage read fMessage write fMessage;
+  end;
+
+  // Note: When you set the Message property, give it a COPY of the message. I
+  // will free the copy.
+  TIdSipMessageWait = class(TIdWait)
+  private
+    fMessage: TIdSipMessage;
+  public
+    destructor Destroy; override;
+
+    property Message: TIdSipMessage read fMessage write fMessage;
   end;
 
   EBadHeader = class(EParserError);
@@ -2818,6 +2830,10 @@ begin
     Self.Name       := H.Name;
     Self.Value      := H.Value;
     Self.Parameters := H.Parameters;
+
+    Self.fIsMalformed     := H.fIsMalformed;
+    Self.fParseFailReason := H.fParseFailReason;
+    Self.fUnparsedValue   := H.UnparsedValue;
   end
   else inherited Assign(Src);
 end;
@@ -6047,12 +6063,6 @@ begin
   end;
 end;
 
-function TIdSipMessage.Copy: TIdSipMessage;
-begin
-  Result := TIdSipMessageClass(Self.ClassType).Create;
-  Result.Assign(Self);
-end;
-
 procedure TIdSipMessage.CopyHeaders(Src: TIdSipMessage;
                                     const HeaderName: String);
 var
@@ -6179,7 +6189,7 @@ begin
     Result := '';
     Exit;
   end;
-  
+
   Result := Self.fParseFailReason;
 
   if (Result = '') then begin
@@ -6694,6 +6704,18 @@ begin
                                          AuthorizationHeader) as TIdSipAuthorizationHeader;
 end;
 
+function TIdSipRequest.Copy: TIdSipMessage;
+var
+  SelfAsString: String;
+begin
+  if (Self.RawMessage <> '') then
+    SelfAsString := Self.RawMessage
+  else
+    SelfAsString := Self.AsString;
+
+  Result := Self.ReadRequestFrom(SelfAsString)
+end;  
+
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
   Assert(Self.IsInvite, 'Only INVITE requests may be CANCELled');
@@ -6840,7 +6862,8 @@ begin
     Result := (Self.SIPVersion     = Request.SIPVersion)
           and (Self.Method         = Request.Method)
           and (Self.RequestUri.URI = Request.RequestUri.URI)
-          and (Self.Headers.Equals(Request.Headers));
+          and (Self.Headers.Equals(Request.Headers))
+          and (Self.Body           = Request.Body);
   end
   else
     Result := false;
@@ -7250,6 +7273,18 @@ begin
     Result := Self.FirstWWWAuthenticate
   else
     Result := nil;
+end;
+
+function TIdSipResponse.Copy: TIdSipMessage;
+var
+  SelfAsString: String;
+begin
+  if (Self.RawMessage <> '') then
+    SelfAsString := Self.RawMessage
+  else
+    SelfAsString := Self.AsString;
+
+  Result := Self.ReadResponseFrom(SelfAsString);
 end;
 
 function TIdSipResponse.Description: String;
@@ -7842,29 +7877,27 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipMessageWait                                                          *
+//* TIdSipMessageNotifyEventWait                                               *
 //******************************************************************************
-//* TIdSipMessageWait Public methods *******************************************
+//* TIdSipMessageNotifyEventWait Public methods ********************************
 
-constructor TIdSipMessageWait.Create;
-begin
-  inherited Create;
-
-  Self.fMessage := TIdSipRequest.Create;
-end;
-
-destructor TIdSipMessageWait.Destroy;
+destructor TIdSipMessageNotifyEventWait.Destroy;
 begin
   Self.Message.Free;
 
   inherited Destroy;
 end;
 
-//* TIdSipMessageWait Private methods ******************************************
+//******************************************************************************
+//* TIdSipMessageWait                                                          *
+//******************************************************************************
+//* TIdSipMessageWait Public methods *******************************************
 
-procedure TIdSipMessageWait.SetMessage(Value: TIdSipMessage);
+destructor TIdSipMessageWait.Destroy;
 begin
-  Self.Message.Assign(Value);
+  Self.Message.Free;
+
+  inherited Destroy;
 end;
 
 //******************************************************************************

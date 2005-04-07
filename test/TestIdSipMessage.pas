@@ -35,6 +35,7 @@ type
                                   UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
+    function  Copy: TIdSipMessage; override;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
@@ -58,6 +59,7 @@ type
     procedure TestAddHeaderName;
     procedure TestAddHeaders;
     procedure TestAssignCopiesBody;
+    procedure TestAssignCopiesParseInfo;
     procedure TestClearHeaders;
     procedure TestContactCount;
     procedure TestCopyHeaders;
@@ -128,6 +130,7 @@ type
     procedure TestCreateCancelWithRoute;
     procedure TestDestinationUri;
     procedure TestEqualsComplexMessages;
+    procedure TestEqualsDifferentBody;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentMethod;
     procedure TestEqualsDifferentRequestUri;
@@ -411,6 +414,11 @@ end;
 //******************************************************************************
 //* TIdSipTrivialMessage Public methods ****************************************
 
+function TIdSipTrivialMessage.Copy: TIdSipMessage;
+begin
+  raise Exception.Create('Don''t call TIdSipTrivialMessage.Copy');
+end;
+
 function TIdSipTrivialMessage.Equals(Msg: TIdSipMessage): Boolean;
 begin
   Result := false;
@@ -626,6 +634,47 @@ begin
                 'Body not assigned properly');
   finally
     AnotherMsg.Free;
+  end;
+end;
+
+procedure TestTIdSipMessage.TestAssignCopiesParseInfo;
+var
+  MalformedMsg: String;
+  NewMsg: TIdSipMessage;
+  P:      TIdSipParser;
+  S:      TStringStream;
+begin
+  MalformedMsg := 'Not a valid first line'#$D#$A
+                + Self.Msg.AsString;
+
+  S := TStringStream.Create(MalformedMsg);
+  try
+    P := TIdSipParser.Create;
+    try
+      P.Source := S;
+
+      Self.Msg.Parse(P);
+
+      Check(Self.Msg.IsMalformed,
+            Self.Msg.ClassName + ' not marked as malformed');
+      NewMsg := Self.Msg.Copy;
+      try
+        Check(Self.Msg.IsMalformed = NewMsg.IsMalformed,
+              Self.Msg.ClassName + ': IsMalformed info not copied');
+        CheckEquals(Self.Msg.ParseFailReason,
+                    NewMsg.ParseFailReason,
+                    Self.Msg.ClassName + ': ParseFailReason info not copied');
+        CheckEquals(Self.Msg.RawMessage,
+                    NewMsg.RawMessage,
+                    Self.Msg.ClassName + ': RawMessage info not copied');
+      finally
+        NewMsg.Free;
+      end;
+    finally
+      P.Free;
+    end;
+  finally
+    S.Free;
   end;
 end;
 
@@ -1522,6 +1571,10 @@ var
 begin
   Cancel := Self.Request.CreateCancel;
   try
+    Cancel.Body := 'Foo';
+    Cancel.ContentLength := Length(Cancel.Body);
+    Cancel.ContentType   := 'text/plain';
+
     Copy := Cancel.Copy;
     try
       Check(Copy.Equals(Cancel), 'Copy = Cancel');
@@ -1647,6 +1700,26 @@ begin
     Check(R.Equals(Self.Request), 'R = Request');
   finally
     R.Free
+  end;
+end;
+
+procedure TestTIdSipRequest.TestEqualsDifferentBody;
+var
+  R1, R2: TIdSipRequest;
+begin
+  R1 := TIdSipRequest.Create;
+  try
+    R2 := TIdSipRequest.Create;
+    try
+      R1.Body := 'non-blank';
+
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
   end;
 end;
 
