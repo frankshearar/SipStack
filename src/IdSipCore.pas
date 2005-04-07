@@ -381,7 +381,7 @@ type
 
   // I represent an event that will execute a block (BlockType) on an action in
   // a list of actions.
-  TIdSipActionsWait = class(TIdSipMessageWait)
+  TIdSipActionsWait = class(TIdSipMessageNotifyEventWait)
   private
     fActions:   TIdSipActions;
     fBlockType: TIdSipActionClosureClass;
@@ -1609,14 +1609,14 @@ procedure TIdSipAbstractCore.ScheduleEvent(Event: TNotifyEvent;
                                            WaitTime: Cardinal;
                                            Msg: TIdSipMessage);
 var
-  RequestEvent: TIdSipMessageWait;
+  RequestEvent: TIdSipMessageNotifyEventWait;
 begin
   Self.TimerLock.Acquire;
   try
     if Assigned(Self.Timer) then begin
-      RequestEvent := TIdSipMessageWait.Create;
+      RequestEvent := TIdSipMessageNotifyEventWait.Create;
       RequestEvent.Message := Msg;
-      RequestEvent.Event := Event;
+      RequestEvent.Event   := Event;
       Self.Timer.AddEvent(WaitTime, RequestEvent);
     end;
   finally
@@ -2779,7 +2779,7 @@ procedure TIdSipAbstractUserAgent.OnReregister(Event: TObject);
 var
   Request: TIdSipRequest;
 begin
-  Request := (Event as TIdSipMessageWait).Message as TIdSipRequest;
+  Request := (Event as TIdSipMessageNotifyEventWait).Message as TIdSipRequest;
   Self.RegisterWith(Request.RequestUri).Send;
 end;
 
@@ -2787,7 +2787,7 @@ procedure TIdSipAbstractUserAgent.OnResendReInvite(Event: TObject);
 var
   Msg: TIdSipMessage;
 begin
-  Msg := (Event as TIdSipMessageWait).Message;
+  Msg := (Event as TIdSipMessageNotifyEventWait).Message;
   Self.Actions.FindSessionAndPerform(Msg,
                                      Self.ResendReInvite);
 end;
