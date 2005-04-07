@@ -7302,7 +7302,8 @@ begin
     Result := (Self.SIPVersion = Response.SipVersion)
           and (Self.StatusCode = Response.StatusCode)
           and (Self.StatusText = Response.StatusText)
-          and (Self.Headers.Equals(Response.Headers));
+          and (Self.Headers.Equals(Response.Headers))
+          and (Self.Body       = Response.Body);
   end
   else
     Result := false;

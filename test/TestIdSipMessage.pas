@@ -130,7 +130,7 @@ type
     procedure TestCreateCancelWithRoute;
     procedure TestDestinationUri;
     procedure TestEqualsComplexMessages;
-    procedure TestEqualsDifferentBody;
+    procedure TestEqualsDifferentBodies;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentMethod;
     procedure TestEqualsDifferentRequestUri;
@@ -202,6 +202,7 @@ type
     procedure TestAuthenticateHeaderWithUser;
     procedure TestCopy;
     procedure TestEqualsComplexMessages;
+    procedure TestEqualsDifferentBodies;
     procedure TestEqualsDifferentHeaders;
     procedure TestEqualsDifferentSipVersion;
     procedure TestEqualsDifferentStatusCode;
@@ -1703,7 +1704,7 @@ begin
   end;
 end;
 
-procedure TestTIdSipRequest.TestEqualsDifferentBody;
+procedure TestTIdSipRequest.TestEqualsDifferentBodies;
 var
   R1, R2: TIdSipRequest;
 begin
@@ -2846,6 +2847,26 @@ begin
     try
       Check(R1.Equals(R2), 'R1 = R2');
       Check(R2.Equals(R1), 'R2 = R1');
+    finally
+      R2.Free;
+    end;
+  finally
+    R1.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestEqualsDifferentBodies;
+var
+  R1, R2: TIdSipResponse;
+begin
+  R1 := TIdSipResponse.Create;
+  try
+    R2 := TIdSipResponse.Create;
+    try
+      R1.Body := 'non-blank';
+
+      Check(not R1.Equals(R2), 'R1 <> R2');
+      Check(not R2.Equals(R1), 'R2 <> R1');
     finally
       R2.Free;
     end;
