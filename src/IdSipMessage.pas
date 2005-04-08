@@ -6221,6 +6221,7 @@ var
   Buf:            array[1..BufLen] of Char;
   BytesToRead:    Integer;
   Read:           Integer;
+  ReadBytes:      String;
   RemainingBytes: Integer;
 begin
   // The transport must set Content-Length before this method gets called!
@@ -6232,7 +6233,9 @@ begin
       Read := Src.Read(Buf, Min(BufLen, BytesToRead));
       Dec(BytesToRead, Read);
 
-      Self.Body := Self.Body + System.Copy(Buf, 1, Read);
+      ReadBytes := System.Copy(Buf, 1, Read);
+      Self.Body := Self.Body + ReadBytes;
+      Self.fRawMessage := Self.fRawMessage + ReadBytes;
     until (Read < BufLen) or (BytesToRead <= 0);
 
     if (Read < Self.ContentLength) then begin

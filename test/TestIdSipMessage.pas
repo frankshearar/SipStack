@@ -1046,6 +1046,9 @@ begin
     SetLength(S, Len);
     Str.Read(S[1], Len);
     CheckEquals(Remainder, S, 'Unread bits of the stream');
+
+    Check(Pos(Self.Msg.Body, Self.Msg.RawMessage) > 0,
+          'ReadBody didn''t add the body to RawMessage');
   finally
     Str.Free;
   end;
