@@ -2217,17 +2217,21 @@ end;
 procedure TestTIdSipRequest.TestIsMalformedSipVersion;
 const
   MalformedMessage = 'INVITE sip:wintermute@tessier-ashpool.co.luna SIP/;2.0'#13#10
-                   + 'Via:     SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bKkdjuw'#13#10
-                   + 'Max-Forwards:     70'#13#10
-                   + 'From:    A. Bell <sip:a.g.bell@bell-tel.com>;tag=qweoiqpe'#13#10
-                   + 'To:      T. Watson <sip:t.watson@ieee.org>'#13#10
-                   + 'Call-ID: 31417@c.bell-tel.com'#13#10
-                   + 'CSeq:    1 INVITE'#13#10
+                   + 'Via: SIP/2.0/UDP c.bell-tel.com;branch=z9hG4bK0'#13#10
+                   + 'Max-Forwards: 70'#13#10
+                   + 'From: sip:case@fried-neurons.org;tag=0'#13#10
+                   + 'To: sip:wintermute@tessier-ashpool.co.luna'#13#10
+                   + 'Call-ID: 0'#13#10
+                   + 'CSeq: 1 INVITE'#13#10
                    + #13#10;
 var
   ExpectedReason: String;
   Msg:            TIdSipMessage;
 begin
+  Check(Length(MalformedMessage) < 255,
+        'Sanity check: DUnit uses ShortStrings, and MalformedMessage contains '
+      + 'too much data');
+
   ExpectedReason := Format(InvalidSipVersion, ['SIP/;2.0']);
 
   Msg := TIdSipMessage.ReadMessageFrom(MalformedMessage);
@@ -2237,8 +2241,8 @@ begin
     CheckEquals(ExpectedReason,
                 Msg.ParseFailReason,
                 'Unexpected parse error reason');
-    CheckEquals(Copy(MalformedMessage, 1, 255),
-                Copy(Msg.RawMessage, 1, 255),
+    CheckEquals(MalformedMessage,
+                Msg.RawMessage,
                 'Unexpected raw message');
   finally
     Msg.Free;
