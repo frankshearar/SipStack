@@ -13,7 +13,7 @@ interface
 
 uses
   IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPClient,
-  IdTCPConnection, IdTCPServer, SyncObjs, SysUtils, TestFramework,
+  IdTCPConnection, IdTCPServer, IdTimerQueue, SyncObjs, SysUtils, TestFramework,
   TestFrameworkSip;
 
 type
@@ -99,6 +99,7 @@ type
     MethodCallCount:        Cardinal;
     ServerReceivedResponse: Boolean;
     SipClient:              TIdSipTcpClient;
+    Timer:                  TIdThreadedTimerQueue;
 
     function ServerType: TIdSipTcpServerClass; virtual;
   public
@@ -313,6 +314,8 @@ var
 begin
   inherited SetUp;
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   Self.Client         := TIdTcpClient.Create(nil);
   Self.HighPortServer := Self.ServerType.Create(nil);
   Self.LowPortServer  := Self.ServerType.Create(nil);
@@ -326,11 +329,13 @@ begin
   Self.MethodCallCount        := 0;
   Self.ServerReceivedResponse := false;
 
-  LowPortServer.Bindings.Clear;
+  Self.LowPortServer.Timer := Self.Timer;
+  Self.LowPortServer.Bindings.Clear;
   Binding := LowPortServer.Bindings.Add;
   Binding.IP   := LocalHost;
   Binding.Port := IdPORT_SIP;
 
+  Self.HighPortServer.Timer := Self.Timer;
   Self.HighPortServer.Bindings.Clear;
   Binding := Self.HighPortServer.Bindings.Add;
   Binding.IP   := GStack.LocalAddress;
@@ -362,6 +367,8 @@ begin
   Self.HighPortLocation.Free;
   Self.HighPortServer.Free;
   Self.Client.Free;
+
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
@@ -715,69 +722,58 @@ end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnectionReceivedParam;
 var
-  HighPortListener: TIdSipTestMessageListener;
-  LowPortListener:  TIdSipTestMessageListener;
-  Request:          TIdSipRequest;
-  Response:         TIdSipResponse;
+  LowPortListener: TIdSipTestMessageListener;
+  Request:         TIdSipRequest;
+  Response:        TIdSipResponse;
 begin
   Assert(Assigned(GStack) and (GStack.LocalAddress <> '127.0.0.1'),
          'This test cannot work on a machine with only one network interface. '
        + 'Please make sure it''s got a NIC and that NIC has an IP');
 
-  HighPortListener := TIdSipTestMessageListener.Create;
+  LowPortListener := TIdSipTestMessageListener.Create;
   try
-    LowPortListener := TIdSipTestMessageListener.Create;
+    Self.LowPortServer.AddMessageListener(LowPortListener);
     try
-      Self.HighPortServer.AddMessageListener(HighPortListener);
+      Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
       try
-        Self.LowPortServer.AddMessageListener(LowPortListener);
+        Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
+        Self.SipClient.Host        := Self.HighPortServer.Bindings[0].IP;
+        Self.SipClient.Port        := Self.HighPortServer.Bindings[0].Port;
+        Self.SipClient.ReadTimeout := 100;
+
+        Self.SipClient.Connect;
         try
-          Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
-          try
-            Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
-            Self.SipClient.Host        := Self.HighPortServer.Bindings[0].IP;
-            Self.SipClient.Port        := Self.HighPortServer.Bindings[0].Port;
-            Self.SipClient.ReadTimeout := 100;
-
-            Self.SipClient.Connect;
-            try
-              Self.SipClient.Send(Request);
-            finally
-              Self.SipClient.Disconnect;
-            end;
-
-            // I can't say WHY we need to pause here, but it seems to work...
-            // Not exactly an ideal situation. We're waiting for the connection
-            // to be completely torn down.
-            IdGlobal.Sleep(500);
-
-            Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
-            try
-              Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
-              Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
-              Response.StatusCode       := SIPOK;
-              Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
-            finally
-              Response.Free;
-            end;
-
-            Check(HighPortListener.ReceivedResponse
-                  and not LowPortListener.ReceivedResponse,
-                  'Wrong server received response');
-          finally
-            Request.Free;
-          end;
+          Self.SipClient.Send(Request);
         finally
-          Self.LowPortServer.RemoveMessageListener(LowPortListener);
+          Self.SipClient.Disconnect;
         end;
+
+        Check(not Self.SipClient.Connected,
+              'Client still connected');
+
+        Self.CheckingResponseEvent := Self.AcknowledgeEvent;
+        Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
+        try
+          Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
+          Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
+          Response.StatusCode       := SIPOK;
+          Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
+        finally
+          Response.Free;
+        end;
+
+        Self.ExceptionMessage := 'High port server didn''t receive the response';
+        Self.WaitForSignaled;
+        Check(not LowPortListener.ReceivedResponse,
+              'Low port server received response');
       finally
-        Self.HighPortServer.RemoveMessageListener(HighPortListener);
+        Request.Free;
       end;
     finally
-      LowPortListener.Free;
+      Self.LowPortServer.RemoveMessageListener(LowPortListener);
     end;
   finally
-    HighPortListener.Free;
+    LowPortListener.Free;
   end;
 end;
 

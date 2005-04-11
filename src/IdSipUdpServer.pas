@@ -13,13 +13,16 @@ interface
 
 uses
   Classes, IdNotification, IdSipConsts, IdSipMessage, IdSipServerNotifier,
-  IdSocketHandle, IdUDPServer, SysUtils;
+  IdSocketHandle, IdUDPServer, IdTimerQueue, SysUtils;
 
 type
   TIdSipUdpServer = class(TIdUDPServer)
   private
+    fTimer:   TIdTimerQueue;
     Notifier: TIdSipServerNotifier;
 
+    procedure DoOnException(Sender: TObject);
+    procedure DoOnReceiveMessage(Sender: TObject);
   protected
     procedure DoUDPRead(AData: TStream; ABinding: TIdSocketHandle); override;
     procedure NotifyListenersOfResponse(Response: TIdSipResponse;
@@ -30,6 +33,16 @@ type
 
     procedure AddMessageListener(const Listener: IIdSipMessageListener);
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
+
+    property Timer: TIdTimerQueue read fTimer write fTimer;
+  end;
+
+  // I represent a (possibly) deferred receipt of a message.
+  TIdSipReceiveUDPMessageWait = class(TIdSipMessageNotifyEventWait)
+  private
+    fReceivedFrom: TIdSipConnectionBindings;
+  public
+    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
   end;
 
 implementation
@@ -72,8 +85,10 @@ end;
 
 procedure TIdSipUdpServer.DoUDPRead(AData: TStream; ABinding: TIdSocketHandle);
 var
+  Ex:           TIdSipExceptionWait;
   Msg:          TIdSipMessage;
   ReceivedFrom: TIdSipConnectionBindings;
+  RecvWait:     TIdSipReceiveUDPMessageWait;
 begin
   // Note that if AData contains a fragment of a message we don't care to
   // reassemble the packet. RFC 3261 section 18.3 tells us:
@@ -97,18 +112,21 @@ begin
     try
       Msg.ReadBody(AData);
 
-      if Msg.IsRequest then
-        Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
-                                               ReceivedFrom)
-      else
-        Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
-                                                ReceivedFrom);
+      RecvWait := TIdSipReceiveUDPMessageWait.Create;
+      RecvWait.Event        := Self.DoOnReceiveMessage;
+      RecvWait.ReceivedFrom := ReceivedFrom;
+      RecvWait.Message      := Msg.Copy;
+      Self.Timer.AddEvent(TriggerImmediately, RecvWait);
     finally
       Msg.Free;
     end;
   except
     on E: Exception do begin
-      Self.Notifier.NotifyListenersOfException(E, E.Message);
+      Ex := TIdSipExceptionWait.Create;
+      Ex.Event := Self.DoOnException;
+      Ex.ExceptionType := ExceptClass(E.ClassType);
+      Ex.Reason := E.Message;
+      Self.Timer.AddEvent(TriggerImmediately, Ex);
     end;
   end;
 end;
@@ -117,6 +135,38 @@ procedure TIdSipUdpServer.NotifyListenersOfResponse(Response: TIdSipResponse;
                                                     ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.Notifier.NotifyListenersOfResponse(Response, ReceivedFrom);
+end;
+
+//* TIdSipUdpServer Private methods ********************************************
+
+procedure TIdSipUdpServer.DoOnException(Sender: TObject);
+var
+  FakeException: Exception;
+  Wait:          TIdSipExceptionWait;
+begin
+  Wait := Sender as TIdSipExceptionWait;
+
+  FakeException := Wait.ExceptionType.Create(Wait.ExceptionMsg);
+  try
+    Self.Notifier.NotifyListenersOfException(FakeException,
+                                             Wait.Reason);
+  finally
+    FakeException.Free;
+  end;
+end;
+
+procedure TIdSipUdpServer.DoOnReceiveMessage(Sender: TObject);
+var
+  Wait: TIdSipReceiveUDPMessageWait;
+begin
+  Wait := Sender as TIdSipReceiveUDPMessageWait;
+
+  if Wait.Message.IsRequest then
+    Self.Notifier.NotifyListenersOfRequest(Wait.Message as TIdSipRequest,
+                                           Wait.ReceivedFrom)
+  else
+    Self.Notifier.NotifyListenersOfResponse(Wait.Message as TIdSipResponse,
+                                            Wait.ReceivedFrom);
 end;
 
 end.

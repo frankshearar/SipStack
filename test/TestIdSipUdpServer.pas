@@ -12,8 +12,8 @@ unit TestIdSipUdpServer;
 interface
 
 uses
-  Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdUDPClient, SysUtils,
-  TestFrameworkSip;
+  Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdTimerQueue, IdUDPClient,
+  SysUtils, TestFrameworkSip;
 
 type
   TestTIdSipUdpServer = class(TTestCaseSip,
@@ -26,6 +26,7 @@ type
     Parser:                   TIdSipParser;
     ReceivedResponse:         Boolean;
     Server:                   TIdSipUdpServer;
+    Timer:                    TIdThreadedTimerQueue;
 
     procedure AcknowledgeEvent(Sender: TObject;
                                Request: TIdSipRequest); overload;
@@ -100,8 +101,11 @@ var
 begin
   inherited SetUp;
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   Self.Client := TIdUDPClient.Create(nil);
   Self.Server := TIdSipUdpServer.Create(nil);
+  Self.Server.Timer := Self.Timer;
   Self.Server.Bindings.Clear;
   Binding := Self.Server.Bindings.Add;
   Binding.IP := '127.0.0.1';
@@ -125,6 +129,8 @@ begin
 
   Self.Server.Free;
   Self.Client.Free;
+
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
@@ -253,7 +259,7 @@ begin
     Self.Client.Send(BasicRequest);
 
     Self.WaitForSignaled;
-    
+
     Check(Listener.ReceivedRequest, 'Not all listeners received the Request');
   finally
     Listener.Free;

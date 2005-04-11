@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Contnrs, IdNotification, IdSipConsts, IdSipLocator, IdSipMessage,
-  IdSipServerNotifier, IdSipTcpClient, IdTCPConnection, IdTCPServer, SyncObjs,
-  SysUtils;
+  IdSipServerNotifier, IdSipTcpClient, IdTCPConnection, IdTCPServer,
+  IdTimerQueue, SyncObjs, SysUtils;
 
 type
   // I relate a request with a TCP connection. I store a COPY of a request
@@ -70,16 +70,24 @@ type
     ConnectionMap:      TIdSipConnectionTableLock;
     fConnectionTimeout: Integer;
     fReadTimeout:       Integer;
+    fTimer:             TIdTimerQueue;
     Notifier:           TIdSipServerNotifier;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
-    function  ReadBody(Connection: TIdTCPConnection;
-                       Message: TIdSipMessage): String;
+    procedure DoOnException(Sender: TObject); overload;
+    procedure DoOnException(Thread: TIdPeerThread;
+                            Exception: Exception); overload;
+    procedure DoOnReceiveMessage(Sender: TObject);
+    procedure ReadBodyInto(Connection: TIdTCPConnection;
+                           Message: TIdSipMessage;
+                           Dest: TStringStream);
     procedure ReadMessage(Connection: TIdTCPConnection;
                           Dest: TStringStream);
     procedure ReturnInternalServerError(Connection: TIdTCPConnection;
-                                        Reason: String);
+                                        const Reason: String);
+    procedure ScheduleExceptionNotification(ExceptionType: ExceptClass;
+                                            const Reason: String);
     procedure SendResponseTo(Response: TIdSipResponse;
                              Dest: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
@@ -99,8 +107,17 @@ type
     procedure SendResponse(Response: TIdSipResponse;
                            Dest: TIdSipLocation);
   published
-    property ConnectionTimeout: Integer read fConnectionTimeout write fConnectionTimeout;
-    property ReadTimeout:       Integer read fReadTimeout write fReadTimeout;
+    property ConnectionTimeout: Integer       read fConnectionTimeout write fConnectionTimeout;
+    property ReadTimeout:       Integer       read fReadTimeout write fReadTimeout;
+    property Timer:             TIdTimerQueue read fTimer write fTimer;
+  end;
+
+  // I represent a (possibly) deferred receipt of a message.
+  TIdSipReceiveTCPMessageWait = class(TIdSipMessageNotifyEventWait)
+  private
+    fReceivedFrom: TIdSipConnectionBindings;
+  public
+    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
@@ -258,6 +275,7 @@ begin
   Self.Notifier          := TIdSipServerNotifier.Create;
   Self.ReadTimeout       := Self.DefaultTimeout;
   Self.OnExecute         := Self.DoOnExecute;
+  Self.OnException       := Self.DoOnException;
 end;
 
 destructor TIdSipTcpServer.Destroy;
@@ -339,6 +357,7 @@ var
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStringStream;
   ConnTimedOut: Boolean;
+  RecvWait:     TIdSipReceiveTCPMessageWait;
 begin
   ConnTimedOut := false;
 
@@ -355,7 +374,8 @@ begin
       try
         try
           try
-            Msg.Body := Self.ReadBody(AThread.Connection, Msg);
+            Self.ReadBodyInto(AThread.Connection, Msg, S);
+            Msg.ReadBody(S);
           except
             on EIdReadTimeout do
               ConnTimedOut := true;
@@ -363,24 +383,24 @@ begin
               ConnTimedOut := true;
           end;
 
-          if Msg.IsRequest then begin
-            // If Self.ReadBody closes the connection, we don't want to AddConnection!
-            if not ConnTimedOut then
-              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+          // If Self.ReadBody closes the connection, we don't want to AddConnection!
+          if Msg.IsRequest and not ConnTimedOut then
+            Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
 
-            Self.Notifier.NotifyListenersOfRequest(Msg as TIdSipRequest,
-                                                   ReceivedFrom);
-          end
-          else
-            Self.Notifier.NotifyListenersOfResponse(Msg as TIdSipResponse,
-                                                    ReceivedFrom);
+          RecvWait := TIdSipReceiveTCPMessageWait.Create;
+          RecvWait.Event        := Self.DoOnReceiveMessage;
+          RecvWait.Message      := Msg.Copy;
+          RecvWait.ReceivedFrom := ReceivedFrom;
+
+          Self.Timer.AddEvent(TriggerImmediately, RecvWait);
         except
           on E: Exception do begin
             // This results in returning a 500 Internal Server Error to a response!
             Self.ReturnInternalServerError(AThread.Connection, E.Message);
             AThread.Connection.DisconnectSocket;
-            Self.Notifier.NotifyListenersOfException(E,
-                                                     'TCP Server: ' + E.Message);
+
+            Self.ScheduleExceptionNotification(ExceptClass(E.ClassType),
+                                               E.Message);
           end;
         end;
       finally
@@ -407,24 +427,71 @@ begin
   end;
 end;
 
-function TIdSipTcpServer.ReadBody(Connection: TIdTCPConnection;
-                                  Message: TIdSipMessage): String;
+procedure TIdSipTcpServer.DoOnException(Sender: TObject);
+var
+  FakeException: Exception;
+  Wait:          TIdSipExceptionWait;
 begin
-  Result := Connection.ReadString(Message.ContentLength);
+  Wait := Sender as TIdSipExceptionWait;
+
+  FakeException := Wait.ExceptionType.Create(Wait.ExceptionMsg);
+  try
+    Self.Notifier.NotifyListenersOfException(FakeException,
+                                             Wait.Reason);
+  finally
+    FakeException.Free;
+  end;
+end;
+
+procedure TIdSipTcpServer.DoOnException(Thread: TIdPeerThread;
+                                        Exception: Exception);
+begin
+  Self.ScheduleExceptionNotification(ExceptClass(Exception.ClassType),
+                                     Exception.Message);
+end;
+
+procedure TIdSipTcpServer.DoOnReceiveMessage(Sender: TObject);
+var
+  Wait: TIdSipReceiveTCPMessageWait;
+begin
+  Wait := Sender as TIdSipReceiveTCPMessageWait;
+
+  if Wait.Message.IsRequest then
+    Self.Notifier.NotifyListenersOfRequest(Wait.Message as TIdSipRequest,
+                                           Wait.ReceivedFrom)
+  else
+    Self.Notifier.NotifyListenersOfResponse(Wait.Message as TIdSipResponse,
+                                            Wait.ReceivedFrom);
+end;
+
+procedure TIdSipTcpServer.ReadBodyInto(Connection: TIdTCPConnection;
+                                       Message: TIdSipMessage;
+                                       Dest: TStringStream);
+begin
+  Connection.ReadStream(Dest, Message.ContentLength);
+
+  // Roll back the stream to just before the message body!
+  Dest.Seek(-Message.ContentLength, soFromCurrent);
 end;
 
 procedure TIdSipTcpServer.ReadMessage(Connection: TIdTCPConnection;
                                       Dest: TStringStream);
+const
+  CrLf = #$D#$A;
 begin
-  // We skip any leading CRLFs, and read up to the first blank line.
+  // We skip any leading CRLFs, and read up to (and including) the first blank
+  // line.
   while (Dest.DataString = '') do
     Connection.Capture(Dest, '');
 
+  // Capture() returns up to the blank line, but eats it: we add it back in
+  // manually.
+  Dest.Write(CrLf, Length(CrLf));
   Dest.Seek(0, soFromBeginning);
 end;
 
 procedure TIdSipTcpServer.ReturnInternalServerError(Connection: TIdTCPConnection;
-                                                    Reason: String);
+                                                    const Reason: String);
 var
   Res: TIdSipResponse;
 begin
@@ -439,6 +506,18 @@ begin
   finally
     Res.Free;
   end;
+end;
+
+procedure TIdSipTcpServer.ScheduleExceptionNotification(ExceptionType: ExceptClass;
+                                                        const Reason: String);
+var
+  Ex:           TIdSipExceptionWait;
+begin
+  Ex := TIdSipExceptionWait.Create;
+  Ex.Event         := Self.DoOnException;
+  Ex.ExceptionType := ExceptionType;
+  Ex.Reason        := Reason;
+  Self.Timer.AddEvent(TriggerImmediately, Ex);
 end;
 
 procedure TIdSipTcpServer.SendResponseTo(Response: TIdSipResponse;

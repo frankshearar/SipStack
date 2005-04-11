@@ -92,6 +92,7 @@ type
     procedure SetAddress(const Value: String); virtual;
     procedure SetPort(Value: Cardinal);
     procedure SetTimeout(Value: Cardinal); virtual;
+    procedure SetTimer(Value: TIdTimerQueue); virtual;
 
     property Bindings: TIdSocketHandles read GetBindings;
   public
@@ -121,7 +122,7 @@ type
     property HostName: String        read fHostName write fHostName;
     property Port:     Cardinal      read GetPort write SetPort;
     property Timeout:  Cardinal      read fTimeout write SetTimeout;
-    property Timer:    TIdTimerQueue read fTimer write fTimer;
+    property Timer:    TIdTimerQueue read fTimer write SetTimer;
     property UseRport: Boolean       read fUseRport write fUseRport;
   end;
 
@@ -172,6 +173,7 @@ type
                            Dest: TIdSipLocation); override;
     function  ServerType: TIdSipTcpServerClass; virtual;
     procedure SetTimeout(Value: Cardinal); override;
+    procedure SetTimer(Value: TIdTimerQueue); override;
   public
     class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
@@ -238,6 +240,7 @@ type
                           Dest: TIdSipLocation); override;
     procedure SendResponse(R: TIdSipResponse;
                            Dest: TIdSipLocation); override;
+    procedure SetTimer(Value: TIdTimerQueue); override;
   public
     class function GetTransportType: String; override;
     class function SrvPrefix: String; override;
@@ -250,10 +253,15 @@ type
     procedure Stop; override;
   end;
 
-  // I represent a (possibly) deferred send of a message down to the network.
-  TIdSipSendMessageWait = class(TIdSipMessageWait)
+  TIdSipExceptionWait = class(TIdNotifyEventWait)
+  private
+    fExceptionMsg:  String;
+    fExceptionType: ExceptClass;
+    fReason:        String;
   public
-    procedure Trigger; override;
+    property ExceptionMsg:  String      read fExceptionMsg write fExceptionMsg;
+    property ExceptionType: ExceptClass read fExceptionType write fExceptionType;
+    property Reason:        String      read fReason write fReason;
   end;
 
   TIdSipTransportExceptionMethod = class(TIdNotification)
@@ -693,6 +701,11 @@ begin
   Self.fTimeout := Value;
 end;
 
+procedure TIdSipTransport.SetTimer(Value: TIdTimerQueue);
+begin
+  Self.fTimer := Value;
+end;
+
 //* TIdSipTransport Private methods ********************************************
 
 procedure TIdSipTransport.RewriteOwnVia(Msg: TIdSipMessage);
@@ -926,6 +939,13 @@ begin
   Self.Transport.ConnectionTimeout := Value;
 end;
 
+procedure TIdSipTCPTransport.SetTimer(Value: TIdTimerQueue);
+begin
+  inherited SetTimer(Value);
+
+  Self.Transport.Timer := Value;
+end;
+
 procedure TIdSipTCPTransport.DestroyClient(Client: TIdSipTcpClient);
 begin
   // Precondition: Self.ClientLock has been acquired.
@@ -967,7 +987,7 @@ end;
 
 procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TObject);
 begin
-  Self.RemoveClient(Sender as TIdSipTcpClient);
+//  Self.RemoveClient(Sender as TIdSipTcpClient);
 end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
@@ -1208,21 +1228,19 @@ begin
   inherited SendResponse(R, Dest);
 
   // cf RFC 3581 section 4.
-  // TODO: this isn't quite right. We have to send the response
-  // from the ip/port that the request was received on.
+  // TODO: this isn't quite right. We have to send the response (if that's what
+  // the message is) from the ip/port that the request was received on.
 
   Self.Transport.Send(Dest.IPAddress,
                       Dest.Port,
                       R.AsString);
 end;
 
-//******************************************************************************
-//* TIdSipSendMessageWait                                                      *
-//******************************************************************************
-//* TIdSipSendMessageWait Public methods ***************************************
-
-procedure TIdSipSendMessageWait.Trigger;
+procedure TIdSipUDPTransport.SetTimer(Value: TIdTimerQueue);
 begin
+  inherited SetTimer(Value);
+
+  Self.Transport.Timer := Value;
 end;
 
 //******************************************************************************

@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdSipLocator, IdSipMessage, IdSipTcpServer, IdSipTransport,
-  IdSocketHandle, IdTcpServer, SyncObjs, SysUtils, TestFramework,
+  IdSocketHandle, IdTcpServer, IdTimerQueue, SyncObjs, SysUtils, TestFramework,
   TestFrameworkEx, TestFrameworkSip;
 
 type
@@ -106,6 +106,8 @@ type
     RejectedMessage:       Boolean;
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
+    SendEvent:             TEvent;
+    Timer:                 TIdThreadedTimerQueue;
     WrongServer:           Boolean;
 
     procedure CheckCanReceiveRequest(Sender: TObject;
@@ -172,7 +174,7 @@ type
     procedure TestIsNull; virtual;
     procedure TestDiscardResponseWithUnknownSentBy;
     procedure TestDiscardMalformedMessage;
-    procedure TestDiscardUnknownSipVersion;
+    procedure TestDontDiscardUnknownSipVersion;
     procedure TestReceivedParamDifferentIPv4SentBy;
     procedure TestReceivedParamFQDNSentBy;
     procedure TestReceivedParamIPv4SentBy;
@@ -361,7 +363,7 @@ begin
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
-  Result.AddTest(TestTIdSipMockTransport.Suite);
+//  Result.AddTest(TestTIdSipMockTransport.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportReceiveResponseMethod.Suite);
@@ -777,14 +779,15 @@ procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
 
+  Self.SendEvent := TSimpleEvent.Create;
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
                                             Self.TransportType);
 
   if not Assigned(GStack) then
     raise Exception.Create('GStack isn''t instantiated - you need something '
                          + 'that opens a socket');
-
-  Self.ExceptionMessage := 'Response not received - event didn''t fire';
 
   Self.LastSentResponse := TIdSipResponse.Create;
 
@@ -845,6 +848,9 @@ begin
   Self.LastSentResponse.Free;
 
   TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
+
+  Self.Timer.Terminate;
+  Self.SendEvent.Free;
 
   inherited TearDown;
 end;
@@ -1054,6 +1060,7 @@ begin
   Transport.AddTransportListener(Self);
   Transport.AddTransportSendingListener(Self);
   Transport.Timeout  := Self.DefaultTimeout div 10;
+  Transport.Timer    := Self.Timer;
   Transport.HostName := HostName;
   Transport.Address  := Address;
   Transport.Port     := Port;
@@ -1150,6 +1157,7 @@ procedure TestTIdSipTransport.OnSendResponse(Response: TIdSipResponse;
                                              Sender: TIdSipTransport);
 begin
   Self.LastSentResponse.Assign(Response);
+  Self.SendEvent.SetEvent;
 end;
 
 //* TestTIdSipTransport Published methods **************************************
@@ -1263,13 +1271,18 @@ begin
                    + #13#10
                    + 'I am a message. Hear me roar!');
 
-    Self.WaitForSignaled;
+    Self.WaitForSignaled(Self.SendEvent);
+
     Check(not Self.ReceivedRequest,
           Self.HighPortTransport.ClassName
         + ': Somehow we received a mangled message');
     Check(Self.RejectedMessage,
           Self.HighPortTransport.ClassName
         + ': Notification of message rejection not received');
+
+    CheckNotEquals(0,
+                   Self.LastSentResponse.StatusCode,
+                   'We didn''t receive the "Bad Request" response');
 
     // Check that the transport sends the 400 Bad Request.
     CheckEquals(SIPBadRequest,
@@ -1287,16 +1300,15 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransport.TestDiscardUnknownSipVersion;
+procedure TestTIdSipTransport.TestDontDiscardUnknownSipVersion;
 begin
+  // The Transaction-User level handles rejecting these messages.  
+  Self.CheckingRequestEvent := Self.CheckCanReceiveRequest;
+
   Self.ExceptionMessage := 'Waiting for request to arrive';
   Self.SendMessage(TortureTest41);
-  Self.WaitForTimeout(Self.ClassName
-                    + ': Received a message with an unknown SIP-Version');
-
-  Check(not Self.ReceivedRequest,
-        Self.ClassName
-      + ': Received a message with an unknown SIP-Version');
+  Self.WaitForSignaled(Self.ClassName
+                    + ': Didn''t receive a message with an unknown SIP-Version (timeout)');
 end;
 
 procedure TestTIdSipTransport.TestReceivedParamDifferentIPv4SentBy;

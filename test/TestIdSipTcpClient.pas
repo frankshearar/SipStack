@@ -12,8 +12,8 @@ unit TestIdSipTcpClient;
 interface
 
 uses
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTCPServer, SysUtils,
-  TestFrameworkSip;
+  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTimerQueue, IdTCPServer,
+  SysUtils, TestFrameworkSip;
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -29,6 +29,7 @@ type
     InviteCount:           Cardinal;
     ReceivedResponseCount: Cardinal;
     Server:                TIdSipTcpServer;
+    Timer:                 TIdTimerQueue;
 
     procedure CheckReceiveOkResponse(Sender: TObject;
                                      Response: TIdSipResponse;
@@ -96,9 +97,12 @@ procedure TestTIdSipTcpClient.SetUp;
 begin
   inherited SetUp;
 
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
   Self.Client := TIdSipTcpClient.Create(nil);
   Self.Server := TIdSipTcpServer.Create(nil);
   Self.Server.AddMessageListener(Self);
+  Self.Server.Timer := Self.Timer;
 
   Self.Client.Host        := '127.0.0.1';
   Self.Client.Port        := Self.Server.DefaultPort;
@@ -119,6 +123,8 @@ begin
   Self.Invite.Free;
   Self.Server.Free;
   Self.Client.Free;
+
+  Self.Timer.Terminate;
 
   inherited TearDown;
 end;
