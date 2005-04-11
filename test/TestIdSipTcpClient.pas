@@ -333,8 +333,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.Finished, 'Client never notified us of its finishing');
 end;
@@ -347,8 +346,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   Check(Self.Finished, 'Client never notified us of its finishing');
 end;
@@ -361,8 +359,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponseWithPause;
@@ -373,8 +370,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpClient.TestReceiveProvisionalAndOkResponse;
@@ -385,8 +381,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 
   CheckEquals(2, Self.ReceivedResponseCount, 'Received response count');
 end;
@@ -399,8 +394,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpClient.TestSendTwoInvites;
@@ -412,8 +406,7 @@ begin
 
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 procedure TestTIdSipTcpClient.TestSendWithServerDisconnect;
@@ -423,8 +416,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  if (Self.ThreadEvent.WaitFor(DefaultTimeout) <> wrSignaled) then
-    raise Self.ExceptionType.Create(Self.ExceptionMessage);
+  Self.WaitForSignaled;
 end;
 
 
