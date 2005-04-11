@@ -12,7 +12,7 @@ unit IdSipTcpClient;
 interface
 
 uses
-  Classes, IdSipMessage, IdTCPClient;
+  Classes, IdSipMessage, IdTCPClient, IdTimerQueue;
 
 type
   // Note that the Timeout property determines the maximum length of time to
@@ -20,10 +20,10 @@ type
   TIdSipTcpClient = class(TIdTCPClient)
   private
     fIsFinished: Boolean;
-    fOnFinished: TNotifyEvent;
     fOnResponse: TIdSipResponseEvent;
+    fTimer:      TIdTimerQueue;
 
-    procedure DoOnFinished;
+    procedure DoOnReceiveMessage(Sender: TObject);
     procedure DoOnResponse(R: TIdSipResponse;
                            ReceivedFrom: TIdSipConnectionBindings);
     procedure MarkFinished;
@@ -32,7 +32,6 @@ type
     procedure ReadResponses;
   protected
     function  DefaultTimeout: Cardinal; virtual;
-    procedure DoOnDisconnected; override;
   public
     constructor Create(AOwner: TComponent); override;
 
@@ -40,8 +39,8 @@ type
     procedure Send(Response: TIdSipResponse); overload;
 
     property IsFinished: Boolean             read fIsFinished;
-    property OnFinished: TNotifyEvent        read fOnFinished write fOnFinished;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
+    property Timer:      TIdTimerQueue       read fTimer write fTimer;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
@@ -49,7 +48,7 @@ type
 implementation
 
 uses
-  IdException, IdTCPConnection;
+  IdException, IdSipTcpServer, IdTCPConnection;
 
 //******************************************************************************
 //* TIdSipTcpClient                                                            *
@@ -83,18 +82,17 @@ begin
   Result := 5000;
 end;
 
-procedure TIdSipTcpClient.DoOnDisconnected;
-begin
-  inherited DoOnDisconnected;
-  Self.DoOnFinished;
-end;
-
 //* TIdSipTcpClient Private methods ********************************************
 
-procedure TIdSipTcpClient.DoOnFinished;
+procedure TIdSipTcpClient.DoOnReceiveMessage(Sender: TObject);
+var
+  Wait: TIdSipReceiveTCPMessageWait;
 begin
-  if Assigned(Self.OnFinished) then
-    Self.OnFinished(Self);
+  Wait := Sender as TIdSipReceiveTCPMessageWait;
+
+  if not Wait.Message.IsRequest then
+    Self.DoOnResponse(Wait.Message as TIdSipResponse,
+                      Wait.ReceivedFrom);
 end;
 
 procedure TIdSipTcpClient.DoOnResponse(R: TIdSipResponse;
@@ -136,6 +134,7 @@ var
   S:            String;
   R:            TIdSipResponse;
   ReceivedFrom: TIdSipConnectionBindings;
+  RecvWait:     TIdSipReceiveTCPMessageWait;
 begin
   Finished := false;
 
@@ -156,7 +155,12 @@ begin
           except
             on EIdConnClosedGracefully do;
           end;
-          Self.DoOnResponse(R, ReceivedFrom);
+
+          RecvWait := TIdSipReceiveTCPMessageWait.Create;
+          RecvWait.Event        := Self.DoOnReceiveMessage;
+          RecvWait.Message      := R.Copy;
+          RecvWait.ReceivedFrom := ReceivedFrom;
+          Self.Timer.AddEvent(TriggerImmediately, RecvWait);
 
           Finished := R.IsFinal;
         finally
@@ -168,7 +172,6 @@ begin
     on EIdConnClosedGracefully do;
   end;
 
-  Self.DoOnFinished;
   Self.MarkFinished;
 end;
 

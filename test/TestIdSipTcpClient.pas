@@ -13,7 +13,7 @@ interface
 
 uses
   IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdTimerQueue, IdTCPServer,
-  SysUtils, TestFrameworkSip;
+  SyncObjs, SysUtils, TestFrameworkSip;
 
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
@@ -24,6 +24,7 @@ type
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
     Client:                TIdSipTcpClient;
+    ClientEvent:           TEvent;
     Finished:              Boolean;
     Invite:                TIdSipRequest;
     InviteCount:           Cardinal;
@@ -78,7 +79,7 @@ const
 implementation
 
 uses
-  Classes, IdGlobal, IdSipConsts, IdStack, SyncObjs, TestFramework,
+  Classes, IdGlobal, IdSipConsts, IdStack, TestFramework,
   TestMessages;
 
 function Suite: ITestSuite;
@@ -96,6 +97,7 @@ procedure TestTIdSipTcpClient.SetUp;
 begin
   inherited SetUp;
 
+  Self.ClientEvent := TSimpleEvent.Create;
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.Client := TIdSipTcpClient.Create(nil);
@@ -106,6 +108,7 @@ begin
   Self.Client.Host        := '127.0.0.1';
   Self.Client.Port        := Self.Server.DefaultPort;
   Self.Client.ReadTimeout := 1000;
+  Self.Client.Timer       := Self.Timer;
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
@@ -124,6 +127,7 @@ begin
   Self.Client.Free;
 
   Self.Timer.Terminate;
+  Self.ClientEvent.Free;
 
   inherited TearDown;
 end;
@@ -152,14 +156,14 @@ begin
     Inc(Self.ReceivedResponseCount);
 
     case Self.ReceivedResponseCount of
-      1: CheckEquals(SIPTrying,   Response.StatusCode, '1st response');
-      2: CheckEquals(SIPBusyHere, Response.StatusCode, '2nd response');
+      1: CheckEquals(SIPTrying, Response.StatusCode, '1st response');
+      2: CheckEquals(SIPOK,     Response.StatusCode, '2nd response');
     else
       Self.ExceptionMessage := 'Too many responses received';
     end;
 
     if (Self.ReceivedResponseCount > 1) then
-      Self.ThreadEvent.SetEvent;
+      Self.ClientEvent.SetEvent;
   except
     on E: Exception do begin
       Self.ExceptionType    := ExceptClass(E.ClassType);
@@ -366,7 +370,7 @@ begin
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled(Self.ClientEvent);
 
   CheckEquals(2, Self.ReceivedResponseCount, 'Received response count');
 end;
