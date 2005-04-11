@@ -63,8 +63,8 @@ type
     procedure TearDown; override;
   published
     procedure TestConnectAndDisconnect;
-    procedure TestOnFinished;
-    procedure TestOnFinishedWithServerDisconnect;
+    procedure TestIsFinished;
+    procedure TestIsFinishedWithServerDisconnect;
     procedure TestReceiveOkResponse;
     procedure TestReceiveOkResponseWithPause;
     procedure TestReceiveProvisionalAndOkResponse;
@@ -325,30 +325,30 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.TestOnFinished;
+procedure TestTIdSipTcpClient.TestIsFinished;
 begin
   Self.CheckingRequestEvent := Self.SendOkResponse;
-  Self.Client.OnFinished    := Self.DoOnFinished;
+
+  Check(not Self.Client.IsFinished, 'Before connect');
 
   Self.Client.Connect(DefaultTimeout);
+  Check(not Self.Client.IsFinished, 'Connection established');
+
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;
-
-  Check(Self.Finished, 'Client never notified us of its finishing');
+  Check(Self.Client.IsFinished, 'After final response received');
 end;
 
-procedure TestTIdSipTcpClient.TestOnFinishedWithServerDisconnect;
+procedure TestTIdSipTcpClient.TestIsFinishedWithServerDisconnect;
 begin
   Self.CheckingRequestEvent := Self.CutConnection;
-  Self.Client.OnFinished    := Self.DoOnFinished;
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;
-
-  Check(Self.Finished, 'Client never notified us of its finishing');
+  Check(Self.Client.IsFinished, 'After connection unexpectedly cut');
 end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponse;

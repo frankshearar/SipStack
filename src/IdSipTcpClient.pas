@@ -19,12 +19,15 @@ type
   // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
+    fIsFinished: Boolean;
     fOnFinished: TNotifyEvent;
     fOnResponse: TIdSipResponseEvent;
 
     procedure DoOnFinished;
     procedure DoOnResponse(R: TIdSipResponse;
                            ReceivedFrom: TIdSipConnectionBindings);
+    procedure MarkFinished;
+    procedure MarkUnfinished;
     function  ReadResponse(var TimedOut: Boolean): String;
     procedure ReadResponses;
   protected
@@ -36,6 +39,7 @@ type
     procedure Send(Request: TIdSipRequest); overload;
     procedure Send(Response: TIdSipResponse); overload;
 
+    property IsFinished: Boolean             read fIsFinished;
     property OnFinished: TNotifyEvent        read fOnFinished write fOnFinished;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
   end;
@@ -56,6 +60,8 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  Self.MarkUnfinished;
+  
   Self.ReadTimeout := Self.DefaultTimeout;
 end;
 
@@ -96,6 +102,16 @@ procedure TIdSipTcpClient.DoOnResponse(R: TIdSipResponse;
 begin
   if Assigned(Self.OnResponse) then
     Self.OnResponse(Self, R, ReceivedFrom);
+end;
+
+procedure TIdSipTcpClient.MarkFinished;
+begin
+  Self.fIsFinished := true;
+end;
+
+procedure TIdSipTcpClient.MarkUnfinished;
+begin
+  Self.fIsFinished := false;
 end;
 
 function TIdSipTcpClient.ReadResponse(var TimedOut: Boolean): String;
@@ -153,6 +169,7 @@ begin
   end;
 
   Self.DoOnFinished;
+  Self.MarkFinished;
 end;
 
 end.

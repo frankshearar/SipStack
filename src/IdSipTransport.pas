@@ -152,7 +152,6 @@ type
     ClientLock: TCriticalSection;
 
     function  AddClient: TIdSipTcpClient;
-    procedure DoOnClientFinished(Sender: TObject);
     procedure DoOnTcpResponse(Sender: TObject;
                               Response: TIdSipResponse;
                               ReceivedFrom: TIdSipConnectionBindings);
@@ -884,7 +883,6 @@ function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
 begin
   // Precondition: Self.ClientLock has been acquired.
   Result := TIdSipTcpClient.Create(nil);
-  Result.OnFinished  := Self.DoOnClientFinished;
   Result.OnResponse  := Self.DoOnTcpResponse;
   Result.ReadTimeout := Self.Timeout;
 end;
@@ -983,11 +981,6 @@ begin
   finally
     Self.ClientLock.Release;
   end;
-end;
-
-procedure TIdSipTCPTransport.DoOnClientFinished(Sender: TObject);
-begin
-//  Self.RemoveClient(Sender as TIdSipTcpClient);
 end;
 
 procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
