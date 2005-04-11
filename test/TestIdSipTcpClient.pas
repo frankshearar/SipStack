@@ -43,7 +43,6 @@ type
                                   Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
-    procedure DoOnFinished(Sender: TObject);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -216,20 +215,6 @@ begin
     finally
       Self.Server.Threads.UnlockList;
     end;
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpClient.DoOnFinished(Sender: TObject);
-begin
-  try
-    Self.Finished := true;
 
     Self.ThreadEvent.SetEvent;
   except
