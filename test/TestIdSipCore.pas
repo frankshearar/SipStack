@@ -3410,13 +3410,13 @@ end;
 
 procedure TestTIdSipUserAgent.TestReregister;
 var
-  Event: TIdSipMessageWait;
+  Event: TIdSipMessageNotifyEventWait;
 begin
   Self.Invite.Method := MethodRegister;
 
   Self.MarkSentRequestCount;
 
-  Event := TIdSipMessageWait.Create;
+  Event := TIdSipMessageNotifyEventWait.Create;
   try
     Event.Message := Self.Invite;
     Self.Core.OnReregister(Event);
