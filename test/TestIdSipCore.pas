@@ -1108,7 +1108,7 @@ var
   EventCount: Integer;
 begin
   EventCount := Self.DebugTimer.EventCount;
-  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite);
+  Self.Core.ScheduleEvent(Self.ScheduledEvent, 50, Self.Invite.Copy);
   Check(EventCount < DebugTimer.EventCount,
         'Event not scheduled');
 end;
@@ -3418,7 +3418,7 @@ begin
 
   Event := TIdSipMessageNotifyEventWait.Create;
   try
-    Event.Message := Self.Invite;
+    Event.Message := Self.Invite.Copy;
     Self.Core.OnReregister(Event);
   finally
     Event.Free;
@@ -3517,7 +3517,7 @@ begin
     Self.Core.Timer := DebugTimer;
 
     EventCount := DebugTimer.EventCount;
-    Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite);
+    Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy);
     Check(EventCount < DebugTimer.EventCount,
           'Event not scheduled');
   finally
@@ -9356,7 +9356,7 @@ begin
 
   Self.Method := TIdSipUserAgentDroppedUnmatchedMessageMethod.Create;
   Self.Method.Receiver := Self.Receiver;
-  Self.Method.Message := Self.Response;
+  Self.Method.Message := Self.Response.Copy;
 end;
 
 procedure TestTIdSipUserAgentDroppedUnmatchedMessageMethod.TearDown;
