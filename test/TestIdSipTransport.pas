@@ -1449,12 +1449,21 @@ begin
       try
         Self.LowPortTransport.AddTransportListener(LowPortListener);
         try
+          // Ensure that we only set ThreadEvent after we know that
+          // LowPortListener's finished with it
+          Self.LowPortTransport.RemoveTransportListener(Self);
+          Self.LowPortTransport.AddTransportListener(Self);
+
           Self.Response.LastHop.Received := Self.LowPortTransport.Address;
           Self.HighPortTransport.Send(Self.Response, Self.LowPortLocation);
 
           // It's not perfect, but anyway. We need to wait long enough for
           // LowPortTransport to get its response.
           Self.WaitForSignaled;
+
+          Check(not Self.ReceivedRequest,
+                Self.HighPortTransport.ClassName
+              + ': Somehow we received a mangled message');
 
           Check(LowPortListener.ReceivedResponse,
                 Self.HighPortTransport.ClassName
