@@ -1284,6 +1284,7 @@ uses
   DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom, IdUnicode, Math;
 
 const
+  ItemNotFoundIndex    = -1;
   JanOne1900           = 2;
   NTPNegativeTimeError = 'DT < 1900/01/01';
   RTPNegativeTimeError = 'DateTimeToRTPTimestamp doesn''t support negative timestamps';
@@ -2052,7 +2053,7 @@ end;
 
 function TIdRTPProfile.HasEncoding(Encoding: TIdRTPPayload): Boolean;
 begin
-  Result := not Encoding.IsNull and (Self.IndexOfEncoding(Encoding) <> -1);
+  Result := not Encoding.IsNull and (Self.IndexOfEncoding(Encoding) <> ItemNotFoundIndex);
 end;
 
 function TIdRTPProfile.HasPayloadType(PayloadType: TIdRTPPayloadType): Boolean;
@@ -2084,7 +2085,7 @@ var
 begin
   Index := Self.IndexOfEncoding(Encoding);
 
-  if (Index = -1) then
+  if (Index = ItemNotFoundIndex) then
     raise ENoPayloadTypeFound.Create(Encoding.EncodingName)
   else
     Result := TIdRTPPayloadType(Index);
@@ -2096,7 +2097,7 @@ var
 begin
   Index := Self.IndexOfEncoding(EncodingName);
 
-  if (Index = -1) then
+  if (Index = ItemNotFoundIndex) then
     raise ENoPayloadTypeFound.Create(EncodingName)
   else
     Result := TIdRTPPayloadType(Index);
@@ -2149,7 +2150,7 @@ begin
       Inc(Result);
 
   if (Result > High(TIdRTPPayloadType)) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 function TIdRTPProfile.IndexOfEncoding(const EncodingName: String): Integer;
@@ -2161,7 +2162,7 @@ begin
       Inc(Result);
 
   if (Result > High(TIdRTPPayloadType)) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 procedure TIdRTPProfile.Initialize;
@@ -3268,7 +3269,7 @@ begin
   try
     Self.ItemList.Add(Result);
   except
-    if (Self.ItemList.IndexOf(Result) <> -1) then
+    if (Self.ItemList.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.ItemList.Remove(Result)
     else
       FreeAndNil(Result);
@@ -3336,7 +3337,7 @@ begin
   try
     Self.ChunkList.Add(Result);
   except
-    if (Self.ChunkList.IndexOf(Result) <> -1) then
+    if (Self.ChunkList.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.ChunkList.Remove(Result)
     else
       FreeAndNil(Result);
@@ -3904,7 +3905,7 @@ begin
   try
     Self.Packets.Add(Result)
   except
-    if (Self.Packets.IndexOf(Result) <> -1) then
+    if (Self.Packets.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.Packets.Remove(Result)
     else
       Result.Free;
@@ -4201,7 +4202,7 @@ begin
     Result.HasSyncSrcID := true;
     Result.SyncSrcID    := SSRC;
   except
-    if (Self.List.IndexOf(Result) <> -1) then
+    if (Self.List.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.List.Remove(Result)
     else
       FreeAndNil(Result);
@@ -4231,7 +4232,7 @@ begin
     Result.SourceAddress  := Host;
     Result.SourcePort     := Port;
   except
-    if (Self.List.IndexOf(Result) <> -1) then
+    if (Self.List.IndexOf(Result) <> ItemNotFoundIndex) then
       Self.List.Remove(Result)
     else
       FreeAndNil(Result);
