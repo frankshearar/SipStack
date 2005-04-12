@@ -294,6 +294,7 @@ end;
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
+  Result.Timer := Self.Timer;
 end;
 
 function TIdSipTcpServer.DefaultTimeout: Cardinal;
