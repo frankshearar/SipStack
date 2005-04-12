@@ -25,12 +25,13 @@ type
     CheckingResponseEvent: TIdSipResponseEvent;
     Client:                TIdSipTcpClient;
     ClientEvent:           TEvent;
+    EmptyListEvent:        TEvent;
     Finished:              Boolean;
     Invite:                TIdSipRequest;
     InviteCount:           Cardinal;
     ReceivedResponseCount: Cardinal;
     Server:                TIdSipTcpServer;
-    Timer:                 TIdTimerQueue;
+    Timer:                 TIdThreadedTimerQueue;
 
     procedure CheckReceiveOkResponse(Sender: TObject;
                                      Response: TIdSipResponse;
@@ -44,6 +45,7 @@ type
                                   Request: TIdSipRequest);
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
+    procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -97,8 +99,10 @@ procedure TestTIdSipTcpClient.SetUp;
 begin
   inherited SetUp;
 
+  Self.EmptyListEvent := TSimpleEvent.Create;
   Self.ClientEvent := TSimpleEvent.Create;
   Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client := TIdSipTcpClient.Create(nil);
   Self.Server := TIdSipTcpServer.Create(nil);
@@ -119,15 +123,22 @@ begin
 end;
 
 procedure TestTIdSipTcpClient.TearDown;
+var
+  WaitTime: Cardinal;
 begin
+  // Wait for all scheduled events to execute
+  WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
+  Self.Timer.Terminate;
+  Self.EmptyListEvent.WaitFor(WaitTime);
+
   Self.Server.Active := false;
 
   Self.Invite.Free;
   Self.Server.Free;
   Self.Client.Free;
 
-  Self.Timer.Terminate;
   Self.ClientEvent.Free;
+  Self.EmptyListEvent.Free;
 
   inherited TearDown;
 end;
@@ -227,6 +238,11 @@ begin
       Self.ExceptionMessage := E.Message;
     end;
   end;
+end;
+
+procedure TestTIdSipTcpClient.OnEmpty(Sender: TIdTimerQueue);
+begin
+  Self.EmptyListEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpClient.OnException(E: Exception;

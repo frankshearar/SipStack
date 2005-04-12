@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdSipMessage, IdSipTcpServer, IdSipUdpServer, IdTimerQueue, IdUDPClient,
-  SysUtils, TestFrameworkSip;
+  SyncObjs, SysUtils, TestFrameworkSip;
 
 type
   TestTIdSipUdpServer = class(TTestCaseSip,
@@ -22,6 +22,7 @@ type
     CheckReceivedRequest:     TIdSipRequestEvent;
     CheckReceivedResponse:    TIdSipResponseEvent;
     Client:                   TIdUDPClient;
+    EmptyListEvent:           TEvent;
     NotifiedMalformedMessage: Boolean;
     Parser:                   TIdSipParser;
     ReceivedResponse:         Boolean;
@@ -40,6 +41,7 @@ type
                                                     ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckRequest(Sender: TObject;
                            Request: TIdSipRequest);
+    procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -81,8 +83,7 @@ const
 implementation
 
 uses
-  IdSipConsts, IdSimpleParser, IdSocketHandle, SyncObjs, TestFramework,
-  TestMessages;
+  IdSipConsts, IdSimpleParser, IdSocketHandle, TestFramework, TestMessages;
 
 function Suite: ITestSuite;
 begin
@@ -101,7 +102,9 @@ var
 begin
   inherited SetUp;
 
+  Self.EmptyListEvent := TSimpleEvent.Create;
   Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client := TIdUDPClient.Create(nil);
   Self.Server := TIdSipUdpServer.Create(nil);
@@ -122,15 +125,23 @@ begin
 end;
 
 procedure TestTIdSipUdpServer.TearDown;
+var
+  WaitTime: Cardinal;
 begin
+  // Wait for all scheduled events to execute
+  WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
+
+  Self.Timer.Terminate;
+  Self.EmptyListEvent.WaitFor(WaitTime);
+
   Self.Parser.Free;
 
   Self.Server.Active := false;
 
   Self.Server.Free;
   Self.Client.Free;
-
-  Self.Timer.Terminate;
+  
+  Self.EmptyListEvent.Free;
 
   inherited TearDown;
 end;
@@ -203,6 +214,11 @@ begin
   end;
 end;
 
+procedure TestTIdSipUdpServer.OnEmpty(Sender: TIdTimerQueue);
+begin
+  Self.EmptyListEvent.SetEvent;
+end;
+
 procedure TestTIdSipUdpServer.OnException(E: Exception;
                                           const Reason: String);
 begin
@@ -228,6 +244,7 @@ begin
   if Assigned(Self.CheckReceivedResponse) then
     Self.CheckReceivedResponse(Self, Response, ReceivedFrom);
   Self.ReceivedResponse := true;
+
   Self.ThreadEvent.SetEvent;
 end;
 
@@ -308,13 +325,26 @@ begin
 end;
 
 procedure TestTIdSipUdpServer.TestRemoveMessageListener;
+var
+  Listener: TIdSipTestMessageListener;
 begin
   Self.CheckReceivedRequest := Self.AcknowledgeEvent;
-  Self.Server.RemoveMessageListener(Self);
 
-  Self.Client.Send(BasicRequest);
+  Listener := TIdSipTestMessageListener.Create;
+  try
+    // This juggle ensures that the Listener gets the notification first.
+    Self.Server.RemoveMessageListener(Self);
+    Self.Server.AddMessageListener(Listener);
+    Self.Server.RemoveMessageListener(Listener);
+    Self.Server.AddMessageListener(Self);
 
-  Self.WaitForTimeout('Listener wasn''t removed: ' + Self.ClassName);
+    Self.Client.Send(BasicRequest);
+
+    Self.WaitForSignaled;
+    Check(not Listener.ReceivedRequest, 'Listener not removed: ' + Self.ClassName);
+  finally
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipUdpServer.TestRequest;

@@ -51,6 +51,7 @@ type
 
   TestTIdSipTcpServer = class(TTestCaseSip, IIdSipMessageListener)
   private
+    EmptyListEvent:           TEvent;
     NotifiedMalformedMessage: Boolean;
 
     procedure AcknowledgeEvent(Sender: TObject;
@@ -74,6 +75,7 @@ type
     procedure ClientOnResponseDownClosedConnection(Sender: TObject;
                                                    Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
+    procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnMalformedMessage(const Msg: String;
@@ -314,7 +316,9 @@ var
 begin
   inherited SetUp;
 
+  Self.EmptyListEvent := TSimpleEvent.Create;
   Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client         := TIdTcpClient.Create(nil);
   Self.HighPortServer := Self.ServerType.Create(nil);
@@ -355,7 +359,15 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.TearDown;
+var
+  WaitTime: Cardinal;
 begin
+  // Wait for all scheduled events to execute
+  WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
+
+  Self.Timer.Terminate;
+  Self.EmptyListEvent.WaitFor(WaitTime);
+
   Self.HighPortServer.RemoveMessageListener(Self);
   Self.LowPortServer.RemoveMessageListener(Self);
 
@@ -368,7 +380,7 @@ begin
   Self.HighPortServer.Free;
   Self.Client.Free;
 
-  Self.Timer.Terminate;
+  Self.EmptyListEvent.Free;
 
   inherited TearDown;
 end;
@@ -499,6 +511,11 @@ procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObje
                                                              ReceivedFrom: TIdSipConnectionBindings);
 begin
   Fail('The connection is closed. The client should not receive a response');
+end;
+
+procedure TestTIdSipTcpServer.OnEmpty(Sender: TIdTimerQueue);
+begin
+  Self.EmptyListEvent.SetEvent;
 end;
 
 procedure TestTIdSipTcpServer.OnException(E: Exception;
@@ -668,14 +685,27 @@ begin
 end;
 
 procedure TestTIdSipTcpServer.TestRemoveMessageListener;
+var
+  Listener: TIdSipTestMessageListener;
 begin
-//  Self.HighPortServer.AddMessageListener(Self);
-  Self.HighPortServer.RemoveMessageListener(Self);
+  Self.CheckingRequestEvent := Self.AcknowledgeEvent;
 
-  Self.Client.Connect(DefaultTimeout);
-  Self.Client.Write(BasicRequest);
+  Listener := TIdSipTestMessageListener.Create;
+  try
+    // This juggle ensures that the Listener gets the notification first.
+    Self.HighPortServer.RemoveMessageListener(Self);
+    Self.HighPortServer.AddMessageListener(Listener);
+    Self.HighPortServer.RemoveMessageListener(Listener);
+    Self.HighPortServer.AddMessageListener(Self);
 
-  Self.WaitForTimeout('Listener wasn''t removed: ' + Self.ClassName);
+    Self.Client.Connect(DefaultTimeout);
+    Self.Client.Write(BasicRequest);
+
+    Self.WaitForSignaled;
+    Check(not Listener.ReceivedRequest, 'Listener not removed: ' + Self.ClassName);
+  finally
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipTcpServer.TestSendResponsesClosedConnection;
