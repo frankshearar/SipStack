@@ -95,6 +95,7 @@ type
   protected
     CheckingRequestEvent:  TTestIdSipRequestEvent;
     CheckingResponseEvent: TTestIdSipResponseEvent;
+    EmptyListEvent:        TEvent;
     HighPortLocation:      TIdSipLocation;
     HighPortTransport:     TIdSipTransport;
     LowPortLocation:       TIdSipLocation;
@@ -149,6 +150,7 @@ type
     function  DefaultPort: Cardinal; virtual;
     procedure OnException(E: Exception;
                           const Reason: String);
+    procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -779,8 +781,10 @@ procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
 
+  Self.EmptyListEvent := TSimpleEvent.Create;
   Self.SendEvent := TSimpleEvent.Create;
   Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer.OnEmpty := Self.OnEmpty;
 
   TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
                                             Self.TransportType);
@@ -831,7 +835,14 @@ begin
 end;
 
 procedure TestTIdSipTransport.TearDown;
+var
+  WaitTime: Cardinal;
 begin
+  WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
+
+  Self.Timer.Terminate;
+  Self.EmptyListEvent.WaitFor(WaitTime);
+
   Self.RecvdRequest.Free;
   Self.Response.Free;
   Self.Request.Free;
@@ -849,8 +860,8 @@ begin
 
   TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
 
-  Self.Timer.Terminate;
   Self.SendEvent.Free;
+  Self.EmptyListEvent.Free;
 
   inherited TearDown;
 end;
@@ -1076,6 +1087,11 @@ procedure TestTIdSipTransport.OnException(E: Exception;
 begin
   Self.ExceptionType := ExceptClass(E.ClassType);
   Self.ExceptionMessage := E.Message + ' caused by ''' + Reason + '''';
+end;
+
+procedure TestTIdSipTransport.OnEmpty(Sender: TIdTimerQueue);
+begin
+  Self.EmptyListEvent.SetEvent;
 end;
 
 procedure TestTIdSipTransport.OnReceiveRequest(Request: TIdSipRequest;
@@ -1440,8 +1456,10 @@ begin
           // LowPortTransport to get its response.
           Self.WaitForSignaled;
 
-          Check(LowPortListener.ReceivedResponse
-                and not HighPortListener.ReceivedResponse,
+          Check(LowPortListener.ReceivedResponse,
+                Self.HighPortTransport.ClassName
+              + ': LowPortTransport didn''t get the message');
+          Check(not HighPortListener.ReceivedResponse,
                 Self.HighPortTransport.ClassName
               + ': Received param in top Via header ignored - '
               + 'wrong server got the message');

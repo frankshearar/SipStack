@@ -75,6 +75,7 @@ type
     fEventList:       TObjectList;
     fLock:            TCriticalSection;
     fTerminated:      Boolean;
+    fDefaultTimeout:  Cardinal;
     WaitEvent:        TEvent;
 
     procedure Add(MillisecsWait: Cardinal;
@@ -83,7 +84,9 @@ type
     procedure ClearEvents;
     function  EarliestEvent: TIdWait;
     function  EventAt(Index: Integer): TIdWait;
+    function  GetDefaultTimeout: Cardinal;
     procedure InternalRemove(Event: Pointer);
+    procedure SetDefaultTimeout(Value: Cardinal);
     function  ShortestWait: Cardinal;
   protected
     function  IndexOfEvent(Event: Pointer): Integer;
@@ -114,6 +117,8 @@ type
     procedure RemoveEvent(Event: TIdWait); overload;
     procedure Resume; virtual;
     procedure Terminate; virtual;
+
+    property DefaultTimeout: Cardinal read GetDefaultTimeout write SetDefaultTimeout;
   end;
 
   TIdThreadProc = procedure of object;
@@ -131,16 +136,22 @@ type
                        CreateSuspended: Boolean = True); reintroduce;
   end;
 
+  TIdTimerEmptyProc = procedure(Sender: TIdTimerQueue) of object;
+
   // I provide a thread in which to execute my events. Obviously, all
   // TNotifyEvents and such execute in BlockRunner's context.
   TIdThreadedTimerQueue = class(TIdTimerQueue)
   private
     BlockRunner: TIdBlockRunnerThread;
+    fOnEmpty:    TIdTimerEmptyProc;
 
+    procedure PossiblyNotifyOfEmpty;
     procedure Run;
   public
     procedure Resume; override;
     procedure Terminate; override;
+
+    property OnEmpty: TIdTimerEmptyProc read fOnEmpty write fOnEmpty;
   end;
 
   // I provide debugging facilities for you to plug in to things that use
@@ -160,7 +171,7 @@ type
   end;
 
 const
-  TriggerImmediately = 0; // zero wait time: execute as soon as possible.  
+  TriggerImmediately = 0; // zero wait time: execute as soon as possible.
 
 // Math and conversion functions
 function AddModulo(Addend, Augend: Cardinal; Radix: Cardinal): Cardinal;
@@ -172,7 +183,7 @@ uses
   IdSystem;
 
 const
-  DefaultSleepTime      = 10000;
+  DefaultSleepTime      = 1000;
   NotFoundSentinelValue = -1;
 
 //******************************************************************************
@@ -252,6 +263,8 @@ end;
 constructor TIdTimerQueue.Create(CreateSuspended: Boolean = True);
 begin
   inherited Create;
+
+  Self.fDefaultTimeout := DefaultSleepTime;
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
@@ -399,7 +412,7 @@ begin
     Self.UnlockTimer;
   end;
 
-  if FireEvent then begin
+  if FireEvent and not Self.Terminated then begin
     try
       NextEvent.Trigger;
     finally
@@ -473,6 +486,16 @@ begin
   Result := Self.EventList[Index] as TIdWait;
 end;
 
+function TIdTimerQueue.GetDefaultTimeout: Cardinal;
+begin
+  Self.LockTimer;
+  try
+    Result := Self.fDefaultTimeout;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
 procedure TIdTimerQueue.InternalRemove(Event: Pointer);
 var
   I: Integer;
@@ -493,6 +516,16 @@ begin
   end;
 end;
 
+procedure TIdTimerQueue.SetDefaultTimeout(Value: Cardinal);
+begin
+  Self.LockTimer;
+  try
+    Self.fDefaultTimeout := Value;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
 function TIdTimerQueue.ShortestWait: Cardinal;
 var
   NextEvent: TIdWait;
@@ -503,7 +536,7 @@ begin
     if Assigned(NextEvent) then
       Result := NextEvent.TimeToWait
     else
-      Result := DefaultSleepTime;
+      Result := Self.DefaultTimeout;
   finally
     Self.UnlockTimer;
   end;
@@ -558,6 +591,17 @@ end;
 
 //* TIdThreadedTimerQueue Private methods **************************************
 
+procedure TIdThreadedTimerQueue.PossiblyNotifyOfEmpty;
+begin
+  Self.LockTimer;
+  try
+    if (Self.EventList.Count = 0) and Assigned(Self.fOnEmpty) then
+      Self.fOnEmpty(Self);
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
 procedure TIdThreadedTimerQueue.Run;
 begin
   while not Self.Terminated do begin
@@ -565,6 +609,8 @@ begin
 
     if not Self.Terminated then
       Self.TriggerEarliestEvent;
+
+    Self.PossiblyNotifyOfEmpty;
   end;
 end;
 
