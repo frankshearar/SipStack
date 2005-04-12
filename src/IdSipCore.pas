@@ -559,7 +559,7 @@ type
                              Reason: Cardinal);
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
-                            Msg: TIdSipMessage); overload;
+                            Copy: TIdSipMessage); overload;
     function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
@@ -2861,7 +2861,7 @@ end;
 
 procedure TIdSipAbstractUserAgent.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                                 WaitTime: Cardinal;
-                                                Msg: TIdSipMessage);
+                                                Copy: TIdSipMessage);
 var
   Event: TIdSipActionsWait;
 begin
@@ -2871,7 +2871,7 @@ begin
       Event := TIdSipActionsWait.Create;
       Event.Actions   := Self.Actions;
       Event.BlockType := BlockType;
-      Event.Message   := Msg;
+      Event.Message   := Copy;
       Self.Timer.AddEvent(WaitTime, Event);
     end;
   finally
