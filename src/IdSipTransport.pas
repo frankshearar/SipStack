@@ -885,6 +885,7 @@ begin
   Result := TIdSipTcpClient.Create(nil);
   Result.OnResponse  := Self.DoOnTcpResponse;
   Result.ReadTimeout := Self.Timeout;
+  Result.Timer       := Self.Timer;
 end;
 
 function TIdSipTCPTransport.GetPort: Cardinal;
