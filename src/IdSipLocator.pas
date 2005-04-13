@@ -157,7 +157,8 @@ uses
   IdSimpleParser, IdSipTransport;
 
 const
-  NoRecordFound               = 'No record found: %s';
+  ItemNotFoundIndex            = -1;
+  NoRecordFound                = 'No record found: %s';
   NoViaHeadersMeansNoLocations = 'You cannot find locations for a response with '
                                + 'no Via headers';
 
@@ -657,7 +658,7 @@ begin
 
     while (I < Naptr.Count) and (Result = '') do begin
       TransportIndex := OurTransports.IndexOf(Naptr[I].AsSipTransport);
-      if (TransportIndex <> -1) then
+      if (TransportIndex <> ItemNotFoundIndex) then
         Result := OurTransports[TransportIndex]
       else
         Inc(I);
@@ -767,7 +768,7 @@ begin
 
   for I := 0 to SRV.Count - 1 do begin
     Index := SupportedTransports.IndexOf(SRV[I].SipTransport);
-    if (Index <> -1) then
+    if (Index <> ItemNotFoundIndex) then
       SupportedTransports.Delete(Index);
   end;
 end;

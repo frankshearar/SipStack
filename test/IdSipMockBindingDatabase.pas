@@ -64,6 +64,9 @@ implementation
 uses
   DateUtils, IdSipConsts, SysUtils;
 
+const
+  ItemNotFoundIndex = -1;  
+
 //******************************************************************************
 //* TIdSipMockBindingDatabase                                                  *
 //******************************************************************************
@@ -162,7 +165,7 @@ begin
     Self.BindingStore.Add(NewBinding);
   except
     Index := Self.BindingStore.IndexOf(NewBinding);
-    if (Index <> -1) then
+    if (Index <> ItemNotFoundIndex) then
       Self.DeleteBinding(Index)
     else
       FreeAndNil(NewBinding);
@@ -225,7 +228,7 @@ begin
     Inc(Result);
 
   if (Result >= Self.BindingCount) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 end.

@@ -600,7 +600,7 @@ begin
       Result.AddTransactionListener(Self);
       Self.Transactions.Add(Result);
     except
-      if (Self.Transactions.IndexOf(Result) <> -1) then
+      if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
         Self.Transactions.Remove(Result)
       else
         Result.Free;
@@ -624,7 +624,7 @@ begin
       Result.AddTransactionListener(Self);
       Self.Transactions.Add(Result);
     except
-      if (Self.Transactions.IndexOf(Result) <> -1) then
+      if (Self.Transactions.IndexOf(Result) <> ItemNotFoundIndex) then
         Self.Transactions.Remove(Result)
       else
         Result.Free;

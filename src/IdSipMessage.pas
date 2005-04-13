@@ -2397,7 +2397,7 @@ end;
 
 function TIdSipUri.HasParameter(const Name: String): Boolean;
 begin
-  Result := Self.Parameters.IndexOfName(Name) <> -1;
+  Result := Self.Parameters.IndexOfName(Name) <> ItemNotFoundIndex;
 end;
 
 function TIdSipUri.IsLooseRoutable: Boolean;
@@ -2850,7 +2850,7 @@ end;
 
 function TIdSipHeader.HasParam(Name: String): Boolean;
 begin
-  Result := Self.IndexOfParam(Name) <> -1;
+  Result := Self.IndexOfParam(Name) <> ItemNotFoundIndex;
 end;
 
 function TIdSipHeader.IndexOfParam(Name: String): Integer;
@@ -2872,7 +2872,7 @@ begin
   end;
 
   if (Result = Self.Parameters.Count) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 function TIdSipHeader.IsContact: Boolean;
@@ -2919,7 +2919,7 @@ var
 begin
   Index := Self.Parameters.IndexOfName(ParamName);
 
-  if (Index <> -1) then
+  if (Index <> ItemNotFoundIndex) then
     Self.Parameters.Delete(Index);
 end;
 
@@ -3022,7 +3022,7 @@ var
 begin
   I := Self.IndexOfParam(Name);
 
-  if (I > -1) then begin
+  if (I > ItemNotFoundIndex) then begin
     Result := Self.Parameters[I];
     Fetch(Result, '=');
     Result := Trim(Result)
@@ -3046,7 +3046,7 @@ begin
   I := Self.IndexOfParam(Name);
 
 
-  if (I = -1) then
+  if (I = ItemNotFoundIndex) then
     Self.Parameters.Add(Trim(Name) + '=' + Value)
   else
     Self.Parameters[I] := Trim(Name) + '=' + Value;
@@ -3235,7 +3235,7 @@ end;
 
 function TIdSipHttpAuthHeader.DigestResponseValue(const Name: String): String;
 begin
-  if (Self.DigestResponses.IndexOfName(Name) = -1) then
+  if (Self.DigestResponses.IndexOfName(Name) = ItemNotFoundIndex) then
     Result := ''
   else
     Result := Self.DigestResponses.Values[Name]
@@ -3330,7 +3330,7 @@ end;
 
 function TIdSipHttpAuthHeader.GetUnknownResponses(const Name: String): String;
 begin
-  if (Self.fUnknownResponses.IndexOfName(Name) = -1) then
+  if (Self.fUnknownResponses.IndexOfName(Name) = ItemNotFoundIndex) then
     Result := ''
   else
     Result := Self.fUnknownResponses.Values[Name]
@@ -3741,7 +3741,7 @@ begin
 
       Self.AddValue(MediaRange, StrToQValueDef(QValue, High(TIdSipQValue)));
 
-      if (NewParams.IndexOfName(QParam) <> -1) then
+      if (NewParams.IndexOfName(QParam) <> ItemNotFoundIndex) then
         NewParams.Delete(NewParams.IndexOfName(QParam));
 
       Self.Values[Self.ValueCount - 1].Parameters.AddStrings(NewParams);
@@ -3807,9 +3807,11 @@ begin
   else
     inherited Parse(Value);
 
-  if (Self.IndexOfParam(QParam) > -1) and not TIdSipParser.IsQValue(Self.Params[QParam]) then
+  if (Self.IndexOfParam(QParam) > ItemNotFoundIndex)
+    and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse(InvalidQValue);
-  if (Self.IndexOfParam(ExpiresParam) > -1) and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
+  if (Self.IndexOfParam(ExpiresParam) > ItemNotFoundIndex)
+    and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
     Self.FailParse(InvalidExpires);
 end;
 
@@ -3990,7 +3992,7 @@ end;
 
 function TIdSipFromToHeader.HasTag: Boolean;
 begin
-  Result := Self.IndexOfParam(TagParam) <> -1;
+  Result := Self.IndexOfParam(TagParam) <> ItemNotFoundIndex;
 end;
 
 function TIdSipFromToHeader.Equals(Header: TIdSipHeader): Boolean;
@@ -4014,7 +4016,7 @@ procedure TIdSipFromToHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if (Self.IndexOfParam(TagParam) > -1)
+  if (Self.IndexOfParam(TagParam) > ItemNotFoundIndex)
     and not TIdSipParser.IsToken(Self.Params[TagParam]) then
     Self.FailParse(InvalidTag);
 end;
@@ -4119,7 +4121,7 @@ var
 begin
   Index := Self.DigestResponses.IndexOfName(StaleParam);
 
-  if (Index <> -1) then
+  if (Index <> ItemNotFoundIndex) then
     Self.DigestResponses.Delete(Index);
 end;
 
@@ -4788,14 +4790,14 @@ end;
 
 procedure TIdSipViaHeader.AssertBranchWellFormed;
 begin
-  if (Self.IndexOfParam(BranchParam) > -1)
+  if (Self.IndexOfParam(BranchParam) > ItemNotFoundIndex)
      and not TIdSipParser.IsToken(Self.Params[BranchParam]) then
     Self.FailParse(InvalidBranchId);
 end;
 
 procedure TIdSipViaHeader.AssertMaddrWellFormed;
 begin
-  if (Self.Parameters.IndexOfName(MaddrParam) > -1) then begin
+  if (Self.Parameters.IndexOfName(MaddrParam) > ItemNotFoundIndex) then begin
     if    not TIdSipParser.IsFQDN(Self.Parameters.Values[MaddrParam])
       and not TIdIPAddressParser.IsIPv4Address(Self.Parameters.Values[MaddrParam])
       and not TIdSipParser.IsIPv6Reference(Self.Parameters.Values[MaddrParam]) then
@@ -4805,7 +4807,7 @@ end;
 
 procedure TIdSipViaHeader.AssertReceivedWellFormed;
 begin
-  if (Self.IndexOfParam(ReceivedParam) > -1)
+  if (Self.IndexOfParam(ReceivedParam) > ItemNotFoundIndex)
     and not TIdIPAddressParser.IsIPv4Address(Self.Params[ReceivedParam])
     and not TIdIPAddressParser.IsIPv6Address(Self.Params[ReceivedParam]) then
     Self.FailParse(InvalidReceived);
@@ -4813,7 +4815,7 @@ end;
 
 procedure TIdSipViaHeader.AssertTTLWellFormed;
 begin
-  if (Self.Parameters.IndexOfName(TTLParam) > -1) then begin
+  if (Self.Parameters.IndexOfName(TTLParam) > ItemNotFoundIndex) then begin
     if not TIdSipParser.IsByte(Self.Parameters.Values[TTLParam]) then
       Self.FailParse(InvalidNumber);
   end;
@@ -5502,7 +5504,7 @@ begin
     Self.List.Add(Result);
     Result.Name := HeaderName;
   except
-    if (Self.List.IndexOf(Result) <> -1) then begin
+    if (Self.List.IndexOf(Result) <> ItemNotFoundIndex) then begin
       Self.List.Remove(Result);
       Result := nil;
     end
@@ -7606,7 +7608,7 @@ begin
     Copy.Assign(Request);
     Self.List.Add(Copy);
   except
-    if (Self.List.IndexOf(Copy) <> -1) then
+    if (Self.List.IndexOf(Copy) <> ItemNotFoundIndex) then
       Self.List.Remove(Copy)
     else
       Copy.Free;
@@ -7693,7 +7695,7 @@ begin
     Copy.Assign(Response);
     Self.List.Add(Copy);
   except
-    if (Self.List.IndexOf(Copy) <> -1) then
+    if (Self.List.IndexOf(Copy) <> ItemNotFoundIndex) then
       Self.List.Remove(Copy)
     else
       Copy.Free;

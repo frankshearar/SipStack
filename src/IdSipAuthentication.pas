@@ -150,6 +150,9 @@ type
                                       const A2: String;
                                       Auth: TIdSipAuthorizationHeader): String;
 
+const
+  ItemNotFoundIndex = -1;                                      
+
 function  A1For(const Algorithm: String): TIdAlgorithmFunction;
 function  A2For(const QopType: String): TIdQopFunction;
 function  AlgorithmNotSpecifiedA1(Auth: TIdSipAuthorizationHeader;
@@ -404,7 +407,7 @@ begin
 
       Self.UserInfo.Add(NewInfo);
     except
-      if (Self.UserInfo.IndexOf(NewInfo) <> -1) then
+      if (Self.UserInfo.IndexOf(NewInfo) <> ItemNotFoundIndex) then
         Self.UserInfo.Remove(NewInfo)
       else
         NewInfo.Free;
@@ -441,7 +444,7 @@ end;
 function TIdSipUserList.HasUser(const Username: String;
                                 const Realm: String): Boolean;
 begin
-  Result := Self.IndexOf(Username, Realm) <> -1;
+  Result := Self.IndexOf(Username, Realm) <> ItemNotFoundIndex;
 end;
 
 function TIdSipUserList.IndexOf(const Username: String;
@@ -453,7 +456,7 @@ begin
     and (Self.InfoAt(Result).Realm <> Realm) do Inc(Result);
 
   if (Result = Self.UserInfo.Count) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 function TIdSipUserList.InfoAt(Index: Integer): TIdUserInfo;
@@ -632,7 +635,7 @@ begin
       NewInfo.Realm     := Challenge.Realm;
       NewInfo.Username  := Username;
     except
-      if (Self.List.IndexOf(NewInfo) <> -1) then
+      if (Self.List.IndexOf(NewInfo) <> ItemNotFoundIndex) then
         Self.List.Remove(NewInfo)
       else
         NewInfo.Free;

@@ -219,6 +219,12 @@ implementation
 uses
   IdSimpleParser, IdSipMessage, SysUtils;
 
+const
+  ItemNotFoundIndex = -1;
+  LessThan          = -1;
+  GreaterThan       = 1;
+  Equal             = 0;  
+
 //******************************************************************************
 //* Unit functions & procedures                                                *
 //******************************************************************************
@@ -249,16 +255,16 @@ begin
   B := TIdNaptrRecord(Item2);
 
   if (A.Key < B.Key) then
-    Result := -1
+    Result := LessThan
   else if (A.Key > B.Key) then
-    Result := 1
+    Result := GreaterThan
   else
-    Result := 0;
+    Result := Equal;
 
-  if (Result = 0) then
+  if (Result = Equal) then
     Result := A.Order - B.Order;
 
-  if (Result = 0) then begin
+  if (Result = Equal) then begin
     // If the A and B have the Protocol, prefer the one that
     // uses a secure Transport. Thus,
     //   SIP+D2T < SIP+D2U;
@@ -269,18 +275,18 @@ begin
 
     if AIsSecure xor BIsSecure then begin
       if AIsSecure then
-        Result := -1
+        Result := LessThan
       else
-        Result := 1;
+        Result := GreaterThan;
     end else begin
       if (A.Service < B.Service) then
-        Result := -1
+        Result := LessThan
       else if (A.Service > B.Service) then
-        Result := 1;
+        Result := GreaterThan;
     end;
   end;
 
-  if (Result = 0) then
+  if (Result = Equal) then
     Result := A.Preference - B.Preference;
 end;
 
@@ -534,7 +540,7 @@ begin
   I      := 0;
 
   while (I < Self.Count) and not Assigned(Result) do
-    if (Transports.IndexOf(Self[I].AsSipTransport) <> -1) then
+    if (Transports.IndexOf(Self[I].AsSipTransport) <> ItemNotFoundIndex) then
       Result := Self[I]
     else
       Inc(I);

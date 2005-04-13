@@ -143,6 +143,9 @@ type
     property Items[Index: Integer]: TIdSipDialog read GetItem;
   end;
 
+const
+  ItemNotFoundIndex = -1;
+
 implementation
 
 uses
@@ -619,7 +622,7 @@ begin
     try
       Self.List.Add(D);
     except
-      if (Self.List.IndexOf(D) <> -1) then
+      if (Self.List.IndexOf(D) <> ItemNotFoundIndex) then
         Self.List.Remove(D)
       else
         D.Free;
