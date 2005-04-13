@@ -66,7 +66,12 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure FireOnException(E: ExceptClass;
+                              const ExceptionMessage: String;
+                              const Reason: String);
     procedure FireOnRequest(R: TIdSipRequest);
+    procedure FireOnRejectedMessage(Msg: TIdSipMessage;
+                                    const Reason: String);
     procedure FireOnResponse(R: TIdSipResponse);
     function  IsReliable: Boolean; override;
     function  LastRequest: TIdSipRequest;
@@ -188,6 +193,20 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipMockTransport.FireOnException(E: ExceptClass;
+                                              const ExceptionMessage: String;
+                                              const Reason: String);
+var
+  Ex: Exception;
+begin
+  Ex := E.Create(ExceptionMessage);
+  try
+    Self.NotifyTransportListenersOfException(Ex, Reason);
+  finally
+    Ex.Free;
+  end;
+end;
+
 procedure TIdSipMockTransport.FireOnRequest(R: TIdSipRequest);
 var
   CopyOfMessage: TIdSipRequest;
@@ -199,6 +218,27 @@ begin
   CopyOfMessage := R.Copy as TIdSipRequest;
   try
     Self.NotifyTransportListeners(CopyOfMessage);
+  finally
+    CopyOfMessage.Free;
+  end;
+end;
+
+procedure TIdSipMockTransport.FireOnRejectedMessage(Msg: TIdSipMessage;
+                                                    const Reason: String);
+var
+  CopyOfMessage: TIdSipMessage;
+begin
+  Self.Log(Msg.AsString, dirIn);
+
+  if Msg.IsRequest then
+    Self.fRequests.AddCopy(Msg as TIdSipRequest)
+  else
+    Self.fResponses.AddCopy(Msg as TIdSipResponse);
+
+  CopyOfMessage := Msg.Copy;
+  try
+    Self.NotifyTransportListenersOfRejectedMessage(CopyOfMessage.AsString,
+                                                   Reason);
   finally
     CopyOfMessage.Free;
   end;
