@@ -95,6 +95,9 @@ type
     function  RTPTypeCount: Integer;
   end;
 
+const
+  ItemNotFoundIndex = -1;  
+
 implementation
 
 uses
@@ -158,7 +161,7 @@ end;
 
 function TIdHistogram.HasEntry(const Name: String): Boolean;
 begin
-  Result := Self.IndexOf(Name) <> -1;
+  Result := Self.IndexOf(Name) <> ItemNotFoundIndex;
 end;
 
 procedure TIdHistogram.RecordEvent(const Name: String);
@@ -168,7 +171,7 @@ var
 begin
   Index := Self.IndexOf(Name);
 
-  if (Index = -1) then begin
+  if (Index = ItemNotFoundIndex) then begin
     NewEntry := TIdHistogramEntry.Create;
     try
       NewEntry.Count := 1;
@@ -176,7 +179,7 @@ begin
 
       Self.List.Add(NewEntry);
     except
-      if (Self.List.IndexOf(NewEntry) <> -1) then
+      if (Self.List.IndexOf(NewEntry) <> ItemNotFoundIndex) then
         Self.List.Remove(NewEntry)
       else
         NewEntry.Free;
@@ -202,7 +205,7 @@ begin
     Inc(Result);
 
   if (Result = Self.Count) then
-    Result := -1;
+    Result := ItemNotFoundIndex;
 end;
 
 //******************************************************************************

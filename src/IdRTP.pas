@@ -1278,13 +1278,15 @@ const
   NullEncodingName     = 'null';
   ReservedEncodingName = 'reserved';
 
+const
+  ItemNotFoundIndex = -1;
+
 implementation
 
 uses
   DateUtils, IdGlobal, IdHash, IdHashMessageDigest, IdRandom, IdUnicode, Math;
 
 const
-  ItemNotFoundIndex    = -1;
   JanOne1900           = 2;
   NTPNegativeTimeError = 'DT < 1900/01/01';
   RTPNegativeTimeError = 'DateTimeToRTPTimestamp doesn''t support negative timestamps';

@@ -735,6 +735,9 @@ const
   RSSDPDirectionSendOnly = 'sendonly';
   RSSDPDirectionSendRecv = 'sendrecv';
 
+const
+  ItemNotFoundIndex = -1;  
+
 function AddressTypeToStr(Version: TIdIPVersion): String;
 function DirectionToStr(Direction: TIdSdpDirection): String;
 function BandwidthTypeToStr(BwType: TIdSdpBandwidthType): String;
@@ -753,7 +756,7 @@ uses
 
 const
   SessionHeaderOrder = 'vosiuepcbtka';
-  MediaHeaderOrder   = 'micbka';  
+  MediaHeaderOrder   = 'micbka';
 
 //******************************************************************************
 //* Unit public functions and procedures                                       *
@@ -1302,7 +1305,7 @@ end;
 
 function TIdSdpMediaDescription.HasFormat(Fmt: String): Boolean;
 begin
-  Result := Self.FormatList.IndexOf(Fmt) <> -1;
+  Result := Self.FormatList.IndexOf(Fmt) <> ItemNotFoundIndex;
 end;
 
 function TIdSdpMediaDescription.HasKey: Boolean;
@@ -1602,7 +1605,7 @@ end;
 
 function TIdSdpList.Contains(O: TObject): Boolean;
 begin
-  Result := Self.List.IndexOf(O) <> -1;
+  Result := Self.List.IndexOf(O) <> ItemNotFoundIndex;
 end;
 
 function TIdSdpList.Equals(Other: TIdSdpList): Boolean;
@@ -3586,7 +3589,7 @@ begin
     Result.DefaultPort := Result.Bindings[0].Port;
     Result.Session.AddListener(Self);
   except
-    if (List.IndexOf(Result) <> -1) then
+    if (List.IndexOf(Result) <> ItemNotFoundIndex) then
       List.Remove(Result)
     else
       FreeAndNil(Result);
@@ -3748,7 +3751,7 @@ begin
         Self.ActivateServerOnNextFreePort(NewPeer,
                                           MediaDesc.Port);
       except
-        if (Self.RTPServers.IndexOf(NewPeer) <> -1) then
+        if (Self.RTPServers.IndexOf(NewPeer) <> ItemNotFoundIndex) then
           Self.RTPServers.Remove(NewPeer)
         else
           FreeAndNil(NewPeer);
@@ -4058,7 +4061,7 @@ begin
     NewStream.LocalDescription := Desc;
     NewStream.StartListening;
   except
-    if (Self.fStreams.IndexOf(NewStream) <> -1) then
+    if (Self.fStreams.IndexOf(NewStream) <> ItemNotFoundIndex) then
       Self.fStreams.Remove(NewStream)
     else
       NewStream.Free;

@@ -171,6 +171,8 @@ type
   end;
 
 const
+  DefaultSleepTime   = 1000;
+  ItemNotFoundIndex  = -1;
   TriggerImmediately = 0; // zero wait time: execute as soon as possible.
 
 // Math and conversion functions
@@ -181,10 +183,6 @@ implementation
 
 uses
   IdSystem;
-
-const
-  DefaultSleepTime      = 1000;
-  NotFoundSentinelValue = -1;
 
 //******************************************************************************
 //* Unit public functions & procedures                                         *
@@ -380,7 +378,7 @@ begin
     end;
 
     if not Found or (Result >= Self.EventList.Count) then
-      Result := NotFoundSentinelValue;
+      Result := ItemNotFoundIndex;
   finally
     Self.UnlockTimer;
   end;
@@ -442,7 +440,7 @@ begin
                                        MillisecsWait,
                                        High(MillisecsWait));
     except
-      if (Self.EventList.IndexOf(Event) <> -1) then
+      if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
         Self.EventList.Remove(Event)
       else
         Event.Free;
@@ -690,7 +688,7 @@ end;
 
 function TIdDebugTimerQueue.HasScheduledEvent(Event: Pointer): Boolean;
 begin
-  Result := Self.IndexOfEvent(Event) <> NotFoundSentinelValue;
+  Result := Self.IndexOfEvent(Event) <> ItemNotFoundIndex;
 end;
 
 end.

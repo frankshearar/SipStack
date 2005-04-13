@@ -351,6 +351,9 @@ const
   WrongTransport          = 'This transport only supports %s  messages but '
                           + 'received a %s message';
 
+const
+  ItemNotFoundIndex = -1;                          
+
 implementation
 
 uses
@@ -755,7 +758,7 @@ end;
 class procedure TIdSipTransportRegistry.RegisterTransport(const Name: String;
                                                           const TransportType: TIdSipTransportClass);
 begin
-  if (Self.TransportRegistry.IndexOf(Name) = -1) then
+  if (Self.TransportRegistry.IndexOf(Name) = ItemNotFoundIndex) then
     Self.TransportRegistry.AddObject(Name, TObject(TransportType));
 end;
 
@@ -775,7 +778,7 @@ var
 begin
   Index := Self.TransportRegistry.IndexOf(Transport);
 
-  if (Index <> -1) then
+  if (Index <> ItemNotFoundIndex) then
     Result := Self.TransportAt(Index)
   else
     raise EUnknownTransport.Create('TIdSipTransport.TransportFor: ' + Transport);
@@ -786,7 +789,7 @@ var
   Index: Integer;
 begin
   Index := Self.TransportRegistry.IndexOf(Name);
-  if (Index <> -1) then
+  if (Index <> ItemNotFoundIndex) then
     Self.TransportRegistry.Delete(Index);
 end;
 
@@ -970,7 +973,7 @@ begin
       Self.Clients.Add(Result);
     except
       // Remember, Self.Clients owns the object and will free it.
-      if (Self.Clients.IndexOf(Result) <> -1) then
+      if (Self.Clients.IndexOf(Result) <> ItemNotFoundIndex) then
         Self.Clients.Remove(Result)
       else
         Result.Free;
