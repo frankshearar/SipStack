@@ -23,6 +23,7 @@ v0.4 ()
   schedule in a TimerQueue) to separate objects, rather than using
   TNotifyEvents. In fact, anything involving its Actions property now
   works exclusively off blocks/closures sent to the Actions.
+* Lots of niggly race conditions in the tests have been fixed.
 
 v0.3 (2004/12/24)
 
