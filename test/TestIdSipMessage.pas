@@ -1143,6 +1143,11 @@ begin
 
   Self.Msg.ContentLanguage := 'en';
   CheckEquals('en', Self.Msg.ContentLanguage, 'Content-Language not set');
+
+  Self.Msg.ContentLanguage := '';
+  CheckEquals('', Self.Msg.ContentLanguage, 'Content-Language not set to blank');
+  Check(not Self.Msg.HasHeader(ContentLanguageHeader),
+        'Can''t have a blank Content-Language header');
 end;
 
 procedure TestTIdSipMessage.TestSetContentLength;
@@ -1159,6 +1164,11 @@ begin
 
   Self.Msg.ContentType := 'text/t140';
   CheckEquals('text/t140', Self.Msg.ContentType, 'Content-Type not set');
+
+  Self.Msg.ContentType := '';
+  CheckEquals('', Self.Msg.ContentType, 'Content-Type not set to blank');
+  Check(not Self.Msg.HasHeader(ContentTypeHeaderFull),
+        'Can''t have a blank Content-Type header');
 end;
 
 procedure TestTIdSipMessage.TestSetCSeq;

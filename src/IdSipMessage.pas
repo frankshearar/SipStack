@@ -1009,6 +1009,8 @@ type
     function  Minimum(A, B: Cardinal): Cardinal;
     function  QuickestContactExpiry: Cardinal;
     function  QuickestExpiresHeader: Cardinal;
+    procedure SetBlankableStringHeader(const HeaderName: String;
+                                       const Value: String);
     procedure SetCallID(const Value: String);
     procedure SetContacts(Value: TIdSipContacts);
     procedure SetContentDisposition(Value: TIdSipContentDispositionHeader);
@@ -6470,7 +6472,7 @@ end;
 
 function TIdSipMessage.GetContentType: String;
 begin
-  Result := Self.FirstHeaderValue(ContentTypeHeaderFull);
+  Result := Self.FirstHeaderValue(ContentTypeHeaderFull)
 end;
 
 function TIdSipMessage.GetCSeq: TIdSipCSeqHeader;
@@ -6553,6 +6555,15 @@ begin
   end;
 end;
 
+procedure TIdSipMessage.SetBlankableStringHeader(const HeaderName: String;
+                                                 const Value: String);
+begin
+  if (Value = '') then
+    Self.RemoveAllHeadersNamed(HeaderName)
+  else
+    Self.FirstHeader(HeaderName).Value := Value;
+end;
+
 procedure TIdSipMessage.SetCallID(const Value: String);
 begin
   Self.FirstHeader(CallIDHeaderFull).Value := Value;
@@ -6571,7 +6582,7 @@ end;
 
 procedure TIdSipMessage.SetContentLanguage(const Value: String);
 begin
-  Self.FirstHeader(ContentLanguageHeader).Value := Value;
+  Self.SetBlankableStringHeader(ContentLanguageHeader, Value);
 end;
 
 procedure TIdSipMessage.SetContentLength(Value: Integer);
@@ -6581,7 +6592,7 @@ end;
 
 procedure TIdSipMessage.SetContentType(const Value: String);
 begin
-  Self.FirstHeader(ContentTypeHeaderFull).Value := Value;
+  Self.SetBlankableStringHeader(ContentTypeHeaderFull, Value);
 end;
 
 procedure TIdSipMessage.SetCSeq(Value: TIdSipCSeqHeader);
