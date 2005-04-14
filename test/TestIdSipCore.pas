@@ -624,6 +624,8 @@ type
     procedure TestIsInbound; override;
     procedure TestIsOutboundCall;
     procedure TestMethod;
+    procedure TestNotifyListenersOfEstablishedSession;
+    procedure TestNotifyListenersOfEstablishedSessionInviteHasNoBody;
     procedure TestInboundModifyBeforeFullyEstablished;
     procedure TestInboundModifyReceivesNoAck;
     procedure TestReceiveBye;
@@ -7245,6 +7247,58 @@ begin
   CheckEquals(MethodInvite,
               TIdSipInboundSession.Method,
               'Inbound session; Method');
+end;
+
+procedure TestTIdSipInboundSession.TestNotifyListenersOfEstablishedSession;
+var
+  Answer:         String;
+  AnswerMimeType: String;
+  Listener:       TIdSipTestSessionListener;
+begin
+  Answer         := TIdSipTestResources.BasicSDP('public.booth.org');
+  AnswerMimeType := SdpMimeType;
+  Self.RemoteContentType := SdpMimeType;
+  Self.RemoteDesc        := TIdSipTestResources.BasicSDP('proxy.tessier-ashpool.co.luna');
+  Self.CreateAction;
+
+  Listener := TIdSipTestSessionListener.Create;
+  try
+    Self.Session.AddSessionListener(Listener);
+    Self.Session.AcceptCall(Answer, AnswerMimeType);
+
+    Self.ReceiveAckWithBody(Self.RemoteDesc, Self.RemoteContentType);
+
+    Check(Listener.EstablishedSession, 'No EstablishedSession notification');
+  finally
+    Self.Session.RemoveSessionListener(Listener);
+    Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundSession.TestNotifyListenersOfEstablishedSessionInviteHasNoBody;
+var
+  Answer:         String;
+  AnswerMimeType: String;
+  Listener:       TIdSipTestSessionListener;
+begin
+  Answer         := TIdSipTestResources.BasicSDP('public.booth.org');
+  AnswerMimeType := SdpMimeType;
+  Self.RemoteContentType := '';
+  Self.RemoteDesc        := '';
+  Self.CreateAction;
+
+  Listener := TIdSipTestSessionListener.Create;
+  try
+    Self.Session.AddSessionListener(Listener);
+    Self.Session.AcceptCall(Answer, AnswerMimeType);
+
+    Self.ReceiveAckWithBody(Self.RemoteDesc, Self.RemoteContentType);
+
+    Check(Listener.EstablishedSession, 'No EstablishedSession notification');
+  finally
+    Self.Session.RemoveSessionListener(Listener);
+    Listener.Free;
+  end;
 end;
 
 procedure TestTIdSipInboundSession.TestInboundModifyBeforeFullyEstablished;

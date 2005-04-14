@@ -6272,10 +6272,11 @@ procedure TIdSipInboundSession.OnSuccess(InviteAgent: TIdSipInboundInvite;
 begin
   inherited OnSuccess(InviteAgent, Ack);
 
-  if (InviteAgent = Self.InitialInvite)
-     and (Self.RemoteSessionDescription = '') then begin
-    Self.RemoteSessionDescription := Ack.Body;
-    Self.RemoteMimeType           := Ack.ContentType;
+  if (InviteAgent = Self.InitialInvite) then begin
+    if (Self.RemoteSessionDescription = '') then begin
+      Self.RemoteSessionDescription := Ack.Body;
+      Self.RemoteMimeType           := Ack.ContentType;
+    end;
 
     Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
                                      Self.InitialInvite.InitialRequest.ContentType);
