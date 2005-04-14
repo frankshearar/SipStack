@@ -7597,7 +7597,7 @@ begin
   Self.RemoteMimeType := MimeType;
 
   Session.LocalSessionDescription := Self.LocalDescription;
-  Session.LocalMimeType           := Self.MimeType;
+  Session.LocalMimeType           := Self.LocalMimeType;
 end;
 
 //* TestTIdSipOutboundSession Private methods **********************************
