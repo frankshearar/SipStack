@@ -1023,12 +1023,14 @@ type
   // erase your references to me.
   TIdSipOutboundRegistration = class(TIdSipRegistration)
   private
+    fBindings:  TIdSipContacts;
     fRegistrar: TIdSipUri;
 
     procedure ReissueRequest(Registrar: TIdSipUri;
                              MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
                                      Response: TIdSipResponse);
+    procedure SetBindings(Value: TIdSipContacts);
     procedure SetRegistrar(Value: TIdSipUri);
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
@@ -1053,6 +1055,7 @@ type
     function  ReregisterTime(Expires: Cardinal): Cardinal;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
 
+    property Bindings:  TIdSipContacts read fBindings write SetBindings;
     property Registrar: TIdSipUri read fRegistrar write SetRegistrar;
   end;
 
@@ -1062,22 +1065,14 @@ type
   end;
 
   TIdSipOutboundRegister = class(TIdSipOutboundRegistration)
-  private
-    fBindings:  TIdSipContacts;
-
-    procedure SetBindings(Value: TIdSipContacts);
   public
-    constructor Create(UA: TIdSipAbstractUserAgent); override;
-    destructor  Destroy; override;
-
     procedure Send; override;
-
-    property Bindings: TIdSipContacts read fBindings write SetBindings;
   end;
 
   TIdSipOutboundUnRegister = class(TIdSipOutboundRegistration)
   private
-    fContact: TIdSipUri;
+    fContact:    TIdSipUri;
+    fIsWildCard: Boolean;
 
     procedure SetContact(Value: TIdSipUri);
   protected
@@ -1089,7 +1084,8 @@ type
 
     procedure Send; override;
 
-    property Contact: TIdSipUri read fContact write SetContact;
+    property Contact:    TIdSipUri read fContact write SetContact;
+    property IsWildCard: Boolean   read fIsWildCard write fIsWildCard;
   end;
 
   // I am a SIP session. As such, I represent both what my dialog represents
@@ -5213,12 +5209,14 @@ constructor TIdSipOutboundRegistration.Create(UA: TIdSipAbstractUserAgent);
 begin
   inherited Create(UA);
 
+  Self.fBindings := TIdSipContacts.Create;
   Self.fRegistrar := TIdSipUri.Create('');
 end;
 
 destructor TIdSipOutboundRegistration.Destroy;
 begin
   Self.fRegistrar.Free;
+  Self.fBindings.Free;
 
   inherited Destroy;
 end;
@@ -5522,6 +5520,12 @@ begin
   end;
 end;
 
+procedure TIdSipOutboundRegistration.SetBindings(Value: TIdSipContacts);
+begin
+  Self.fBindings.Clear;
+  Self.fBindings.Add(Value);
+end;
+
 procedure TIdSipOutboundRegistration.SetRegistrar(Value: TIdSipUri);
 begin
   Self.fRegistrar.Uri := Value.Uri;
@@ -5533,17 +5537,11 @@ end;
 //* TIdSipOutboundRegistrationQuery Public methods *****************************
 
 procedure TIdSipOutboundRegistrationQuery.Send;
-var
-  BlankBindings: TIdSipContacts;
 begin
   inherited Send;
 
-  BlankBindings := TIdSipContacts.Create;
-  try
-    Self.RegisterWith(Self.Registrar, BlankBindings);
-  finally
-    BlankBindings.Free;
-  end;
+  Self.Bindings.Clear;
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
 end;
 
 //******************************************************************************
@@ -5551,33 +5549,11 @@ end;
 //******************************************************************************
 //* TIdSipOutboundRegister Public methods **************************************
 
-constructor TIdSipOutboundRegister.Create(UA: TIdSipAbstractUserAgent);
-begin
-  inherited Create(UA);
-
-  Self.fBindings := TIdSipContacts.Create;
-end;
-
-destructor TIdSipOutboundRegister.Destroy;
-begin
-  Self.fBindings.Free;
-
-  inherited Destroy;
-end;
-
 procedure TIdSipOutboundRegister.Send;
 begin
   inherited Send;
 
   Self.RegisterWith(Self.Registrar, Self.Bindings);
-end;
-
-//* TIdSipOutboundRegister Private methods *************************************
-
-procedure TIdSipOutboundRegister.SetBindings(Value: TIdSipContacts);
-begin
-  Self.fBindings.Clear;
-  Self.fBindings.Add(Value);
 end;
 
 //******************************************************************************
@@ -5590,6 +5566,8 @@ begin
   inherited Create(UA);
 
   Self.fContact := TIdSipUri.Create('');
+
+  Self.IsWildCard := false;
 end;
 
 destructor TIdSipOutboundUnRegister.Destroy;
@@ -5600,21 +5578,23 @@ begin
 end;
 
 procedure TIdSipOutboundUnRegister.Send;
-var
-  BindingsRemoval: TIdSipContacts;
 begin
   inherited Send;
 
-  BindingsRemoval := TIdSipContacts.Create;
-  try
-    BindingsRemoval.Add(ContactHeaderFull);
-    BindingsRemoval.First;
-    BindingsRemoval.CurrentContact.Value := ContactWildCard;
-
-    Self.RegisterWith(Self.Registrar, BindingsRemoval);
-  finally
-    BindingsRemoval.Free;
+  if Self.IsWildCard then begin
+    Self.Bindings.Clear;
+    Self.Bindings.Add(ContactHeaderFull);
+    Self.Bindings.First;
+    Self.Bindings.CurrentContact.IsWildCard := true;
+  end else begin
+    Self.Bindings.First;
+    while Self.Bindings.HasNext do begin
+      Self.Bindings.CurrentContact.Expires := ExpireNow;
+      Self.Bindings.Next;
+    end;
   end;
+
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
 end;
 
 //* TIdSipOutboundUnRegister Protected methods *********************************

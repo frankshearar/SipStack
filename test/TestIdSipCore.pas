@@ -515,10 +515,17 @@ type
   end;
 
   TestTIdSipOutboundUnregister = class(TestTIdSipOutboundRegistration)
+  private
+    Bindings: TIdSipContacts;
+    WildCard: Boolean;
   protected
     function CreateAction: TIdSipAction; override;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
-    procedure TestUnregister;
+    procedure TestUnregisterAll;
+    procedure TestUnregisterSeveralContacts;
   end;
 
   TestTIdSipSession = class(TestTIdSipAction,
@@ -6802,6 +6809,23 @@ end;
 //******************************************************************************
 //* TestTIdSipOutboundUnregister                                               *
 //******************************************************************************
+//* TestTIdSipOutboundUnregister Public methods ********************************
+
+procedure TestTIdSipOutboundUnregister.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Bindings := TIdSipContacts.Create;
+  Self.WildCard := false;
+end;
+
+procedure TestTIdSipOutboundUnregister.TearDown;
+begin
+  Self.Bindings.Free;
+
+  inherited TearDown;
+end;
+
 //* TestTIdSipOutboundUnregister Protected methods *****************************
 
 function TestTIdSipOutboundUnregister.CreateAction: TIdSipAction;
@@ -6811,17 +6835,20 @@ begin
   Result := Self.Core.UnregisterFrom(Self.RegistrarAddress);
 
   Reg := Result as TIdSipOutboundUnregister;
+  Reg.Bindings   := Self.Bindings;
+  Reg.IsWildCard := Self.WildCard;
   Reg.AddListener(Self);
   Result.Send;
 end;
 
 //* TestTIdSipOutboundUnregister Published methods *****************************
 
-procedure TestTIdSipOutboundUnregister.TestUnregister;
+procedure TestTIdSipOutboundUnregister.TestUnregisterAll;
 var
   Request: TIdSipRequest;
 begin
   Self.MarkSentRequestCount;
+  Self.WildCard := true;
   Self.CreateAction;
   CheckRequestSent('No request sent');
 
@@ -6836,6 +6863,42 @@ begin
         'First Contact');
   CheckEquals(0, Request.QuickestExpiry,
              'Request expiry');
+end;
+
+procedure TestTIdSipOutboundUnregister.TestUnregisterSeveralContacts;
+var
+  Request: TIdSipRequest;
+begin
+  Self.MarkSentRequestCount;
+  Self.Bindings.Add(ContactHeaderFull).Value := 'sip:case@fried.neurons.org';
+  Self.Bindings.Add(ContactHeaderFull).Value := 'sip:wintermute@tessier-ashpool.co.luna';
+
+  Self.CreateAction;
+  CheckRequestSent('No request sent');
+
+  Request := Self.LastSentRequest;
+  CheckEquals(Self.RegistrarAddress.Uri,
+              Request.RequestUri.Uri,
+              'Request-URI');
+  CheckEquals(MethodRegister, Request.Method, 'Method');
+
+  Request.Contacts.First;
+  Self.Bindings.First;
+
+  while Request.Contacts.HasNext do begin
+    CheckEquals(Self.Bindings.CurrentContact.Value,
+                Request.Contacts.CurrentContact.Value,
+                'Different Contact');
+
+    CheckEquals(0,
+                Request.Contacts.CurrentContact.Expires,
+                'Expiry of ' + Request.Contacts.CurrentContact.Value);
+    Request.Contacts.Next;
+    Self.Bindings.Next;
+  end;
+
+  CheckEquals(Self.Bindings.Count, Request.Contacts.Count,
+             'Contact count');
 end;
 
 //******************************************************************************
