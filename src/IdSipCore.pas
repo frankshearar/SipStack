@@ -1039,18 +1039,19 @@ type
     function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
                                          UsingSecureTransport: Boolean): Boolean; override;
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Bindings: TIdSipContacts); overload;
+    procedure RegisterWith(Registrar: TIdSipUri;
+                           Contact: TIdSipContactHeader); overload;
     procedure SendRequest(Request: TIdSipRequest); overload; override;
-    procedure SendRequestWith(Bindings: TIdSipContacts);
+    procedure Unregister(Registrar: TIdSipUri);
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
     procedure AddListener(const Listener: IIdSipRegistrationListener);
-    procedure RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts); overload;
-    procedure RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader); overload;
     function  ReregisterTime(Expires: Cardinal): Cardinal;
     procedure RemoveListener(const Listener: IIdSipRegistrationListener);
-    procedure Unregister(Registrar: TIdSipUri);
 
     property Registrar: TIdSipUri read fRegistrar write SetRegistrar;
   end;
@@ -5227,32 +5228,6 @@ begin
   Self.Listeners.AddListener(Listener);
 end;
 
-procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Bindings: TIdSipContacts);
-var
-  Request: TIdSipRequest;
-begin
-  Request := Self.CreateRegister(Registrar, Bindings);
-  try
-    Self.SendRequest(Request);
-  finally
-    Request.Free;
-  end;
-end;
-
-procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri; Contact: TIdSipContactHeader);
-var
-  Binding: TIdSipContacts;
-begin
-  Binding := TIdSipContacts.Create;
-  try
-    Binding.Add(Contact);
-
-    Self.RegisterWith(Registrar, Binding);
-  finally
-    Binding.Free;
-  end;
-end;
-
 function TIdSipOutboundRegistration.ReregisterTime(Expires: Cardinal): Cardinal;
 begin
   // Expires magnitude:                  Result
@@ -5275,30 +5250,6 @@ end;
 procedure TIdSipOutboundRegistration.RemoveListener(const Listener: IIdSipRegistrationListener);
 begin
   Self.Listeners.RemoveListener(Listener);
-end;
-
-procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
-var
-  RemovalBindings: TIdSipContacts;
-  Request:         TIdSipRequest;
-begin
-  RemovalBindings := TIdSipContacts.Create;
-  try
-    RemovalBindings.Add(ContactHeaderFull);
-    RemovalBindings.First;
-    RemovalBindings.CurrentContact.IsWildCard := true;
-
-    Request := Self.CreateRegister(Registrar, RemovalBindings);
-    try
-      Request.FirstExpires.NumericValue := 0;
-
-      Self.SendRequest(Request);
-    finally
-      Request.Free;
-    end;
-  finally
-    RemovalBindings.Free;
-  end;
 end;
 
 //* TIdSipOutboundRegistration Protected methods *******************************
@@ -5444,6 +5395,34 @@ begin
   end;
 end;
 
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri;
+                                                  Bindings: TIdSipContacts);
+var
+  Request: TIdSipRequest;
+begin
+  Request := Self.CreateRegister(Registrar, Bindings);
+  try
+    Self.SendRequest(Request);
+  finally
+    Request.Free;
+  end;
+end;
+
+procedure TIdSipOutboundRegistration.RegisterWith(Registrar: TIdSipUri;
+                                                  Contact: TIdSipContactHeader);
+var
+  Binding: TIdSipContacts;
+begin
+  Binding := TIdSipContacts.Create;
+  try
+    Binding.Add(Contact);
+
+    Self.RegisterWith(Registrar, Binding);
+  finally
+    Binding.Free;
+  end;
+end;
+
 procedure TIdSipOutboundRegistration.SendRequest(Request: TIdSipRequest);
 begin
   Self.InitialRequest.Assign(Request);
@@ -5451,15 +5430,27 @@ begin
   inherited SendRequest(Request);
 end;
 
-procedure TIdSipOutboundRegistration.SendRequestWith(Bindings: TIdSipContacts);
+procedure TIdSipOutboundRegistration.Unregister(Registrar: TIdSipUri);
 var
-  Request: TIdSipRequest;
+  RemovalBindings: TIdSipContacts;
+  Request:         TIdSipRequest;
 begin
-  Request := Self.CreateRegister(Self.Registrar, Bindings);
+  RemovalBindings := TIdSipContacts.Create;
   try
-    Self.SendRequest(Request);
+    RemovalBindings.Add(ContactHeaderFull);
+    RemovalBindings.First;
+    RemovalBindings.CurrentContact.IsWildCard := true;
+
+    Request := Self.CreateRegister(Registrar, RemovalBindings);
+    try
+      Request.FirstExpires.NumericValue := 0;
+
+      Self.SendRequest(Request);
+    finally
+      Request.Free;
+    end;
   finally
-    Request.Free;
+    RemovalBindings.Free;
   end;
 end;
 
@@ -5549,7 +5540,7 @@ begin
 
   BlankBindings := TIdSipContacts.Create;
   try
-    Self.SendRequestWith(BlankBindings);
+    Self.RegisterWith(Self.Registrar, BlankBindings);
   finally
     BlankBindings.Free;
   end;
@@ -5578,7 +5569,7 @@ procedure TIdSipOutboundRegister.Send;
 begin
   inherited Send;
 
-  Self.SendRequestWith(Self.Bindings);
+  Self.RegisterWith(Self.Registrar, Self.Bindings);
 end;
 
 //* TIdSipOutboundRegister Private methods *************************************
@@ -5620,7 +5611,7 @@ begin
     BindingsRemoval.First;
     BindingsRemoval.CurrentContact.Value := ContactWildCard;
 
-    Self.SendRequestWith(BindingsRemoval);
+    Self.RegisterWith(Self.Registrar, BindingsRemoval);
   finally
     BindingsRemoval.Free;
   end;
