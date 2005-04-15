@@ -1071,20 +1071,15 @@ type
 
   TIdSipOutboundUnRegister = class(TIdSipOutboundRegistration)
   private
-    fContact:    TIdSipUri;
     fIsWildCard: Boolean;
-
-    procedure SetContact(Value: TIdSipUri);
   protected
     function  CreateRegister(Registrar: TIdSipUri;
                              Bindings: TIdSipContacts): TIdSipRequest; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
-    destructor  Destroy; override;
 
     procedure Send; override;
 
-    property Contact:    TIdSipUri read fContact write SetContact;
     property IsWildCard: Boolean   read fIsWildCard write fIsWildCard;
   end;
 
@@ -5565,16 +5560,7 @@ constructor TIdSipOutboundUnRegister.Create(UA: TIdSipAbstractUserAgent);
 begin
   inherited Create(UA);
 
-  Self.fContact := TIdSipUri.Create('');
-
   Self.IsWildCard := false;
-end;
-
-destructor TIdSipOutboundUnRegister.Destroy;
-begin
-  Self.fContact.Free;
-
-  inherited Destroy;
 end;
 
 procedure TIdSipOutboundUnRegister.Send;
@@ -5586,12 +5572,6 @@ begin
     Self.Bindings.Add(ContactHeaderFull);
     Self.Bindings.First;
     Self.Bindings.CurrentContact.IsWildCard := true;
-  end else begin
-    Self.Bindings.First;
-    while Self.Bindings.HasNext do begin
-      Self.Bindings.CurrentContact.Expires := ExpireNow;
-      Self.Bindings.Next;
-    end;
   end;
 
   Self.RegisterWith(Self.Registrar, Self.Bindings);
@@ -5605,13 +5585,6 @@ begin
   Result := inherited CreateRegister(Registrar, Bindings);
 
   Result.FirstExpires.NumericValue := ExpireNow;
-end;
-
-//* TIdSipOutboundUnRegister Private methods ***********************************
-
-procedure TIdSipOutboundUnRegister.SetContact(Value: TIdSipUri);
-begin
-  Self.fContact.Uri := Value.Uri;
 end;
 
 //******************************************************************************

@@ -6889,16 +6889,17 @@ begin
     CheckEquals(Self.Bindings.CurrentContact.Value,
                 Request.Contacts.CurrentContact.Value,
                 'Different Contact');
-
-    CheckEquals(0,
-                Request.Contacts.CurrentContact.Expires,
-                'Expiry of ' + Request.Contacts.CurrentContact.Value);
     Request.Contacts.Next;
     Self.Bindings.Next;
   end;
 
   CheckEquals(Self.Bindings.Count, Request.Contacts.Count,
              'Contact count');
+
+  CheckEquals(0,
+              Request.QuickestExpiry,
+              'Expiry');
+
 end;
 
 //******************************************************************************
