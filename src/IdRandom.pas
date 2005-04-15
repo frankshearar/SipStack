@@ -32,7 +32,7 @@ type
 
   // I do NOT supply you with cryptographically adequate random numbers!
   // Still, you can make use of me when you write test code and don't care
-  // about the entropy of my  results.
+  // about the entropy of my results.
   TIdBasicRandomNumber = class(TIdRandomNumber)
   private
     BranchLock:  TCriticalSection;
