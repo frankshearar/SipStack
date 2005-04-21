@@ -427,8 +427,8 @@ end;
 //* TIdTimerQueue Private methods **********************************************
 
 procedure TIdTimerQueue.Add(MillisecsWait: Cardinal;
-                                    Event: TIdWait;
-                                    Data: TObject);
+                            Event: TIdWait;
+                            Data: TObject);
 begin
   Self.LockTimer;
   try
