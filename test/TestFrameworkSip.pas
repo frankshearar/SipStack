@@ -722,6 +722,7 @@ begin
   Self.RemoveBody(Self.Invite);
 
   Self.DebugTimer := TIdDebugTimerQueue.Create;
+  Self.DebugTimer.FireImmediateEvents := true;
   Self.Core.Timer := DebugTimer;
 
   // Make sure we have a sane DNS setup so that actions don't terminate
