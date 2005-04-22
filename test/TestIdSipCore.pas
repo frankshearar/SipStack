@@ -240,6 +240,7 @@ type
                            IIdSipActionListener)
   protected
     ActionFailed: Boolean;
+    ActionParam:  TIdSipAction;
     FailReason:   String;
 
     function  CreateAction: TIdSipAction; virtual;
@@ -705,6 +706,7 @@ type
     procedure TestIsOutboundCall;
     procedure TestMethod;
     procedure TestModifyUsesAuthentication;
+    procedure TestNetworkFailuresLookLikeSessionFailures;
     procedure TestReceive2xxSendsAck;
     procedure TestReceive3xxSendsNewInvite;
     procedure TestReceive3xxWithOneContact;
@@ -1815,9 +1817,9 @@ procedure TestTIdSipUserAgent.TestAcceptCallSchedulesResendOk;
 begin
   Self.ReceiveInvite;
   Check(Assigned(Self.Session), 'TU not informed of inbound call');
-  Self.Session.AcceptCall('', '');
-
   Self.MarkSentResponseCount;
+  
+  Self.Session.AcceptCall('', '');
   Self.DebugTimer.TriggerEarliestEvent;
   CheckResponseSent('No OK sent');
   CheckEquals(SIPOK, Self.LastSentResponse.StatusCode, 'Unexpected response sent');
@@ -3784,7 +3786,8 @@ end;
 procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
                                             const Reason: String);
 begin
-  Self.FailReason := Reason;
+  Self.FailReason  := Reason;
+  Self.ActionParam := Action;
 end;
 
 procedure TestTIdSipAction.ReceiveBadExtensionResponse;
@@ -6889,17 +6892,16 @@ begin
     CheckEquals(Self.Bindings.CurrentContact.Value,
                 Request.Contacts.CurrentContact.Value,
                 'Different Contact');
+
+    CheckEquals(0,
+                Request.Contacts.CurrentContact.Expires,
+                'Expiry of ' + Request.Contacts.CurrentContact.Value);
     Request.Contacts.Next;
     Self.Bindings.Next;
   end;
 
   CheckEquals(Self.Bindings.Count, Request.Contacts.Count,
              'Contact count');
-
-  CheckEquals(0,
-              Request.QuickestExpiry,
-              'Expiry');
-
 end;
 
 //******************************************************************************
@@ -8315,6 +8317,17 @@ begin
   finally
     Invite.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.TestNetworkFailuresLookLikeSessionFailures;
+begin
+  Self.Dispatcher.Transport.FailWith := Exception;
+  Self.ReceiveOk(Self.LastSentRequest);
+
+  Check(Assigned(Self.ActionParam), 'OnNetworkFailure didn''t fire');
+  Check(Self.ActionParam = Self.Session,
+        'Session must signal the network error as _its_ error, not the '
+      + 'Invite''s'); 
 end;
 
 procedure TestTIdSipOutboundSession.TestReceive2xxSendsAck;
