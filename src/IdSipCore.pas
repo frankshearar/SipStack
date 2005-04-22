@@ -145,6 +145,8 @@ type
   //   this method. Accessing your reference to the Session after this method
   //   has finished will probably fail with an access violation.
   // * OnEstablishedSession tells us when a session has been fully established.
+  //   For inbound calls this means receipt of an ACK; for outbound calls, the
+  //   receipt of a 200 OK.
   // * OnModifySession fires when we receive an in-dialog INVITE - an INVITE
   //   that offers a modified session description.
   // * OnModifiedSession tells us the answer the remote side gave us for an
@@ -166,7 +168,7 @@ type
 
   // You can use OnAuthenticationChallenge to authenticate to a proxy (or
   // registrar or user agent server). Note that we cannot distinguish between
-  // (1) you contactingthe proxy/registrar for the first time and it asking
+  // (1) you contacting the proxy/registrar for the first time and it asking
   // for credentials, and (2) you offering invalid credentials.
   IIdSipUserAgentListener = interface
     ['{E365D17F-054B-41AB-BB18-0C339715BFA3}']
@@ -369,7 +371,9 @@ type
                                      FoundBlock: TIdSipActionClosure;
                                      NotFoundBlock: TIdSipActionClosure);
     procedure FindSessionAndPerform(Msg: TIdSipMessage;
-                                    Proc: TIdSipSessionProc);
+                                    Block: TIdSipActionClosure); overload;
+    procedure FindSessionAndPerform(Msg: TIdSipMessage;
+                                    Proc: TIdSipSessionProc); overload;
     procedure Perform(Msg: TIdSipMessage; Block: TIdSipActionClosure);
     function  InviteCount: Integer;
     function  OptionsCount: Integer;
@@ -391,6 +395,17 @@ type
     property Actions:   TIdSipActions            read fActions write fActions;
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
   end;
+
+  TIdSipActionSendWait = class(TIdWait)
+  private
+    fAction: TIdSipAction;
+  public
+    procedure Trigger; override;
+
+    property Action: TIdSipAction read fAction write fAction;
+  end;
+
+  TIdSipActionsWaitClass = class of TIdSipActionsWait;
 
   TIdUserAgentClosure = class(TIdSipActionClosure)
   private
@@ -503,6 +518,8 @@ type
     function  AddInboundAction(Request: TIdSipRequest;
                                Receiver: TIdSipTransport): TIdSipAction;
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); virtual;
+    function  CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
+                                   Msg: TIdSipMessage): TIdSipActionsWait;
     function  ListHasUnknownValue(Request: TIdSipRequest;
                                   ValueList: TStrings;
                                   const HeaderName: String): Boolean;
@@ -560,6 +577,8 @@ type
     procedure ScheduleEvent(BlockType: TIdSipActionClosureClass;
                             WaitTime: Cardinal;
                             Copy: TIdSipMessage); overload;
+    procedure ScheduleEvent(WaitTime: Cardinal;
+                            Wait: TIdWait); overload;
     function  Username: String;
     function  UsesModule(ModuleType: TIdSipMessageModuleClass): Boolean;
 
@@ -2140,6 +2159,24 @@ begin
 end;
 
 procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
+                                              Block: TIdSipActionClosure);
+var
+  Session: TIdSipSession;
+begin
+  Self.LockActions;
+  try
+    Session := Self.FindSession(Msg);
+
+    if Assigned(Session) then
+      Block.Execute(Session);
+  finally
+    Self.UnlockActions;
+  end;
+
+  Self.CleanOutTerminatedActions;
+end;
+
+procedure TIdSipActions.FindSessionAndPerform(Msg: TIdSipMessage;
                                               Proc: TIdSipSessionProc);
 var
   Session: TIdSipSession;
@@ -2300,6 +2337,16 @@ begin
   finally
     Block.Free;
   end;
+end;
+
+//******************************************************************************
+//* TIdSipActionSendWait                                                       *
+//******************************************************************************
+//* TIdSipActionSendWait Public methods ****************************************
+
+procedure TIdSipActionSendWait.Trigger;
+begin
+  Self.Action.Send;
 end;
 
 //******************************************************************************
@@ -2860,11 +2907,22 @@ begin
   Self.TimerLock.Acquire;
   try
     if Assigned(Self.Timer) then begin
-      Event := TIdSipActionsWait.Create;
-      Event.Actions   := Self.Actions;
+      Event := Self.CreateActionsClosure(TIdSipActionsWait, Copy);
       Event.BlockType := BlockType;
-      Event.Message   := Copy;
       Self.Timer.AddEvent(WaitTime, Event);
+    end;
+  finally
+    Self.TimerLock.Release;
+  end;
+end;
+
+procedure TIdSipAbstractUserAgent.ScheduleEvent(WaitTime: Cardinal;
+                                                Wait: TIdWait);
+begin
+  Self.TimerLock.Acquire;
+  try
+    if Assigned(Self.Timer) then begin
+      Self.Timer.AddEvent(WaitTime, Wait);
     end;
   finally
     Self.TimerLock.Release;
@@ -2971,6 +3029,14 @@ begin
 
   if OutboundRequest.HasSipsUri then
     OutboundRequest.FirstContact.Address.Scheme := SipsScheme;
+end;
+
+function TIdSipAbstractUserAgent.CreateActionsClosure(ClosureType: TIdSipActionsWaitClass;
+                                                      Msg: TIdSipMessage): TIdSipActionsWait;
+begin
+  Result := ClosureType.Create;
+  Result.Actions := Self.Actions;
+  Result.Message := Msg.Copy;
 end;
 
 function TIdSipAbstractUserAgent.ListHasUnknownValue(Request: TIdSipRequest;
@@ -5572,6 +5638,12 @@ begin
     Self.Bindings.Add(ContactHeaderFull);
     Self.Bindings.First;
     Self.Bindings.CurrentContact.IsWildCard := true;
+  end else begin
+    Self.Bindings.First;
+    while Self.Bindings.HasNext do begin
+      Self.Bindings.CurrentContact.Expires := ExpireNow;
+      Self.Bindings.Next;
+    end;
   end;
 
   Self.RegisterWith(Self.Registrar, Self.Bindings);
