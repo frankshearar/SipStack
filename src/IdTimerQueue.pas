@@ -109,7 +109,7 @@ type
                        Event: TNotifyEvent;
                        Data: TObject = nil); overload;
     procedure AddEvent(MillisecsWait: Cardinal;
-                       Event: TIdWait); overload;
+                       Event: TIdWait); overload; virtual;
     function  Before(TimeA,
                      TimeB: Cardinal): Boolean;
     procedure RemoveEvent(Event: TEvent); overload;
@@ -158,8 +158,12 @@ type
   // TimerQueues.
   TIdDebugTimerQueue = class(TIdTimerQueue)
   private
+    fFireImmediateEvents: Boolean;
+
     function HasScheduledEvent(Event: Pointer): Boolean;
   public
+    procedure AddEvent(MillisecsWait: Cardinal;
+                       Event: TIdWait); override;
     function  EventAt(Index: Integer): TIdWait;
     function  EventCount: Integer;
     procedure LockTimer; override;
@@ -168,6 +172,8 @@ type
     procedure Terminate; override;
     procedure TriggerEarliestEvent; override;
     procedure UnlockTimer; override;
+
+    property FireImmediateEvents: Boolean read fFireImmediateEvents write fFireImmediateEvents;
   end;
 
 const
@@ -616,6 +622,19 @@ end;
 //* TIdDebugTimerQueue                                                         *
 //******************************************************************************
 //* TIdDebugTimerQueue Public methods ******************************************
+
+procedure TIdDebugTimerQueue.AddEvent(MillisecsWait: Cardinal;
+                                      Event: TIdWait);
+begin
+  if Self.FireImmediateEvents
+    and (MillisecsWait = TriggerImmediately) then begin
+    Event.Trigger;
+    Event.Free;
+  end
+  else begin
+    inherited AddEvent(MillisecsWait, Event);
+  end;
+end;
 
 function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
 begin
