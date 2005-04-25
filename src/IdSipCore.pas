@@ -1179,7 +1179,7 @@ type
     function  IsSession: Boolean; override;
     function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModificationInProgress: Boolean;
-    function  Modify(const Offer, ContentType: String): TIdSipOutboundInvite;
+    procedure Modify(const Offer, ContentType: String);
     function  ModifyWaitTime: Cardinal; virtual;
     procedure ReceiveRequest(Request: TIdSipRequest); override;
     procedure RemoveSessionListener(const Listener: IIdSipSessionListener);
@@ -5762,12 +5762,10 @@ begin
   Result := Assigned(Self.ModifyAttempt);
 end;
 
-function TIdSipSession.Modify(const Offer, ContentType: String): TIdSipOutboundInvite;
+procedure TIdSipSession.Modify(const Offer, ContentType: String);
 var
   ReInvite: TIdSipOutboundReInvite;
 begin
-  Result := nil;
-
   if not Self.FullyEstablished then
     raise EIdSipTransactionUser.Create(CannotModifyBeforeEstablished);
 
@@ -5786,7 +5784,6 @@ begin
     ReInvite.Send;
 
     Self.ModifyAttempt := ReInvite;
-    Result := ReInvite;
   finally
     Self.ModifyLock.Release;
   end;
