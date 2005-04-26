@@ -90,6 +90,8 @@ type
                         CurrentBindings: TIdSipContacts);
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
+    procedure SynchronizedNotify(Listeners: TIdNotificationList;
+                                 Notification: TIdNotification);
 
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
@@ -189,6 +191,19 @@ type
     property Data:   TIdEventData         read fData write fData;
     property Event:  Cardinal             read fEvent write fEvent;
     property Stack:  TIdSipStackInterface read fStack write fStack;
+  end;
+
+  // Use me when you want to run something in the context of the VCL/main
+  // thread.
+  TIdSipVclNotifier = class(TObject)
+  private
+    fListeners:    TIdNotificationList;
+    fNotification: TIdNotification;
+  public
+    procedure Notify;
+
+    property Listeners:    TIdNotificationList read fListeners write fListeners;
+    property Notification: TIdNotification     read fNotification write fNotification;
   end;
 
   EInvalidHandle = class(Exception)
@@ -483,7 +498,7 @@ begin
       Notification.Event  := Event;
       Notification.Stack  := Self;
 
-      Self.Listeners.Notify(Notification);
+      Self.SynchronizedNotify(Self.Listeners, Notification);
     finally
       Notification.Free;
     end;
@@ -658,6 +673,22 @@ begin
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
 end;
 
+procedure TIdSipStackInterface.SynchronizedNotify(Listeners: TIdNotificationList;
+                                                  Notification: TIdNotification);
+var
+  Notifier: TIdSipVclNotifier;                                                  
+begin
+  Notifier := TIdSipVclNotifier.Create;
+  try
+    Notifier.Listeners    := Listeners;
+    Notifier.Notification := Notification;
+
+    Self.UserAgent.Timer.Synchronize(Notifier.Notify);
+  finally
+    Notifier.Free;
+  end;
+end;
+
 //******************************************************************************
 //* TIdEventData                                                               *
 //******************************************************************************
@@ -794,6 +825,15 @@ begin
                                            Self.Data);
 end;
 
+//******************************************************************************
+//* TIdSipVclNotifier                                                          *
+//******************************************************************************
+//* TIdSipVclNotifier Public methods *******************************************
+
+procedure TIdSipVclNotifier.Notify;
+begin
+  Self.Listeners.Notify(Self.Notification);
+end;
 
 //******************************************************************************
 //* EInvalidHandle                                                             *
