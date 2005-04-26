@@ -546,6 +546,13 @@ type
 const
   CertPasswd     = 'test';
   DefaultTimeout = 1000;
+  DummySDP       = 'v=0'#13#10
+                 + 'o=sc 1105373135 1105373135 IN IP4 %s'#13#10
+                 + 's=Dummy on hold SDP'#13#10
+                 + 'c=IN IP4 0.0.0.0'#13#10
+                 + 'm=audio 65534 RTP/AVP 0'#13#10
+                 + 'a=rtpmap:0 PCMU/8000'#13#10
+                 + 'a=recvonly'#13#10;
   RootCert       = '..\etc\cacert.pem';
   ServerCert     = '..\etc\newcert.pem';
   ServerKey      = '..\etc\newkey.pem';
