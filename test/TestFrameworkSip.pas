@@ -295,7 +295,6 @@ type
     fModifiedSession:          Boolean;
     fModifySession:            Boolean;
     fNewSession:               Boolean;
-    fModifyParam:              TIdSipInboundInvite;
     fReasonParam:              String;
     fRedirect:                 Boolean;
     fRemoteSessionDescription: String;
@@ -312,7 +311,9 @@ type
                                    const MimeType: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
-    procedure OnModifySession(Modify: TIdSipInboundInvite);
+    procedure OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String);
     procedure OnNewSession(Session: TIdSipSession);
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
@@ -322,7 +323,6 @@ type
     property ModifiedSession:          Boolean             read fModifiedSession;
     property ModifySession:            Boolean             read fModifySession;
     property NewSession:               Boolean             read fNewSession;
-    property ModifyParam:              TIdSipInboundInvite read fModifyParam;
     property Redirect:                 Boolean             read fRedirect;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
     property ReasonParam:              String              read fReasonParam;
@@ -1451,10 +1451,14 @@ begin
     raise Self.FailWith.Create(Self.ClassName + '.OnModifiedSession');
 end;
 
-procedure TIdSipTestSessionListener.OnModifySession(Modify: TIdSipInboundInvite);
+procedure TIdSipTestSessionListener.OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String);
 begin
-  Self.fModifySession := true;
-  Self.fModifyParam   := Modify;
+  Self.fModifySession            := true;
+  Self.fSessionParam             := Session;
+  Self.fRemoteSessionDescription := RemoteSessionDescription;
+  Self.fMimeType                 := MimeType;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnModifiedSession');

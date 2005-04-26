@@ -158,7 +158,9 @@ type
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
-    procedure OnModifySession(Modify: TIdSipInboundInvite);
+    procedure OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
   end;
@@ -1171,13 +1173,15 @@ type
     constructor Create(UA: TIdSipAbstractUserAgent); override;
     destructor  Destroy; override;
 
+    procedure AcceptModify(const LocalSessionDescription: String;
+                           const MimeType: String);
     procedure AddSessionListener(const Listener: IIdSipSessionListener);
     function  IsEarly: Boolean;
     function  DialogEstablished: Boolean;
-    function  DialogMatches(DialogID: TIdSipDialogID): Boolean;
+    function  DialogMatches(DialogID: TIdSipDialogID): Boolean; overload;
+    function  DialogMatches(Msg: TIdSipMessage): Boolean; overload;
     function  IsOutboundCall: Boolean;
     function  IsSession: Boolean; override;
-    function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModificationInProgress: Boolean;
     procedure Modify(const Offer, ContentType: String);
     function  ModifyWaitTime: Cardinal; virtual;
@@ -1213,6 +1217,7 @@ type
 
     function  AcceptCall(const Offer, ContentType: String): String;
     function  IsInbound: Boolean; override;
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     function  ModifyWaitTime: Cardinal; override;
     procedure RedirectCall(NewDestination: TIdSipAddressHeader);
     procedure RejectCallBusy;
@@ -1437,13 +1442,11 @@ type
     property Answer: TIdSipResponse read fAnswer write fAnswer;
   end;
 
-  TIdSipSessionModifySessionMethod = class(TIdNotification)
-  private
-    fModify: TIdSipInboundInvite;
+  // We subclass TIdSipEstablishedSessionMethod solely for reusing
+  // property declarations.
+  TIdSipSessionModifySessionMethod = class(TIdSipEstablishedSessionMethod)
   public
     procedure Run(const Subject: IInterface); override;
-
-    property Modify: TIdSipInboundInvite read fModify write fModify;
   end;
 
   TIdSipUserAgentMethod = class(TIdNotification)
@@ -5695,6 +5698,20 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipSession.AcceptModify(const LocalSessionDescription: String;
+                                     const MimeType: String);
+begin
+  Self.ModifyLock.Acquire;
+  try
+    if Self.ModificationInProgress then begin
+      (Self.ModifyAttempt as TIdSipInboundInvite).Accept(LocalSessionDescription,
+                                                         MimeType);
+    end;
+  finally
+    Self.ModifyLock.Release;
+  end;
+end;
+
 procedure TIdSipSession.AddSessionListener(const Listener: IIdSipSessionListener);
 begin
   Self.Listeners.AddListener(Listener);
@@ -5729,6 +5746,18 @@ begin
   end;
 end;
 
+function TIdSipSession.DialogMatches(Msg: TIdSipMessage): Boolean;
+var
+  DialogID: TIdSipDialogID;
+begin
+  DialogID := Self.CreateDialogIDFrom(Msg);
+  try
+    Result := Self.DialogMatches(DialogID);
+  finally
+    DialogID.Free;
+  end;
+end;
+
 function TIdSipSession.IsOutboundCall: Boolean;
 begin
   Result := not Self.IsInbound;
@@ -5737,24 +5766,6 @@ end;
 function TIdSipSession.IsSession: Boolean;
 begin
   Result := true;
-end;
-
-function TIdSipSession.Match(Msg: TIdSipMessage): Boolean;
-var
-  DialogID: TIdSipDialogID;
-begin
-  if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
-    Result := false
-  else if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
-    Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
-  else begin
-    DialogID := Self.CreateDialogIDFrom(Msg);
-    try
-      Result := Self.DialogMatches(DialogID);
-    finally
-      DialogID.Free;
-    end;
-  end;
 end;
 
 function TIdSipSession.ModificationInProgress: Boolean;
@@ -5879,7 +5890,9 @@ var
 begin
   Notification := TIdSipSessionModifySessionMethod.Create;
   try
-    Notification.Modify := Modify;
+    Notification.MimeType                 := Modify.InitialRequest.ContentType;
+    Notification.RemoteSessionDescription := Modify.InitialRequest.Body;
+    Notification.Session                  := Self;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -6206,6 +6219,32 @@ begin
   Result := true;
 end;
 
+function TIdSipInboundSession.Match(Msg: TIdSipMessage): Boolean;
+var
+  MatchesReInvite: Boolean;
+begin
+  // If the response matches the reinvite, DON'T match the response.
+  // Otherwise, check against the dialog. Yes, that's "response" because
+  // we Waits use messages to find actions for things like
+  // TIdSipInboundInvite.ResendOK.
+  Self.ModifyLock.Acquire;
+  try
+    MatchesReInvite := Self.ModificationInProgress
+                   and Self.ModifyAttempt.Match(Msg);
+  finally
+    Self.ModifyLock.Release;
+  end;
+
+  if Msg.IsRequest and (Msg as TIdSipRequest).IsAck then
+    Result := false
+  else if MatchesReInvite then
+    Result := false
+  else if Msg.IsRequest and (Msg as TIdSipRequest).IsCancel then
+    Result := Self.InitialRequest.MatchCancel(Msg as TIdSipRequest)
+  else
+    Result := Self.DialogMatches(Msg);
+end;
+
 function TIdSipInboundSession.ModifyWaitTime: Cardinal;
 begin
   // 0s <= WaitTime <= 2s, in 10ms units
@@ -6395,7 +6434,6 @@ end;
 
 function TIdSipOutboundSession.Match(Msg: TIdSipMessage): Boolean;
 var
-  DialogID:        TIdSipDialogID;
   MatchesReInvite: Boolean;
 begin
   // If the response matches the reinvite, DON'T match the response.
@@ -6412,14 +6450,8 @@ begin
     Result := false
   else if MatchesReInvite then
     Result := false
-  else begin
-    DialogID := Self.CreateDialogIDFrom(Msg);
-    try
-      Result := Self.DialogMatches(DialogID);
-    finally
-      DialogID.Free;
-    end;
-  end;
+  else
+    Result := Self.DialogMatches(Msg);
 end;
 
 function TIdSipOutboundSession.ModifyWaitTime: Cardinal;
@@ -6883,7 +6915,9 @@ end;
 
 procedure TIdSipSessionModifySessionMethod.Run(const Subject: IInterface);
 begin
-  (Subject as IIdSipSessionListener).OnModifySession(Self.Modify);
+  (Subject as IIdSipSessionListener).OnModifySession(Self.Session,
+                                                     Self.RemoteSessionDescription,
+                                                     Self.MimeType);
 end;
 
 //******************************************************************************

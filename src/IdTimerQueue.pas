@@ -40,6 +40,8 @@ type
     property TriggerTime:   Cardinal read fTriggerTime write fTriggerTime;
   end;
 
+  TIdWaitClass = class of TIdWait;
+
   TIdEventWait = class(TIdWait)
   private
     fEvent: TEvent;
@@ -170,6 +172,7 @@ type
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
     procedure Terminate; override;
+    procedure TriggerAllEventsOfType(WaitType: TIdWaitClass);
     procedure TriggerEarliestEvent; override;
     procedure UnlockTimer; override;
 
@@ -673,6 +676,27 @@ begin
   inherited Terminate;
 
   Self.Free;
+end;
+
+procedure TIdDebugTimerQueue.TriggerAllEventsOfType(WaitType: TIdWaitClass);
+var
+  NextEvent: TIdWait;
+begin
+  Self.LockTimer;
+  try
+    NextEvent := Self.EarliestEvent;
+    while Assigned(NextEvent) do begin
+      if (NextEvent is WaitType) then
+        NextEvent.Trigger;
+
+      Self.EventList.Remove(NextEvent);
+      NextEvent := Self.EarliestEvent;
+    end;
+
+    Self.WaitEvent.ResetEvent;
+  finally
+    Self.UnlockTimer;
+  end;
 end;
 
 procedure TIdDebugTimerQueue.TriggerEarliestEvent;

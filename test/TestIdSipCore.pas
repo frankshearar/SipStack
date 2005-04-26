@@ -135,7 +135,9 @@ type
                             Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
-    procedure OnModifySession(Modify: TIdSipInboundInvite);
+    procedure OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
@@ -532,12 +534,13 @@ type
   TestTIdSipSession = class(TestTIdSipAction,
                             IIdSipSessionListener)
   protected
-    InboundModify:             TIdSipInboundInvite;
+    MimeType:                  String;
     MultiStreamSdp:            TIdSdpPayload;
     OnEndedSessionFired:       Boolean;
     OnEstablishedSessionFired: Boolean;
     OnModifiedSessionFired:    Boolean;
     OnModifySessionFired:      Boolean;
+    RemoteSessionDescription:  String;
     SimpleSdp:                 TIdSdpPayload;
 
     procedure CheckResendWaitTime(Milliseconds: Cardinal;
@@ -554,7 +557,9 @@ type
                                    const MimeType: String); virtual;
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse); virtual;
-    procedure OnModifySession(Modify: TIdSipInboundInvite); virtual;
+    procedure OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String); virtual;
     procedure ReceiveRemoteReInvite(Session: TIdSipSession);
   public
     procedure SetUp; override;
@@ -862,11 +867,10 @@ type
 
   TestTIdSipSessionModifySessionMethod = class(TestSessionMethod)
   private
-    Modify: TIdSipInboundInvite;
-    Method: TIdSipSessionModifySessionMethod;
+    Session: TIdSipOutboundSession;
+    Method:  TIdSipSessionModifySessionMethod;
   public
     procedure SetUp; override;
-    procedure TearDown; override;
   published
     procedure TestRun;
   end;
@@ -1742,7 +1746,9 @@ procedure TestTIdSipUserAgent.OnModifiedSession(Session: TIdSipSession;
 begin
 end;
 
-procedure TestTIdSipUserAgent.OnModifySession(Modify: TIdSipInboundInvite);
+procedure TestTIdSipUserAgent.OnModifySession(Session: TIdSipSession;
+                                              const RemoteSessionDescription: String;
+                                              const MimeType: String);
 begin
 end;
 
@@ -4125,11 +4131,12 @@ begin
   Self.MultiStreamSdp := Self.CreateMultiStreamSdp;
   Self.SimpleSdp      := Self.CreateSimpleSdp;
 
-  Self.InboundModify             := nil;
+  Self.MimeType                  := '';
   Self.OnEndedSessionFired       := false;
   Self.OnEstablishedSessionFired := false;
   Self.OnModifiedSessionFired    := false;
   Self.OnModifySessionFired      := false;
+  Self.RemoteSessionDescription  := '';
 end;
 
 procedure TestTIdSipSession.TearDown;
@@ -4260,10 +4267,14 @@ begin
   Self.OnModifiedSessionFired := true;
 end;
 
-procedure TestTIdSipSession.OnModifySession(Modify: TIdSipInboundInvite);
+procedure TestTIdSipSession.OnModifySession(Session: TIdSipSession;
+                                            const RemoteSessionDescription: String;
+                                            const MimeType: String);
 begin
   Self.OnModifySessionFired := true;
-  Self.InboundModify := Modify;
+
+  Self.RemoteSessionDescription := RemoteSessionDescription;
+  Self.MimeType                 := MimeType;
 end;
 
 procedure TestTIdSipSession.ReceiveRemoteReInvite(Session: TIdSipSession);
@@ -4274,6 +4285,10 @@ begin
   Self.Invite.From.Tag        := Session.Dialog.ID.RemoteTag;
   Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
   Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
+
+  Self.Invite.Body          := Self.SimpleSdp.AsString;
+  Self.Invite.ContentType   := SdpMimeType;
+  Self.Invite.ContentLength := Length(Self.Invite.Body);
 
   // Now it represents an INVITE received from the network
   Self.ReceiveInvite;
@@ -4289,17 +4304,16 @@ begin
   Session := Self.CreateAndEstablishSession;
   Self.ReceiveRemoteReInvite(Session);
 
-  Check(Assigned(Self.InboundModify),
+  Check(Self.OnModifySessionFired
         Session.ClassName + ': OnModifySession didn''t fire');
 
-  Self.InboundModify.Accept('', '');
+  Session.AcceptModify('', '');
 
-  Ack := Self.InboundModify.InitialRequest.AckFor(Self.LastSentResponse);
+  // The last request was the inbound re-INVITE.
+  Ack := Self.Dispatcher.Transport.LastRequest.AckFor(Self.LastSentResponse);
   try
     Check(not Session.Match(Ack),
           Session.ClassName + ': ACK mustn''t match the Session');
-    Check(Self.InboundModify.Match(Ack),
-          Session.ClassName + ': ACK doesn''t match the InboundModify');
   finally
     Ack.Free;
   end;
@@ -4315,6 +4329,13 @@ begin
   Self.ReceiveRemoteReInvite(Session);
   Check(Self.OnModifySessionFired,
         Session.ClassName + ': OnModifySession didn''t fire');
+
+  CheckEquals(Self.SimpleSdp.AsString,
+              Self.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(SdpMimeType,
+              Self.MimeType,
+              'MimeType');
 end;
 
 procedure TestTIdSipSession.TestIsSession;
@@ -4633,7 +4654,7 @@ begin
     Session := Self.CreateAndEstablishSession;
 
     Self.ReceiveRemoteReInvite(Session);
-    FirstInvite.Assign(Self.InboundModify.InitialRequest);
+    FirstInvite.Assign(Self.Dispatcher.Transport.LastRequest);
     Check(Self.OnModifySessionFired,
           Session.ClassName + ': OnModifySession didn''t fire');
 
@@ -4653,7 +4674,7 @@ begin
           Session.ClassName + ': Modification should still be ongoing');
 
     Self.MarkSentResponseCount;
-    Self.InboundModify.Accept('', '');
+    Session.AcceptModify('', '');
 
     CheckResponseSent(Session.ClassName + ': No 200 response sent');
     CheckEquals(SIPOK,
@@ -4661,8 +4682,9 @@ begin
                 Session.ClassName + ': Unexpected response to 1st INVITE');
     Check(FirstInvite.Match(Self.LastSentResponse),
           Session.ClassName + ': Response doesn''t match 1st INVITE');
-    Self.ReceiveAckFor(Self.InboundModify.InitialRequest,
-                        Self.LastSentResponse);
+
+    Self.ReceiveAckFor(FirstInvite,
+                       Self.LastSentResponse);
     Check(not Session.ModificationInProgress,
           Session.ClassName + ': Modification should have finished');
   finally
@@ -7421,8 +7443,6 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.TestInboundModifyReceivesNoAck;
-var
-  I: Integer;
 begin
   // <---    INVITE   ---
   //  --- 180 Ringing --->
@@ -7440,18 +7460,19 @@ begin
   Self.ReceiveRemoteReInvite(Self.Session);
   Check(Self.OnModifySessionFired,
         'OnModifySession didn''t fire');
-  Self.InboundModify.Accept('', '');
+  Self.Session.AcceptModify('', '');
 
   Self.MarkSentRequestCount;
-  // Time out waiting for the ACK
-  for I := 1 to 7 do
-    Self.InboundModify.ResendOk;
 
-  CheckRequestSent('Requests sent');
+  // This will fire all Resend OK attempts (and possibly some other events),
+  // making the inbound INVITE fail.
+  Self.DebugTimer.TriggerAllEventsOfType(TIdSipActionsWait);
+
+  CheckRequestSent('No BYE sent to terminate the dialog');
 
   CheckEquals(MethodBye,
               Self.LastSentRequest.Method,
-              'Request');
+              'Unexpected request sent');
 end;
 
 procedure TestTIdSipInboundSession.TestReceiveBye;
@@ -9300,23 +9321,18 @@ var
 begin
   inherited SetUp;
 
+  Self.Method := TIdSipSessionModifySessionMethod.Create;
+
   Invite := TIdSipTestResources.CreateBasicRequest;
   try
-    Self.Modify := Self.UA.AddInboundInvite(Invite);
+    Self.Session := Self.UA.Call(Invite.ToHeader, '', '');
+
+    Self.Method.RemoteSessionDescription := Invite.Body;
+    Self.Method.Session                  := Self.Session;
+    Self.Method.MimeType                 := Invite.ContentType;
   finally
     Invite.Free;
   end;
-
-  Self.Method := TIdSipSessionModifySessionMethod.Create;
-
-  Self.Method.Modify := Self.Modify;
-end;
-
-procedure TestTIdSipSessionModifySessionMethod.TearDown;
-begin
-  Self.Method.Free;
-
-  inherited TearDown;
 end;
 
 //* TestTIdSipSessionModifySessionMethod Published methods *********************
@@ -9329,8 +9345,14 @@ begin
   try
     Self.Method.Run(L);
 
-    Check(Self.Method.Modify = L.ModifyParam,
+    Check(Self.Method.Session = L.SessionParam,
           'Modify param');
+    CheckEquals(Self.Method.MimeType,
+                L.MimeType,
+                'MimeType');
+    CheckEquals(Self.Method.RemoteSessionDescription,
+                L.RemoteSessionDescription,
+                'RemoteSessionDescription');
   finally
     L.Free;
   end;
