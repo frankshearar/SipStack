@@ -935,6 +935,7 @@ type
 
 const
   DefaultTimeout = 5000;
+
   // SFTF: Sip Foundry Test Framework. cf. http://www.sipfoundry.org/sftf/
   SFTFInvite = 'INVITE sip:abc@80.168.137.82 SIP/2.0'#13#10
              + 'Via: SIP/2.0/UDP 81.86.64.25;branch=z9hG4bK-SCb-0-1105373135.55-81.86.64.25-first-request;rport=5060;received=81.86.64.25'#13#10
@@ -4265,6 +4266,9 @@ procedure TestTIdSipSession.OnModifiedSession(Session: TIdSipSession;
                                               Answer: TIdSipResponse);
 begin
   Self.OnModifiedSessionFired := true;
+
+  Self.RemoteSessionDescription := Answer.Body;
+  Self.MimeType                 := Answer.ContentType;
 end;
 
 procedure TestTIdSipSession.OnModifySession(Session: TIdSipSession;
@@ -4286,8 +4290,8 @@ begin
   Self.Invite.ToHeader.Tag    := Session.Dialog.ID.LocalTag;
   Self.Invite.CSeq.SequenceNo := Session.Dialog.RemoteSequenceNo + 1;
 
-  Self.Invite.Body          := Self.SimpleSdp.AsString;
-  Self.Invite.ContentType   := SdpMimeType;
+  Self.Invite.Body          := Self.RemoteSessionDescription;
+  Self.Invite.ContentType   := Self.MimeType;
   Self.Invite.ContentLength := Length(Self.Invite.Body);
 
   // Now it represents an INVITE received from the network
@@ -4321,21 +4325,36 @@ end;
 
 procedure TestTIdSipSession.TestInboundModify;
 var
-  Session: TIdSipSession;
+  LocalSessionDescription: String;
+  LocalMimeType:           String;
+  Session:                 TIdSipSession;
 begin
   Session := Self.CreateAction as TIdSipSession;
   Self.EstablishSession(Session);
 
+  LocalMimeType                 := SdpMimeType;
+  LocalSessionDescription       := Format(DummySDP, ['127.0.0.1']);
+  Self.MimeType                 := SdpMimeType;
+  Self.RemoteSessionDescription := Self.SimpleSdp.AsString;
+
   Self.ReceiveRemoteReInvite(Session);
+  Session.AcceptModify(LocalSessionDescription, LocalMimeType);
+  Self.ReceiveAck;
+
   Check(Self.OnModifySessionFired,
         Session.ClassName + ': OnModifySession didn''t fire');
-
-  CheckEquals(Self.SimpleSdp.AsString,
-              Self.RemoteSessionDescription,
-              'RemoteSessionDescription');
-  CheckEquals(SdpMimeType,
-              Self.MimeType,
-              'MimeType');
+  CheckEquals(MimeType,
+              Session.LocalMimeType,
+              'Session.LocalMimeType');
+  CheckEquals(LocalSessionDescription,
+              Session.LocalSessionDescription,
+              'Session.LocalSessionDescription');
+  CheckEquals(Self.MimeType,
+              Session.RemoteMimeType,
+              'Session.RemoteMimeType');
+  CheckEquals(Self.RemoteSessionDescription,
+              Session.RemoteSessionDescription,
+              'Session.RemoteSessionDescription');
 end;
 
 procedure TestTIdSipSession.TestIsSession;
@@ -4628,12 +4647,33 @@ begin
   Self.EstablishSession(Session);
 
   Self.MarkSentRequestCount;
-  Session.Modify('', '');
+  Session.Modify(Self.SimpleSdp.AsString, SdpMimeType);
   CheckRequestSent(Session.ClassName + ': No INVITE sent');
 
-  Self.ReceiveOk(Self.LastSentRequest);
+  Self.ReceiveOkWithBody(Self.LastSentRequest,
+                         Format(DummySDP, ['127.0.0.1']),
+                         SdpMimeType);
   Check(Self.OnModifiedSessionFired,
         Session.ClassName + ': OnModifiedSession didn''t fire');
+
+  CheckEquals(Self.SimpleSdp.AsString,
+              Session.LocalSessionDescription,
+              'Session.LocalSessionDescription');
+  CheckEquals(SdpMimeType,
+              Session.LocalMimeType,
+              'Session.LocalMimeType');
+  CheckEquals(Format(DummySDP, ['127.0.0.1']),
+              Self.RemoteSessionDescription,
+              'RemoteSessionDescription');
+  CheckEquals(SdpMimeType,
+              Self.MimeType,
+              'MimeType');
+  CheckEquals(Self.RemoteSessionDescription,
+              Session.RemoteSessionDescription,
+              'Session.RemoteSessionDescription');
+  CheckEquals(Self.MimeType,
+              Session.RemoteMimeType,
+              'Session.RemoteMimeType');
 end;
 
 procedure TestTIdSipSession.TestRejectInviteWhenInboundModificationInProgress;

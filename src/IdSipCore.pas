@@ -817,13 +817,15 @@ type
   // listeners) once I receive an ACK to my 2xx response.
   TIdSipInboundInvite = class(TIdSipInvite)
   private
-    fMaxResendInterval: Cardinal; // in milliseconds
-    InviteModule:       TIdSipInviteModule;
-    LastResponse:       TIdSipResponse;
-    LocalTag:           String;
-    ReceivedAck:        Boolean;
-    ResendInterval:     Cardinal;
-    SentFinalResponse:  Boolean;
+    fLocalMimeType:           String;
+    fLocalSessionDescription: String;
+    fMaxResendInterval:       Cardinal; // in milliseconds
+    InviteModule:             TIdSipInviteModule;
+    LastResponse:             TIdSipResponse;
+    LocalTag:                 String;
+    ReceivedAck:              Boolean;
+    ResendInterval:           Cardinal;
+    SentFinalResponse:        Boolean;
 
     function  GetInitialResendInterval: Cardinal;
     function  GetProgressResendInterval: Cardinal;
@@ -855,9 +857,11 @@ type
     procedure Terminate; override;
     procedure TimeOut;
 
-    property InitialResendInterval:  Cardinal read GetInitialResendInterval;
-    property MaxResendInterval:      Cardinal read fMaxResendInterval write fMaxResendInterval;
-    property ProgressResendInterval: Cardinal read GetProgressResendInterval;
+    property LocalSessionDescription: String   read fLocalSessionDescription;
+    property LocalMimeType:           String   read fLocalMimeType;
+    property InitialResendInterval:   Cardinal read GetInitialResendInterval;
+    property MaxResendInterval:       Cardinal read fMaxResendInterval write fMaxResendInterval;
+    property ProgressResendInterval:  Cardinal read GetProgressResendInterval;
   end;
 
   // I encapsulate the call flows around an outbound INVITE, both in-dialog
@@ -4169,6 +4173,9 @@ begin
   Self.ResendInterval    := Self.InitialResendInterval;
   Self.MaxResendInterval := 64*Self.ResendInterval;
 
+  Self.fLocalSessionDescription := Offer;
+  Self.fLocalMimeType           := ContentType;
+
   Ok := Self.UA.CreateResponse(Self.InitialRequest, SIPOK);
   try
     Ok.Body          := Offer;
@@ -5970,8 +5977,14 @@ begin
   // TODO: Notify listeners of modification, possibly
   Self.ModifyLock.Acquire;
   try
-    if (InviteAgent = Self.ModifyAttempt) then
+    if (InviteAgent = Self.ModifyAttempt) then begin
       Self.ModifyAttempt := nil;
+
+      Self.LocalSessionDescription  := InviteAgent.LocalSessionDescription;
+      Self.LocalMimeType            := InviteAgent.LocalMimeType;
+      Self.RemoteSessionDescription := Ack.Body;
+      Self.RemoteMimeType           := Ack.ContentType;
+    end;
   finally
     Self.ModifyLock.Release;
   end;
@@ -5990,8 +6003,14 @@ begin
 
   Self.ModifyLock.Acquire;
   try
-    if (InviteAgent = Self.ModifyAttempt) then
+    if (InviteAgent = Self.ModifyAttempt) then begin
       Self.ModifyAttempt := nil;
+
+      Self.LocalSessionDescription  := InviteAgent.InitialRequest.Body;
+      Self.LocalMimeType            := InviteAgent.InitialRequest.ContentType;
+      Self.RemoteSessionDescription := Response.Body;
+      Self.RemoteMimeType           := Response.ContentType;
+    end;
   finally
     Self.ModifyLock.Release;
   end;
