@@ -132,7 +132,8 @@ type
                                         var Password: String;
                                         var TryAgain: Boolean);
     procedure OnChanged(Observed: TObject);
-    procedure OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+    procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                        Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
@@ -146,10 +147,13 @@ type
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
-    procedure OnInboundCall(Session: TIdSipInboundSession);
+    procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                            Session: TIdSipInboundSession);
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
-    procedure OnModifySession(Modify: TIdSipInboundInvite);
+    procedure OnModifySession(Session: TIdSipSession;
+                              const RemoteSessionDescription: String;
+                              const MimeType: String);
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
@@ -207,7 +211,7 @@ constructor TrnidSpike.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.RunningPort := 25060;
+  Self.RunningPort := 35060;
   Self.CreateUi;
 
   TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTcpTransport);
@@ -219,14 +223,15 @@ begin
   Self.Transports := TObjectList.Create(true);
   Self.RTPProfile := TIdAudioVisualProfile.Create;
 
-  Self.Dispatch := TIdSipTransactionDispatcher.Create;
-  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
-  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
-  Self.Dispatch.Timer := Self.Timer;
-
   Self.Locator := TIdSipIndyLocator.Create;
   Self.Locator.NameServer := '62.241.160.200';
   Self.Locator.Port := 53;
+
+  Self.Dispatch := TIdSipTransactionDispatcher.Create;
+  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
+  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
+  Self.Dispatch.Locator := Self.Locator;
+  Self.Dispatch.Timer := Self.Timer;
 
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;
@@ -262,8 +267,8 @@ begin
   Self.PayloadProcessor.Free;
 
   Self.UA.Free;
-  Self.Locator.Free;
   Self.Dispatch.Free;
+  Self.Locator.Free;
 
   Self.TextLock.Free;
   Self.CounterLock.Free;
@@ -300,7 +305,8 @@ begin
   Result := TransportType.Create;
   Self.Transports.Add(Result);
   Result.HostName := Self.HostName.Text;
-  Result.Port     := RunningPort;
+  Result.Port     := Self.RunningPort;
+  Result.Timer    := Self.Timer;
 
   if (GStack.LocalAddress <> LocalHostName) then
     Result.Address := GStack.LocalAddress
@@ -396,7 +402,8 @@ begin
   Self.SessionCounter.Caption := IntToStr((Observed as TIdSipUserAgent).SessionCount);
 end;
 
-procedure TrnidSpike.OnDroppedUnmatchedMessage(Message: TIdSipMessage;
+procedure TrnidSpike.OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
+                                               Message: TIdSipMessage;
                                                Receiver: TIdSipTransport);
 const
   LogLine = 'Dropped unmatched message: %s';
@@ -417,7 +424,7 @@ procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession;
                                           const RemoteSessionDescription: String;
                                           const MimeType: String);
 begin
-//  Self.PayloadProcessor.SetRemoteDescription('');
+  Self.PayloadProcessor.SetRemoteDescription(RemoteSessionDescription);
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -440,7 +447,6 @@ end;
 procedure TrnidSpike.OnException(E: Exception;
                                  const Reason: String);
 begin
-
   Self.Lock.Acquire;
   try
     Self.Log.Lines.Add('Exception ' + E.ClassName + ': ' + E.Message
@@ -482,11 +488,13 @@ begin
   end;
 end;
 
-procedure TrnidSpike.OnInboundCall(Session: TIdSipInboundSession);
+procedure TrnidSpike.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
+                                   Session: TIdSipInboundSession);
 begin
   Session.AddSessionListener(Self);
   Self.LatestSession := Session;
   Self.Answer.Enabled := true;
+  Self.Answer.Click;
 end;
 
 procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
@@ -494,10 +502,12 @@ procedure TrnidSpike.OnModifiedSession(Session: TIdSipSession;
 begin
 end;
 
-procedure TrnidSpike.OnModifySession(Modify: TIdSipInboundInvite);
+procedure TrnidSpike.OnModifySession(Session: TIdSipSession;
+                                     const RemoteSessionDescription: String;
+                                     const MimeType: String);
 begin
-  Modify.Accept(Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address),
-                SdpMimeType);
+  Session.AcceptModify(Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address),
+                       SdpMimeType);
 end;
 
 procedure TrnidSpike.OnNewData(Data: TIdRTPPayload;
@@ -696,8 +706,7 @@ begin
     Self.LatestSession := Self.UA.Call(Target,
                             SDP,
                             SdpMimeType);
-
-    Self.LatestSession.AddSessionListener(Self);
+    Self.LatestSession.AddSessionListener(Self);                        
     Self.LatestSession.Send;
   finally
     Target.Free;

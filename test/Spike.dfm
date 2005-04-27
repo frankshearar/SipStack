@@ -210,7 +210,7 @@ object rnidSpike: TrnidSpike
         Width = 290
         Height = 21
         TabOrder = 0
-        Text = 'sip:frank@roke.angband.za.org'
+        Text = 'sip:192.168.1.132'
       end
       object Invite: TButton
         Left = 0
@@ -273,7 +273,7 @@ object rnidSpike: TrnidSpike
         Width = 142
         Height = 21
         TabOrder = 9
-        Text = 'sip:frank@angband.za.org'
+        Text = 'sip:frank@192.168.1.131:25060'
         OnChange = ContactUriChange
       end
       object HostName: TEdit
@@ -349,7 +349,7 @@ object rnidSpike: TrnidSpike
         Width = 142
         Height = 21
         TabOrder = 14
-        Text = 'sip:frank@angband.za.org'
+        Text = 'sip:frank@192.168.1.131:25060'
         OnChange = FromUriChange
       end
     end
