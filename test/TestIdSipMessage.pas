@@ -35,7 +35,6 @@ type
                                   UseCSeqMethod: Boolean): Boolean; override;
     procedure ParseStartLine(Parser: TIdSipParser); override;
   public
-    function  Copy: TIdSipMessage; override;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
@@ -123,6 +122,7 @@ type
     procedure TestAsStringNoMaxForwardsSet;
     procedure TestAuthorizationFor;
     procedure TestCopy;
+    procedure TestCopyMessageMutatedFromString;
     procedure TestCreateCancel;
     procedure TestCreateCancelANonInviteRequest;
     procedure TestCreateCancelWithProxyRequire;
@@ -415,11 +415,6 @@ end;
 //* TIdSipTrivialMessage                                                       *
 //******************************************************************************
 //* TIdSipTrivialMessage Public methods ****************************************
-
-function TIdSipTrivialMessage.Copy: TIdSipMessage;
-begin
-  raise Exception.Create('Don''t call TIdSipTrivialMessage.Copy');
-end;
 
 function TIdSipTrivialMessage.Equals(Msg: TIdSipMessage): Boolean;
 begin
@@ -1599,6 +1594,28 @@ begin
     end;
   finally
     Cancel.Free;
+  end;
+end;
+
+procedure TestTIdSipRequest.TestCopyMessageMutatedFromString;
+var
+  Copy:     TIdSipRequest;
+  Original: TIdSipRequest;
+begin
+  Original := TIdSipMessage.ReadRequestFrom(LocalLoopRequest) as TIdSipRequest;
+  try
+    Original.Method := Original.Method + '1';
+
+    Copy := Original.Copy as TIdSipRequest;
+    try
+      CheckEquals(Original.Method,
+                  Copy.Method,
+                  'Newly changed values not copied properly');
+    finally
+      Copy.Free;
+    end;
+  finally
+    Original.Free;
   end;
 end;
 

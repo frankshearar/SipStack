@@ -1064,7 +1064,7 @@ type
     function  AsString: String;
     procedure ClearHeaders;
     function  ContactCount: Cardinal;
-    function  Copy: TIdSipMessage; virtual; abstract;
+    function  Copy: TIdSipMessage;
     procedure CopyHeaders(Src: TIdSipMessage;
                           const HeaderName: String);
     function  FirstContact: TIdSipContactHeader;
@@ -1145,7 +1145,6 @@ type
     function  AddressOfRecord: String;
     procedure Assign(Src: TPersistent); override;
     function  AuthorizationFor(const Realm: String): TIdSipAuthorizationHeader;
-    function  Copy: TIdSipMessage; override;
     function  CreateCancel: TIdSipRequest;
     function  DefaultMaxForwards: Cardinal;
     function  DestinationUri: String;
@@ -1217,7 +1216,6 @@ type
     procedure Accept(Visitor: IIdSipMessageVisitor); override;
     procedure Assign(Src: TPersistent); override;
     function  AuthenticateHeader: TIdSipAuthenticateHeader;
-    function  Copy: TIdSipMessage; override;
     function  Description: String;
     function  Equals(Msg: TIdSipMessage): Boolean; override;
     function  FirstAuthenticationInfo: TIdSipAuthenticationInfoHeader;
@@ -6068,6 +6066,30 @@ begin
   end;
 end;
 
+function TIdSipMessage.Copy: TIdSipMessage;
+var
+  S: TStream;
+begin
+  if (Self.RawMessage <> '') then begin
+    S := TStringStream.Create(Self.RawMessage);
+    try
+      Result := Self.CreateAndReadMessageFrom(S, TIdSipMessageClass(Self.ClassType));
+    finally
+      S.Free;
+    end;
+
+    // Sometimes we've read in a message from a stream, and we've changed some
+    // details of the message. The below, while pretty wasteful (it (re)copies
+    // ALL details, not just the changed details), makes sure that
+    // Self.Equals(Result) remains true.
+    Result.Assign(Self);
+  end
+  else begin
+    Result := TIdSipMessageClass(Self.ClassType).Create;
+    Result.Assign(Self);
+  end;
+end;
+
 procedure TIdSipMessage.CopyHeaders(Src: TIdSipMessage;
                                     const HeaderName: String);
 var
@@ -6721,18 +6743,6 @@ begin
                                          AuthorizationHeader) as TIdSipAuthorizationHeader;
 end;
 
-function TIdSipRequest.Copy: TIdSipMessage;
-var
-  SelfAsString: String;
-begin
-  if (Self.RawMessage <> '') then
-    SelfAsString := Self.RawMessage
-  else
-    SelfAsString := Self.AsString;
-
-  Result := Self.ReadRequestFrom(SelfAsString)
-end;  
-
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
   Assert(Self.IsInvite, 'Only INVITE requests may be CANCELled');
@@ -7290,24 +7300,6 @@ begin
     Result := Self.FirstWWWAuthenticate
   else
     Result := nil;
-end;
-
-function TIdSipResponse.Copy: TIdSipMessage;
-var
-  SelfAsString: String;
-begin
-  if (Self.RawMessage <> '') then
-    SelfAsString := Self.RawMessage
-  else
-    SelfAsString := Self.AsString;
-
-  Result := Self.ReadResponseFrom(SelfAsString);
-
-  // Sometimes we've read in a message from a stream, and we've changed some
-  // details of the message. The below, while pretty wasteful (it (re)copies
-  // ALL details, not just the changed details), makes sure that
-  // Self.Equals(Result) remains true.
-  Result.Assign(Self);
 end;
 
 function TIdSipResponse.Description: String;
