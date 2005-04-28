@@ -20,6 +20,7 @@ type
   TIdSipChars = set of Char;
 
 type
+  TIdSipMessage = class;
   TIdSipRequest = class;
   TIdSipResponse = class;
 
@@ -44,7 +45,8 @@ type
 
   TIdSipNotifyEvent = TNotifyEvent;
   TIdSipRequestEvent = procedure(Sender: TObject;
-                                 R: TIdSipRequest) of object;
+                                 R: TIdSipRequest;
+                                 ReceivedFrom: TIdSipConnectionBindings) of object;
   TIdSipResponseEvent = procedure(Sender: TObject;
                                   R: TIdSipResponse;
                                   ReceivedFrom: TIdSipConnectionBindings) of object;
@@ -974,7 +976,6 @@ type
   EBadMessageClass = class of EBadMessage;
 
   TIdSipParser = class;
-  TIdSipMessage = class;
   TIdSipMessageClass = class of TIdSipMessage;
 
   TIdSipMessage = class(TPersistent)
@@ -7301,6 +7302,7 @@ begin
     SelfAsString := Self.AsString;
 
   Result := Self.ReadResponseFrom(SelfAsString);
+  Result.Assign(Self);
 end;
 
 function TIdSipResponse.Description: String;

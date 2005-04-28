@@ -201,6 +201,7 @@ type
     procedure TestAuthenticateHeaderWithProxy;
     procedure TestAuthenticateHeaderWithUser;
     procedure TestCopy;
+    procedure TestCopyMessageMutatedFromString;
     procedure TestEqualsComplexMessages;
     procedure TestEqualsDifferentBodies;
     procedure TestEqualsDifferentHeaders;
@@ -2851,6 +2852,28 @@ begin
     Check(Self.Response.Equals(Copy), 'Self.Response = Copy');
   finally
     Copy.Free;
+  end;
+end;
+
+procedure TestTIdSipResponse.TestCopyMessageMutatedFromString;
+var
+  Copy:     TIdSipResponse;
+  Original: TIdSipResponse;
+begin
+  Original := TIdSipMessage.ReadResponseFrom(LocalLoopResponse) as TIdSipResponse;
+  try
+    Original.StatusCode := Original.StatusCode + 1;
+
+    Copy := Original.Copy as TIdSipResponse;
+    try
+      CheckEquals(Original.StatusCode,
+                  Copy.StatusCode,
+                  'Newly changed values not copied properly');
+    finally
+      Copy.Free;
+    end;
+  finally
+    Original.Free;
   end;
 end;
 
