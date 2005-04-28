@@ -7302,6 +7302,11 @@ begin
     SelfAsString := Self.AsString;
 
   Result := Self.ReadResponseFrom(SelfAsString);
+
+  // Sometimes we've read in a message from a stream, and we've changed some
+  // details of the message. The below, while pretty wasteful (it (re)copies
+  // ALL details, not just the changed details), makes sure that
+  // Self.Equals(Result) remains true.
   Result.Assign(Self);
 end;
 
