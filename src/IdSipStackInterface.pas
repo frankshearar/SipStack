@@ -31,8 +31,10 @@ type
   end;
 
   // I provide a high-level interface to a SIP stack.
-  // I make sure that messages are sent in the context of the stack's thread
-  // (its Timer).
+  // On one hand, I make sure that messages are sent in the context of the
+  // stack's thread (its Timer). On the other, I make sure that events from the
+  // network (e.g., an inbound call) result in messages posted to Application's
+  // message queue.
   //
   // You receive Handles to actions by calling methods with the prefix "Make".
   // You can perform actions using those Handles using the other methods. If you
