@@ -12,23 +12,22 @@ unit IdSipTcpClient;
 interface
 
 uses
-  Classes, IdSipMessage, IdTCPClient, IdTimerQueue;
+  Classes, IdSipMessage, IdTCPClient, IdTCPConnection, IdTimerQueue;
 
 type
   // Note that the Timeout property determines the maximum length of time to
   // wait for the next line of data to arrive.
   TIdSipTcpClient = class(TIdTCPClient)
   private
-    fIsFinished: Boolean;
+    fOnRequest:  TIdSipRequestEvent;
     fOnResponse: TIdSipResponseEvent;
-    fTimer:      TIdTimerQueue;
+    fTerminated: Boolean;
 
-    procedure DoOnReceiveMessage(Sender: TObject);
-    procedure DoOnResponse(R: TIdSipResponse;
-                           ReceivedFrom: TIdSipConnectionBindings);
-    procedure MarkFinished;
-    procedure MarkUnfinished;
-    function  ReadResponse(var TimedOut: Boolean): String;
+    procedure DoOnMessage(Msg: TIdSipMessage;
+                          ReceivedFrom: TIdSipConnectionBindings);
+    procedure ReadBodyInto(Msg: TIdSipMessage;
+                           Dest: TStringStream);
+    function  ReadResponse(Dest: TStringStream): String;
     procedure ReadResponses;
   protected
     function  DefaultTimeout: Cardinal; virtual;
@@ -38,17 +37,23 @@ type
     procedure Send(Request: TIdSipRequest); overload;
     procedure Send(Response: TIdSipResponse); overload;
 
-    property IsFinished: Boolean             read fIsFinished;
+    property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
-    property Timer:      TIdTimerQueue       read fTimer write fTimer;
+    property Terminated: Boolean             read fTerminated write fTerminated;
   end;
 
   TIdSipTcpClientClass = class of TIdSipTcpClient;
 
+  TIdSipTlsClient = class(TIdSipTcpClient)
+  public
+    constructor Create(AOwner: TComponent); override;
+    destructor  Destroy; override;
+  end;
+
 implementation
 
 uses
-  IdException, IdSipTcpServer, IdTCPConnection;
+  IdException, IdSipTcpServer, IdSSLOpenSSL, SysUtils;
 
 //******************************************************************************
 //* TIdSipTcpClient                                                            *
@@ -59,9 +64,8 @@ constructor TIdSipTcpClient.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.MarkUnfinished;
-  
   Self.ReadTimeout := Self.DefaultTimeout;
+  Self.Terminated  := false;  
 end;
 
 procedure TIdSipTcpClient.Send(Request: TIdSipRequest);
@@ -84,95 +88,109 @@ end;
 
 //* TIdSipTcpClient Private methods ********************************************
 
-procedure TIdSipTcpClient.DoOnReceiveMessage(Sender: TObject);
-var
-  Wait: TIdSipReceiveTCPMessageWait;
+procedure TIdSipTcpClient.DoOnMessage(Msg: TIdSipMessage;
+                                      ReceivedFrom: TIdSipConnectionBindings);
 begin
-  Wait := Sender as TIdSipReceiveTCPMessageWait;
-
-  if not Wait.Message.IsRequest then
-    Self.DoOnResponse(Wait.Message as TIdSipResponse,
-                      Wait.ReceivedFrom);
-end;
-
-procedure TIdSipTcpClient.DoOnResponse(R: TIdSipResponse;
-                                       ReceivedFrom: TIdSipConnectionBindings);
-begin
-  if Assigned(Self.OnResponse) then
-    Self.OnResponse(Self, R, ReceivedFrom);
-end;
-
-procedure TIdSipTcpClient.MarkFinished;
-begin
-  Self.fIsFinished := true;
-end;
-
-procedure TIdSipTcpClient.MarkUnfinished;
-begin
-  Self.fIsFinished := false;
-end;
-
-function TIdSipTcpClient.ReadResponse(var TimedOut: Boolean): String;
-var
-  Line: String;
-begin
-  Result := '';
-
-  Line := Self.ReadLn(#$A, Self.ReadTimeout);
-
-  while (Line <> '') do begin
-    Result := Result + Line + #13#10;
-    Line := Self.ReadLn(#$A, Self.ReadTimeout);
+  if Msg.IsRequest then begin
+    if Assigned(Self.OnRequest) then
+      Self.OnRequest(Self, Msg as TIdSipRequest, ReceivedFrom)
+  end
+  else begin
+    if Assigned(Self.OnResponse) then
+      Self.OnResponse(Self, Msg as TIdSipResponse, ReceivedFrom);
   end;
+end;
 
-  TimedOut := Self.ReadLnTimedOut;
+procedure TIdSipTcpClient.ReadBodyInto(Msg: TIdSipMessage;
+                                       Dest: TStringStream);
+begin
+  Self.ReadStream(Dest, Msg.ContentLength);
+
+  // Roll back the stream to just before the message body!
+  Dest.Seek(-Msg.ContentLength, soFromCurrent);
+end;
+
+function TIdSipTcpClient.ReadResponse(Dest: TStringStream): String;
+const
+  CrLf = #$D#$A;
+begin
+  // We skip any leading CRLFs, and read up to (and including) the first blank
+  // line.
+  while (Dest.DataString = '') do
+    Self.Capture(Dest, '');
+
+  // Capture() returns up to the blank line, but eats it: we add it back in
+  // manually.
+  Dest.Write(CrLf, Length(CrLf));
+  Dest.Seek(0, soFromBeginning);
 end;
 
 procedure TIdSipTcpClient.ReadResponses;
 var
-  Finished:     Boolean;
-  S:            String;
-  R:            TIdSipResponse;
+  S:            TStringStream;
+  Msg:          TIdSipMessage;
   ReceivedFrom: TIdSipConnectionBindings;
-  RecvWait:     TIdSipReceiveTCPMessageWait;
 begin
-  Finished := false;
-
   ReceivedFrom.LocalIP   := Self.Socket.Binding.IP;
   ReceivedFrom.LocalPort := Self.Socket.Binding.Port;
   ReceivedFrom.PeerIP    := Self.Socket.Binding.PeerIP;
   ReceivedFrom.PeerPort  := Self.Socket.Binding.PeerPort;
 
-  try
-    while (not Finished) do begin
-      S := Self.ReadResponse(Finished);
-
-      if (S <> '') then begin
-        R := TIdSipMessage.ReadResponseFrom(S);
+  while (not Self.Terminated and Self.Connected) do begin
+    S := TStringStream.Create('');
+    try
+      try
+        Self.ReadResponse(S);
+        Msg := TIdSipMessage.ReadMessageFrom(S);
         try
           try
-            R.Body := Self.ReadString(R.ContentLength);
+            Self.ReadBodyInto(Msg, S);
+            Msg.ReadBody(S);
+
+            Self.DoOnMessage(Msg, ReceivedFrom);
           except
-            on EIdConnClosedGracefully do;
+            // Exceptions reading the body of a message from the socket.
+            on E: Exception do begin
+              if not Msg.IsRequest then begin
+                //Self.ReturnInternalServerError(E.Message);
+                Self.Disconnect;
+                Self.Terminated := true;
+              end;
+            end;
           end;
-
-          RecvWait := TIdSipReceiveTCPMessageWait.Create;
-          RecvWait.Event        := Self.DoOnReceiveMessage;
-          RecvWait.Message      := R.Copy;
-          RecvWait.ReceivedFrom := ReceivedFrom;
-          Self.Timer.AddEvent(TriggerImmediately, RecvWait);
-
-          Finished := R.IsFinal;
         finally
-          R.Free;
+          Msg.Free;
         end;
+      except
+        // Exceptions reading a message from the socket.
+        on EIdReadTimeout do
+          Self.Terminated := true;
+        on EIdConnClosedGracefully do
+          Self.Terminated := true;
       end;
+    finally
+      S.Free;
     end;
-  except
-    on EIdConnClosedGracefully do;
   end;
+end;
 
-  Self.MarkFinished;
+//******************************************************************************
+//* TIdSipTlsClient                                                            *
+//******************************************************************************
+//* TIdSipTlsClient Public methods *********************************************
+
+constructor TIdSipTlsClient.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+
+  Self.IOHandler := TIdSSLIOHandlerSocket.Create(nil);
+end;
+
+destructor TIdSipTlsClient.Destroy;
+begin
+  Self.IOHandler.Free;
+
+  inherited Destroy;
 end;
 
 end.

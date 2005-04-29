@@ -19,33 +19,6 @@ uses
 type
   TIdTcpClientClass = class of TIdTcpClient;
 
-  TestTIdSipConnectionTableEntry = class(TTestCase)
-  published
-    procedure TestCreate;
-  end;
-
-  TestTIdSipConnectionTable = class(TTestCaseSip)
-  private
-    Conn:    TIdTCPConnection;
-    NewConn: TIdTCPConnection;
-    NewReq:  TIdSipRequest;
-    Req:     TIdSipRequest;
-    Table:   TIdSipConnectionTable;
-  public
-    procedure SetUp; override;
-    procedure TearDown; override;
-  published
-    procedure TestAddAndCount;
-    procedure TestConnectionFor;
-    procedure TestConnectionForOneEntry;
-    procedure TestConnectionForOnEmptyList;
-    procedure TestConnectionForOnNoEntry;
-    procedure TestConnectionForResponse;
-    procedure TestRemove;
-    procedure TestRemoveOnEmptyList;
-    procedure TestRemoveOnNonEmptyList;
-  end;
-
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest) of object;
 
@@ -66,15 +39,6 @@ type
                                     Request: TIdSipRequest);
     procedure CheckMethodEvent(Sender: TObject;
                                Request: TIdSipRequest);
-    procedure CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                                     Response: TIdSipResponse;
-                                                     ReceivedFrom: TIdSipConnectionBindings);
-    procedure ClientOnResponse(Sender: TObject;
-                               Response: TIdSipResponse;
-                               ReceivedFrom: TIdSipConnectionBindings);
-    procedure ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                   Response: TIdSipResponse;
-                                                   ReceivedFrom: TIdSipConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -84,17 +48,13 @@ type
                                ReceivedFrom: TIdSipConnectionBindings);
     procedure OnReceiveResponse(Response: TIdSipResponse;
                                 ReceivedFrom: TIdSipConnectionBindings);
-    procedure OnServerDisconnect(AThread: TIdPeerThread);
     procedure RaiseException(Sender: TObject;
                              Request: TIdSipRequest);
-    procedure Send200OK(Sender: TObject;
-                        Request: TIdSipRequest);
   protected
     CheckingRequestEvent:   TIdSipRequestEvent;
     CheckingResponseEvent:  TIdSipResponseEvent;
     Client:                 TIdTcpClient;
     ClientReceivedResponse: Boolean;
-    ConnectionDropped:      Boolean;
     HighPortLocation:       TIdSipLocation;
     HighPortServer:         TIdSipTcpServer;
     LowPortServer:          TIdSipTcpServer;
@@ -116,10 +76,6 @@ type
     procedure TestMethodEvent;
     procedure TestMultipleMessages;
     procedure TestRemoveMessageListener;
-    procedure TestSendResponsesClosedConnection;
-    procedure TestSendResponsesClosedConnectionReceivedParam;
-    procedure TestSendResponsesOpenConnection;
-    procedure TestTruncatedBodyClosesConnection;
   end;
 
 const
@@ -150,159 +106,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTcpServer unit tests');
-  Result.AddSuite(TestTIdSipConnectionTableEntry.Suite);
-  Result.AddSuite(TestTIdSipConnectionTable.Suite);
   Result.AddSuite(TestTIdSipTcpServer.Suite);
-end;
-
-procedure TestTIdSipConnectionTableEntry.TestCreate;
-var
-  Conn: TIdTCPConnection;
-  E:    TIdSipConnectionTableEntry;
-  Req:  TIdSipRequest;
-begin
-  Conn := TIdTCPConnection.Create(nil);
-  try
-    Req := TIdSipRequest.Create;
-    try
-      E := TIdSipConnectionTableEntry.Create(Conn, Req);
-      try
-        Check(Conn = E.Connection,   'Connection not set');
-        Check(Req.Equals(E.Request), 'Request not set');
-      finally
-        E.Free;
-      end;
-    finally
-      Req.Free;
-    end;
-  finally
-    Conn.Free;
-  end;
-end;
-
-//******************************************************************************
-//* TestTIdSipConnectionTable
-//******************************************************************************
-//* TestTIdSipConnectionTable Public methods ***********************************
-
-procedure TestTIdSipConnectionTable.SetUp;
-begin
-  inherited SetUp;
-
-  Self.Conn    := TIdTCPConnection.Create(nil);
-  Self.NewConn := TIdTCPConnection.Create(nil);
-  Self.NewReq  := TIdSipRequest.Create;
-  Self.Req     := TIdSipRequest.Create;
-  Self.Table   := TIdSipConnectionTable.Create;
-
-  Self.Req.RequestUri.URI    := 'sip:wintermute@tessier-ashpool.co.luna';
-  Self.NewReq.RequestUri.URI := 'sip:case@fried.neurons.org';
-end;
-
-procedure TestTIdSipConnectionTable.TearDown;
-begin
-  Self.Table.Free;
-  Self.Req.Free;
-  Self.NewReq.Free;
-  Self.NewConn.Free;
-  Self.Conn.Free;
-
-  inherited TearDown;
-end;
-
-//* TestTIdSipConnectionTable Published methods ********************************
-
-procedure TestTIdSipConnectionTable.TestAddAndCount;
-var
-  Count: Integer;
-begin
-  Count := Self.Table.Count;
-
-  Self.Table.Add(Self.Conn, Self.Req);
-
-  CheckEquals(Count + 1, Self.Table.Count, 'No entry added');
-end;
-
-procedure TestTIdSipConnectionTable.TestConnectionFor;
-begin
-  Self.Table.Add(Self.Conn,    Self.Req);
-  Self.Table.Add(Self.NewConn, Self.NewReq);
-
-  Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn,
-        'Wrong Connection 1');
-  Check(Self.Table.ConnectionFor(Self.NewReq) = Self.NewConn,
-        'Wrong Connection 2');
-end;
-
-procedure TestTIdSipConnectionTable.TestConnectionForOneEntry;
-begin
-  Self.Table.Add(Self.Conn, Self.Req);
-
-  Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn,
-        'Wrong Connection');
-end;
-
-procedure TestTIdSipConnectionTable.TestConnectionForOnEmptyList;
-begin
-  Check(not Assigned(Self.Table.ConnectionFor(Self.Req)), 'non-nil result');
-end;
-
-procedure TestTIdSipConnectionTable.TestConnectionForOnNoEntry;
-begin
-  Self.Table.Add(Self.Conn, Self.Req);
-
-  Check(not Assigned(Self.Table.ConnectionFor(Self.NewReq)), 'non-nil result');
-end;
-
-procedure TestTIdSipConnectionTable.TestConnectionForResponse;
-var
-  Response: TIdSipResponse;
-begin
-  Self.Req.AddHeader(ViaHeaderFull).Value := 'SIP/2.0/TCP localhost;' + BranchParam + '=' + BranchMagicCookie + 'f00';
-  Self.Req.Method := MethodOptions;
-
-  Self.Table.Add(Self.Conn, Self.Req);
-
-  Response := TIdSipResponse.Create;
-  try
-    Response.AddHeader(Self.Req.LastHop);
-    Response.CSeq.Method := MethodOptions;
-
-    Check(Self.Conn = Self.Table.ConnectionFor(Response), 'Wrong connection');
-  finally
-    Response.Free;
-  end;
-end;
-
-procedure TestTIdSipConnectionTable.TestRemove;
-var
-  Count: Integer;
-begin
-  Count := Self.Table.Count;
-
-  Self.Table.Add(Conn, Req);
-  Self.Table.Remove(Conn);
-  CheckEquals(Count, Self.Table.Count, 'No entry removed');
-end;
-
-procedure TestTIdSipConnectionTable.TestRemoveOnEmptyList;
-begin
-  Self.Table.Remove(Self.Conn);
-end;
-
-procedure TestTIdSipConnectionTable.TestRemoveOnNonEmptyList;
-var
-  Count: Integer;
-begin
-  Self.Table.Add(Self.Conn, Self.Req);
-  Self.Table.Add(NewConn, NewReq);
-
-  Count := Self.Table.Count;
-
-  Self.Table.Remove(NewConn);
-
-  CheckEquals(Count - 1, Self.Table.Count, 'Nothing was removed');
-  Check(Self.Table.ConnectionFor(Self.Req) = Self.Conn, 'Wrong entry removed (ConnectionFor)');
 end;
 
 //******************************************************************************
@@ -317,7 +121,7 @@ begin
   inherited SetUp;
 
   Self.EmptyListEvent := TSimpleEvent.Create;
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer := TIdThreadedTimerQueue.Create(false, 0);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client         := TIdTcpClient.Create(nil);
@@ -329,7 +133,6 @@ begin
   Self.Client.Port := LowPortServer.DefaultPort;
 
   Self.ClientReceivedResponse := false;
-  Self.ConnectionDropped      := false;
   Self.MethodCallCount        := 0;
   Self.ServerReceivedResponse := false;
 
@@ -472,47 +275,6 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpServer.CheckSendResponsesDownClosedConnection(Sender: TObject;
-                                                                     Response: TIdSipResponse;
-                                                                     ReceivedFrom: TIdSipConnectionBindings);
-begin
-  try
-    CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
-    Self.ServerReceivedResponse := true;
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.ClientOnResponse(Sender: TObject;
-                                               Response: TIdSipResponse;
-                                               ReceivedFrom: TIdSipConnectionBindings);
-begin
-  try
-    CheckEquals(SIPOK, Response.StatusCode, 'Status-Code');
-    Self.ClientReceivedResponse := true;
-
-    Self.ThreadEvent.SetEvent;
-  except
-    on E: Exception do begin
-      Self.ExceptionType    := ExceptClass(E.ClassType);
-      Self.ExceptionMessage := E.Message;
-    end;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.ClientOnResponseDownClosedConnection(Sender: TObject;
-                                                             Response: TIdSipResponse;
-                                                             ReceivedFrom: TIdSipConnectionBindings);
-begin
-  Fail('The connection is closed. The client should not receive a response');
-end;
-
 procedure TestTIdSipTcpServer.OnEmpty(Sender: TIdTimerQueue);
 begin
   Self.EmptyListEvent.SetEvent;
@@ -545,30 +307,10 @@ begin
     Self.CheckingResponseEvent(Self, Response, ReceivedFrom);
 end;
 
-procedure TestTIdSipTcpServer.OnServerDisconnect(AThread: TIdPeerThread);
-begin
-  Self.ConnectionDropped := true;
-  Self.ThreadEvent.SetEvent;
-end;
-
 procedure TestTIdSipTcpServer.RaiseException(Sender: TObject;
                                              Request: TIdSipRequest);
 begin
   raise Exception.Create('RaiseException');
-end;
-
-procedure TestTIdSipTcpServer.Send200OK(Sender: TObject;
-                                        Request: TIdSipRequest);
-var
-  Response: TIdSipResponse;
-begin
-  Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
-  try
-    Response.StatusCode := SIPOK;
-    Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
-  finally
-    Response.Free;
-  end;
 end;
 
 //* TestTIdSipTcpServer Published methods **************************************
@@ -706,153 +448,6 @@ begin
   finally
     Listener.Free;
   end;
-end;
-
-procedure TestTIdSipTcpServer.TestSendResponsesClosedConnection;
-var
-  Request:  TIdSipRequest;
-  Response: TIdSipResponse;
-begin
-  Self.CheckingResponseEvent := Self.CheckSendResponsesDownClosedConnection;
-
-  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
-  try
-    Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
-    Self.SipClient.Host        := '127.0.0.1';
-    Self.SipClient.Port        := IdPORT_SIP;
-    Self.SipClient.ReadTimeout := 100;
-
-    Self.SipClient.Connect;
-    try
-      Self.SipClient.Send(Request);
-    finally
-      Self.SipClient.Disconnect;
-    end;
-
-    // I can't say WHY we need to pause here, but it seems to work...
-    // Not exactly an ideal situation.
-    IdGlobal.Sleep(500);
-
-    Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
-    try
-      Response.StatusCode := SIPOK;
-      Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
-    finally
-      Response.Free;
-    end;
-
-    Self.WaitForSignaled;
-
-    Check(Self.ServerReceivedResponse,
-          'Response wasn''t sent down a new connection');
-  finally
-    Request.Free;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.TestSendResponsesClosedConnectionReceivedParam;
-var
-  LowPortListener: TIdSipTestMessageListener;
-  Request:         TIdSipRequest;
-  Response:        TIdSipResponse;
-begin
-  Assert(Assigned(GStack) and (GStack.LocalAddress <> '127.0.0.1'),
-         'This test cannot work on a machine with only one network interface. '
-       + 'Please make sure it''s got a NIC and that NIC has an IP');
-
-  LowPortListener := TIdSipTestMessageListener.Create;
-  try
-    Self.LowPortServer.AddMessageListener(LowPortListener);
-    try
-      Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
-      try
-        Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
-        Self.SipClient.Host        := Self.HighPortServer.Bindings[0].IP;
-        Self.SipClient.Port        := Self.HighPortServer.Bindings[0].Port;
-        Self.SipClient.ReadTimeout := 100;
-
-        Self.SipClient.Connect;
-        try
-          Self.SipClient.Send(Request);
-        finally
-          Self.SipClient.Disconnect;
-        end;
-
-        Check(not Self.SipClient.Connected,
-              'Client still connected');
-
-        Self.CheckingResponseEvent := Self.AcknowledgeEvent;
-        Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
-        try
-          Response.LastHop.Received := Self.HighPortServer.Bindings[0].IP;
-          Response.LastHop.Port     := Self.HighPortServer.Bindings[0].Port;
-          Response.StatusCode       := SIPOK;
-          Self.LowPortServer.SendResponse(Response, Self.HighPortLocation);
-        finally
-          Response.Free;
-        end;
-
-        Self.ExceptionMessage := 'High port server didn''t receive the response';
-        Self.WaitForSignaled;
-        Check(not LowPortListener.ReceivedResponse,
-              'Low port server received response');
-      finally
-        Request.Free;
-      end;
-    finally
-      Self.LowPortServer.RemoveMessageListener(LowPortListener);
-    end;
-  finally
-    LowPortListener.Free;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.TestSendResponsesOpenConnection;
-var
-  Request:   TIdSipRequest;
-  SipClient: TIdSipTcpClient;
-begin
-  Self.CheckingRequestEvent := Self.Send200OK;
-
-  Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
-  try
-    SipClient := Self.HighPortServer.CreateClient;
-    try
-      SipClient.OnResponse  := Self.ClientOnResponse;
-      SipClient.Host        := '127.0.0.1';
-      SipClient.Port        := IdPORT_SIP;
-      SipClient.ReadTimeout := 1000;
-
-      SipClient.Connect;
-      try
-        SipClient.Send(Request);
-
-        Self.WaitForSignaled;
-
-        Check(Self.ClientReceivedResponse,
-              'No response received on same connection');
-      finally
-        SipClient.Disconnect;
-      end;
-    finally
-      Self.HighPortServer.DestroyClient(SipClient);
-    end;
-  finally
-    Request.Free;
-  end;
-end;
-
-procedure TestTIdSipTcpServer.TestTruncatedBodyClosesConnection;
-begin
-  Self.LowPortServer.OnDisconnect := Self.OnServerDisconnect;
-  Self.LowPortServer.ReadTimeout  := 50;
-
-  Self.Client.Connect(DefaultTimeout);
-
-  Self.ExceptionMessage := 'Waiting for socket to disconnect';
-  Self.Client.Write(TortureTest16);
-  Self.WaitForSignaled;
-  Check(Self.ConnectionDropped, 'Connection not dropped');
 end;
 
 initialization

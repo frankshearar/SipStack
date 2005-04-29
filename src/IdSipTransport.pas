@@ -12,9 +12,10 @@ unit IdSipTransport;
 interface
 
 uses
-  Classes, Contnrs, IdException, IdInterfacedObject, IdNotification, IdSipLocator,
-  IdSipMessage, IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
-  IdSocketHandle, IdSSLOpenSSL, IdTimerQueue, SyncObjs, SysUtils;
+  Classes, Contnrs, IdBaseThread, IdException, IdInterfacedObject,
+  IdNotification, IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer,
+  IdSipTlsServer, IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, IdTCPConnection,
+  IdTimerQueue, SyncObjs, SysUtils;
 
 type
   TIdSipTransport = class;
@@ -62,6 +63,7 @@ type
     procedure RewriteOwnVia(Msg: TIdSipMessage);
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); virtual; abstract;
+    procedure DestroyServer; virtual;
     function  GetAddress: String; virtual; abstract;
     function  GetBindings: TIdSocketHandles; virtual; abstract;
     function  GetPort: Cardinal; virtual; abstract;
@@ -144,25 +146,26 @@ type
     class function  UriSchemeFor(const Transport: String): String;
   end;
 
+  TIdSipConnectionTableLock = class;
+
   // I implement the Transmission Control Protocol (RFC 793) connections for the
   // SIP stack.
   TIdSipTCPTransport = class(TIdSipTransport)
   private
-    Clients:    TObjectList;
-    ClientLock: TCriticalSection;
-
-    function  AddClient: TIdSipTcpClient;
-    procedure DoOnTcpResponse(Sender: TObject;
-                              Response: TIdSipResponse;
-                              ReceivedFrom: TIdSipConnectionBindings);
-    procedure RemoveClient(Client: TIdSipTcpClient);
+    procedure SendMessageTo(Msg: TIdSipMessage;
+                            Dest: TIdSipLocation);
+    procedure SendMessage(Msg: TIdSipMessage;
+                          Dest: TIdSipLocation);
   protected
-    Transport: TIdSipTcpServer;
+    ConnectionMap: TIdSipConnectionTableLock;
+    Transport:     TIdSipTcpServer;
 
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
+    procedure DestroyServer; override;
+    procedure DoOnAddConnection(Connection: TIdTCPConnection;
+                                Request: TIdSipRequest);
+    procedure DoOnRemoveConnection(Connection: TIdTCPConnection);
     function  GetAddress: String; override;
-    function  CreateClient: TIdSipTcpClient; virtual;
-    procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
     procedure InstantiateServer; override;
@@ -184,6 +187,67 @@ type
     procedure Stop; override;
   end;
 
+  // I allow the sending of TCP requests to happen asynchronously: in my
+  // context, I instantiate a TCP client, send a request, and receive
+  // responses. I schedule Waits for each of these responses so that my
+  // Transport handles the response in the context of its Timer.
+  TIdSipTcpClientThread = class(TIdBaseThread)
+  private
+    Client:    TIdSipTcpClient;
+    Msg:       TIdSipMessage;
+    Transport: TIdSipTCPTransport;
+
+    procedure NotifyOfException(E: Exception);
+    procedure ReceiveRequestInTimerContext(Sender: TObject;
+                                           R: TIdSipRequest;
+                                           ReceivedFrom: TIdSipConnectionBindings); overload;
+    procedure ReceiveResponseInTimerContext(Sender: TObject;
+                                            R: TIdSipResponse;
+                                            ReceivedFrom: TIdSipConnectionBindings); overload;
+  protected
+    function  ClientType: TIdSipTcpClientClass; virtual;
+    procedure Run; override;
+  public
+    constructor Create(const Host: String;
+                       Port: Cardinal;
+                       Msg: TIdSipMessage;
+                       Transport: TIdSipTCPTransport); reintroduce;
+    destructor Destroy; override;
+  end;
+
+  TIdSipTlsClientThread = class(TIdSipTcpClientThread)
+  protected
+    function ClientType: TIdSipTcpClientClass; override;
+  end;
+
+  TIdSipMessageExceptionWait = class(TIdWait)
+  private
+    fExceptionMessage: String;
+    fExceptionType:    ExceptClass;
+    fReason:           String;
+    fTransport:        TIdSipTransport;
+  public
+    procedure Trigger; override;
+
+    property ExceptionType:    ExceptClass     read fExceptionType write fExceptionType;
+    property ExceptionMessage: String          read fExceptionMessage write fExceptionMessage;
+    property Reason:           String          read fReason write fReason;
+    property Transport:        TIdSipTransport read fTransport write fTransport;
+  end;
+
+  TIdSipReceiveMessageWait = class(TIdSipMessageWait)
+  private
+    fReceivedFrom: TIdSipConnectionBindings;
+    fMessage:      TIdSipMessage;
+    fTransport:    TIdSipTransport;
+  public
+    procedure Trigger; override;
+
+    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
+    property Message:      TIdSipMessage            read fMessage write fMessage;
+    property Transport:    TIdSipTransport          read fTransport write fTransport;
+  end;
+
   // I implement the Transport Layer Security (RFC 2249) connections for the SIP
   // stack.
   TIdSipTLSTransport = class(TIdSipTCPTransport)
@@ -198,8 +262,6 @@ type
     procedure SetServerCertificate(Value: TFileName);
     procedure SetServerKey(Value: TFileName);
   protected
-    function  CreateClient: TIdSipTcpClient; override;
-    procedure DestroyClient(Client: TIdSipTcpClient); override;
     function  ServerType: TIdSipTcpServerClass; override;
   public
     class function DefaultPort: Cardinal; override;
@@ -229,6 +291,7 @@ type
 
   protected
     procedure ChangeBinding(const Address: String; Port: Cardinal); override;
+    procedure DestroyServer; override;
     function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
@@ -245,11 +308,55 @@ type
     class function SrvPrefix: String; override;
 
     constructor Create; override;
-    destructor  Destroy; override;
 
     function  IsReliable: Boolean; override;
     procedure Start; override;
     procedure Stop; override;
+  end;
+
+  // I relate a request with a TCP connection. I store a COPY of a request
+  // while storing a REFERENCE to a connection. Transports construct requests
+  // and so bear responsibility for destroying them, and I need to remember
+  //these requests.
+  TIdSipConnectionTableEntry = class(TObject)
+  private
+    fConnection: TIdTCPConnection;
+    fRequest:    TIdSipRequest;
+  public
+    constructor Create(Connection:    TIdTCPConnection;
+                       CopyOfRequest: TIdSipRequest);
+    destructor  Destroy; override;
+
+    property Connection: TIdTCPConnection read fConnection;
+    property Request:    TIdSipRequest    read fRequest;
+  end;
+
+  TIdSipConnectionTable = class(TObject)
+  private
+    List: TObjectList;
+
+    function EntryAt(Index: Integer): TIdSipConnectionTableEntry;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(Connection: TIdTCPConnection;
+                  Request:    TIdSipRequest);
+    function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection;
+    function  Count: Integer;
+    procedure Remove(Connection: TIdTCPConnection);
+  end;
+
+  TIdSipConnectionTableLock = class(TObject)
+  private
+    Table: TIdSipConnectionTable;
+    Lock:  TCriticalSection;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    function  LockList: TIdSipConnectionTable;
+    procedure UnlockList;
   end;
 
   TIdSipExceptionWait = class(TIdNotifyEventWait)
@@ -345,6 +452,8 @@ type
   EUnknownTransport = class(EIdException);
 
 const
+  ExceptionDuringTcpClientRequestSend = 'Something went wrong sending a TCP '
+                                      + 'request or receiving a response to one.';
   MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
                           + 'Via, namely, this stack.';
   ResponseNotSentFromHere = 'Received response could not have been sent from here';
@@ -413,6 +522,8 @@ begin
   Self.TransportSendingListeners.Free;
   Self.TransportListeners.Free;
 
+  Self.DestroyServer;
+
   inherited Destroy;
 end;
 
@@ -477,6 +588,10 @@ begin
 end;
 
 //* TIdSipTransport Protected methods ******************************************
+
+procedure TIdSipTransport.DestroyServer;
+begin
+end;
 
 procedure TIdSipTransport.InstantiateServer;
 begin
@@ -834,8 +949,7 @@ constructor TIdSipTCPTransport.Create;
 begin
   inherited Create;
 
-  Self.Clients    := TObjectList.Create(true);
-  Self.ClientLock := TCriticalSection.Create;
+  Self.ConnectionMap := TIdSipConnectionTableLock.Create;
 
   Self.Bindings.Add;
   Self.SetPort(Port);
@@ -843,9 +957,7 @@ end;
 
 destructor TIdSipTCPTransport.Destroy;
 begin
-  Self.Transport.Free;
-  Self.ClientLock.Free;
-  Self.Clients.Free;
+  Self.ConnectionMap.Free;
 
   inherited Destroy;
 end;
@@ -877,18 +989,44 @@ begin
   Self.Start;
 end;
 
+procedure TIdSipTCPTransport.DestroyServer;
+begin
+  Self.Transport.Free;
+end;
+
+procedure TIdSipTCPTransport.DoOnAddConnection(Connection: TIdTCPConnection;
+                                               Request: TIdSipRequest);
+var
+  Table: TIdSipConnectionTable;
+begin
+  Table := Self.ConnectionMap.LockList;
+  try
+    Table.Add(Connection, Request);
+  finally
+    Self.ConnectionMap.UnlockList;
+  end;
+end;
+
+procedure TIdSipTCPTransport.DoOnRemoveConnection(Connection: TIdTCPConnection);
+var
+  Table: TIdSipConnectionTable;
+begin
+  Table := Self.ConnectionMap.LockList;
+  try
+    Table.Remove(Connection);
+  finally
+    Self.ConnectionMap.UnlockList;
+  end;
+end;
+
 function TIdSipTCPTransport.GetAddress: String;
 begin
   Result := Self.Transport.Bindings[0].IP;
 end;
 
-function TIdSipTCPTransport.CreateClient: TIdSipTcpClient;
+function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
 begin
-  // Precondition: Self.ClientLock has been acquired.
-  Result := TIdSipTcpClient.Create(nil);
-  Result.OnResponse  := Self.DoOnTcpResponse;
-  Result.ReadTimeout := Self.Timeout;
-  Result.Timer       := Self.Timer;
+  Result := Self.Transport.Bindings;
 end;
 
 function TIdSipTCPTransport.GetPort: Cardinal;
@@ -898,26 +1036,19 @@ end;
 
 procedure TIdSipTCPTransport.InstantiateServer;
 begin
-  Self.Transport  := Self.ServerType.Create(nil);
+  Self.Transport := Self.ServerType.Create(nil);
   Self.Transport.AddMessageListener(Self);
+
+  Self.Transport.OnAddConnection    := Self.DoOnAddConnection;
+  Self.Transport.OnRemoveConnection := Self.DoOnRemoveConnection;
 end;
 
 procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest;
                                          Dest: TIdSipLocation);
-var
-  Client: TIdSipTcpClient;
 begin
   inherited SendRequest(R, Dest);
 
-  Client := Self.AddClient;
-
-  Client.Host        := Dest.IPAddress;
-  Client.Port        := Dest.Port;
-  Client.ReadTimeout := Self.Timeout;
-
-  // Race condition here? Connect, but during the send the client disconnects?
-  Client.Connect(Self.Timeout);
-  Client.Send(R);
+  Self.SendMessage(R, Dest);
 end;
 
 procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse;
@@ -925,7 +1056,7 @@ procedure TIdSipTCPTransport.SendResponse(R: TIdSipResponse;
 begin
   inherited SendResponse(R, Dest);
 
-  Self.Transport.SendResponse(R, Dest);
+  Self.SendMessage(R, Dest);
 end;
 
 function TIdSipTCPTransport.ServerType: TIdSipTcpServerClass;
@@ -948,60 +1079,175 @@ begin
   Self.Transport.Timer := Value;
 end;
 
-procedure TIdSipTCPTransport.DestroyClient(Client: TIdSipTcpClient);
-begin
-  // Precondition: Self.ClientLock has been acquired.
-  if Client.Connected then
-    Client.Disconnect;
+//* TIdSipTCPTransport Protected methods ***************************************
 
-  Self.Clients.Remove(Client);
+procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
+                                           Dest: TIdSipLocation);
+begin
+  TIdSipTcpClientThread.Create(Dest.IPAddress, Dest.Port, Msg, Self);
 end;
 
-function TIdSipTCPTransport.GetBindings: TIdSocketHandles;
+procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
+                                         Dest: TIdSipLocation);
+var
+  Connection:  TIdTCPConnection;
+  Table:       TIdSipConnectionTable;
 begin
-  Result := Self.Transport.Bindings;
-end;
-
-//* TIdSipTCPTransport Private methods *****************************************
-
-function TIdSipTCPTransport.AddClient: TIdSipTcpClient;
-begin
-  Self.ClientLock.Acquire;
+  Table := Self.ConnectionMap.LockList;
   try
-    Result := Self.CreateClient;
-    try
-      Self.Clients.Add(Result);
-    except
-      // Remember, Self.Clients owns the object and will free it.
-      if (Self.Clients.IndexOf(Result) <> ItemNotFoundIndex) then
-        Self.Clients.Remove(Result)
-      else
-        Result.Free;
+    Connection := Table.ConnectionFor(Msg);
 
-      Result := nil;
-
-      raise;
+    if Assigned(Connection) and Connection.Connected then
+      Connection.Write(Msg.AsString)
+    else begin
+      Self.SendMessageTo(Msg, Dest);
     end;
   finally
-    Self.ClientLock.Release;
+    Self.ConnectionMap.UnlockList;
   end;
 end;
 
-procedure TIdSipTCPTransport.DoOnTcpResponse(Sender: TObject;
-                                             Response: TIdSipResponse;
-                                             ReceivedFrom: TIdSipConnectionBindings);
+//******************************************************************************
+//* TIdSipTcpClientThread                                                      *
+//******************************************************************************
+//* TIdSipTcpClientThread Public methods ***************************************
+
+constructor TIdSipTcpClientThread.Create(const Host: String;
+                                         Port: Cardinal;
+                                         Msg: TIdSipMessage;
+                                         Transport: TIdSipTCPTransport);
 begin
-  Self.OnReceiveResponse(Response, ReceivedFrom);
+  Self.FreeOnTerminate := true;
+
+  Self.Client := Self.ClientType.Create(nil);
+  Self.Client.Host       := Host;
+  Self.Client.OnRequest  := Self.ReceiveRequestInTimerContext;
+  Self.Client.OnResponse := Self.ReceiveResponseInTimerContext;
+  Self.Client.Port       := Port;
+
+  Self.Msg       := Msg.Copy;
+  Self.Transport := Transport;
+
+  inherited Create(false);
 end;
 
-procedure TIdSipTCPTransport.RemoveClient(Client: TIdSipTcpClient);
+destructor TIdSipTcpClientThread.Destroy;
 begin
-  Self.ClientLock.Acquire;
+  Self.Msg.Free;
+  Self.Client.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipTcpClientThread Protected methods ************************************
+
+function TIdSipTcpClientThread.ClientType: TIdSipTcpClientClass;
+begin
+  Result := TIdSipTcpClient;
+end;
+
+procedure TIdSipTcpClientThread.Run;
+begin
   try
-    Self.DestroyClient(Client);
-  finally
-    Self.ClientLock.Release;
+    Self.Client.Connect(Self.Transport.Timeout);
+    try
+      if Self.Msg.IsRequest then
+        Self.Client.Send(Self.Msg as TIdSipRequest)
+      else
+        Self.Client.Send(Self.Msg as TIdSipResponse)
+    finally
+      Self.Client.Disconnect;
+    end;
+  except
+    on E: Exception do
+      Self.NotifyOfException(E);
   end;
+end;
+
+//* TIdSipTcpClientThread Private methods **************************************
+
+procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
+var
+  Wait: TIdSipMessageExceptionWait;
+begin
+  Wait := TIdSipMessageExceptionWait.Create;
+  Wait.ExceptionType    := ExceptClass(E.ClassType);
+  Wait.ExceptionMessage := E.Message;
+  Wait.Reason           := ExceptionDuringTcpClientRequestSend;
+  Wait.Transport        := Self.Transport;
+
+  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+procedure TIdSipTcpClientThread.ReceiveRequestInTimerContext(Sender: TObject;
+                                                             R: TIdSipRequest;
+                                                             ReceivedFrom: TIdSipConnectionBindings);
+var
+  Wait: TIdSipReceiveMessageWait;
+begin
+  Wait := TIdSipReceiveMessageWait.Create;
+  Wait.ReceivedFrom := ReceivedFrom;
+  Wait.Message      := Msg;
+  Wait.Transport    := Self.Transport;
+
+  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+procedure TIdSipTcpClientThread.ReceiveResponseInTimerContext(Sender: TObject;
+                                                              R: TIdSipResponse;
+                                                              ReceivedFrom: TIdSipConnectionBindings);
+var
+  Wait: TIdSipReceiveMessageWait;
+begin
+  Wait := TIdSipReceiveMessageWait.Create;
+  Wait.ReceivedFrom := ReceivedFrom;
+  Wait.Message      := Msg;
+  Wait.Transport    := Self.Transport;
+
+  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
+end;
+
+//******************************************************************************
+//* TIdSipTlsClientThread                                                      *
+//******************************************************************************
+//* TIdSipTlsClientThread Protected methods ************************************
+
+function TIdSipTlsClientThread.ClientType: TIdSipTcpClientClass;
+begin
+  Result := TIdSipTlsClient;
+end;
+
+//******************************************************************************
+//* TIdSipMessageExceptionWait                                                 *
+//******************************************************************************
+//* TIdSipMessageExceptionWait Public methods **********************************
+
+procedure TIdSipMessageExceptionWait.Trigger;
+var
+  FakeException: Exception;
+begin
+  FakeException := Self.ExceptionType.Create(Self.ExceptionMessage);
+  try
+    (Self.Transport as IIdSipMessageListener).OnException(FakeException,
+                                                          Self.Reason);
+  finally
+    FakeException.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TIdSipReceiveMessageWait                                                   *
+//******************************************************************************
+//* TIdSipReceiveMessageWait Public methods ************************************
+
+procedure TIdSipReceiveMessageWait.Trigger;
+begin
+  if Self.Message.IsRequest then
+    (Self.Transport as IIdSipMessageListener).OnReceiveRequest(Self.Message as TIdSipRequest,
+                                                                Self.ReceivedFrom)
+  else
+    (Self.Transport as IIdSipMessageListener).OnReceiveResponse(Self.Message as TIdSipResponse,
+                                                                Self.ReceivedFrom);
 end;
 
 //******************************************************************************
@@ -1030,20 +1276,6 @@ begin
 end;
 
 //* TIdSipTLSTransport Protected methods ***************************************
-
-function TIdSipTLSTransport.CreateClient: TIdSipTcpClient;
-begin
-  Result := inherited CreateClient;
-
-  Result.IOHandler := TIdSSLIOHandlerSocket.Create(nil);
-end;
-
-procedure TIdSipTLSTransport.DestroyClient(Client: TIdSipTcpClient);
-begin
-  Client.IOHandler.Free;
-
-  inherited DestroyClient(Client);
-end;
 
 function TIdSipTLSTransport.ServerType: TIdSipTcpServerClass;
 begin
@@ -1134,13 +1366,6 @@ begin
   Self.Bindings.Add;
 end;
 
-destructor TIdSipUDPTransport.Destroy;
-begin
-  Self.Transport.Free;
-
-  inherited Destroy;
-end;
-
 function TIdSipUDPTransport.IsReliable: Boolean;
 begin
   Result := false;
@@ -1171,6 +1396,11 @@ begin
   Binding.Port := Port;
 
   Self.Start;
+end;
+
+procedure TIdSipUDPTransport.DestroyServer;
+begin
+  Self.Transport.Free;
 end;
 
 function TIdSipUDPTransport.GetAddress: String;
@@ -1238,6 +1468,142 @@ begin
   inherited SetTimer(Value);
 
   Self.Transport.Timer := Value;
+end;
+
+//******************************************************************************
+//* TIdSipConnectionTableEntry                                                 *
+//******************************************************************************
+//* TIdSipConnectionTableEntry Public methods **********************************
+
+constructor TIdSipConnectionTableEntry.Create(Connection:    TIdTCPConnection;
+                                              CopyOfRequest: TIdSipRequest);
+begin
+  inherited Create;
+
+  Self.fConnection := Connection;
+  Self.fRequest := TIdSipRequest.Create;
+  Self.fRequest.Assign(CopyOfRequest);
+end;
+
+destructor TIdSipConnectionTableEntry.Destroy;
+begin
+  Self.fRequest.Free;
+
+  inherited Destroy;
+end;
+
+//******************************************************************************
+//* TIdSipConnectionTable                                                      *
+//******************************************************************************
+//* TIdSipConnectionTable Public methods ***************************************
+
+constructor TIdSipConnectionTable.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdSipConnectionTable.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
+                                    Request:    TIdSipRequest);
+begin
+  Self.List.Add(TIdSipConnectionTableEntry.Create(Connection, Request));
+end;
+
+function TIdSipConnectionTable.ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection;
+var
+  Count: Integer;
+  I:     Integer;
+  Found: Boolean;
+begin
+  Result := nil;
+
+  I := 0;
+  Count := Self.List.Count;
+  Found := false;
+  while (I < Count) and not Found do begin
+    if Msg.IsRequest then
+      Found := Self.EntryAt(I).Request.Equals(Msg)
+    else
+      Found := Self.EntryAt(I).Request.Match(Msg);
+
+    if not Found then
+      Inc(I);
+  end;
+
+  if (I < Count) then
+    Result := Self.EntryAt(I).Connection;
+end;
+
+function TIdSipConnectionTable.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+procedure TIdSipConnectionTable.Remove(Connection: TIdTCPConnection);
+var
+  Count: Integer;
+  I: Integer;
+begin
+  I := 0;
+  Count := Self.List.Count;
+  while (I < Count)
+    and (Self.EntryAt(I).Connection <> Connection) do
+    Inc(I);
+
+  if (I < Count) then
+    Self.List.Delete(I);
+end;
+
+//* TIdSipConnectionTable Private methods **************************************
+
+function TIdSipConnectionTable.EntryAt(Index: Integer): TIdSipConnectionTableEntry;
+begin
+  Result := Self.List[Index] as TIdSipConnectionTableEntry;
+end;
+
+//******************************************************************************
+//* TIdSipConnectionTableLock                                                  *
+//******************************************************************************
+//* TIdSipConnectionTableLock Public methods ***********************************
+
+constructor TIdSipConnectionTableLock.Create;
+begin
+  inherited Create;
+
+  Self.Lock  := TCriticalSection.Create;
+  Self.Table := TIdSipConnectionTable.Create;
+end;
+
+destructor TIdSipConnectionTableLock.Destroy;
+begin
+  Self.Lock.Acquire;
+  try
+    Self.Table.Free;
+  finally
+    Self.Lock.Release;
+  end;
+  Self.Lock.Free;
+
+  inherited Destroy;
+end;
+
+function TIdSipConnectionTableLock.LockList: TIdSipConnectionTable;
+begin
+  Self.Lock.Acquire;
+  Result := Self.Table;
+end;
+
+procedure TIdSipConnectionTableLock.UnlockList;
+begin
+  Self.Lock.Release;
 end;
 
 //******************************************************************************

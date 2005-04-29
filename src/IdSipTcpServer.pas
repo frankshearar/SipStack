@@ -17,49 +17,9 @@ uses
   IdTimerQueue, SyncObjs, SysUtils;
 
 type
-  // I relate a request with a TCP connection. I store a COPY of a request
-  // while storing a REFERENCE to a connection. Transports construct requests
-  // and so bear responsibility for destroying them, and I need to remember
-  //these requests.
-  TIdSipConnectionTableEntry = class(TObject)
-  private
-    fConnection: TIdTCPConnection;
-    fRequest:    TIdSipRequest;
-  public
-    constructor Create(Connection:    TIdTCPConnection;
-                       CopyOfRequest: TIdSipRequest);
-    destructor  Destroy; override;
-
-    property Connection: TIdTCPConnection read fConnection;
-    property Request:    TIdSipRequest    read fRequest;
-  end;
-
-  TIdSipConnectionTable = class(TObject)
-  private
-    List: TObjectList;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    procedure Add(Connection: TIdTCPConnection;
-                  Request:    TIdSipRequest);
-    function  ConnectionFor(Request: TIdSipRequest): TIdTCPConnection; overload;
-    function  ConnectionFor(Response: TIdSipResponse): TIdTCPConnection; overload;
-    function  Count: Integer;
-    procedure Remove(Connection: TIdTCPConnection);
-  end;
-
-  TIdSipConnectionTableLock = class(TObject)
-  private
-    Table: TIdSipConnectionTable;
-    Lock:  TCriticalSection;
-  public
-    constructor Create;
-    destructor  Destroy; override;
-
-    function  LockList: TIdSipConnectionTable;
-    procedure UnlockList;
-  end;
+  TIdSipAddConnectionEvent = procedure(Connection: TIdTCPConnection;
+                                       Request: TIdSipRequest) of object;
+  TIdSipRemoveConnectionEvent = procedure(Connection: TIdTCPConnection) of object;
 
   // ReadTimeout = -1 implies that we never timeout the body wait. We do not
   // recommend this. ReadTimeout = n implies we wait n milliseconds for
@@ -67,11 +27,12 @@ type
   // time the timeout occurs, we sever the connection.
   TIdSipTcpServer = class(TIdTCPServer)
   private
-    ConnectionMap:      TIdSipConnectionTableLock;
-    fConnectionTimeout: Integer;
-    fReadTimeout:       Integer;
-    fTimer:             TIdTimerQueue;
-    Notifier:           TIdSipServerNotifier;
+    fConnectionTimeout:  Integer;
+    fOnAddConnection:    TIdSipAddConnectionEvent;
+    fOnRemoveConnection: TIdSipRemoveConnectionEvent;
+    fReadTimeout:        Integer;
+    fTimer:              TIdTimerQueue;
+    Notifier:            TIdSipServerNotifier;
 
     procedure AddConnection(Connection: TIdTCPConnection;
                             Request: TIdSipRequest);
@@ -88,8 +49,8 @@ type
                                         const Reason: String);
     procedure ScheduleExceptionNotification(ExceptionType: ExceptClass;
                                             const Reason: String);
-    procedure SendResponseTo(Response: TIdSipResponse;
-                             Dest: TIdSipConnectionBindings);
+    procedure ScheduleReceivedMessage(Msg: TIdSipMessage;
+                                      ReceivedFrom: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
                            AMessage: TIdSipMessage);
   protected
@@ -104,12 +65,12 @@ type
     function  DefaultTimeout: Cardinal; virtual;
     procedure DestroyClient(Client: TIdSipTcpClient); virtual;
     procedure RemoveMessageListener(const Listener: IIdSipMessageListener);
-    procedure SendResponse(Response: TIdSipResponse;
-                           Dest: TIdSipLocation);
   published
-    property ConnectionTimeout: Integer       read fConnectionTimeout write fConnectionTimeout;
-    property ReadTimeout:       Integer       read fReadTimeout write fReadTimeout;
-    property Timer:             TIdTimerQueue read fTimer write fTimer;
+    property ConnectionTimeout:  Integer                     read fConnectionTimeout write fConnectionTimeout;
+    property OnAddConnection:    TIdSipAddConnectionEvent    read fOnAddConnection write fOnAddConnection;
+    property OnRemoveConnection: TIdSipRemoveConnectionEvent read fOnRemoveConnection write fOnRemoveConnection;
+    property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
+    property Timer:              TIdTimerQueue               read fTimer write fTimer;
   end;
 
   // I represent a (possibly) deferred receipt of a message.
@@ -128,139 +89,6 @@ uses
   IdException, IdSipTransport;
 
 //******************************************************************************
-//* TIdSipConnectionTableEntry                                                 *
-//******************************************************************************
-//* TIdSipConnectionTableEntry Public methods **********************************
-
-constructor TIdSipConnectionTableEntry.Create(Connection:    TIdTCPConnection;
-                                              CopyOfRequest: TIdSipRequest);
-begin
-  inherited Create;
-
-  Self.fConnection := Connection;
-  Self.fRequest := TIdSipRequest.Create;
-  Self.fRequest.Assign(CopyOfRequest);
-end;
-
-destructor TIdSipConnectionTableEntry.Destroy;
-begin
-  Self.fRequest.Free;
-
-  inherited Destroy;
-end;
-
-//******************************************************************************
-//* TIdSipConnectionTable                                                      *
-//******************************************************************************
-//* TIdSipConnectionTable Public methods ***************************************
-
-constructor TIdSipConnectionTable.Create;
-begin
-  inherited Create;
-
-  Self.List := TObjectList.Create(true);
-end;
-
-destructor TIdSipConnectionTable.Destroy;
-begin
-  Self.List.Free;
-
-  inherited Destroy;
-end;
-
-procedure TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
-                                    Request:    TIdSipRequest);
-begin
-  Self.List.Add(TIdSipConnectionTableEntry.Create(Connection, Request));
-end;
-
-function TIdSipConnectionTable.ConnectionFor(Request: TIdSipRequest): TIdTCPConnection;
-var
-  Count: Integer;
-  I:     Integer;
-begin
-  Result := nil;
-
-  I := 0;
-  Count := Self.List.Count;
-  while (I < Count)
-    and not (Self.List[I] as TIdSipConnectionTableEntry).Request.Equals(Request) do
-    Inc(I);
-
-  if (I < Count) then
-    Result := (Self.List[I] as TIdSipConnectionTableEntry).Connection;
-end;
-
-function TIdSipConnectionTable.ConnectionFor(Response: TIdSipResponse): TIdTCPConnection;
-var
-  Count: Integer;
-  I:     Integer;
-begin
-  Result := nil;
-
-  I := 0;
-  Count := Self.List.Count;
-  while (I < Count)
-    and not (Self.List[I] as TIdSipConnectionTableEntry).Request.Match(Response) do
-    Inc(I);
-
-  if (I < Count) then
-    Result := (Self.List[I] as TIdSipConnectionTableEntry).Connection;
-end;
-
-function TIdSipConnectionTable.Count: Integer;
-begin
-  Result := Self.List.Count;
-end;
-
-procedure TIdSipConnectionTable.Remove(Connection: TIdTCPConnection);
-var
-  Count: Integer;
-  I: Integer;
-begin
-  I := 0;
-  Count := Self.List.Count;
-  while (I < Count)
-    and ((Self.List[I] as TIdSipConnectionTableEntry).Connection <> Connection) do
-    Inc(I);
-
-  if (I < Count) then
-    Self.List.Delete(I);
-end;
-
-//******************************************************************************
-//* TIdSipConnectionTableLock                                                  *
-//******************************************************************************
-//* TIdSipConnectionTableLock Public methods ***********************************
-
-constructor TIdSipConnectionTableLock.Create;
-begin
-  inherited Create;
-
-  Self.Lock  := TCriticalSection.Create;
-  Self.Table := TIdSipConnectionTable.Create;
-end;
-
-destructor TIdSipConnectionTableLock.Destroy;
-begin
-  Self.Lock.Free;
-  Self.Table.Free;
-
-  inherited Destroy;
-end;
-
-function TIdSipConnectionTableLock.LockList: TIdSipConnectionTable;
-begin
-  Self.Lock.Acquire;
-  Result := Self.Table;
-end;
-
-procedure TIdSipConnectionTableLock.UnlockList;
-begin
-  Self.Lock.Release;
-end;
-
-//******************************************************************************
 //* TIdSipTcpServer                                                            *
 //******************************************************************************
 //* TIdSipTcpServer Public methods *********************************************
@@ -269,7 +97,6 @@ constructor TIdSipTcpServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  Self.ConnectionMap     := TIdSipConnectionTableLock.Create;
   Self.ConnectionTimeout := Self.DefaultTimeout;
   Self.DefaultPort       := TIdSipTransportRegistry.DefaultPortFor(TcpTransport);
   Self.Notifier          := TIdSipServerNotifier.Create;
@@ -281,7 +108,6 @@ end;
 destructor TIdSipTcpServer.Destroy;
 begin
   Self.Notifier.Free;
-  Self.ConnectionMap.Free;
 
   inherited Destroy;
 end;
@@ -294,7 +120,6 @@ end;
 function TIdSipTcpServer.CreateClient: TIdSipTcpClient;
 begin
   Result := TIdSipTcpClient.Create(nil);
-  Result.Timer := Self.Timer;
 end;
 
 function TIdSipTcpServer.DefaultTimeout: Cardinal;
@@ -312,44 +137,14 @@ begin
   Self.Notifier.RemoveMessageListener(Listener);
 end;
 
-procedure TIdSipTcpServer.SendResponse(Response: TIdSipResponse;
-                                       Dest: TIdSipLocation);
-var
-  Connection:  TIdTCPConnection;
-  Table:       TIdSipConnectionTable;
-  Destination: TIdSipConnectionBindings;
-begin
-  Table := Self.ConnectionMap.LockList;
-  try
-    Connection := Table.ConnectionFor(Response);
-
-    if Assigned(Connection) and Connection.Connected then
-      Connection.Write(Response.AsString)
-    else begin
-      Destination.PeerIP   := Dest.IPAddress;
-      Destination.PeerPort := Dest.Port;
-
-      Self.SendResponseTo(Response, Destination);
-    end;
-  finally
-    Self.ConnectionMap.UnlockList;
-  end;
-end;
-
 //* TIdSipTcpServer Protected methods ******************************************
 
 procedure TIdSipTcpServer.DoDisconnect(AThread: TIdPeerThread);
-var
-  Table: TIdSipConnectionTable;
 begin
-  Table := Self.ConnectionMap.LockList;
-  try
-    inherited DoDisconnect(AThread);
+  if Assigned(Self.fOnRemoveConnection) then
+    Self.fOnRemoveConnection(AThread.Connection);
 
-    Table.Remove(AThread.Connection);
-  finally
-    Self.ConnectionMap.UnlockList;
-  end;
+  inherited DoDisconnect(AThread);
 end;
 
 procedure TIdSipTcpServer.DoOnExecute(AThread: TIdPeerThread);
@@ -358,7 +153,6 @@ var
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStringStream;
   ConnTimedOut: Boolean;
-  RecvWait:     TIdSipReceiveTCPMessageWait;
 begin
   ConnTimedOut := false;
 
@@ -388,12 +182,7 @@ begin
           if Msg.IsRequest and not ConnTimedOut then
             Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
 
-          RecvWait := TIdSipReceiveTCPMessageWait.Create;
-          RecvWait.Event        := Self.DoOnReceiveMessage;
-          RecvWait.Message      := Msg.Copy;
-          RecvWait.ReceivedFrom := ReceivedFrom;
-
-          Self.Timer.AddEvent(TriggerImmediately, RecvWait);
+          Self.ScheduleReceivedMessage(Msg, ReceivedFrom);
         except
           on E: Exception do begin
             // This results in returning a 500 Internal Server Error to a response!
@@ -417,15 +206,9 @@ end;
 
 procedure TIdSipTcpServer.AddConnection(Connection: TIdTCPConnection;
                                         Request: TIdSipRequest);
-var
-  Table:  TIdSipConnectionTable;
 begin
-  Table := Self.ConnectionMap.LockList;
-  try
-    Table.Add(Connection, Request);
-  finally
-    Self.ConnectionMap.UnlockList;
-  end;
+  if Assigned(Self.fOnAddConnection) then
+    Self.fOnAddConnection(Connection, Request);
 end;
 
 procedure TIdSipTcpServer.DoOnException(Sender: TObject);
@@ -512,7 +295,7 @@ end;
 procedure TIdSipTcpServer.ScheduleExceptionNotification(ExceptionType: ExceptClass;
                                                         const Reason: String);
 var
-  Ex:           TIdSipExceptionWait;
+  Ex: TIdSipExceptionWait;
 begin
   Ex := TIdSipExceptionWait.Create;
   Ex.Event         := Self.DoOnException;
@@ -521,25 +304,17 @@ begin
   Self.Timer.AddEvent(TriggerImmediately, Ex);
 end;
 
-procedure TIdSipTcpServer.SendResponseTo(Response: TIdSipResponse;
-                                         Dest: TIdSipConnectionBindings);
+procedure TIdSipTcpServer.ScheduleReceivedMessage(Msg: TIdSipMessage;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
 var
-  Client: TIdSipTcpClient;
+  RecvWait: TIdSipReceiveTCPMessageWait;
 begin
-  Client := Self.CreateClient;
-  try
-    Client.Host := Dest.PeerIP;
-    Client.Port := Dest.PeerPort;
+  RecvWait := TIdSipReceiveTCPMessageWait.Create;
+  RecvWait.Event        := Self.DoOnReceiveMessage;
+  RecvWait.Message      := Msg.Copy;
+  RecvWait.ReceivedFrom := ReceivedFrom;
 
-    Client.Connect(Self.ConnectionTimeout);
-    try
-      Client.Send(Response);
-    finally
-      Client.Disconnect;
-    end;
-  finally
-    Self.DestroyClient(Client);
-  end;
+  Self.Timer.AddEvent(TriggerImmediately, RecvWait);
 end;
 
 procedure TIdSipTcpServer.WriteMessage(Connection: TIdTCPConnection;

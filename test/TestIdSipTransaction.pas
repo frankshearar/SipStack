@@ -2631,7 +2631,7 @@ begin
 
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
 
-  Self.DebugTimer := TIdDebugTimerQueue.Create(true);
+  Self.DebugTimer := TIdDebugTimerQueue.Create(true, 0);
 
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
   Self.MockDispatcher.Timer := Self.DebugTimer;

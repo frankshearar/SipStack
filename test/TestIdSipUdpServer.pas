@@ -30,17 +30,20 @@ type
     Timer:                    TIdThreadedTimerQueue;
 
     procedure AcknowledgeEvent(Sender: TObject;
-                               Request: TIdSipRequest); overload;
+                               Request: TIdSipRequest;
+                               ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure AcknowledgeEvent(Sender: TObject;
                                Response: TIdSipResponse;
                                ReceivedFrom: TIdSipConnectionBindings); overload;
     procedure CheckRejectFragmentedRequestProperly(Sender: TObject;
-                                                   Request: TIdSipRequest);
+                                                   Request: TIdSipRequest;
+                                                   ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckRejectFragmentedResponseProperly(Sender: TObject;
                                                     Response: TIdSipResponse;
                                                     ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckRequest(Sender: TObject;
-                           Request: TIdSipRequest);
+                           Request: TIdSipRequest;
+                           ReceivedFrom: TIdSipConnectionBindings);
     procedure OnEmpty(Sender: TIdTimerQueue);
     procedure OnException(E: Exception;
                           const Reason: String);
@@ -103,7 +106,7 @@ begin
   inherited SetUp;
 
   Self.EmptyListEvent := TSimpleEvent.Create;
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer := TIdThreadedTimerQueue.Create(false, 0);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client := TIdUDPClient.Create(nil);
@@ -149,7 +152,8 @@ end;
 //* TestTIdSipUdpServer Private methods *****************************************
 
 procedure TestTIdSipUdpServer.AcknowledgeEvent(Sender: TObject;
-                                               Request: TIdSipRequest);
+                                               Request: TIdSipRequest;
+                                               ReceivedFrom: TIdSipConnectionBindings);
 begin
   Self.ThreadEvent.SetEvent;
 end;
@@ -162,7 +166,8 @@ begin
 end;
 
 procedure TestTIdSipUdpServer.CheckRejectFragmentedRequestProperly(Sender: TObject;
-                                                                   Request: TIdSipRequest);
+                                                                   Request: TIdSipRequest;
+                                                                   ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     Check(Request.IsMalformed,
@@ -195,7 +200,8 @@ begin
 end;
 
 procedure TestTIdSipUdpServer.CheckRequest(Sender: TObject;
-                                           Request: TIdSipRequest);
+                                           Request: TIdSipRequest;
+                                           ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
     CheckEquals(MethodInvite, Request.Method,        'Method');
@@ -235,7 +241,7 @@ procedure TestTIdSipUdpServer.OnReceiveRequest(Request: TIdSipRequest;
                                                ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckReceivedRequest) then
-    Self.CheckReceivedRequest(Self, Request);
+    Self.CheckReceivedRequest(Self, Request, ReceivedFrom);
 end;
 
 procedure TestTIdSipUdpServer.OnReceiveResponse(Response: TIdSipResponse;

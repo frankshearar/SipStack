@@ -29,6 +29,7 @@ type
     Finished:              Boolean;
     Invite:                TIdSipRequest;
     InviteCount:           Cardinal;
+    ReceivedRequestMethod: String;
     ReceivedResponseCount: Cardinal;
     Server:                TIdSipTcpServer;
     Timer:                 TIdThreadedTimerQueue;
@@ -43,6 +44,9 @@ type
                               Request: TIdSipRequest);
     procedure CheckSendTwoInvites(Sender: TObject;
                                   Request: TIdSipRequest);
+    procedure ClientReceivedRequest(Sender: TObject;
+                                    R: TIdSipRequest;
+                                    ReceivedFrom: TIdSipConnectionBindings);
     procedure CutConnection(Sender: TObject;
                             R: TIdSipRequest);
     procedure OnEmpty(Sender: TIdTimerQueue);
@@ -58,15 +62,18 @@ type
                                      Request: TIdSipRequest);
     procedure SendOkResponse(Sender: TObject;
                              Request: TIdSipRequest);
+    procedure SendOptionsRequest(Sender: TObject;
+                                 Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject;
                                            Request: TIdSipRequest);
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestCanReceiveRequest;
     procedure TestConnectAndDisconnect;
-    procedure TestIsFinished;
-    procedure TestIsFinishedWithServerDisconnect;
+    procedure TestTerminated;
+    procedure TestTerminatedWithServerDisconnect;
     procedure TestReceiveOkResponse;
     procedure TestReceiveOkResponseWithPause;
     procedure TestReceiveProvisionalAndOkResponse;
@@ -101,7 +108,7 @@ begin
 
   Self.EmptyListEvent := TSimpleEvent.Create;
   Self.ClientEvent := TSimpleEvent.Create;
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Timer := TIdThreadedTimerQueue.Create(false, 0);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client := TIdSipTcpClient.Create(nil);
@@ -112,12 +119,12 @@ begin
   Self.Client.Host        := '127.0.0.1';
   Self.Client.Port        := Self.Server.DefaultPort;
   Self.Client.ReadTimeout := 1000;
-  Self.Client.Timer       := Self.Timer;
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
   Self.Finished              := false;
   Self.InviteCount           := 0;
+  Self.ReceivedRequestMethod := '';
   Self.ReceivedResponseCount := 0;
   Self.Server.Active         := true;
 end;
@@ -218,6 +225,14 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpClient.ClientReceivedRequest(Sender: TObject;
+                                                    R: TIdSipRequest;
+                                                    ReceivedFrom: TIdSipConnectionBindings);
+begin
+  Self.ReceivedRequestMethod := R.Method;
+  Self.ThreadEvent.SetEvent;
+end;
+
 procedure TestTIdSipTcpClient.CutConnection(Sender: TObject;
                                             R: TIdSipRequest);
 var
@@ -297,6 +312,22 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpClient.SendOptionsRequest(Sender: TObject;
+                                                 Request: TIdSipRequest);
+var
+  S:       String;
+  Threads: TList;
+begin
+  S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, []);
+
+  Threads := Self.Server.Threads.LockList;
+  try
+    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
 procedure TestTIdSipTcpClient.SendProvisionalAndOkResponse(Sender: TObject;
                                                            Request: TIdSipRequest);
 var
@@ -318,6 +349,20 @@ end;
 
 //* TestTIdSipTcpClient Published methods **************************************
 
+procedure TestTIdSipTcpClient.TestCanReceiveRequest;
+begin
+  Self.CheckingRequestEvent := Self.SendOptionsRequest;
+  Self.Client.OnRequest     := Self.ClientReceivedRequest;
+
+  Self.Client.Connect(DefaultTimeout);
+  Self.Client.Send(Self.Invite);
+
+  Self.WaitForSignaled;
+  CheckEquals(MethodOptions,
+             Self.ReceivedRequestMethod,
+             'Unexpected received request');
+end;
+
 procedure TestTIdSipTcpClient.TestConnectAndDisconnect;
 begin
   Self.Client.Host := '127.0.0.1';
@@ -330,22 +375,22 @@ begin
   end;
 end;
 
-procedure TestTIdSipTcpClient.TestIsFinished;
+procedure TestTIdSipTcpClient.TestTerminated;
 begin
   Self.CheckingRequestEvent := Self.SendOkResponse;
 
-  Check(not Self.Client.IsFinished, 'Before connect');
+  Check(not Self.Client.Terminated, 'Before connect');
 
   Self.Client.Connect(DefaultTimeout);
-  Check(not Self.Client.IsFinished, 'Connection established');
+  Check(not Self.Client.Terminated, 'Connection established');
 
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;
-  Check(Self.Client.IsFinished, 'After final response received');
+  Check(Self.Client.Terminated, 'After final response received');
 end;
 
-procedure TestTIdSipTcpClient.TestIsFinishedWithServerDisconnect;
+procedure TestTIdSipTcpClient.TestTerminatedWithServerDisconnect;
 begin
   Self.CheckingRequestEvent := Self.CutConnection;
 
@@ -353,7 +398,7 @@ begin
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;
-  Check(Self.Client.IsFinished, 'After connection unexpectedly cut');
+  Check(Self.Client.Terminated, 'After connection unexpectedly cut');
 end;
 
 procedure TestTIdSipTcpClient.TestReceiveOkResponse;
