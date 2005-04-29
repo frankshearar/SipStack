@@ -108,7 +108,7 @@ begin
 
   Self.EmptyListEvent := TSimpleEvent.Create;
   Self.ClientEvent := TSimpleEvent.Create;
-  Self.Timer := TIdThreadedTimerQueue.Create(false, 0);
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.Client := TIdSipTcpClient.Create(nil);
