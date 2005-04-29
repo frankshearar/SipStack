@@ -304,8 +304,8 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                         Event: TEvent;
-                                         Data: TObject = nil);
+                                 Event: TEvent;
+                                 Data: TObject = nil);
 var
   EventWait: TIdEventWait;
 begin
@@ -316,8 +316,8 @@ begin
 end;
 
 procedure TIdTimerQueue.AddEvent(MillisecsWait: Cardinal;
-                                         Event: TNotifyEvent;
-                                         Data: TObject = nil);
+                                 Event: TNotifyEvent;
+                                 Data: TObject = nil);
 var
   EventWait: TIdNotifyEventWait;
 begin
