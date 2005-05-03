@@ -106,7 +106,6 @@ type
     procedure TestAddEventWithZeroTimeToSuspendedTimer;
     procedure TestCount;
     procedure TestDebugWaitTime;
-    procedure TestEventAt;
     procedure TestScheduledEvent;
     procedure TestTriggerEarliestEvent;
   end;
@@ -221,14 +220,14 @@ procedure TestTIdTimerQueue.SetUp;
 begin
   inherited SetUp;
 
-  Self.Queue := TIdDebugTimerQueue.Create;
+  Self.Queue := TIdDebugTimerQueue.Create(true);
 
   Self.WaitTime := 999;
 end;
 
 procedure TestTIdTimerQueue.TearDown;
 begin
-  Self.Queue.Free;
+  Self.Queue.Terminate;
 
   inherited TearDown;
 end;
@@ -243,7 +242,7 @@ begin
   Self.Queue.AddEvent(WaitTime, Foo);
   CheckEquals(1, Self.Queue.EventCount, 'No event added');
   Check(Self.Queue.ScheduledEvent(Foo), 'No event scheduled');
-  CheckNotEquals(0, Self.Queue.EventAt(0).TimeToWait, 'TimeToWait not calculated');
+  CheckNotEquals(0, Self.Queue.FirstEventScheduledFor(Foo).TimeToWait, 'TimeToWait not calculated');
 end;
 
 procedure TestTIdTimerQueue.TestBefore;
@@ -686,46 +685,16 @@ begin
 end;
 
 procedure TestTIdDebugTimerQueue.TestDebugWaitTime;
+const
+  ArbValue = 42;
 var
-  I: Integer;
+  Event: TNotifyEvent;
 begin
-  for I := 1 to 2 do begin
-    Self.Timer.AddEvent(I, Self.OnTimer, nil);
-    CheckEquals(I,
-                Self.Timer.EventAt(I - 1).DebugWaitTime,
-                IntToStr(I) + 'th event');
-  end;
-end;
+  Event := Self.OnTimer;
 
-procedure TestTIdDebugTimerQueue.TestEventAt;
-var
-  Callback: TNotifyEvent;
-begin
-  Callback := Self.OnTimer;
-
-  try
-    Self.Timer.EventAt(0);
-  except
-    on EListError do;
-  end;
-
-  Self.Timer.AddEvent(1000, Self.OnTimer, nil);
-  Check(Assigned(Self.Timer.EventAt(0)),
-        'EventAt returned nil for an existing event (0)');
-  CheckEquals(TIdNotifyEventWait.ClassName,
-              Self.Timer.EventAt(0).ClassName,
-              'Unexpected event (0)');
-  Check(Self.Timer.EventAt(0).MatchEvent(@Callback),
-        'Wrong timer (0)');
-
-  Self.Timer.AddEvent(1000, Self.WaitEvent, nil);
-  Check(Assigned(Self.Timer.EventAt(1)),
-        'EventAt returned nil for an existing event (1)');
-  CheckEquals(TIdEventWait.ClassName,
-              Self.Timer.EventAt(1).ClassName,
-              'Unexpected event (1)');
-  Check(Self.Timer.EventAt(1).MatchEvent(Self.WaitEvent),
-        'Wrong timer (1)');
+  Self.Timer.AddEvent(ArbValue, Event, nil);
+  CheckEquals(ArbValue, Self.Timer.FirstEventScheduledFor(@Event).DebugWaitTime,
+              'DebugWaitTime not set');
 end;
 
 procedure TestTIdDebugTimerQueue.TestScheduledEvent;

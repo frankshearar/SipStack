@@ -12,7 +12,7 @@ unit TestIdRTP;
 interface
 
 uses
-  IdGlobal, IdRTP, TestFramework, TestFrameworkRtp;
+  IdGlobal, IdRTP, IdTimerQueue, TestFramework, TestFrameworkRtp;
 
 type
   TestFunctions = class(TTestRTP)
@@ -460,11 +460,13 @@ type
 
   TestTIdRTCPBye = class(TRTCPPacketTestCase)
   private
-    Bye: TIdRTCPBye;
+    Bye:   TIdRTCPBye;
+    Timer: TIdTimerQueue;
   protected
     function PacketType: Byte; override;
   public
     procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestGetAllSrcIDs;
     procedure TestIsBye; override;
@@ -608,6 +610,7 @@ type
     Session: TIdRTPSession;
     Profile: TIdRTPProfile;
     T140PT:  Cardinal;
+    Timer:   TIdThreadedTimerQueue;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -803,7 +806,7 @@ const
 implementation
 
 uses
-  Classes, DateUtils, IdRtpServer, IdTimerQueue, SysUtils, Types;
+  Classes, DateUtils, IdRtpServer, SysUtils, Types;
 
 function Suite: ITestSuite;
 begin
@@ -5423,6 +5426,14 @@ begin
   inherited SetUp;
 
   Self.Bye := Self.Packet as TIdRTCPBye;
+  Self.Timer := TIdDebugTimerQueue.Create(false);
+end;
+
+procedure TestTIdRTCPBye.TearDown;
+begin
+  Self.Timer.Terminate;
+
+  inherited TearDown;
 end;
 
 //* TestTIdRTCPBye Protected methods *******************************************
@@ -5477,6 +5488,7 @@ begin
       Session := TIdRTPSession.Create(MockAgent);
       try
         Session.Profile := Profile;
+        Session.Timer   := Self.Timer;
         Self.Bye.PrepareForTransmission(Session);
         Check(Self.Bye.SourceCount > 0,
               'BYE must have source counts');
@@ -6902,6 +6914,8 @@ begin
 
   Self.Session := TIdRTPSession.Create(Self.Agent);
   Self.Session.Profile := Self.Profile;
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+  Self.Session.Timer := Self.Timer;
 end;
 
 procedure TRTPSessionTestCase.TearDown;

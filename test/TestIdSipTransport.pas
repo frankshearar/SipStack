@@ -429,12 +429,9 @@ var
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
-{
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
-}
   Result.AddTest(TestTIdSipTCPTransport.Suite);
-{
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
@@ -447,7 +444,6 @@ begin
   Result.AddTest(TestTIdSipTransportRejectedMessageMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingResponseMethod.Suite);
-}
 end;
 
 //******************************************************************************
@@ -1853,13 +1849,18 @@ var
   Request:  TIdSipRequest;
   Response: TIdSipResponse;
 begin
+  // We send an INVITE to the low port transport. The client then disconnects its
+  // connection. We check that the transport sends the response down a new TCP
+  // connection. In this case the transport will make a connection to itself
+  // (since it runs on the default transport port).
+
   Self.CheckingResponseEvent := Self.CheckSendResponsesDownClosedConnection;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
   try
     Self.SipClient.OnResponse  := Self.ClientOnResponseDownClosedConnection;
-    Self.SipClient.Host        := '127.0.0.1';
-    Self.SipClient.Port        := IdPORT_SIP;
+    Self.SipClient.Host        := Self.LowPortTransport.Address;
+    Self.SipClient.Port        := Self.LowPortTransport.Port;
     Self.SipClient.ReadTimeout := 100;
 
     Self.SipClient.Connect;
@@ -1868,10 +1869,6 @@ begin
     finally
       Self.SipClient.Disconnect;
     end;
-
-    // I can't say WHY we need to pause here, but it seems to work...
-    // Not exactly an ideal situation.
-    IdGlobal.Sleep(500);
 
     Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
     try
@@ -1959,8 +1956,8 @@ begin
     SipClient := Self.CreateClient;
     try
       SipClient.OnResponse  := Self.ClientOnResponse;
-      SipClient.Host        := '127.0.0.1';
-      SipClient.Port        := IdPORT_SIP;
+      SipClient.Host        := Self.LowPortTransport.Address;
+      SipClient.Port        := Self.LowPortTransport.Port;
       SipClient.ReadTimeout := 1000;
 
       SipClient.Connect;

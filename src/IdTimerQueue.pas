@@ -74,7 +74,7 @@ type
   TIdTimerQueue = class(TObject)
   private
     fCreateSuspended: Boolean;
-    fEventList:       TObjectList;
+    fEventList:       TList;
     fLock:            TCriticalSection;
     fTerminated:      Boolean;
     fDefaultTimeout:  Cardinal;
@@ -89,6 +89,7 @@ type
     function  GetDefaultTimeout: Cardinal;
     procedure InternalRemove(Event: Pointer);
     procedure SetDefaultTimeout(Value: Cardinal);
+    procedure SortEvents;
     function  ShortestWait: Cardinal;
   protected
     function  IndexOfEvent(Event: Pointer): Integer;
@@ -97,11 +98,11 @@ type
     procedure UnlockTimer; virtual;
 
     property CreateSuspended: Boolean          read fCreateSuspended write fCreateSuspended;
-    property EventList:       TObjectList      read fEventList;
+    property EventList:       TList            read fEventList;
     property Lock:            TCriticalSection read fLock;
     property Terminated:      Boolean          read fTerminated write fTerminated;
   public
-    constructor Create(CreateSuspended: Boolean = True); virtual;
+    constructor Create(CreateSuspended: Boolean); virtual;
     destructor  Destroy; override;
 
     procedure AddEvent(MillisecsWait: Cardinal;
@@ -168,8 +169,9 @@ type
   public
     procedure AddEvent(MillisecsWait: Cardinal;
                        Event: TIdWait); override;
-    function  EventAt(Index: Integer): TIdWait;
     function  EventCount: Integer;
+    function  FirstEventScheduledFor(Event: Pointer): TIdWait;
+    function  LastEventScheduledFor(Event: Pointer): TIdWait;
     procedure LockTimer; override;
     function  ScheduledEvent(Event: TObject): Boolean; overload;
     function  ScheduledEvent(Event: TNotifyEvent): Boolean; overload;
@@ -207,6 +209,26 @@ end;
 function AddModuloWord(Addend, Augend: Word): Word;
 begin
   Result := AddModulo(Addend, Augend, High(Addend));
+end;
+
+//******************************************************************************
+//* Unit private functions & procedures                                        *
+//******************************************************************************
+
+function TimeSort(Item1, Item2: Pointer): Integer;
+var
+  WaitA: TIdWait;
+  WaitB: TIdWait;
+begin
+  WaitA := TIdWait(Item1);
+  WaitB := TIdWait(Item2);
+
+  if (WaitA.TriggerTime < WaitB.TriggerTime) then
+    Result := -1
+  else if (WaitA.TriggerTime > WaitB.TriggerTime) then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 //******************************************************************************
@@ -269,7 +291,7 @@ end;
 //******************************************************************************
 //* TIdTimerQueue Public methods ***********************************************
 
-constructor TIdTimerQueue.Create(CreateSuspended: Boolean = True);
+constructor TIdTimerQueue.Create(CreateSuspended: Boolean);
 begin
   inherited Create;
 
@@ -277,7 +299,7 @@ begin
 
   // Before inherited - inherited creates the actual thread and if not
   // suspended will start before we initialize.
-  Self.fEventList := TObjectList.Create(false);
+  Self.fEventList := TList.Create;
   Self.fLock      := TCriticalSection.Create;
   Self.Terminated := false;
   Self.WaitEvent  := TSimpleEvent.Create;
@@ -455,6 +477,7 @@ begin
       Event.TriggerTime   := AddModulo(GetTickCount,
                                        MillisecsWait,
                                        High(MillisecsWait));
+      Self.SortEvents;
     except
       if (Self.EventList.IndexOf(Event) <> ItemNotFoundIndex) then
         Self.EventList.Remove(Event)
@@ -473,14 +496,12 @@ end;
 procedure TIdTimerQueue.ClearEvents;
 begin
   while Self.EventList.Count > 0 do begin
-    Self.EventList[0].Free;
+    Self.EventAt(0).Free;
     Self.EventList.Delete(0);
   end;
 end;
 
 function TIdTimerQueue.EarliestEvent: TIdWait;
-var
-  I: Integer;
 begin
   // Precondition: Something acquired Self.Lock
   if (Self.EventList.Count = 0) then begin
@@ -489,15 +510,12 @@ begin
   end;
 
   Result := Self.EventAt(0);
-  for I := 1 to Self.EventList.Count - 1 do
-    if Self.Before(Self.EventAt(I).TriggerTime, Result.TriggerTime) then
-      Result := Self.EventAt(I);
 end;
 
 function TIdTimerQueue.EventAt(Index: Integer): TIdWait;
 begin
   // Precondition: Something acquired Self.Lock
-  Result := Self.EventList[Index] as TIdWait;
+  Result := TIdWait(Self.EventList[Index]);
 end;
 
 function TIdTimerQueue.GetDefaultTimeout: Cardinal;
@@ -538,6 +556,12 @@ begin
   finally
     Self.UnlockTimer;
   end;
+end;
+
+procedure TIdTimerQueue.SortEvents;
+begin
+  // Precondition: You've locked the list
+  Self.EventList.Sort(TimeSort);
 end;
 
 function TIdTimerQueue.ShortestWait: Cardinal;
@@ -651,16 +675,49 @@ begin
   end;
 end;
 
-function TIdDebugTimerQueue.EventAt(Index: Integer): TIdWait;
-begin
-  Result := inherited EventAt(Index);
-end;
-
 function TIdDebugTimerQueue.EventCount: Integer;
 begin
   Self.LockTimer;
   try
     Result := Self.EventList.Count;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+function TIdDebugTimerQueue.FirstEventScheduledFor(Event: Pointer): TIdWait;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  Self.LockTimer;
+  try
+    I := 0;
+    while (I < Self.EventList.Count) and not Assigned(Result) do begin
+      if Self.EventAt(I).MatchEvent(Event) then
+        Result := Self.EventAt(I);
+      Inc(I);
+    end;
+  finally
+    Self.UnlockTimer;
+  end;
+end;
+
+function TIdDebugTimerQueue.LastEventScheduledFor(Event: Pointer): TIdWait;
+var
+  I: Integer;
+begin
+  Result := nil;
+
+  Self.LockTimer;
+  try
+    I := Self.EventList.Count - 1;
+    while (I >= 0) and not Assigned(Result) do begin
+      if Self.EventAt(I).MatchEvent(Event) then
+        Result := Self.EventAt(I);
+      Dec(I);
+    end;
   finally
     Self.UnlockTimer;
   end;

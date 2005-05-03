@@ -3527,21 +3527,12 @@ end;
 
 procedure TestTIdSipUserAgent.TestScheduleEventActionClosure;
 var
-  DebugTimer: TIdDebugTimerQueue;
   EventCount: Integer;
 begin
-  DebugTimer := TIdDebugTimerQueue.Create;
-  try
-    Self.Core.Timer := DebugTimer;
-
-    EventCount := DebugTimer.EventCount;
-    Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy);
-    Check(EventCount < DebugTimer.EventCount,
-          'Event not scheduled');
-  finally
-    Self.Core.Timer := nil;
-    DebugTimer.Terminate;
-  end;
+  EventCount := Self.DebugTimer.EventCount;
+  Self.Core.ScheduleEvent(TIdSipInboundInviteExpire, 50, Self.Invite.Copy);
+  Check(EventCount < DebugTimer.EventCount,
+        'Event not scheduled');
 end;
 
 procedure TestTIdSipUserAgent.TestSetContact;
@@ -4508,11 +4499,10 @@ end;
 
 procedure TestTIdSipSession.TestModifyGlareOutbound;
 var
-  DebugTimer:    TIdDebugTimerQueue;
-  Event:         TNotifyEvent;
-  EventCount:    Integer;
-  LatestEvent:   TIdWait;
-  Session:       TIdSipSession;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
+  Session:     TIdSipSession;
 begin
   // Essentially, we and Remote send INVITEs simultaneously
   // We send ours and, because the remote end's sent its before ours arrives,
@@ -4520,34 +4510,28 @@ begin
   // INVITE.
 
   Event := Self.Core.OnResendReInvite;
-  DebugTimer := TIdDebugTimerQueue.Create;
+
+  Session := Self.CreateAndEstablishSession;
+
+  Session.Modify('', '');
+
+  EventCount := Self.DebugTimer.EventCount;
+  Self.ReceiveResponse(SIPRequestPending);
+
+  Self.DebugTimer.LockTimer;
   try
-    Self.Core.Timer := DebugTimer;
+    Check(EventCount < Self.DebugTimer.EventCount,
+          Session.ClassName + ': No timer added');
 
-    Session := Self.CreateAndEstablishSession;
+    LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
 
-    Session.Modify('', '');
-
-    EventCount := DebugTimer.EventCount;
-    Self.ReceiveResponse(SIPRequestPending);
-
-    DebugTimer.LockTimer;
-    try
-      Check(EventCount < DebugTimer.EventCount,
-            Session.ClassName + ': no timer added');
-
-      LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-      Check(LatestEvent.MatchEvent(@Event),
-            Session.ClassName + ': Wrong notify event');
-      Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
-                               Session.ClassName + ': Bad wait time (was '
-                             + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
+    Check(Assigned(LatestEvent),
+          Session.ClassName + ': Wrong notify event');
+    Self.CheckResendWaitTime(LatestEvent.DebugWaitTime,
+                             Session.ClassName + ': Bad wait time (was '
+                           + IntToStr(LatestEvent.DebugWaitTime) + ' milliseconds)');
   finally
-    Self.Core.Timer := nil;
-    DebugTimer.Terminate;
+    Self.DebugTimer.UnlockTimer;
   end;
 end;
 
@@ -6654,43 +6638,36 @@ procedure TestTIdSipOutboundRegister.CheckAutoReregister(ReceiveResponse: TExpir
 const
   ExpiryTime = 42;
 var
-  DebugTimer:    TIdDebugTimerQueue;
-  Event:         TNotifyEvent;
-  EventCount:    Integer;
-  LatestEvent:   TIdWait;
+  Event:       TNotifyEvent;
+  EventCount:  Integer;
+  LatestEvent: TIdWait;
 begin
   Event := Self.Core.OnReregister;
-  DebugTimer := TIdDebugTimerQueue.Create;
+
+  Self.CreateAction;
+
+  EventCount := DebugTimer.EventCount;
+  ReceiveResponse(ExpiryTime);
+
+  Self.DebugTimer.LockTimer;
   try
-    Self.Core.Timer := DebugTimer;
+    if EventIsScheduled then begin
+      Check(EventCount < Self.DebugTimer.EventCount,
+            MsgPrefix + ': No timer added');
 
-    Self.CreateAction;
+      LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
 
-    EventCount := DebugTimer.EventCount;
-    ReceiveResponse(ExpiryTime);
-
-    DebugTimer.LockTimer;
-    try
-      if EventIsScheduled then begin
-        Check(EventCount < DebugTimer.EventCount,
-              MsgPrefix + ': No timer added');
-
-        LatestEvent := DebugTimer.EventAt(DebugTimer.EventCount - 1);
-        Check(LatestEvent.MatchEvent(@Event),
-              MsgPrefix + ': Wrong notify event');
-        Check(LatestEvent.DebugWaitTime > 0,
-              MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
-      end
-      else
-        CheckEquals(EventCount,
-                    DebugTimer.EventCount,
-                    MsgPrefix + ': Timer erroneously added');
-    finally
-      DebugTimer.UnlockTimer;
-    end;
+      Check(Assigned(LatestEvent),
+            MsgPrefix + ': Wrong notify event');
+      Check(LatestEvent.DebugWaitTime > 0,
+            MsgPrefix + ': Bad wait time (' + IntToStr(LatestEvent.DebugWaitTime) + ')');
+    end
+    else
+      CheckEquals(EventCount,
+                  Self.DebugTimer.EventCount,
+                  MsgPrefix + ': Timer erroneously added');
   finally
-    Self.Core.Timer := nil;
-    DebugTimer.Terminate;
+    Self.DebugTimer.UnlockTimer;
   end;
 end;
 

@@ -3176,7 +3176,8 @@ begin
 
   // "-2" because, arbitrarily, the implementation adds TimerG and then
   // TimerH.
-  TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+  TimerGEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
+  Check(Assigned(TimerGEvent), 'Event not scheduled?');
   Check(TimerGEvent.MatchEvent(@Event),
         'Wrong notify event');
   CheckEquals(Self.MockDispatcher.T1Interval,
@@ -3208,7 +3209,8 @@ begin
   // "-2" because, arbitrarily, the implementation adds TimerG and then
   // TimerH.
   //
-  TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+  TimerGEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
+  Check(Assigned(TimerGEvent), 'Event not scheduled?');
   Check(TimerGEvent.MatchEvent(@Event),
         'Wrong notify event');
   CheckEquals(Self.MockDispatcher.T1Interval,
@@ -3222,7 +3224,7 @@ begin
 
     Self.ServerTran.FireTimerG;
 
-    TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    TimerGEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event scheduled (' + IntToStr(FireCount) + ')');
     CheckEquals(ExpectedInterval,
@@ -3239,7 +3241,7 @@ begin
 
     Self.ServerTran.FireTimerG;
 
-    TimerGEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    TimerGEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event scheduled (' + IntToStr(FireCount) + ')');
     CheckEquals(ExpectedInterval,
@@ -3306,7 +3308,7 @@ begin
 
   // "-1" because, arbitrarily, the implementation adds TimerH and then
   // TimerH.
-  TimerHEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  TimerHEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(TimerHEvent.MatchEvent(@Event),
         'Wrong notify event');
   CheckEquals(Self.ServerTran.TimerHInterval,
@@ -3354,7 +3356,7 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount, 'No event scheduled');
 
-  LatestEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(LatestEvent.MatchEvent(@Event),
         'Wrong notify event');
   CheckEquals(Self.ServerTran.TimerIInterval,
@@ -3782,7 +3784,7 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount, 'No event scheduled');
 
-  LatestEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  LatestEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(LatestEvent.MatchEvent(@Event),
         'Wrong notify event');
   CheckEquals(Tran.TimerJInterval,
@@ -4001,13 +4003,13 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount,
         'No event added');
-  LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  LastEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
   Check(LastEvent.MatchEvent(@Event),
         'Wrong event scheduled');
   // 2* cos SendRequest calls FireTimerA the first time
   CheckEquals(2*Self.MockDispatcher.T1Interval,
               LastEvent.DebugWaitTime,
-              'Wrong time');
+              'Wrong time for the second Timer A event');
 end;
 
 procedure TestTIdSipClientInviteTransaction.TestFireTimerAInCompletedState;
@@ -4412,10 +4414,10 @@ begin
 
   Event := Self.MockDispatcher.OnClientInviteTransactionTimerA;
 
-  Check(Self.DebugTimer.EventAt(0).MatchEvent(@Event),
+  Check(Self.DebugTimer.FirstEventScheduledFor(@Event).MatchEvent(@Event),
         'Wrong timer scheduled');
   CheckEquals(Self.MockDispatcher.T1Interval,
-              Self.DebugTimer.EventAt(0).DebugWaitTime,
+              Self.DebugTimer.FirstEventScheduledFor(@Event).DebugWaitTime,
               'Wrong time for the timer');
 end;
 
@@ -4435,7 +4437,7 @@ begin
   // "-2" because the implementation schedules timer B then timer D.
   Check(Self.DebugTimer.EventCount >= 1,
         'Not enough events scheduled - no timer B!');
-  TimerBEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  TimerBEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(TimerBEvent.MatchEvent(@Event),
         'Wrong event scheduled');
   CheckEquals(Self.ClientTran.TimerBInterval,
@@ -4494,7 +4496,7 @@ begin
 
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event added (' + IntToStr(FireCount) + ')');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    LastEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event added (' + IntToStr(FireCount) + ')');
     CheckEquals(ExpectedInterval,
@@ -4536,7 +4538,7 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount,
         'No event added');
-  LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  LastEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(LastEvent.MatchEvent(@Event),
         'Wrong event scheduled');
   CheckEquals(Self.ClientTran.TimerDInterval,
@@ -4984,7 +4986,7 @@ begin
 
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event added (' + IntToStr(FireCount) + ')');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    LastEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event added (' + IntToStr(FireCount) + ')');
     CheckEquals(ExpectedInterval,
@@ -5011,7 +5013,7 @@ begin
 
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event added (' + IntToStr(FireCount) + ')');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    LastEvent := Self.DebugTimer.LastEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event added (' + IntToStr(FireCount) + ')');
     CheckEquals(ExpectedInterval,
@@ -5046,7 +5048,7 @@ begin
     // "+1" and "-1" because the transaction will always add Timer F. Last.
     Check(EventCount + 1 < Self.DebugTimer.EventCount,
           'No event added');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 2);
+    LastEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event scheduled');
     CheckEquals(Tran.TimerEInterval,
@@ -5077,7 +5079,7 @@ begin
     CheckEquals(EventCount + 1,
                 Self.DebugTimer.EventCount,
                 'Timer E scheduled');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    LastEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event scheduled');
     CheckEquals(Tran.TimerFInterval,
@@ -5108,7 +5110,7 @@ begin
 
     Check(EventCount < Self.DebugTimer.EventCount,
           'No event added');
-    LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+    LastEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
     Check(LastEvent.MatchEvent(@Event),
           'Wrong event scheduled');
     CheckEquals(Tran.TimerFInterval,
@@ -5150,7 +5152,7 @@ begin
 
   Check(EventCount < Self.DebugTimer.EventCount,
         'No event added');
-  LastEvent := Self.DebugTimer.EventAt(Self.DebugTimer.EventCount - 1);
+  LastEvent := Self.DebugTimer.FirstEventScheduledFor(@Event);
   Check(LastEvent.MatchEvent(@Event),
         'Wrong event scheduled');
   CheckEquals(Self.ClientTran.TimerKInterval,

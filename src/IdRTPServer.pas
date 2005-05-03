@@ -12,7 +12,7 @@ unit IdRTPServer;
 interface
 
 uses
-  Classes, IdRTP, IdSocketHandle, IdUDPServer, SyncObjs;
+  Classes, IdRTP, IdTimerQueue, IdSocketHandle, IdUDPServer, SyncObjs;
 
 type
   TIdRTCPReadEvent = procedure(Sender: TObject;
@@ -45,11 +45,13 @@ type
     Peer:        TIdBaseRTPAbstractPeer; // We delegate to this to facilitate code reuse
 
     function  GetProfile: TIdRTPProfile;
+    function  GetTimer: TIdTimerQueue;
     procedure NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                     Binding: TIdConnection);
     procedure NotifyListenersOfRTP(Packet: TIdRTPPacket;
                                    Binding: TIdConnection);
     procedure SetProfile(Value: TIdRTPProfile);
+    procedure SetTimer(Value: TIdTimerQueue);
   protected
     procedure DoUDPRead(AData: TStream;
                         ABinding: TIdSocketHandle); override;
@@ -68,6 +70,7 @@ type
     property OnRTPRead:  TIdRTPReadEvent  read fOnRTPRead write fOnRTPRead;
     property Profile:    TIdRTPProfile    read GetProfile write SetProfile;
     property Session:    TIdRTPSession    read fSession;
+    property Timer:      TIdTimerQueue    read GetTimer write SetTimer;
   end;
 
 implementation
@@ -160,6 +163,11 @@ begin
   Result := Self.Peer.Profile;
 end;
 
+function TIdRTPServer.GetTimer: TIdTimerQueue;
+begin
+  Result := Self.Session.Timer;
+end;
+
 procedure TIdRTPServer.NotifyListenersOfRTCP(Packet: TIdRTCPPacket;
                                              Binding: TIdConnection);
 var
@@ -197,6 +205,11 @@ procedure TIdRTPServer.SetProfile(Value: TIdRTPProfile);
 begin
   Self.Session.Profile := Value;
   Self.Peer.Profile    := Self.Session.Profile;
+end;
+
+procedure TIdRTPServer.SetTimer(Value: TIdTimerQueue);
+begin
+  Self.Session.Timer := Value;
 end;
 
 end.

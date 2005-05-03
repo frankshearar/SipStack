@@ -946,6 +946,7 @@ type
     fSentOctetCount:            Cardinal;
     fSentPacketCount:           Cardinal;
     fSessionBandwidth:          Cardinal;
+    fTimer:                     TIdTimerQueue;
     Listeners:                  TIdNotificationList;
     MemberLock:                 TCriticalSection;
     Members:                    TIdRTPMemberTable;
@@ -953,7 +954,6 @@ type
     NoDataSent:                 Boolean;
     PreviousTransmissionTime:   TDateTime;
     SequenceNo:                 TIdRTPSequenceNo;
-    Timer:                      TIdTimerQueue;
     TransmissionLock:           TCriticalSection;
 
     function  AddAppropriateReportTo(Packet: TIdCompoundRTCPPacket): TIdRTCPReceiverReport;
@@ -1045,6 +1045,7 @@ type
     property SentPacketCount:           Cardinal      read fSentPacketCount;
     property SessionBandwith:           Cardinal      read fSessionBandwidth write fSessionBandwidth;
     property SyncSrcID:                 Cardinal      read fSyncSrcID;
+    property Timer:                     TIdTimerQueue read fTimer write fTimer;
   end;
 
   // I provide a buffer to objects that receive RTP packets. I assemble these
@@ -4713,7 +4714,6 @@ begin
   Self.Members    := TIdRTPMemberTable.Create;
 
   Self.TransmissionLock := TCriticalSection.Create;
-  Self.Timer            := TIdTimerQueue.Create(false);
 
   Self.AssumedMTU            := Self.DefaultAssumedMTU;
   Self.MissedReportTolerance := Self.DefaultMissedReportTolerance;
@@ -4723,7 +4723,6 @@ end;
 
 destructor TIdRTPSession.Destroy;
 begin
-  Self.Timer.Terminate;
   Self.TransmissionLock.Free;
 
   Self.MemberLock.Acquire;

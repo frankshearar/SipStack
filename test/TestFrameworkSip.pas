@@ -728,7 +728,7 @@ begin
   Self.Invite := TIdSipTestResources.CreateBasicRequest;
   Self.RemoveBody(Self.Invite);
 
-  Self.DebugTimer := TIdDebugTimerQueue.Create;
+  Self.DebugTimer := TIdDebugTimerQueue.Create(false);
   Self.DebugTimer.FireImmediateEvents := true;
   Self.Core.Timer := DebugTimer;
 
