@@ -2902,6 +2902,7 @@ end;
 function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
 begin
   Result := Self.AddOutboundUnregister;
+  Result.Bindings.Add(Self.Contact);
   Result.Registrar := Registrar;
 end;
 

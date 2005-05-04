@@ -235,6 +235,7 @@ type
     procedure TestTerminateAllCalls;
     procedure TestUnknownAcceptValue;
     procedure TestUnmatchedAckGetsDropped;
+    procedure TestUnregisterFrom;
     procedure TestViaMatchesTransportParameter;
   end;
 
@@ -3734,6 +3735,26 @@ begin
   finally
     Self.Core.RemoveUserAgentListener(Listener);
     Listener.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestUnregisterFrom;
+var
+  OurBindings: TIdSipContacts;
+begin
+  Self.MarkSentRequestCount;
+  Self.Core.UnregisterFrom(Self.RemoteUri).Send;
+  CheckRequestSent('No REGISTER sent');
+  CheckEquals(MethodRegister,
+              Self.LastSentRequest.Method,
+              'Unexpected sent request');
+
+  OurBindings := TIdSipContacts.Create;
+  try
+    Check(OurBindings.Equals(Self.LastSentRequest.Contacts),
+          'un-REGISTER has wrong contact info');
+  finally
+    OurBindings.Free;
   end;
 end;
 
