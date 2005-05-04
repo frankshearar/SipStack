@@ -77,6 +77,8 @@ type
   // transactions.
   //
   // I do not manage any transports that may be given to me.
+  //
+  // To correctly set me up, you must set my Timer and Locator properties.  
   TIdSipTransactionDispatcher = class(TIdInterfacedObject,
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
