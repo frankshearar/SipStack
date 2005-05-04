@@ -422,7 +422,7 @@ procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession;
                                           const RemoteSessionDescription: String;
                                           const MimeType: String);
 begin
-  Self.PayloadProcessor.SetRemoteDescription(RemoteSessionDescription);
+//  Self.PayloadProcessor.SetRemoteDescription(RemoteSessionDescription);
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -888,6 +888,7 @@ begin
       Answer := Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address);
 
     (Self.LatestSession as TIdSipInboundSession).AcceptCall(Answer, SdpMimeType);
+    Self.Answer.Enabled := false;
   end;
 end;
 

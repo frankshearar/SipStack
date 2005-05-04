@@ -273,7 +273,7 @@ object rnidSpike: TrnidSpike
         Width = 142
         Height = 21
         TabOrder = 9
-        Text = 'sip:frank@192.168.1.131:25060'
+        Text = 'sip:frank@192.168.1.131:35060'
         OnChange = ContactUriChange
       end
       object HostName: TEdit
@@ -349,7 +349,7 @@ object rnidSpike: TrnidSpike
         Width = 142
         Height = 21
         TabOrder = 14
-        Text = 'sip:frank@192.168.1.131:25060'
+        Text = 'sip:frank@192.168.1.131:35060'
         OnChange = FromUriChange
       end
     end
