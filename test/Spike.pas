@@ -227,11 +227,9 @@ begin
   Self.Locator.NameServer := '62.241.160.200';
   Self.Locator.Port := 53;
 
-  Self.Dispatch := TIdSipTransactionDispatcher.Create;
+  Self.Dispatch := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
   Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
-  Self.Dispatch.Locator := Self.Locator;
-  Self.Dispatch.Timer := Self.Timer;
 
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatch;

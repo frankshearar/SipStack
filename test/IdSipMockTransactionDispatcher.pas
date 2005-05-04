@@ -13,7 +13,7 @@ interface
 
 uses
   Classes, IdSipDialog, IdSipLocator, IdSipMessage, IdSipMockLocator,
-  IdSipMockTransport, IdSipTransaction, IdSipTransport;
+  IdSipMockTransport, IdSipTransaction, IdSipTransport, IdTimerQueue;
 
 type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
@@ -21,11 +21,12 @@ type
     fTransportType: String;
     Transports:     TStrings;
 
+    function GetDebugTimer: TIdDebugTimerQueue;
     function GetMockLocator: TIdSipMockLocator;
     function GetTransport: TIdSipMockTransport;
     function TransportAt(Index: Integer): TIdSipMockTransport;
   public
-    constructor Create; override;
+    constructor Create; reintroduce;
     destructor  Destroy; override;
 
     procedure AddTransportSendingListener(Listener: IIdSipTransportSendingListener);
@@ -34,6 +35,7 @@ type
     procedure SendToTransport(Response: TIdSipResponse;
                               Dests: TIdSipLocations); override;
 
+    property DebugTimer:    TIdDebugTimerQueue  read GetDebugTimer;
     property MockLocator:   TIdSipMockLocator   read GetMockLocator;
     property Transport:     TIdSipMockTransport read GetTransport;
     property TransportType: String              read fTransportType write fTransportType;
@@ -60,13 +62,14 @@ var
   SupportedTrans: TStrings;
   Tran:           TIdSipTransport;
 begin
-  inherited Create;
+  inherited Create(TIdDebugTimerQueue.Create(false), TIdSipMockLocator.Create);
+
+  Self.DebugTimer.FireImmediateEvents := true;
 
   TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipMockTcpTransport);
   TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
 
-  Self.Locator := TIdSipMockLocator.Create;
   Self.Transports := TStringList.Create;
   Self.TransportType := UdpTransport;
 
@@ -94,6 +97,7 @@ begin
     Self.Transports.Objects[I].Free;
 
   Self.Transports.Free;
+  Self.Timer.Terminate;
   Self.Locator.Free;
 
   TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
@@ -127,6 +131,11 @@ begin
 end;
 
 //* TIdSipMockTransactionDispatcher Private methods ****************************
+
+function TIdSipMockTransactionDispatcher.GetDebugTimer: TIdDebugTimerQueue;
+begin
+  Result := Self.Timer as TIdDebugTimerQueue;
+end;
 
 function TIdSipMockTransactionDispatcher.GetMockLocator: TIdSipMockLocator;
 begin

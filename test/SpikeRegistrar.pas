@@ -13,8 +13,8 @@ interface
 
 uses
   Classes, Controls, ExtCtrls, Forms, IdObservable, IdSipCore, IdSipMessage,
-  IdSipMockBindingDatabase, IdSipRegistration, IdSipTransaction,
-  IdSipTransport, StdCtrls, SyncObjs, SysUtils;
+  IdSipMockBindingDatabase, IdSipMockLocator,IdSipRegistration,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpikeRegistrar = class(TForm,
@@ -31,7 +31,9 @@ type
   private
     DB:         TIdSipMockBindingDatabase;
     Dispatcher: TIdSipTransactionDispatcher;
+    Locator:    TIdSipMockLocator;
     Lock:       TCriticalSection;
+    Timer:      TIdTimerQueue;
     Transport:  TIdSipTransport;
     UA:         TIdSipRegistrar;
 
@@ -80,6 +82,8 @@ begin
   inherited Create(AOwner);
 
   Self.Lock := TCriticalSection.Create;
+  Self.Locator := TIdSipMockLocator.Create;
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
 
   Self.DB := TIdSipMockBindingDatabase.Create;
 
@@ -93,12 +97,13 @@ begin
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
 
-  Self.Dispatcher := TIdSipTransactionDispatcher.Create;
+  Self.Dispatcher := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.Dispatcher.AddTransport(Self.Transport);
   Self.UA := TIdSipRegistrar.Create;
-  Self.UA.Dispatcher := Self.Dispatcher;
-  Self.UA.BindingDB := Self.DB;
-  Self.UA.HostName := 'wsfrank';
+  Self.UA.Dispatcher    := Self.Dispatcher;
+  Self.UA.BindingDB     := Self.DB;
+  Self.UA.HostName      := 'wsfrank';
+  Self.UA.Timer         := Self.Timer;
   Self.UA.UserAgentName := 'Frank''s Registration Spike';
 
   Contact := TIdSipContactHeader.Create;
@@ -122,9 +127,11 @@ end;
 
 destructor TrnidSpikeRegistrar.Destroy;
 begin
+  Self.Timer.Terminate;
   Self.UA.Free;
   Self.Dispatcher.Free;
   Self.Transport.Free;
+  Self.Locator.Free;
   Self.Lock.Free;
   Self.DB.Free;
 

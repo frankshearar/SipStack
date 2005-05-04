@@ -77,8 +77,6 @@ type
   // transactions.
   //
   // I do not manage any transports that may be given to me.
-  //
-  // To correctly set me up, you must set my Timer and Locator properties.  
   TIdSipTransactionDispatcher = class(TIdInterfacedObject,
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
@@ -149,8 +147,11 @@ type
                                 Receiver: TIdSipTransport); overload;
     procedure OnRejectedMessage(const Msg: String;
                                 const Reason: String);
+    procedure SetLocator(Value: TIdSipAbstractLocator);
+    procedure SetTimer(Value: TIdTimerQueue);
   public
-    constructor Create; virtual;
+    constructor Create(Timer: TIdTimerQueue;
+                       Locator: TIdSipAbstractLocator); virtual;
     destructor  Destroy; override;
 
     procedure AddTransactionDispatcherListener(const Listener: IIdSipTransactionDispatcherListener);
@@ -187,11 +188,11 @@ type
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property Locator:    TIdSipAbstractLocator read fLocator    write fLocator;
+    property Locator:    TIdSipAbstractLocator read fLocator;
     property T1Interval: Cardinal              read fT1Interval write fT1Interval;
     property T2Interval: Cardinal              read fT2Interval write fT2Interval;
     property T4Interval: Cardinal              read fT4Interval write fT4Interval;
-    property Timer:      TIdTimerQueue         read fTimer write fTimer;
+    property Timer:      TIdTimerQueue         read fTimer;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -533,9 +534,13 @@ const
 //******************************************************************************
 //* TIdSipTransactionDispatcher Public methods *********************************
 
-constructor TIdSipTransactionDispatcher.Create;
+constructor TIdSipTransactionDispatcher.Create(Timer: TIdTimerQueue;
+                                               Locator: TIdSipAbstractLocator);
 begin
   inherited Create;
+
+  Self.SetLocator(Locator);
+  Self.SetTimer(Timer);
 
   Self.MsgListeners := TIdNotificationList.Create;
   Self.TimerLock    := TCriticalSection.Create;
@@ -993,6 +998,16 @@ end;
 procedure TIdSipTransactionDispatcher.OnRejectedMessage(const Msg: String;
                                                         const Reason: String);
 begin
+end;
+
+procedure TIdSipTransactionDispatcher.SetLocator(Value: TIdSipAbstractLocator);
+begin
+  Self.fLocator := Value;
+end;
+
+procedure TIdSipTransactionDispatcher.SetTimer(Value: TIdTimerQueue);
+begin
+  Self.fTimer := Value;
 end;
 
 //* TIdSipTransactionDispatcher Private methods ********************************

@@ -66,6 +66,7 @@ type
     ReceivedResponse:       TIdSipResponse;
     RejectedRequest:        TIdSipRequest;
     Response200:            TIdSipResponse;
+    Timer:                  TIdDebugTimerQueue;
     TranRequest:            TIdSipRequest;
     Username:               String;
 
@@ -230,7 +231,6 @@ type
     CheckReceiveResponse:  TTestIdSipResponseEvent;
     CheckTerminated:       TIdSipTransactionEvent;
     Core:                  TIdSipAbstractCore;
-    DebugTimer:            TIdDebugTimerQueue;
     Destination:           TIdSipLocation;
     FailMsg:               String;
     MockDispatcher:        TIdSipMockTransactionDispatcher;
@@ -244,6 +244,7 @@ type
 
     procedure Completed(Sender: TObject;
                         R: TIdSipResponse);
+    function  DebugTimer: TIdDebugTimerQueue;
     procedure OnFail(Transaction: TIdSipTransaction;
                      const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
@@ -675,19 +676,19 @@ begin
   Self.Core := TIdSipMockCore.Create;
 
   Self.Locator := TIdSipMockLocator.Create;
+  Self.Timer   := TIdDebugTimerQueue.Create(false);
 
   Self.MockTcpTransport := TIdSipMockTcpTransport.Create;
   Self.MockUdpTransport := TIdSipMockUdpTransport.Create;
   Self.MockTransport    := Self.MockTcpTransport;
 
-  Self.D := TIdSipTransactionDispatcher.Create;
+  Self.D := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.D.AddTransactionDispatcherListener(Self);
 
   Self.Core.Dispatcher := Self.D;
 
   Self.D.AddTransport(Self.MockTcpTransport);
   Self.D.AddTransport(Self.MockUdpTransport);
-  Self.D.Locator := Self.Locator;
 
   Self.Destination := TIdSipLocation.Create(TcpTransport, '127.0.0.1', IdPORT_SIP);
 
@@ -724,6 +725,8 @@ end;
 
 procedure TestTIdSipTransactionDispatcher.TearDown;
 begin
+  Self.Timer.Terminate;
+
   Self.Response200.Free;
   Self.RejectedRequest.Free;
   Self.Options.Free;
@@ -1957,17 +1960,17 @@ procedure TestLocation.SetUp;
 begin
   inherited SetUp;
 
-  Self.L := TIdSipMockLocator.Create;
+  Self.L     := TIdSipMockLocator.Create;
+  Self.Timer := TIdDebugTimerQueue.Create(false);
 
   Self.TcpTransport := TIdSipMockTcpTransport.Create;
   Self.UdpTransport := TIdSipMockUdpTransport.Create;
 
   Self.MockTransport := Self.UdpTransport;
 
-  Self.D := TIdSipTransactionDispatcher.Create;
+  Self.D := TIdSipTransactionDispatcher.Create(Self.Timer, Self.L);
   Self.D.AddTransport(Self.TcpTransport);
   Self.D.AddTransport(Self.UdpTransport);
-  Self.D.Locator := Self.L;
 
   Self.Request  := TIdSipTestResources.CreateBasicRequest;
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPNotFound);
@@ -1984,6 +1987,7 @@ begin
   Self.D.Free;
   Self.UdpTransport.Free;
   Self.TcpTransport.Free;
+  Self.Timer.Terminate;
   Self.L.Free;
 
   inherited TearDown;
@@ -2631,10 +2635,7 @@ begin
 
   Self.Response := TIdSipResponse.InResponseTo(Self.Request, SIPOK);
 
-  Self.DebugTimer := TIdDebugTimerQueue.Create(true);
-
   Self.MockDispatcher := TIdSipMockTransactionDispatcher.Create;
-  Self.MockDispatcher.Timer := Self.DebugTimer;
 
   Self.MockTransport := Self.MockDispatcher.Transport;
   Self.MockTransport.HostName := 'gw1.leo-ix.org';
@@ -2659,7 +2660,6 @@ begin
   Self.Destination.Free;
   Self.Tran.Free;
   Self.MockDispatcher.Free;
-  Self.DebugTimer.Terminate;
   Self.Response.Free;
   Self.Request.Free;
   Self.Core.Free;
@@ -2674,6 +2674,11 @@ procedure TTestTransaction.Completed(Sender: TObject;
 begin
   Self.TransactionCompleted := true;
   Self.ThreadEvent.SetEvent;
+end;
+
+function TTestTransaction.DebugTimer: TIdDebugTimerQueue;
+begin
+  Result := Self.MockDispatcher.DebugTimer;
 end;
 
 procedure TTestTransaction.OnFail(Transaction: TIdSipTransaction;

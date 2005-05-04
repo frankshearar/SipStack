@@ -12,8 +12,8 @@ unit SpikeRegister;
 interface
 
 uses
-  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipMessage,
-  IdSipTransaction, IdSipTransport, StdCtrls, SyncObjs, SysUtils;
+  Classes, Controls, ExtCtrls, Forms, IdSipCore, IdSipIndyLocator, IdSipMessage,
+  IdSipTransaction, IdSipTransport, IdTimerQueue, StdCtrls, SyncObjs, SysUtils;
 
 type
   TrnidSpikeRegister = class(TForm,
@@ -33,8 +33,10 @@ type
     procedure UnregisterClick(Sender: TObject);
   private
     Dispatcher:  TIdSipTransactionDispatcher;
+    Locator:     TIdSipIndyLocator;
     Lock:        TCriticalSection;
     RunningPort: Cardinal;
+    Timer:       TIdTimerQueue;
     Transport:   TIdSipTransport;
     UA:          TIdSipUserAgent;
 
@@ -45,7 +47,7 @@ type
                                const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
-                        const Reason: String); 
+                        const Reason: String);
     procedure OnReceiveRequest(Request: TIdSipRequest;
                                Receiver: TIdSipTransport);
     procedure OnReceiveResponse(Response: TIdSipResponse;
@@ -90,6 +92,11 @@ begin
   inherited Create(AOwner);
 
   Self.Lock := TCriticalSection.Create;
+  Self.Timer := TIdThreadedTimerQueue.Create(false);
+
+  Self.Locator := TIdSipIndyLocator.Create;
+  Self.Locator.NameServer := '127.0.0.1'; // bogus value!
+  Self.Locator.Port       := 53;
 
   Self.Transport := TIdSipUDPTransport.Create;
   if (GStack.LocalAddress <> LocalHostName) then
@@ -101,7 +108,7 @@ begin
   Self.Transport.AddTransportListener(Self);
   Self.Transport.AddTransportSendingListener(Self);
 
-  Self.Dispatcher := TIdSipTransactionDispatcher.Create;
+  Self.Dispatcher := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
   Self.Dispatcher.AddTransport(Self.Transport);
   Self.UA := TIdSipUserAgent.Create;
   Self.UA.Dispatcher := Self.Dispatcher;
@@ -131,10 +138,12 @@ end;
 
 destructor TrnidSpikeRegister.Destroy;
 begin
+  Self.Timer.Terminate;
   Self.UA.Free;
   Self.Dispatcher.Free;
   Self.Transport.Free;
   Self.Lock.Free;
+  Self.Locator.Free;
 
   inherited Destroy;
 end;
