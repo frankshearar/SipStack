@@ -119,7 +119,6 @@ type
     procedure RemoveEvent(Event: TNotifyEvent); overload;
     procedure RemoveEvent(Event: TIdWait); overload;
     procedure Resume; virtual;
-    procedure Synchronize(Method: TThreadMethod); virtual;
     procedure Terminate; virtual;
 
     property DefaultTimeout: Cardinal read GetDefaultTimeout write SetDefaultTimeout;
@@ -153,7 +152,6 @@ type
     procedure Run;
   public
     procedure Resume; override;
-    procedure Synchronize(Method: TThreadMethod); override;
     procedure Terminate; override;
 
     property OnEmpty: TIdTimerEmptyProc read fOnEmpty write fOnEmpty;
@@ -380,11 +378,6 @@ end;
 
 procedure TIdTimerQueue.Resume;
 begin
-end;
-
-procedure TIdTimerQueue.Synchronize(Method: TThreadMethod);
-begin
-  Method;
 end;
 
 procedure TIdTimerQueue.Terminate;
@@ -615,11 +608,6 @@ begin
     Self.BlockRunner := TIdBlockRunnerThread.Create(Self.Run, Self.CreateSuspended);
 
   Self.BlockRunner.Resume;
-end;
-
-procedure TIdThreadedTimerQueue.Synchronize(Method: TThreadMethod);
-begin
-  Self.BlockRunner.Synchronize(Method);
 end;
 
 procedure TIdThreadedTimerQueue.Terminate;
