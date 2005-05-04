@@ -166,6 +166,7 @@ type
   private
     D:            TIdSipTransactionDispatcher;
     L:            TIdSipMockLocator;
+    Timer:        TIdDebugTimerQueue;
     Request:      TIdSipRequest;
     Response:     TIdSipResponse;
     TcpTransport: TIdSipMockTransport;
