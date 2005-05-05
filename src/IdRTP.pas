@@ -70,7 +70,7 @@ type
                                 ClockRate: Cardinal;
                                 const Parameters: String = ''): String; overload;
 
-    constructor Create(EncodingName: String); overload; virtual;
+    constructor Create; overload; virtual;
 
     procedure Assign(Src: TPersistent); override;
     function  Clone: TIdRTPPayload;
@@ -125,7 +125,7 @@ type
   protected
     function GetName: String; override;
   public
-    constructor Create(EncodingName: String); overload; override;
+    constructor Create; overload; override;
 
     function  Length: Cardinal; override;
     procedure ReadFrom(Src: TStream); override;
@@ -144,7 +144,7 @@ type
   protected
     function GetName: String; override;
   public
-    constructor Create(EncodingName: String); override;
+    constructor Create; override;
 
     function  HasKnownLength: Boolean; override;
     function  Length: Cardinal; override;
@@ -1607,14 +1607,16 @@ begin
   Clock := Fetch(Parameters, '/');
   if (Clock = '') then
     raise EBadEncodingName.Create(Name);
-  ClockRate    := StrToInt(Clock);
+  ClockRate := StrToInt(Clock);
 
   if (Lowercase(EncodingName) = Lowercase(T140EncodingName)) then
     Result := TIdRTPT140Payload.Create
   else if (Lowercase(EncodingName) = Lowercase(TelephoneEventEncodingName)) then
     Result := TIdRTPTelephoneEventPayload.Create
-  else
-    Result := TIdRTPRawPayload.Create(EncodingName);
+  else begin
+    Result := TIdRTPRawPayload.Create;
+    TIdRTPRawPayload(Result).SetName(EncodingName);
+  end;
 
   Result.ClockRate  := ClockRate;
   Result.Parameters := Parameters;
@@ -1636,7 +1638,7 @@ begin
     Result := Result + '/' + Parameters;
 end;
 
-constructor TIdRTPPayload.Create(EncodingName: String);
+constructor TIdRTPPayload.Create;
 begin
   inherited Create;
 
@@ -1795,9 +1797,9 @@ end;
 //******************************************************************************
 //* TIdRTPRawPayload Public methods ********************************************
 
-constructor TIdRTPRawPayload.Create(EncodingName: String);
+constructor TIdRTPRawPayload.Create;
 begin
-  inherited Create(EncodingName);
+  inherited Create;
 
   Self.fName := EncodingName;
 end;
@@ -1834,9 +1836,9 @@ end;
 //******************************************************************************
 //* TIdRTPT140Payload Public methods *******************************************
 
-constructor TIdRTPT140Payload.Create(EncodingName: String);
+constructor TIdRTPT140Payload.Create;
 begin
-  inherited Create(EncodingName);
+  inherited Create;
 
   Self.ClockRate := T140ClockRate;
 end;
@@ -1933,8 +1935,8 @@ constructor TIdRTPProfile.Create;
 begin
   inherited Create;
 
-  Self.NullEncoding     := TIdNullPayload.Create('');
-  Self.ReservedEncoding := TIdRTPReservedPayload.Create('');
+  Self.NullEncoding     := TIdNullPayload.Create;
+  Self.ReservedEncoding := TIdRTPReservedPayload.Create;
   Self.Initialize;
 end;
 

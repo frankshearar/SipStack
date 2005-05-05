@@ -1472,7 +1472,7 @@ procedure TPayloadTestCase.SetUp;
 begin
   inherited SetUp;
 
-  Self.Payload := Self.PayloadType.Create('');
+  Self.Payload := Self.PayloadType.Create;
 end;
 
 procedure TPayloadTestCase.TearDown;
@@ -1536,8 +1536,9 @@ var
   Source: TIdRTPRawPayload;
   Copy:   TIdRTPRawPayload;
 begin
-  Source := TIdRTPRawPayload.Create('foo/0');
+  Source := TIdRTPRawPayload.Create;
   try
+    Source.SetName('foo');
     Source.Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
 
     Copy := Source.Clone as TIdRTPRawPayload;
@@ -1894,7 +1895,7 @@ begin
     Self.Packet.PrintOn(OutStream);
     OutStream.Seek(0, soFromBeginning);
 
-    NewPacket := TIdRTPTelephoneEventPayload.Create(TelephoneEventEncodingName);
+    NewPacket := TIdRTPTelephoneEventPayload.Create;
     try
       NewPacket.ReadFrom(OutStream);
 
@@ -2117,17 +2118,20 @@ end;
 
 procedure TestTIdRTPProfile.TestAssign;
 var
-  Dvi4Vid:    TIdRTPPayload;
-  GSM:        TIdRTPPayload;
+  Dvi4Vid:    TIdRTPRawPayload;
+  GSM:        TIdRTPRawPayload;
   I:          Integer;
   NewProfile: TIdRTPProfile;
 begin
   NewProfile := TIdRTPProfile.Create;
   try
-    GSM := TIdRTPPayload.Create(GSMEncoding + '/8000');
+    GSM := TIdRTPRawPayload.Create;
     try
-      Dvi4Vid := TIdRTPPayload.Create(DVI4Encoding + '/22050');
+      GSM.SetName(GSMEncoding + '/8000');
+
+      Dvi4Vid := TIdRTPRawPayload.Create;
       try
+        Dvi4Vid.SetName(DVI4Encoding + '/22050');
         NewProfile.AddEncoding(GSM, 5);
         NewProfile.AddEncoding(Dvi4Vid, 10);
 
@@ -2352,7 +2356,7 @@ procedure TestTIdRTPProfile.TestReservedEncodingMustntOverwriteOthers;
 var
   Res: TIdRTPReservedPayload;
 begin
-  Res := TIdRTPReservedPayload.Create('');
+  Res := TIdRTPReservedPayload.Create;
   try
     Self.Profile.AddEncoding(Self.T140Encoding, Self.ArbPT);
     Self.Profile.AddEncoding(Res, Self.ArbPT);
@@ -2424,7 +2428,7 @@ var
 begin
   PayloadCount := Self.Profile.Count;
 
-  TestEncoding := TIdRTPPayload.Create('arb values');
+  TestEncoding := TIdRTPPayload.Create;
   try
     for I := StartType to EndType do begin
       Self.Profile.AddEncoding(TestEncoding, I);
@@ -2441,8 +2445,8 @@ end;
 
 procedure TestTIdAudioVisualProfile.TestAssign;
 var
-  Dvi4Vid:       TIdRTPPayload;
-  GSM:           TIdRTPPayload;
+  Dvi4Vid:       TIdRTPRawPayload;
+  GSM:           TIdRTPRawPayload;
   NewProfile:    TIdRTPProfile;
   VirginProfile: TIdAudioVisualProfile;
 begin
@@ -2450,10 +2454,14 @@ begin
   try
     NewProfile := TIdRTPProfile.Create;
     try
-      GSM := TIdRTPPayload.Create(GSMEncoding + '/44100');
+      GSM := TIdRTPRawPayload.Create;
       try
-        Dvi4Vid := TIdRTPPayload.Create(DVI4Encoding + '/666');
+        GSM.SetName(GSMEncoding + '/44100');
+
+        Dvi4Vid := TIdRTPRawPayload.Create;
         try
+          Dvi4Vid.SetName(DVI4Encoding + '/666');
+
           NewProfile.AddEncoding(GSM, 0);
           NewProfile.AddEncoding(Dvi4Vid, 98);
 
@@ -3456,8 +3464,9 @@ var
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdRTPRawPayload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPRawPayload.Create;
   try
+    Expected.SetName(Self.AVP.EncodingFor(Self.T140PT).Name);
     Expected.Data := Data;
 
     S := TStringStream.Create('');
@@ -3512,8 +3521,9 @@ var
   S:        TStringStream;
 begin
   Data := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
-  Expected := TIdRTPRawPayload.Create(Self.AVP.EncodingFor(Self.T140PT).Name);
+  Expected := TIdRTPRawPayload.Create;
   try
+    Expected.SetName(Self.AVP.EncodingFor(Self.T140PT).Name);
     Expected.Data := Data;
 
     S := TStringStream.Create('');
@@ -7637,7 +7647,7 @@ begin
               Self.Session.SentOctetCount,
               'Initially we have sent no data');
 
-  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create;
   try
     Payload.Block := 'ph''nglui mglw''nafh Cthulhu R''lyeh wgah''nagl fhtagn';
     DataLen := Payload.Length;
@@ -7665,7 +7675,7 @@ begin
               Self.Session.SentPacketCount,
               'Initially we have sent no data');
 
-  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create;
   try
     for I := 1 to 5 do begin
       Self.Session.SendData(Payload);
@@ -7682,7 +7692,7 @@ procedure TestSessionReportRules.TestSSRCChangeResetsSentOctetCount;
 var
   Payload: TIdRTPT140Payload;
 begin
-  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create;
   try
     Self.Session.SendData(Payload);
   finally
@@ -7699,7 +7709,7 @@ procedure TestSessionReportRules.TestSSRCChangeResetsSentPacketCount;
 var
   Payload: TIdRTPT140Payload;
 begin
-  Payload := TIdRTPT140Payload.Create(Self.Profile.EncodingFor(Self.T140PT).Name);
+  Payload := TIdRTPT140Payload.Create;
   try
     Self.Session.SendData(Payload);
   finally
@@ -8151,7 +8161,7 @@ procedure TestTIdRTPDataListenerNewDataMethod.SetUp;
 begin
   inherited SetUp;
 
-  Self.Data := TIdRTPRawPayload.Create('');
+  Self.Data := TIdRTPRawPayload.Create;
   Self.Method := TIdRTPDataListenerNewDataMethod.Create;
   Self.Method.Data := Self.Data;
 end;

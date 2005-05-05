@@ -90,7 +90,7 @@ begin
   Self.Client.Profile     := Self.Profile;
   Self.Client.Active      := true;
 
-  Self.T140   := TIdRTPT140Payload.Create(T140Encoding);
+  Self.T140   := TIdRTPT140Payload.Create;
   Self.T140PT := Self.Server.Profile.FirstFreePayloadType;
   Self.Server.Profile.AddEncoding(Self.T140, Self.T140PT);
   Self.Client.Profile.AddEncoding(Self.T140, Self.T140PT);
@@ -191,7 +191,7 @@ begin
     Port := Self.RemoteHostAndPort.Text;
     Host := Fetch(Port, ':');
 
-    Payload := TIdRTPT140Payload.Create(Self.Server.Profile.EncodingFor(Self.T140PT).Name);
+    Payload := TIdRTPT140Payload.Create;
     try
       Payload.Block := Self.SendBuffer;
       Self.Session.SendData(Payload);
