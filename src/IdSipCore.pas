@@ -150,7 +150,9 @@ type
   // * OnModifySession fires when we receive an in-dialog INVITE - an INVITE
   //   that offers a modified session description.
   // * OnModifiedSession tells us the answer the remote side gave us for an
-  //   INVITE we sent to modify the session description.
+  //   INVITE we sent to modify the session description. In other words, at this
+  //   point we know that our requested session modification succeeded or
+  //   failed.
   IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
