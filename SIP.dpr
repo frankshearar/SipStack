@@ -60,6 +60,7 @@ uses
   SpikeRegister in 'test\SpikeRegister.pas' {rnidSpikeRegister},
   SpikeRegistrar in 'test\SpikeRegistrar.pas' {rnidSpikeRegistrar},
   SpikeT140 in 'test\SpikeT140.pas' {IdSpikeT140},
+  StackWindow in 'test\StackWindow.pas' {StackWindow},
   TestFrameworkEx in 'test\TestFrameworkEx.pas',
   TestFrameworkRtp in 'test\TestFrameworkRtp.pas',
   TestFrameworkSip in 'test\TestFrameworkSip.pas',
