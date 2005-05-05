@@ -4,7 +4,7 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipMessage,
-  IdSipTransport, IdTimerQueue, SyncObjs, SysUtils;
+  IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, Messages, Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -30,6 +30,8 @@ type
     property Handle: TIdSipHandle read fHandle;
   end;
 
+  TIdSipStackInterfaceEventMethod = class;
+
   // I provide a high-level interface to a SIP stack.
   // On one hand, I make sure that messages are sent in the context of the
   // stack's thread (its Timer). On the other, I make sure that events from the
@@ -42,20 +44,31 @@ type
   // finished, a handle I never gave you) or try issue an inappropriate command
   // using an otherwise valid handle (calling AcceptCall on an outbound call,
   // for instance) I will raise an EInvalidHandle exception.
-  TIdSipStackInterface = class(TIdInterfacedObject,
+  //
+  // My current implementation is Windows-specific. Ultimately, of course, we
+  // want to be OS-agnostic (at least, as much as we can be).
+  TIdSipStackInterface = class(TIdThreadedTimerQueue,
                                IIdSipActionListener,
                                IIdSipRegistrationListener,
                                IIdSipSessionListener,
+                               IIdSipTransportSendingListener,
                                IIdSipUserAgentListener)
   private
     ActionLock: TCriticalSection;
     Actions:    TObjectList;
+    fUiHandle:  HWnd;
     fUserAgent: TIdSipUserAgent;
-    Listeners:  TIdNotificationList;
+    Transport:  TIdSipTransport;
+
+    function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
+    function _AddRef: Integer; stdcall;
+    function _Release: Integer; stdcall;
 
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
+    procedure DebugRegister;
+    procedure DebugUnregister;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
@@ -88,19 +101,23 @@ type
                                 Answer: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
+    procedure OnSendRequest(Request: TIdSipRequest;
+                            Sender: TIdSipTransport);
+    procedure OnSendResponse(Response: TIdSipResponse;
+                             Sender: TIdSipTransport);
     procedure OnSuccess(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts);
+
     procedure RemoveAction(Handle: TIdSipHandle);
     procedure SendAction(Action: TIdSipAction);
-    procedure SynchronizedNotify(Listeners: TIdNotificationList;
-                                 Notification: TIdNotification);
+    procedure SynchronizedNotify(Notification: TIdSipStackInterfaceEventMethod);
 
+    property UiHandle:  HWnd            read fUiHandle;
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
-    constructor Create(UserAgent: TIdSipUserAgent);
+    constructor Create(UiHandle: HWnd); reintroduce;
     destructor  Destroy; override;
 
-    procedure AddListener(Listener: IIdSipStackListener);
     procedure AnswerCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
@@ -112,7 +129,6 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
-    procedure RemoveListener(Listener: IIdSipStackListener);
     procedure Send(ActionHandle: TIdSipHandle);
   end;
 
@@ -138,6 +154,13 @@ type
     procedure Assign(Src: TPersistent); override;
 
     property Reason: String read fReason write fReason;
+  end;
+
+  TIdDebugMessageData = class(TIdEventData)
+  private
+    fMessage: TIdSipMessage;
+  public
+    property Message: TIdSipMessage read fMessage write fMessage;
   end;
 
   TIdRegistrationData = class(TIdEventData)
@@ -176,6 +199,20 @@ type
     property LocalMimeType:            String read fLocalMimeType write fLocalMimeType;
     property RemoteSessionDescription: String read fRemoteSessionDescription write fRemoteSessionDescription;
     property RemoteMimeType:           String read fRemoteMimeType write fRemoteMimeType;
+  end;
+
+  TIdInboundCallData = class(TIdSessionData)
+  private
+    fFrom: TIdSipFromHeader;
+
+    procedure SetFrom(Value: TIdSipFromHeader);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property From: TIdSipFromHeader read fFrom write SetFrom;
   end;
 
   // I represent a reified method call, like my ancestor, that a
@@ -218,19 +255,32 @@ const
   InvalidHandle = 0;
 
 const
-  SipSuccess            = 0;
-  SipFailure            = 1;
-  SipNetworkFailure     = 2;
-  SipSessionInbound     = 3;
-  SipSessionEnded       = 4;
-  SipSessionEstablished = 5;
-  SipSessionModify      = 6;
-  SipSessionModified    = 7;
+  CM_BASE = WM_USER;
+
+  CM_SUCCESS                      = CM_BASE + 0;
+  CM_FAIL                         = CM_BASE + 1;
+  CM_NETWORK_FAILURE              = CM_BASE + 2;
+  CM_CALL_REQUEST_NOTIFY          = CM_BASE + 3;
+  CM_CALL_ENDED                   = CM_BASE + 4;
+  CM_CALL_ESTABLISHED             = CM_BASE + 5;
+  CM_CALL_REMOTE_MODIFY_REQUEST   = CM_BASE + 6;
+  CM_CALL_OUTBOUND_MODIFY_SUCCESS = CM_BASE + 7;
+
+  CM_DEBUG = CM_BASE + 10000;
+
+  CM_DEBUG_SEND_MSG = CM_DEBUG + 0;
+
+type
+  TIdSipEventMessage = packed record
+    Event:    Cardinal;
+    Data:     TIdSipStackInterfaceEventMethod;
+    Reserved: DWord;
+  end;
 
 implementation
 
 uses
-  IdRandom;
+  IdRandom, IdSipIndyLocator, IdSipTransaction;
 
 const
   NoSuchHandle = 'No such handle (%d)';
@@ -255,33 +305,62 @@ end;
 //******************************************************************************
 //* TIdSipStackInterface Public methods ****************************************
 
-constructor TIdSipStackInterface.Create(UserAgent: TIdSipUserAgent);
+constructor TIdSipStackInterface.Create(UiHandle: HWnd);
+const
+  LocalAddress = '192.168.1.131';
+var
+  Loc: TIdSipIndyLocator;
 begin
-  inherited Create;
+  inherited Create(true);
 
   Self.ActionLock := TCriticalSection.Create;
   Self.Actions   := TObjectList.Create(true);
-  Self.Listeners := TIdNotificationList.Create;
 
-  Self.fUserAgent := UserAgent;
+  Self.fUiHandle := UiHandle;
+
+  Self.Transport := TIdSipUDPTransport.Create;
+  Self.Transport.Address  := LocalAddress;
+  Self.Transport.HostName := LocalAddress;
+  Self.Transport.Port     := 5060;
+  Self.Transport.Timer    := Self;
+  Self.Transport.AddTransportSendingListener(Self);
+
+  Loc := TIdSipIndyLocator.Create;
+  Loc.NameServer := '62.241.160.200';
+  Loc.Port       := 53;
+
+  Self.fUserAgent := TIdSipUserAgent.Create;
+  Self.UserAgent.Contact.Value := 'sip:foo@' + LocalAddress + ':5060';
+  Self.UserAgent.Dispatcher    := TIdSipTransactionDispatcher.Create(Self, Loc);
+  Self.UserAgent.Dispatcher.AddTransport(Self.Transport);
+  Self.UserAgent.From.Value    := 'sip:foo@' + LocalAddress + ':5060';
+  Self.UserAgent.HostName      := LocalAddress;
+  Self.UserAgent.Locator       := Loc;
+  Self.UserAgent.Timer         := Self;
 
   Self.UserAgent.AddUserAgentListener(Self);
+  Self.Transport.Start;
+
+  Self.DebugRegister;
 end;
 
 destructor TIdSipStackInterface.Destroy;
 begin
+//  Self.DebugUnregister;
+
+  Self.Transport.Stop;
+
   Self.UserAgent.RemoveUserAgentListener(Self);
 
-  Self.Listeners.Free;
+  Self.UserAgent.Locator.Free;
+  Self.UserAgent.Dispatcher.Free;
+  Self.UserAgent.Free;
+  Self.Transport.Free;
+
   Self.Actions.Free;
   Self.ActionLock.Free;
 
   inherited Destroy;
-end;
-
-procedure TIdSipStackInterface.AddListener(Listener: IIdSipStackListener);
-begin
-  Self.Listeners.AddListener(Listener);
 end;
 
 procedure TIdSipStackInterface.AnswerCall(ActionHandle: TIdSipHandle;
@@ -368,11 +447,6 @@ begin
   end;
 end;
 
-procedure TIdSipStackInterface.RemoveListener(Listener: IIdSipStackListener);
-begin
-  Self.Listeners.RemoveListener(Listener);
-end;
-
 procedure TIdSipStackInterface.Send(ActionHandle: TIdSipHandle);
 var
   Action: TIdSipAction;
@@ -391,6 +465,24 @@ begin
 end;
 
 //* TIdSipStackInterface Private methods ***************************************
+
+function TIdSipStackInterface.QueryInterface(const IID: TGUID; out Obj): HResult;
+begin
+  if GetInterface(IID, Obj) then
+    Result := S_OK
+  else
+    Result := E_NOINTERFACE;
+end;
+
+function TIdSipStackInterface._AddRef: Integer;
+begin
+  Result := -1;
+end;
+
+function TIdSipStackInterface._Release: Integer;
+begin
+  Result := -1;
+end;
 
 function TIdSipStackInterface.ActionFor(Handle: TIdSipHandle): TIdSipAction;
 var
@@ -425,6 +517,30 @@ end;
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
+end;
+
+procedure TIdSipStackInterface.DebugRegister;
+var
+  Reg: TIdSipUri;
+begin
+  Reg := TIdSipUri.Create('sip:192.168.1.132');
+  try
+    Self.UserAgent.RegisterWith(Reg).Send;
+  finally
+    Reg.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.DebugUnregister;
+var
+  Reg: TIdSipUri;
+begin
+  Reg := TIdSipUri.Create('sip:192.168.1.132');
+  try
+    Self.UserAgent.UnregisterFrom(Reg).Send;
+  finally
+    Reg.Free;
+  end;
 end;
 
 function TIdSipStackInterface.HandleFor(Action: TIdSipAction): TIdSipHandle;
@@ -495,15 +611,12 @@ begin
   Self.ActionLock.Acquire;
   try
     Notification := TIdSipStackInterfaceEventMethod.Create;
-    try
-      Notification.Data   := Data;
-      Notification.Event  := Event;
-      Notification.Stack  := Self;
+    Notification.Data   := Data.Copy;
+    Notification.Event  := Event;
+    Notification.Stack  := Self;
 
-      Self.SynchronizedNotify(Self.Listeners, Notification);
-    finally
-      Notification.Free;
-    end;
+    // The receiver of this message must free the Notification.
+    Self.SynchronizedNotify(Notification);
   finally
     Self.ActionLock.Release;
   end;
@@ -526,12 +639,13 @@ end;
 procedure TIdSipStackInterface.OnEndedSession(Session: TIdSipSession;
                                               const Reason: String);
 var
-  Data: TIdEventData;
+  Data: TIdFailEventData;
 begin
-  Data := TIdEventData.Create;
+  Data := TIdFailEventData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
-    Self.NotifyEvent(Session, SipSessionEnded, Data);
+    Data.Reason := Reason;
+    Self.NotifyEvent(Session, CM_CALL_ENDED, Data);
 
     Self.RemoveAction(Data.Handle);
   finally
@@ -553,7 +667,7 @@ begin
     Data.RemoteSessionDescription := RemoteSessionDescription;
     Data.RemoteMimeType           := MimeType;
 
-    Self.NotifyEvent(Session, SipSessionEstablished, Data);
+    Self.NotifyEvent(Session, CM_CALL_ESTABLISHED, Data);
   finally
     Data.Free;
   end;
@@ -571,7 +685,7 @@ begin
     Data.Contacts := CurrentBindings;
     Data.Reason   := Reason;
 
-    Self.NotifyEvent(RegisterAgent, SipFailure, Data);
+    Self.NotifyEvent(RegisterAgent, CM_FAIL, Data);
   finally
     Data.Free;
   end;
@@ -580,16 +694,19 @@ end;
 procedure TIdSipStackInterface.OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                                              Session: TIdSipInboundSession);
 var
-  Data: TIdEventData;
+  Data: TIdInboundCallData;
 begin
   Session.AddSessionListener(Self);
   Self.AddAction(Session);
 
-  Data := TIdEventData.Create;
+  Data := TIdInboundCallData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
+    Data.From := Session.InitialRequest.From;
+    Data.RemoteSessionDescription := Session.RemoteSessionDescription;
+    Data.RemoteMimeType           := Session.RemoteMimeType;
 
-    Self.NotifyEvent(Session, SipSessionInbound, Data);
+    Self.NotifyEvent(Session, CM_CALL_REQUEST_NOTIFY, Data);
   finally
     Data.Free;
   end;
@@ -607,7 +724,7 @@ begin
     Data.RemoteSessionDescription := RemoteSessionDescription;
     Data.RemoteMimeType           := MimeType;
 
-    Self.NotifyEvent(Session, SipSessionModify, Data);
+    Self.NotifyEvent(Session, CM_CALL_REMOTE_MODIFY_REQUEST, Data);
   finally
     Data.Free;
   end;
@@ -615,8 +732,21 @@ end;
 
 procedure TIdSipStackInterface.OnModifiedSession(Session: TIdSipSession;
                                                  Answer: TIdSipResponse);
+var
+  Data: TIdSessionData;
 begin
-  raise Exception.Create('TIdSipStackInterface.OnModifiedSession not implemented');
+  Data := TIdSessionData.Create;
+  try
+    Data.Handle := Self.HandleFor(Session);
+    Data.LocalMimeType            := Session.LocalMimeType;
+    Data.LocalSessionDescription  := Session.LocalSessionDescription;
+    Data.RemoteMimeType           := Answer.ContentType;
+    Data.RemoteSessionDescription := Answer.Body;
+
+    Self.NotifyEvent(Session, CM_CALL_OUTBOUND_MODIFY_SUCCESS, Data);
+  finally
+    Data.Free;
+  end;
 end;
 
 procedure TIdSipStackInterface.OnNetworkFailure(Action: TIdSipAction;
@@ -629,7 +759,41 @@ begin
     Data.Handle := Self.HandleFor(Action);
     Data.Reason := Reason;
 
-    Self.NotifyEvent(Action, SipNetworkFailure, Data);
+    Self.NotifyEvent(Action, CM_NETWORK_FAILURE, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.OnSendRequest(Request: TIdSipRequest;
+                                             Sender: TIdSipTransport);
+var
+  Data: TIdDebugMessageData;
+begin
+  Data := TIdDebugMessageData.Create;
+  try
+    Data.Handle := InvalidHandle;
+    Data.Message := Request.Copy;
+
+    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
+  finally
+    Data.Free;
+  end;
+end;
+
+procedure TIdSipStackInterface.OnSendResponse(Response: TIdSipResponse;
+                                              Sender: TIdSipTransport);
+var
+  Data: TIdDebugMessageData;
+begin
+  // TODO Refactor this & OnSendRequest into NotifyOfSentMessage
+
+  Data := TIdDebugMessageData.Create;
+  try
+    Data.Handle  := InvalidHandle;
+    Data.Message := Response.Copy;
+
+    Self.NotifyEvent(nil, CM_DEBUG_SEND_MSG, Data);
   finally
     Data.Free;
   end;
@@ -645,7 +809,7 @@ begin
     Data.Handle   := Self.HandleFor(RegisterAgent);
     Data.Contacts := CurrentBindings;
 
-    Self.NotifyEvent(RegisterAgent, SipSuccess, Data);
+    Self.NotifyEvent(RegisterAgent, CM_SUCCESS, Data);
   finally
     Data.Free;
   end;
@@ -675,20 +839,9 @@ begin
   Self.UserAgent.ScheduleEvent(TriggerImmediately, Wait);
 end;
 
-procedure TIdSipStackInterface.SynchronizedNotify(Listeners: TIdNotificationList;
-                                                  Notification: TIdNotification);
-var
-  Notifier: TIdSipVclNotifier;                                                  
+procedure TIdSipStackInterface.SynchronizedNotify(Notification: TIdSipStackInterfaceEventMethod);
 begin
-  Notifier := TIdSipVclNotifier.Create;
-  try
-    Notifier.Listeners    := Listeners;
-    Notifier.Notification := Notification;
-
-    Self.UserAgent.Timer.Synchronize(Notifier.Notify);
-  finally
-    Notifier.Free;
-  end;
+  PostMessage(Self.UiHandle, UINT(Notification.Event), WPARAM(Notification), 0)
 end;
 
 //******************************************************************************
@@ -813,6 +966,46 @@ begin
     Self.RemoteMimeType           := Other.RemoteMimeType;
     Self.RemoteSessionDescription := Other.RemoteSessionDescription;
   end;
+end;
+
+//******************************************************************************
+//* TIdInboundCallData                                                         *
+//******************************************************************************
+//* TIdInboundCallData Public methods ******************************************
+
+constructor TIdInboundCallData.Create;
+begin
+  inherited Create;
+
+  Self.fFrom := TIdSipFromHeader.Create;
+end;
+
+destructor TIdInboundCallData.Destroy;
+begin
+  Self.fFrom.Free;
+
+ inherited Destroy;
+end;
+
+procedure TIdInboundCallData.Assign(Src: TPersistent);
+var
+  Other: TIdInboundCallData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdInboundCallData) then begin
+    Other := Src as TIdInboundCallData;
+
+    Self.From := Other.From;
+  end;
+end;
+
+//* TIdInboundCallData Private methods *****************************************
+
+procedure TIdInboundCallData.SetFrom(Value: TIdSipFromHeader);
+begin
+  Self.From.Assign(Value);
+  Self.From.RemoveParameter(TagParam);
 end;
 
 //******************************************************************************
