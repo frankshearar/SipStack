@@ -11,14 +11,15 @@ We connect TIdSipTransports to a TIdSipTransactionDispatcher. The
 dispatcher does not own these TIdSipTransports (i.e., it does not manage
 their lifetimes).
 
-A TIdSipDispatcher creates and destroys TIdSipTransactions as
-needed. Transactions contain state engines, and manage things like
+A TIdSipTransactionDispatcher creates and destroys TIdSipTransactions
+as needed. Transactions contain state engines, and manage things like
 message resends for unreliable networks and the like.
 
-We attach a TIdSipDispatcher to a TIdSipUserAgent. The dispatcher
-distinguishes between "unhandled" messages and "handled" messages:
-unhandled messages do not belong to an existing transaction, and so
-the TIdSipUserAgent decides whether or not to accept these
+We attach a TIdSipTransactionDispatcher to a TIdSipUserAgent (or
+TIdSipRegistrar, or other subclass of TIdSipAbstractUserAgent). The
+dispatcher distinguishes between "unhandled" messages and "handled"
+messages: unhandled messages do not belong to an existing transaction,
+and so the TIdSipUserAgent decides whether or not to accept these
 messages. Handled messages, naturally, belong to existing
 transactions.
 
@@ -40,7 +41,7 @@ AddListener(Event: TNotifyEvent)" and keep a list of TNotifyEvents to
 trigger when necessary, this makes us work as hard as we'd have to
 using interfaces, and it still only provides one kind of
 notification. For transports we'd thus have to have the methods
-AddReceiveRequest and an AddReceiveResponse.
+AddReceiveRequestEvent and AddReceiveResponseEvent.
 
 Still, many programmers experience pain mixing interfaces and
 Delphi. To mitigate this, we follow the "weak reference" idiom
@@ -56,16 +57,28 @@ we inherit from TIdInterfacedObject, which implements QueryInterface,
 _AddRef and _Release, directly. Otherwise we implement these methods
 as necessary to ensure that reference counting doesn't.
 
+USING THE STACK
+
+Instantiate a TIdSipStackInterface, giving a (Windows) window handle
+to which the stack can post messages. Implement message handlers for
+each of the CM_FOO messages defined in IdSipStackInterface.
+
+When you want to perform actions (register with a registrar, make a
+call, etc.) you instantiate the action through the MakeFoo methods -
+MakeCall, etc. This in itself doesn't execute the action - you store
+the SipHandle of the action, and then use the Send method to execute
+the action.
+
 MESSAGE FLOW OF AN INBOUND CALL
 
 Someone wants to call us, so they create an INVITE message and send it
 into the network. The message reaches our machine. A TIdSipTransport
 receives it and parses the message. If the message doesn't conform to
-the SIP/2.0 syntax, the transport rejects it (with a 400 Bad Request)
+the RFC 3261 syntax, the transport rejects it (with a 400 Bad Request)
 if it can, or simply drops it and notifies its listeners that a bad
 message arrived (presenting the raw message).
 
-So, let's say the INVITE matched the SIP/2.0 grammar. The transport
+So, let's say the INVITE matched the RFC 3261 grammar. The transport
 notifies its listeners that a new request has arrived. The
 TIdSipTransportDispatcher attached to the listener tries to match the
 message against any transactions. The INVITE doesn't match any
@@ -76,7 +89,7 @@ answer the call, we still have a call flow we need to follow.
 
 The TIdSipUserAgent listening to the dispatcher receives the message, and
 notifies its listeners that a new inbound call request has arrived. It
-does this by creating a new TIdSipInboundSession (call itNewSession)
+does this by creating a new TIdSipInboundSession (call it NewSession)
 and passing the message to NewSession. So we pick up the softphone by
 invoking NewSession.AcceptCall with an appropriate answer to the
 request's offer (more on this later).
@@ -116,36 +129,64 @@ those messages, possibly notifying its listeners of interesting events
 receives the Action's outbound message and routes the message down to
 its dispatcher, or catches the notification and notifies the user.
 
-Graphically, the Transaction and Transaction User layers look
-something like this:
+Finally, access to the Transaction User layer occurs through the
+so-called synchronization layer (see the THREADING MODEL section).
 
-                  ^      |
-                  |      V
-               +-------------+       +--------------+
-               |             |<------|              |
-               | Dispatcher/ |       | Transaction/ |
-               | User agent  |       | Action       |
-               |             |------>|              |
-               +-------------+       +--------------+
-                  ^      |
-                  |      V
+Graphically, the stack looks something like this:
 
++----------------------------------------------------+
+|              Synchronization layer                 |
++----------------------------------------------------+
+              ^      |
+              |      V
+           +------------+       +-------------+
+           |            |<------|             |
+           | User agent |       |   Action    |
+           |            |------>|             |
+           +------------+       +-------------+
+              ^      |
+              |      V
+           +------------+       +-------------+
+           |            |<------|             |
+           | Dispatcher |       | Transaction |
+           |            |------>|             |
+           +------------+       +-------------+
+              ^      |
+              |      V
++----------------------------------------------------+
+|                  Transport layer                   |
+|                                                    |
+| +------------------------------------------------+ |
+| |                (Socket layer)                  | |
+| +------------------------------------------------+ |
++----------------------------------------------------+
 
-UNIT BREAKDOWN
+THREADING MODEL
 
-IdSipCore implements the highest layer in the SIP stack, the
-Transaction User layer. The TIdSipUserAgent farms out its behaviour to
-TIdSipAction classes - TIdSipSession, TIdSipRegistration,
-TIdSipOptions, for instance - and these classes manage the actual
-message flows of the Transaction User layer.
+If the layers are the skeleton of the stack, its heart is a
+TimerQueue. Each layer has a reference to this thread. The entire
+stack executes in the context of this thread, except for the socket
+layer and the synchronization layer.
 
-IdSipTransaction implements all transactions and the transaction
-dispatcher. This provides the entire Transaction Layer.
+The TimerQueue processes Waits, objects that encapsulate a piece of
+code scheduled to run at a particular time.
 
-IdSipTransport implements the Transport Layer. SipTransports use Indy
-servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
-data through the IP network, etc. SipTransports provide an
-encapsulated way to access network functionality.
+In the case of the socket layer, servers (TIdSipTcpServer,
+TIdSipUdpServer, etc.) receive messages and add them to the TimerQueue
+for processing.
+
+In the case of the synchronization layer, when you send a message (say
+through MakeRegistration/Send), you're creating a Wait that is
+scheduled to run in the context of the TimerQueue.
+
+THE SYNCHRONIZATION LAYER
+
+This provides access to the stack, running in its own thread. It
+notifies listeners of events (established sessions, network failures,
+successful/failed registrations, etc.) in the context of the main
+thread (in which the VCL runs). Any messages bound for the network run
+in the context of the TimerQueue. Thus, the synchronization layer
+synchronizes the stack thread and the main thread.
 
 THE TRANSACTION USER LAYER
 
@@ -171,3 +212,19 @@ which makes the UserAgent create a TIdSipOutboundRegister and gives us
 a pointer to that new Action. We can then choose to listen to that
 Action, and receive success/failure/authentication challenge
 notifications.
+
+UNIT BREAKDOWN
+
+IdSipCore implements the highest layer in the SIP stack, the
+Transaction User layer. The TIdSipUserAgent farms out its behaviour to
+TIdSipAction classes - TIdSipSession, TIdSipRegistration,
+TIdSipOptions, for instance - and these classes manage the actual
+message flows of the Transaction User layer.
+
+IdSipTransaction implements all transactions and the transaction
+dispatcher. This provides the entire Transaction Layer.
+
+IdSipTransport implements the Transport Layer. SipTransports use Indy
+servers (TIdTCPServer, TIdUDPServer, etc) to bind to sockets, send
+data through the IP network, etc. SipTransports provide an
+encapsulated way to access network functionality.
