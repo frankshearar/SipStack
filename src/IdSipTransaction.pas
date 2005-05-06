@@ -76,7 +76,9 @@ type
   // appropriate transaction or fire events on messages that don't match any
   // transactions.
   //
-  // I do not manage any transports that may be given to me.
+  // I manage the lifetimes of transports that you give me via the AddTransport
+  // method. This means that you can no longer have two TransactionDispatchers
+  // reading messages from the same transport object.
   TIdSipTransactionDispatcher = class(TIdInterfacedObject,
                                       IIdSipTransactionListener,
                                       IIdSipTransportListener)
@@ -88,7 +90,7 @@ type
     fTimer:          TIdTimerQueue;
     MsgListeners:    TIdNotificationList;
     TimerLock:       TCriticalSection;
-    Transports:      TObjectList;
+    fTransports:     TIdSipTransports;
     TransportLock:   TCriticalSection;
     Transactions:    TObjectList;
     TransactionLock: TCriticalSection;
@@ -193,6 +195,7 @@ type
     property T2Interval: Cardinal              read fT2Interval write fT2Interval;
     property T4Interval: Cardinal              read fT4Interval write fT4Interval;
     property Timer:      TIdTimerQueue         read fTimer;
+    property Transports: TIdSipTransports      read fTransports;
   end;
 
   // I am a SIP Transaction. As such, I am a finite state machine. I swallow
@@ -545,7 +548,7 @@ begin
   Self.MsgListeners := TIdNotificationList.Create;
   Self.TimerLock    := TCriticalSection.Create;
 
-  Self.Transports    := TObjectList.Create(false);
+  Self.fTransports   := TIdSipTransports.Create;
   Self.TransportLock := TCriticalSection.Create;
 
   Self.Transactions    := TObjectList.Create(true);

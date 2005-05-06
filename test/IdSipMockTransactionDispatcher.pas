@@ -19,7 +19,7 @@ type
   TIdSipMockTransactionDispatcher = class(TIdSipTransactionDispatcher)
   private
     fTransportType: String;
-    Transports:     TStrings;
+    MockTransports: TStrings;
 
     function GetDebugTimer: TIdDebugTimerQueue;
     function GetMockLocator: TIdSipMockLocator;
@@ -70,7 +70,7 @@ begin
   TIdSipTransportRegistry.RegisterTransport(TlsTransport, TIdSipMockTlsTransport);
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUdpTransport);
 
-  Self.Transports := TStringList.Create;
+  Self.MockTransports := TStringList.Create;
   Self.TransportType := UdpTransport;
 
   SupportedTrans := TStringList.Create;
@@ -81,7 +81,7 @@ begin
     for I := 0 to SupportedTrans.Count - 1 do begin
       Tran := TIdSipTransportRegistry.TransportFor(SupportedTrans[I]).Create;
       Self.AddTransport(Tran);
-      Self.Transports.AddObject(SupportedTrans[I],
+      Self.MockTransports.AddObject(SupportedTrans[I],
                                 Tran);
     end;
   finally
@@ -90,13 +90,8 @@ begin
 end;
 
 destructor TIdSipMockTransactionDispatcher.Destroy;
-var
-  I: Integer;
 begin
-  for I := 0 to Self.Transports.Count - 1 do
-    Self.Transports.Objects[I].Free;
-
-  Self.Transports.Free;
+  Self.MockTransports.Free;
   Self.Timer.Terminate;
   Self.Locator.Free;
 
@@ -111,7 +106,7 @@ procedure TIdSipMockTransactionDispatcher.AddTransportSendingListener(Listener: 
 var
   I: Integer;
 begin
-  for I := 0 to Self.Transports.Count - 1 do
+  for I := 0 to Self.MockTransports.Count - 1 do
     Self.TransportAt(I).AddTransportSendingListener(Listener);
 end;
 
@@ -146,7 +141,7 @@ function TIdSipMockTransactionDispatcher.GetTransport: TIdSipMockTransport;
 var
   Index: Integer;
 begin
-  Index := Self.Transports.IndexOf(Self.TransportType);
+  Index := Self.MockTransports.IndexOf(Self.TransportType);
 
   if (Index <> -1) then
      Result := Self.TransportAt(Index)
@@ -157,7 +152,7 @@ end;
 
 function TIdSipMockTransactionDispatcher.TransportAt(Index: Integer): TIdSipMockTransport;
 begin
-  Result := Self.Transports.Objects[Index] as TIdSipMockTransport
+  Result := Self.MockTransports.Objects[Index] as TIdSipMockTransport
 end;
 
 end.

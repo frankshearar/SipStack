@@ -28,7 +28,6 @@ unit IdSipCore;
 // * We avoid typecasting as much as possible by using polymorphism and, in
 //   certain situations where polymorphism can't cut it, the Visitor pattern.
 // * TObjectLists almost always manage the lifetime of the objects they contain.
-//   The Transports in a TransactionDispatcher illustrate a counterexample.
 // * Threads belong to the process in which they run. It doesn't really make sense
 //   for us to refer to a class that instantiates a thread as the thread's owner,
 //   so

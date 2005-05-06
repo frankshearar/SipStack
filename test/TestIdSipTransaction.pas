@@ -738,8 +738,6 @@ begin
 
   Self.Destination.Free;
   Self.D.Free;
-  Self.MockUdpTransport.Free;
-  Self.MockTcpTransport.Free;
   Self.Locator.Free;
   Self.Core.Free;
 
@@ -1140,25 +1138,14 @@ end;
 procedure TestTIdSipTransactionDispatcher.TestAddAndCountTransport;
 var
   OriginalCount: Cardinal;
-  T1, T2:        TIdSipMockTransport;
 begin
   OriginalCount := Self.D.TransportCount;
 
-  T1 := TIdSipMockUdpTransport.Create;
-  try
-    Self.D.AddTransport(T1);
-    CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
+  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
+  CheckEquals(OriginalCount + 1, Self.D.TransportCount, 'After one AddTransport');
 
-    T2 := TIdSipMockTcpTransport.Create;
-    try
-      Self.D.AddTransport(T1);
-      CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
-    finally
-      T2.Free;
-    end;
-  finally
-    T1.Free;
-  end;
+  Self.D.AddTransport(TIdSipMockTcpTransport.Create);
+  CheckEquals(OriginalCount + 2, Self.D.TransportCount, 'After two AddTransports');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestAddClientTransaction;
@@ -1205,25 +1192,12 @@ begin
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestClearTransports;
-var
-  T1, T2: TIdSipMockTransport;
 begin
-  T1 := TIdSipMockUdpTransport.Create;
-  try
-    Self.D.AddTransport(T1);
+  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
+  Self.D.AddTransport(TIdSipMockUdpTransport.Create);
 
-    T2 := TIdSipMockUdpTransport.Create;
-    try
-      Self.D.AddTransport(T1);
-
-      Self.D.ClearTransports;
-      CheckEquals(0, Self.D.TransportCount, 'After Clear');
-    finally
-      T2.Free;
-    end;
-  finally
-    T1.Free;
-  end;
+  Self.D.ClearTransports;
+  CheckEquals(0, Self.D.TransportCount, 'After Clear');
 end;
 
 procedure TestTIdSipTransactionDispatcher.TestCreateNewTransaction;
@@ -1986,8 +1960,6 @@ begin
   Self.Request.Free;
 
   Self.D.Free;
-  Self.UdpTransport.Free;
-  Self.TcpTransport.Free;
   Self.Timer.Terminate;
   Self.L.Free;
 
