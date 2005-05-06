@@ -8802,7 +8802,6 @@ procedure TActionMethodTestCase.TearDown;
 begin
   Self.Response.Free;
   Self.UA.Free;
-  Self.Dispatcher.Free;  
 
   inherited TearDown;
 end;

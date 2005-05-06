@@ -747,7 +747,6 @@ begin
 
   Self.Invite.Free;
   Self.Core.Free;
-  Self.Dispatcher.Free;
   Self.Destination.Free;
 
   inherited TearDown;

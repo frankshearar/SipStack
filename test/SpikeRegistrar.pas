@@ -129,8 +129,6 @@ destructor TrnidSpikeRegistrar.Destroy;
 begin
   Self.Timer.Terminate;
   Self.UA.Free;
-  Self.Dispatcher.Free;
-  Self.Transport.Free;
   Self.Locator.Free;
   Self.Lock.Free;
   Self.DB.Free;

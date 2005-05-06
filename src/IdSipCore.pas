@@ -3500,6 +3500,7 @@ end;
 destructor TIdSipUserAgent.Destroy;
 begin
   Self.Proxy.Free;
+  Self.Dispatcher.Free;
 
   inherited Destroy;
 end;

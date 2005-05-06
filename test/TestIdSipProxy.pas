@@ -75,11 +75,9 @@ end;
 
 procedure TestTIdSipProxy.TearDown;
 begin
-  Self.ClientDispatcher.Free;
   Self.Client.Free;
   Self.Proxy.Free;
   Self.Invite.Free;
-  Self.Dispatcher.Free;
 
   inherited TearDown;
 end;
