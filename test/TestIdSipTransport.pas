@@ -316,6 +316,18 @@ type
     function TransportType: TIdSipTransportClass; override;
   end;
 
+  TestTIdSipTransports = class(TTestCase)
+  private
+    List: TIdSipTransports;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestAddAndCount;
+    procedure TestClear;
+    procedure TestGetTransport;
+  end;
+
   TestTIdSipConnectionTableEntry = class(TTestCase)
   published
     procedure TestCreate;
@@ -436,6 +448,7 @@ begin
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
 //  Result.AddTest(TestTIdSipMockTransport.Suite);
+  Result.AddSuite(TestTIdSipTransports.Suite);
   Result.AddSuite(TestTIdSipConnectionTableEntry.Suite);
   Result.AddSuite(TestTIdSipConnectionTable.Suite);
   Result.AddTest(TestTIdSipTransportExceptionMethod.Suite);
@@ -2365,6 +2378,74 @@ begin
   Result := TIdSipMockTransport;
 end;
 
+//******************************************************************************
+//* TestTIdSipTransports                                                       *
+//******************************************************************************
+//* TestTIdSipTransports Public methods ****************************************
+
+procedure TestTIdSipTransports.SetUp;
+begin
+  inherited SetUp;
+
+  Self.List := TIdSipTransports.Create;
+end;
+
+procedure TestTIdSipTransports.TearDown;
+begin
+  Self.List.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipTransports Published methods *************************************
+
+procedure TestTIdSipTransports.TestAddAndCount;
+begin
+  CheckEquals(0, Self.List.Count, 'Supposedly empty list');
+
+  Self.List.Add(TIdSipMockTransport.Create);
+  CheckEquals(1, Self.List.Count, 'One Add');
+
+  Self.List.Add(TIdSipMockTransport.Create);
+  CheckEquals(2, Self.List.Count, 'Two Adds');
+
+  Self.List.Add(TIdSipMockTransport.Create);
+  CheckEquals(3, Self.List.Count, 'Three Adds');
+end;
+
+procedure TestTIdSipTransports.TestClear;
+begin
+  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockTransport.Create);
+  Self.List.Add(TIdSipMockTransport.Create);
+
+  Self.List.Clear;
+
+  CheckEquals(0, Self.List.Count, 'After Clear the list should contain nothing');
+end;
+
+procedure TestTIdSipTransports.TestGetTransport;
+begin
+  Self.List.Add(TIdSipMockSctpTransport.Create);
+  Self.List.Add(TIdSipMockTcpTransport.Create);
+  Self.List.Add(TIdSipMockUdpTransport.Create);
+
+  CheckEquals(TIdSipMockSctpTransport.ClassName,
+              Self.List[0].ClassName,
+              'First item');
+  CheckEquals(TIdSipMockTcpTransport.ClassName,
+              Self.List[1].ClassName,
+              'Second item');
+  CheckEquals(TIdSipMockUdpTransport.ClassName,
+              Self.List[2].ClassName,
+              'Third item');
+end;
+
+//******************************************************************************
+//* TestTIdSipConnectionTableEntry
+//******************************************************************************
+//* TestTIdSipConnectionTableEntry Published methods ***************************
+
 procedure TestTIdSipConnectionTableEntry.TestCreate;
 var
   Conn: TIdTCPConnection;
@@ -2391,7 +2472,7 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipConnectionTable
+//* TestTIdSipConnectionTable                                                  *
 //******************************************************************************
 //* TestTIdSipConnectionTable Public methods ***********************************
 

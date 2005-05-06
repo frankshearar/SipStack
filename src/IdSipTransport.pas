@@ -317,6 +317,24 @@ type
     procedure Stop; override;
   end;
 
+  // I represent a collection of Transports. I own, and hence manage the
+  // lifetimes of, all transports given to me via Add.
+  TIdSipTransports = class(TObject)
+  private
+    List: TObjectList;
+
+    function GetTransports(Index: Integer): TIdSipTransport;
+  public
+    constructor Create;
+    destructor  Destroy; override;
+
+    procedure Add(T: TIdSipTransport);
+    procedure Clear;
+    function  Count: Integer;
+
+    property Transports[Index: Integer]: TIdSipTransport read GetTransports; default;
+  end;
+
   // I relate a request with a TCP connection. I store a COPY of a request
   // while storing a REFERENCE to a connection. Transports construct requests
   // and so bear responsibility for destroying them, and I need to remember
@@ -1485,6 +1503,47 @@ begin
   inherited SetTimer(Value);
 
   Self.Transport.Timer := Value;
+end;
+
+//******************************************************************************
+//* TIdSipTransports                                                           *
+//******************************************************************************
+//* TIdSipTransports Public methods ********************************************
+
+constructor TIdSipTransports.Create;
+begin
+  inherited Create;
+
+  Self.List := TObjectList.Create(true);
+end;
+
+destructor TIdSipTransports.Destroy;
+begin
+  Self.List.Free;
+
+  inherited Destroy;
+end;
+
+procedure TIdSipTransports.Add(T: TIdSipTransport);
+begin
+  Self.List.Add(T);
+end;
+
+procedure TIdSipTransports.Clear;
+begin
+  Self.List.Clear;
+end;
+
+function TIdSipTransports.Count: Integer;
+begin
+  Result := Self.List.Count;
+end;
+
+//* TIdSipTransports Private methods *******************************************
+
+function TIdSipTransports.GetTransports(Index: Integer): TIdSipTransport;
+begin
+  Result := Self.List[Index] as TIdSipTransport;
 end;
 
 //******************************************************************************
