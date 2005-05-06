@@ -464,8 +464,8 @@ type
     procedure ActivateServerOn(Server: TIdRTPServer;
                                const IP: String;
                                Port: Cardinal);
-    procedure CheckServerActiveOn(Port: Cardinal);
-    procedure CheckServerNotActiveOn(Port: Cardinal);
+    procedure CheckServerActiveOn(Port: Cardinal; const Msg: String = '');
+    procedure CheckServerNotActiveOn(Port: Cardinal; const Msg: String = '');
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
@@ -5700,10 +5700,14 @@ procedure TestTIdSdpPayloadProcessor.SetUp;
 begin
   inherited SetUp;
 
+  Self.DataEvent := TSimpleEvent.Create;
+  Self.Proc      := TIdSdpPayloadProcessor.Create;
+  Self.PCMData   := Self.Proc.Profile.EncodingFor(PCMMuLawEncoding + '/8000').Clone;
 
-  Self.DataEvent      := TSimpleEvent.Create;
-  Self.Proc           := TIdSdpPayloadProcessor.Create;
-  Self.PCMData := Self.Proc.Profile.EncodingFor(PCMMuLawEncoding + '/8000').Clone;
+  CheckServerNotActiveOn(8000,
+                         'You can''t run this test until you free up localhost:8000');
+  CheckServerNotActiveOn(8001,
+                         'You can''t run this test until you free up localhost:8000');
 end;
 
 procedure TestTIdSdpPayloadProcessor.TearDown;
@@ -5731,7 +5735,8 @@ begin
   Server.Active := true;
 end;
 
-procedure TestTIdSdpPayloadProcessor.CheckServerActiveOn(Port: Cardinal);
+procedure TestTIdSdpPayloadProcessor.CheckServerActiveOn(Port: Cardinal;
+                                                         const Msg: String = '');
 var
   Server: TIdUDPServer;
 begin
@@ -5741,7 +5746,7 @@ begin
 
     try
       Server.Active := true;
-      Fail('No server started on ' + IntToStr(Port));
+      Fail(Msg + ': No server started on ' + IntToStr(Port));
     except
       on EIdCouldNotBindSocket do;
     end;
@@ -5750,7 +5755,8 @@ begin
   end;
 end;
 
-procedure TestTIdSdpPayloadProcessor.CheckServerNotActiveOn(Port: Cardinal);
+procedure TestTIdSdpPayloadProcessor.CheckServerNotActiveOn(Port: Cardinal;
+                                                            const Msg: String = '');
 var
   Binding: TIdSocketHandle;
   Server:  TIdUDPServer;
@@ -5764,7 +5770,7 @@ begin
       Server.Active := false;
     except
       on EIdCouldNotBindSocket do
-        Fail('Port ' + IntToStr(Port) + ' not closed');
+        Fail(Msg + ': Port ' + IntToStr(Port) + ' not closed');
     end;
   finally
     Server.Free;
