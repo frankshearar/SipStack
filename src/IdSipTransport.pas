@@ -189,8 +189,8 @@ type
 
   // I allow the sending of TCP requests to happen asynchronously: in my
   // context, I instantiate a TCP client, send a request, and receive
-  // responses. I schedule Waits for each of these responses so that my
-  // Transport handles the response in the context of its Timer.
+  // messages, usually responses. I schedule Waits for each of these messages so
+  // that my Transport handles the response in the context of its Timer.
   TIdSipTcpClientThread = class(TIdBaseThread)
   private
     Client:    TIdSipTcpClient;
@@ -220,6 +220,8 @@ type
     function ClientType: TIdSipTcpClientClass; override;
   end;
 
+  // I represent the (possibly) deferred handling of an exception raised in the
+  // process of sending or receiving a message.
   TIdSipMessageExceptionWait = class(TIdWait)
   private
     fExceptionMessage: String;
@@ -235,6 +237,7 @@ type
     property Transport:        TIdSipTransport read fTransport write fTransport;
   end;
 
+  // I represent the (possibly) deferred handling of an inbound message.
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdSipConnectionBindings;
@@ -317,7 +320,7 @@ type
   // I relate a request with a TCP connection. I store a COPY of a request
   // while storing a REFERENCE to a connection. Transports construct requests
   // and so bear responsibility for destroying them, and I need to remember
-  //these requests.
+  // these requests.
   TIdSipConnectionTableEntry = class(TObject)
   private
     fConnection: TIdTCPConnection;
@@ -331,6 +334,11 @@ type
     property Request:    TIdSipRequest    read fRequest;
   end;
 
+  // I represent a table containing ordered pairs of (TCP connection, Request).
+  // If a transport wishes to send a request or response I match the outbound
+  // message against my table of tuples, and return the appropriate TCP
+  // connection. My users bear responsibility for informing me when TCP
+  // connections appear and disappear.
   TIdSipConnectionTable = class(TObject)
   private
     List: TObjectList;
@@ -359,6 +367,8 @@ type
     procedure UnlockList;
   end;
 
+  // I represent a (possibly) deferred handling of an exception by using a
+  // TNotifyEvent.
   TIdSipExceptionWait = class(TIdNotifyEventWait)
   private
     fExceptionMsg:  String;
@@ -370,6 +380,7 @@ type
     property Reason:        String      read fReason write fReason;
   end;
 
+  // Look at IIdSipTransportListener's declaration.
   TIdSipTransportExceptionMethod = class(TIdNotification)
   private
     fException: Exception;
@@ -381,6 +392,7 @@ type
     property Reason:    String    read fReason write fReason;
   end;
 
+  // Look at IIdSipTransportListener's declaration.
   TIdSipTransportReceiveRequestMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
@@ -392,6 +404,7 @@ type
     property Request:  TIdSipRequest   read fRequest write fRequest;
   end;
 
+  // Look at IIdSipTransportListener's declaration.
   TIdSipTransportReceiveResponseMethod = class(TIdNotification)
   private
     fReceiver: TIdSipTransport;
@@ -403,6 +416,7 @@ type
     property Response: TIdSipResponse  read fResponse write fResponse;
   end;
 
+  // Look at IIdSipTransportListener's declaration.
   TIdSipTransportRejectedMessageMethod = class(TIdNotification)
   private
     fMsg:    String;
@@ -414,6 +428,7 @@ type
     property Reason: String read fReason write fReason;
   end;
 
+  // Look at IIdSipTransportSendingListener's declaration.
   TIdSipTransportSendingRequestMethod = class(TIdNotification)
   private
     fSender:  TIdSipTransport;
@@ -425,6 +440,7 @@ type
     property Request: TIdSipRequest   read fRequest write fRequest;
   end;
 
+  // Look at IIdSipTransportSendingListener's declaration.
   TIdSipTransportSendingResponseMethod = class(TIdNotification)
   private
     fSender: TIdSipTransport;
@@ -456,9 +472,10 @@ const
                                       + 'request or receiving a response to one.';
   MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
                           + 'Via, namely, this stack.';
-  ResponseNotSentFromHere = 'Received response could not have been sent from here';
+  ResponseNotSentFromHere = 'The request to which this response replies could '
+                          + 'not have been sent from here.';
   WrongTransport          = 'This transport only supports %s  messages but '
-                          + 'received a %s message';
+                          + 'received a %s message.';
 
 const
   ItemNotFoundIndex = -1;                          
