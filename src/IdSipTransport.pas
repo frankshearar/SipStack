@@ -472,7 +472,7 @@ const
                                       + 'request or receiving a response to one.';
   MustHaveAtLeastOneVia   = 'An outbound message must always have at least one '
                           + 'Via, namely, this stack.';
-  ResponseNotSentFromHere = 'The request to which this response replies could '
+  RequestNotSentFromHere  = 'The request to which this response replies could '
                           + 'not have been sent from here.';
   WrongTransport          = 'This transport only supports %s  messages but '
                           + 'received a %s message.';
@@ -764,7 +764,7 @@ begin
   end
   else
     Self.NotifyTransportListenersOfRejectedMessage(Response.AsString,
-                                                   ResponseNotSentFromHere);
+                                                   RequestNotSentFromHere);
 end;
 
 procedure TIdSipTransport.ReturnBadRequest(Request: TIdSipRequest;
