@@ -6156,7 +6156,7 @@ procedure TestTIdSDPMediaStream.SendRTP;
 var
   Text: TIdRTPT140Payload;
 begin
-  Text := TIdRTPT140Payload.Create(T140MimeType);
+  Text := TIdRTPT140Payload.Create;
   try
     Text.Block := '1234';
     Self.Sender.SendData(Text);
