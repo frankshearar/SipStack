@@ -3751,8 +3751,21 @@ begin
 
   OurBindings := TIdSipContacts.Create;
   try
-    Check(OurBindings.Equals(Self.LastSentRequest.Contacts),
-          'un-REGISTER has wrong contact info');
+    OurBindings.Add(Self.Core.Contact);
+
+    OurBindings.First;
+    Self.LastSentRequest.Contacts.First;
+
+    while (OurBindings.HasNext and Self.LastSentRequest.Contacts.HasNext) do begin
+      CheckEquals(OurBindings.CurrentContact.Address.AsString,
+                  Self.LastSentRequest.Contacts.CurrentContact.Address.AsString,
+                  'Incorrect Contact');
+
+      OurBindings.Next;
+      Self.LastSentRequest.Contacts.Next;
+    end;
+    Check(OurBindings.HasNext = Self.LastSentRequest.Contacts.HasNext,
+          'Either not all Contacts in the un-REGISTER, or too many contacts');
   finally
     OurBindings.Free;
   end;
