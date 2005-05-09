@@ -27,8 +27,8 @@ type
                           ReceivedFrom: TIdSipConnectionBindings);
     procedure ReadBodyInto(Msg: TIdSipMessage;
                            Dest: TStringStream);
-    function  ReadResponse(Dest: TStringStream): String;
-    procedure ReadResponses;
+    function  ReadMessage(Dest: TStringStream): String;
+    procedure ReadMessages;
   protected
     function  DefaultTimeout: Cardinal; virtual;
   public
@@ -71,7 +71,7 @@ end;
 procedure TIdSipTcpClient.Send(Request: TIdSipRequest);
 begin
   Self.Write(Request.AsString);
-  Self.ReadResponses;
+  Self.ReadMessages;
 end;
 
 procedure TIdSipTcpClient.Send(Response: TIdSipResponse);
@@ -110,7 +110,7 @@ begin
   Dest.Seek(-Msg.ContentLength, soFromCurrent);
 end;
 
-function TIdSipTcpClient.ReadResponse(Dest: TStringStream): String;
+function TIdSipTcpClient.ReadMessage(Dest: TStringStream): String;
 const
   CrLf = #$D#$A;
 begin
@@ -125,7 +125,7 @@ begin
   Dest.Seek(0, soFromBeginning);
 end;
 
-procedure TIdSipTcpClient.ReadResponses;
+procedure TIdSipTcpClient.ReadMessages;
 var
   S:            TStringStream;
   Msg:          TIdSipMessage;
@@ -140,7 +140,7 @@ begin
     S := TStringStream.Create('');
     try
       try
-        Self.ReadResponse(S);
+        Self.ReadMessage(S);
         Msg := TIdSipMessage.ReadMessageFrom(S);
         try
           try
