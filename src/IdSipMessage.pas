@@ -2068,7 +2068,11 @@ begin
 end;
 
 procedure TIdSipHostAndPort.SetValue(Value: String);
+var
+  OriginalValue: String;
 begin
+  OriginalValue := Value;
+
   Self.PortIsSpecified := false;
 
   if Self.CouldContainIPv6Reference(Value) then begin
@@ -2083,11 +2087,15 @@ begin
     Self.Host := Fetch(Value, ':');
   end;
 
+  // Value now contains either a (possibly malformed) port, or nothing.
   if (Value = '') then begin
     Self.Port := Self.DefaultPort;
     Self.PortIsSpecified := false;
   end
   else begin
+    if not TIdSimpleParser.IsNumber(Value) then
+      raise EParserError.Create('Malformed host/port: ' + OriginalValue);
+
     Self.Port := StrToIntDef(Value, Self.DefaultPort);
     Self.PortIsSpecified := true;
   end;
@@ -5005,7 +5013,13 @@ begin
 
   // warn-agent
   Token := Fetch(S, ' ');
-  Self.HostAndPort.Value := Token;
+
+  try
+    Self.HostAndPort.Value := Token;
+  except
+    on E: EParserError do
+      Self.FailParse(E.Message);
+  end;
 
   // warn-text
   if not TIdSipParser.IsQuotedString(S) then

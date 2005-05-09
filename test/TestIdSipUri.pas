@@ -26,6 +26,7 @@ type
     procedure TestSetDefaultPort;
     procedure TestSetValueHost;
     procedure TestSetValueHostWithDefaultPort;
+    procedure TestSetValueHostWithMalformedPort;
     procedure TestSetValueHostWithPort;
     procedure TestSetValueIPv4Address;
     procedure TestSetValueIPv4AddressWithDefaultPort;
@@ -154,7 +155,7 @@ type
 implementation
 
 uses
-  IdSimpleParser, IdSipConsts, SysUtils;
+  Classes, IdSimpleParser, IdSipConsts, SysUtils;
 
 function Suite: ITestSuite;
 begin
@@ -232,6 +233,21 @@ begin
   CheckEquals('foo.com:' + IntToStr(Self.HP.Port),
               Self.HP.Value,
               'GetValue');
+end;
+
+procedure TestTIdSipHostAndPort.TestSetValueHostWithMalformedPort;
+const
+  MalformedPortString = 'foo.com:a';
+begin
+  try
+    Self.HP.Value := MalformedPortString;
+    Fail('Failed to bail out on malformed port');
+  except
+    on E: EParserError do begin
+      Check(Pos(MalformedPortString, E.Message) > 0,
+            'Uninformative error message');
+    end;
+  end;
 end;
 
 procedure TestTIdSipHostAndPort.TestSetValueHostWithPort;
