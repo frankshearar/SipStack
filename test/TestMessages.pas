@@ -400,20 +400,20 @@ const
   //   A server should respond 400 with an appropriate reason phrase if it
   //   can. It may just drop this message.
   TortureTest35 = 'OPTIONS sip:%s SIP/2.0'#13#10
-                + 'Via: SIP/2.0/UDP %s:5604'#13#10
+                + 'Via: SIP/2.0/UDP %s'#13#10
                 + 'Max-Forwards: 70'#13#10
-                + 'From: sip:iuser@%s;tag=74345345'#13#10
+                + 'From: sip:iuser@company.com;tag=74345345'#13#10
                 + 'To: sip:user@135.180.130.133'#13#10
-                + 'Call-ID: 1804928587@%s'#13#10
+                + 'Call-ID: 1804928587@company.com'#13#10
                 + 'CSeq: 1 OPTIONS'#13#10
-                + 'Expires: 0 0l@%s'#13#10               // mangled
+                + 'Expires: 0 0l@company.com'#13#10               // mangled
                 + 'To: sip:user@135.180.130.133'#13#10            // 2nd To header
-                + 'Call-ID: 1804928587@%s'#13#10         // 2nd Call-ID
+                + 'Call-ID: 1804928587@company.com'#13#10         // 2nd Call-ID
                 + 'CSeq: 1 OPTIONS'#13#10                         // 2nd CSeq
-                + 'Contact: sip:host.%s'#13#10
-                + 'Expires: 0xpires: 0sip:host.%s'#13#10 // mangled
+                + 'Contact: sip:host.company.com'#13#10
+                + 'Expires: 0xpires: 0sip:host.company.com'#13#10 // mangled
                 + 'Expires: 0'#13#10
-                + 'Contact: sip:host.%s'#13#10
+                + 'Contact: sip:host.company.com'#13#10
                 + #13#10;
 
   //   This is an illegal invite as the display names in the To and From
