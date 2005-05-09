@@ -77,6 +77,29 @@ type
     procedure TestUriSchemeFor;
   end;
 
+  TestTIdSipTransport = class;
+  TTransportTestTimerQueue = class(TIdThreadedTimerQueue)
+  private
+    fHighPortTransport: TIdSipTransport;
+    FinishedEvent:      TEvent;
+    fLowPortTransport:  TIdSipTransport;
+
+    procedure ConfigureTransport(Transport: TIdSipTransport;
+                                 const HostName: String;
+                                 const Address: String;
+                                 Port: Cardinal;
+                                 TestCase: TestTIdSipTransport);
+
+  public
+    constructor Create(TransportType: TIdSipTransportClass;
+                       TestCase: TestTIdSipTransport;
+                       FinishedEvent: TEvent); reintroduce;
+    destructor  Destroy; override;
+
+    property HighPortTransport: TIdSipTransport read fHighPortTransport;
+    property LowPortTransport:  TIdSipTransport read fLowPortTransport;
+  end;
+
   TestTIdSipTransport = class(TThreadingTestCase,
                               IIdSipTransportListener,
                               IIdSipTransportSendingListener)
@@ -91,10 +114,9 @@ type
     CheckingRequestEvent:  TIdSipRequestEvent;
     CheckingResponseEvent: TIdSipResponseEvent;
     EmptyListEvent:        TEvent;
+    FinishedTimer:         TEvent;
     HighPortLocation:      TIdSipLocation;
-    HighPortTransport:     TIdSipTransport;
     LowPortLocation:       TIdSipLocation;
-    LowPortTransport:      TIdSipTransport;
     Parser:                TIdSipParser;
     ReceivedRequest:       Boolean;
     ReceivedResponse:      Boolean;
@@ -103,7 +125,7 @@ type
     Request:               TIdSipRequest;
     Response:              TIdSipResponse;
     SendEvent:             TEvent;
-    Timer:                 TIdThreadedTimerQueue;
+    Timer:                 TTransportTestTimerQueue;
     WrongServer:           Boolean;
 
     procedure CheckCanReceiveRequest(Sender: TObject;
@@ -149,11 +171,8 @@ type
     procedure CheckUseRport(Sender: TObject;
                             R: TIdSipRequest;
                             ReceivedFrom: TIdSipConnectionBindings);
-    procedure ConfigureTransport(Transport: TIdSipTransport;
-                                 const HostName: String;
-                                 const Address: String;
-                                 Port: Cardinal); virtual;
-    function  DefaultPort: Cardinal; virtual;
+    function  HighPortTransport: TIdSipTransport;
+    function  LowPortTransport: TIdSipTransport;
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnEmpty(Sender: TIdTimerQueue);
@@ -176,6 +195,8 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
+
+    function  DefaultPort: Cardinal; virtual;
   published
     procedure TestCanReceiveRequest;
     procedure TestCanReceiveResponse;
@@ -243,7 +264,6 @@ type
     procedure TestGetTransportType;
     procedure TestIsReliable;
     procedure TestIsSecure;
-    procedure TestSendRequestWithNoResponse;
     procedure TestSendResponsesClosedConnection;
     procedure TestSendResponsesClosedConnectionReceivedParam;
     procedure TestSendResponsesOpenConnection;
@@ -254,11 +274,12 @@ type
     procedure DoOnPassword(var Password: String);
     procedure SetUpTls(Transport: TIdSipTransport);
   protected
-    function  DefaultPort: Cardinal; override;
     procedure SendMessage(Msg: String); override;
     function  TransportType: TIdSipTransportClass; override;
   public
     procedure SetUp; override;
+
+    function  DefaultPort: Cardinal; override;
   published
     procedure TestGetTransportType;
     procedure TestIsReliable;
@@ -441,9 +462,12 @@ var
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipTransport unit tests');
+{
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
+}
   Result.AddTest(TestTIdSipTCPTransport.Suite);
+{
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
@@ -457,6 +481,7 @@ begin
   Result.AddTest(TestTIdSipTransportRejectedMessageMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingResponseMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -858,6 +883,73 @@ begin
 end;
 
 //******************************************************************************
+//* TTransportTestTimerQueue                                                   *
+//******************************************************************************
+//* TTransportTestTimerQueue Public methods ************************************
+
+constructor TTransportTestTimerQueue.Create(TransportType: TIdSipTransportClass;
+                                            TestCase: TestTIdSipTransport;
+                                            FinishedEvent: TEvent);
+var
+  I: Integer;
+begin
+  inherited Create(false);
+
+  try
+    Self.FinishedEvent := FinishedEvent;
+
+    Self.fHighPortTransport := TransportType.Create;
+    Self.ConfigureTransport(Self.HighPortTransport,
+                            'localhost',
+                            '127.0.0.1',
+                            TestCase.DefaultPort + 10000,
+                            TestCase);
+
+    Self.fLowPortTransport  := TransportType.Create;
+    Self.ConfigureTransport(Self.LowPortTransport,
+                            'localhost',
+                            '127.0.0.1',
+                            TestCase.DefaultPort,
+                            TestCase);
+
+    Self.HighPortTransport.Start;
+    Self.LowPortTransport.Start;
+  except
+    on E: Exception do
+      I := 0;
+  end;
+end;
+
+destructor TTransportTestTimerQueue.Destroy;
+begin
+  Self.LowPortTransport.Stop;
+  Self.HighPortTransport.Stop;
+  Self.LowPortTransport.Free;
+  Self.HighPortTransport.Free;
+
+  Self.FinishedEvent.SetEvent;
+
+  inherited Destroy;
+end;
+
+//* TTransportTestTimerQueue Private methods ***********************************
+
+procedure TTransportTestTimerQueue.ConfigureTransport(Transport: TIdSipTransport;
+                                                      const HostName: String;
+                                                      const Address: String;
+                                                      Port: Cardinal;
+                                                      TestCase: TestTIdSipTransport);
+begin
+  Transport.AddTransportListener(TestCase);
+  Transport.AddTransportSendingListener(TestCase);
+  Transport.Timeout  := TestCase.DefaultTimeout div 10;
+  Transport.Timer    := Self;
+  Transport.HostName := HostName;
+  Transport.Address  := Address;
+  Transport.Port     := Port;
+end;
+
+//******************************************************************************
 //* TestTIdSipTransport                                                        *
 //******************************************************************************
 //* TestTIdSipTransport Public methods *****************************************
@@ -866,36 +958,25 @@ procedure TestTIdSipTransport.SetUp;
 begin
   inherited SetUp;
 
-  Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
-
-  Self.EmptyListEvent := TSimpleEvent.Create;
-  Self.SendEvent := TSimpleEvent.Create;
-  Self.Timer := TIdThreadedTimerQueue.Create(false);
-  Self.Timer.OnEmpty := Self.OnEmpty;
-
-  TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
-                                            Self.TransportType);
-
   if not Assigned(GStack) then
     raise Exception.Create('GStack isn''t instantiated - you need something '
                          + 'that opens a socket');
 
+  TIdSipTransportRegistry.RegisterTransport(Self.TransportType.GetTransportType,
+                                            Self.TransportType);
+
+  Self.ExceptionMessage := Self.TransportType.ClassName + ': ' + Self.ExceptionMessage;
+
+  Self.EmptyListEvent := TSimpleEvent.Create;
+  Self.FinishedTimer  := TSimpleEvent.Create;
+  Self.SendEvent := TSimpleEvent.Create;
+  Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer);
+  Self.Timer.OnEmpty := Self.OnEmpty;
+
   Self.LastSentResponse := TIdSipResponse.Create;
 
-  Self.HighPortTransport := Self.TransportType.Create;
-  Self.ConfigureTransport(Self.HighPortTransport,
-                          'localhost',
-                          '127.0.0.1',
-                          Self.DefaultPort + 10000);
-  Self.HighPortTransport.Start;
-
-  Self.LowPortTransport := Self.TransportType.Create;
-  Self.ConfigureTransport(Self.LowPortTransport,
-                          'localhost',
-                          '127.0.0.1',
-                          Self.DefaultPort);
-  Self.LowPortTransport.Start;
-
+  Check(Self.HighPortTransport <> nil,
+        'Something went wrong creating the TTransportTestTimerQueue');
   Self.HighPortLocation := TIdSipLocation.Create(Self.TransportType.GetTransportType,
                                                  Self.HighPortTransport.Address,
                                                  Self.HighPortTransport.Port);
@@ -925,32 +1006,32 @@ procedure TestTIdSipTransport.TearDown;
 var
   WaitTime: Cardinal;
 begin
-  WaitTime := Self.Timer.DefaultTimeout * 3 div 2;
+  WaitTime := Self.DefaultTimeout * 3 div 2;
 
   Self.Timer.Terminate;
   Self.EmptyListEvent.WaitFor(WaitTime);
+  Self.FinishedTimer.WaitFor(WaitTime);
 
   Self.RecvdRequest.Free;
   Self.Response.Free;
   Self.Request.Free;
 
-  Self.LowPortTransport.Stop;
-  Self.HighPortTransport.Stop;
-
   Self.LowPortLocation.Free;
   Self.HighPortLocation.Free;
 
-  Self.LowPortTransport.Free;
-  Self.HighPortTransport.Free;
-
   Self.LastSentResponse.Free;
-
-  TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
 
   Self.SendEvent.Free;
   Self.EmptyListEvent.Free;
 
+  TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);
+
   inherited TearDown;
+end;
+
+function TestTIdSipTransport.DefaultPort: Cardinal;
+begin
+  Result := IdPORT_SIP;
 end;
 
 //* TestTIdSipTransport Protected methods **************************************
@@ -1161,23 +1242,14 @@ begin
   end;
 end;
 
-procedure TestTIdSipTransport.ConfigureTransport(Transport: TIdSipTransport;
-                                                 const HostName: String;
-                                                 const Address: String;
-                                                 Port: Cardinal);
+function TestTIdSipTransport.HighPortTransport: TIdSipTransport;
 begin
-  Transport.AddTransportListener(Self);
-  Transport.AddTransportSendingListener(Self);
-  Transport.Timeout  := Self.DefaultTimeout div 10;
-  Transport.Timer    := Self.Timer;
-  Transport.HostName := HostName;
-  Transport.Address  := Address;
-  Transport.Port     := Port;
+  Result := Self.Timer.HighPortTransport;
 end;
 
-function TestTIdSipTransport.DefaultPort: Cardinal;
+function TestTIdSipTransport.LowPortTransport: TIdSipTransport;
 begin
-  Result := IdPORT_SIP;
+  Result := Self.Timer.LowPortTransport;
 end;
 
 procedure TestTIdSipTransport.OnException(E: Exception;
@@ -1653,11 +1725,16 @@ begin
 end;
 
 procedure TestTIdSipTransport.TestTortureTest35;
+var
+  Destination: String;
 begin
-  // Illegal >1 SP between elements of the Request-Line.
+  // Badly mangled message: two mangled Expires, duplicated To, Call-ID,
+  // Cseq headers.
+
+  Destination := Self.HighPortTransport.Address + ':' + IntToStr(Self.HighPortTransport.Port);
 
   Self.CheckingResponseEvent := Self.CheckForBadRequest;
-  Self.SendFromLowTransport(TortureTest35);
+  Self.SendFromLowTransport(StringReplace(TortureTest35, '%s', Destination, [rfReplaceAll]));
 
   Self.WaitForSignaled;
 end;
@@ -1851,12 +1928,6 @@ begin
   Check(not Self.HighPortTransport.IsSecure, 'TCP transport marked as secure');
 end;
 
-procedure TestTIdSipTCPTransport.TestSendRequestWithNoResponse;
-begin
-  Self.CheckingRequestEvent := nil;
-  Self.LowPortTransport.Send(Self.Request, Self.HighPortLocation);
-end;
-
 procedure TestTIdSipTCPTransport.TestSendResponsesClosedConnection;
 var
   Request:  TIdSipRequest;
@@ -1882,6 +1953,12 @@ begin
     finally
       Self.SipClient.Disconnect;
     end;
+
+    // Why should we need to sleep here?
+    // When SipClient disconnects, the server side of the connection should
+    // invoke OnDisconnect which then unregisters the connection from the
+    // ConnectionMap.
+    Sleep(500);
 
     Response := TIdSipMessage.ReadResponseFrom(LocalLoopResponse);
     try
@@ -2014,12 +2091,12 @@ begin
 }
 end;
 
-//* TestTIdSipTLSTransport Protected methods ***********************************
-
 function TestTIdSipTLSTransport.DefaultPort: Cardinal;
 begin
   Result := IdPORT_SIPS;
 end;
+
+//* TestTIdSipTLSTransport Protected methods ***********************************
 
 procedure TestTIdSipTLSTransport.SendMessage(Msg: String);
 var

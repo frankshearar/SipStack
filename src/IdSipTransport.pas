@@ -152,10 +152,13 @@ type
   // SIP stack.
   TIdSipTCPTransport = class(TIdSipTransport)
   private
+    RunningClients: TThreadList;
+
     procedure SendMessageTo(Msg: TIdSipMessage;
                             Dest: TIdSipLocation);
     procedure SendMessage(Msg: TIdSipMessage;
                           Dest: TIdSipLocation);
+    procedure StopAllClientConnections;
   protected
     ConnectionMap: TIdSipConnectionTableLock;
     Transport:     TIdSipTcpServer;
@@ -164,7 +167,6 @@ type
     procedure DestroyServer; override;
     procedure DoOnAddConnection(Connection: TIdTCPConnection;
                                 Request: TIdSipRequest);
-    procedure DoOnRemoveConnection(Connection: TIdTCPConnection);
     function  GetAddress: String; override;
     function  GetBindings: TIdSocketHandles; override;
     function  GetPort: Cardinal; override;
@@ -183,6 +185,7 @@ type
     constructor Create; override;
     destructor  Destroy; override;
 
+    procedure RemoveClient(ClientThread: TObject);
     procedure Start; override;
     procedure Stop; override;
   end;
@@ -213,6 +216,8 @@ type
                        Msg: TIdSipMessage;
                        Transport: TIdSipTCPTransport); reintroduce;
     destructor Destroy; override;
+
+    procedure Terminate; override;
   end;
 
   TIdSipTlsClientThread = class(TIdSipTcpClientThread)
@@ -361,14 +366,16 @@ type
   private
     List: TObjectList;
 
-    function EntryAt(Index: Integer): TIdSipConnectionTableEntry;
+    procedure ConnectionDisconnected(Sender: TObject);
+    function  EntryAt(Index: Integer): TIdSipConnectionTableEntry;
   public
     constructor Create;
     destructor  Destroy; override;
 
     procedure Add(Connection: TIdTCPConnection;
                   Request:    TIdSipRequest);
-    function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection;
+    function  ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection; overload;
+    function  ConnectionFor(Destination: TIdSipLocation): TIdTCPConnection; overload;
     function  Count: Integer;
     procedure Remove(Connection: TIdTCPConnection);
   end;
@@ -985,6 +992,7 @@ begin
   inherited Create;
 
   Self.ConnectionMap := TIdSipConnectionTableLock.Create;
+  Self.RunningClients := TThreadList.Create;
 
   Self.Bindings.Add;
   Self.SetPort(Port);
@@ -992,9 +1000,22 @@ end;
 
 destructor TIdSipTCPTransport.Destroy;
 begin
+  Self.RunningClients.Free;
   Self.ConnectionMap.Free;
 
   inherited Destroy;
+end;
+
+procedure TIdSipTCPTransport.RemoveClient(ClientThread: TObject);
+var
+  Clients: TList;
+begin
+  Clients := Self.RunningClients.LockList;
+  try
+    Clients.Remove(ClientThread);
+  finally
+    Self.RunningClients.UnlockList;
+  end;
 end;
 
 procedure TIdSipTCPTransport.Start;
@@ -1005,6 +1026,8 @@ end;
 procedure TIdSipTCPTransport.Stop;
 begin
   Self.Transport.Active := false;
+
+  Self.StopAllClientConnections;
 end;
 
 //* TIdSipTCPTransport Protected methods ***************************************
@@ -1042,18 +1065,6 @@ begin
   end;
 end;
 
-procedure TIdSipTCPTransport.DoOnRemoveConnection(Connection: TIdTCPConnection);
-var
-  Table: TIdSipConnectionTable;
-begin
-  Table := Self.ConnectionMap.LockList;
-  try
-    Table.Remove(Connection);
-  finally
-    Self.ConnectionMap.UnlockList;
-  end;
-end;
-
 function TIdSipTCPTransport.GetAddress: String;
 begin
   Result := Self.Transport.Bindings[0].IP;
@@ -1075,7 +1086,6 @@ begin
   Self.Transport.AddMessageListener(Self);
 
   Self.Transport.OnAddConnection    := Self.DoOnAddConnection;
-  Self.Transport.OnRemoveConnection := Self.DoOnRemoveConnection;
 end;
 
 procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest;
@@ -1119,7 +1129,7 @@ end;
 procedure TIdSipTCPTransport.SendMessageTo(Msg: TIdSipMessage;
                                            Dest: TIdSipLocation);
 begin
-  TIdSipTcpClientThread.Create(Dest.IPAddress, Dest.Port, Msg, Self);
+  Self.RunningClients.Add(TIdSipTcpClientThread.Create(Dest.IPAddress, Dest.Port, Msg, Self));
 end;
 
 procedure TIdSipTCPTransport.SendMessage(Msg: TIdSipMessage;
@@ -1130,15 +1140,37 @@ var
 begin
   Table := Self.ConnectionMap.LockList;
   try
+    // Try send the response down the same connection we received the request on.
     Connection := Table.ConnectionFor(Msg);
 
     if Assigned(Connection) and Connection.Connected then
       Connection.Write(Msg.AsString)
     else begin
-      Self.SendMessageTo(Msg, Dest);
+      Connection := Table.ConnectionFor(Dest);
+
+      // Otherwise, try find an existing connection to Dest.
+      if Assigned(Connection) and Connection.Connected then
+        Connection.Write(Msg.AsString)
+      else
+        // Last resort: make a new connection to Dest.
+        Self.SendMessageTo(Msg, Dest);
     end;
   finally
     Self.ConnectionMap.UnlockList;
+  end;
+end;
+
+procedure TIdSipTCPTransport.StopAllClientConnections;
+var
+  Clients: TList;
+  I:       Integer;
+begin
+  Clients := Self.RunningClients.LockList;
+  try
+    for I := 0 to Clients.Count - 1 do
+      TIdSipTcpClientThread(Clients[I]).Terminate;
+  finally
+    Self.RunningClients.UnlockList;
   end;
 end;
 
@@ -1174,6 +1206,11 @@ begin
   inherited Destroy;
 end;
 
+procedure TIdSipTcpClientThread.Terminate;
+begin
+  Self.Client.Terminated := true;
+end;
+
 //* TIdSipTcpClientThread Protected methods ************************************
 
 function TIdSipTcpClientThread.ClientType: TIdSipTcpClientClass;
@@ -1182,6 +1219,8 @@ begin
 end;
 
 procedure TIdSipTcpClientThread.Run;
+var
+  C: TIdSipConnectionTable;
 begin
   try
     Self.Client.Connect(Self.Transport.Timeout);
@@ -1189,7 +1228,7 @@ begin
       if Self.Msg.IsRequest then
         Self.Client.Send(Self.Msg as TIdSipRequest)
       else
-        Self.Client.Send(Self.Msg as TIdSipResponse)
+        Self.Client.Send(Self.Msg as TIdSipResponse);
     finally
       Self.Client.Disconnect;
     end;
@@ -1197,6 +1236,8 @@ begin
     on E: Exception do
       Self.NotifyOfException(E);
   end;
+
+  Self.Transport.RemoveClient(Self);
 end;
 
 //* TIdSipTcpClientThread Private methods **************************************
@@ -1591,6 +1632,7 @@ procedure TIdSipConnectionTable.Add(Connection: TIdTCPConnection;
                                     Request:    TIdSipRequest);
 begin
   Self.List.Add(TIdSipConnectionTableEntry.Create(Connection, Request));
+  Connection.OnDisconnected := Self.ConnectionDisconnected;
 end;
 
 function TIdSipConnectionTable.ConnectionFor(Msg: TIdSipMessage): TIdTCPConnection;
@@ -1609,6 +1651,30 @@ begin
       Found := Self.EntryAt(I).Request.Equals(Msg)
     else
       Found := Self.EntryAt(I).Request.Match(Msg);
+
+    if not Found then
+      Inc(I);
+  end;
+
+  if (I < Count) then
+    Result := Self.EntryAt(I).Connection;
+end;
+
+function TIdSipConnectionTable.ConnectionFor(Destination: TIdSipLocation): TIdTCPConnection;
+var
+  Count: Integer;
+  I:     Integer;
+  Found: Boolean;
+begin
+  Result := nil;
+
+  I := 0;
+  Count := Self.List.Count;
+  Found := false;
+  while (I < Count) and not Found do begin
+    Found := (Destination.Transport = TcpTransport)
+         and (Destination.IPAddress = Self.EntryAt(I).Connection.Socket.Binding.PeerIP)
+         and (Integer(Destination.Port) = Self.EntryAt(I).Connection.Socket.Binding.PeerPort);
 
     if not Found then
       Inc(I);
@@ -1639,6 +1705,11 @@ begin
 end;
 
 //* TIdSipConnectionTable Private methods **************************************
+
+procedure TIdSipConnectionTable.ConnectionDisconnected(Sender: TObject);
+begin
+  Self.Remove(Sender as TIdTCPConnection);
+end;
 
 function TIdSipConnectionTable.EntryAt(Index: Integer): TIdSipConnectionTableEntry;
 begin
