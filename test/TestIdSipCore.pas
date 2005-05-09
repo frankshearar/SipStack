@@ -984,13 +984,10 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
-{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
-}
   Result.AddTest(TestTIdSipUserAgent.Suite);
-{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -1018,7 +1015,6 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
-}
 end;
 
 //******************************************************************************
