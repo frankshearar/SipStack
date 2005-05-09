@@ -139,7 +139,6 @@ begin
   Self.EmptyListEvent.WaitFor(WaitTime);
 
   Self.Server.Active := false;
-
   Self.Invite.Free;
   Self.Server.Free;
   Self.Client.Free;
@@ -241,6 +240,9 @@ begin
   try
     Threads := Self.Server.Threads.LockList;
     try
+      if (Threads.Count = 0) then
+        raise Exception.Create('TCP connection disappeared: CutConnection');
+
       (TObject(Threads[0]) as TIdPeerThread).Connection.DisconnectSocket;
     finally
       Self.Server.Threads.UnlockList;
@@ -304,8 +306,12 @@ var
   Threads: TList;
 begin
   S := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
+
   Threads := Self.Server.Threads.LockList;
   try
+    if (Threads.Count = 0) then
+      raise Exception.Create('TCP connection disappeared: SendOkResponse');
+
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
   finally
     Self.Server.Threads.UnlockList;
@@ -322,6 +328,9 @@ begin
 
   Threads := Self.Server.Threads.LockList;
   try
+    if (Threads.Count = 0) then
+      raise Exception.Create('TCP connection disappeared: SendOptionsRequest');
+
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
   finally
     Self.Server.Threads.UnlockList;
@@ -337,8 +346,12 @@ var
 begin
   Trying := StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []);
   OK     := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
+  
   Threads := Self.Server.Threads.LockList;
   try
+    if (Threads.Count = 0) then
+      raise Exception.Create('TCP connection disappeared: SendProvisionalAndOkResponse');
+
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Trying);
     IdGlobal.Sleep(500);
     (TObject(Threads[0]) as TIdPeerThread).Connection.Write(OK);
@@ -468,7 +481,6 @@ begin
 
   Self.WaitForSignaled;
 end;
-
 
 initialization
   RegisterTest('IdSipTcpClient', Suite);
