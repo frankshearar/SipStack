@@ -4,7 +4,8 @@ interface
 
 uses
   Classes, Contnrs, IdInterfacedObject, IdNotification, IdSipCore, IdSipMessage,
-  IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, Messages, Windows;
+  IdSipTransaction, IdSipTransport, IdTimerQueue, SyncObjs, SysUtils, Messages,
+  Windows;
 
 type
   TIdSipHandle = Cardinal;
@@ -132,6 +133,39 @@ type
     procedure Send(ActionHandle: TIdSipHandle);
   end;
 
+  // Given a configuration file, I create a stack.
+  // The configuration file consists of lines. Each line is a complete and
+  // independent setting consisting of a Directive, at least one space, and the
+  // settings for that Directive.
+  //
+  // Currently we support the following Directives: Listen, NameServer,
+  // Register.
+  //
+  // Here's a summary of the formats for each directive:
+  //   NameServer <domain name or IP>:<port>
+  //   NameServer MOCK
+  //   Listen <transport name><SP><host|IPv4 address|IPv6 reference>:<port>
+  //   Register <SIP/S URI>
+  TIdSipStackConfigurator = class(TObject)
+  private
+    procedure AddLocator(UserAgent: TIdSipAbstractUserAgent;
+                         const NameServerLine: String);
+    procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
+                           const TransportLine: String);
+    procedure EatDirective(var Line: String);
+    procedure ParseLine(UserAgent: TIdSipAbstractUserAgent;
+                        const ConfigurationLine: String);
+    procedure RegisterUA(UserAgent: TIdSipAbstractUserAgent;
+                         const RegisterLine: String);
+  public
+    function CreateStack(Configuration: String;
+                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
+    function CreateStack(Configuration: TStream;
+                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
+    function CreateStack(Configuration: TStrings;
+                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
+  end;
+
   // I contain data relating to a particular event.
   TIdEventData = class(TPersistent)
   private
@@ -147,7 +181,7 @@ type
 
   TIdEventDataClass = class of TIdEventData;
 
-  TIdFailEventData = class(TIdEventData)
+  TIdInformationalData = class(TIdEventData)
   private
     fReason: String;
   public
@@ -155,6 +189,9 @@ type
 
     property Reason: String read fReason write fReason;
   end;
+
+  TIdFailData = class(TIdInformationalData);
+  TIdCallEndedData = class(TIdInformationalData);
 
   TIdDebugMessageData = class(TIdEventData)
   private
@@ -232,25 +269,20 @@ type
     property Stack:  TIdSipStackInterface read fStack write fStack;
   end;
 
-  // Use me when you want to run something in the context of the VCL/main
-  // thread.
-  TIdSipVclNotifier = class(TObject)
-  private
-    fListeners:    TIdNotificationList;
-    fNotification: TIdNotification;
-  public
-    procedure Notify;
-
-    property Listeners:    TIdNotificationList read fListeners write fListeners;
-    property Notification: TIdNotification     read fNotification write fNotification;
-  end;
-
   EInvalidHandle = class(Exception)
   public
     constructor Create(const Reason: String;
                        Handle: TIdSipHandle);
   end;
 
+// Configuration file constants
+const
+  ListenDirective     = 'Listen';
+  MockKeyword         = 'MOCK';
+  NameServerDirective = 'NameServer';
+  RegisterDirective   = 'Register';
+
+// Call management constants
 const
   InvalidHandle = 0;
 
@@ -280,7 +312,7 @@ type
 implementation
 
 uses
-  IdRandom, IdSipIndyLocator, IdSipTransaction;
+  IdGlobal, IdRandom, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator;
 
 const
   NoSuchHandle = 'No such handle (%d)';
@@ -353,9 +385,7 @@ begin
   Self.UserAgent.RemoveUserAgentListener(Self);
 
   Self.UserAgent.Locator.Free;
-  Self.UserAgent.Dispatcher.Free;
   Self.UserAgent.Free;
-  Self.Transport.Free;
 
   Self.Actions.Free;
   Self.ActionLock.Free;
@@ -639,9 +669,9 @@ end;
 procedure TIdSipStackInterface.OnEndedSession(Session: TIdSipSession;
                                               const Reason: String);
 var
-  Data: TIdFailEventData;
+  Data: TIdCallEndedData;
 begin
-  Data := TIdFailEventData.Create;
+  Data := TIdCallEndedData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
     Data.Reason := Reason;
@@ -752,9 +782,9 @@ end;
 procedure TIdSipStackInterface.OnNetworkFailure(Action: TIdSipAction;
                                                 const Reason: String);
 var
-  Data: TIdFailEventData;
+  Data: TIdFailData;
 begin
-  Data := TIdFailEventData.Create;
+  Data := TIdFailData.Create;
   try
     Data.Handle := Self.HandleFor(Action);
     Data.Reason := Reason;
@@ -845,6 +875,168 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipStackConfigurator                                                    *
+//******************************************************************************
+//* TIdSipStackConfigurator Public methods *************************************
+
+function TIdSipStackConfigurator.CreateStack(Configuration: String;
+                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.Text := Configuration;
+
+    Result := Self.CreateStack(Conf, Context);
+  finally
+    Conf.Free;
+  end;
+end;
+
+function TIdSipStackConfigurator.CreateStack(Configuration: TStream;
+                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
+var
+  Conf: TStrings;
+begin
+  Conf := TStringList.Create;
+  try
+    Conf.LoadFromStream(Configuration);
+
+    Result := Self.CreateStack(Conf, Context);
+  finally
+    Conf.Free;
+  end;
+end;
+
+function TIdSipStackConfigurator.CreateStack(Configuration: TStrings;
+                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
+var
+  I: Integer;
+begin
+  Result := TIdSipUserAgent.Create;
+  try
+    Result.Dispatcher := TIdSipTransactionDispatcher.Create(Context, nil);
+
+    for I := 0 to Configuration.Count - 1 do
+      Self.ParseLine(Result, Configuration[I]);
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+//* TIdSipStackConfigurator Private methods ************************************
+
+procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractUserAgent;
+                                             const NameServerLine: String);
+var
+  Host: String;
+  Line: String;
+  Loc:  TIdSipIndyLocator;
+  Port: String;
+begin
+  // The line should look like one of these:
+  //   NameServer <domain name or IP>:<port>
+  //   NameServer MOCK
+  Line := NameServerLine;
+  Self.EatDirective(Line);
+
+  Host := Fetch(Line, ':');
+  Port := Fetch(Line, ' ');
+
+  if IsEqual(Host, MockKeyword) then
+    UserAgent.Locator := TIdSipMockLocator.Create
+  else begin
+    if not TIdSimpleParser.IsNumber(Port) then
+      raise EParserError.Create('Malformed configuration line: ' + NameServerLine);
+
+    Loc := TIdSipIndyLocator.Create;
+    Loc.NameServer := Host;
+    Loc.Port       := StrToInt(Port);
+    
+    UserAgent.Locator := Loc;
+    UserAgent.Dispatcher.Locator := UserAgent.Locator;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.AddTransport(Dispatcher: TIdSipTransactionDispatcher;
+                                               const TransportLine: String);
+var
+  HostAndPort:  TIdSipHostAndPort;
+  Line:         String;
+  NewTransport: TIdSipTransport;
+  Transport:    String;
+begin
+  // The line should contain something like these:
+  //   Listen TCP 127.0.0.1:5060
+  //   Listen SCTP [::1]:15060
+  Line := TransportLine;
+
+  Self.EatDirective(Line);
+  Transport := Fetch(Line, ' ');
+
+  NewTransport := TIdSipTransportRegistry.TransportFor(Transport).Create;
+  Dispatcher.AddTransport(NewTransport);
+
+  HostAndPort := TIdSipHostAndPort.Create;
+  try
+    HostAndPort.Value := Line;
+
+    NewTransport.Address := HostAndPort.Host;
+    NewTransport.Port    := HostAndPort.Port;
+  finally
+    HostAndPort.Free;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.EatDirective(var Line: String);
+begin
+  Fetch(Line, ':');
+  Line := Trim(Line);
+end;
+
+procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipAbstractUserAgent;
+                                            const ConfigurationLine: String);
+var
+  FirstToken: String;
+  Line:       String;
+begin
+  Line := ConfigurationLine;
+  FirstToken := Trim(Fetch(Line, ':', false));
+
+  if IsEqual(FirstToken,      ListenDirective) then
+    Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
+  else if IsEqual(FirstToken, NameServerDirective) then
+    Self.AddLocator(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, RegisterDirective) then
+    Self.RegisterUA(UserAgent, ConfigurationLine)
+end;
+
+procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipAbstractUserAgent;
+                                             const RegisterLine: String);
+var
+  Line:      String;
+  Registrar: TIdSipUri;
+begin
+  // The line should look like this:
+  //   Register <SIP/S URI>
+  Line := RegisterLine;
+  Self.EatDirective(Line);
+
+  Line := Trim(Line);
+
+  Registrar := TIdSipUri.Create(Line);
+  try
+    UserAgent.AutoReRegister := true;
+    UserAgent.RegisterWith(Registrar).Send;
+  finally
+    Registrar.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TIdEventData                                                               *
 //******************************************************************************
 //* TIdEventData Public methods ************************************************
@@ -873,18 +1065,18 @@ begin
 end;
 
 //******************************************************************************
-//* TIdFailEventData                                                           *
+//* TIdInformationalData                                                       *
 //******************************************************************************
-//* TIdFailEventData Public methods ********************************************
+//* TIdInformationalData Public methods ****************************************
 
-procedure TIdFailEventData.Assign(Src: TPersistent);
+procedure TIdInformationalData.Assign(Src: TPersistent);
 var
-  Other: TIdFailEventData;
+  Other: TIdFailData;
 begin
   inherited Assign(Src);
 
-  if (Src is TIdFailEventData) then begin
-    Other := Src as TIdFailEventData;
+  if (Src is TIdFailData) then begin
+    Other := Src as TIdFailData;
     Self.Reason := Other.Reason;
   end;
 end;
@@ -1018,16 +1210,6 @@ begin
   (Subject as IIdSipStackListener).OnEvent(Self.Stack,
                                            Self.Event,
                                            Self.Data);
-end;
-
-//******************************************************************************
-//* TIdSipVclNotifier                                                          *
-//******************************************************************************
-//* TIdSipVclNotifier Public methods *******************************************
-
-procedure TIdSipVclNotifier.Notify;
-begin
-  Self.Listeners.Notify(Self.Notification);
 end;
 
 //******************************************************************************

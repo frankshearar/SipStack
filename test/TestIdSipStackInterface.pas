@@ -3,8 +3,9 @@ unit TestIdSipStackInterface;
 interface
 
 uses
-  Contnrs, Forms, IdSipCore, IdSipDialog, IdSipMessage, IdSipStackInterface,
-  IdSipTransport, IdTimerQueue, IdUDPClient, SyncObjs, SysUtils, TestFramework,
+  Classes, Contnrs, Forms, IdSipCore, IdSipDialog, IdSipMessage,
+  IdSipStackInterface, IdSipTransport, IdSocketHandle, IdTimerQueue,
+  IdUDPClient, IdUDPServer, SyncObjs, SysUtils, TestFramework, TestFrameworkEx,
   TestFrameworkSip;
 
 type
@@ -34,7 +35,7 @@ type
   private
     CheckDataProc:  TDataCheckProc;
     fIntf:          TIdSipStackInterface;
-
+{
     DataList:       TObjectList;
     Destination:    TIdSipToHeader;
     LocalMimeType:  String;
@@ -53,9 +54,11 @@ type
     procedure CheckInboundCallData(Stack: TIdSipStackInterface;
                                    Event: Cardinal;
                                    Data: TIdEventData);
+}
     procedure CheckNothing(Stack: TIdSipStackInterface;
                            Event: Cardinal;
                            Data: TIdEventData);
+{
     procedure CheckRequestSent(const Msg: String);
     procedure CheckResponseSent(const Msg: String);
     function  CreateBindings: TIdSipContacts;
@@ -89,6 +92,7 @@ type
     procedure ReceiveRequest(Request: TIdSipRequest);
     procedure ReceiveResponse(Response: TIdSipResponse);
     procedure ReceiveReInvite;
+}
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -96,6 +100,9 @@ type
     procedure OnEvent(Stack: TIdSipStackInterface;
                       Event: Cardinal;
                       Data:  TIdEventData);
+
+    property Intf: TIdSipStackInterface read fIntf write fIntf;
+{
   published
     procedure TestAcceptCall;
     procedure TestAcceptCallWithInvalidHandle;
@@ -117,8 +124,41 @@ type
     procedure TestRegistrationFailsWithRetry;
     procedure TestSendNonExistentHandle;
     procedure TestSessionModifiedByRemoteSide;
+}
+  end;
 
-    property Intf: TIdSipStackInterface read fIntf write fIntf;
+  TestTIdSipStackConfigurator = class(TThreadingTestCase)
+  private
+    Address:        String;
+    Conf:           TIdSipStackConfigurator;
+    Configuration:  TStrings;
+    Port:           Cardinal;
+    ReceivedPacket: Boolean;
+    Timer:          TIdTimerQueue;
+    Server:         TIdUdpServer;
+
+    function  ARecords: String;
+    procedure NoteReceiptOfPacket(Sender: TObject;
+                                  AData: TStream;
+                                  ABinding: TIdSocketHandle);
+    procedure ProvideAnswer(Sender: TObject;
+                            AData: TStream;
+                            ABinding: TIdSocketHandle);
+
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCreateStackHandlesMultipleSpaces;
+    procedure TestCreateStackHandlesTabs;
+    procedure TestCreateStackRegisterDirectiveBeforeTransport;
+    procedure TestCreateStackReturnsSomething;
+    procedure TestCreateStackWithLocator;
+    procedure TestCreateStackWithMalformedLocator;
+    procedure TestCreateStackWithMockLocator;
+    procedure TestCreateStackWithRegistrar;
+    procedure TestCreateStackWithOneTransport;
+    procedure TestCreateStackTransportHaMalformedPort;
   end;
 
   TestTIdEventData = class(TTestCase)
@@ -131,9 +171,9 @@ type
     procedure TestCopy;
   end;
 
-  TestTIdFailEventData = class(TTestCase)
+  TestTIdFailData = class(TTestCase)
   private
-    Data: TIdFailEventData;
+    Data: TIdFailData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -196,18 +236,21 @@ const
 implementation
 
 uses
-  IdRandom, StackWindow;
+  IdRandom, IdSipMockLocator, StackWindow;
 
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
-  Result.AddTest(TestTIdSipStackInterface.Suite);
+//  Result.AddTest(TestTIdSipStackInterface.Suite);
+  Result.AddTest(TestTIdSipStackConfigurator.Suite);
+{
   Result.AddTest(TestTIdEventData.Suite);
-  Result.AddTest(TestTIdFailEventData.Suite);
+  Result.AddTest(TestTIdFailData.Suite);
   Result.AddTest(TestTIdRegistrationData.Suite);
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
+}
 end;
 
 //******************************************************************************
@@ -220,7 +263,7 @@ begin
   inherited SetUp;
 
   Self.CheckDataProc := Self.CheckNothing;
-
+{
   Self.DataList       := TObjectList.Create(true);
   Self.Destination    := TIdSipToHeader.Create;
   Self.Requests       := TIdSipRequestList.Create;
@@ -240,10 +283,12 @@ begin
   Self.LocalMimeType  := 'application/sdp';
   Self.RemoteOffer    := Format(DummySdp, ['127.0.0.2']);
   Self.RemoteMimeType := 'application/sdp';
+}
 end;
 
 procedure TestTIdSipStackInterface.TearDown;
 begin
+{
   Application.ProcessMessages;
   Self.UI.Release;
 
@@ -252,7 +297,7 @@ begin
   Self.Requests.Free;
   Self.Destination.Free;
   Self.DataList.Free;
-
+}
   inherited TearDown;
 end;
 
@@ -264,7 +309,7 @@ begin
 end;
 
 //* TestTIdSipStackInterface Private methods ***********************************
-
+{
 procedure TestTIdSipStackInterface.CheckSessionData(Stack: TIdSipStackInterface;
                                                     Event: Cardinal;
                                                     Data: TIdEventData);
@@ -306,14 +351,14 @@ begin
               'Wrong data');
   Check(Data.Handle > 0, 'Invalid Action handle');
 end;
-
+}
 procedure TestTIdSipStackInterface.CheckNothing(Stack: TIdSipStackInterface;
                                                 Event: Cardinal;
                                                 Data: TIdEventData);
 begin
   // Use this "Null Object" when you don't actually want to check anything.
 end;
-
+{
 procedure TestTIdSipStackInterface.CheckRequestSent(const Msg: String);
 begin
   raise Exception.Create('implement TestTIdSipStackInterface.CheckRequestSent');
@@ -588,9 +633,9 @@ begin
     ReInvite.Free;
   end;
 end;
-
+}
 //* TestTIdSipStackInterface Published methods *********************************
-
+{
 procedure TestTIdSipStackInterface.TestAcceptCall;
 const
   Offer = 'offer';
@@ -724,7 +769,7 @@ begin
     on EInvalidHandle do;
   end;
 end;
-{
+
 procedure TestTIdSipStackInterface.TestNetworkFailure;
 var
   Call: TIdSipHandle;
@@ -739,11 +784,11 @@ begin
   Check(Self.Action = Call, 'Invalid Action handle');
   CheckEquals(CM_NETWORK_FAILURE, Self.Event, 'Wrong Event param');
 
-  CheckEquals(TIdFailEventData.ClassName,
+  CheckEquals(TIdFailData.ClassName,
               Self.LastEventData.ClassName,
               'Wrong data');
 end;
-}
+
 procedure TestTIdSipStackInterface.TestRegistrationFails;
 begin
   //  ---    REGISTER   --->
@@ -778,6 +823,283 @@ begin
   // <--- (re)INVITE ---
   //  ---   200 OK   --->
   // <---    ACK     ---
+end;
+}
+//******************************************************************************
+//* TestTIdSipStackConfigurator                                                *
+//******************************************************************************
+//* TestTIdSipStackConfigurator Public methods *********************************
+
+procedure TestTIdSipStackConfigurator.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Address       := '127.0.0.1';
+  Self.Conf          := TIdSipStackConfigurator.Create;
+  Self.Configuration := TStringList.Create;
+  Self.Port          := 15060;
+  Self.Timer         := TIdTimerQueue.Create(true);
+  Self.Server        := TIdUDPServer.Create(nil);
+  Self.Server.DefaultPort   := Self.Port + 10000;
+  Self.Server.OnUDPRead     := Self.NoteReceiptOfPacket;
+  Self.Server.ThreadedEvent := true;
+  Self.Server.Active        := true;
+
+  TIdSipTransportRegistry.RegisterTransport(TcpTransport, TIdSipTCPTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUDPTransport);
+
+  Self.ReceivedPacket := false;
+
+end;
+
+procedure TestTIdSipStackConfigurator.TearDown;
+begin
+  TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
+  TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
+
+  Self.Server.Free;
+  Self.Timer.Terminate;
+  Self.Configuration.Free;
+  Self.Conf.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdSipStackConfigurator Private methods ********************************
+
+function TestTIdSipStackConfigurator.ARecords: String;
+begin
+
+  // Dig would translate this data as
+  // ;; QUERY SECTION:
+  // ;;      paranoid.leo-ix.net, type = A, class = IN
+  //
+  // ;; ANSWER SECTION:
+  // paranoid.leo-ix.net.    1H IN A         127.0.0.2
+  // paranoid.leo-ix.net.    1H IN A         127.0.0.1
+  //
+  // ;; AUTHORITY SECTION:
+  // leo-ix.net.             1H IN NS        ns1.leo-ix.net.
+  //
+  // ;; ADDITIONAL SECTION:
+  // ns1.leo-ix.net.         1H IN A         127.0.0.1
+
+  Result :=
+  { hdr id }#$85#$80#$00#$01#$00#$02#$00#$01#$00#$01#$08#$70#$61#$72
+  + #$61#$6E#$6F#$69#$64#$06#$6C#$65#$6F#$2D#$69#$78#$03#$6E#$65#$74
+  + #$00#$00#$01#$00#$01#$C0#$0C#$00#$01#$00#$01#$00#$00#$0E#$10#$00
+  + #$04#$7F#$00#$00#$01#$C0#$0C#$00#$01#$00#$01#$00#$00#$0E#$10#$00
+  + #$04#$7F#$00#$00#$02#$C0#$15#$00#$02#$00#$01#$00#$00#$0E#$10#$00
+  + #$06#$03#$6E#$73#$31#$C0#$15#$C0#$51#$00#$01#$00#$01#$00#$00#$0E
+  + #$10#$00#$04#$7F#$00#$00#$01;
+end;
+
+procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
+                                                          AData: TStream;
+                                                          ABinding: TIdSocketHandle);
+begin
+  Self.ReceivedPacket := true;
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSipStackConfigurator.ProvideAnswer(Sender: TObject;
+                                                    AData: TStream;
+                                                    ABinding: TIdSocketHandle);
+var
+  Answer:  String;
+  ReplyID: String;
+  S:       TStringStream;
+begin
+  S := TStringStream.Create('');
+  try
+    S.CopyFrom(AData, 0);
+
+    ReplyID := Copy(S.DataString, 1, 2);
+  finally
+    S.Free;
+  end;
+
+  Answer := ReplyID + Self.ARecords;
+
+  Self.Server.Send(ABinding.PeerIP,
+                   ABinding.PeerPort,
+                   Answer);
+
+  Self.NoteReceiptOfPacket(Sender, AData, ABinding);
+end;
+
+//* TestTIdSipStackConfigurator Published methods ******************************
+
+procedure TestTIdSipStackConfigurator.TestCreateStackHandlesMultipleSpaces;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  Self.Configuration.Add('Listen  :     TCP 127.0.0.1:5060');
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipTCPTransport.ClassName,
+                UA.Dispatcher.Transports[0].ClassName,
+                'Transport type');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackHandlesTabs;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  Self.Configuration.Add('Listen'#9':'#9'TCP 127.0.0.1:5060');
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipTCPTransport.ClassName,
+                UA.Dispatcher.Transports[0].ClassName,
+                'Transport type');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackRegisterDirectiveBeforeTransport;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  // Any network actions (like registering) can only happen once we've
+  // configured the Transport layer. Same goes for configuring the NameServer.
+  Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add('Listen: UDP 127.0.0.1:5060');
+  Self.Configuration.Add('NameServer: MOCK');
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    Self.WaitForSignaled('Waiting for REGISTER');
+    Check(Self.ReceivedPacket, 'No REGISTER received');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackReturnsSomething;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA), 'CreateStack didn''t return anything');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackWithLocator;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  // This looks confusing. It isn't. We give the name server & port of Server,
+  // and an unused port as the registrar. That's just because we don't care
+  // about the REGISTER message - we just want to make sure the UA sends a DNS
+  // query to the name server specified in the configuration.
+
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: 127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort + 1));
+  Self.Server.OnUDPRead := Self.ProvideAnswer;
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.Locator),
+          'Transaction-User has no Locator');
+    Self.WaitForSignaled('Waiting for DNS query');
+    Check(Self.ReceivedPacket, 'No DNS query sent to name server');
+
+    Check(Assigned(UA.Dispatcher.Locator),
+          'No Locator assigned to the Transaction layer');
+    Check(UA.Locator = UA.Dispatcher.Locator,
+          'Transaction and Transaction-User layers have different Locators');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackWithMalformedLocator;
+begin
+  Self.Configuration.Add('NameServer: 127.0.0.1:aa');
+
+  try
+    Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out with malformed locator port');
+  except
+    on EParserError do;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackWithMockLocator;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockLocator.ClassName,
+                UA.Locator.ClassName,
+                'Locator type');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackWithRegistrar;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('NameServer: MOCK');
+  Self.Configuration.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    Self.WaitForSignaled('Waiting for REGISTER');
+    Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackWithOneTransport;
+var
+  UA: TIdSipAbstractUserAgent;
+begin
+  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.Dispatcher), 'Stack doesn''t have a Transaction layer');
+    CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
+    CheckEquals(TIdSipTCPTransport.ClassName,
+                UA.Dispatcher.Transports[0].ClassName,
+                'Transport type');
+    CheckEquals(Port,
+                UA.Dispatcher.Transports[0].Port,
+                'Transport port');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateStackTransportHaMalformedPort;
+begin
+  Self.Configuration.Add('Listen: TCP ' + Self.Address + ':aa');
+
+  try
+    Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out from a malformed port configuration');
+  except
+    on EParserError do;
+  end;
 end;
 
 //******************************************************************************
@@ -817,33 +1139,33 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdFailEventData                                                       *
+//* TestTIdFailData                                                            *
 //******************************************************************************
-//* TestTIdFailEventData Public methods ****************************************
+//* TestTIdFailData Public methods *********************************************
 
-procedure TestTIdFailEventData.SetUp;
+procedure TestTIdFailData.SetUp;
 begin
   inherited SetUp;
 
-  Self.Data := TIdFailEventData.Create;
+  Self.Data := TIdFailData.Create;
   Self.Data.Handle := $decafbad;
   Self.Data.Reason := 'Arbitrary';
 end;
 
-procedure TestTIdFailEventData.TearDown;
+procedure TestTIdFailData.TearDown;
 begin
   Self.Data.Free;
 
   inherited TearDown;
 end;
 
-//* TestTIdFailEventData Published methods *************************************
+//* TestTIdFailData Published methods ******************************************
 
-procedure TestTIdFailEventData.TestCopy;
+procedure TestTIdFailData.TestCopy;
 var
-  Copy: TIdFailEventData;
+  Copy: TIdFailData;
 begin
-  Copy := Self.Data.Copy as TIdFailEventData;
+  Copy := Self.Data.Copy as TIdFailData;
   try
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),

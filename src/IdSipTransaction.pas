@@ -189,7 +189,7 @@ type
     function  TransportCount: Integer;
     function  WillUseReliableTranport(R: TIdSipMessage): Boolean;
 
-    property Locator:    TIdSipAbstractLocator read fLocator;
+    property Locator:    TIdSipAbstractLocator read fLocator write fLocator;
     property T1Interval: Cardinal              read fT1Interval write fT1Interval;
     property T2Interval: Cardinal              read fT2Interval write fT2Interval;
     property T4Interval: Cardinal              read fT4Interval write fT4Interval;
