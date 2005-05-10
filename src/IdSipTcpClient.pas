@@ -167,6 +167,8 @@ begin
           Self.Terminated := true;
         on EIdConnClosedGracefully do
           Self.Terminated := true;
+        on EIdClosedSocket do
+          Self.Terminated := true;
       end;
     finally
       S.Free;
