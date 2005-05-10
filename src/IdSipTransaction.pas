@@ -89,7 +89,6 @@ type
     fT4Interval:     Cardinal;
     fTimer:          TIdTimerQueue;
     MsgListeners:    TIdNotificationList;
-    TimerLock:       TCriticalSection;
     fTransports:     TIdSipTransports;
     TransportLock:   TCriticalSection;
     Transactions:    TObjectList;
@@ -546,7 +545,6 @@ begin
   Self.SetTimer(Timer);
 
   Self.MsgListeners := TIdNotificationList.Create;
-  Self.TimerLock    := TCriticalSection.Create;
 
   Self.fTransports   := TIdSipTransports.Create;
   Self.TransportLock := TCriticalSection.Create;
@@ -577,7 +575,6 @@ begin
   end;
   Self.TransportLock.Free;
 
-  Self.TimerLock.Free;
   Self.MsgListeners.Free;
 
   inherited Destroy;
@@ -770,13 +767,8 @@ procedure TIdSipTransactionDispatcher.ScheduleEvent(Event: TNotifyEvent;
                                                     WaitTime: Cardinal;
                                                     Request: TIdSipMessage);
 begin
-  Self.TimerLock.Acquire;
-  try
-    if Assigned(Self.Timer) then
-      Self.Timer.AddEvent(WaitTime, Event, Request);
-  finally
-    Self.TimerLock.Release;
-  end;
+  if Assigned(Self.Timer) then
+    Self.Timer.AddEvent(WaitTime, Event, Request);
 end;
 
 procedure TIdSipTransactionDispatcher.SendToTransport(Request: TIdSipRequest;
