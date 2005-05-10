@@ -550,6 +550,7 @@ type
     procedure TestStartListeningMultipleStreams;
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningRegistersRemoteRtpMaps;
+    procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListening;
   end;
 
@@ -570,6 +571,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSdpParser unit tests');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSdpAttribute.Suite);
   Result.AddTest(TestTIdSdpRTPMapAttribute.Suite);
@@ -591,6 +593,7 @@ begin
   Result.AddTest(TestTIdSdpParser.Suite);
   Result.AddTest(TestTIdSdpPayload.Suite);
   Result.AddTest(TestTIdSdpPayloadProcessor.Suite);
+}
   Result.AddTest(TestTIdSDPMediaStream.Suite);
   Result.AddTest(TestTIdSDPMultimediaSession.Suite);
 end;
@@ -6655,6 +6658,35 @@ begin
         EncodingName + ' not registered');
   Check(Self.Profile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningTriesConsecutivePorts;
+const
+  BlockedPort = 8000;
+var
+  PortBlocker: TIdUdpServer;
+  SDP:         String;
+begin
+  PortBlocker := TIdUDPServer.Create(nil);
+  try
+    PortBlocker.DefaultPort := BlockedPort;
+    PortBlocker.Active := true;
+
+    SDP :=  'v=0'#13#10
+          + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
+          + 's=-'#13#10
+          + 'c=IN IP4 127.0.0.1'#13#10
+          + 'm=text ' + IntToStr(BlockedPort) + ' RTP/AVP 0'#13#10;
+
+    SDP := Self.MS.StartListening(SDP);
+    CheckPortActive('127.0.0.1', BlockedPort + 2, 'Next available RTP port not used');
+
+    Check(Pos(IntToStr(BlockedPort + 2), SDP) > 0,
+          'Expected actual port (' + IntToStr(BlockedPort + 2)
+        + ') not present in resultant SDP');
+  finally
+    PortBlocker.Free;
+  end;
 end;
 
 procedure TestTIdSDPMultimediaSession.TestStopListening;

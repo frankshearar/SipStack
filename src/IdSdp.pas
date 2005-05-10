@@ -644,7 +644,7 @@ type
     destructor  Destroy; override;
 
     function  MimeType: String;
-    procedure StartListening(LocalSessionDesc: String);
+    function  StartListening(LocalSessionDesc: String): String;
     procedure SetRemoteDescription(RemoteSessionDesc: String);
     procedure StopListening;
     function  StreamCount: Integer;
@@ -3972,11 +3972,21 @@ begin
   Result := SdpMimeType;
 end;
 
-procedure TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String);
+function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String): String;
 var
   I:   Integer;
   SDP: TIdSdpPayload;
 begin
+  // We don't know, until we try, whether the ports in LocalSessionDesc are
+  // free. LocalSessionDesc thus contains info on how many streams to create,
+  // what data those streams will contain, but NOT on what ports they'll run:
+  // the ports are just guidelines as to the lowest acceptable port number, if
+  // you like.
+  //
+  // As an example, if there's one media description with port 8000, and we're
+  // already running servers on ports 8000-8099, we'll start aa server on 8100.
+  // Result contains the ACTUAL port numbers used.  
+
   Self.StreamLock.Acquire;
   try
     SDP := TIdSdpPayload.CreateFrom(LocalSessionDesc);
@@ -3985,6 +3995,8 @@ begin
         Self.EstablishStream(SDP.MediaDescriptionAt(I));
         Self.RegisterEncodingMaps(SDP.MediaDescriptionAt(I).RTPMapAttributes);
       end;
+
+      Result := SDP.AsString;
     finally
       SDP.Free;
     end;
@@ -4052,14 +4064,24 @@ end;
 
 procedure TIdSDPMultimediaSession.EstablishStream(Desc: TIdSdpMediaDescription);
 var
-  NewStream: TIdSDPMediaStream;
+  NewStream:   TIdSDPMediaStream;
+  SocketBound: Boolean;
 begin
   NewStream := TIdSDPMediaStream.Create(Self.Profile);
   try
     Self.fStreams.Add(NewStream);
 
-    NewStream.LocalDescription := Desc;
-    NewStream.StartListening;
+    SocketBound := false;
+    while not SocketBound do begin
+      NewStream.LocalDescription := Desc;
+      try
+        NewStream.StartListening;
+        SocketBound := true;
+      except
+        on EIdCouldNotBindSocket do
+          Desc.Port := Desc.Port + 2; // One for RTP, one for RTCP.
+      end;
+    end;
   except
     if (Self.fStreams.IndexOf(NewStream) <> ItemNotFoundIndex) then
       Self.fStreams.Remove(NewStream)
