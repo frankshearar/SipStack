@@ -107,6 +107,7 @@ end;
 
 destructor TIdSipTcpServer.Destroy;
 begin
+  Self.Active := false;
   Self.Notifier.Free;
 
   inherited Destroy;
@@ -149,12 +150,12 @@ end;
 
 procedure TIdSipTcpServer.DoOnExecute(AThread: TIdPeerThread);
 var
+  ConnClosed:   Boolean;
   Msg:          TIdSipMessage;
   ReceivedFrom: TIdSipConnectionBindings;
   S:            TStringStream;
-  ConnTimedOut: Boolean;
 begin
-  ConnTimedOut := false;
+  ConnClosed := false;
 
   ReceivedFrom.PeerIP   := AThread.Connection.Socket.Binding.PeerIP;
   ReceivedFrom.PeerPort := AThread.Connection.Socket.Binding.PeerPort;
@@ -164,37 +165,49 @@ begin
 
     S := TStringStream.Create('');
     try
-      Self.ReadMessage(AThread.Connection, S);
-      Msg := TIdSipMessage.ReadMessageFrom(S);
       try
+        Self.ReadMessage(AThread.Connection, S);
+      except
+        on EIdClosedSocket do
+          ConnClosed := true;
+      end;
+
+      if not ConnClosed then begin
+        Msg := TIdSipMessage.ReadMessageFrom(S);
         try
           try
-            Self.ReadBodyInto(AThread.Connection, Msg, S);
-            Msg.ReadBody(S);
+            try
+              Self.ReadBodyInto(AThread.Connection, Msg, S);
+              Msg.ReadBody(S);
+            except
+              on EIdReadTimeout do
+                ConnClosed := true;
+              on EIdConnClosedGracefully do
+                ConnClosed := true;
+              on EIdClosedSocket do
+                ConnClosed := true;
+            end;
+
+            // If Self.ReadBody closes the connection, we don't want to AddConnection!
+            if Msg.IsRequest and not ConnClosed then
+              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+
+            Self.ScheduleReceivedMessage(Msg, ReceivedFrom);
           except
-            on EIdReadTimeout do
-              ConnTimedOut := true;
-            on EIdConnClosedGracefully do
-              ConnTimedOut := true;
+            on E: Exception do begin
+              // This results in returning a 500 Internal Server Error to a response!
+              if AThread.Connection.Connected then begin
+                Self.ReturnInternalServerError(AThread.Connection, E.Message);
+                AThread.Connection.DisconnectSocket;
+              end;
+
+              Self.ScheduleExceptionNotification(ExceptClass(E.ClassType),
+                                                 E.Message);
+            end;
           end;
-
-          // If Self.ReadBody closes the connection, we don't want to AddConnection!
-          if Msg.IsRequest and not ConnTimedOut then
-            Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
-
-          Self.ScheduleReceivedMessage(Msg, ReceivedFrom);
-        except
-          on E: Exception do begin
-            // This results in returning a 500 Internal Server Error to a response!
-            Self.ReturnInternalServerError(AThread.Connection, E.Message);
-            AThread.Connection.DisconnectSocket;
-
-            Self.ScheduleExceptionNotification(ExceptClass(E.ClassType),
-                                               E.Message);
-          end;
+        finally
+          Msg.Free;
         end;
-      finally
-        Msg.Free;
       end;
     finally
       S.Free;
