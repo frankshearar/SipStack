@@ -6684,6 +6684,10 @@ begin
     Check(Pos(IntToStr(BlockedPort + 2), SDP) > 0,
           'Expected actual port (' + IntToStr(BlockedPort + 2)
         + ') not present in resultant SDP');
+
+    Self.MS.StopListening;
+
+    CheckPortFree('127.0.0.1', BlockedPort + 2, 'Port not closed');
   finally
     PortBlocker.Free;
   end;
