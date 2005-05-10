@@ -88,7 +88,7 @@ const
 implementation
 
 uses
-  Classes, IdGlobal, IdSipConsts, IdStack, TestFramework,
+  Classes, IdGlobal, IdSipConsts, IdStack, IdTCPConnection, TestFramework,
   TestMessages;
 
 function Suite: ITestSuite;
@@ -321,8 +321,9 @@ end;
 procedure TestTIdSipTcpClient.SendOptionsRequest(Sender: TObject;
                                                  Request: TIdSipRequest);
 var
-  S:       String;
-  Threads: TList;
+  Connection: TIdTCPConnection;
+  S:          String;
+  Threads:    TList;
 begin
   S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, []);
 
@@ -331,7 +332,11 @@ begin
     if (Threads.Count = 0) then
       raise Exception.Create('TCP connection disappeared: SendOptionsRequest');
 
-    (TObject(Threads[0]) as TIdPeerThread).Connection.Write(S);
+    Connection := (TObject(Threads[0]) as TIdPeerThread).Connection;
+    if not Connection.Connected then
+      raise Exception.Create('TCP connection closed');
+
+    Connection.Write(S);
   finally
     Self.Server.Threads.UnlockList;
   end;
