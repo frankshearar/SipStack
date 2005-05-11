@@ -71,7 +71,6 @@ type
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
-    function  LocalAddress: String;
     function  NewHandle: TIdSipHandle;
     procedure NotifyEvent(Action: TIdSipAction;
                           Event: Cardinal;
@@ -143,7 +142,7 @@ type
   // Here's a summary of the formats for each directive:
   //   NameServer: <domain name or IP>:<port>
   //   NameServer: MOCK
-  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference>:<port>
+  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
   //   Register: <SIP/S URI>
   //   Proxy: <SIP/S URI>
   //   From: "Count Zero" <sip:countzero@jammer.org>
@@ -285,6 +284,7 @@ type
 
 // Configuration file constants
 const
+  AutoKeyword         = 'AUTO';
   ContactDirective    = ContactHeaderFull;
   FromDirective       = FromHeaderFull;
   ListenDirective     = 'Listen';
@@ -320,6 +320,8 @@ type
     Reserved: DWord;
   end;
 
+function LocalAddress: String;
+
 implementation
 
 uses
@@ -332,6 +334,26 @@ const
 
 const
   MalformedConfigurationLine = 'Malformed configuration line: %s';
+
+//******************************************************************************
+//* Unit public procedures & functions                                         *
+//******************************************************************************
+
+function LocalAddress: String;
+var
+  UnusedServer: TIdUDPServer;
+begin
+  if not Assigned(GStack) then begin
+    UnusedServer := TIdUDPServer.Create(nil);
+    try
+      Result := GStack.LocalAddress;
+    finally
+      UnusedServer.Free;
+    end;
+  end
+  else
+    Result := GStack.LocalAddress;
+end;
 
 //******************************************************************************
 //* TIdActionAssociation                                                       *
@@ -353,8 +375,6 @@ end;
 //* TIdSipStackInterface Public methods ****************************************
 
 constructor TIdSipStackInterface.Create(UiHandle: HWnd);
-const
-  LocalAddress = '192.168.1.131';
 var
   Conf:         TStrings;
   Configurator: TIdSipStackConfigurator;
@@ -369,10 +389,10 @@ begin
 
   Conf := TStringList.Create;
   try
-    Conf.Add('Listen: UDP ' + Self.LocalAddress + ':5060');
+    Conf.Add('Listen: UDP AUTO:5060');
     Conf.Add('NameServer: 62.241.160.200:53');
-    Conf.Add('Contact: sip:foo@' + Self.LocalAddress + ':5060');
-    Conf.Add('From: sip:foo@' + Self.LocalAddress + ':5060');
+    Conf.Add('Contact: sip:foo@' + LocalAddress + ':5060');
+    Conf.Add('From: sip:foo@' + LocalAddress + ':5060');
     Conf.Add('Register: sip:192.168.1.132');
 
     Configurator := TIdSipStackConfigurator.Create;
@@ -614,22 +634,6 @@ function TIdSipStackInterface.HasHandle(H: TIdSipHandle): Boolean;
 begin
   // Precondition: ActionLock acquired.
   Result := Self.IndexOf(H) <> ItemNotFoundIndex;
-end;
-
-function TIdSipStackInterface.LocalAddress: String;
-var
-  UnusedServer: TIdUdpServer;
-begin
-  // With no instantiated servers, GStack = nil.
-  UnusedServer := TIdUDPServer.Create(nil);
-  try
-    if Assigned(GStack) then
-      Result := GStack.LocalAddress
-    else
-      Result := '127.0.0.1';
-  finally
-    UnusedServer.Free;
-  end;
 end;
 
 function TIdSipStackInterface.NewHandle: TIdSipHandle;
@@ -1015,8 +1019,12 @@ begin
   try
     HostAndPort.Value := Line;
 
-    NewTransport.Address := HostAndPort.Host;
-    NewTransport.Port    := HostAndPort.Port;
+    if (HostAndPort.Host = AutoKeyword) then
+      NewTransport.Address := LocalAddress
+    else
+      NewTransport.Address := HostAndPort.Host;
+
+    NewTransport.Port := HostAndPort.Port;
   finally
     HostAndPort.Free;
   end;

@@ -153,6 +153,7 @@ type
     procedure TestCreateUserAgentHandlesTabs;
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
+    procedure TestCreateUserAgentWithAutoTransport;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithLocator;
@@ -996,6 +997,22 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(Assigned(UA), 'CreateUserAgent didn''t return anything');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoTransport;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP AUTO:5060');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(LocalAddress,
+                UA.Dispatcher.Transports[0].Address,
+                'Local NIC (or loopback) address not used');
   finally
     UA.Free;
   end;
