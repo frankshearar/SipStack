@@ -82,6 +82,9 @@ type
   //  or TEL URIs. My subclasses do all parsing. My constructor is a Template
   // Method - my subclasses need only override Initialize to instantiate
   // any private variables they define, and Parse to actually parse a string.
+  //
+  // This class exists because the author doesn't like Indy's TIdUri for
+  // various reasons.
   TIdUri = class(TObject)
   private
     fScheme:     String;
@@ -170,7 +173,7 @@ type
     class function IsParamNameOrValue(const Token: String): Boolean;
     class function IsPassword(const Token: String): Boolean;
     class function IsUser(const Token: String): Boolean;
-    class function ParameterEncode(const Parameter: String): String; //; override;
+    class function ParameterEncode(const Parameter: String): String;
     class function UsernameEncode(const Username: String): String;
 
     destructor Destroy; override;
@@ -2210,6 +2213,7 @@ var
   ESC:      String[2];
   I:        Integer;
 begin
+  // This code comes straight from Indy's TIdUri. 
   Result := '';
   // S.G. 27/11/2002: Spaces is NOT to be encoded as "+".
   // S.G. 27/11/2002: "+" is a field separator in query parameter, space is...
