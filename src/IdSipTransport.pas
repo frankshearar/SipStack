@@ -1219,8 +1219,6 @@ begin
 end;
 
 procedure TIdSipTcpClientThread.Run;
-var
-  C: TIdSipConnectionTable;
 begin
   try
     Self.Client.Connect(Self.Transport.Timeout);
