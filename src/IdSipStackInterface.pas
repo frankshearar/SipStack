@@ -68,11 +68,11 @@ type
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
-    procedure DebugRegister;
     procedure DebugUnregister;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
+    function  LocalAddress: String;
     function  NewHandle: TIdSipHandle;
     procedure NotifyEvent(Action: TIdSipAction;
                           Event: Cardinal;
@@ -142,13 +142,19 @@ type
   // Register.
   //
   // Here's a summary of the formats for each directive:
-  //   NameServer <domain name or IP>:<port>
-  //   NameServer MOCK
-  //   Listen <transport name><SP><host|IPv4 address|IPv6 reference>:<port>
-  //   Register <SIP/S URI>
-  //   Proxy <SIP/S URI>
+  //   NameServer: <domain name or IP>:<port>
+  //   NameServer: MOCK
+  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference>:<port>
+  //   Register: <SIP/S URI>
+  //   Proxy: <SIP/S URI>
+  //   From: "Count Zero" <sip:countzero@jammer.org>
+  //   Contact: sip:wintermute@tessier-ashpool.co.luna
   TIdSipStackConfigurator = class(TObject)
   private
+    procedure AddContact(UserAgent: TIdSipAbstractUserAgent;
+                      const ContactLine: String);
+    procedure AddFrom(UserAgent: TIdSipAbstractUserAgent;
+                      const FromLine: String);
     procedure AddLocator(UserAgent: TIdSipAbstractUserAgent;
                          const NameServerLine: String);
     procedure AddProxy(UserAgent: TIdSipUserAgent;
@@ -280,6 +286,8 @@ type
 
 // Configuration file constants
 const
+  ContactDirective    = ContactHeaderFull;
+  FromDirective       = FromHeaderFull;
   ListenDirective     = 'Listen';
   MockKeyword         = 'MOCK';
   NameServerDirective = 'NameServer';
@@ -316,11 +324,15 @@ type
 implementation
 
 uses
-  IdGlobal, IdRandom, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator;
+  IdGlobal, IdRandom, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
+  IdStack;
 
 const
-  NoSuchHandle = 'No such handle (%d)';
   ActionNotAllowedForHandle = 'You cannot perform that action on this handle (%d)';
+  NoSuchHandle              = 'No such handle (%d)';
+
+const
+  MalformedConfigurationLine = 'Malformed configuration line: %s';
 
 //******************************************************************************
 //* TIdActionAssociation                                                       *
@@ -345,7 +357,9 @@ constructor TIdSipStackInterface.Create(UiHandle: HWnd);
 const
   LocalAddress = '192.168.1.131';
 var
-  Loc: TIdSipIndyLocator;
+  Conf:         TStrings;
+  Configurator: TIdSipStackConfigurator;
+  I:            Integer;
 begin
   inherited Create(true);
 
@@ -354,41 +368,33 @@ begin
 
   Self.fUiHandle := UiHandle;
 
-  Self.Transport := TIdSipUDPTransport.Create;
-  Self.Transport.Address  := LocalAddress;
-  Self.Transport.HostName := LocalAddress;
-  Self.Transport.Port     := 5060;
-  Self.Transport.Timer    := Self;
-  Self.Transport.AddTransportSendingListener(Self);
+  Conf := TStringList.Create;
+  try
+    Conf.Add('Listen: UDP ' + Self.LocalAddress + ':5060');
+    Conf.Add('NameServer: 62.241.160.200:53');
+    Conf.Add('Contact: sip:foo@' + Self.LocalAddress + ':5060');
+    Conf.Add('From: sip:foo@' + Self.LocalAddress + ':5060');
+    Conf.Add('Register: sip:192.168.1.132');
 
-  Loc := TIdSipIndyLocator.Create;
-  Loc.NameServer := '62.241.160.200';
-  Loc.Port       := 53;
+    Configurator := TIdSipStackConfigurator.Create;
+    try
+      Self.fUserAgent := Configurator.CreateUserAgent(Conf, Self);
+      Self.UserAgent.AddUserAgentListener(Self);
 
-  Self.fUserAgent := TIdSipUserAgent.Create;
-  Self.UserAgent.Contact.Value := 'sip:foo@' + LocalAddress + ':5060';
-  Self.UserAgent.Dispatcher    := TIdSipTransactionDispatcher.Create(Self, Loc);
-  Self.UserAgent.Dispatcher.AddTransport(Self.Transport);
-  Self.UserAgent.From.Value    := 'sip:foo@' + LocalAddress + ':5060';
-  Self.UserAgent.HostName      := LocalAddress;
-  Self.UserAgent.Locator       := Loc;
-  Self.UserAgent.Timer         := Self;
-
-  Self.UserAgent.AddUserAgentListener(Self);
-  Self.Transport.Start;
-
-  Self.DebugRegister;
+      for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
+        Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
+    finally
+      Configurator.Free;
+    end;
+  finally
+    Conf.Free;
+  end;
 end;
 
 destructor TIdSipStackInterface.Destroy;
 begin
 //  Self.DebugUnregister;
 
-  Self.Transport.Stop;
-
-  Self.UserAgent.RemoveUserAgentListener(Self);
-
-  Self.UserAgent.Locator.Free;
   Self.UserAgent.Free;
 
   Self.Actions.Free;
@@ -553,18 +559,6 @@ begin
   Result := Self.Actions[Index] as TIdActionAssociation;
 end;
 
-procedure TIdSipStackInterface.DebugRegister;
-var
-  Reg: TIdSipUri;
-begin
-  Reg := TIdSipUri.Create('sip:192.168.1.132');
-  try
-    Self.UserAgent.RegisterWith(Reg).Send;
-  finally
-    Reg.Free;
-  end;
-end;
-
 procedure TIdSipStackInterface.DebugUnregister;
 var
   Reg: TIdSipUri;
@@ -621,6 +615,14 @@ function TIdSipStackInterface.HasHandle(H: TIdSipHandle): Boolean;
 begin
   // Precondition: ActionLock acquired.
   Result := Self.IndexOf(H) <> ItemNotFoundIndex;
+end;
+
+function TIdSipStackInterface.LocalAddress: String;
+begin
+  if Assigned(GStack) then
+    Result := GStack.LocalAddress
+  else
+    Result := '127.0.0.1';
 end;
 
 function TIdSipStackInterface.NewHandle: TIdSipHandle;
@@ -912,6 +914,34 @@ end;
 
 //* TIdSipStackConfigurator Private methods ************************************
 
+procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractUserAgent;
+                                             const ContactLine: String);
+var
+  Line: String;
+begin
+  Line := ContactLine;
+  Self.EatDirective(Line);
+
+  UserAgent.Contact.Value := Line;
+
+  if UserAgent.Contact.IsMalformed then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [ContactLine]));
+end;
+
+procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractUserAgent;
+                                          const FromLine: String);
+var
+  Line: String;
+begin
+  Line := FromLine;
+  Self.EatDirective(Line);
+
+  UserAgent.From.Value := Line;
+
+  if UserAgent.From.IsMalformed then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [FromLine]));
+end;
+
 procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractUserAgent;
                                              const NameServerLine: String);
 var
@@ -931,7 +961,7 @@ begin
     UserAgent.Locator := TIdSipMockLocator.Create
   else begin
     if not TIdSimpleParser.IsNumber(Port) then
-      raise EParserError.Create('Malformed configuration line: ' + NameServerLine);
+      raise EParserError.Create(Format(MalformedConfigurationLine, [NameServerLine]));
 
     Loc := TIdSipIndyLocator.Create;
     Loc.NameServer := Host;
@@ -954,7 +984,7 @@ begin
 
   UserAgent.Proxy.Uri := Trim(Line);
 
-  Self.CheckUri(UserAgent.Proxy, 'Malformed configuration line: ' + ProxyLine);
+  Self.CheckUri(UserAgent.Proxy, Format(MalformedConfigurationLine, [ProxyLine]));
 end;
 
 procedure TIdSipStackConfigurator.AddTransport(Dispatcher: TIdSipTransactionDispatcher;
@@ -1010,12 +1040,16 @@ begin
   Line := ConfigurationLine;
   FirstToken := Trim(Fetch(Line, ':', false));
 
-  if IsEqual(FirstToken,      ListenDirective) then
+  if      IsEqual(FirstToken, ContactDirective) then
+    Self.AddContact(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, FromDirective) then
+    Self.AddFrom(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ListenDirective) then
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, ProxyDirective) then
-    Self.AddProxy(UserAgent, ConfigurationLine)
+    Self.AddProxy(UserAgent,  ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
 end;

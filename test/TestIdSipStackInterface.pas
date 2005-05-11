@@ -153,10 +153,16 @@ type
     procedure TestCreateUserAgentHandlesTabs;
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
+    procedure TestCreateUserAgentWithContact;
+    procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithLocator;
+    procedure TestCreateUserAgentWithMalformedContact;
+    procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedProxy;
     procedure TestCreateUserAgentWithMockLocator;
+    procedure TestCreateUserAgentWithNoContact;
+    procedure TestCreateUserAgentWithNoFrom;
     procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithRegistrar;
     procedure TestCreateUserAgentWithOneTransport;
@@ -995,6 +1001,44 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithContact;
+const
+  DisplayName = 'Count Zero';
+  ContactUri     = 'sip:countzero@jammer.org';
+  Contact = '"' + DisplayName + '" <' + ContactUri + '>';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Contact: ' + Contact);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(DisplayName, UA.Contact.DisplayName,      'Contact display-name');
+    CheckEquals(ContactUri,  UA.Contact.Address.AsString, 'Contact URI');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithFrom;
+const
+  DisplayName = 'Count Zero';
+  FromUri     = 'sip:countzero@jammer.org';
+  From = '"' + DisplayName + '" <' + FromUri + '>';
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('From: ' + From);
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(DisplayName, UA.From.DisplayName,      'From display-name');
+    CheckEquals(FromUri,     UA.From.Address.AsString, 'From URI');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithLocator;
 var
   UA: TIdSipUserAgent;
@@ -1022,6 +1066,38 @@ begin
           'Transaction and Transaction-User layers have different Locators');
   finally
     UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedContact;
+const
+  MalformedContactLine = '"Count Zero <sip:countzero@jammer.org>';
+begin
+  Self.Configuration.Add('Contact: ' + MalformedContactLine);
+
+  try
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out with malformed Contact');
+  except
+    on E: EParserError do
+      Check(Pos(MalformedContactLine, E.Message) > 0,
+            'Insufficient error message');
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedFrom;
+const
+  MalformedFromLine = '"Count Zero <sip:countzero@jammer.org>';
+begin
+  Self.Configuration.Add('From: ' + MalformedFromLine);
+
+  try
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out with malformed From');
+  except
+    on E: EParserError do
+      Check(Pos(MalformedFromLine, E.Message) > 0,
+            'Insufficient error message');
   end;
 end;
 
@@ -1069,6 +1145,40 @@ begin
     CheckEquals(TIdSipMockLocator.ClassName,
                 UA.Locator.ClassName,
                 'Locator type');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoContact;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.From),
+          'UserAgent has no Contact at all');
+    CheckNotEquals('', UA.Contact.Address.AsString,
+                   'No Contact address');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithNoFrom;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(Assigned(UA.From),
+          'UserAgent has no From at all');
+    CheckNotEquals('', UA.From.Address.AsString,
+                   'No From address');
   finally
     UA.Free;
   end;
