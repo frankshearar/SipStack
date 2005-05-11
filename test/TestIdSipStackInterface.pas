@@ -997,6 +997,10 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(Assigned(UA), 'CreateUserAgent didn''t return anything');
+    Check(Assigned(UA.Timer),
+          'Transaction-User layer has no timer');
+    Check(UA.Timer = UA.Dispatcher.Timer,
+          'Transaction and Transaction-User layers have different timers');
   finally
     UA.Free;
   end;
@@ -1254,6 +1258,16 @@ begin
     CheckEquals(Port,
                 UA.Dispatcher.Transports[0].Port,
                 'Transport port');
+    CheckEquals(Self.Address,
+                UA.Dispatcher.Transports[0].Address,
+                'Transport address');
+    CheckEquals(Self.Address,
+                UA.Dispatcher.Transports[0].HostName,
+                'Transport hostname');
+    Check(Assigned(UA.Dispatcher.Transports[0].Timer),
+          'Transport has no timer');
+    Check(UA.Dispatcher.Timer = UA.Dispatcher.Transports[0].Timer,
+          'Transport and Transaction layers have different timers');
   finally
     UA.Free;
   end;

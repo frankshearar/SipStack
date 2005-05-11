@@ -906,7 +906,8 @@ begin
   try
     Result := TIdSipUserAgent.Create;
     try
-      Result.Dispatcher := TIdSipTransactionDispatcher.Create(Context, nil);
+      Result.Timer := Context;
+      Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
 
       for I := 0 to Configuration.Count - 1 do
         Self.ParseLine(Result, Configuration[I], PendingActions);
@@ -1014,6 +1015,7 @@ begin
 
   NewTransport := TIdSipTransportRegistry.TransportFor(Transport).Create;
   Dispatcher.AddTransport(NewTransport);
+  NewTransport.Timer := Dispatcher.Timer;
 
   HostAndPort := TIdSipHostAndPort.Create;
   try
@@ -1024,7 +1026,8 @@ begin
     else
       NewTransport.Address := HostAndPort.Host;
 
-    NewTransport.Port := HostAndPort.Port;
+    NewTransport.HostName := NewTransport.Address;
+    NewTransport.Port     := HostAndPort.Port;
   finally
     HostAndPort.Free;
   end;
