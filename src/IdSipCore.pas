@@ -2440,6 +2440,7 @@ begin
 
   Self.AddAllowedScheme(SipScheme);
 
+  Self.Contact.Value := Self.DefaultFrom;
   Self.From.Value    := Self.DefaultFrom;
   Self.HostName      := Self.DefaultHostName;
   Self.UserAgentName := Self.DefaultUserAgent;
