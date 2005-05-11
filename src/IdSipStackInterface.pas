@@ -324,7 +324,7 @@ implementation
 
 uses
   IdGlobal, IdRandom, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
-  IdStack;
+  IdStack, IdUDPServer;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform that action on this handle (%d)';
@@ -617,11 +617,19 @@ begin
 end;
 
 function TIdSipStackInterface.LocalAddress: String;
+var
+  UnusedServer: TIdUdpServer;
 begin
-  if Assigned(GStack) then
-    Result := GStack.LocalAddress
-  else
-    Result := '127.0.0.1';
+  // With no instantiated servers, GStack = nil.
+  UnusedServer := TIdUDPServer.Create(nil);
+  try
+    if Assigned(GStack) then
+      Result := GStack.LocalAddress
+    else
+      Result := '127.0.0.1';
+  finally
+    UnusedServer.Free;
+  end;
 end;
 
 function TIdSipStackInterface.NewHandle: TIdSipHandle;
