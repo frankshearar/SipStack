@@ -149,16 +149,17 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
-    procedure TestCreateStackHandlesMultipleSpaces;
-    procedure TestCreateStackHandlesTabs;
-    procedure TestCreateStackRegisterDirectiveBeforeTransport;
-    procedure TestCreateStackReturnsSomething;
-    procedure TestCreateStackWithLocator;
-    procedure TestCreateStackWithMalformedLocator;
-    procedure TestCreateStackWithMockLocator;
-    procedure TestCreateStackWithRegistrar;
-    procedure TestCreateStackWithOneTransport;
-    procedure TestCreateStackTransportHaMalformedPort;
+    procedure TestCreateUserAgentHandlesMultipleSpaces;
+    procedure TestCreateUserAgentHandlesTabs;
+    procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
+    procedure TestCreateUserAgentReturnsSomething;
+    procedure TestCreateUserAgentWithLocator;
+    procedure TestCreateUserAgentWithMalformedLocator;
+    procedure TestCreateUserAgentWithMockLocator;
+    procedure TestCreateUserAgentWithProxy;
+    procedure TestCreateUserAgentWithRegistrar;
+    procedure TestCreateUserAgentWithOneTransport;
+    procedure TestCreateUserAgentTransportHaMalformedPort;
   end;
 
   TestTIdEventData = class(TTestCase)
@@ -930,13 +931,13 @@ end;
 
 //* TestTIdSipStackConfigurator Published methods ******************************
 
-procedure TestTIdSipStackConfigurator.TestCreateStackHandlesMultipleSpaces;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentHandlesMultipleSpaces;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen  :     TCP 127.0.0.1:5060');
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     CheckEquals(TIdSipTCPTransport.ClassName,
                 UA.Dispatcher.Transports[0].ClassName,
@@ -946,13 +947,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackHandlesTabs;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentHandlesTabs;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen'#9':'#9'TCP 127.0.0.1:5060');
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     CheckEquals(TIdSipTCPTransport.ClassName,
                 UA.Dispatcher.Transports[0].ClassName,
@@ -962,17 +963,17 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackRegisterDirectiveBeforeTransport;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentRegisterDirectiveBeforeTransport;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   // Any network actions (like registering) can only happen once we've
   // configured the Transport layer. Same goes for configuring the NameServer.
-  Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort));
+  Self.Configuration.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
   Self.Configuration.Add('Listen: UDP 127.0.0.1:5060');
   Self.Configuration.Add('NameServer: MOCK');
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Self.WaitForSignaled('Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER received');
@@ -981,21 +982,21 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackReturnsSomething;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentReturnsSomething;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    Check(Assigned(UA), 'CreateStack didn''t return anything');
+    Check(Assigned(UA), 'CreateUserAgent didn''t return anything');
   finally
     UA.Free;
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackWithLocator;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithLocator;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   // This looks confusing. It isn't. We give the name server & port of Server,
   // and an unused port as the registrar. That's just because we don't care
@@ -1007,7 +1008,7 @@ begin
   Self.Configuration.Add('Register: sip:localhost:' + IntToStr(Self.Server.DefaultPort + 1));
   Self.Server.OnUDPRead := Self.ProvideAnswer;
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(Assigned(UA.Locator),
           'Transaction-User has no Locator');
@@ -1023,26 +1024,26 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackWithMalformedLocator;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedLocator;
 begin
   Self.Configuration.Add('NameServer: 127.0.0.1:aa');
 
   try
-    Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     Fail('Failed to bail out with malformed locator port');
   except
     on EParserError do;
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackWithMockLocator;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockLocator;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     CheckEquals(TIdSipMockLocator.ClassName,
                 UA.Locator.ClassName,
@@ -1052,15 +1053,34 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackWithRegistrar;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithProxy;
+const
+  ProxyUri = 'sip:localhost';
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Check(UA.HasProxy, 'No proxy specified');
+    CheckEquals(ProxyUri,
+                UA.Proxy.AsString,
+                'Wrong proxy specified');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithRegistrar;
+var
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
   Self.Configuration.Add('Register: sip:127.0.0.1:' + IntToStr(Self.Server.DefaultPort));
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Self.WaitForSignaled('Waiting for REGISTER');
     Check(Self.ReceivedPacket, 'No REGISTER sent to registrar');
@@ -1069,13 +1089,13 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackWithOneTransport;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithOneTransport;
 var
-  UA: TIdSipAbstractUserAgent;
+  UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen: TCP ' + Self.Address + ':' + IntToStr(Self.Port));
 
-  UA := Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(Assigned(UA.Dispatcher), 'Stack doesn''t have a Transaction layer');
     CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
@@ -1090,12 +1110,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipStackConfigurator.TestCreateStackTransportHaMalformedPort;
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentTransportHaMalformedPort;
 begin
   Self.Configuration.Add('Listen: TCP ' + Self.Address + ':aa');
 
   try
-    Self.Conf.CreateStack(Self.Configuration, Self.Timer);
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     Fail('Failed to bail out from a malformed port configuration');
   except
     on EParserError do;

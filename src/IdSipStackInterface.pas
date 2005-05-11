@@ -146,24 +146,27 @@ type
   //   NameServer MOCK
   //   Listen <transport name><SP><host|IPv4 address|IPv6 reference>:<port>
   //   Register <SIP/S URI>
+  //   Proxy <SIP/S URI>
   TIdSipStackConfigurator = class(TObject)
   private
     procedure AddLocator(UserAgent: TIdSipAbstractUserAgent;
                          const NameServerLine: String);
+    procedure AddProxy(UserAgent: TIdSipUserAgent;
+                       const ProxyLine: String);
     procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
                            const TransportLine: String);
+    procedure CheckUri(Uri: TIdSipUri;
+                       const FailMsg: String);
     procedure EatDirective(var Line: String);
-    procedure ParseLine(UserAgent: TIdSipAbstractUserAgent;
-                        const ConfigurationLine: String);
+    procedure ParseLine(UserAgent: TIdSipUserAgent;
+                        const ConfigurationLine: String;
+                        PendingActions: TObjectList);
     procedure RegisterUA(UserAgent: TIdSipAbstractUserAgent;
-                         const RegisterLine: String);
+                         const RegisterLine: String;
+                         PendingActions: TObjectList);
   public
-    function CreateStack(Configuration: String;
-                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
-    function CreateStack(Configuration: TStream;
-                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
-    function CreateStack(Configuration: TStrings;
-                         Context: TIdTimerQueue): TIdSipAbstractUserAgent; overload;
+    function CreateUserAgent(Configuration: TStrings;
+                             Context: TIdTimerQueue): TIdSipUserAgent; overload;
   end;
 
   // I contain data relating to a particular event.
@@ -280,6 +283,7 @@ const
   ListenDirective     = 'Listen';
   MockKeyword         = 'MOCK';
   NameServerDirective = 'NameServer';
+  ProxyDirective      = 'Proxy';
   RegisterDirective   = 'Register';
 
 // Call management constants
@@ -879,51 +883,30 @@ end;
 //******************************************************************************
 //* TIdSipStackConfigurator Public methods *************************************
 
-function TIdSipStackConfigurator.CreateStack(Configuration: String;
-                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
+function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
+                                                 Context: TIdTimerQueue): TIdSipUserAgent;
 var
-  Conf: TStrings;
+  I:              Integer;
+  PendingActions: TObjectList;
 begin
-  Conf := TStringList.Create;
+  PendingActions := TObjectList.Create(false);
   try
-    Conf.Text := Configuration;
+    Result := TIdSipUserAgent.Create;
+    try
+      Result.Dispatcher := TIdSipTransactionDispatcher.Create(Context, nil);
 
-    Result := Self.CreateStack(Conf, Context);
+      for I := 0 to Configuration.Count - 1 do
+        Self.ParseLine(Result, Configuration[I], PendingActions);
+
+      for I := 0 to PendingActions.Count - 1 do
+        (PendingActions[I] as TIdSipAction).Send;
+    except
+      FreeAndNil(Result);
+
+      raise;
+    end;
   finally
-    Conf.Free;
-  end;
-end;
-
-function TIdSipStackConfigurator.CreateStack(Configuration: TStream;
-                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
-var
-  Conf: TStrings;
-begin
-  Conf := TStringList.Create;
-  try
-    Conf.LoadFromStream(Configuration);
-
-    Result := Self.CreateStack(Conf, Context);
-  finally
-    Conf.Free;
-  end;
-end;
-
-function TIdSipStackConfigurator.CreateStack(Configuration: TStrings;
-                                             Context: TIdTimerQueue): TIdSipAbstractUserAgent;
-var
-  I: Integer;
-begin
-  Result := TIdSipUserAgent.Create;
-  try
-    Result.Dispatcher := TIdSipTransactionDispatcher.Create(Context, nil);
-
-    for I := 0 to Configuration.Count - 1 do
-      Self.ParseLine(Result, Configuration[I]);
-  except
-    FreeAndNil(Result);
-
-    raise;
+    PendingActions.Free;
   end;
 end;
 
@@ -937,9 +920,7 @@ var
   Loc:  TIdSipIndyLocator;
   Port: String;
 begin
-  // The line should look like one of these:
-  //   NameServer <domain name or IP>:<port>
-  //   NameServer MOCK
+  // See class comment for the format for this directive.
   Line := NameServerLine;
   Self.EatDirective(Line);
 
@@ -955,10 +936,25 @@ begin
     Loc := TIdSipIndyLocator.Create;
     Loc.NameServer := Host;
     Loc.Port       := StrToInt(Port);
-    
+
     UserAgent.Locator := Loc;
     UserAgent.Dispatcher.Locator := UserAgent.Locator;
   end;
+end;
+
+procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
+                                           const ProxyLine: String);
+var
+  Line: String;
+begin
+  Line := ProxyLine;
+  Self.EatDirective(Line);
+
+  UserAgent.HasProxy := true;
+
+  UserAgent.Proxy.Uri := Trim(Line);
+
+  Self.CheckUri(UserAgent.Proxy, 'Malformed configuration line: ' + ProxyLine);
 end;
 
 procedure TIdSipStackConfigurator.AddTransport(Dispatcher: TIdSipTransactionDispatcher;
@@ -969,9 +965,7 @@ var
   NewTransport: TIdSipTransport;
   Transport:    String;
 begin
-  // The line should contain something like these:
-  //   Listen TCP 127.0.0.1:5060
-  //   Listen SCTP [::1]:15060
+  // See class comment for the format for this directive.
   Line := TransportLine;
 
   Self.EatDirective(Line);
@@ -991,14 +985,24 @@ begin
   end;
 end;
 
+procedure TIdSipStackConfigurator.CheckUri(Uri: TIdSipUri;
+                                           const FailMsg: String);
+begin
+  if not TIdSimpleParser.IsFQDN(Uri.Host)
+    and not TIdIPAddressParser.IsIPv4Address(Uri.Host)
+    and not TIdIPAddressParser.IsIPv6Reference(Uri.Host) then
+    raise EParserError.Create(FailMsg);
+end;
+
 procedure TIdSipStackConfigurator.EatDirective(var Line: String);
 begin
   Fetch(Line, ':');
   Line := Trim(Line);
 end;
 
-procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipAbstractUserAgent;
-                                            const ConfigurationLine: String);
+procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipUserAgent;
+                                            const ConfigurationLine: String;
+                                            PendingActions: TObjectList);
 var
   FirstToken: String;
   Line:       String;
@@ -1010,18 +1014,20 @@ begin
     Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
   else if IsEqual(FirstToken, NameServerDirective) then
     Self.AddLocator(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ProxyDirective) then
+    Self.AddProxy(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, RegisterDirective) then
-    Self.RegisterUA(UserAgent, ConfigurationLine)
+    Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
 end;
 
 procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipAbstractUserAgent;
-                                             const RegisterLine: String);
+                                             const RegisterLine: String;
+                                             PendingActions: TObjectList);
 var
   Line:      String;
   Registrar: TIdSipUri;
 begin
-  // The line should look like this:
-  //   Register <SIP/S URI>
+  // See class comment for the format for this directive.
   Line := RegisterLine;
   Self.EatDirective(Line);
 
@@ -1030,7 +1036,7 @@ begin
   Registrar := TIdSipUri.Create(Line);
   try
     UserAgent.AutoReRegister := true;
-    UserAgent.RegisterWith(Registrar).Send;
+    PendingActions.Add(UserAgent.RegisterWith(Registrar));
   finally
     Registrar.Free;
   end;
