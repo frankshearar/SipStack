@@ -59,7 +59,6 @@ type
     Actions:    TObjectList;
     fUiHandle:  HWnd;
     fUserAgent: TIdSipUserAgent;
-    Transport:  TIdSipTransport;
 
     function QueryInterface(const IID: TGUID; out Obj): HResult; stdcall;
     function _AddRef: Integer; stdcall;
