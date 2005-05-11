@@ -1004,8 +1004,8 @@ end;
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithContact;
 const
   DisplayName = 'Count Zero';
-  ContactUri     = 'sip:countzero@jammer.org';
-  Contact = '"' + DisplayName + '" <' + ContactUri + '>';
+  ContactUri  = 'sip:countzero@jammer.org';
+  Contact     = '"' + DisplayName + '" <' + ContactUri + '>';
 var
   UA: TIdSipUserAgent;
 begin
@@ -1024,7 +1024,7 @@ procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithFrom;
 const
   DisplayName = 'Count Zero';
   FromUri     = 'sip:countzero@jammer.org';
-  From = '"' + DisplayName + '" <' + FromUri + '>';
+  From        = '"' + DisplayName + '" <' + FromUri + '>';
 var
   UA: TIdSipUserAgent;
 begin
