@@ -155,6 +155,7 @@ type
     procedure TestCreateUserAgentReturnsSomething;
     procedure TestCreateUserAgentWithLocator;
     procedure TestCreateUserAgentWithMalformedLocator;
+    procedure TestCreateUserAgentWithMalformedProxy;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithProxy;
     procedure TestCreateUserAgentWithRegistrar;
@@ -1025,14 +1026,34 @@ begin
 end;
 
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedLocator;
+const
+  MalformedNameServerLine = 'NameServer: 127.0.0.1:aa';
 begin
-  Self.Configuration.Add('NameServer: 127.0.0.1:aa');
+  Self.Configuration.Add(MalformedNameServerLine);
 
   try
     Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
     Fail('Failed to bail out with malformed locator port');
   except
-    on EParserError do;
+    on E: EParserError do
+      Check(Pos(MalformedNameServerLine, E.Message) > 0,
+            'Insufficient error message');
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMalformedProxy;
+const
+  MalformedProxyLine = 'Proxy: sip://localhost'; // SIP URIs don't use "//"
+begin
+  Self.Configuration.Add(MalformedProxyLine);
+
+  try
+    Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+    Fail('Failed to bail out with malformed proxy');
+  except
+    on E: EParserError do
+      Check(Pos(MalformedProxyLine, E.Message) > 0,
+            'Insufficient error message');
   end;
 end;
 
@@ -1060,6 +1081,7 @@ var
   UA: TIdSipUserAgent;
 begin
   Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
+  Self.Configuration.Add('Proxy: ' + ProxyUri);
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
