@@ -7090,6 +7090,12 @@ var
   Encoding:       TIdRTPPayload;
   StartTimestamp: Cardinal;
 begin
+  // This has nothing really to do with the tests: we don't send data to
+  // ourselves, and we need at least one other member in the session for the
+  // tests to mean something. The values here might be anything - it doesn't
+  // matter.
+  Self.Session.AddReceiver('127.0.0.1', 8000);
+
   Encoding := TIdRTPPayload.CreatePayload('foo/8000');
   try
     Self.Profile.AddEncoding(Encoding, Self.Profile.FirstFreePayloadType);

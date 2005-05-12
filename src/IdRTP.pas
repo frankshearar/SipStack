@@ -5411,9 +5411,10 @@ begin
 
     if (Table.Count > 0) then
       for I := 0 to Table.Count - 1 do
-        Agent.SendPacket(Table.MemberAt(I).SourceAddress,
-                         Table.MemberAt(I).SourcePort,
-                         Packet);
+        if (Table.MemberAt(I).SyncSrcID <> Self.SyncSrcID) then
+          Agent.SendPacket(Table.MemberAt(I).SourceAddress,
+                           Table.MemberAt(I).SourcePort,
+                           Packet);
   finally
     Packet.Free;
   end;
