@@ -504,8 +504,6 @@ begin
   end
   else
     Result := false;
-
-  // TODO: This has to be clever enough to support both Proxy-Auth and WWW-Auth
 end;
 
 //*******************************************************************************
