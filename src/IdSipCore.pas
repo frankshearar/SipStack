@@ -677,6 +677,56 @@ type
     property MinimumExpiryTime:             Cardinal                      read GetMinimumExpiryTime write SetMinimumExpiryTime;
   end;
 
+  // Given a configuration file, I create a stack.
+  // The configuration file consists of lines. Each line is a complete and
+  // independent setting consisting of a Directive, at least one space, and the
+  // settings for that Directive.
+  //
+  // Currently we support the following Directives: Listen, NameServer,
+  // Register.
+  //
+  // Here's a summary of the formats for each directive:
+  //   NameServer: <domain name or IP>:<port>
+  //   NameServer: MOCK
+  //   Listen: <transport name><SP><host|IPv4 address|IPv6 reference|AUTO>:<port>
+  //   Register: <SIP/S URI>
+  //   Proxy: <SIP/S URI>
+  //   From: "Count Zero" <sip:countzero@jammer.org>
+  //   Contact: sip:wintermute@tessier-ashpool.co.luna
+  TIdSipStackConfigurator = class(TObject)
+  private
+    procedure AddAuthentication(UserAgent: TIdSipAbstractUserAgent;
+                                const AuthenticationLine: String);
+    procedure AddContact(UserAgent: TIdSipAbstractUserAgent;
+                      const ContactLine: String);
+    procedure AddFrom(UserAgent: TIdSipAbstractUserAgent;
+                      const FromLine: String);
+    procedure AddLocator(UserAgent: TIdSipAbstractUserAgent;
+                         const NameServerLine: String);
+    procedure AddProxy(UserAgent: TIdSipUserAgent;
+                       const ProxyLine: String);
+    procedure AddTransport(Dispatcher: TIdSipTransactionDispatcher;
+                           const TransportLine: String);
+    procedure CheckUri(Uri: TIdSipUri;
+                       const FailMsg: String);
+    function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
+    procedure EatDirective(var Line: String);
+    procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractUserAgent);
+    procedure ParseFile(UserAgent: TIdSipUserAgent;
+                        Configuration: TStrings;
+                        PendingActions: TObjectList);
+    procedure ParseLine(UserAgent: TIdSipUserAgent;
+                        const ConfigurationLine: String;
+                        PendingActions: TObjectList);
+    procedure RegisterUA(UserAgent: TIdSipUserAgent;
+                         const RegisterLine: String;
+                         PendingActions: TObjectList);
+    procedure SendPendingActions(Actions: TObjectList);
+  public
+    function CreateUserAgent(Configuration: TStrings;
+                             Context: TIdTimerQueue): TIdSipUserAgent; overload;
+  end;
+
   TIdSipMessageModule = class(TObject)
   private
     UserAgent: TIdSipAbstractUserAgent;
@@ -1510,6 +1560,18 @@ type
   end;
   EIdSipTransactionUser = class(EIdException);
 
+// Configuration file constants
+const
+  AuthenticationDirective = 'Authentication';
+  AutoKeyword             = 'AUTO';
+  ContactDirective        = ContactHeaderFull;
+  FromDirective           = FromHeaderFull;
+  ListenDirective         = 'Listen';
+  MockKeyword             = 'MOCK';
+  NameServerDirective     = 'NameServer';
+  ProxyDirective          = 'Proxy';
+  RegisterDirective       = 'Register';
+
 const
   BadAuthorizationTokens  = 'Bad Authorization tokens';
   MaximumUDPMessageSize   = 1300;
@@ -1519,11 +1581,13 @@ const
   FiveMinutes             = 5*OneMinute;
   TwentyMinutes           = 20*OneMinute;
 
+function LocalAddress: String;
+
 implementation
 
 uses
-  IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdRandom, IdSdp, IdStack,
-  Math, SysUtils, IdUDPServer;
+  IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipIndyLocator,
+  IdSipMockLocator, IdRandom, IdSdp, IdStack, Math, SysUtils, IdUDPServer;
 
 const
   BusyHere                       = 'Incoming call rejected - busy here';
@@ -1546,6 +1610,29 @@ const
   RedirectWithNoSuccess          = 'Call redirected but no target answered';
   RemoteCancel                   = 'Remote end cancelled call';
   RemoteHangUp                   = 'Remote end hung up';
+
+const
+  MalformedConfigurationLine = 'Malformed configuration line: %s';
+
+//******************************************************************************
+//* Unit public procedures & functions                                         *
+//******************************************************************************
+
+function LocalAddress: String;
+var
+  UnusedServer: TIdUDPServer;
+begin
+  if not Assigned(GStack) then begin
+    UnusedServer := TIdUDPServer.Create(nil);
+    try
+      Result := GStack.LocalAddress;
+    finally
+      UnusedServer.Free;
+    end;
+  end
+  else
+    Result := GStack.LocalAddress;
+end;
 
 //******************************************************************************
 //* TIdSipActionClosure                                                        *
@@ -3644,6 +3731,248 @@ end;
 procedure TIdSipRegistrar.SetMinimumExpiryTime(Value: Cardinal);
 begin
   Self.RegisterModule.MinimumExpiryTime := Value;
+end;
+
+//******************************************************************************
+//* TIdSipStackConfigurator                                                    *
+//******************************************************************************
+//* TIdSipStackConfigurator Public methods *************************************
+
+function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
+                                                 Context: TIdTimerQueue): TIdSipUserAgent;
+var
+  PendingActions: TObjectList;
+begin
+  try
+    Result := Self.CreateLayers(Context);
+
+    PendingActions := TObjectList.Create(false);
+    try
+      Self.ParseFile(Result, Configuration, PendingActions);
+      Self.InstantiateMissingObjectsAsDefaults(Result);
+      Self.SendPendingActions(PendingActions);
+    finally
+      PendingActions.Free;
+    end;
+  except
+    FreeAndNil(Result);
+
+    raise;
+  end;
+end;
+
+//* TIdSipStackConfigurator Private methods ************************************
+
+procedure TIdSipStackConfigurator.AddAuthentication(UserAgent: TIdSipAbstractUserAgent;
+                                                    const AuthenticationLine: String);
+var
+  Line: String;
+begin
+  Line := AuthenticationLine;
+  Self.EatDirective(Line);
+
+  if IsEqual(Trim(Line), MockKeyword) then
+    UserAgent.Authenticator := TIdSipMockAuthenticator.Create
+end;
+
+procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractUserAgent;
+                                             const ContactLine: String);
+var
+  Line: String;
+begin
+  Line := ContactLine;
+  Self.EatDirective(Line);
+
+  UserAgent.Contact.Value := Line;
+
+  if UserAgent.Contact.IsMalformed then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [ContactLine]));
+end;
+
+procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractUserAgent;
+                                          const FromLine: String);
+var
+  Line: String;
+begin
+  Line := FromLine;
+  Self.EatDirective(Line);
+
+  UserAgent.From.Value := Line;
+
+  if UserAgent.From.IsMalformed then
+    raise EParserError.Create(Format(MalformedConfigurationLine, [FromLine]));
+end;
+
+procedure TIdSipStackConfigurator.AddLocator(UserAgent: TIdSipAbstractUserAgent;
+                                             const NameServerLine: String);
+var
+  Host: String;
+  Line: String;
+  Loc:  TIdSipIndyLocator;
+  Port: String;
+begin
+  // See class comment for the format for this directive.
+  Line := NameServerLine;
+  Self.EatDirective(Line);
+
+  Host := Fetch(Line, ':');
+  Port := Fetch(Line, ' ');
+
+  if IsEqual(Host, MockKeyword) then
+    UserAgent.Locator := TIdSipMockLocator.Create
+  else begin
+    if not TIdSimpleParser.IsNumber(Port) then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [NameServerLine]));
+
+    Loc := TIdSipIndyLocator.Create;
+    Loc.NameServer := Host;
+    Loc.Port       := StrToInt(Port);
+
+    UserAgent.Locator := Loc;
+    UserAgent.Dispatcher.Locator := UserAgent.Locator;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.AddProxy(UserAgent: TIdSipUserAgent;
+                                           const ProxyLine: String);
+var
+  Line: String;
+begin
+  Line := ProxyLine;
+  Self.EatDirective(Line);
+
+  UserAgent.HasProxy := true;
+
+  UserAgent.Proxy.Uri := Trim(Line);
+
+  Self.CheckUri(UserAgent.Proxy, Format(MalformedConfigurationLine, [ProxyLine]));
+end;
+
+procedure TIdSipStackConfigurator.AddTransport(Dispatcher: TIdSipTransactionDispatcher;
+                                               const TransportLine: String);
+var
+  HostAndPort:  TIdSipHostAndPort;
+  Line:         String;
+  NewTransport: TIdSipTransport;
+  Transport:    String;
+begin
+  // See class comment for the format for this directive.
+  Line := TransportLine;
+
+  Self.EatDirective(Line);
+  Transport := Fetch(Line, ' ');
+
+  NewTransport := TIdSipTransportRegistry.TransportFor(Transport).Create;
+  Dispatcher.AddTransport(NewTransport);
+  NewTransport.Timer := Dispatcher.Timer;
+
+  HostAndPort := TIdSipHostAndPort.Create;
+  try
+    HostAndPort.Value := Line;
+
+    if (HostAndPort.Host = AutoKeyword) then
+      NewTransport.Address := LocalAddress
+    else
+      NewTransport.Address := HostAndPort.Host;
+
+    NewTransport.HostName := NewTransport.Address;
+    NewTransport.Port     := HostAndPort.Port;
+  finally
+    HostAndPort.Free;
+  end;
+end;
+
+procedure TIdSipStackConfigurator.CheckUri(Uri: TIdSipUri;
+                                           const FailMsg: String);
+begin
+  if not TIdSimpleParser.IsFQDN(Uri.Host)
+    and not TIdIPAddressParser.IsIPv4Address(Uri.Host)
+    and not TIdIPAddressParser.IsIPv6Reference(Uri.Host) then
+    raise EParserError.Create(FailMsg);
+end;
+
+function TIdSipStackConfigurator.CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
+begin
+  Result := TIdSipUserAgent.Create;
+  Result.Timer := Context;
+  Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
+end;
+
+procedure TIdSipStackConfigurator.EatDirective(var Line: String);
+begin
+  Fetch(Line, ':');
+  Line := Trim(Line);
+end;
+
+procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractUserAgent);
+begin
+  if not Assigned(UserAgent.Authenticator) then
+    UserAgent.Authenticator := TIdSipAuthenticator.Create;
+
+  if not Assigned(UserAgent.Locator) then
+    UserAgent.Locator := TIdSipIndyLocator.Create;
+end;
+
+procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
+                                            Configuration: TStrings;
+                                            PendingActions: TObjectList);
+var
+  I: Integer;
+begin
+  for I := 0 to Configuration.Count - 1 do
+    Self.ParseLine(UserAgent, Configuration[I], PendingActions);
+end;
+
+procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipUserAgent;
+                                            const ConfigurationLine: String;
+                                            PendingActions: TObjectList);
+var
+  FirstToken: String;
+  Line:       String;
+begin
+  Line := ConfigurationLine;
+  FirstToken := Trim(Fetch(Line, ':', false));
+
+  if      IsEqual(FirstToken, AuthenticationDirective) then
+    Self.AddAuthentication(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ContactDirective) then
+    Self.AddContact(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, FromDirective) then
+    Self.AddFrom(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ListenDirective) then
+    Self.AddTransport(UserAgent.Dispatcher, ConfigurationLine)
+  else if IsEqual(FirstToken, NameServerDirective) then
+    Self.AddLocator(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ProxyDirective) then
+    Self.AddProxy(UserAgent,  ConfigurationLine)
+  else if IsEqual(FirstToken, RegisterDirective) then
+    Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
+end;
+
+procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
+                                             const RegisterLine: String;
+                                             PendingActions: TObjectList);
+var
+  Line: String;
+begin
+  // See class comment for the format for this directive.
+  Line := RegisterLine;
+  Self.EatDirective(Line);
+
+  Line := Trim(Line);
+
+  UserAgent.AutoReRegister := true;
+  UserAgent.HasRegistrar := true;
+  UserAgent.Registrar.Uri := Line;
+  PendingActions.Add(UserAgent.RegisterWith(UserAgent.Registrar));
+end;
+
+procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);
+var
+  I: Integer;
+begin
+  for I := 0 to Actions.Count - 1 do
+    (Actions[I] as TIdSipAction).Send;
 end;
 
 //******************************************************************************
