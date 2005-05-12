@@ -149,6 +149,8 @@ type
   //   Contact: sip:wintermute@tessier-ashpool.co.luna
   TIdSipStackConfigurator = class(TObject)
   private
+    procedure AddAuthentication(UserAgent: TIdSipAbstractUserAgent;
+                                const AuthenticationLine: String);
     procedure AddContact(UserAgent: TIdSipAbstractUserAgent;
                       const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractUserAgent;
@@ -161,13 +163,19 @@ type
                            const TransportLine: String);
     procedure CheckUri(Uri: TIdSipUri;
                        const FailMsg: String);
+    function  CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
     procedure EatDirective(var Line: String);
+    procedure InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractUserAgent);
+    procedure ParseFile(UserAgent: TIdSipUserAgent;
+                        Configuration: TStrings;
+                        PendingActions: TObjectList);
     procedure ParseLine(UserAgent: TIdSipUserAgent;
                         const ConfigurationLine: String;
                         PendingActions: TObjectList);
     procedure RegisterUA(UserAgent: TIdSipAbstractUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
+    procedure SendPendingActions(Actions: TObjectList);
   public
     function CreateUserAgent(Configuration: TStrings;
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
@@ -284,14 +292,15 @@ type
 
 // Configuration file constants
 const
-  AutoKeyword         = 'AUTO';
-  ContactDirective    = ContactHeaderFull;
-  FromDirective       = FromHeaderFull;
-  ListenDirective     = 'Listen';
-  MockKeyword         = 'MOCK';
-  NameServerDirective = 'NameServer';
-  ProxyDirective      = 'Proxy';
-  RegisterDirective   = 'Register';
+  AuthenticationDirective = 'Authentication';
+  AutoKeyword             = 'AUTO';
+  ContactDirective        = ContactHeaderFull;
+  FromDirective           = FromHeaderFull;
+  ListenDirective         = 'Listen';
+  MockKeyword             = 'MOCK';
+  NameServerDirective     = 'NameServer';
+  ProxyDirective          = 'Proxy';
+  RegisterDirective       = 'Register';
 
 // Call management constants
 const
@@ -325,8 +334,8 @@ function LocalAddress: String;
 implementation
 
 uses
-  IdGlobal, IdRandom, IdSimpleParser, IdSipIndyLocator, IdSipMockLocator,
-  IdStack, IdUDPServer;
+  IdGlobal, IdRandom, IdSimpleParser, IdSipAuthentication, IdSipIndyLocator,
+  IdSipMockLocator, IdStack, IdUDPServer;
 
 const
   ActionNotAllowedForHandle = 'You cannot perform that action on this handle (%d)';
@@ -902,29 +911,37 @@ var
   I:              Integer;
   PendingActions: TObjectList;
 begin
-  PendingActions := TObjectList.Create(false);
   try
-    Result := TIdSipUserAgent.Create;
+    Result := Self.CreateLayers(Context);
+
+    PendingActions := TObjectList.Create(false);
     try
-      Result.Timer := Context;
-      Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
-
-      for I := 0 to Configuration.Count - 1 do
-        Self.ParseLine(Result, Configuration[I], PendingActions);
-
-      for I := 0 to PendingActions.Count - 1 do
-        (PendingActions[I] as TIdSipAction).Send;
-    except
-      FreeAndNil(Result);
-
-      raise;
+      Self.ParseFile(Result, Configuration, PendingActions);
+      Self.InstantiateMissingObjectsAsDefaults(Result);
+      Self.SendPendingActions(PendingActions);
+    finally
+      PendingActions.Free;
     end;
-  finally
-    PendingActions.Free;
+  except
+    FreeAndNil(Result);
+
+    raise;
   end;
 end;
 
 //* TIdSipStackConfigurator Private methods ************************************
+
+procedure TIdSipStackConfigurator.AddAuthentication(UserAgent: TIdSipAbstractUserAgent;
+                                                    const AuthenticationLine: String);
+var
+  Line: String;
+begin
+  Line := AuthenticationLine;
+  Self.EatDirective(Line);
+
+  if IsEqual(Trim(Line), MockKeyword) then
+    UserAgent.Authenticator := TIdSipMockAuthenticator.Create
+end;
 
 procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractUserAgent;
                                              const ContactLine: String);
@@ -1042,10 +1059,36 @@ begin
     raise EParserError.Create(FailMsg);
 end;
 
+function TIdSipStackConfigurator.CreateLayers(Context: TIdTimerQueue): TIdSipUserAgent;
+begin
+  Result := TIdSipUserAgent.Create;
+  Result.Timer := Context;
+  Result.Dispatcher := TIdSipTransactionDispatcher.Create(Result.Timer, nil);
+end;
+
 procedure TIdSipStackConfigurator.EatDirective(var Line: String);
 begin
   Fetch(Line, ':');
   Line := Trim(Line);
+end;
+
+procedure TIdSipStackConfigurator.InstantiateMissingObjectsAsDefaults(UserAgent: TIdSipAbstractUserAgent);
+begin
+  if not Assigned(UserAgent.Authenticator) then
+    UserAgent.Authenticator := TIdSipAuthenticator.Create;
+
+  if not Assigned(UserAgent.Locator) then
+    UserAgent.Locator := TIdSipIndyLocator.Create;
+end;
+
+procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
+                                            Configuration: TStrings;
+                                            PendingActions: TObjectList);
+var
+  I: Integer;
+begin
+  for I := 0 to Configuration.Count - 1 do
+    Self.ParseLine(UserAgent, Configuration[I], PendingActions);
 end;
 
 procedure TIdSipStackConfigurator.ParseLine(UserAgent: TIdSipUserAgent;
@@ -1058,7 +1101,9 @@ begin
   Line := ConfigurationLine;
   FirstToken := Trim(Fetch(Line, ':', false));
 
-  if      IsEqual(FirstToken, ContactDirective) then
+  if      IsEqual(FirstToken, AuthenticationDirective) then
+    Self.AddAuthentication(UserAgent, ConfigurationLine)
+  else if IsEqual(FirstToken, ContactDirective) then
     Self.AddContact(UserAgent, ConfigurationLine)
   else if IsEqual(FirstToken, FromDirective) then
     Self.AddFrom(UserAgent, ConfigurationLine)
@@ -1092,6 +1137,14 @@ begin
   finally
     Registrar.Free;
   end;
+end;
+
+procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);
+var
+  I: Integer;
+begin
+  for I := 0 to Actions.Count - 1 do
+    (Actions[I] as TIdSipAction).Send;
 end;
 
 //******************************************************************************

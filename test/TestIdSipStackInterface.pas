@@ -161,6 +161,7 @@ type
     procedure TestCreateUserAgentWithMalformedFrom;
     procedure TestCreateUserAgentWithMalformedLocator;
     procedure TestCreateUserAgentWithMalformedProxy;
+    procedure TestCreateUserAgentWithMockAuthenticator;
     procedure TestCreateUserAgentWithMockLocator;
     procedure TestCreateUserAgentWithNoContact;
     procedure TestCreateUserAgentWithNoFrom;
@@ -245,7 +246,7 @@ const
 implementation
 
 uses
-  IdRandom, IdSipMockLocator, StackWindow;
+  IdRandom, IdSipAuthentication, IdSipMockLocator, StackWindow;
 
 function Suite: ITestSuite;
 begin
@@ -997,6 +998,12 @@ begin
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
     Check(Assigned(UA), 'CreateUserAgent didn''t return anything');
+    Check(Assigned(UA.Dispatcher), 'Stack doesn''t have a Transaction layer');
+
+    Check(Assigned(UA.Authenticator),
+          'Transaction-User layer has no Authenticator');
+    Check(Assigned(UA.Locator),
+          'Transaction-User layer has no Locator');
     Check(Assigned(UA.Timer),
           'Transaction-User layer has no timer');
     Check(UA.Timer = UA.Dispatcher.Timer,
@@ -1154,11 +1161,26 @@ begin
   end;
 end;
 
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockAuthenticator;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Authentication: MOCK');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    CheckEquals(TIdSipMockAuthenticator.ClassName,
+                UA.Authenticator.ClassName,
+                'Authenticator type');
+  finally
+    UA.Free;
+  end;
+end;
+
 procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithMockLocator;
 var
   UA: TIdSipUserAgent;
 begin
-  Self.Configuration.Add('Listen: UDP ' + Self.Address + ':' + IntToStr(Self.Port));
   Self.Configuration.Add('NameServer: MOCK');
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
@@ -1250,7 +1272,6 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    Check(Assigned(UA.Dispatcher), 'Stack doesn''t have a Transaction layer');
     CheckEquals(1, UA.Dispatcher.TransportCount, 'Number of transports');
     CheckEquals(TIdSipTCPTransport.ClassName,
                 UA.Dispatcher.Transports[0].ClassName,
