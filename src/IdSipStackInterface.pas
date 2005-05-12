@@ -67,7 +67,6 @@ type
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
-    procedure DebugUnregister;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
@@ -114,7 +113,8 @@ type
     property UiHandle:  HWnd            read fUiHandle;
     property UserAgent: TIdSipUserAgent read fUserAgent;
   public
-    constructor Create(UiHandle: HWnd); reintroduce;
+    constructor Create(UiHandle: HWnd;
+                       Configuration: TStrings); reintroduce;
     destructor  Destroy; override;
 
     procedure AnswerCall(ActionHandle: TIdSipHandle;
@@ -172,7 +172,7 @@ type
     procedure ParseLine(UserAgent: TIdSipUserAgent;
                         const ConfigurationLine: String;
                         PendingActions: TObjectList);
-    procedure RegisterUA(UserAgent: TIdSipAbstractUserAgent;
+    procedure RegisterUA(UserAgent: TIdSipUserAgent;
                          const RegisterLine: String;
                          PendingActions: TObjectList);
     procedure SendPendingActions(Actions: TObjectList);
@@ -383,9 +383,9 @@ end;
 //******************************************************************************
 //* TIdSipStackInterface Public methods ****************************************
 
-constructor TIdSipStackInterface.Create(UiHandle: HWnd);
+constructor TIdSipStackInterface.Create(UiHandle: HWnd;
+                                        Configuration: TStrings);
 var
-  Conf:         TStrings;
   Configurator: TIdSipStackConfigurator;
   I:            Integer;
 begin
@@ -396,26 +396,15 @@ begin
 
   Self.fUiHandle := UiHandle;
 
-  Conf := TStringList.Create;
+  Configurator := TIdSipStackConfigurator.Create;
   try
-    Conf.Add('Listen: UDP AUTO:5060');
-    Conf.Add('NameServer: 62.241.160.200:53');
-    Conf.Add('Contact: sip:foo@' + LocalAddress + ':5060');
-    Conf.Add('From: sip:foo@' + LocalAddress + ':5060');
-    Conf.Add('Register: sip:192.168.1.132');
+    Self.fUserAgent := Configurator.CreateUserAgent(Configuration, Self);
+    Self.UserAgent.AddUserAgentListener(Self);
 
-    Configurator := TIdSipStackConfigurator.Create;
-    try
-      Self.fUserAgent := Configurator.CreateUserAgent(Conf, Self);
-      Self.UserAgent.AddUserAgentListener(Self);
-
-      for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
-        Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
-    finally
-      Configurator.Free;
-    end;
+    for I := 0 to Self.UserAgent.Dispatcher.TransportCount - 1 do
+      Self.UserAgent.Dispatcher.Transports[I].AddTransportSendingListener(Self);
   finally
-    Conf.Free;
+    Configurator.Free;
   end;
 end;
 
@@ -585,18 +574,6 @@ end;
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
-end;
-
-procedure TIdSipStackInterface.DebugUnregister;
-var
-  Reg: TIdSipUri;
-begin
-  Reg := TIdSipUri.Create('sip:192.168.1.132');
-  try
-    Self.UserAgent.UnregisterFrom(Reg).Send;
-  finally
-    Reg.Free;
-  end;
 end;
 
 function TIdSipStackInterface.HandleFor(Action: TIdSipAction): TIdSipHandle;
@@ -908,7 +885,6 @@ end;
 function TIdSipStackConfigurator.CreateUserAgent(Configuration: TStrings;
                                                  Context: TIdTimerQueue): TIdSipUserAgent;
 var
-  I:              Integer;
   PendingActions: TObjectList;
 begin
   try
@@ -1117,12 +1093,11 @@ begin
     Self.RegisterUA(UserAgent, ConfigurationLine, PendingActions)
 end;
 
-procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipAbstractUserAgent;
+procedure TIdSipStackConfigurator.RegisterUA(UserAgent: TIdSipUserAgent;
                                              const RegisterLine: String;
                                              PendingActions: TObjectList);
 var
-  Line:      String;
-  Registrar: TIdSipUri;
+  Line: String;
 begin
   // See class comment for the format for this directive.
   Line := RegisterLine;
@@ -1130,13 +1105,10 @@ begin
 
   Line := Trim(Line);
 
-  Registrar := TIdSipUri.Create(Line);
-  try
-    UserAgent.AutoReRegister := true;
-    PendingActions.Add(UserAgent.RegisterWith(Registrar));
-  finally
-    Registrar.Free;
-  end;
+  UserAgent.AutoReRegister := true;
+  UserAgent.HasRegistrar := true;
+  UserAgent.Registrar.Uri := Line;
+  PendingActions.Add(UserAgent.RegisterWith(UserAgent.Registrar));
 end;
 
 procedure TIdSipStackConfigurator.SendPendingActions(Actions: TObjectList);

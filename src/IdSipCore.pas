@@ -622,7 +622,9 @@ type
     fDoNotDisturb:        Boolean;
     fDoNotDisturbMessage: String;
     fHasProxy:            Boolean;
+    fHasRegistrar:        Boolean;
     fProxy:               TIdSipUri;
+    fRegistrar:           TIdSipUri;
     InviteModule:         TIdSipInviteModule;
 
     function  AddOutboundSession: TIdSipOutboundSession;
@@ -631,6 +633,7 @@ type
     procedure SetInitialResendInterval(Value: Cardinal);
     procedure SetProgressResendInterval(Value: Cardinal);
     procedure SetProxy(Value: TIdSipUri);
+    procedure SetRegistrar(Value: TIdSipUri);
   protected
     procedure AddLocalHeaders(OutboundRequest: TIdSipRequest); override;
     function  ResponseForInvite: Cardinal; override;
@@ -647,9 +650,11 @@ type
     property DoNotDisturb:           Boolean   read fDoNotDisturb write fDoNotDisturb;
     property DoNotDisturbMessage:    String    read fDoNotDisturbMessage write fDoNotDisturbMessage;
     property HasProxy:               Boolean   read fHasProxy write fHasProxy;
+    property HasRegistrar:           Boolean   read fHasRegistrar write fHasRegistrar;
     property InitialResendInterval:  Cardinal  read GetInitialResendInterval write SetInitialResendInterval;
     property ProgressResendInterval: Cardinal  read GetProgressResendInterval write SetProgressResendInterval;
     property Proxy:                  TIdSipUri read fProxy write SetProxy;
+    property Registrar:              TIdSipUri read fRegistrar write SetRegistrar;
   end;
 
   TIdSipRegisterModule = class;
@@ -3494,12 +3499,18 @@ begin
   Self.DoNotDisturb           := false;
   Self.DoNotDisturbMessage    := RSSIPTemporarilyUnavailable;
   Self.fProxy                 := TIdSipUri.Create('');
+  Self.fRegistrar             := TIdSipUri.Create('');
   Self.HasProxy               := false;
+  Self.HasRegistrar           := false;
   Self.InitialResendInterval  := DefaultT1;
 end;
 
 destructor TIdSipUserAgent.Destroy;
 begin
+  if Self.HasRegistrar then
+    Self.UnregisterFrom(Self.Registrar).Send;
+
+  Self.Registrar.Free;
   Self.Proxy.Free;
   Self.Dispatcher.Free;
 
@@ -3584,6 +3595,11 @@ end;
 procedure TIdSipUserAgent.SetProxy(Value: TIdSipUri);
 begin
   Self.Proxy.Uri := Value.Uri;
+end;
+
+procedure TIdSipUserAgent.SetRegistrar(Value: TIdSipUri);
+begin
+  Self.Registrar.Uri := Value.Uri;
 end;
 
 //******************************************************************************

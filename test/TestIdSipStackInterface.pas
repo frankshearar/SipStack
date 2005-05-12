@@ -253,14 +253,12 @@ begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
 //  Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
-{
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
   Result.AddTest(TestTIdRegistrationData.Suite);
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
-}
 end;
 
 //******************************************************************************

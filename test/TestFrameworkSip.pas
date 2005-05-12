@@ -742,7 +742,6 @@ end;
 
 procedure TTestCaseTU.TearDown;
 begin
-  Self.Core.Timer := nil;
   Self.DebugTimer.Terminate;
 
   Self.Invite.Free;

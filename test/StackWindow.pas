@@ -48,6 +48,8 @@ uses
 //* TStackWindow Public methods ************************************************
 
 constructor TStackWindow.Create(AOwner: TComponent; TestCase: TestTIdSipStackInterface);
+var
+  BasicConf: TStrings;
 begin
   inherited Create(AOwner);
 
@@ -58,7 +60,17 @@ begin
 
   TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUDPTransport);
 
-  Self.Intf := TIdSipStackInterface.Create(Self.Handle);
+  BasicConf := TStringList.Create;
+  try
+    BasicConf.Add('Listen: UDP AUTO:5060');
+    BasicConf.Add('NameServer: 62.241.160.200:53');
+    BasicConf.Add('Contact: sip:foo@' + LocalAddress + ':5060');
+    BasicConf.Add('From: sip:foo@' + LocalAddress + ':5060');
+
+    Self.Intf := TIdSipStackInterface.Create(Self.Handle, BasicConf);
+  finally
+    BasicConf.Free;
+  end;
   Self.Intf.OnEmpty := Self.OnStackQueueEmpty;
   Self.Intf.Resume;
 

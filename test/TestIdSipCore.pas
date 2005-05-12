@@ -185,6 +185,7 @@ type
     procedure TestCreateResponseUserAgent;
     procedure TestCreateResponseUserAgentBlank;
     procedure TestDeclinedCallNotifiesListeners;
+    procedure TestDestroyUnregisters;
     procedure TestDialogLocalSequenceNoMonotonicallyIncreases;
     procedure TestDispatchToCorrectSession;
     procedure TestDoNotDisturb;
@@ -924,7 +925,7 @@ implementation
 
 uses
   IdException, IdSipAuthentication, IdSipDns, IdSipLocator, IdSipMockTransport,
-  SysUtils;
+  IdSipStackInterface, SysUtils;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -984,10 +985,13 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
+}
   Result.AddTest(TestTIdSipUserAgent.Suite);
+{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -1015,6 +1019,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -2640,6 +2645,34 @@ begin
   finally
     Self.Core.RemoveObserver(O);
     O.Free;
+  end;
+end;
+
+procedure TestTIdSipUserAgent.TestDestroyUnregisters;
+var
+  Registrar: TIdSipMockUdpTransport;
+begin
+  Registrar := TIdSipMockUdpTransport.Create;
+  try
+    Registrar.Address  := '127.0.0.1';
+    Registrar.HostName := '127.0.0.1';
+    Registrar.Port     := 25060;
+
+    Self.Core.Registrar.Uri := 'sip:' + Registrar.Address + ':' + IntToStr(Registrar.Port);
+    Self.Core.HasRegistrar  := true;
+
+    FreeAndNil(Self.Core);
+
+    Check(Registrar.LastRequest <> nil,
+          'No REGISTER sent');
+    CheckEquals(MethodRegister,
+                Registrar.LastRequest.Method,
+                'Unexpected request sent');
+    CheckEquals(0,
+                Registrar.LastRequest.QuickestExpiry,
+                'Expiry time indicates this wasn''t an un-REGISTER');
+  finally
+    Registrar.Free;
   end;
 end;
 
