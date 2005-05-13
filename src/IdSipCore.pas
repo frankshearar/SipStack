@@ -1573,13 +1573,14 @@ const
   RegisterDirective       = 'Register';
 
 const
-  BadAuthorizationTokens  = 'Bad Authorization tokens';
-  MaximumUDPMessageSize   = 1300;
-  MaxPrematureInviteRetry = 10;
-  MissingContactHeader    = 'Missing Contact Header';
-  OneMinute               = 60;
-  FiveMinutes             = 5*OneMinute;
-  TwentyMinutes           = 20*OneMinute;
+  BadAuthorizationTokens     = 'Bad Authorization tokens';
+  MalformedConfigurationLine = 'Malformed configuration line: %s';
+  MaximumUDPMessageSize      = 1300;
+  MaxPrematureInviteRetry    = 10;
+  MissingContactHeader       = 'Missing Contact Header';
+  OneMinute                  = 60;
+  FiveMinutes                = 5*OneMinute;
+  TwentyMinutes              = 20*OneMinute;
 
 function LocalAddress: String;
 
@@ -1610,9 +1611,6 @@ const
   RedirectWithNoSuccess          = 'Call redirected but no target answered';
   RemoteCancel                   = 'Remote end cancelled call';
   RemoteHangUp                   = 'Remote end hung up';
-
-const
-  MalformedConfigurationLine = 'Malformed configuration line: %s';
 
 //******************************************************************************
 //* Unit public procedures & functions                                         *
