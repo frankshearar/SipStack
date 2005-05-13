@@ -544,6 +544,8 @@ type
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestHighestAllowedPort;
+    procedure TestLowestAllowedPort;
     procedure TestMimeType;
     procedure TestSetRemoteDescription;
     procedure TestStartListeningSingleStream;
@@ -6530,6 +6532,42 @@ end;
 
 //* TestTIdSDPMultimediaSession Published methods ******************************
 
+procedure TestTIdSDPMultimediaSession.TestHighestAllowedPort;
+var
+  ActualSDP: String;
+  Desc:      TIdSdpPayload;
+begin
+  Self.MS.HighestAllowedPort := 9000;
+
+  ActualSDP := Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.HighestAllowedPort + 1));
+
+  Desc := TIdSdpPayload.CreateFrom(ActualSDP);
+  try
+    CheckEquals(1, Desc.MediaDescriptionCount,      'Media description count');
+    CheckEquals(0, Desc.MediaDescriptionAt(0).Port, 'Unexpected port');
+  finally
+    Desc.Free;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestLowestAllowedPort;
+var
+  ActualSDP: String;
+  Desc:      TIdSdpPayload;
+begin
+  Self.MS.LowestAllowedPort := 9000;
+
+  ActualSDP := Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.LowestAllowedPort - 1));
+
+  Desc := TIdSdpPayload.CreateFrom(ActualSDP);
+  try
+    CheckEquals(1, Desc.MediaDescriptionCount,      'Media description count');
+    CheckEquals(0, Desc.MediaDescriptionAt(0).Port, 'Unexpected port');
+  finally
+    Desc.Free;
+  end;
+end;
+
 procedure TestTIdSDPMultimediaSession.TestMimeType;
 begin
   CheckEquals(SdpMimeType, Self.MS.MimeType, 'SDP MIME type');
@@ -6568,7 +6606,7 @@ begin
   CheckEquals(1, Self.MS.StreamCount, 'StreamCount');
 end;
 
-procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
+    procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
 var
   LowPort:  Cardinal;
   HighPort: Cardinal;

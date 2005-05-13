@@ -632,10 +632,13 @@ type
   // use me to send (RTP) data to the remote peer.
   TIdSDPMultimediaSession = class(TObject)
   private
-    Profile:    TIdRTPProfile;
-    fStreams:   TObjectList;
-    StreamLock: TCriticalSection;
+    fHighestAllowedPort: Cardinal;
+    fLowestAllowedPort:  Cardinal;
+    fStreams:            TObjectList;
+    Profile:             TIdRTPProfile;
+    StreamLock:          TCriticalSection;
 
+    function  AllowedPort(Port: Cardinal): Boolean;
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
     procedure RegisterEncodingMaps(Maps: TIdSdpRTPMapAttributes);
@@ -649,6 +652,8 @@ type
     procedure StopListening;
     function  StreamCount: Integer;
 
+    property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
+    property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
   end;
 
@@ -3952,6 +3957,9 @@ begin
 
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
+
+  Self.LowestAllowedPort  := 0;
+  Self.HighestAllowedPort := 65535;
 end;
 
 destructor TIdSDPMultimediaSession.Destroy;
@@ -4062,6 +4070,11 @@ begin
   end;
 end;
 
+function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;
+begin
+  Result := (Self.LowestAllowedPort < Port) and (Port < Self.HighestAllowedPort);
+end;
+
 procedure TIdSDPMultimediaSession.EstablishStream(Desc: TIdSdpMediaDescription);
 var
   NewStream:   TIdSDPMediaStream;
@@ -4072,7 +4085,7 @@ begin
     Self.fStreams.Add(NewStream);
 
     SocketBound := false;
-    while not SocketBound do begin
+    while not SocketBound and Self.AllowedPort(Desc.Port) do begin
       NewStream.LocalDescription := Desc;
       try
         NewStream.StartListening;
@@ -4090,6 +4103,11 @@ begin
 
     raise;
   end;
+
+  // Note that even if the stream doesn't bind to a port, the stream object
+  // still exists!
+  if not SocketBound then
+    Desc.Port := 0;
 end;
 
 //* TIdSDPMultimediaSession Private methods ************************************
