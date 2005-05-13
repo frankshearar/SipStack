@@ -741,7 +741,9 @@ const
   RSSDPDirectionSendRecv = 'sendrecv';
 
 const
-  ItemNotFoundIndex = -1;  
+  HighestPossiblePort = 65535;
+  ItemNotFoundIndex   = -1;
+  LowestPossiblePort  = 0;
 
 function AddressTypeToStr(Version: TIdIPVersion): String;
 function DirectionToStr(Direction: TIdSdpDirection): String;
@@ -3958,8 +3960,8 @@ begin
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
 
-  Self.LowestAllowedPort  := 0;
-  Self.HighestAllowedPort := 65535;
+  Self.LowestAllowedPort  := LowestPossiblePort;
+  Self.HighestAllowedPort := HighestPossiblePort;
 end;
 
 destructor TIdSDPMultimediaSession.Destroy;
