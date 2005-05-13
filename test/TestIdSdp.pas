@@ -548,7 +548,9 @@ type
     procedure TestLowestAllowedPort;
     procedure TestMimeType;
     procedure TestSetRemoteDescription;
+    procedure TestSetRemoteDescriptionMalformedSdp;
     procedure TestStartListeningSingleStream;
+    procedure TestStartListeningMalformedSdp;
     procedure TestStartListeningMultipleStreams;
     procedure TestStartListeningRegistersLocalRtpMaps;
     procedure TestStartListeningRegistersRemoteRtpMaps;
@@ -6593,6 +6595,16 @@ begin
               'Remote description of second stream not set');
 end;
 
+procedure TestTIdSDPMultimediaSession.TestSetRemoteDescriptionMalformedSdp;
+begin
+  try
+    Self.MS.SetRemoteDescription('');
+    Fail('Set remote description on a malformed session description');
+  except
+    on EParserError do;
+  end;
+end;
+
 procedure TestTIdSDPMultimediaSession.TestStartListeningSingleStream;
 var
   Port: Cardinal;
@@ -6606,7 +6618,17 @@ begin
   CheckEquals(1, Self.MS.StreamCount, 'StreamCount');
 end;
 
-    procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
+procedure TestTIdSDPMultimediaSession.TestStartListeningMalformedSdp;
+begin
+  try
+    Self.MS.StartListening('');
+    Fail('Started listening on malformed SDP');
+  except
+    on EParserError do;
+  end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestStartListeningMultipleStreams;
 var
   LowPort:  Cardinal;
   HighPort: Cardinal;
