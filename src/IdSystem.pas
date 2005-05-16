@@ -16,13 +16,23 @@ interface
   implemented.
 }
 
+function GetFullUserName: WideString;
 function GetTickCount: Cardinal;
 function GetTickDiff(const OldTickCount, NewTickCount : Cardinal): Cardinal;
+function GetUserName: WideString;
+function LocalAddress: String;
 
 implementation
 
 uses
-  Windows;
+  IdStack, IdUDPServer, SysUtils, Windows;
+
+function GetFullUserName: WideString;
+begin
+  // Really, we want to get something like "John Random" rather than "JohnR" or
+  // "JRandom".
+  Result := GetUserName;
+end;
 
 function GetTickCount: Cardinal;
 var
@@ -53,6 +63,39 @@ begin
   end
   else
     Result := High(Cardinal) - OldTickCount + NewTickCount;
+end;
+
+function GetUserName: WideString;
+var
+  Buf: PWideChar;
+  Len: Cardinal;
+begin
+  Len := 1000;
+  GetMem(Buf, Len);
+  try
+    if not GetUserNameW(Buf, Len) then
+      raise Exception.Create(SysErrorMessage(GetLastError));
+
+    Result := Buf;
+  finally
+    FreeMem(Buf);
+  end;
+end;
+
+function LocalAddress: String;
+var
+  UnusedServer: TIdUDPServer;
+begin
+  if not Assigned(GStack) then begin
+    UnusedServer := TIdUDPServer.Create(nil);
+    try
+      Result := GStack.LocalAddress;
+    finally
+      UnusedServer.Free;
+    end;
+  end
+  else
+    Result := GStack.LocalAddress;
 end;
 
 end.
