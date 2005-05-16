@@ -252,6 +252,7 @@ type
     Server:         TIdUdpServer;
 
     function  ARecords: String;
+    procedure CheckAutoContact(UserAgent: TIdSipAbstractUserAgent);
     procedure NoteReceiptOfPacket(Sender: TObject;
                                   AData: TStream;
                                   ABinding: TIdSocketHandle);
@@ -268,6 +269,7 @@ type
     procedure TestCreateUserAgentRegisterDirectiveBeforeTransport;
     procedure TestCreateUserAgentReturnsSomething;
     procedure TestCreateUserAgentWithAutoTransport;
+    procedure TestCreateUserAgentWithAutoContact;
     procedure TestCreateUserAgentWithContact;
     procedure TestCreateUserAgentWithFrom;
     procedure TestCreateUserAgentWithLocator;
@@ -970,7 +972,7 @@ implementation
 
 uses
   IdException, IdSipAuthentication, IdSipMockLocator, IdSipDns, IdSipLocator,
-  IdSipMockTransport, SysUtils;
+  IdSipMockTransport, IdSystem, IdUnicode, SysUtils;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -1030,11 +1032,14 @@ const
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipCore unit tests');
+{
   Result.AddTest(TestTIdSipAbstractCore.Suite);
   Result.AddTest(TestTIdSipRegistrations.Suite);
   Result.AddTest(TestTIdSipActions.Suite);
   Result.AddTest(TestTIdSipUserAgent.Suite);
+}
   Result.AddTest(TestTIdSipStackConfigurator.Suite);
+{
   Result.AddTest(TestLocation.Suite);
   Result.AddTest(TestTIdSipInboundInvite.Suite);
   Result.AddTest(TestTIdSipOutboundInvite.Suite);
@@ -1062,6 +1067,7 @@ begin
   Result.AddTest(TestTIdSipUserAgentAuthenticationChallengeMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentDroppedUnmatchedMessageMethod.Suite);
   Result.AddTest(TestTIdSipUserAgentInboundCallMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -3939,6 +3945,19 @@ begin
   + #$10#$00#$04#$7F#$00#$00#$01;
 end;
 
+procedure TestTIdSipStackConfigurator.CheckAutoContact(UserAgent: TIdSipAbstractUserAgent);
+begin
+  CheckEquals(UTF16LEToUTF8(GetFullUserName),
+              UserAgent.Contact.DisplayName,
+              'display-name');
+  CheckEquals(UTF16LEToUTF8(GetUserName),
+              UserAgent.Contact.Address.Username,
+              'user-info');
+  CheckEquals(LocalAddress,
+              UserAgent.Contact.Address.Host,
+              'host-info');
+end;
+
 procedure TestTIdSipStackConfigurator.NoteReceiptOfPacket(Sender: TObject;
                                                           AData: TStream;
                                                           ABinding: TIdSocketHandle);
@@ -4059,6 +4078,20 @@ begin
     CheckEquals(LocalAddress,
                 UA.Dispatcher.Transports[0].Address,
                 'Local NIC (or loopback) address not used');
+  finally
+    UA.Free;
+  end;
+end;
+
+procedure TestTIdSipStackConfigurator.TestCreateUserAgentWithAutoContact;
+var
+  UA: TIdSipUserAgent;
+begin
+  Self.Configuration.Add('Contact: AUTO');
+
+  UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
+  try
+    Self.CheckAutoContact(UA);
   finally
     UA.Free;
   end;
@@ -4236,10 +4269,7 @@ begin
 
   UA := Self.Conf.CreateUserAgent(Self.Configuration, Self.Timer);
   try
-    Check(Assigned(UA.From),
-          'UserAgent has no Contact at all');
-    CheckNotEquals('', UA.Contact.Address.AsString,
-                   'No Contact address');
+    Self.CheckAutoContact(UA);
   finally
     UA.Free;
   end;

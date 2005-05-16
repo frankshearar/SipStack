@@ -608,6 +608,7 @@ type
     function  RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
     procedure TerminateAllCalls;
     function  UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
+    function  UsingDefaultContact: Boolean;
 
     property AutoReRegister: Boolean             read fAutoReRegister write fAutoReRegister;
     property Contact:        TIdSipContactHeader read GetContact write SetContact;
@@ -697,6 +698,7 @@ type
   private
     procedure AddAuthentication(UserAgent: TIdSipAbstractUserAgent;
                                 const AuthenticationLine: String);
+    procedure AddAutoContact(UserAgent: TIdSipAbstractUserAgent);
     procedure AddContact(UserAgent: TIdSipAbstractUserAgent;
                       const ContactLine: String);
     procedure AddFrom(UserAgent: TIdSipAbstractUserAgent;
@@ -1582,13 +1584,11 @@ const
   FiveMinutes                = 5*OneMinute;
   TwentyMinutes              = 20*OneMinute;
 
-function LocalAddress: String;
-
 implementation
 
 uses
   IdHashMessageDigest, IdSimpleParser, IdSipConsts, IdSipIndyLocator,
-  IdSipMockLocator, IdRandom, IdSdp, IdStack, Math, SysUtils, IdUDPServer;
+  IdSipMockLocator, IdRandom, IdSdp, IdSystem, IdUnicode, Math, SysUtils;
 
 const
   BusyHere                       = 'Incoming call rejected - busy here';
@@ -1611,26 +1611,6 @@ const
   RedirectWithNoSuccess          = 'Call redirected but no target answered';
   RemoteCancel                   = 'Remote end cancelled call';
   RemoteHangUp                   = 'Remote end hung up';
-
-//******************************************************************************
-//* Unit public procedures & functions                                         *
-//******************************************************************************
-
-function LocalAddress: String;
-var
-  UnusedServer: TIdUDPServer;
-begin
-  if not Assigned(GStack) then begin
-    UnusedServer := TIdUDPServer.Create(nil);
-    try
-      Result := GStack.LocalAddress;
-    finally
-      UnusedServer.Free;
-    end;
-  end
-  else
-    Result := GStack.LocalAddress;
-end;
 
 //******************************************************************************
 //* TIdSipActionClosure                                                        *
@@ -2998,6 +2978,11 @@ begin
   Result.Registrar := Registrar;
 end;
 
+function TIdSipAbstractUserAgent.UsingDefaultContact: Boolean;
+begin
+  Result := Pos(Self.Contact.Address.Uri, Self.DefaultFrom) > 0;
+end;
+
 procedure TIdSipAbstractUserAgent.ScheduleEvent(BlockType: TIdSipActionClosureClass;
                                                 WaitTime: Cardinal;
                                                 Copy: TIdSipMessage);
@@ -3773,6 +3758,13 @@ begin
     UserAgent.Authenticator := TIdSipMockAuthenticator.Create
 end;
 
+procedure TIdSipStackConfigurator.AddAutoContact(UserAgent: TIdSipAbstractUserAgent);
+begin
+  UserAgent.Contact.DisplayName      := UTF16LEToUTF8(GetFullUserName);
+  UserAgent.Contact.Address.Username := UTF16LEToUTF8(GetUserName);
+  UserAgent.Contact.Address.Host     := LocalAddress;
+end;
+
 procedure TIdSipStackConfigurator.AddContact(UserAgent: TIdSipAbstractUserAgent;
                                              const ContactLine: String);
 var
@@ -3781,10 +3773,14 @@ begin
   Line := ContactLine;
   Self.EatDirective(Line);
 
-  UserAgent.Contact.Value := Line;
+  if (Trim(Line) = AutoKeyword) then
+    Self.AddAutoContact(UserAgent)
+  else begin
+    UserAgent.Contact.Value := Line;
 
-  if UserAgent.Contact.IsMalformed then
-    raise EParserError.Create(Format(MalformedConfigurationLine, [ContactLine]));
+    if UserAgent.Contact.IsMalformed then
+      raise EParserError.Create(Format(MalformedConfigurationLine, [ContactLine]));
+  end;    
 end;
 
 procedure TIdSipStackConfigurator.AddFrom(UserAgent: TIdSipAbstractUserAgent;
@@ -3909,6 +3905,9 @@ begin
 
   if not Assigned(UserAgent.Locator) then
     UserAgent.Locator := TIdSipIndyLocator.Create;
+
+  if UserAgent.UsingDefaultContact then
+    Self.AddAutoContact(UserAgent);
 end;
 
 procedure TIdSipStackConfigurator.ParseFile(UserAgent: TIdSipUserAgent;
