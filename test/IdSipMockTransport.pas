@@ -550,6 +550,9 @@ initialization
   GAllTransports := TObjectList.Create(false);
   GTransportType := UdpTransport;
 finalization
-  GLog.Free;
-  GAllTransports.Free;
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GLog.Free;
+//  GAllTransports.Free;
 end.

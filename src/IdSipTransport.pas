@@ -1835,5 +1835,8 @@ end;
 initialization
   GTransportTypes := TStringList.Create;
 finalization
-  GTransportTypes.Free;
+// These objects are purely memory-based, so it's safe not to free them here.
+// Still, perhaps we need to review this methodology. How else do we get
+// something like class variables?
+//  GTransportTypes.Free;
 end.
