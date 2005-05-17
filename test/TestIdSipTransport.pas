@@ -886,34 +886,27 @@ end;
 constructor TTransportTestTimerQueue.Create(TransportType: TIdSipTransportClass;
                                             TestCase: TestTIdSipTransport;
                                             FinishedEvent: TEvent);
-var
-  I: Integer;
 begin
   inherited Create(false);
 
-  try
-    Self.FinishedEvent := FinishedEvent;
+  Self.FinishedEvent := FinishedEvent;
 
-    Self.fHighPortTransport := TransportType.Create;
-    Self.ConfigureTransport(Self.HighPortTransport,
-                            'localhost',
-                            '127.0.0.1',
-                            TestCase.DefaultPort + 10000,
-                            TestCase);
+  Self.fHighPortTransport := TransportType.Create;
+  Self.ConfigureTransport(Self.HighPortTransport,
+                          'localhost',
+                          '127.0.0.1',
+                          TestCase.DefaultPort + 10000,
+                          TestCase);
 
-    Self.fLowPortTransport  := TransportType.Create;
-    Self.ConfigureTransport(Self.LowPortTransport,
-                            'localhost',
-                            '127.0.0.1',
-                            TestCase.DefaultPort,
-                            TestCase);
+  Self.fLowPortTransport  := TransportType.Create;
+  Self.ConfigureTransport(Self.LowPortTransport,
+                          'localhost',
+                          '127.0.0.1',
+                          TestCase.DefaultPort,
+                          TestCase);
 
-    Self.HighPortTransport.Start;
-    Self.LowPortTransport.Start;
-  except
-    on E: Exception do
-      I := 0;
-  end;
+  Self.HighPortTransport.Start;
+  Self.LowPortTransport.Start;
 end;
 
 destructor TTransportTestTimerQueue.Destroy;
