@@ -118,11 +118,13 @@ type
                                          const Msg: String);
     procedure CheckCreateRequest(Dest: TIdSipToHeader;
                                  Request: TIdSipRequest);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse); overload;
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
-                                        var TryAgain: Boolean);
+                                        var TryAgain: Boolean); overload;
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
                                         Message: TIdSipMessage;
@@ -295,6 +297,8 @@ type
     FailReason:   String;
 
     function  CreateAction: TIdSipAction; virtual;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
     procedure ReceiveBadExtensionResponse;
@@ -326,6 +330,8 @@ type
     TransportParam: String;
 
     function  CreateAction: TIdSipOutboundInitialInvite;
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
                         const Reason: String);
@@ -1739,6 +1745,12 @@ begin
   CheckEquals(UdpTransport,
               Request.LastHop.Transport,
               'UDP should be the default transport');
+end;
+
+procedure TestTIdSipUserAgent.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                        Response: TIdSipResponse);
+begin
+  raise Exception.Create('implement TestTIdSipUserAgent.OnAuthenticationChallenge');
 end;
 
 procedure TestTIdSipUserAgent.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
@@ -4387,6 +4399,12 @@ begin
                        + ': Don''t call CreateAction on an inbound Action');
 end;
 
+procedure TestTIdSipAction.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                     Response: TIdSipResponse);
+begin
+  raise Exception.Create('TestTIdSipAction.OnAuthenticationChallenge');
+end;
+
 procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
                                             const Reason: String);
 begin
@@ -4534,6 +4552,11 @@ begin
   Result.Offer       := Self.InviteOffer;
   Result.AddListener(Self);
   Result.Send;
+end;
+
+procedure TestLocation.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                 Response: TIdSipResponse);
+begin
 end;
 
 procedure TestLocation.OnFailure(InviteAgent: TIdSipOutboundInvite;

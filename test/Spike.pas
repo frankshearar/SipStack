@@ -126,11 +126,13 @@ type
     procedure CreateUi;
     function  LocalSDP(const Address: String): String;
     procedure LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse); overload;
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
-                                        var TryAgain: Boolean);
+                                        var TryAgain: Boolean); overload;
     procedure OnChanged(Observed: TObject);
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
                                         Message: TIdSipMessage;
@@ -382,6 +384,12 @@ begin
   finally
     Self.Lock.Release;
   end;
+end;
+
+procedure TrnidSpike.OnAuthenticationChallenge(Action: TIdSipAction;
+                                               Response: TIdSipResponse);
+begin
+  raise Exception.Create('TrnidSpike.OnAuthenticationChallenge');
 end;
 
 procedure TrnidSpike.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;

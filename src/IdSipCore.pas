@@ -80,6 +80,8 @@ type
   //
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
   end;
@@ -1210,6 +1212,8 @@ type
                                          const MimeType: String);
     procedure NotifyOfFailure(Response: TIdSipResponse); overload; override;
     procedure NotifyOfModifySession(Modify: TIdSipInboundInvite);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse); virtual;
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog); virtual;
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -6251,6 +6255,12 @@ begin
   finally
     Notification.Free;
   end;
+end;
+
+procedure TIdSipSession.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                  Response: TIdSipResponse);
+begin
+  raise Exception.Create('implement TIdSipSession.OnAuthenticationChallenge');
 end;
 
 procedure TIdSipSession.OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;

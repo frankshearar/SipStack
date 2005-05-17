@@ -83,11 +83,13 @@ type
     procedure NotifyEvent(Action: TIdSipAction;
                           Event: Cardinal;
                           Data: TIdEventData);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse); overload;
     procedure OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;
                                         Challenge: TIdSipResponse;
                                         var Username: String;
                                         var Password: String;
-                                        var TryAgain: Boolean);
+                                        var TryAgain: Boolean); overload;
     procedure OnDroppedUnmatchedMessage(UserAgent: TIdSipAbstractUserAgent;
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
@@ -575,6 +577,12 @@ begin
   finally
     Self.ActionLock.Release;
   end;
+end;
+
+procedure TIdSipStackInterface.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                         Response: TIdSipResponse);
+begin
+  raise Exception.Create('TIdSipStackInterface.OnAuthenticationChallenge');
 end;
 
 procedure TIdSipStackInterface.OnAuthenticationChallenge(UserAgent: TIdSipAbstractUserAgent;

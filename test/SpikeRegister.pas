@@ -41,6 +41,8 @@ type
     UA:          TIdSipUserAgent;
 
     procedure LogMessage(Msg: TIdSipMessage);
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
@@ -153,6 +155,11 @@ begin
   Self.Log.Lines.Add(Msg.AsString);
   Self.Log.Lines.Add('----');
 end;
+
+procedure TrnidSpikeRegister.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                       Response: TIdSipResponse);
+begin
+end;                                                       
 
 procedure TrnidSpikeRegister.OnException(E: Exception;
                                          const Reason: String);

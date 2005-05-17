@@ -111,9 +111,14 @@ type
   TIdSipMockListener = class(TIdInterfacedObject,
                              IIdSipActionListener)
   private
-    fFailWith:      ExceptClass;
-    fNetworkFailed: Boolean;
+    fActionParam:              TIdSipAction;
+    fAuthenticationChallenged: Boolean;
+    fFailWith:                 ExceptClass;
+    fNetworkFailed:            Boolean;
+    fResponseParam:            TIdSipResponse;
 
+    procedure OnAuthenticationChallenge(Action: TIdSipAction;
+                                        Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
   protected
@@ -121,9 +126,11 @@ type
   public
     constructor Create; virtual;
 
-    property FailWith:      ExceptClass read fFailWith write fFailWith;
-    property NetworkFailed: Boolean     read fNetworkFailed;
-    property ReasonParam:   String      read fReasonParam;
+    property ActionParam:   TIdSipAction   read fActionParam;
+    property FailWith:      ExceptClass    read fFailWith write fFailWith;
+    property NetworkFailed: Boolean        read fNetworkFailed;
+    property ReasonParam:   String         read fReasonParam;
+    property ResponseParam: TIdSipResponse read fResponseParam;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -1108,17 +1115,28 @@ constructor TIdSipMockListener.Create;
 begin
   inherited Create;
 
-  Self.FailWith       := nil;
-  Self.fNetworkFailed := false;
-  Self.fReasonParam   := '';
+  Self.FailWith                  := nil;
+  Self.fAuthenticationChallenged := false;
+  Self.fNetworkFailed            := false;
+  Self.fReasonParam              := '';
 end;
 
 //* TIdSipMockListener Private methods *****************************************
 
+procedure TIdSipMockListener.OnAuthenticationChallenge(Action: TIdSipAction;
+                                                       Response: TIdSipResponse);
+begin
+  Self.fActionParam              := Action;
+  Self.fAuthenticationChallenged := true;
+  Self.fResponseParam            := Response;
+end;
+
 procedure TIdSipMockListener.OnNetworkFailure(Action: TIdSipAction;
                                               const Reason: String);
 begin
+  Self.fActionParam   := Action;
   Self.fNetworkFailed := true;
+  Self.fReasonParam   := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
