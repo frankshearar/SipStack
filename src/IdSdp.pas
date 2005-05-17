@@ -276,7 +276,9 @@ type
 
   TIdSdpAttributes = class(TIdSdpList)
   private
-    function GetItems(Index: Integer): TIdSdpAttribute;
+    function  GetDirection: TIdSdpDirection;
+    function  GetItems(Index: Integer): TIdSdpAttribute;
+    procedure SetDirection(Value: TIdSdpDirection);
   protected
     function ItemType: TIdPrintableClass; override;
   public
@@ -284,9 +286,9 @@ type
     function  Add(Att: TIdSdpAttribute): TIdSdpAttribute; overload;
     procedure Add(A: TIdSdpAttributes); overload;
     procedure Add(const NameAndValue: String); overload;
-    function  Direction: TIdSdpDirection;
     function  HasAttribute(Att: TIdSdpAttribute): Boolean;
 
+    property Direction:             TIdSdpDirection read GetDirection write SetDirection;
     property Items[Index: Integer]: TIdSdpAttribute read GetItems; default;
   end;
 
@@ -594,17 +596,21 @@ type
   private
     DataListeners:      TIdNotificationList;
     fLocalDescription:  TIdSdpMediaDescription;
+    fOnHold:            Boolean;
     fRemoteDescription: TIdSdpMediaDescription;
     fProfile:           TIdRTPProfile;
+    PreHoldDirection:   TIdSdpDirection;
     RTPListeners:       TIdNotificationList;
     Server:             TIdRTPServer;
 
+    function  GetDirection: TIdSdpDirection;
     procedure OnNewData(Data: TIdRTPPayload;
                         Binding: TIdConnection);
     procedure OnRTCP(Packet: TIdRTCPPacket;
                      Binding: TIdConnection);
     procedure OnRTP(Packet: TIdRTPPacket;
                     Binding: TIdConnection);
+    procedure SetDirection(Value: TIdSdpDirection);
     procedure SetLocalDescription(const Value: TIdSdpMediaDescription);
     procedure SetRemoteDescription(const Value: TIdSdpMediaDescription);
   public
@@ -615,13 +621,17 @@ type
     procedure AddRTPListener(const Listener: IIdRTPListener);
     function  IsReceiver: Boolean;
     function  IsSender: Boolean;
+    procedure PutOnHold;
     procedure RemoveDataListener(const Listener: IIdRTPDataListener);
     procedure RemoveRTPListener(const Listener: IIdRTPListener);
     procedure SendData(Payload: TIdRTPPayload);
     procedure StartListening;
     procedure StopListening;
+    procedure TakeOffHold;
 
+    property Direction:         TIdSdpDirection        read GetDirection write SetDirection;
     property LocalDescription:  TIdSdpMediaDescription read fLocalDescription write SetLocalDescription;
+    property OnHold:            Boolean                read fOnHold;
     property Profile:           TIdRTPProfile          read fProfile;
     property RemoteDescription: TIdSdpMediaDescription read fRemoteDescription write SetRemoteDescription;
   end;
@@ -647,10 +657,12 @@ type
     destructor  Destroy; override;
 
     function  MimeType: String;
+    procedure PutOnHold;
     function  StartListening(LocalSessionDesc: String): String;
     procedure SetRemoteDescription(RemoteSessionDesc: String);
     procedure StopListening;
     function  StreamCount: Integer;
+    procedure TakeOffHold;
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
@@ -1710,25 +1722,6 @@ begin
   end;
 end;
 
-function TIdSdpAttributes.Direction: TIdSdpDirection;
-var
-  Found: Boolean;
-  I: Integer;
-begin
-  Result := sdSendRecv;
-
-  Found := false;
-  I     := 0;
-  while (I < Self.Count) and not Found do begin
-    if not TIdSdpParser.IsDirection(Self[I].Name) then
-      Inc(I)
-    else begin
-      Result := StrToDirection(Self[I].Name);
-      Found := true;
-    end;
-  end;
-end;
-
 function TIdSdpAttributes.HasAttribute(Att: TIdSdpAttribute): Boolean;
 var
   I: Integer;
@@ -1751,9 +1744,52 @@ end;
 
 //* TIdSdpAttributes Private methods *******************************************
 
+function TIdSdpAttributes.GetDirection: TIdSdpDirection;
+var
+  Found: Boolean;
+  I: Integer;
+begin
+  Result := sdSendRecv;
+
+  Found := false;
+  I     := 0;
+  while (I < Self.Count) and not Found do begin
+    if not TIdSdpParser.IsDirection(Self[I].Name) then
+      Inc(I)
+    else begin
+      Result := StrToDirection(Self[I].Name);
+      Found := true;
+    end;
+  end;
+end;
+
 function TIdSdpAttributes.GetItems(Index: Integer): TIdSdpAttribute;
 begin
   Result := Self.List[Index] as TIdSdpAttribute;
+end;
+
+procedure TIdSdpAttributes.SetDirection(Value: TIdSdpDirection);
+var
+  Direction: TIdSdpAttribute;
+  Found: Boolean;
+  I: Integer;
+begin
+  Found := false;
+  I     := 0;
+  while (I < Self.Count) and not Found do begin
+    if not TIdSdpParser.IsDirection(Self[I].Name) then
+      Inc(I)
+    else
+      Found := true;
+  end;
+
+  if Found then begin
+    Self[I].Name := DirectionToStr(Value)
+  end
+  else begin
+    Direction := Self.Add;
+    Direction.Name := DirectionToStr(Value);
+  end;
 end;
 
 //******************************************************************************
@@ -3780,6 +3816,7 @@ constructor TIdSDPMediaStream.Create(Profile: TIdRTPProfile);
 begin
   inherited Create;
 
+  Self.fOnHold  := false;
   Self.fProfile := Profile;
 
   Self.fLocalDescription  := TIdSdpMediaDescription.Create;
@@ -3825,6 +3862,18 @@ begin
   Result := Self.LocalDescription.Attributes.Direction in [sdSendOnly, sdSendRecv];
 end;
 
+procedure TIdSDPMediaStream.PutOnHold;
+begin
+  if not Self.OnHold then begin
+    Self.PreHoldDirection := Self.Direction;
+    case Self.Direction of
+      sdRecvOnly: Self.Direction := sdInactive;
+      sdSendRecv: Self.Direction := sdSendOnly;
+    end;
+    Self.fOnHold := true;
+  end;
+end;
+
 procedure TIdSDPMediaStream.RemoveDataListener(const Listener: IIdRTPDataListener);
 begin
   Self.DataListeners.RemoveListener(Listener);
@@ -3837,7 +3886,7 @@ end;
 
 procedure TIdSDPMediaStream.SendData(Payload: TIdRTPPayload);
 begin
-  if Self.IsSender then
+  if Self.IsSender and not Self.OnHold then
     Self.Server.Session.SendData(Payload);
 end;
 
@@ -3854,7 +3903,20 @@ begin
   end;
 end;
 
+procedure TIdSDPMediaStream.TakeOffHold;
+begin
+  if Self.OnHold then begin
+    Self.Direction := Self.PreHoldDirection;
+    Self.fOnHold   := false;
+  end;
+end;
+
 //* TIdSDPMediaStream Private methods ******************************************
+
+function TIdSDPMediaStream.GetDirection: TIdSdpDirection;
+begin
+  Result := Self.LocalDescription.Attributes.Direction;
+end;
 
 procedure TIdSDPMediaStream.OnNewData(Data: TIdRTPPayload;
                                       Binding: TIdConnection);
@@ -3904,6 +3966,11 @@ begin
   finally
     Notification.Free;
   end;
+end;
+
+procedure TIdSDPMediaStream.SetDirection(Value: TIdSdpDirection);
+begin
+  Self.LocalDescription.Attributes.Direction := Value;
 end;
 
 procedure TIdSDPMediaStream.SetLocalDescription(const Value: TIdSdpMediaDescription);
@@ -3980,6 +4047,14 @@ end;
 function TIdSDPMultimediaSession.MimeType: String;
 begin
   Result := SdpMimeType;
+end;
+
+procedure TIdSDPMultimediaSession.PutOnHold;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.StreamCount - 1 do
+    Self.Streams[I].PutOnHold;
 end;
 
 function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String): String;
@@ -4070,6 +4145,14 @@ begin
   finally
     Self.StreamLock.Release;
   end;
+end;
+
+procedure TIdSDPMultimediaSession.TakeOffHold;
+var
+  I: Integer;
+begin
+  for I := 0 to Self.StreamCount - 1 do
+    Self.Streams[I].TakeOffHold;
 end;
 
 function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;

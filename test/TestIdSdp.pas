@@ -184,6 +184,8 @@ type
     procedure TestEquals;
     procedure TestHasAttribute;
     procedure TestPrintOn;
+    procedure TestSetDirection;
+    procedure TestInitialSetDirection;
   end;
 
   TestTIdSdpRTPMapAttributes = class(TTestCase)
@@ -518,12 +520,16 @@ type
     procedure TestAddRTPListener;
     procedure TestIsReceiver;
     procedure TestIsSender;
+    procedure TestPutOnHoldRecvOnly;
+    procedure TestPutOnHoldSendRecv;
+    procedure TestPutOnHoldWhileOnHold;
     procedure TestReceiveDataWhenNotReceiver;
     procedure TestRTPListenersGetRTCP;
     procedure TestRTPListenersGetRTP;
     procedure TestSendData;
     procedure TestSendDataWhenNotSender;
     procedure TestStopListeningStopsListening;
+    procedure TestTakeOffHold;
   end;
 
   TestTIdSDPMultimediaSession = class(TTestCase)
@@ -547,6 +553,7 @@ type
     procedure TestHighestAllowedPort;
     procedure TestLowestAllowedPort;
     procedure TestMimeType;
+    procedure TestPutOnHold;
     procedure TestSetRemoteDescription;
     procedure TestSetRemoteDescriptionMalformedSdp;
     procedure TestStartListeningSingleStream;
@@ -556,6 +563,7 @@ type
     procedure TestStartListeningRegistersRemoteRtpMaps;
     procedure TestStartListeningTriesConsecutivePorts;
     procedure TestStopListening;
+    procedure TestTakeOffHold;
   end;
 
 const
@@ -2023,6 +2031,27 @@ begin
   finally
     S.Free;
   end;
+end;
+
+procedure TestTIdSdpAttributes.TestSetDirection;
+begin
+  Self.A.Direction := sdRecvOnly;
+  Self.A.Direction := sdInactive;
+  CheckEquals(DirectionToStr(sdInactive),
+              DirectionToStr(Self.A.Direction),
+              'Direction attribute not changed');
+end;
+
+procedure TestTIdSdpAttributes.TestInitialSetDirection;
+begin
+  CheckEquals(0, Self.A.Count, 'New Attributes not empty');
+
+  Self.A.Direction := sdInactive;
+  CheckEquals(1, Self.A.Count, 'Direction attribute not added');
+  
+  CheckEquals(DirectionToStr(sdInactive),
+              DirectionToStr(Self.A.Direction),
+              'Direction attribute incorrect');
 end;
 
 //******************************************************************************
@@ -6323,6 +6352,50 @@ begin
         'Sender when inactive');
 end;
 
+procedure TestTIdSDPMediaStream.TestPutOnHoldRecvOnly;
+begin
+  Check(not Self.Media.OnHold,
+        'OnHold set before PutOnHold');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'a=recvonly');
+  Self.Media.PutOnHold;
+
+  CheckEquals(DirectionToStr(sdInactive),
+              DirectionToStr(Self.Media.Direction),
+              'Stream not put on hold');
+  Check(Self.Media.OnHold,
+        'OnHold not set');
+end;
+
+procedure TestTIdSDPMediaStream.TestPutOnHoldSendRecv;
+begin
+  Check(not Self.Media.OnHold,
+        'OnHold set before PutOnHold');
+
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'a=sendrecv');
+  Self.Media.PutOnHold;
+
+  CheckEquals(DirectionToStr(sdSendOnly),
+              DirectionToStr(Self.Media.Direction),
+              'Stream not put on hold');
+  Check(Self.Media.OnHold,
+        'OnHold not set');
+end;
+
+procedure TestTIdSDPMediaStream.TestPutOnHoldWhileOnHold;
+begin
+  Self.Media.PutOnHold;
+  Self.Media.PutOnHold;
+  Check(Self.Media.OnHold,
+        'OnHold not set');
+end;
+
 procedure TestTIdSDPMediaStream.TestReceiveDataWhenNotReceiver;
 begin
   Self.Media.AddDataListener(Self);
@@ -6428,6 +6501,25 @@ begin
   Self.WaitForSignaled(Self.RTCPEvent, 'Server didn''t send any RTCP');
   Check(Self.SentBye, 'Server didn''t send an RTCP BYE');
 }
+end;
+
+procedure TestTIdSDPMediaStream.TestTakeOffHold;
+var
+  PreHoldDirection: TIdSdpDirection;
+begin
+  PreHoldDirection := sdRecvOnly;
+  Self.SetLocalMediaDesc(Self.Media,
+                         'm=text 8000 RTP/AVP 96'#13#10
+                       + 'a=rtpmap:96 t140/1000'#13#10
+                       + 'a=' + DirectionToStr(PreHoldDirection));
+  Self.Media.PutOnHold;
+  Self.Media.TakeOffHold;
+
+  CheckEquals(DirectionToStr(PreHoldDirection),
+              DirectionToStr(Self.Media.Direction),
+              'Stream not taken off hold');
+  Check(not Self.Media.OnHold,
+        'OnHold not unset');
 end;
 
 //******************************************************************************
@@ -6571,6 +6663,20 @@ end;
 procedure TestTIdSDPMultimediaSession.TestMimeType;
 begin
   CheckEquals(SdpMimeType, Self.MS.MimeType, 'SDP MIME type');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestPutOnHold;
+begin
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
+  Self.MS.Streams[0].Direction := sdRecvOnly;
+  Self.MS.Streams[1].Direction := sdSendRecv;
+
+  Self.MS.PutOnHold;
+
+  Check(Self.MS.Streams[0].OnHold,
+        'Stream #0 not put on hold');
+  Check(Self.MS.Streams[1].OnHold,
+        'Stream #1 not put on hold');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestSetRemoteDescription;
@@ -6770,6 +6876,21 @@ begin
                      HighPort,
                      'Server still listening on '
                    + GStack.LocalAddress + ':' + IntToStr(HighPort));
+end;
+
+procedure TestTIdSDPMultimediaSession.TestTakeOffHold;
+begin
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
+  Self.MS.Streams[0].Direction := sdRecvOnly;
+  Self.MS.Streams[1].Direction := sdSendRecv;
+
+  Self.MS.PutOnHold;
+  Self.MS.TakeOffHold;
+
+  Check(not Self.MS.Streams[0].OnHold,
+        'Stream #0 not taken off hold');
+  Check(not Self.MS.Streams[1].OnHold,
+        'Stream #1 not taken off hold');
 end;
 
 initialization
