@@ -47,7 +47,7 @@ type
 implementation
 
 uses
-  IdSipTransport;
+  IdSipTransport, IdSystem;
 
 {$R *.dfm}
 
