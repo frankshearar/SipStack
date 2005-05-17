@@ -81,7 +81,7 @@ type
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
-                                        Response: TIdSipResponse);
+                                        Challenge: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
                                const Reason: String);
   end;
@@ -789,6 +789,10 @@ type
   // Owned actions are actions that other actions control. For example, Sessions
   // are Actions. Sessions use Invites (among other things), and Sessions
   // control those Invites. Thus, the Invites are Owned.
+  //
+  // Note that both in- and out-bound actions subclass Action. Thus this class
+  // contains methods that are sometimes inapplicable to a particular action.
+  TIdSipActionStatus = (asSuccess, asFailure, asInterim);
   TIdSipAction = class(TIdInterfacedObject)
   private
     fInitialRequest: TIdSipRequest;
@@ -815,19 +819,19 @@ type
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; virtual;
-    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean; virtual;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
+    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
     procedure ReceiveInvite(Invite: TIdSipRequest); virtual;
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): Boolean; virtual;
+                                UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
     procedure ReceiveOptions(Options: TIdSipRequest); virtual;
     procedure ReceiveOtherRequest(Request: TIdSipRequest); virtual;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; virtual;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; virtual;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; virtual;
     procedure ReceiveRegister(Register: TIdSipRequest); virtual;
-    function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; virtual;
+    function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; virtual;
     procedure SendRequest(Request: TIdSipRequest); virtual;
     procedure SendResponse(Response: TIdSipResponse); virtual;
   public
@@ -957,15 +961,15 @@ type
   protected
     procedure ActionSucceeded(Response: TIdSipResponse); override;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
-    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
+    function  ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
     function  ReceiveOKResponse(Response: TIdSipResponse;
-                                UsingSecureTransport: Boolean): Boolean; override;
+                                UsingSecureTransport: Boolean): TIdSipActionStatus; override;
     function  ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
-    function  ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean; override;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; override;
+    function  ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
     procedure SendRequest(Request: TIdSipRequest); override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); override;
@@ -1123,9 +1127,9 @@ type
                              Bindings: TIdSipContacts): TIdSipRequest; virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); override;
     procedure NotifyOfSuccess(Response: TIdSipResponse); virtual;
-    function  ReceiveFailureResponse(Response: TIdSipResponse): Boolean; override;
+    function  ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus; override;
     function  ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                         UsingSecureTransport: Boolean): Boolean; override;
+                                         UsingSecureTransport: Boolean): TIdSipActionStatus; override;
     procedure RegisterWith(Registrar: TIdSipUri;
                            Bindings: TIdSipContacts); overload;
     procedure RegisterWith(Registrar: TIdSipUri;
@@ -4172,7 +4176,7 @@ end;
 procedure TIdSipAction.ReceiveResponse(Response: TIdSipResponse;
                                        UsingSecureTransport: Boolean);
 var
-  Succeeded: Boolean;
+  Succeeded: TIdSipActionStatus;
 begin
   // Each of the ReceiveXXXResponse functions returns true if we succeeded
   // in our Action, or we could re-issue the request. They only return
@@ -4198,15 +4202,29 @@ begin
     // This should never happen - response status codes lie in the range
     // 100 <= S < 700, so we handle these obviously malformed responses by
     // treating them as failure responses.
-    Succeeded := false;
+    Succeeded := asFailure;
   end;
 
-  if Succeeded then begin
-    if Response.IsOK then
-      Self.ActionSucceeded(Response)
-  end
-  else
-    Self.NotifyOfFailure(Response);
+  case Succeeded of
+    asSuccess: if Response.IsOK then
+      Self.ActionSucceeded(Response);
+    asFailure:
+      Self.NotifyOfFailure(Response);
+  end;
+end;
+
+procedure TIdSipAction.ReissueRequest(Auth: TIdSipAuthorizationHeader);
+var
+  ReAttempt: TIdSipRequest;
+begin
+  ReAttempt := Self.CreateNewAttempt;
+  try
+    ReAttempt.AddHeader(Auth);
+
+    Self.SendRequest(ReAttempt);
+  finally
+    ReAttempt.Free;
+  end;
 end;
 
 procedure TIdSipAction.Send;
@@ -4290,14 +4308,22 @@ begin
   end;
 end;
 
-function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
-  Result := false;
+  case Response.StatusCode of
+    SIPUnauthorized,
+    SIPProxyAuthenticationRequired: begin
+      Self.NotifyOfAuthenticationChallenge(Response);
+      Result := asInterim;
+    end;
+  else
+    Result := asFailure;
+  end;
 end;
 
-function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
-  Result := false;
+  Result := asFailure;
 end;
 
 procedure TIdSipAction.ReceiveInvite(Invite: TIdSipRequest);
@@ -4306,9 +4332,9 @@ begin
 end;
 
 function TIdSipAction.ReceiveOKResponse(Response: TIdSipResponse;
-                                        UsingSecureTransport: Boolean): Boolean;
+                                        UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
-  Result := true;
+  Result := asSuccess;
 end;
 
 procedure TIdSipAction.ReceiveOptions(Options: TIdSipRequest);
@@ -4322,15 +4348,15 @@ begin
 end;
 
 function TIdSipAction.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                 UsingSecureTransport: Boolean): Boolean;
+                                                 UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
-  Result := false;
+  Result := asFailure;
 end;
 
 function TIdSipAction.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                 UsingSecureTransport: Boolean): Boolean;
+                                                 UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
-  Result := false;
+  Result := asFailure;
 end;
 
 procedure TIdSipAction.ReceiveRegister(Register: TIdSipRequest);
@@ -4339,9 +4365,9 @@ begin
   // By default do nothing
 end;
 
-function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipAction.ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
-  Result := false;
+  Result := asFailure;
 end;
 
 procedure TIdSipAction.SendRequest(Request: TIdSipRequest);
@@ -4878,14 +4904,14 @@ begin
   Self.MarkAsTerminated;
 end;
 
-function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipOutboundInvite.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
   Result := inherited ReceiveFailureResponse(Response);
 
   Self.ReceivedFinalResponse := true;
 end;
 
-function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipOutboundInvite.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
   Result := inherited ReceiveGlobalFailureResponse(Response);
 
@@ -4893,12 +4919,12 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveOKResponse(Response: TIdSipResponse;
-                                                UsingSecureTransport: Boolean): Boolean;
+                                                UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
   // REMEMBER: A 2xx response to an INVITE DOES NOT take place in a transaction!
   // A 2xx response immediately terminates a client INVITE transaction so that
   // the ACK can get passed up to the UA (as an unhandled request).
-  Result := false;
+  Result := asFailure;
 
   if Self.Cancelling and Self.CancelRequest.Match(Response) then begin
     // We received a 2xx for the CANCEL. Do nothing.
@@ -4917,7 +4943,7 @@ begin
       Self.SendBye(Response, UsingSecureTransport);
     end
     else begin
-      Result := true;
+      Result := asSuccess;
       if not Self.DialogEstablished then begin
           Self.NotifyOfDialogEstablished(Response, UsingSecureTransport);
 
@@ -4933,9 +4959,9 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveProvisionalResponse(Response: TIdSipResponse;
-                                                         UsingSecureTransport: Boolean): Boolean;
+                                                         UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
-  Result := true;
+  Result := asSuccess;
 
   Self.HasReceivedProvisionalResponse := true;
 
@@ -4949,7 +4975,7 @@ begin
 end;
 
 function TIdSipOutboundInvite.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                         UsingSecureTransport: Boolean): Boolean;
+                                                         UsingSecureTransport: Boolean): TIdSipActionStatus;
 begin
   Result := inherited ReceiveRedirectionResponse(Response, UsingSecureTransport);
 
@@ -4958,7 +4984,7 @@ begin
   Self.NotifyOfRedirect(Response);
 end;
 
-function TIdSipOutboundInvite.ReceiveServerFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipOutboundInvite.ReceiveServerFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
   Result := inherited ReceiveServerFailureResponse(Response);
 
@@ -5774,43 +5800,44 @@ begin
   Self.Terminate;
 end;
 
-function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): Boolean;
+function TIdSipOutboundRegistration.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
-  Result := not inherited ReceiveFailureResponse(Response);
-  
-  if Result then begin
+  Result := inherited ReceiveFailureResponse(Response);
+
+  if (Result = asFailure) then begin
     case Response.StatusCode of
       SIPIntervalTooBrief: begin
-        Self.ReissueRequest(Self.InitialRequest.RequestUri,
-                            Response.FirstMinExpires.NumericValue);
-        Result := true;
+        Self.ReissueRequestWithLongerExpiry(Self.InitialRequest.RequestUri,
+                                            Response.FirstMinExpires.NumericValue);
+        Result := asSuccess;
       end;
 
       SIPBadExtension: begin
-        Result := Self.InitialRequest.HasHeader(RequireHeader);
-        if Result then
+        if Self.InitialRequest.HasHeader(RequireHeader) then begin
           Self.RetryWithoutExtensions(Self.InitialRequest.RequestUri,
                                       Response);
+          Result := asSuccess;
+        end;
       end;
     else
-      Result := false;
+      Result := asFailure;
     end;
   end;
 end;
 
 function TIdSipOutboundRegistration.ReceiveRedirectionResponse(Response: TIdSipResponse;
-                                                               UsingSecureTransport: Boolean): Boolean;
+                                                               UsingSecureTransport: Boolean): TIdSipActionStatus;
 var
   NewAttempt: TIdSipOutboundRegister;
 begin
-  Result := false;
+  Result := asFailure;
 
   if Response.HasHeader(ContactHeaderFull) then begin
     NewAttempt := Self.UA.RegisterWith(Response.FirstContact.Address);
     NewAttempt.AddListeners(Self.Listeners);
     NewAttempt.Send;
 
-    Result := true;
+    Result := asSuccess;
   end;
 end;
 
