@@ -1115,8 +1115,8 @@ type
     fBindings:  TIdSipContacts;
     fRegistrar: TIdSipUri;
 
-    procedure ReissueRequest(Registrar: TIdSipUri;
-                             MinimumExpiry: Cardinal);
+    procedure ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
+                                             MinimumExpiry: Cardinal);
     procedure RetryWithoutExtensions(Registrar: TIdSipUri;
                                      Response: TIdSipResponse);
     procedure SetBindings(Value: TIdSipContacts);
@@ -4213,20 +4213,6 @@ begin
   end;
 end;
 
-procedure TIdSipAction.ReissueRequest(Auth: TIdSipAuthorizationHeader);
-var
-  ReAttempt: TIdSipRequest;
-begin
-  ReAttempt := Self.CreateNewAttempt;
-  try
-    ReAttempt.AddHeader(Auth);
-
-    Self.SendRequest(ReAttempt);
-  finally
-    ReAttempt.Free;
-  end;
-end;
-
 procedure TIdSipAction.Send;
 begin
   if Self.SentRequest then
@@ -4310,6 +4296,8 @@ end;
 
 function TIdSipAction.ReceiveFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
 begin
+  Result := asFailure;
+{
   case Response.StatusCode of
     SIPUnauthorized,
     SIPProxyAuthenticationRequired: begin
@@ -4319,6 +4307,7 @@ begin
   else
     Result := asFailure;
   end;
+}
 end;
 
 function TIdSipAction.ReceiveGlobalFailureResponse(Response: TIdSipResponse): TIdSipActionStatus;
@@ -5902,8 +5891,8 @@ end;
 
 //* TIdSipOutboundRegistration Private methods *********************************
 
-procedure TIdSipOutboundRegistration.ReissueRequest(Registrar: TIdSipUri;
-                                                    MinimumExpiry: Cardinal);
+procedure TIdSipOutboundRegistration.ReissueRequestWithLongerExpiry(Registrar: TIdSipUri;
+                                                                    MinimumExpiry: Cardinal);
 var
   Bindings: TIdSipContacts;
   OriginalBindings: TIdSipContacts;
