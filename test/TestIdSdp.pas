@@ -623,10 +623,10 @@ procedure TestFunctions.TestDirectionToStr;
 var
   D: TIdSdpDirection;
 begin
-  CheckEquals('inactive', DIrectionToStr(sdInactive), 'sdInactive');
-  CheckEquals('recvonly', DIrectionToStr(sdRecvOnly), 'sdRecvOnly');
-  CheckEquals('sendonly', DIrectionToStr(sdSendOnly), 'sdSendOnly');
-  CheckEquals('sendrecv', DIrectionToStr(sdSendRecv), 'sdSendRecv');
+  CheckEquals('inactive', DirectionToStr(sdInactive), 'sdInactive');
+  CheckEquals('recvonly', DirectionToStr(sdRecvOnly), 'sdRecvOnly');
+  CheckEquals('sendonly', DirectionToStr(sdSendOnly), 'sdSendOnly');
+  CheckEquals('sendrecv', DirectionToStr(sdSendRecv), 'sdSendRecv');
 
   // To check that ALL TIdSdpDirections can be converted
   for D := Low(TIdSdpDirection) to High(TIdSdpDirection) do
