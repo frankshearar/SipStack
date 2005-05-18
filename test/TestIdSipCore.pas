@@ -449,6 +449,8 @@ type
   end;
 
   TestTIdSipOutboundRedirectedInvite = class(TestTIdSipOutboundInvite)
+  private
+    function CreateInvite: TIdSipOutboundRedirectedInvite;
   protected
     function CreateAction: TIdSipAction; override;
   published
@@ -458,6 +460,8 @@ type
   TestTIdSipOutboundReInvite = class(TestTIdSipOutboundInvite)
   private
     Dialog: TIdSipDialog;
+
+    function CreateInvite: TIdSipOutboundReInvite;
   protected
     function CreateAction: TIdSipAction; override;
   public
@@ -6549,13 +6553,19 @@ function TestTIdSipOutboundRedirectedInvite.CreateAction: TIdSipAction;
 var
   Invite: TIdSipOutboundRedirectedInvite;
 begin
-  Result := Self.Core.AddOutboundRedirectedInvite;
-
-  Invite := Result as TIdSipOutboundRedirectedInvite;
+  Invite := Self.CreateInvite;
   Invite.Contact        := Self.Destination;
   Invite.OriginalInvite := Self.Invite;
   Invite.AddListener(Self);
   Invite.Send;
+  Result := Invite;
+end;
+
+//* TestTIdSipOutboundRedirectedInvite Private methods *************************
+
+function TestTIdSipOutboundRedirectedInvite.CreateInvite: TIdSipOutboundRedirectedInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
 end;
 
 //* TestTIdSipOutboundRedirectedInvite Published methods ***********************
@@ -6568,7 +6578,7 @@ var
 begin
   OriginalInvite := Self.Core.CreateInvite(Self.Destination, '', '');
   try
-    Invite := Self.Core.AddOutboundRedirectedInvite;
+    Invite := Self.CreateInvite;
     Self.MarkSentRequestCount;
 
     Invite.Contact := Self.Destination;
@@ -6617,7 +6627,7 @@ function TestTIdSipOutboundReInvite.CreateAction: TIdSipAction;
 var
   Invite: TIdSipOutboundReInvite;
 begin
-  Result := Self.Core.AddOutboundReInvite;
+  Result := Self.CreateInvite;
 
   Self.Dialog.RemoteTarget.Uri := Self.Destination.Address.Uri;
 
@@ -6628,6 +6638,13 @@ begin
   Invite.OriginalInvite := Self.Invite;
   Invite.AddListener(Self);
   Invite.Send;
+end;
+
+//* TestTIdSipOutboundReInvite Private methods *********************************
+
+function TestTIdSipOutboundReInvite.CreateInvite: TIdSipOutboundReInvite;
+begin
+  Result := Self.Core.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
 end;
 
 //* TestTIdSipOutboundReInvite Published methods *******************************

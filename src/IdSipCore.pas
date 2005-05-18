@@ -550,7 +550,6 @@ type
     procedure AddAllowedScheme(const Scheme: String);
     function  AddModule(ModuleType: TIdSipMessageModuleClass): TIdSipMessageModule;
     function  AddOutboundAction(ActionType: TIdSipActionClass): TIdSipAction;
-    function  AddOutboundOptions: TIdSipOutboundOptions;
     function  AllowedContentTypes: String;
     function  AllowedEncodings: String;
     function  AllowedExtensions: String;
@@ -589,11 +588,6 @@ type
 
     // Move to UserAgent:
     function  AddInboundInvite(Request: TIdSipRequest): TIdSipInboundInvite;
-    function  AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
-    function  AddOutboundRegister: TIdSipOutboundRegister;
-    function  AddOutboundRegistrationQuery: TIdSipOutboundRegistrationQuery;
-    function  AddOutboundReInvite: TIdSipOutboundReInvite;
-    function  AddOutboundUnregister: TIdSipOutboundUnregister;
     function  CreateAck(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
     function  CreateInvite(Dest: TIdSipAddressHeader;
@@ -2597,40 +2591,6 @@ begin
   Result := Self.Actions.AddOutboundAction(Self, ActionType);
 end;
 
-function TIdSipAbstractUserAgent.AddOutboundOptions: TIdSipOutboundOptions;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundOptions) as TIdSipOutboundOptions;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
-begin
-  // Do not call this directly. Modules call this method.
-
-  Result := Self.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundRegister: TIdSipOutboundRegister;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundRegister) as TIdSipOutboundRegister;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundRegistrationQuery: TIdSipOutboundRegistrationQuery;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundReInvite: TIdSipOutboundReInvite;
-begin
-  // Do not call this directly. Modules call this method.
-
-  Result := Self.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
-end;
-
-function TIdSipAbstractUserAgent.AddOutboundUnregister: TIdSipOutboundUnregister;
-begin
-  Result := Self.Actions.AddOutboundAction(Self, TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
-end;
-
 function TIdSipAbstractUserAgent.AllowedContentTypes: String;
 begin
   Result := Self.ConvertToHeader(Self.AllowedContentTypeList);
@@ -2808,7 +2768,7 @@ end;
 
 function TIdSipAbstractUserAgent.CurrentRegistrationWith(Registrar: TIdSipUri): TIdSipOutboundRegistrationQuery;
 begin
-  Result := Self.AddOutboundRegistrationQuery;
+  Result := Self.AddOutboundAction(TIdSipOutboundRegistrationQuery) as TIdSipOutboundRegistrationQuery;
 end;
 
 function TIdSipAbstractUserAgent.HasUnknownAccept(Request: TIdSipRequest): Boolean;
@@ -2925,13 +2885,13 @@ end;
 
 function TIdSipAbstractUserAgent.QueryOptions(Server: TIdSipAddressHeader): TIdSipOutboundOptions;
 begin
-  Result := Self.AddOutboundOptions;
+  Result := Self.AddOutboundAction(TIdSipOutboundOptions) as TIdSipOutboundOptions;
   Result.Server := Server;
 end;
 
 function TIdSipAbstractUserAgent.RegisterWith(Registrar: TIdSipUri): TIdSipOutboundRegister;
 begin
-  Result := Self.AddOutboundRegister;
+  Result := Self.AddOutboundAction(TIdSipOutboundRegister) as TIdSipOutboundRegister;
   Result.Bindings.Add(Self.Contact);
   Result.Registrar := Registrar;
 end;
@@ -2981,7 +2941,7 @@ end;
 
 function TIdSipAbstractUserAgent.UnregisterFrom(Registrar: TIdSipUri): TIdSipOutboundUnregister;
 begin
-  Result := Self.AddOutboundUnregister;
+  Result := Self.AddOutboundAction(TIdSipOutboundUnregister) as TIdSipOutboundUnregister;
   Result.Bindings.Add(Self.Contact);
   Result.Registrar := Registrar;
 end;
@@ -6158,7 +6118,7 @@ begin
     if Self.ModificationInProgress then
       raise EIdSipTransactionUser.Create(CannotModifyDuringModification);
 
-    ReInvite := Self.UA.AddOutboundReInvite;
+    ReInvite := Self.UA.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
     ReInvite.MimeType          := ContentType;
     ReInvite.Dialog            := Self.Dialog;
     ReInvite.InOutboundSession := Self.IsOutboundCall;
@@ -7039,7 +6999,7 @@ procedure TIdSipOutboundSession.AddNewRedirect(OriginalInvite: TIdSipRequest;
 var
   Redirect: TIdSipOutboundRedirectedInvite;
 begin
-  Redirect := Self.UA.AddOutboundRedirectedInvite;
+  Redirect := Self.UA.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
 
   Self.RedirectedInviteLock.Acquire;
   try
