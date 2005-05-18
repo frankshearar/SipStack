@@ -2604,7 +2604,7 @@ end;
 
 function TIdSipAbstractUserAgent.AddOutboundRedirectedInvite: TIdSipOutboundRedirectedInvite;
 begin
-  // Do not call this diRedirectedctly. Modules call this method.
+  // Do not call this dictly. Modules call this method.
 
   Result := Self.AddOutboundAction(TIdSipOutboundRedirectedInvite) as TIdSipOutboundRedirectedInvite;
 end;
