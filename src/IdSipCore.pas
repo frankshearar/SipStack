@@ -2123,12 +2123,7 @@ end;
 function TIdSipActions.AddInboundInvite(UserAgent: TIdSipAbstractUserAgent;
                                         Request: TIdSipRequest): TIdSipInboundInvite;
 begin
-  Self.LockActions;
-  try
-    Result := Self.Add(TIdSipInboundInvite.Create(UserAgent, Request)) as TIdSipInboundInvite;
-  finally
-    Self.UnlockActions;
-  end;
+  Result := Self.Add(TIdSipInboundInvite.Create(UserAgent, Request)) as TIdSipInboundInvite;
 end;
 
 procedure TIdSipActions.AddObserver(const Listener: IIdObserver);
