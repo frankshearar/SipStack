@@ -21,27 +21,29 @@ Of the stuff not implemented, the most important missing bits include:
  * S/MIME;
  * proxy classes
 
-Take a look at the Spike class in tests\Spike.pas. It does a lot of stuff, but
-it should show you what you need to do to get your very own SIP stack up and
-running. I plan to simplify Spike to ease the reader into the ways of
-SIP. Please note that the code in Spike is somewhere around prototype
-quality - the UI elements will sometimes behave oddly.
+The main interface to the stack - the interface you want to use to USE
+the stack, as opposed to extend the stack - is in
+src\IdSipStackInterface.
+
+If you're interested in hacking the stack, take a look at the Spike
+class in tests\Spike.pas. It does a lot of stuff, and it's definitely
+"alpha" quality, but it's what I use to try out SIP stuff. I plan to
+simplify Spike to ease the reader into the ways of SIP.
+
+Please note that this version, 0.4, has a radically different
+threading architecture to version 0.3 Please read the CHANGES file,
+doc\overview.txt and doc\architecture.txt!
 
 Todo:
 * The User Agent knows about what kinds of actions it supports. We
   need to pull this knowledge out into separate OutboundModules, much
   like the existing inbound MessageModules.
-* The offer/answer model needs work, as the user of the stack still
-  has to do too much.
 
 Known bugs:
-* TCP clients don't send/receive data in a separate thread. This
-  makes the main/VCL thread hang while you send messages.
-* Occasionally the TCP transport tests fail with an access violation
-  inside TIdTCPConnection.ReadFromStack, in the 0041nnnn address
-  range. I currently develop the stack on Indy 9.0.14. I don't know if
-  this is a bug in Indy's code or if I'm doing something subtly wrong
-  in my code.
 * TLS tests fail because of something to do with the certificates.
+* There are still some subtle race conditions in the transport. When
+  they occur, they're quite uncomfortable because the
+  TId(TCP|UDP)Servers then don't deactivate, and the program appears
+  to hang after you close it.
 
-Frank Shearar, 2004/12/24
+Frank Shearar, 2005/05/19

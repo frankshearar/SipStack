@@ -1,5 +1,13 @@
-v0.4 ()
-
+v0.4 (2005/05/19)
+* Major architectural changes: The SIP stack now executes in the
+  context of one thread, a TIdThreadedTimerQueue: a
+  TIdSipStackInterface. Any actions you request the stack to take
+  result in TIdWait objects being added to the TimerQueue's list, and
+  it will execute those actions when it gets a chance. Communication
+  from the stack to your code happens via Windows' PostMessage. When
+  you instantiate the StackInterface you give it the handle to a
+  window that will handle the requests. You are responsible for
+  destroying any objects you receive from the stack!
 * We now use DNS to locate SIP entities. Since Indy 9 only supports
   IPv4 addresses, the stack doesn't support handling AAAA records even
   though it doesn't care how addresses look: all layers treat
