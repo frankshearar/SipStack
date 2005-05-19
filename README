@@ -45,5 +45,7 @@ Known bugs:
   they occur, they're quite uncomfortable because the
   TId(TCP|UDP)Servers then don't deactivate, and the program appears
   to hang after you close it.
+* The TCP transport test TestSendResponsesClosedConnection has a race
+  condition somewhere.
 
 Frank Shearar, 2005/05/19
