@@ -77,7 +77,8 @@ type
   TIdSipActionClass = class of TIdSipAction;
 
   // I provide a protocol for generic Actions.
-  //
+  // OnAuthenticationChallenge right now isn't used: it's here in anticipation
+  // of a rewrite of the stack's authentication mechanism. 
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
