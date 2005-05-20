@@ -6627,17 +6627,17 @@ function TestTIdSipOutboundReInvite.CreateAction: TIdSipAction;
 var
   Invite: TIdSipOutboundReInvite;
 begin
-  Result := Self.CreateInvite;
-
   Self.Dialog.RemoteTarget.Uri := Self.Destination.Address.Uri;
 
-  Invite := Result as TIdSipOutboundReInvite;
+  Invite := Self.CreateInvite;
   Invite.Dialog         := Self.Dialog;
   Invite.MimeType       := Self.InviteMimeType;
   Invite.Offer          := Self.InviteOffer;
   Invite.OriginalInvite := Self.Invite;
   Invite.AddListener(Self);
   Invite.Send;
+
+  Result := Invite;
 end;
 
 //* TestTIdSipOutboundReInvite Private methods *********************************
