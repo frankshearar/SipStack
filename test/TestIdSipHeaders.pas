@@ -365,6 +365,24 @@ type
     procedure TestName;
   end;
 
+  TestTIdSipReplacesHeader = class(THeaderTestCase)
+  private
+    R: TIdSipReplacesHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestCallID;
+    procedure TestFromTag;
+    procedure TestIsEarly;
+    procedure TestName;
+    procedure TestToTag;
+    procedure TestValue; override;
+    procedure TestValueMultipleFromTags;
+    procedure TestValueMultipleToTags;
+  end;
+
   TestTIdSipTimestampHeader = class(THeaderTestCase)
   private
     T: TIdSipTimestampHeader;
@@ -655,6 +673,7 @@ begin
   Result.AddTest(TestTIdSipRetryAfterHeader.Suite);
   Result.AddTest(TestTIdSipRouteHeader.Suite);
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
+  Result.AddTest(TestTIdSipReplacesHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
   Result.AddTest(TestTIdSipViaHeader.Suite);
@@ -3360,6 +3379,117 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipReplacesHeader                                                   *
+//******************************************************************************
+//* TestTIdSipReplacesHeader Public methods ************************************
+
+procedure TestTIdSipReplacesHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := Self.Header as TIdSipReplacesHeader;
+end;
+
+//* TestTIdSipReplacesHeader Protected methods *********************************
+
+function TestTIdSipReplacesHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipReplacesHeader;
+end;
+
+//* TestTIdSipReplacesHeader Published methods *********************************
+
+procedure TestTIdSipReplacesHeader.TestCallID;
+const
+  CallID    = 'foo';
+  NewCallID = 'bar';
+begin
+  Self.R.CallID := CallID;
+  CheckEquals(CallID, Self.R.CallID, 'Call-ID not set');
+
+  Self.R.CallID := NewCallID;
+  CheckEquals(NewCallID, Self.R.CallID, 'Call-ID not re-set');
+end;
+
+procedure TestTIdSipReplacesHeader.TestFromTag;
+const
+  NewTag = 'bar';
+  Tag    = 'foo';
+begin
+  Self.R.FromTag := Tag;
+  CheckEquals(Tag, Self.R.FromTag, 'From tag not set');
+
+  Self.R.FromTag := NewTag;
+  CheckEquals(NewTag, Self.R.FromTag, 'From tag not re-set');
+
+  Self.R.Value := 'arbcallid;from-tag=1';
+  Self.R.FromTag := NewTag;
+  CheckEquals(NewTag, Self.R.FromTag, 'From tag not re-set after SetValue');
+end;
+
+procedure TestTIdSipReplacesHeader.TestIsEarly;
+begin
+  Check(not Self.R.IsEarly, 'Initial value of IsEarly');
+
+  Self.R.Value := 'arbcallid;' + EarlyOnlyParam;
+  Check(Self.R.IsEarly,
+        EarlyOnlyParam + ' present but IsEarly returns wrong value');
+end;
+
+procedure TestTIdSipReplacesHeader.TestName;
+begin
+  CheckEquals(ReplacesHeader, Self.R.Name, 'Name');
+
+  Self.R.Name := 'foo';
+  CheckEquals(ReplacesHeader, Self.R.Name, 'Name after set');
+end;
+
+procedure TestTIdSipReplacesHeader.TestToTag;
+const
+  NewTag = 'bar';
+  Tag    = 'foo';
+begin
+  Self.R.ToTag := Tag;
+  CheckEquals(Tag, Self.R.ToTag, 'To tag not set');
+
+  Self.R.ToTag := NewTag;
+  CheckEquals(NewTag, Self.R.ToTag, 'To tag not re-set');
+end;
+
+procedure TestTIdSipReplacesHeader.TestValue;
+const
+  CallID  = 'foo';
+  FromTag = 'bar';
+  ToTag   = 'baz';
+begin
+  Self.R.Value := Format('%s;from-tag=%s;to-tag=%s', [CallID, FromTag, ToTag]);
+  CheckEquals(CallID,  Self.R.CallID,  CallIDHeaderFull);
+  CheckEquals(FromTag, Self.R.FromTag, FromTagParam);
+  CheckEquals(ToTag,   Self.R.ToTag,   ToTagParam);
+
+  Check(not Self.R.IsMalformed,
+        'Syntactically correct header claims to be malformed');
+end;
+
+procedure TestTIdSipReplacesHeader.TestValueMultipleFromTags;
+begin
+  Self.R.Value := 'arbcallid;from-tag=1;from-tag=2';
+  Check(Self.R.IsMalformed,
+        'Header with two from-tags not marked as malformed');
+  Check(Pos(FromTagParam, Self.R.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason');
+end;
+
+procedure TestTIdSipReplacesHeader.TestValueMultipleToTags;
+begin
+  Self.R.Value := 'arbcallid;to-tag=1;from-tag=2;to-tag=3';
+  Check(Self.R.IsMalformed,
+        'Header with two to-tags not marked as malformed');
+  Check(Pos(ToTagParam, Self.R.ParseFailReason) > 0,
+        'Insufficiently informative ParseFailReason');
+end;
+
+//******************************************************************************
 //* TestTIdSipTimestampHeader                                                  *
 //******************************************************************************
 //* TestTIdSipTimestampHeader Public methods ***********************************
@@ -4863,6 +4993,7 @@ begin
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ProxyRequireHeader),         ProxyRequireHeader);
   CheckType(TIdSipRecordRouteHeader,            Self.Headers.Add(RecordRouteHeader),          RecordRouteHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(RequireHeader),              RequireHeader);
+  CheckType(TIdSipReplacesHeader,               Self.Headers.Add(ReplacesHeader),             ReplacesHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(ReplyToHeader),              ReplyToHeader);
   CheckType(TIdSipRetryAfterHeader,             Self.Headers.Add(RetryAfterHeader),           RetryAfterHeader);
   CheckType(TIdSipRouteHeader,                  Self.Headers.Add(RouteHeader),                RouteHeader);

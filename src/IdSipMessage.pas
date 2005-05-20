@@ -653,6 +653,30 @@ type
     function GetName: String; override;
   end;
 
+  // cf. RFC 3891
+  TIdSipReplacesHeader = class(TIdSipHeader)
+  private
+    procedure CheckDuplicatedParam(const ParamName: String;
+                                   const CurrentParamName: String;
+                                   var FoundFlag: Boolean);
+    procedure CheckFromToTagCount(Params: TStrings);
+    function  GetCallID: String;
+    function  GetFromTag: String;
+    function  GetToTag: String;
+    procedure SetCallID(const Value: String);
+    procedure SetFromTag(const Value: String);
+    procedure SetToTag(const Value: String);
+  protected
+    function  GetName: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    function IsEarly: Boolean;
+
+    property CallID:  String read GetCallID write SetCallID;
+    property FromTag: String read GetFromTag write SetFromTag;
+    property ToTag:   String read GetToTag write SetToTag;
+  end;
+
   TIdSipTimestamp = class(TObject)
   private
     fFractionalPart: Cardinal;
@@ -1155,11 +1179,13 @@ type
     function  FirstAuthorization: TIdSipAuthorizationHeader;
     function  FirstProxyAuthorization: TIdSipProxyAuthorizationHeader;
     function  FirstProxyRequire: TIdSipCommaSeparatedHeader;
+    function  FirstReplaces: TIdSipReplacesHeader;
     function  FirstRoute: TIdSipRouteHeader;
     function  HasAuthorization: Boolean;
     function  HasAuthorizationFor(const Realm: String): Boolean;
     function  HasProxyAuthorization: Boolean;
     function  HasProxyAuthorizationFor(const Realm: String): Boolean;
+    function  HasReplaces: Boolean;
     function  HasRoute: Boolean;
     function  HasSipsUri: Boolean;
     function  IsAck: Boolean;
@@ -1423,12 +1449,14 @@ const
   DispositionSession         = 'session';
   DomainParam                = 'domain';
   DurationParam              = 'duration';
+  EarlyOnlyParam             = 'early-only';
   ErrorInfoHeader            = 'Error-Info';
   ExpireNow                  = 0;
   ExpiresHeader              = 'Expires';
   ExpiresParam               = 'expires';
   FromHeaderFull             = 'From';
   FromHeaderShort            = 'f';
+  FromTagParam               = 'from-tag'; // cf. RFC 3891
   HandlingOptional           = 'optional';
   HandlingParam              = 'handling';
   HandlingRequired           = 'required';
@@ -1463,6 +1491,8 @@ const
   RealmParam                 = 'realm';
   ReceivedParam              = 'received';
   RecordRouteHeader          = 'Record-Route';
+  ReplacesExtension          = 'replaces'; // cf. RFC 3891
+  ReplacesHeader             = 'Replaces'; // cf. RFC 3891
   ReplyToHeader              = 'Reply-To';
   RequireHeader              = 'Require';
   ResponseDigestParam        = 'rspauth';
@@ -1481,6 +1511,7 @@ const
   TimestampHeader            = 'Timestamp';
   ToHeaderFull               = 'To';
   ToHeaderShort              = 't';
+  ToTagParam                 = 'to-tag'; // cf. RFC 3891
   TransportParam             = 'transport';
   TransportParamSCTP         = 'sctp';
   TransportParamTCP          = 'tcp';
@@ -1704,6 +1735,7 @@ const
   BadContentLength            = 'Content-Length must match body length';
   ConvertErrorMsg             = 'Failed to convert ''%s'' to type %s';
   CSeqMethodMismatch          = 'CSeq header method doesn''t match request method';
+  DuplicatedParam             = 'Duplicated %s';
   InvalidBranchId             = 'Invalid branch-id';
   InvalidCallID               = 'Invalid Call-ID';
   InvalidComment              = 'Invalid Comment';
@@ -1728,7 +1760,7 @@ const
   InvalidWarnAgent            = 'Invalid warn-agent';
   InvalidWarnCode             = 'Invalid warn-code';
   InvalidWarnText             = 'Invalid warn-text';
-  MethodToken                 = 'Method';  
+  MethodToken                 = 'Method';
   MissingAngleBrackets        = 'Missing angle brackets';
   MissingCallID               = 'Missing Call-ID header';
   MissingContentType          = 'Missing Content-Type header with a non-empty message-body';
@@ -2940,8 +2972,7 @@ end;
 
 procedure TIdSipHeader.FailParse(const Reason: String);
 begin
-//  Self.MarkAsInvalid(Reason);
-  raise EBadHeader.Create(Self.Name);
+  raise EBadHeader.Create(Self.Name + ': ' + Reason);
 end;
 
 function TIdSipHeader.GetName: String;
@@ -4505,6 +4536,90 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipReplacesHeader                                                       *
+//******************************************************************************
+//* TIdSipReplacesHeader Public methods ****************************************
+
+function TIdSipReplacesHeader.IsEarly: Boolean;
+begin
+  Result := Self.HasParam(EarlyOnlyParam)
+end;
+
+//* TIdSipReplacesHeader Protected methods *************************************
+
+function TIdSipReplacesHeader.GetName: String;
+begin
+  Result := ReplacesHeader;
+end;
+
+procedure TIdSipReplacesHeader.Parse(const Value: String);
+begin
+  inherited Parse(Value);
+
+  Self.CheckFromToTagCount(Self.Parameters);
+end;
+
+//* TIdSipReplacesHeader Private methods ***************************************
+
+procedure TIdSipReplacesHeader.CheckDuplicatedParam(const ParamName: String;
+                                                    const CurrentParamName: String;
+                                                    var FoundFlag: Boolean);
+begin
+  if IsEqual(ParamName, CurrentParamName) then begin
+    if FoundFlag then
+      Self.FailParse(Format(DuplicatedParam, [ParamName]))
+    else
+      FoundFlag := true;
+  end;
+end;
+
+procedure TIdSipReplacesHeader.CheckFromToTagCount(Params: TStrings);
+var
+  FoundFrom: Boolean;
+  FoundTo:   Boolean;
+  I:         Integer;
+begin
+  FoundFrom := false;
+  FoundTo   := false;
+  I := 0;
+  while (I < Params.Count) and not Self.IsMalformed do begin
+    Self.CheckDuplicatedParam(FromTagParam, Params.Names[I], FoundFrom);
+    Self.CheckDuplicatedParam(ToTagParam, Params.Names[I], FoundTo);
+    Inc(I);
+  end;
+end;
+
+function TIdSipReplacesHeader.GetCallID: String;
+begin
+  Result := Self.Value;
+end;
+
+function TIdSipReplacesHeader.GetFromTag: String;
+begin
+  Result := Self.Params[FromTagParam];
+end;
+
+function TIdSipReplacesHeader.GetToTag: String;
+begin
+  Result := Self.Params[ToTagParam];
+end;
+
+procedure TIdSipReplacesHeader.SetCallID(const Value: String);
+begin
+  Self.Value := Value;
+end;
+
+procedure TIdSipReplacesHeader.SetFromTag(const Value: String);
+begin
+  Self.Params[FromTagParam] := Value;
+end;
+
+procedure TIdSipReplacesHeader.SetToTag(const Value: String);
+begin
+  Self.Params[ToTagParam] := Value;
+end;
+
+//******************************************************************************
 //* TIdSipTimestampHeader                                                      *
 //******************************************************************************
 //* TIdSipTimestampHeader Public methods ***************************************
@@ -5116,6 +5231,7 @@ begin
     GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
     GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
     GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
+    GCanonicalHeaderNames.Add(ReplacesHeader             + '=' + ReplacesHeader);    
     GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
     GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
     GCanonicalHeaderNames.Add(RetryAfterHeader           + '=' + RetryAfterHeader);
@@ -5285,6 +5401,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RouteHeader,                TIdSipRouteHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(SupportedHeaderFull,        TIdSipCommaSeparatedHeader));
@@ -6833,6 +6950,11 @@ begin
   Result := Self.FirstHeader(ProxyRequireHeader) as TIdSipCommaSeparatedHeader;
 end;
 
+function TIdSipRequest.FirstReplaces: TIdSipReplacesHeader;
+begin
+  Result := Self.FirstHeader(ReplacesHeader) as TIdSipReplacesHeader;
+end;
+
 function TIdSipRequest.FirstRoute: TIdSipRouteHeader;
 begin
   Result := Self.FirstHeader(RouteHeader) as TIdSipRouteHeader
@@ -6884,6 +7006,11 @@ begin
   finally
     ProxyAuthHeaders.Free;
   end;
+end;
+
+function TIdSipRequest.HasReplaces: Boolean;
+begin
+  Result := Self.HasHeader(ReplacesHeader);
 end;
 
 function TIdSipRequest.HasRoute: Boolean;

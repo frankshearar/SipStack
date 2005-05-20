@@ -141,11 +141,13 @@ type
     procedure TestFirstAuthorization;
     procedure TestFirstProxyAuthorization;
     procedure TestFirstProxyRequire;
+    procedure TestFirstReplaces;
     procedure TestFirstRoute;
     procedure TestHasAuthorization;
     procedure TestHasAuthorizationFor;
     procedure TestHasProxyAuthorization;
     procedure TestHasProxyAuthorizationFor;
+    procedure TestHasReplaces;
     procedure TestHasRoute;
     procedure TestHasSipsUri;
     procedure TestInSameDialogAsRequest;
@@ -1934,6 +1936,23 @@ begin
   Check(P = Self.Request.FirstProxyRequire, 'Wrong Proxy-Require');
 end;
 
+procedure TestTIdSipRequest.TestFirstReplaces;
+var
+  A: TIdSipHeader;
+begin
+  Self.Request.ClearHeaders;
+
+  CheckNotNull(Self.Request.FirstReplaces, 'Replaces not present');
+  CheckEquals(1, Self.Request.HeaderCount, 'Replaces not auto-added');
+
+  A := Self.Request.FirstHeader(ReplacesHeader);
+  Self.Request.AddHeader(ReplacesHeader);
+
+  Check(A = Self.Request.FirstReplaces, 'Wrong Replaces');
+  Check(Self.Request.IsMalformed,
+        'A request with multiple Replaces header should be malformed');
+end;
+
 procedure TestTIdSipRequest.TestFirstRoute;
 var
   A: TIdSipHeader;
@@ -2009,6 +2028,20 @@ begin
   Self.Request.AddHeader(ProxyAuthorizationHeader).Value := 'Digest realm="leo-ix.net"';
   Check(Self.Request.HasProxyAuthorizationFor('leo-ix.net'),
         'Cannot find existing Proxy-Authorization');
+end;
+
+procedure TestTIdSipRequest.TestHasReplaces;
+begin
+  Check(not Self.Request.HasHeader(ReplacesHeader),
+        'Sanity check');
+
+  Check(not Self.Request.HasReplaces,
+        'New request');
+
+
+  Self.Request.AddHeader(ReplacesHeader);
+  Check(Self.Request.HasReplaces,
+        'Lies! There is too a Replaces header!');
 end;
 
 procedure TestTIdSipRequest.TestHasRoute;
