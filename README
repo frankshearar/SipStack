@@ -14,6 +14,11 @@ The stack uses Indy 9.0.14 (but 9.0.18 should work fine). Find this
 excellent library either in your Delphi\Sources\Indy directory or at
 http://www.indyproject.org/
 
+Note that Indy doesn't support some functionality that a SIP stack
+requires, such as SRV and NAPTR DNS records. In the indy-patches
+directory you'll find all patches to the Indy project. You'll have to
+merge these changes into your Indy setup.
+
 All test code relies on the DUnit test framework. See
 http://dunit.sourceforge.net/ for details.
 
@@ -30,7 +35,7 @@ class in tests\Spike.pas. It does a lot of stuff, and it's definitely
 "alpha" quality, but it's what I use to try out SIP stuff. I plan to
 simplify Spike to ease the reader into the ways of SIP.
 
-Please note that this version, 0.4, has a radically different
+Please note that this version, 0.4.1, has a radically different
 threading architecture to version 0.3 Please read the CHANGES file,
 doc\overview.txt and doc\architecture.txt!
 
@@ -48,4 +53,4 @@ Known bugs:
 * The TCP transport test TestSendResponsesClosedConnection has a race
   condition somewhere.
 
-Frank Shearar, 2005/05/19
+Frank Shearar, 2005/05/20

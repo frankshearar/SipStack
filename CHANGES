@@ -1,3 +1,6 @@
+v0.4.1 (2005/05/20)
+* Added those files necessary to patch Indy to support the stack.
+
 v0.4 (2005/05/19)
 * Major architectural changes: The SIP stack now executes in the
   context of one thread, a TIdThreadedTimerQueue: a
