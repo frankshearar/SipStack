@@ -443,6 +443,7 @@ type
     procedure TestReceiveRequestFailed;
     procedure TestReceiveServerFailed;
     procedure TestRemoveListener;
+    procedure TestSendTwice;
     procedure TestTerminateBeforeAccept;
     procedure TestTerminateAfterAccept;
     procedure TestTransactionCompleted;
@@ -467,8 +468,6 @@ type
   public
     procedure SetUp; override;
     procedure TearDown; override;
-  published
-    procedure TestReInviteTwice;
   end;
 
   TestTIdSipInboundOptions = class(TestTIdSipAction)
@@ -6507,6 +6506,19 @@ begin
   end;
 end;
 
+procedure TestTIdSipOutboundInvite.TestSendTwice;
+var
+  Invite: TIdSipAction;
+begin
+  Invite := Self.CreateAction;
+  try
+    Invite.Send;
+    Fail(Invite.ClassName + ': Failed to bail out calling Send a 2nd time');
+  except
+    on EIdSipTransactionUser do;
+  end;
+end;
+
 procedure TestTIdSipOutboundInvite.TestTerminateBeforeAccept;
 var
   OutboundInvite: TIdSipOutboundInvite;
@@ -6645,30 +6657,6 @@ end;
 function TestTIdSipOutboundReInvite.CreateInvite: TIdSipOutboundReInvite;
 begin
   Result := Self.Core.AddOutboundAction(TIdSipOutboundReInvite) as TIdSipOutboundReInvite;
-end;
-
-//* TestTIdSipOutboundReInvite Published methods *******************************
-
-procedure TestTIdSipOutboundReInvite.TestReInviteTwice;
-var
-  Invite: TIdSipOutboundReInvite;
-begin
-  Invite := TIdSipOutboundReInvite.Create(Self.Core);
-  try
-    Invite.OriginalInvite    := Self.Invite;
-    Invite.Dialog            := Dialog;
-    Invite.InOutboundSession := false;
-    Invite.Send;
-
-    try
-      Invite.Send;
-      Fail('Failed to bail out calling ReInvite a 2nd time');
-    except
-      on EIdSipTransactionUser do;
-    end;
-  finally
-    Invite.Free;
-  end;
 end;
 
 //******************************************************************************
