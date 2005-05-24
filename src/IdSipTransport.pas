@@ -995,7 +995,6 @@ begin
   Self.RunningClients := TThreadList.Create;
 
   Self.Bindings.Add;
-  Self.SetPort(Port);
 end;
 
 destructor TIdSipTCPTransport.Destroy;
