@@ -1771,6 +1771,7 @@ const
   MissingTo                   = 'Missing To header';
   MissingSipVersion           = 'Missing SIP-Version';
   MissingVia                  = 'Missing Via header';
+  OnlyCancelInvites           = 'Only INVITE requests may be CANCELled, not "%s" requests';
   RequestLine                 = '%s %s %s' + CRLF;
   RequestUriNoAngleBrackets   = 'Request-URI may not be enclosed in <>';
   RequestUriNoSpaces          = 'Request-URI may not contain spaces';
@@ -6880,7 +6881,8 @@ end;
 
 function TIdSipRequest.CreateCancel: TIdSipRequest;
 begin
-  Assert(Self.IsInvite, 'Only INVITE requests may be CANCELled');
+  Assert(Self.IsInvite,
+         Format(OnlyCancelInvites, [Self.Method]));
   Result := TIdSipRequest.Create;
   try
     Result.Method      := MethodCancel;
