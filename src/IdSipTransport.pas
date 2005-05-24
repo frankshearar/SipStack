@@ -991,7 +991,7 @@ constructor TIdSipTCPTransport.Create;
 begin
   inherited Create;
 
-  Self.ConnectionMap := TIdSipConnectionTableLock.Create;
+  Self.ConnectionMap  := TIdSipConnectionTableLock.Create;
   Self.RunningClients := TThreadList.Create;
 
   Self.Bindings.Add;
