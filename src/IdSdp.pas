@@ -656,6 +656,7 @@ type
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
 
+    function  IsListening: Boolean;
     function  MimeType: String;
     procedure PutOnHold;
     function  StartListening(LocalSessionDesc: String): String;
@@ -4042,6 +4043,11 @@ begin
   Self.StreamLock.Free;
 
   inherited Destroy;
+end;
+
+function TIdSDPMultimediaSession.IsListening: Boolean;
+begin
+  Result := Self.StreamCount > 0;
 end;
 
 function TIdSDPMultimediaSession.MimeType: String;

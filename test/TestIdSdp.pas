@@ -551,6 +551,7 @@ type
     procedure TearDown; override;
   published
     procedure TestHighestAllowedPort;
+    procedure TestIsListening;
     procedure TestLowestAllowedPort;
     procedure TestMimeType;
     procedure TestPutOnHold;
@@ -6640,6 +6641,19 @@ begin
   finally
     Desc.Free;
   end;
+end;
+
+procedure TestTIdSDPMultimediaSession.TestIsListening;
+begin
+  Check(not Self.MS.IsListening, 'Initial IsListening must be false');
+
+  Self.MS.StartListening(Self.SingleStreamSDP(Self.MS.LowestAllowedPort));
+
+  Check(Self.MS.IsListening, 'IsListening after StartListening');
+
+  Self.MS.StopListening;
+
+  Check(not Self.MS.IsListening, 'IsListening after StopListening');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestLowestAllowedPort;
