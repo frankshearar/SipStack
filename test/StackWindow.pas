@@ -71,10 +71,10 @@ begin
 
   BasicConf := TStringList.Create;
   try
-    BasicConf.Add('Listen: UDP AUTO:5060');
-    BasicConf.Add('NameServer: 62.241.160.200:53');
-    BasicConf.Add('Contact: sip:foo@' + LocalAddress + ':5060');
-    BasicConf.Add('From: sip:foo@' + LocalAddress + ':5060');
+    BasicConf.Add('Listen: UDP 127.0.0.1:5060');
+    BasicConf.Add('NameServer: MOCK');
+    BasicConf.Add('Contact: sip:foo@127.0.0.1:5060');
+    BasicConf.Add('From: sip:foo@127.0.0.1:5060');
 
     Self.Intf := TIdSipStackInterface.Create(Self.Handle, BasicConf);
   finally
@@ -149,9 +149,11 @@ end;
 
 procedure TStackWindow.NotifyTestCase(Msg: TIdSipEventMessage);
 begin
-  Self.TestCase.OnEvent(Msg.Data.Stack, Msg.Data.Event, Msg.Data.Data);
-
-  Msg.Data.Free;
+  try
+    Self.TestCase.OnEvent(Msg.Data.Stack, Msg.Data.Event, Msg.Data.Data);
+  finally
+    Msg.Data.Free;
+  end;
 end;
 
 procedure TStackWindow.OnStackQueueEmpty(Sender: TIdTimerQueue);
