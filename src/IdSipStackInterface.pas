@@ -76,6 +76,8 @@ type
     function  ActionFor(Handle: TIdSipHandle): TIdSipAction;
     function  AddAction(Action: TIdSipAction): TIdSipHandle;
     function  AssociationAt(Index: Integer): TIdActionAssociation;
+    function  GetAndCheckAction(Handle: TIdSipHandle;
+                                ExpectedType: TIdSipActionClass): TIdSipAction;
     function  HandleFor(Action: TIdSipAction): TIdSipHandle;
     function  IndexOf(H: TIdSipHandle): Integer;
     function  HasHandle(H: TIdSipHandle): Boolean;
@@ -352,13 +354,7 @@ var
 begin
   Self.ActionLock.Acquire;
   try
-    if not Self.HasHandle(ActionHandle) then
-      raise EInvalidHandle.Create(NoSuchHandle, ActionHandle);
-
-    Action := Self.ActionFor(ActionHandle);
-
-    if not (Action is TIdSipInboundSession) then
-      raise EInvalidHandle.Create(ActionNotAllowedForHandle, ActionHandle);
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
 
     (Action as TIdSipInboundSession).AcceptCall(Offer, ContentType)
   finally
@@ -372,13 +368,7 @@ var
 begin
   Self.ActionLock.Acquire;
   try
-    Action := Self.ActionFor(ActionHandle);
-
-    if not Assigned(Action) then
-      raise EInvalidHandle.Create(NoSuchHandle, ActionHandle);
-
-    if not (Action is TIdSipSession) then
-      raise EInvalidHandle.Create(ActionNotAllowedForHandle, ActionHandle);
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     Action.Terminate;
   finally
@@ -414,13 +404,7 @@ var
 begin
   Self.ActionLock.Acquire;
   try
-    Action := Self.ActionFor(ActionHandle);
-
-    if not Assigned(Action) then
-      raise EInvalidHandle.Create(NoSuchHandle, ActionHandle);
-
-    if not (Action is TIdSipSession) then
-      raise EInvalidHandle.Create(ActionNotAllowedForHandle, ActionHandle);
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     (Action as TIdSipSession).Modify(Offer, ContentType);
   finally
@@ -434,10 +418,7 @@ var
 begin
   Self.ActionLock.Acquire;
   try
-    Action := Self.ActionFor(ActionHandle);
-
-    if not Assigned(Action) then
-      raise EInvalidHandle.Create(NoSuchHandle, ActionHandle);
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipAction);
 
     Self.SendAction(Action);
   finally
@@ -449,6 +430,7 @@ end;
 
 function TIdSipStackInterface.QueryInterface(const IID: TGUID; out Obj): HResult;
 begin
+  // Don't support reference counting.
   if GetInterface(IID, Obj) then
     Result := S_OK
   else
@@ -457,11 +439,13 @@ end;
 
 function TIdSipStackInterface._AddRef: Integer;
 begin
+  // Don't support reference counting.
   Result := -1;
 end;
 
 function TIdSipStackInterface._Release: Integer;
 begin
+  // Don't support reference counting.
   Result := -1;
 end;
 
@@ -498,6 +482,18 @@ end;
 function TIdSipStackInterface.AssociationAt(Index: Integer): TIdActionAssociation;
 begin
   Result := Self.Actions[Index] as TIdActionAssociation;
+end;
+
+function TIdSipStackInterface.GetAndCheckAction(Handle: TIdSipHandle;
+                                                ExpectedType: TIdSipActionClass): TIdSipAction;
+begin
+  Result := Self.ActionFor(Handle);
+
+  if not Assigned(Result) then
+    raise EInvalidHandle.Create(NoSuchHandle, Handle);
+
+  if not (Result is ExpectedType) then
+    raise EInvalidHandle.Create(ActionNotAllowedForHandle, Handle);
 end;
 
 function TIdSipStackInterface.HandleFor(Action: TIdSipAction): TIdSipHandle;
