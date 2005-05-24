@@ -3852,10 +3852,10 @@ begin
   else
     inherited Parse(Value);
 
-  if (Self.IndexOfParam(QParam) > ItemNotFoundIndex)
+  if Self.HasParam(QParam)
     and not TIdSipParser.IsQValue(Self.Params[QParam]) then
     Self.FailParse(InvalidQValue);
-  if (Self.IndexOfParam(ExpiresParam) > ItemNotFoundIndex)
+  if Self.HasParam(ExpiresParam)
     and not TIdSipParser.IsNumber(Self.Params[ExpiresParam]) then
     Self.FailParse(InvalidExpires);
 end;
@@ -4037,7 +4037,7 @@ end;
 
 function TIdSipFromToHeader.HasTag: Boolean;
 begin
-  Result := Self.IndexOfParam(TagParam) <> ItemNotFoundIndex;
+  Result := Self.HasParam(TagParam);
 end;
 
 function TIdSipFromToHeader.Equals(Header: TIdSipHeader): Boolean;
@@ -4061,7 +4061,7 @@ procedure TIdSipFromToHeader.Parse(const Value: String);
 begin
   inherited Parse(Value);
 
-  if (Self.IndexOfParam(TagParam) > ItemNotFoundIndex)
+  if Self.HasParam(TagParam)
     and not TIdSipParser.IsToken(Self.Params[TagParam]) then
     Self.FailParse(InvalidTag);
 end;
@@ -4919,35 +4919,42 @@ end;
 
 procedure TIdSipViaHeader.AssertBranchWellFormed;
 begin
-  if (Self.IndexOfParam(BranchParam) > ItemNotFoundIndex)
+  if Self.HasParam(BranchParam)
      and not TIdSipParser.IsToken(Self.Params[BranchParam]) then
     Self.FailParse(InvalidBranchId);
 end;
 
 procedure TIdSipViaHeader.AssertMaddrWellFormed;
+var
+  Maddr: String;
 begin
-  if (Self.Parameters.IndexOfName(MaddrParam) > ItemNotFoundIndex) then begin
-    if    not TIdSipParser.IsFQDN(Self.Parameters.Values[MaddrParam])
-      and not TIdIPAddressParser.IsIPv4Address(Self.Parameters.Values[MaddrParam])
-      and not TIdSipParser.IsIPv6Reference(Self.Parameters.Values[MaddrParam]) then
+  if Self.HasParam(MaddrParam) then begin
+    Maddr := Self.Parameters.Values[MaddrParam];
+    if    not TIdSipParser.IsFQDN(Maddr)
+      and not TIdIPAddressParser.IsIPv4Address(Maddr)
+      and not TIdSipParser.IsIPv6Reference(Maddr) then
       Self.FailParse(InvalidMaddr);
   end;
 end;
 
 procedure TIdSipViaHeader.AssertReceivedWellFormed;
+var
+  Received: String;
 begin
-  if (Self.IndexOfParam(ReceivedParam) > ItemNotFoundIndex)
-    and not TIdIPAddressParser.IsIPv4Address(Self.Params[ReceivedParam])
-    and not TIdIPAddressParser.IsIPv6Address(Self.Params[ReceivedParam]) then
-    Self.FailParse(InvalidReceived);
+  if Self.HasParam(ReceivedParam) then begin
+    Received := Self.Params[ReceivedParam];
+
+    if    not TIdIPAddressParser.IsIPv4Address(Received)
+      and not TIdIPAddressParser.IsIPv6Address(Received) then
+      Self.FailParse(InvalidReceived);
+  end;
 end;
 
 procedure TIdSipViaHeader.AssertTTLWellFormed;
 begin
-  if (Self.Parameters.IndexOfName(TTLParam) > ItemNotFoundIndex) then begin
-    if not TIdSipParser.IsByte(Self.Parameters.Values[TTLParam]) then
-      Self.FailParse(InvalidNumber);
-  end;
+  if Self.HasParam(TTLParam)
+    and not TIdSipParser.IsByte(Self.Parameters.Values[TTLParam]) then
+    Self.FailParse(InvalidNumber);
 end;
 
 function TIdSipViaHeader.GetBranch: String;
