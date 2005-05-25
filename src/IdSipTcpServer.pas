@@ -41,7 +41,7 @@ type
                             Exception: Exception); overload;
     procedure DoOnReceiveMessage(Sender: TObject);
     procedure ReadBodyInto(Connection: TIdTCPConnection;
-                           Message: TIdSipMessage;
+                           Msg: TIdSipMessage;
                            Dest: TStringStream);
     procedure ReadMessage(Connection: TIdTCPConnection;
                           Dest: TStringStream);
@@ -52,10 +52,10 @@ type
     procedure ScheduleReceivedMessage(Msg: TIdSipMessage;
                                       ReceivedFrom: TIdSipConnectionBindings);
     procedure WriteMessage(Connection: TIdTCPConnection;
-                           AMessage: TIdSipMessage);
+                           Msg: TIdSipMessage);
   protected
-    procedure DoDisconnect(AThread: TIdPeerThread); override;
-    procedure DoOnExecute(AThread: TIdPeerThread);
+    procedure DoDisconnect(Thread: TIdPeerThread); override;
+    procedure DoOnExecute(Thread: TIdPeerThread);
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -140,15 +140,15 @@ end;
 
 //* TIdSipTcpServer Protected methods ******************************************
 
-procedure TIdSipTcpServer.DoDisconnect(AThread: TIdPeerThread);
+procedure TIdSipTcpServer.DoDisconnect(Thread: TIdPeerThread);
 begin
   if Assigned(Self.fOnRemoveConnection) then
-    Self.fOnRemoveConnection(AThread.Connection);
+    Self.fOnRemoveConnection(Thread.Connection);
 
-  inherited DoDisconnect(AThread);
+  inherited DoDisconnect(Thread);
 end;
 
-procedure TIdSipTcpServer.DoOnExecute(AThread: TIdPeerThread);
+procedure TIdSipTcpServer.DoOnExecute(Thread: TIdPeerThread);
 var
   ConnClosed:   Boolean;
   Msg:          TIdSipMessage;
@@ -157,16 +157,16 @@ var
 begin
   ConnClosed := false;
 
-  ReceivedFrom.PeerIP   := AThread.Connection.Socket.Binding.PeerIP;
-  ReceivedFrom.PeerPort := AThread.Connection.Socket.Binding.PeerPort;
+  ReceivedFrom.PeerIP   := Thread.Connection.Socket.Binding.PeerIP;
+  ReceivedFrom.PeerPort := Thread.Connection.Socket.Binding.PeerPort;
 
-  while AThread.Connection.Connected do begin
-    AThread.Connection.ReadTimeout := Self.ReadTimeout;
+  while Thread.Connection.Connected do begin
+    Thread.Connection.ReadTimeout := Self.ReadTimeout;
 
     S := TStringStream.Create('');
     try
       try
-        Self.ReadMessage(AThread.Connection, S);
+        Self.ReadMessage(Thread.Connection, S);
       except
         on EIdClosedSocket do
           ConnClosed := true;
@@ -177,7 +177,7 @@ begin
         try
           try
             try
-              Self.ReadBodyInto(AThread.Connection, Msg, S);
+              Self.ReadBodyInto(Thread.Connection, Msg, S);
               Msg.ReadBody(S);
             except
               on EIdReadTimeout do
@@ -190,15 +190,15 @@ begin
 
             // If Self.ReadBody closes the connection, we don't want to AddConnection!
             if Msg.IsRequest and not ConnClosed then
-              Self.AddConnection(AThread.Connection, Msg as TIdSipRequest);
+              Self.AddConnection(Thread.Connection, Msg as TIdSipRequest);
 
             Self.ScheduleReceivedMessage(Msg, ReceivedFrom);
           except
             on E: Exception do begin
               // This results in returning a 500 Internal Server Error to a response!
-              if AThread.Connection.Connected then begin
-                Self.ReturnInternalServerError(AThread.Connection, E.Message);
-                AThread.Connection.DisconnectSocket;
+              if Thread.Connection.Connected then begin
+                Self.ReturnInternalServerError(Thread.Connection, E.Message);
+                Thread.Connection.DisconnectSocket;
               end;
 
               Self.ScheduleExceptionNotification(ExceptClass(E.ClassType),
@@ -262,13 +262,13 @@ begin
 end;
 
 procedure TIdSipTcpServer.ReadBodyInto(Connection: TIdTCPConnection;
-                                       Message: TIdSipMessage;
+                                       Msg: TIdSipMessage;
                                        Dest: TStringStream);
 begin
-  Connection.ReadStream(Dest, Message.ContentLength);
+  Connection.ReadStream(Dest, Msg.ContentLength);
 
   // Roll back the stream to just before the message body!
-  Dest.Seek(-Message.ContentLength, soFromCurrent);
+  Dest.Seek(-Msg.ContentLength, soFromCurrent);
 end;
 
 procedure TIdSipTcpServer.ReadMessage(Connection: TIdTCPConnection;
@@ -331,9 +331,9 @@ begin
 end;
 
 procedure TIdSipTcpServer.WriteMessage(Connection: TIdTCPConnection;
-                                       AMessage: TIdSipMessage);
+                                       Msg: TIdSipMessage);
 begin
-  Connection.Write(AMessage.AsString);
+  Connection.Write(Msg.AsString);
 end;
 
 end.
