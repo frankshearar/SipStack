@@ -554,6 +554,7 @@ type
     procedure TestIsListening;
     procedure TestLowestAllowedPort;
     procedure TestMimeType;
+    procedure TestOnHold;
     procedure TestPutOnHold;
     procedure TestSetRemoteDescription;
     procedure TestSetRemoteDescriptionMalformedSdp;
@@ -6677,6 +6678,30 @@ end;
 procedure TestTIdSDPMultimediaSession.TestMimeType;
 begin
   CheckEquals(SdpMimeType, Self.MS.MimeType, 'SDP MIME type');
+end;
+
+procedure TestTIdSDPMultimediaSession.TestOnHold;
+begin
+  Self.MS.StartListening(Self.MultiStreamSDP(8000, 9000));
+  Check(not Self.MS.OnHold, 'Session shouldn''t be on hold at first');
+  Self.MS.PutOnHold;
+  Check(Self.MS.OnHold, 'OnHold after PutOnHold');
+
+  Self.MS.TakeOffHold;
+  Check(not Self.MS.OnHold, 'OnHold after TakeOffHold');
+
+  CheckEquals(2,
+              Self.MS.StreamCount,
+              'Sanity check: MultiStreamSDP made the wrong number of streams');
+  Self.MS.PutOnHold;
+  Self.MS.Streams[0].TakeOffHold;
+  Check(Self.MS.OnHold, 'The Session can''t know you manually took any streams off hold');
+  Self.MS.Streams[1].TakeOffHold;
+  Check(Self.MS.OnHold, 'The Session can''t know you manually took all streams off hold');
+
+  Self.MS.TakeOffHold;
+  Check(not Self.MS.OnHold,
+        'OnHold after TakeOffHold, having manually taken all streams off hold');
 end;
 
 procedure TestTIdSDPMultimediaSession.TestPutOnHold;

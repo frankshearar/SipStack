@@ -644,6 +644,7 @@ type
   private
     fHighestAllowedPort: Cardinal;
     fLowestAllowedPort:  Cardinal;
+    fOnHold:             Boolean;
     fStreams:            TObjectList;
     Profile:             TIdRTPProfile;
     StreamLock:          TCriticalSection;
@@ -667,6 +668,7 @@ type
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
+    property OnHold:                  Boolean           read fOnHold;
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
   end;
 
@@ -4061,6 +4063,8 @@ var
 begin
   for I := 0 to Self.StreamCount - 1 do
     Self.Streams[I].PutOnHold;
+
+  Self.fOnHold := true;  
 end;
 
 function TIdSDPMultimediaSession.StartListening(LocalSessionDesc: String): String;
@@ -4159,6 +4163,8 @@ var
 begin
   for I := 0 to Self.StreamCount - 1 do
     Self.Streams[I].TakeOffHold;
+
+  Self.fOnHold := false;
 end;
 
 function TIdSDPMultimediaSession.AllowedPort(Port: Cardinal): Boolean;
