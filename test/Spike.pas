@@ -363,10 +363,10 @@ begin
           + 's=-'#13#10
           + 'c=IN IP4 ' + Address + #13#10
           + 't=0 0'#13#10
-          + 'm=audio 8000 RTP/AVP 0'#13#10
-          + 'm=audio 8002 RTP/AVP 96'#13#10
-          + 'a=rtpmap:96 telephone-event/8000'#13#10
-          + 'a=fmtp:101 0-16'#13#10
+//          + 'm=audio 8000 RTP/AVP 0'#13#10
+//          + 'm=audio 8002 RTP/AVP 96'#13#10
+//          + 'a=rtpmap:96 telephone-event/8000'#13#10
+//          + 'a=fmtp:101 0-16'#13#10
           + 'm=text 8004 RTP/AVP 97'#13#10
           + 'a=rtpmap:97 T140/1000'#13#10;
 end;
@@ -430,7 +430,7 @@ procedure TrnidSpike.OnEstablishedSession(Session: TIdSipSession;
                                           const RemoteSessionDescription: String;
                                           const MimeType: String);
 begin
-//  Self.PayloadProcessor.SetRemoteDescription(RemoteSessionDescription);
+  Self.PayloadProcessor.SetRemoteDescription(RemoteSessionDescription);
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
@@ -689,6 +689,7 @@ end;
 
 procedure TrnidSpike.InviteClick(Sender: TObject);
 var
+  I:           Integer;
   OurHostName: String;
   SDP:         String;
   Target:      TIdSipToHeader;
@@ -704,7 +705,9 @@ begin
     Self.ResetCounters;
 
 //    Self.AudioPlayer.Play(AnyAudioDevice);
-//    Self.PayloadProcessor.StartListening(SDP);
+    SDP := Self.PayloadProcessor.StartListening(SDP);
+    for I := 0 to Self.PayloadProcessor.StreamCount - 1 do
+      Self.PayloadProcessor.Streams[I].AddDataListener(Self);
 
     if Self.MasqAsNat.Checked then
       SDP := StringReplace(SDP, OurHostName, Self.HostName.Text, [rfReplaceAll, rfIgnoreCase]);
@@ -725,17 +728,16 @@ begin
 end;
 
 procedure TrnidSpike.TextTimerTimer(Sender: TObject);
-//var
-//  Text: TIdRTPT140Payload;
+var
+  Text: TIdRTPT140Payload;
 begin
-{
   Self.TextLock.Acquire;
   try
     if (Self.SendBuffer <> '') then begin
-      Text := Self.Media.Profile.EncodingFor(T140Encoding + '/' + IntToStr(T140ClockRate)).Clone as TIdRTPT140Payload;
+      Text := Self.RTPProfile.EncodingFor(T140Encoding).Clone as TIdRTPT140Payload;
       try
         Text.Block := Self.SendBuffer;
-//        Self.Media.SessionFor(Text).SendData(Text);
+        Self.PayloadProcessor.Streams[0].SendData(Text);
       finally
         Text.Free;
       end;
@@ -744,7 +746,6 @@ begin
   finally
     Self.TextLock.Release;
   end;
-}
 end;
 
 procedure TrnidSpike.InputTextKeyPress(Sender: TObject; var Key: Char);
@@ -878,19 +879,17 @@ begin
         for I := 0 to SDP.MediaDescriptionCount - 1 do
           SDP.MediaDescriptionAt(I).Connections[0].Address := Self.Address;
 
-        Answer := SDP.AsString;
+        Answer := Self.PayloadProcessor.StartListening(SDP.AsString);
+
+        for I := 0 to Self.PayloadProcessor.StreamCount - 1 do
+          Self.PayloadProcessor.Streams[I].AddDataListener(Self);
       finally
         SDP.Free;
       end;
 
 //      Self.AudioPlayer.Play(AnyAudioDevice);
 
-    // Offer contains a description of what data we expect to receive. Sometimes
-    // we cannot meet this offer (e.g., the offer says "receive on port 8000" but
-    // port 8000's already bound. We thus try to honour the offer as closely as
-    // possible.
-//      Self.PayloadProcessor.StartListening(Answer);
-//      Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
+      Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
     end
     else
       Answer := Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address);

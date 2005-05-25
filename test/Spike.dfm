@@ -210,7 +210,7 @@ object rnidSpike: TrnidSpike
         Width = 290
         Height = 21
         TabOrder = 0
-        Text = 'sip:192.168.1.132'
+        Text = 'sip:192.168.1.128:5060;transport=tcp'
       end
       object Invite: TButton
         Left = 0
@@ -282,7 +282,7 @@ object rnidSpike: TrnidSpike
         Width = 121
         Height = 21
         TabOrder = 10
-        Text = '80.168.137.82'
+        Text = '192.168.1.131'
         OnChange = HostNameChange
       end
       object MasqAsNat: TCheckBox
@@ -292,10 +292,8 @@ object rnidSpike: TrnidSpike
         Height = 17
         Hint = 'If checked, use the IP to the left in the SDP payloads'
         Caption = 'Masq as NAT'
-        Checked = True
         ParentShowHint = False
         ShowHint = True
-        State = cbChecked
         TabOrder = 11
       end
       object Answer: TButton
