@@ -125,7 +125,7 @@ end;
 
 function TIdSipTcpServer.DefaultTimeout: Cardinal;
 begin
-  Result := 5000;
+  Result := 60000; // One minute
 end;
 
 procedure TIdSipTcpServer.DestroyClient(Client: TIdSipTcpClient);
