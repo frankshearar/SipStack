@@ -103,25 +103,21 @@ type
 
     AudioPlayer:    TAudioData;
     DataStore:      TStream;
-    Dispatch:       TIdSipTransactionDispatcher;
     DTMFPanel:      TIdDTMFPanel;
     HistListener:   TIdRTPPayloadHistogram;
     HistogramPanel: TIdHistogramPanel;
     LatestSession:  TIdSipSession;
-    Locator:        TIdSipIndyLocator;
     RTPByteCount:   Integer;
     RTPProfile:     TIdRTPProfile;
     RunningPort:    Cardinal;
     SendBuffer:     String;
     StopEvent:      TEvent;
     Timer:          TIdTimerQueue;
-    Transports:     TObjectList;
     UA:             TIdSipUserAgent;
     UDPByteCount:   Integer;
 
     fPayloadProcessor:    TIdSDPMultimediaSession;
 
-    function  AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
     function  Address: String;
     procedure CreateUi;
     function  LocalSDP(const Address: String): String;
@@ -210,6 +206,10 @@ const
 //* TrnidSpike Public methods **************************************************
 
 constructor TrnidSpike.Create(AOwner: TComponent);
+var
+  Conf: TStrings;
+  Configurator: TIdSipStackConfigurator;
+  I: Integer;
 begin
   inherited Create(AOwner);
 
@@ -222,53 +222,61 @@ begin
 
   Self.Timer := TIdThreadedTimerQueue.Create(false);
 
-  Self.Transports := TObjectList.Create(true);
+  Conf := TStringList.Create;
+  try
+    Conf.Add('Listen: UDP AUTO:' + IntToStr(Self.RunningPort));
+    Conf.Add('Listen: TCP AUTO:' + IntToStr(Self.RunningPort));
+    Conf.Add('Contact: ' + Self.ContactUri.Text);
+    Conf.Add('From: ' + Self.FromUri.Text);
+    Conf.Add('NameServer: MOCK');
+
+    if Self.UseAsProxy.Checked then
+      Conf.Add('Proxy: ' + Self.TargetUri.Text + ';lr');
+
+    Configurator := TIdSipStackConfigurator.Create;
+    try
+      Self.UA := Configurator.CreateUserAgent(Conf, Self.Timer);
+    finally
+      Configurator.Free;
+    end;
+  finally
+    Conf.Free;
+  end;
+
+  Self.Timer.Resume;
+
   Self.RTPProfile := TIdAudioVisualProfile.Create;
 
-  Self.Locator := TIdSipIndyLocator.Create;
-  Self.Locator.NameServer := '62.241.160.200';
-  Self.Locator.Port := 53;
-
-  Self.Dispatch := TIdSipTransactionDispatcher.Create(Self.Timer, Self.Locator);
-  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipTCPTransport));
-  Self.Dispatch.AddTransport(Self.AddTransport(TIdSipUDPTransport));
-
-  Self.UA := TIdSipUserAgent.Create;
-  Self.UA.Dispatcher := Self.Dispatch;
-  Self.UA.Locator    := Self.Locator;
   Self.UA.AddUserAgentListener(Self);
   Self.UA.AddObserver(Self);
-  Self.UA.HostName := (Self.Transports[0] as TIdSipTransport).HostName;
-  Self.UA.Timer := Self.Timer;
-  Self.UA.UserAgentName := '';
   Self.UA.AddModule(TIdSipRegisterModule);
 
+  for I := 0 to Self.UA.Dispatcher.Transports.Count - 1 do begin
+    Self.UA.Dispatcher.Transports[I].AddTransportListener(Self);
+    Self.UA.Dispatcher.Transports[I].AddTransportSendingListener(Self);
+  end;
+
   try
-    BasePort.Text := IntToStr((Self.Transports[0] as TIdSipTransport).Port);
+    Self.StopTransports;
+    BasePort.Text := IntToStr(Self.UA.Dispatcher.Transports[0].Port);
     Self.StartTransports;
   except
     on EIdCouldNotBindSocket do
       ShowMessage('Something''s hogged the SIP port '
-                + '(' + IntToStr((Self.Transports[0] as TIdSipTransport).Port) + ') - '
+                + '(' + IntToStr(Self.UA.Dispatcher.Transports[0].Port) + ') - '
                 + 'kill it and restart this');
   end;
-  Self.UA.Contact.Value := Self.ContactUri.Text;
-  Self.UA.From.Value    := Self.FromUri.Text;
-  Self.UA.HasProxy      := Self.UseAsProxy.Checked;
-  Self.UA.Proxy.Uri     := Self.TargetUri.Text + ';lr';
-
   Self.fPayloadProcessor := TIdSDPMultimediaSession.Create(Self.RTPProfile);
 end;
 
 destructor TrnidSpike.Destroy;
 begin
+  Self.Timer.Terminate;
   Self.StopTransports;
 
   Self.PayloadProcessor.Free;
 
   Self.UA.Free;
-  Self.Dispatch.Free;
-  Self.Locator.Free;
 
   Self.TextLock.Free;
   Self.CounterLock.Free;
@@ -287,10 +295,6 @@ begin
   Self.DTMFPanel.Free;
   Self.RTPProfile.Free;
 
-  Self.Transports.Free;
-
-  Self.Timer.Terminate;
-
   TIdSipTransportRegistry.UnregisterTransport(TcpTransport);
   TIdSipTransportRegistry.UnregisterTransport(TlsTransport);
   TIdSipTransportRegistry.UnregisterTransport(UdpTransport);
@@ -300,26 +304,9 @@ end;
 
 //* TrnidSpike Private methods *************************************************
 
-function TrnidSpike.AddTransport(TransportType: TIdSipTransportClass): TIdSipTransport;
-begin
-  Result := TransportType.Create;
-  Self.Transports.Add(Result);
-  Result.HostName := Self.HostName.Text;
-  Result.Port     := Self.RunningPort;
-  Result.Timer    := Self.Timer;
-
-  if (GStack.LocalAddress <> LocalHostName) then
-    Result.Address := GStack.LocalAddress
-  else
-   Result.Address := LocalHostName;
-
-  Result.AddTransportListener(Self);
-  Result.AddTransportSendingListener(Self);
-end;
-
 function TrnidSpike.Address: String;
 begin
-  Result := (Self.Transports[0] as TIdSipTransport).Address;
+  Result := Self.UA.Dispatcher.Transports[0].Address;
 end;
 
 procedure TrnidSpike.CreateUi;
@@ -372,14 +359,19 @@ begin
 end;
 
 procedure TrnidSpike.LogMessage(Msg: TIdSipMessage; Inbound: Boolean);
+var
+  LogLine: String;
 begin
+  if Inbound then begin
+    LogLine := '<<<< ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now);
+  end
+  else begin
+    LogLine := '>>>> ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now);
+  end;
+
   Self.Lock.Acquire;
   try
-    if Inbound then
-      Self.Log.Lines.Add('<<<< ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now))
-    else
-      Self.Log.Lines.Add('>>>> ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
-
+    Self.Log.Lines.Add(LogLine);
     Self.Log.Lines.Add(EncodeNonLineUnprintableChars(Msg.AsString));
   finally
     Self.Lock.Release;
@@ -512,7 +504,7 @@ procedure TrnidSpike.OnModifySession(Session: TIdSipSession;
                                      const RemoteSessionDescription: String;
                                      const MimeType: String);
 begin
-  Session.AcceptModify(Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address),
+  Session.AcceptModify(Self.LocalSDP(Self.UA.Dispatcher.Transports[0].Address),
                        SdpMimeType);
 end;
 
@@ -649,8 +641,8 @@ procedure TrnidSpike.StartTransports;
 var
   I: Integer;
 begin
-  for I := 0 to Self.Transports.Count - 1 do
-    (Self.Transports[I] as TIdSipTransport).Start;
+  for I := 0 to Self.UA.Dispatcher.Transports.Count - 1 do
+    Self.UA.Dispatcher.Transports[I].Start;
 end;
 
 procedure TrnidSpike.StopReadingData;
@@ -662,8 +654,8 @@ procedure TrnidSpike.StopTransports;
 var
   I: Integer;
 begin
-  for I := 0 to Self.Transports.Count - 1 do
-    (Self.Transports[I] as TIdSipTransport).Stop;
+  for I := 0 to Self.UA.Dispatcher.Transports.Count - 1 do
+    Self.UA.Dispatcher.Transports[I].Stop;
 end;
 
 procedure TrnidSpike.UpdateCounters;
@@ -694,7 +686,7 @@ var
   SDP:         String;
   Target:      TIdSipToHeader;
 begin
-  OurHostName := (Self.Transports[0] as TIdSipTransport).Address;
+  OurHostName := Self.UA.Dispatcher.Transports[0].Address;
 
   SDP := Self.LocalSDP(OurHostName);
 
@@ -767,8 +759,8 @@ begin
 
   NewPort := StrToInt(BasePort.Text);
 
-  for I := 0 to Self.Transports.Count - 1 do
-    (Self.Transports[I] as TIdSipTransport).Port := NewPort;
+  for I := 0 to Self.UA.Dispatcher.Transports.Count - 1 do
+    Self.UA.Dispatcher.Transports[I].Port := NewPort;
 
   Self.UA.Contact.Address.Port := NewPort;
   Self.UA.From.Address.Port    := NewPort;
@@ -855,8 +847,8 @@ var
 begin
   Self.StopTransports;
 
-  for I := 0 to Self.Transports.Count - 1 do
-    (Self.Transports[I] as TIdSipTransport).HostName := Self.HostName.Text;
+  for I := 0 to Self.UA.Dispatcher.Transports.Count - 1 do
+    Self.UA.Dispatcher.Transports[I].HostName := Self.HostName.Text;
 
   Self.UA.HostName := Self.HostName.Text;
 
@@ -892,7 +884,7 @@ begin
       Self.PayloadProcessor.SetRemoteDescription(Self.LatestSession.InitialRequest.Body);
     end
     else
-      Answer := Self.LocalSDP((Self.Transports[0] as TIdSipTransport).Address);
+      Answer := Self.LocalSDP(Self.UA.Dispatcher.Transports[0].Address);
 
     (Self.LatestSession as TIdSipInboundSession).AcceptCall(Answer, SdpMimeType);
     Self.Answer.Enabled := false;

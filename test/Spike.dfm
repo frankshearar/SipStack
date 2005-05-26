@@ -210,7 +210,7 @@ object rnidSpike: TrnidSpike
         Width = 290
         Height = 21
         TabOrder = 0
-        Text = 'sip:192.168.1.128:5060;transport=tcp'
+        Text = 'sip:127.0.0.1:5061;transport=tcp'
       end
       object Invite: TButton
         Left = 0
