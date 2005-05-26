@@ -197,7 +197,7 @@ type
   TIdSipTcpClientThread = class(TIdBaseThread)
   private
     Client:    TIdSipTcpClient;
-    Msg:       TIdSipMessage;
+    FirstMsg:  TIdSipMessage;
     Transport: TIdSipTCPTransport;
 
     procedure NotifyOfException(E: Exception);
@@ -1191,7 +1191,7 @@ begin
   Self.Client.OnResponse := Self.ReceiveResponseInTimerContext;
   Self.Client.Port       := Port;
 
-  Self.Msg       := Msg.Copy;
+  Self.FirstMsg  := Msg.Copy;
   Self.Transport := Transport;
 
   inherited Create(false);
@@ -1199,7 +1199,7 @@ end;
 
 destructor TIdSipTcpClientThread.Destroy;
 begin
-  Self.Msg.Free;
+  Self.FirstMsg.Free;
   Self.Client.Free;
 
   inherited Destroy;
@@ -1222,10 +1222,10 @@ begin
   try
     Self.Client.Connect(Self.Transport.Timeout);
     try
-      if Self.Msg.IsRequest then
-        Self.Client.Send(Self.Msg as TIdSipRequest)
+      if Self.FirstMsg.IsRequest then
+        Self.Client.Send(Self.FirstMsg as TIdSipRequest)
       else
-        Self.Client.Send(Self.Msg as TIdSipResponse);
+        Self.Client.Send(Self.FirstMsg as TIdSipResponse);
     finally
       Self.Client.Disconnect;
     end;
