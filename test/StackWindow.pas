@@ -21,6 +21,8 @@ type
     DefaultTimeout: Cardinal;
     EmptyListEvent: TEvent;
     ExceptionType:  ExceptClass;
+    fAddress:       String;
+    fPort:          Cardinal;
     fTestCase:      TestTIdSipStackInterface;
     Intf:           TIdSipStackInterface;
 
@@ -41,13 +43,15 @@ type
     constructor Create(AOwner: TComponent; TestCase: TestTIdSipStackInterface); reintroduce;
     destructor  Destroy; override;
 
+    property Address: String   read fAddress;
+    property Port:    Cardinal read fPort;
     property TestCase: TestTIdSipStackInterface read fTestCase;
   end;
 
 implementation
 
 uses
-  IdSipTransport, IdSystem;
+  IdSipMockTransport, IdSipTransport, IdSystem;
 
 {$R *.dfm}
 
@@ -62,12 +66,12 @@ var
 begin
   inherited Create(AOwner);
 
-  Self.DefaultTimeout := 1000;
+  Self.DefaultTimeout := 2000;
   Self.EmptyListEvent := TSimpleEvent.Create;
   Self.ExceptionType  := Exception;
   Self.fTestCase      := TestCase;
 
-  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipUDPTransport);
+  TIdSipTransportRegistry.RegisterTransport(UdpTransport, TIdSipMockUDPTransport);
 
   BasicConf := TStringList.Create;
   try
@@ -83,12 +87,13 @@ begin
   Self.Intf.OnEmpty := Self.OnStackQueueEmpty;
   Self.Intf.Resume;
 
-
   Self.TestCase.Intf := Self.Intf;
+//  Self.fTestCase := TestTIdSipStackInterface.Create('TestAcceptCallWithInvalidHandle');
 end;
 
 destructor TStackWindow.Destroy;
 begin
+// Self.TestCase.Free;
   Self.Intf.Terminate;
   Self.WaitForSignaled(Self.EmptyListEvent,
                        'Stack took too long to finish handling outstanding events');
