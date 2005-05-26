@@ -1260,7 +1260,7 @@ var
 begin
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.ReceivedFrom := ReceivedFrom;
-  Wait.Message      := Msg;
+  Wait.Message      := R;
   Wait.Transport    := Self.Transport;
 
   Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
@@ -1274,7 +1274,7 @@ var
 begin
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.ReceivedFrom := ReceivedFrom;
-  Wait.Message      := Msg;
+  Wait.Message      := R;
   Wait.Transport    := Self.Transport;
 
   Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
