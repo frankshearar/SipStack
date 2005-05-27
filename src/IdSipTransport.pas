@@ -1317,7 +1317,7 @@ procedure TIdSipReceiveMessageWait.Trigger;
 begin
   if Self.Message.IsRequest then
     (Self.Transport as IIdSipMessageListener).OnReceiveRequest(Self.Message as TIdSipRequest,
-                                                                Self.ReceivedFrom)
+                                                               Self.ReceivedFrom)
   else
     (Self.Transport as IIdSipMessageListener).OnReceiveResponse(Self.Message as TIdSipResponse,
                                                                 Self.ReceivedFrom);
