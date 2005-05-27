@@ -246,13 +246,11 @@ type
   TIdSipReceiveMessageWait = class(TIdSipMessageWait)
   private
     fReceivedFrom: TIdSipConnectionBindings;
-    fMessage:      TIdSipMessage;
     fTransport:    TIdSipTransport;
   public
     procedure Trigger; override;
 
     property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Message:      TIdSipMessage            read fMessage write fMessage;
     property Transport:    TIdSipTransport          read fTransport write fTransport;
   end;
 
