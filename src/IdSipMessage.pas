@@ -6658,6 +6658,7 @@ end;
 
 function TIdSipMessage.HasBodyButMissingContentType: Boolean;
 begin
+  // cf. RFC 3261, section 7.4.1
   Result := (Length(Self.Body) > 0)
     and not Self.HasHeader(ContentTypeHeaderFull);
 
