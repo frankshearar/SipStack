@@ -23,7 +23,6 @@ type
 
   TIdSipTransaction = class;
   TIdSipTransactionClass = class of TIdSipTransaction;
-  TIdSipClientInviteTransaction = class;
 
   // OnTerminated signals to the Listener that Transaction has terminated,
   // and the Listener must remove any references to Transaction - after this
