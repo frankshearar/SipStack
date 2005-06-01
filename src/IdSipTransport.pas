@@ -1256,6 +1256,8 @@ procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
 var
   Wait: TIdSipMessageExceptionWait;
 begin
+  if Self.Terminated then Exit;
+
   Wait := TIdSipMessageExceptionWait.Create;
   Wait.ExceptionType    := ExceptClass(E.ClassType);
   Wait.ExceptionMessage := E.Message;
