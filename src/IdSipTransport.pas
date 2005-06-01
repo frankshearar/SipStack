@@ -1241,6 +1241,8 @@ begin
       Self.Client.Disconnect;
     end;
   except
+    on EIdConnClosedGracefully do;
+    on EIdConnectTimeout do;
     on E: Exception do
       Self.NotifyOfException(E);
   end;
@@ -1269,6 +1271,8 @@ procedure TIdSipTcpClientThread.ReceiveRequestInTimerContext(Sender: TObject;
 var
   Wait: TIdSipReceiveMessageWait;
 begin
+  if Self.Terminated then Exit;
+
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.ReceivedFrom := ReceivedFrom;
   Wait.Message      := R;
@@ -1283,6 +1287,8 @@ procedure TIdSipTcpClientThread.ReceiveResponseInTimerContext(Sender: TObject;
 var
   Wait: TIdSipReceiveMessageWait;
 begin
+  if Self.Terminated then Exit;
+
   Wait := TIdSipReceiveMessageWait.Create;
   Wait.ReceivedFrom := ReceivedFrom;
   Wait.Message      := R;
