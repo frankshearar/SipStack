@@ -13,9 +13,10 @@ interface
 
 uses
   Classes, Contnrs, IdBaseThread, IdException, IdInterfacedObject,
-  IdNotification, IdSipLocator, IdSipMessage, IdSipTcpClient, IdSipTcpServer,
-  IdSipTlsServer, IdSipUdpServer, IdSocketHandle, IdSSLOpenSSL, IdTCPConnection,
-  IdTimerQueue, SyncObjs, SysUtils;
+  IdNotification, IdSipLocator, IdSipMessage, IdSipServerNotifier,
+  IdSipTcpClient, IdSipTcpServer, IdSipTlsServer, IdSipUdpServer,
+  IdSocketHandle, IdSSLOpenSSL, IdTCPConnection, IdTimerQueue, SyncObjs,
+  SysUtils;
 
 type
   TIdSipTransport = class;
@@ -252,6 +253,18 @@ type
 
     property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
     property Transport:    TIdSipTransport          read fTransport write fTransport;
+  end;
+
+  // I represent a (possibly) deferred receipt of a message.
+  TIdSipReceiveTCPMessageWait = class(TIdSipReceiveMessageWait)
+  private
+    fReceivedFrom: TIdSipConnectionBindings;
+    fListeners:    TIdSipServerNotifier;
+  public
+    procedure Trigger; override;
+
+    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
+    property Listeners:    TIdSipServerNotifier     read fListeners write fListeners;
   end;
 
   // I implement the Transport Layer Security (RFC 2249) connections for the SIP
@@ -1082,7 +1095,7 @@ begin
   Self.Transport := Self.ServerType.Create(nil);
   Self.Transport.AddMessageListener(Self);
 
-  Self.Transport.OnAddConnection    := Self.DoOnAddConnection;
+  Self.Transport.OnAddConnection := Self.DoOnAddConnection;
 end;
 
 procedure TIdSipTCPTransport.SendRequest(R: TIdSipRequest;
@@ -1206,6 +1219,8 @@ end;
 procedure TIdSipTcpClientThread.Terminate;
 begin
   Self.Client.Terminated := true;
+
+  inherited Terminate;
 end;
 
 //* TIdSipTcpClientThread Protected methods ************************************
@@ -1220,10 +1235,8 @@ begin
   try
     Self.Client.Connect(Self.Transport.Timeout);
     try
-      if Self.FirstMsg.IsRequest then
-        Self.Client.Send(Self.FirstMsg as TIdSipRequest)
-      else
-        Self.Client.Send(Self.FirstMsg as TIdSipResponse);
+      Self.Client.Send(Self.FirstMsg);
+      Self.Client.ReceiveMessages;
     finally
       Self.Client.Disconnect;
     end;
@@ -1319,6 +1332,21 @@ begin
   else
     (Self.Transport as IIdSipMessageListener).OnReceiveResponse(Self.Message as TIdSipResponse,
                                                                 Self.ReceivedFrom);
+end;
+
+//******************************************************************************
+//* TIdSipReceiveTCPMessageWait                                                *
+//******************************************************************************
+//* TIdSipReceiveTCPMessageWait Public methods *********************************
+
+procedure TIdSipReceiveTCPMessageWait.Trigger;
+begin
+  if Self.Message.IsRequest then
+    Self.Listeners.NotifyListenersOfRequest(Self.Message as TIdSipRequest,
+                                            Self.ReceivedFrom)
+  else
+    Self.Listeners.NotifyListenersOfResponse(Self.Message as TIdSipResponse,
+                                             Self.ReceivedFrom);
 end;
 
 //******************************************************************************

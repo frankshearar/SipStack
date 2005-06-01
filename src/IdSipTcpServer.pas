@@ -39,7 +39,6 @@ type
     procedure DoOnException(Sender: TObject); overload;
     procedure DoOnException(Thread: TIdPeerThread;
                             Exception: Exception); overload;
-    procedure DoOnReceiveMessage(Sender: TObject);
     procedure ReadBodyInto(Connection: TIdTCPConnection;
                            Msg: TIdSipMessage;
                            Dest: TStringStream);
@@ -71,14 +70,6 @@ type
     property OnRemoveConnection: TIdSipRemoveConnectionEvent read fOnRemoveConnection write fOnRemoveConnection;
     property ReadTimeout:        Integer                     read fReadTimeout write fReadTimeout;
     property Timer:              TIdTimerQueue               read fTimer write fTimer;
-  end;
-
-  // I represent a (possibly) deferred receipt of a message.
-  TIdSipReceiveTCPMessageWait = class(TIdSipMessageNotifyEventWait)
-  private
-    fReceivedFrom: TIdSipConnectionBindings;
-  public
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
   end;
 
   TIdSipTcpServerClass = class of TIdSipTcpServer;
@@ -247,20 +238,6 @@ begin
                                      Exception.Message);
 end;
 
-procedure TIdSipTcpServer.DoOnReceiveMessage(Sender: TObject);
-var
-  Wait: TIdSipReceiveTCPMessageWait;
-begin
-  Wait := Sender as TIdSipReceiveTCPMessageWait;
-
-  if Wait.Message.IsRequest then
-    Self.Notifier.NotifyListenersOfRequest(Wait.Message as TIdSipRequest,
-                                           Wait.ReceivedFrom)
-  else
-    Self.Notifier.NotifyListenersOfResponse(Wait.Message as TIdSipResponse,
-                                            Wait.ReceivedFrom);
-end;
-
 procedure TIdSipTcpServer.ReadBodyInto(Connection: TIdTCPConnection;
                                        Msg: TIdSipMessage;
                                        Dest: TStringStream);
@@ -323,8 +300,8 @@ var
   RecvWait: TIdSipReceiveTCPMessageWait;
 begin
   RecvWait := TIdSipReceiveTCPMessageWait.Create;
-  RecvWait.Event        := Self.DoOnReceiveMessage;
   RecvWait.Message      := Msg.Copy;
+  RecvWait.Listeners    := Self.Notifier;
   RecvWait.ReceivedFrom := ReceivedFrom;
 
   Self.Timer.AddEvent(TriggerImmediately, RecvWait);

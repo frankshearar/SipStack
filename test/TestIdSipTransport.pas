@@ -465,6 +465,7 @@ begin
   Result.AddTest(TestTIdSipTransportEventNotifications.Suite);
   Result.AddTest(TestTransportRegistry.Suite);
   Result.AddTest(TestTIdSipTCPTransport.Suite);
+{
 //  Result.AddTest(TestTIdSipTLSTransport.Suite);
   Result.AddTest(TestTIdSipUDPTransport.Suite);
 //  Result.AddTest(TestTIdSipSCTPTransport.Suite);
@@ -478,6 +479,7 @@ begin
   Result.AddTest(TestTIdSipTransportRejectedMessageMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingRequestMethod.Suite);
   Result.AddTest(TestTIdSipTransportSendingResponseMethod.Suite);
+}
 end;
 
 //******************************************************************************
@@ -992,14 +994,12 @@ begin
 end;
 
 procedure TestTIdSipTransport.TearDown;
-var
-  WaitTime: Cardinal;
 begin
-  WaitTime := Self.DefaultTimeout * 3 div 2;
+  Self.DefaultTimeout := Self.DefaultTimeout * 3 div 2;
 
   Self.Timer.Terminate;
-  Self.EmptyListEvent.WaitFor(WaitTime);
-  Self.FinishedTimer.WaitFor(WaitTime);
+  Self.WaitForSignaled(Self.EmptyListEvent, 'Waiting for timer to finish processing its events');
+  Self.WaitForSignaled(Self.FinishedTimer, 'Waiting for timer to finish destroying its transports');
 
   Self.RecvdRequest.Free;
   Self.Response.Free;
@@ -1011,6 +1011,7 @@ begin
   Self.LastSentResponse.Free;
 
   Self.SendEvent.Free;
+  Self.FinishedTimer.Free;
   Self.EmptyListEvent.Free;
 
   TIdSipTransportRegistry.UnregisterTransport(Self.TransportType.GetTransportType);

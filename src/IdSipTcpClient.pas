@@ -28,14 +28,13 @@ type
     procedure ReadBodyInto(Msg: TIdSipMessage;
                            Dest: TStringStream);
     function  ReadMessage(Dest: TStringStream): String;
-    procedure ReadMessages;
   protected
     function  DefaultTimeout: Cardinal; virtual;
   public
     constructor Create(AOwner: TComponent); override;
 
-    procedure Send(Request: TIdSipRequest); overload;
-    procedure Send(Response: TIdSipResponse); overload;
+    procedure ReceiveMessages;
+    procedure Send(Msg: TIdSipMessage);
 
     property OnRequest:  TIdSipRequestEvent  read fOnRequest write fOnRequest;
     property OnResponse: TIdSipResponseEvent read fOnResponse write fOnResponse;
@@ -65,18 +64,61 @@ begin
   inherited Create(AOwner);
 
   Self.ReadTimeout := Self.DefaultTimeout;
-  Self.Terminated  := false;  
+  Self.Terminated  := false;
 end;
 
-procedure TIdSipTcpClient.Send(Request: TIdSipRequest);
+procedure TIdSipTcpClient.ReceiveMessages;
+var
+  S:            TStringStream;
+  Msg:          TIdSipMessage;
+  ReceivedFrom: TIdSipConnectionBindings;
 begin
-  Self.Write(Request.AsString);
-  Self.ReadMessages;
+  ReceivedFrom.LocalIP   := Self.Socket.Binding.IP;
+  ReceivedFrom.LocalPort := Self.Socket.Binding.Port;
+  ReceivedFrom.PeerIP    := Self.Socket.Binding.PeerIP;
+  ReceivedFrom.PeerPort  := Self.Socket.Binding.PeerPort;
+
+  while (not Self.Terminated and Self.Connected) do begin
+    S := TStringStream.Create('');
+    try
+      try
+        Self.ReadMessage(S);
+        Msg := TIdSipMessage.ReadMessageFrom(S);
+        try
+          try
+            Self.ReadBodyInto(Msg, S);
+            Msg.ReadBody(S);
+
+            Self.DoOnMessage(Msg, ReceivedFrom);
+          except
+            // Exceptions reading the body of a message from the socket.
+            on E: Exception do begin
+              Self.Disconnect;
+
+              raise;
+            end;
+          end;
+        finally
+          Msg.Free;
+        end;
+      except
+        // Exceptions reading a message from the socket.
+        on EIdReadTimeout do
+          Self.Terminated := true;
+        on EIdConnClosedGracefully do
+          Self.Terminated := true;
+        on EIdClosedSocket do
+          Self.Terminated := true;
+      end;
+    finally
+      S.Free;
+    end;
+  end;
 end;
 
-procedure TIdSipTcpClient.Send(Response: TIdSipResponse);
+procedure TIdSipTcpClient.Send(Msg: TIdSipMessage);
 begin
-  Self.Write(Response.AsString);
+  Self.Write(Msg.AsString);
 end;
 
 //* TIdSipTcpClient Protected methods ******************************************
@@ -123,57 +165,6 @@ begin
   // manually.
   Dest.Write(CrLf, Length(CrLf));
   Dest.Seek(0, soFromBeginning);
-end;
-
-procedure TIdSipTcpClient.ReadMessages;
-var
-  S:            TStringStream;
-  Msg:          TIdSipMessage;
-  ReceivedFrom: TIdSipConnectionBindings;
-begin
-  ReceivedFrom.LocalIP   := Self.Socket.Binding.IP;
-  ReceivedFrom.LocalPort := Self.Socket.Binding.Port;
-  ReceivedFrom.PeerIP    := Self.Socket.Binding.PeerIP;
-  ReceivedFrom.PeerPort  := Self.Socket.Binding.PeerPort;
-
-  while (not Self.Terminated and Self.Connected) do begin
-    S := TStringStream.Create('');
-    try
-      try
-        Self.ReadMessage(S);
-        Msg := TIdSipMessage.ReadMessageFrom(S);
-        try
-          try
-            Self.ReadBodyInto(Msg, S);
-            Msg.ReadBody(S);
-
-            Self.DoOnMessage(Msg, ReceivedFrom);
-          except
-            // Exceptions reading the body of a message from the socket.
-            on E: Exception do begin
-              if not Msg.IsRequest then begin
-                //Self.ReturnInternalServerError(E.Message);
-                Self.Disconnect;
-                Self.Terminated := true;
-              end;
-            end;
-          end;
-        finally
-          Msg.Free;
-        end;
-      except
-        // Exceptions reading a message from the socket.
-        on EIdReadTimeout do
-          Self.Terminated := true;
-        on EIdConnClosedGracefully do
-          Self.Terminated := true;
-        on EIdClosedSocket do
-          Self.Terminated := true;
-      end;
-    finally
-      S.Free;
-    end;
-  end;
 end;
 
 //******************************************************************************

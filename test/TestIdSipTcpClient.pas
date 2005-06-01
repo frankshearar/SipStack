@@ -18,6 +18,8 @@ uses
 type
   TIdSipRequestEvent = procedure(Sender: TObject;
                                  R: TIdSipRequest) of object;
+  TIdSipResponseEvent = procedure(Sender: TObject;
+                                  R: TIdSipResponse) of object;
 
   TestTIdSipTcpClient = class(TTestCaseSip, IIdSipMessageListener)
   private
@@ -37,6 +39,9 @@ type
     procedure CheckReceiveOkResponse(Sender: TObject;
                                      Response: TIdSipResponse;
                                      ReceivedFrom: TIdSipConnectionBindings);
+    procedure CheckReceiveOptions(Sender: TObject;
+                                  Request: TIdSipRequest;
+                                  ReceivedFrom: TIdSipConnectionBindings);
     procedure CheckReceiveProvisionalAndOkResponse(Sender: TObject;
                                                    Response: TIdSipResponse;
                                                    ReceivedFrom: TIdSipConnectionBindings);
@@ -66,6 +71,8 @@ type
                                  Request: TIdSipRequest);
     procedure SendProvisionalAndOkResponse(Sender: TObject;
                                            Request: TIdSipRequest);
+    procedure SendResponseReceiveOptions(Sender: TObject;
+                                         Response: TIdSipResponse);
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -78,6 +85,7 @@ type
     procedure TestReceiveOkResponseWithPause;
     procedure TestReceiveProvisionalAndOkResponse;
     procedure TestSendInvite;
+    procedure TestSendResponseReceiveOptions;
     procedure TestSendTwoInvites;
     procedure TestSendWithServerDisconnect;
   end;
@@ -156,6 +164,22 @@ procedure TestTIdSipTcpClient.CheckReceiveOkResponse(Sender: TObject;
                                                      ReceivedFrom: TIdSipConnectionBindings);
 begin
   try
+    CheckEquals(SIPOK, Response.StatusCode, 'Unexpected response');
+    Self.ThreadEvent.SetEvent;
+  except
+    on E: Exception do begin
+      Self.ExceptionType    := ExceptClass(E.ClassType);
+      Self.ExceptionMessage := E.Message;
+    end;
+  end;
+end;
+
+procedure TestTIdSipTcpClient.CheckReceiveOptions(Sender: TObject;
+                                                  Request: TIdSipRequest;
+                                                  ReceivedFrom: TIdSipConnectionBindings);
+begin
+  try
+    CheckEquals(MethodOptions, Request.Method, 'Unexpected request');
     Self.ThreadEvent.SetEvent;
   except
     on E: Exception do begin
@@ -287,7 +311,7 @@ procedure TestTIdSipTcpClient.OnReceiveResponse(Response: TIdSipResponse;
                                                 ReceivedFrom: TIdSipConnectionBindings);
 begin
   if Assigned(Self.CheckingResponseEvent) then
-    Self.CheckingResponseEvent(Self, Response, ReceivedFrom);
+    Self.CheckingResponseEvent(Self, Response);
 
   Self.ThreadEvent.SetEvent;
 end;
@@ -351,7 +375,7 @@ var
 begin
   Trying := StringReplace(LocalLoopResponse, '486 Busy Here', '100 Trying', []);
   OK     := StringReplace(LocalLoopResponse, '486 Busy Here', '200 OK', []);
-  
+
   Threads := Self.Server.Threads.LockList;
   try
     if (Threads.Count = 0) then
@@ -365,6 +389,31 @@ begin
   end;
 end;
 
+procedure TestTIdSipTcpClient.SendResponseReceiveOptions(Sender: TObject;
+                                                         Response: TIdSipResponse);
+var
+  Options: TIdSipRequest;
+  Threads: TList;
+begin
+  Options := Self.Invite.Copy as TIdSipRequest;
+  try
+    Options.Method := MethodOptions;
+    Options.CSeq.Method := Options.Method;
+
+    Threads := Self.Server.Threads.LockList;
+    try
+      if (Threads.Count = 0) then
+        raise Exception.Create('TCP connection disappeared: SendProvisionalAndOkResponse');
+
+      (TObject(Threads[0]) as TIdPeerThread).Connection.Write(Options.AsString);
+    finally
+      Self.Server.Threads.UnlockList;
+    end;
+  finally
+    Options.Free;
+  end;
+end;
+
 //* TestTIdSipTcpClient Published methods **************************************
 
 procedure TestTIdSipTcpClient.TestCanReceiveRequest;
@@ -374,6 +423,7 @@ begin
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
+  Self.Client.ReceiveMessages;
 
   Self.WaitForSignaled;
   CheckEquals(MethodOptions,
@@ -403,6 +453,7 @@ begin
   Check(not Self.Client.Terminated, 'Connection established');
 
   Self.Client.Send(Self.Invite);
+  Self.Client.ReceiveMessages;
 
   Self.WaitForSignaled;
   Check(Self.Client.Terminated, 'After final response received');
@@ -414,6 +465,7 @@ begin
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
+  Self.Client.ReceiveMessages;
 
   Self.WaitForSignaled;
   Check(Self.Client.Terminated, 'After connection unexpectedly cut');
@@ -448,6 +500,7 @@ begin
 
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
+  Self.Client.ReceiveMessages;
 
   Self.WaitForSignaled(Self.ClientEvent);
 
@@ -458,11 +511,26 @@ procedure TestTIdSipTcpClient.TestSendInvite;
 begin
   Self.CheckingRequestEvent := Self.CheckSendInvite;
 
-//  Self.Client.OnResponse
   Self.Client.Connect(DefaultTimeout);
   Self.Client.Send(Self.Invite);
 
   Self.WaitForSignaled;
+end;
+
+procedure TestTIdSipTcpClient.TestSendResponseReceiveOptions;
+var
+  OK: TIdSipResponse;
+begin
+  Self.CheckingResponseEvent := Self.SendResponseReceiveOptions;
+  Self.Client.OnRequest      := Self.CheckReceiveOptions;
+
+  OK := TIdSipResponse.InResponseTo(Self.Invite, SIPOK);
+  try
+    Self.Client.Connect(DefaultTimeout);
+    Self.Client.Send(OK);
+  finally
+    OK.Free;
+  end;
 end;
 
 procedure TestTIdSipTcpClient.TestSendTwoInvites;
