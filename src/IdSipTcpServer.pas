@@ -151,9 +151,9 @@ begin
   ReceivedFrom.PeerIP   := Thread.Connection.Socket.Binding.PeerIP;
   ReceivedFrom.PeerPort := Thread.Connection.Socket.Binding.PeerPort;
 
-  while Thread.Connection.Connected do begin
-    Thread.Connection.ReadTimeout := Self.ReadTimeout;
 
+  Thread.Connection.ReadTimeout := Self.ReadTimeout;
+  while Thread.Connection.Connected do begin
     S := TStringStream.Create('');
     try
       try
