@@ -30,6 +30,8 @@ type
     fDebugWaitTime: Cardinal;
     fTriggerTime:   Cardinal;
   public
+    constructor Create; virtual;
+
     function  Due: Boolean;
     function  MatchEvent(Event: Pointer): Boolean; virtual;
     function  TimeToWait: Cardinal;
@@ -233,6 +235,11 @@ end;
 //* TIdWait                                                                    *
 //******************************************************************************
 //* TIdWait Public methods *****************************************************
+
+constructor TIdWait.Create;
+begin
+  inherited Create;
+end;
 
 function TIdWait.Due: Boolean;
 begin
