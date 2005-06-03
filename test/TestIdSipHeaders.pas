@@ -365,6 +365,15 @@ type
     procedure TestName;
   end;
 
+  TestTIdSipReferToHeader = class(TestTIdSipAddressHeader)
+  private
+    R: TIdSipReferToHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  end;
+
   TestTIdSipReplacesHeader = class(THeaderTestCase)
   private
     R: TIdSipReplacesHeader;
@@ -673,6 +682,7 @@ begin
   Result.AddTest(TestTIdSipRetryAfterHeader.Suite);
   Result.AddTest(TestTIdSipRouteHeader.Suite);
   Result.AddTest(TestTIdSipRecordRouteHeader.Suite);
+  Result.AddTest(TestTIdSipReferToHeader.Suite);
   Result.AddTest(TestTIdSipReplacesHeader.Suite);
   Result.AddTest(TestTIdSipTimestampHeader.Suite);
   Result.AddTest(TestTIdSipUriHeader.Suite);
@@ -3379,6 +3389,25 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdSipReferToHeader                                                    *
+//******************************************************************************
+//* TestTIdSipReferToHeader Public methods *************************************
+
+procedure TestTIdSipReferToHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.R := Self.Header as TIdSipReferToHeader;
+end;
+
+//* TestTIdSipReferToHeader Protected methods **********************************
+
+function TestTIdSipReferToHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipReferToHeader;
+end;
+
+//******************************************************************************
 //* TestTIdSipReplacesHeader                                                   *
 //******************************************************************************
 //* TestTIdSipReplacesHeader Public methods ************************************
@@ -4992,6 +5021,7 @@ begin
   CheckType(TIdSipProxyAuthorizationHeader,     Self.Headers.Add(ProxyAuthorizationHeader),   ProxyAuthorizationHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(ProxyRequireHeader),         ProxyRequireHeader);
   CheckType(TIdSipRecordRouteHeader,            Self.Headers.Add(RecordRouteHeader),          RecordRouteHeader);
+  CheckType(TIdSipReferToHeader,                Self.Headers.Add(ReferToHeader),              ReferToHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(RequireHeader),              RequireHeader);
   CheckType(TIdSipReplacesHeader,               Self.Headers.Add(ReplacesHeader),             ReplacesHeader);
   CheckType(TIdSipHeader,                       Self.Headers.Add(ReplyToHeader),              ReplyToHeader);

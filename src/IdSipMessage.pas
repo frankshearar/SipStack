@@ -653,6 +653,11 @@ type
     function GetName: String; override;
   end;
 
+  TIdSipReferToHeader = class(TIdSipAddressHeader)
+  protected
+    function GetName: String; override;
+  end;
+
   // cf. RFC 3891
   TIdSipReplacesHeader = class(TIdSipHeader)
   private
@@ -1491,6 +1496,7 @@ const
   RealmParam                 = 'realm';
   ReceivedParam              = 'received';
   RecordRouteHeader          = 'Record-Route';
+  ReferToHeader              = 'Refer-To';
   ReplacesExtension          = 'replaces'; // cf. RFC 3891
   ReplacesHeader             = 'Replaces'; // cf. RFC 3891
   ReplyToHeader              = 'Reply-To';
@@ -4537,6 +4543,16 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipReferToHeader                                                        *
+//******************************************************************************
+//* TIdSipReferToHeader Public methods *****************************************
+
+function TIdSipReferToHeader.GetName: String;
+begin
+  Result := ReferToHeader;
+end;
+
+//******************************************************************************
 //* TIdSipReplacesHeader                                                       *
 //******************************************************************************
 //* TIdSipReplacesHeader Public methods ****************************************
@@ -5239,6 +5255,7 @@ begin
     GCanonicalHeaderNames.Add(ProxyAuthorizationHeader   + '=' + ProxyAuthorizationHeader);
     GCanonicalHeaderNames.Add(ProxyRequireHeader         + '=' + ProxyRequireHeader);
     GCanonicalHeaderNames.Add(RecordRouteHeader          + '=' + RecordRouteHeader);
+    GCanonicalHeaderNames.Add(ReferToHeader              + '=' + ReferToHeader);
     GCanonicalHeaderNames.Add(ReplacesHeader             + '=' + ReplacesHeader);    
     GCanonicalHeaderNames.Add(ReplyToHeader              + '=' + ReplyToHeader);
     GCanonicalHeaderNames.Add(RequireHeader              + '=' + RequireHeader);
@@ -5408,6 +5425,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyAuthorizationHeader,   TIdSipProxyAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ProxyRequireHeader,         TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RecordRouteHeader,          TIdSipRecordRouteHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReferToHeader,              TIdSipReferToHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RequireHeader,              TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ReplacesHeader,             TIdSipReplacesHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(RetryAfterHeader,           TIdSipRetryAfterHeader));
