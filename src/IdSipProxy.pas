@@ -33,6 +33,7 @@ uses
 //******************************************************************************
 //* TIdSipProxy                                                                *
 //******************************************************************************
+//* TIdSipProxy Public methods *************************************************
 
 function TIdSipProxy.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
