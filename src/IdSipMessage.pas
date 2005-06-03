@@ -228,6 +228,15 @@ type
   //   '"Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
   // Lastly, AsString returns what will go down the wire, so to speak:
   //   'Contact: "Count Zero" <sip:countzero@jacksbar.com;paranoid>;very'
+  //
+  // If you want to subclass me, you need to do these things:
+  // * find a suitable subclass (e.g., if the header primarily consists of an
+  //   address, subclass TIdSipAddressHeader);
+  // * override GetName;
+  // * override Parse, if necessary;
+  // * add the header type to TIdSipHeaderList.HeaderTypes;
+  // * add the header name (possibly both full and short forms) to
+  //   TIdSipHeaderList.CanonicaliseName.
   TIdSipHeader = class(TPersistent)
   private
     fIsMalformed:     Boolean;
