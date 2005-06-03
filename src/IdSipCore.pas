@@ -2682,7 +2682,7 @@ function TIdSipAbstractUserAgent.CreateOptions(Dest: TIdSipAddressHeader): TIdSi
 begin
   Result := Self.CreateRequest(Dest);
   try
-    Result.Method := MethodOptions;
+    Result.Method      := MethodOptions;
     Result.CSeq.Method := Result.Method;
 
     Result.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
