@@ -455,15 +455,10 @@ type
     procedure Execute(Action: TIdSipAction); override;
   end;
 
-  TIdSipInboundOptions = class;
-  TIdSipInboundRegistration = class;
   TIdSipMessageModule = class;
   TIdSipMessageModuleClass = class of TIdSipMessageModule;
-  TIdSipOutboundInitialInvite = class;
-  TIdSipOutboundRedirectedInvite = class;
   TIdSipOutboundRegister = class;
   TIdSipOutboundRegistrationQuery = class;
-  TIdSipOutboundReInvite = class;
   TIdSipOutboundSession = class;
   TIdSipOutboundUnregister = class;
 
