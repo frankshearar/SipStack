@@ -29,7 +29,8 @@ type
     function  WillAcceptRequest(Request: TIdSipRequest): TIdSipUserAgentReaction; override;
     function  WillAcceptResponse(Response: TIdSipResponse): TIdSipUserAgentReaction; override;
   public
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; override;
+    function  CreateRequest(const Method: String;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     procedure Reset;
@@ -60,13 +61,14 @@ implementation
 //******************************************************************************
 //* TIdSipMockCore Public methods **********************************************
 
-function TIdSipMockCore.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+function TIdSipMockCore.CreateRequest(const Method: String;
+                                      Dest: TIdSipAddressHeader): TIdSipRequest;
 var
   UA: TIdSipAbstractUserAgent;
 begin
   UA := TIdSipAbstractUserAgent.Create;
   try
-    Result := UA.CreateRequest(Dest);
+    Result := UA.CreateRequest(Method, Dest);
   finally
     UA.Free;
   end;

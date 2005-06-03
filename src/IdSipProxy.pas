@@ -21,8 +21,10 @@ type
     function  AuthenticationStatusCode: Cardinal; override;
     function  HasAuthorization(Request: TIdSipRequest): Boolean; override;
   public
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
-    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dialog: TIdSipDialog): TIdSipRequest; overload; override;
   end;
 
 implementation
@@ -35,12 +37,14 @@ uses
 //******************************************************************************
 //* TIdSipProxy Public methods *************************************************
 
-function TIdSipProxy.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+function TIdSipProxy.CreateRequest(const Method: String;
+                                   Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   raise Exception.Create('This stack cannot proxy requests as yet');
 end;
 
-function TIdSipProxy.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
+function TIdSipProxy.CreateRequest(const Method: String;
+                                   Dialog: TIdSipDialog): TIdSipRequest;
 begin
   raise Exception.Create('This stack cannot proxy requests as yet');
 end;

@@ -986,8 +986,10 @@ uses
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
   public
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
-    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     procedure TriggerNotify;
   end;
 
@@ -1080,12 +1082,14 @@ end;
 //******************************************************************************
 //* TIdSipCoreWithExposedNotify Public methods *********************************
 
-function TIdSipCoreWithExposedNotify.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+function TIdSipCoreWithExposedNotify.CreateRequest(const Method: String;
+                                                   Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   Result := nil;
 end;
 
-function TIdSipCoreWithExposedNotify.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
+function TIdSipCoreWithExposedNotify.CreateRequest(const Method: String;
+                                                   Dialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := nil;
 end;
@@ -2530,6 +2534,8 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.TestCreateRequest;
+const
+  UnknownMethod = 'Foo';
 var
   Request: TIdSipRequest;
   Dest:    TIdSipToHeader;
@@ -2537,8 +2543,9 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(UnknownMethod, Dest);
     try
+      CheckEquals(UnknownMethod, Request.Method, 'Requet-Method');
       Self.CheckCreateRequest(Dest, Request);
     finally
       Request.Free;
@@ -2557,7 +2564,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sips:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Dest);
     try
       Contact := Request.FirstContact;
       CheckEquals(SipsScheme,
@@ -2581,7 +2588,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Dest);
     try
       CheckEquals(Self.Core.UserAgentName,
                   Request.FirstHeader(UserAgentHeader).Value,
@@ -2602,7 +2609,7 @@ begin
   Dest := TIdSipToHeader.Create;
   try
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=udp';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Dest);
     try
       CheckEquals(UdpTransport,
                   Request.LastHop.Transport,
@@ -2612,7 +2619,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=tcp';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Dest);
     try
       CheckEquals(TcpTransport,
                   Request.LastHop.Transport,
@@ -2622,7 +2629,7 @@ begin
     end;
 
     Dest.Address.URI := 'sip:wintermute@tessier-ashpool.co.luna;transport=foo';
-    Request := Self.Core.CreateRequest(Dest);
+    Request := Self.Core.CreateRequest(MethodInvite, Dest);
     try
       CheckEquals('FOO',
                   Request.LastHop.Transport,
@@ -2740,14 +2747,14 @@ var
   BaseSeqNo: Cardinal;
   R:         TIdSipRequest;
 begin
-  R := Self.Core.CreateRequest(Self.Dlg);
+  R := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
   try
      BaseSeqNo := R.CSeq.SequenceNo;
   finally
     R.Free;
   end;
 
-  R := Self.Core.CreateRequest(Self.Dlg);
+  R := Self.Core.CreateRequest(MethodInvite, Self.Dlg);
   try
     CheckEquals(BaseSeqNo + 1,
                 R.CSeq.SequenceNo,
@@ -3128,7 +3135,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
   try
     Bye.Method          := MethodBye;
     Bye.CSeq.SequenceNo := $deadbeef;
@@ -3197,7 +3204,7 @@ var
   Bye:      TIdSipRequest;
   Response: TIdSipResponse;
 begin
-  Bye := Self.Core.CreateRequest(Self.Destination);
+  Bye := Self.Core.CreateRequest(MethodInvite, Self.Destination);
   try
     Bye.Method          := MethodBye;
     Bye.From.Value      := Bye.From.Address.URI;     // strip the tag

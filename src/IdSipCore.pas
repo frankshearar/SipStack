@@ -276,8 +276,10 @@ type
 
     procedure AddObserver(const Listener: IIdObserver);
     procedure AddUserAgentListener(const Listener: IIdSipUserAgentListener);
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
-    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
+    function  CreateRequest(const Method: String;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; virtual; abstract;
+    function  CreateRequest(const Method: String;
+                            Dialog: TIdSipDialog): TIdSipRequest; overload; virtual; abstract;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; virtual;
     function  NextCallID: String;
@@ -565,8 +567,10 @@ type
     function  AllowedMethods: String;
     function  AllowedSchemes: String;
     function  CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
-    function  CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
-    function  CreateRequest(Dialog: TIdSipDialog): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dest: TIdSipAddressHeader): TIdSipRequest; overload; override;
+    function  CreateRequest(const Method: String;
+                            Dialog: TIdSipDialog): TIdSipRequest; overload; override;
     function  CreateResponse(Request: TIdSipRequest;
                              ResponseCode: Cardinal): TIdSipResponse; override;
     function  HasUnknownAccept(Request: TIdSipRequest): Boolean;
@@ -2654,9 +2658,7 @@ end;
 function TIdSipAbstractUserAgent.CreateBye(Dialog: TIdSipDialog): TIdSipRequest;
 begin
   try
-    Result := Self.CreateRequest(Dialog);
-    Result.Method      := MethodBye;
-    Result.CSeq.Method := Result.Method;
+    Result := Self.CreateRequest(MethodBye, Dialog);
   except
     FreeAndNil(Result);
 
@@ -2668,7 +2670,7 @@ function TIdSipAbstractUserAgent.CreateInvite(Dest: TIdSipAddressHeader;
                                               const Body: String;
                                               const MimeType: String): TIdSipRequest;
 begin
-  Result := Self.CreateRequest(Dest);
+  Result := Self.CreateRequest(MethodInvite, Dest);
   try
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
@@ -2680,11 +2682,8 @@ end;
 
 function TIdSipAbstractUserAgent.CreateOptions(Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
-  Result := Self.CreateRequest(Dest);
+  Result := Self.CreateRequest(MethodOptions, Dest);
   try
-    Result.Method      := MethodOptions;
-    Result.CSeq.Method := Result.Method;
-
     Result.AddHeader(AcceptHeader).Value := Self.AllowedContentTypes;
   except
     FreeAndNil(Result);
@@ -2693,16 +2692,13 @@ end;
 
 function TIdSipAbstractUserAgent.CreateRegister(Registrar: TIdSipToHeader): TIdSipRequest;
 begin
-  Result := Self.CreateRequest(Registrar);
+  Result := Self.CreateRequest(MethodRegister, Registrar);
   try
     Self.KnownRegistrars.AddKnownRegistrar(Registrar.Address,
                                            Result.CallID,
                                            Result.CSeq.SequenceNo);
 
-    Result.Method := MethodRegister;
     Result.RequestUri.EraseUserInfo;
-
-    Result.CSeq.Method     := MethodRegister;
     Result.CSeq.SequenceNo := Self.KnownRegistrars.NextSequenceNoFor(Registrar.Address);
 
     Result.CallID := Self.KnownRegistrars.CallIDFor(Registrar.Address);
@@ -2720,7 +2716,7 @@ function TIdSipAbstractUserAgent.CreateReInvite(Dialog: TIdSipDialog;
                                                 const Body: String;
                                                 const MimeType: String): TIdSipRequest;
 begin
-  Result := Self.CreateRequest(Dialog);
+  Result := Self.CreateRequest(MethodInvite, Dialog);
   try
     Self.TurnIntoInvite(Result, Body, MimeType);
   except
@@ -2730,16 +2726,19 @@ begin
   end;
 end;
 
-function TIdSipAbstractUserAgent.CreateRequest(Dest: TIdSipAddressHeader): TIdSipRequest;
+function TIdSipAbstractUserAgent.CreateRequest(const Method: String;
+                                               Dest: TIdSipAddressHeader): TIdSipRequest;
 begin
   Result := TIdSipRequest.Create;
   try
-    Result.RequestUri     := Dest.Address;
+    Result.CallID         := Self.NextCallID;
     Result.From           := Self.From;
     Result.From.Tag       := Self.NextTag;
+    Result.Method         := Method;
+    Result.RequestUri     := Dest.Address;
     Result.ToHeader.Value := Dest.FullValue;
 
-    Result.CallID          := Self.NextCallID;
+    Result.CSeq.Method     := Result.Method;
     Result.CSeq.SequenceNo := Self.NextInitialSequenceNo;
 
     Self.AddLocalHeaders(Result);
@@ -2750,10 +2749,13 @@ begin
   end;
 end;
 
-function TIdSipAbstractUserAgent.CreateRequest(Dialog: TIdSipDialog): TIdSipRequest;
+function TIdSipAbstractUserAgent.CreateRequest(const Method: String;
+                                               Dialog: TIdSipDialog): TIdSipRequest;
 begin
   Result := Dialog.CreateRequest;
   try
+    Result.Method      := Method;
+    Result.CSeq.Method := Result.Method;
     Self.AddLocalHeaders(Result);
   except
     FreeAndNil(Result);
