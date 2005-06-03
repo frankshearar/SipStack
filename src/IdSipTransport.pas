@@ -201,13 +201,9 @@ type
     FirstMsg:  TIdSipMessage;
     Transport: TIdSipTCPTransport;
 
+    procedure AddConnection(Connection: TIdTCPConnection;
+                            Request: TIdSipRequest);
     procedure NotifyOfException(E: Exception);
-    procedure ReceiveRequestInTimerContext(Sender: TObject;
-                                           R: TIdSipRequest;
-                                           ReceivedFrom: TIdSipConnectionBindings); overload;
-    procedure ReceiveResponseInTimerContext(Sender: TObject;
-                                            R: TIdSipResponse;
-                                            ReceivedFrom: TIdSipConnectionBindings); overload;
   protected
     function  ClientType: TIdSipTcpClientClass; virtual;
     procedure Run; override;
@@ -228,43 +224,28 @@ type
 
   // I represent the (possibly) deferred handling of an exception raised in the
   // process of sending or receiving a message.
-  TIdSipMessageExceptionWait = class(TIdWait)
+  TIdSipMessageTransportExceptionWait = class(TIdSipMessageExceptionWait)
   private
-    fExceptionMessage: String;
-    fExceptionType:    ExceptClass;
-    fReason:           String;
-    fTransport:        TIdSipTransport;
-  public
-    procedure Trigger; override;
+    fTransport: TIdSipTransport;
 
-    property ExceptionType:    ExceptClass     read fExceptionType write fExceptionType;
-    property ExceptionMessage: String          read fExceptionMessage write fExceptionMessage;
-    property Reason:           String          read fReason write fReason;
-    property Transport:        TIdSipTransport read fTransport write fTransport;
+    procedure SetTransport(Value: TIdSipTransport);
+  public
+    constructor Create; override;
+    destructor  Destroy; override;
+
+    property Transport: TIdSipTransport read fTransport write SetTransport;
   end;
 
-  // I represent the (possibly) deferred handling of an inbound message.
-  TIdSipReceiveMessageWait = class(TIdSipMessageWait)
+  TIdSipReceiveTransportMessageWait = class(TIdSipReceiveMessageWait)
   private
-    fReceivedFrom: TIdSipConnectionBindings;
-    fTransport:    TIdSipTransport;
+    fTransport: TIdSipTransport;
+
+    procedure SetTransport(Value: TIdSipTransport);
   public
-    procedure Trigger; override;
+    constructor Create; override;
+    destructor  Destroy; override;
 
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Transport:    TIdSipTransport          read fTransport write fTransport;
-  end;
-
-  // I represent a (possibly) deferred receipt of a message.
-  TIdSipReceiveTCPMessageWait = class(TIdSipReceiveMessageWait)
-  private
-    fReceivedFrom: TIdSipConnectionBindings;
-    fListeners:    TIdSipServerNotifier;
-  public
-    procedure Trigger; override;
-
-    property ReceivedFrom: TIdSipConnectionBindings read fReceivedFrom write fReceivedFrom;
-    property Listeners:    TIdSipServerNotifier     read fListeners write fListeners;
+    property Transport: TIdSipTransport read fTransport write SetTransport;
   end;
 
   // I implement the Transport Layer Security (RFC 2249) connections for the SIP
@@ -1197,10 +1178,10 @@ begin
   Self.FreeOnTerminate := true;
 
   Self.Client := Self.ClientType.Create(nil);
-  Self.Client.Host       := Host;
-  Self.Client.OnRequest  := Self.ReceiveRequestInTimerContext;
-  Self.Client.OnResponse := Self.ReceiveResponseInTimerContext;
-  Self.Client.Port       := Port;
+  Self.Client.AddMessageListener(Transport);
+  Self.Client.Host  := Host;
+  Self.Client.Port  := Port;
+  Self.Client.Timer := Transport.Timer;
 
   Self.FirstMsg  := Msg.Copy;
   Self.Transport := Transport;
@@ -1233,8 +1214,11 @@ end;
 procedure TIdSipTcpClientThread.Run;
 begin
   try
-    Self.Client.Connect(Self.Transport.Timeout);
+    Self.Client.Connect(Self.Client.ReadTimeout);
     try
+      if Self.FirstMsg.IsRequest then
+        Self.AddConnection(Self.Client, Self.FirstMsg as TIdSipRequest);
+
       Self.Client.Send(Self.FirstMsg);
       Self.Client.ReceiveMessages;
     finally
@@ -1252,49 +1236,23 @@ end;
 
 //* TIdSipTcpClientThread Private methods **************************************
 
+procedure TIdSipTcpClientThread.AddConnection(Connection: TIdTCPConnection;
+                                              Request: TIdSipRequest);
+begin
+  Self.Transport.DoOnAddConnection(Connection, Request);
+end;
+
 procedure TIdSipTcpClientThread.NotifyOfException(E: Exception);
 var
-  Wait: TIdSipMessageExceptionWait;
+  Wait: TIdSipMessageTransportExceptionWait;
 begin
   if Self.Terminated then Exit;
 
-  Wait := TIdSipMessageExceptionWait.Create;
+  Wait := TIdSipMessageTransportExceptionWait.Create;
   Wait.ExceptionType    := ExceptClass(E.ClassType);
   Wait.ExceptionMessage := E.Message;
   Wait.Reason           := ExceptionDuringTcpClientRequestSend;
   Wait.Transport        := Self.Transport;
-
-  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
-end;
-
-procedure TIdSipTcpClientThread.ReceiveRequestInTimerContext(Sender: TObject;
-                                                             R: TIdSipRequest;
-                                                             ReceivedFrom: TIdSipConnectionBindings);
-var
-  Wait: TIdSipReceiveMessageWait;
-begin
-  if Self.Terminated then Exit;
-
-  Wait := TIdSipReceiveMessageWait.Create;
-  Wait.ReceivedFrom := ReceivedFrom;
-  Wait.Message      := R;
-  Wait.Transport    := Self.Transport;
-
-  Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
-end;
-
-procedure TIdSipTcpClientThread.ReceiveResponseInTimerContext(Sender: TObject;
-                                                              R: TIdSipResponse;
-                                                              ReceivedFrom: TIdSipConnectionBindings);
-var
-  Wait: TIdSipReceiveMessageWait;
-begin
-  if Self.Terminated then Exit;
-
-  Wait := TIdSipReceiveMessageWait.Create;
-  Wait.ReceivedFrom := ReceivedFrom;
-  Wait.Message      := R;
-  Wait.Transport    := Self.Transport;
 
   Self.Transport.Timer.AddEvent(TriggerImmediately, Wait);
 end;
@@ -1310,51 +1268,59 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipMessageExceptionWait                                                 *
+//* TIdSipMessageTransportExceptionWait                                        *
 //******************************************************************************
-//* TIdSipMessageExceptionWait Public methods **********************************
+//* TIdSipMessageTransportExceptionWait Public methods *************************
 
-procedure TIdSipMessageExceptionWait.Trigger;
-var
-  FakeException: Exception;
+constructor TIdSipMessageTransportExceptionWait.Create;
 begin
-  FakeException := Self.ExceptionType.Create(Self.ExceptionMessage);
-  try
-    (Self.Transport as IIdSipMessageListener).OnException(FakeException,
-                                                          Self.Reason);
-  finally
-    FakeException.Free;
-  end;
+  inherited Create;
+
+  Self.Listeners := TIdSipServerNotifier.Create;
+end;
+
+destructor TIdSipMessageTransportExceptionWait.Destroy;
+begin
+  Self.Listeners.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipMessageTransportExceptionWait Private methods ************************
+
+procedure TIdSipMessageTransportExceptionWait.SetTransport(Value: TIdSipTransport);
+begin
+  Self.Listeners.RemoveMessageListener(Self.fTransport);
+  Self.fTransport := Value;
+  Self.Listeners.AddMessageListener(Value);
 end;
 
 //******************************************************************************
-//* TIdSipReceiveMessageWait                                                   *
+//* TIdSipReceiveTransportMessageWait                                          *
 //******************************************************************************
-//* TIdSipReceiveMessageWait Public methods ************************************
+//* TIdSipReceiveTransportMessageWait Public methods ***************************
 
-procedure TIdSipReceiveMessageWait.Trigger;
+constructor TIdSipReceiveTransportMessageWait.Create;
 begin
-  if Self.Message.IsRequest then
-    (Self.Transport as IIdSipMessageListener).OnReceiveRequest(Self.Message as TIdSipRequest,
-                                                               Self.ReceivedFrom)
-  else
-    (Self.Transport as IIdSipMessageListener).OnReceiveResponse(Self.Message as TIdSipResponse,
-                                                                Self.ReceivedFrom);
+  inherited Create;
+
+  Self.Listeners := TIdSipServerNotifier.Create;
 end;
 
-//******************************************************************************
-//* TIdSipReceiveTCPMessageWait                                                *
-//******************************************************************************
-//* TIdSipReceiveTCPMessageWait Public methods *********************************
-
-procedure TIdSipReceiveTCPMessageWait.Trigger;
+destructor TIdSipReceiveTransportMessageWait.Destroy;
 begin
-  if Self.Message.IsRequest then
-    Self.Listeners.NotifyListenersOfRequest(Self.Message as TIdSipRequest,
-                                            Self.ReceivedFrom)
-  else
-    Self.Listeners.NotifyListenersOfResponse(Self.Message as TIdSipResponse,
-                                             Self.ReceivedFrom);
+  Self.Listeners.Free;
+
+  inherited Destroy;
+end;
+
+//* TIdSipReceiveTransportMessageWait Private methods **************************
+
+procedure TIdSipReceiveTransportMessageWait.SetTransport(Value: TIdSipTransport);
+begin
+  Self.Listeners.RemoveMessageListener(Self.fTransport);
+  Self.fTransport := Value;
+  Self.Listeners.AddMessageListener(Value);
 end;
 
 //******************************************************************************

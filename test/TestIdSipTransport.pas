@@ -960,6 +960,9 @@ begin
   Self.FinishedTimer  := TSimpleEvent.Create;
   Self.SendEvent := TSimpleEvent.Create;
   Self.Timer := TTransportTestTimerQueue.Create(Self.TransportType, Self, Self.FinishedTimer);
+  Check(Self.Timer <> nil,
+        'Timer didn''t instantiate: the previous test likely failed without '
+      + 'killing the transports');
   Self.Timer.OnEmpty := Self.OnEmpty;
 
   Self.LastSentResponse := TIdSipResponse.Create;
@@ -1276,6 +1279,7 @@ procedure TestTIdSipTransport.OnRejectedMessage(const Msg: String;
                                                 const Reason: String);
 begin
   Self.RejectedMessage := true;
+  Self.ExceptionMessage := Reason;
   Self.ThreadEvent.SetEvent;
 end;
 
@@ -2027,6 +2031,8 @@ var
   Request:   TIdSipRequest;
   SipClient: TIdSipTcpClient;
 begin
+  Self.LowPortTransport.Timeout := 1000;
+  Self.HighPortTransport.Timeout := 1000;
   Self.CheckingRequestEvent := Self.Send200OK;
 
   Request := TIdSipMessage.ReadRequestFrom(LocalLoopRequest);
@@ -2037,10 +2043,12 @@ begin
       SipClient.Host        := Self.LowPortTransport.Address;
       SipClient.Port        := Self.LowPortTransport.Port;
       SipClient.ReadTimeout := 1000;
+      SipClient.Timer       := Self.Timer;         
 
       SipClient.Connect;
       try
         SipClient.Send(Request);
+        SipClient.ReceiveMessages;
 
         Self.WaitForSignaled;
 

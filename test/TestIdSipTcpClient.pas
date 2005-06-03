@@ -65,6 +65,7 @@ type
                                 ReceivedFrom: TIdSipConnectionBindings);
     procedure PauseAndSendOkResponse(Sender: TObject;
                                      Request: TIdSipRequest);
+    procedure ReceiveOptions;
     procedure SendOkResponse(Sender: TObject;
                              Request: TIdSipRequest);
     procedure SendOptionsRequest(Sender: TObject;
@@ -127,6 +128,7 @@ begin
   Self.Client.Host        := '127.0.0.1';
   Self.Client.Port        := Self.Server.DefaultPort;
   Self.Client.ReadTimeout := 1000;
+  Self.Client.Timer       := Self.Timer;
 
   Self.Invite := TIdSipTestResources.CreateLocalLoopRequest;
 
@@ -323,6 +325,29 @@ begin
   Self.SendOkResponse(Sender, Request);
 end;
 
+procedure TestTIdSipTcpClient.ReceiveOptions;
+var
+  Connection: TIdTCPConnection;
+  S:          String;
+  Threads:    TList;
+begin
+  S := StringReplace(LocalLoopRequest, MethodInvite, MethodOptions, []);
+
+  Threads := Self.Server.Threads.LockList;
+  try
+    if (Threads.Count = 0) then
+      raise Exception.Create('TCP connection disappeared: SendOptionsRequest');
+
+    Connection := (TObject(Threads[0]) as TIdPeerThread).Connection;
+    if not Connection.Connected then
+      raise Exception.Create('TCP connection closed');
+
+    Connection.Write(S);
+  finally
+    Self.Server.Threads.UnlockList;
+  end;
+end;
+
 procedure TestTIdSipTcpClient.SendOkResponse(Sender: TObject;
                                              Request: TIdSipRequest);
 var
@@ -418,14 +443,12 @@ end;
 
 procedure TestTIdSipTcpClient.TestCanReceiveRequest;
 begin
-  Self.CheckingRequestEvent := Self.SendOptionsRequest;
-  Self.Client.OnRequest     := Self.ClientReceivedRequest;
-
+  Self.Client.OnRequest := Self.ClientReceivedRequest;
   Self.Client.Connect(DefaultTimeout);
-  Self.Client.Send(Self.Invite);
+  Self.ReceiveOptions;
   Self.Client.ReceiveMessages;
 
-  Self.WaitForSignaled;
+  Self.WaitForSignaled('Waiting for an inbound request');
   CheckEquals(MethodOptions,
              Self.ReceivedRequestMethod,
              'Unexpected received request');
@@ -456,7 +479,7 @@ begin
   Self.Client.ReceiveMessages;
 
   Self.WaitForSignaled;
-  Check(Self.Client.Terminated, 'After final response received');
+  Check(not Self.Client.Terminated, 'After final response received');
 end;
 
 procedure TestTIdSipTcpClient.TestTerminatedWithServerDisconnect;
