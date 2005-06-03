@@ -320,6 +320,8 @@ type
     property SequenceNo: Cardinal  read fSequenceNo write fSequenceNo;
   end;
 
+  // I store registration information for registrars with which you've
+  // registered. 
   TIdSipRegistrations = class(TObject)
   private
     KnownRegistrars: TObjectList;
@@ -402,6 +404,8 @@ type
     property BlockType: TIdSipActionClosureClass read fBlockType write fBlockType;
   end;
 
+  // I represent the (possibly deferred) execution of something my Action needs
+  // done.
   TIdSipActionSendWait = class(TIdWait)
   private
     fAction: TIdSipAction;
@@ -413,6 +417,8 @@ type
 
   TIdSipActionsWaitClass = class of TIdSipActionsWait;
 
+  // I represent a closure that a UserAgent uses to, for instance, process a
+  // request or response.
   TIdUserAgentClosure = class(TIdSipActionClosure)
   private
     fReceiver:  TIdSipTransport;
@@ -424,11 +430,15 @@ type
     property UserAgent: TIdSipAbstractUserAgent read fUserAgent write fUserAgent;
   end;
 
+  // I give my Request to the Action or create a new Action to which I give the
+  // Request. I also drop an unmatched ACK, and respond with 481 Call Leg/
+  // Transaction Does Not Exist as the case may be.
   TIdSipUserAgentActOnRequest = class(TIdUserAgentClosure)
   public
     procedure Execute(Action: TIdSipAction); override;
   end;
 
+  // I give the affected Action my Response, or drop the (unmatched) response.
   TIdSipUserAgentActOnResponse = class(TIdUserAgentClosure)
   private
     fResponse: TIdSipResponse;
@@ -438,6 +448,8 @@ type
     property Response: TIdSipResponse read fResponse write fResponse;
   end;
 
+  // I represent the closure that will change the initial request of an Action.
+  // For instance, I could change the dialog of the affected Action.
   TIdSipUserAgentUpdateAction = class(TIdUserAgentClosure)
   public
     procedure Execute(Action: TIdSipAction); override;
@@ -726,6 +738,9 @@ type
                              Context: TIdTimerQueue): TIdSipUserAgent; overload;
   end;
 
+  // I and my subclasses represent chunks of Transaction-User Core
+  // functionality: the ability to process REGISTERs, say, or OPTIONS, or the
+  // requests involved with establishing a call.
   TIdSipMessageModule = class(TObject)
   private
     UserAgent: TIdSipAbstractUserAgent;
