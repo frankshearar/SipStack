@@ -1300,27 +1300,27 @@ begin
   Self.A.Name := ToHeaderFull;
 
   Self.A.Value := 'sip:countzero@jacks-bar.com';
-  CheckEquals(ToHeaderFull + ': sip:countzero@jacks-bar.com',
+  CheckEquals(Self.A.Name + ': sip:countzero@jacks-bar.com',
               Self.A.AsString,
               'AsString, plain URI');
 
   Self.A.Value := 'Wintermute <sip:wintermute@tessier-ashpool.co.luna>';
-  CheckEquals(ToHeaderFull + ': Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
+  CheckEquals(Self.A.Name + ': Wintermute <sip:wintermute@tessier-ashpool.co.luna>',
               Self.A.AsString,
               'AsString, display-name');
 
   Self.A.Value := '"Count Zero\"" <sip:countzero@jacks-bar.com>';
-  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sip:countzero@jacks-bar.com>',
+  CheckEquals(Self.A.Name + ': "Count Zero\"" <sip:countzero@jacks-bar.com>',
               Self.A.AsString,
               'AsString, display-name with quoted-pair');
 
   Self.A.Value := '"Count Zero\"" <sip:countzero@jacks-bar.com>;paranoid';
-  CheckEquals(ToHeaderFull + ': "Count Zero\"" <sip:countzero@jacks-bar.com>;paranoid',
+  CheckEquals(Self.A.Name + ': "Count Zero\"" <sip:countzero@jacks-bar.com>;paranoid',
               Self.A.AsString,
               'AsString, display-name with quoted-pair + parameters');
 
   Self.A.Value := 'Count Zero <sip:countzero@jacks-bar.com;paranoid>;very';
-  CheckEquals(ToHeaderFull + ': Count Zero <sip:countzero@jacks-bar.com;paranoid>;very',
+  CheckEquals(Self.A.Name + ': Count Zero <sip:countzero@jacks-bar.com;paranoid>;very',
               Self.A.AsString,
               'AsString, display-name, and URI and header have parameters');
 
@@ -1328,7 +1328,7 @@ begin
   Self.A.DisplayName   := 'Bell, Alexander';
   Self.A.Address.URI   := 'sip:a.g.bell@bell-tel.com';
   Self.A.Params['tag'] := '43';
-  CheckEquals(ToHeaderFull + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
+  CheckEquals(Self.A.Name + ': "Bell, Alexander" <sip:a.g.bell@bell-tel.com>;tag=43',
               Self.A.AsString,
               'AsString, display-name with comma');
 end;
