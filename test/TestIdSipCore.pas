@@ -502,6 +502,11 @@ type
   end;
 
   TestTIdSipRegistration = class(TestTIdSipAction)
+  private
+    RegisterModule: TIdSipRegisterModule;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
   published
     procedure TestIsRegistration; override;
   end;
@@ -981,7 +986,7 @@ implementation
 
 uses
   IdException, IdSipAuthentication, IdSipMockLocator, IdSipDns, IdSipLocator,
-  IdSipMockTransport, IdSystem, IdUnicode, SysUtils;
+  IdSipMockBindingDatabase, IdSipMockTransport, IdSystem, IdUnicode, SysUtils;
 
 type
   TIdSipCoreWithExposedNotify = class(TIdSipAbstractCore)
@@ -6946,6 +6951,23 @@ end;
 //*  TestTIdSipRegistration                                                    *
 //******************************************************************************
 //*  TestTIdSipRegistration Public methods *************************************
+
+procedure TestTIdSipRegistration.SetUp;
+begin
+  inherited SetUp;
+
+  Self.RegisterModule := Self.Core.AddModule(TIdSipRegisterModule) as TIdSipRegisterModule;
+  Self.RegisterModule.BindingDB := TIdSipMockBindingDatabase.Create
+end;
+
+procedure TestTIdSipRegistration.TearDown;
+begin
+  Self.RegisterModule.BindingDB.Free;
+
+  inherited TearDown;
+end;
+
+//*  TestTIdSipRegistration Published methods **********************************
 
 procedure TestTIdSipRegistration.TestIsRegistration;
 var
