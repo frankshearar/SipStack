@@ -5676,7 +5676,7 @@ begin
   Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
   try
     Check(Action.IsInvite,
-          Action.ClassName + 'not marked as a Invite');
+          Action.ClassName + ' not marked as a Invite');
   finally
     Action.Free;
   end;
@@ -6122,7 +6122,9 @@ var
   L1, L2: TIdSipTestInviteListener;
   Invite: TIdSipOutboundInvite;
 begin
+  Self.MarkSentRequestCount;
   Invite := Self.CreateAction as TIdSipOutboundInvite;
+  CheckRequestSent(Invite.ClassName + ': No INVITE sent');
 
   L1 := TIdSipTestInviteListener.Create;
   try
@@ -6695,7 +6697,8 @@ procedure TestTIdSipInboundOptions.TestIsInbound;
 var
   Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Self.Invite.Method := MethodOptions;
+  Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
   try
     Check(Action.IsInbound,
           Action.ClassName + ' not marked as inbound');
@@ -6724,7 +6727,7 @@ begin
   Action := TIdSipInboundOptions.Create(Self.Core, Self.Invite);
   try
     Check(Action.IsOptions,
-          Action.ClassName + 'not marked as an Options');
+          Action.ClassName + ' not marked as an Options');
   finally
     Action.Free;
   end;
@@ -6963,7 +6966,8 @@ procedure TestTIdSipInboundRegistration.TestIsInbound;
 var
   Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Self.Invite.Method := MethodRegister;
+  Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
   try
     Check(Action.IsInbound,
           Action.ClassName + ' not marked as inbound');
@@ -7005,7 +7009,7 @@ begin
   Action := TIdSipInboundRegistration.Create(Self.Core, Self.Invite);
   try
     Check(Action.IsRegistration,
-          Action.ClassName + 'not marked as a Registration');
+          Action.ClassName + ' not marked as a Registration');
   finally
     Action.Free;
   end;
@@ -7974,7 +7978,7 @@ procedure TestTIdSipInboundSession.TestIsInbound;
 var
   Action: TIdSipAction;
 begin
-  Action := TIdSipInboundInvite.Create(Self.Core, Self.Invite);
+  Action := TIdSipInboundSession.Create(Self.Core, Self.Invite, false);
   try
     Check(Action.IsInbound,
           Action.ClassName + ' not marked as inbound');
