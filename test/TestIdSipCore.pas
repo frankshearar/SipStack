@@ -2183,7 +2183,12 @@ begin
   Self.Core.Proxy.Uri := ProxyUri;
   Self.Core.HasProxy := true;
 
+  Self.MarkSentRequestCount;
   Self.Core.Call(Self.Destination, '', '').Send;
+  CheckRequestSent('No request sent');
+  CheckEquals(MethodInvite,
+              Self.LastSentRequest.Method,
+              'Unexpected request sent');
 
   Invite := Self.LastSentRequest;
   Check(Invite.HasHeader(RouteHeader),
