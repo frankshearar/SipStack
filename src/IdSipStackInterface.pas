@@ -170,7 +170,19 @@ type
   end;
 
   TIdFailData = class(TIdInformationalData);
-  TIdCallEndedData = class(TIdInformationalData);
+
+  // An ErrorCode of 0 means "no error".
+  // Usually the ErrorCode will map to a SIP response Status-Code.
+  TIdCallEndedData = class(TIdInformationalData)
+  private
+    fErrorCode: Cardinal;
+  public
+    constructor Create; override;
+
+    procedure Assign(Src: TPersistent); override;
+
+    property ErrorCode: Cardinal read fErrorCode write fErrorCode;
+  end;
 
   TIdDebugMessageData = class(TIdEventData)
   private
@@ -853,13 +865,38 @@ end;
 
 procedure TIdInformationalData.Assign(Src: TPersistent);
 var
-  Other: TIdFailData;
+  Other: TIdInformationalData;
 begin
   inherited Assign(Src);
 
-  if (Src is TIdFailData) then begin
-    Other := Src as TIdFailData;
+  if (Src is TIdInformationalData) then begin
+    Other := Src as TIdInformationalData;
     Self.Reason := Other.Reason;
+  end;
+end;
+
+//******************************************************************************
+//* TIdCallEndedData                                                           *
+//******************************************************************************
+//* TIdCallEndedData Public methods ********************************************
+
+constructor TIdCallEndedData.Create;
+begin
+  inherited Create;
+
+  Self.ErrorCode := NoError;
+end;
+
+procedure TIdCallEndedData.Assign(Src: TPersistent);
+var
+  Other: TIdCallEndedData;
+begin
+  inherited Assign(Src);
+
+  if (Src is TIdCallEndedData) then begin
+    Other := Src as TIdCallEndedData;
+
+    Self.ErrorCode := Other.ErrorCode;
   end;
 end;
 

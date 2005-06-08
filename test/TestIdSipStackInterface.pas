@@ -164,9 +164,29 @@ type
     procedure TestCopy;
   end;
 
+  TestTIdInformationalData = class(TTestCase)
+  private
+    Data: TIdInformationalData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
   TestTIdFailData = class(TTestCase)
   private
     Data: TIdFailData;
+  public
+    procedure SetUp; override;
+    procedure TearDown; override;
+  published
+    procedure TestCopy;
+  end;
+
+  TestTIdCallEndedData = class(TTestCase)
+  private
+    Data: TIdCallEndedData;
   public
     procedure SetUp; override;
     procedure TearDown; override;
@@ -235,14 +255,14 @@ function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
   Result.AddTest(TestTIdSipStackInterface.Suite);
-{
   Result.AddTest(TestTIdEventData.Suite);
+  Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
+  Result.AddTest(TestTIdCallEndedData.Suite);
   Result.AddTest(TestTIdRegistrationData.Suite);
   Result.AddTest(TestTIdFailedRegistrationData.Suite);
   Result.AddTest(TestTIdSessionData.Suite);
   Result.AddTest(TestTIdInboundCallData.Suite);
-}
 end;
 
 //******************************************************************************
@@ -947,6 +967,46 @@ begin
 end;
 
 //******************************************************************************
+//* TestTIdInformationalData                                                   *
+//******************************************************************************
+//* TestTIdInformationalData Public methods ************************************
+
+procedure TestTIdInformationalData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdInformationalData.Create;
+  Self.Data.Handle := $decafbad;
+  Self.Data.Reason := 'Arbitrary';
+end;
+
+procedure TestTIdInformationalData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdInformationalData Published methods ******************************************
+
+procedure TestTIdInformationalData.TestCopy;
+var
+  Copy: TIdInformationalData;
+begin
+  Copy := Self.Data.Copy as TIdInformationalData;
+  try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Reason,
+                Copy.Reason,
+                'Reason');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
 //* TestTIdFailData                                                            *
 //******************************************************************************
 //* TestTIdFailData Public methods *********************************************
@@ -975,6 +1035,50 @@ var
 begin
   Copy := Self.Data.Copy as TIdFailData;
   try
+    CheckEquals(IntToHex(Self.Data.Handle, 8),
+                IntToHex(Copy.Handle, 8),
+                'Handle');
+    CheckEquals(Self.Data.Reason,
+                Copy.Reason,
+                'Reason');
+  finally
+    Copy.Free;
+  end;
+end;
+
+//******************************************************************************
+//* TestTIdCallEndedData                                                       *
+//******************************************************************************
+//* TestTIdCallEndedData Public methods ****************************************
+
+procedure TestTIdCallEndedData.SetUp;
+begin
+  inherited SetUp;
+
+  Self.Data := TIdCallEndedData.Create;
+  Self.Data.ErrorCode := 42;
+  Self.Data.Handle    := $decafbad;
+  Self.Data.Reason    := 'Arbitrary';
+end;
+
+procedure TestTIdCallEndedData.TearDown;
+begin
+  Self.Data.Free;
+
+  inherited TearDown;
+end;
+
+//* TestTIdCallEndedData Published methods ******************************************
+
+procedure TestTIdCallEndedData.TestCopy;
+var
+  Copy: TIdCallEndedData;
+begin
+  Copy := Self.Data.Copy as TIdCallEndedData;
+  try
+    CheckEquals(Self.Data.ErrorCode,
+                Copy.ErrorCode,
+                'ErrorCode');
     CheckEquals(IntToHex(Self.Data.Handle, 8),
                 IntToHex(Copy.Handle, 8),
                 'Handle');
