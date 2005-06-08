@@ -286,6 +286,13 @@ const
 
   CM_DEBUG_SEND_MSG = CM_DEBUG + 0;
 
+// Constants for TIdCallEndedData
+const
+  CallEndedSuccess    = 0;
+  CallEndedFailure    = 1;
+  CallEndedNoSuchUser = SIPNotFound;
+  CallEndedRejected   = SIPBusyHere;
+
 type
   TIdSipEventMessage = packed record
     Event:    Cardinal;
@@ -884,7 +891,7 @@ constructor TIdCallEndedData.Create;
 begin
   inherited Create;
 
-  Self.ErrorCode := NoError;
+  Self.ErrorCode := CallEndedSuccess;
 end;
 
 procedure TIdCallEndedData.Assign(Src: TPersistent);
