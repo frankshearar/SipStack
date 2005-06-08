@@ -264,8 +264,6 @@ begin
 
   Self.PreFindServersFor(AddressOfRecord);
   try
-    Result.Clear;
-
     Target := TIdSipUri.Create;
     try
       Naptr := TIdNaptrRecords.Create;
