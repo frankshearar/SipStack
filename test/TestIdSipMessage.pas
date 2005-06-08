@@ -161,7 +161,9 @@ type
     procedure TestIsMalformedMissingMaxForwards;
     procedure TestIsMalformedMissingVia;
     procedure TestIsMalformedSipVersion;
+    procedure TestIsNotify;
     procedure TestIsOptions;
+    procedure TestIsRefer;
     procedure TestIsRegister;
     procedure TestIsRequest;
     procedure TestMatchRFC2543Options;
@@ -2141,6 +2143,9 @@ begin
   Self.Request.Method := MethodOptions;
   Check(not Self.Request.IsAck, MethodOptions);
 
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
+
   Self.Request.Method := MethodRegister;
   Check(not Self.Request.IsAck, MethodRegister);
 
@@ -2164,6 +2169,9 @@ begin
 
   Self.Request.Method := MethodOptions;
   Check(not Self.Request.IsBye, MethodOptions);
+
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
 
   Self.Request.Method := MethodRegister;
   Check(not Self.Request.IsBye, MethodRegister);
@@ -2189,6 +2197,9 @@ begin
   Self.Request.Method := MethodOptions;
   Check(not Self.Request.IsCancel, MethodOptions);
 
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
+
   Self.Request.Method := MethodRegister;
   Check(not Self.Request.IsCancel, MethodRegister);
 
@@ -2212,6 +2223,9 @@ begin
 
   Self.Request.Method := MethodOptions;
   Check(not Self.Request.IsInvite, MethodOptions);
+
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
 
   Self.Request.Method := MethodRegister;
   Check(not Self.Request.IsInvite, MethodRegister);
@@ -2310,6 +2324,15 @@ begin
   end;
 end;
 
+procedure TestTIdSipRequest.TestIsNotify;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsOptions, MethodAck);
+
+  Self.Request.Method := MethodNotify;
+  Check(Self.Request.IsNotify, MethodNotify);
+end;
+
 procedure TestTIdSipRequest.TestIsOptions;
 begin
   Self.Request.Method := MethodAck;
@@ -2327,11 +2350,41 @@ begin
   Self.Request.Method := MethodOptions;
   Check(Self.Request.IsOptions, MethodOptions);
 
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
+
   Self.Request.Method := MethodRegister;
   Check(not Self.Request.IsOptions, MethodRegister);
 
   Self.Request.Method := 'XXX';
   Check(not Self.Request.IsOptions, 'XXX');
+end;
+
+procedure TestTIdSipRequest.TestIsRefer;
+begin
+  Self.Request.Method := MethodAck;
+  Check(not Self.Request.IsRefer, MethodAck);
+
+  Self.Request.Method := MethodBye;
+  Check(not Self.Request.IsRefer, MethodBye);
+
+  Self.Request.Method := MethodCancel;
+  Check(not Self.Request.IsRefer, MethodCancel);
+
+  Self.Request.Method := MethodInvite;
+  Check(not Self.Request.IsRefer, MethodInvite);
+
+  Self.Request.Method := MethodOptions;
+  Check(not Self.Request.IsRefer, MethodOptions);
+
+  Self.Request.Method := MethodRefer;
+  Check(Self.Request.IsRefer, MethodRefer);
+
+  Self.Request.Method := MethodRegister;
+  Check(not Self.Request.IsOptions, MethodRegister);
+
+  Self.Request.Method := 'XXX';
+  Check(not Self.Request.IsRefer, 'XXX');
 end;
 
 procedure TestTIdSipRequest.TestIsRegister;
@@ -2350,6 +2403,9 @@ begin
 
   Self.Request.Method := MethodOptions;
   Check(not Self.Request.IsRegister, MethodOptions);
+
+  Self.Request.Method := MethodRefer;
+  Check(not Self.Request.IsOptions, MethodRefer);
 
   Self.Request.Method := MethodRegister;
   Check(Self.Request.IsRegister, MethodRegister);

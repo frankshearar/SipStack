@@ -290,6 +290,8 @@ type
 
   TIdSipHeaderClass = class of TIdSipHeader;
 
+  // I have an important limitation: my Address property can only contain a SIP
+  // or SIPS URI, but according to RFC 3261, I should be able to accept ANY URI.
   TIdSipUriHeader = class(TIdSipHeader)
   private
     fAddress: TIdSipUri;
@@ -529,6 +531,19 @@ type
     function ZeroDateTime: String;
 
     property Time: TIdDateTimeStamp read GetAbsoluteTime;
+  end;
+
+  // cf. RFC 3265. 
+  TIdSipEventHeader = class(TIdSipHeader)
+  private
+    function GetID: String;
+    procedure SetID(const Value: String);
+  protected
+    function GetName: String; override;
+  public
+    function PackageName: String;
+
+    property ID: String read GetID write SetID;
   end;
 
   TIdSipFromToHeader = class(TIdSipAddressHeader)
@@ -1207,7 +1222,9 @@ type
     function  IsCancel: Boolean;
     function  IsInvite: Boolean;
     function  IsMalformed: Boolean; override;
+    function  IsNotify: Boolean;
     function  IsOptions: Boolean;
+    function  IsRefer: Boolean;
     function  IsRegister: Boolean;
     function  IsRequest: Boolean; override;
     function  MalformedException: EBadMessageClass; override;
@@ -1465,6 +1482,7 @@ const
   DurationParam              = 'duration';
   EarlyOnlyParam             = 'early-only';
   ErrorInfoHeader            = 'Error-Info';
+  EventHeader                = 'Event';
   ExpireNow                  = 0;
   ExpiresHeader              = 'Expires';
   ExpiresParam               = 'expires';
@@ -1474,6 +1492,7 @@ const
   HandlingOptional           = 'optional';
   HandlingParam              = 'handling';
   HandlingRequired           = 'required';
+  IdParam                    = 'id';
   InReplyToHeader            = 'In-Reply-To';
   LooseRoutableParam         = 'lr';
   MaddrParam                 = 'maddr';
@@ -1484,9 +1503,12 @@ const
   MethodBye                  = 'BYE';
   MethodCancel               = 'CANCEL';
   MethodInvite               = 'INVITE';
+  MethodNotify               = 'NOTIFY';
   MethodOptions              = 'OPTIONS';
   MethodParam                = 'method';
+  MethodRefer                = 'REFER';
   MethodRegister             = 'REGISTER';
+  MethodSubscribe            = 'SUBSCRIBE';
   MIMEVersionHeader          = 'MIME-Version';
   MinExpiresHeader           = 'Min-Expires';
   NextNonceParam             = 'nextnonce';
@@ -1494,6 +1516,7 @@ const
   NonceParam                 = 'nonce';
   OpaqueParam                = 'opaque';
   OrganizationHeader         = 'Organization';
+  PackageRefer               = 'refer';
   PriorityHeader             = 'Priority';
   ProxyAuthenticateHeader    = 'Proxy-Authenticate';
   ProxyAuthorizationHeader   = 'Proxy-Authorization';
@@ -4046,6 +4069,35 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipEventHeader                                                          *
+//******************************************************************************
+//* TIdSipEventHeader Public methods *******************************************
+
+function TIdSipEventHeader.PackageName: String;
+begin
+  Result := Self.Value;
+end;
+
+//* TIdSipEventHeader Protected methods ****************************************
+
+function TIdSipEventHeader.GetName: String;
+begin
+  Result := EventHeader;
+end;
+
+//* TIdSipEventHeader Private methods ****************************************
+
+function TIdSipEventHeader.GetID: String;
+begin
+  Result := Self.Params[IdParam];
+end;
+
+procedure TIdSipEventHeader.SetID(const Value: String);
+begin
+  Self.Params[IdParam] := Value;
+end;
+
+//******************************************************************************
 //* TIdSipFromToHeader                                                         *
 //******************************************************************************
 //* TIdSipFromToHeader Public methods ******************************************
@@ -5250,6 +5302,7 @@ begin
     GCanonicalHeaderNames.Add(ContentTypeHeaderShort     + '=' + ContentTypeHeaderFull);
     GCanonicalHeaderNames.Add(CSeqHeader                 + '=' + CSeqHeader);
     GCanonicalHeaderNames.Add(DateHeader                 + '=' + DateHeader);
+    GCanonicalHeaderNames.Add(EventHeader                + '=' + EventHeader);
     GCanonicalHeaderNames.Add(ErrorInfoHeader            + '=' + ErrorInfoHeader);
     GCanonicalHeaderNames.Add(ExpiresHeader              + '=' + ExpiresHeader);
     GCanonicalHeaderNames.Add(FromHeaderFull             + '=' + FromHeaderFull);
@@ -5423,6 +5476,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,    TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                 TIdSipCSeqHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                 TIdSipDateHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeader,                TIdSipEventHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,              TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,             TIdSipFromHeader));
@@ -7089,9 +7143,19 @@ begin
             or not Self.CSeqMatchesMethod;
 end;
 
+function TIdSipRequest.IsNotify: Boolean;
+begin
+  Result := Self.Method = MethodNotify;
+end;
+
 function TIdSipRequest.IsOptions: Boolean;
 begin
   Result := Self.Method = MethodOptions;
+end;
+
+function TIdSipRequest.IsRefer: Boolean;
+begin
+  Result := Self.Method = MethodRefer;
 end;
 
 function TIdSipRequest.IsRegister: Boolean;

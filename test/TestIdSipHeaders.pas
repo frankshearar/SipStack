@@ -216,6 +216,19 @@ type
     procedure TestValueZeroTime;
   end;
 
+  TestTIdSipEventHeader = class(THeaderTestCase)
+  private
+    E: TIdSipEventHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestGetSetID;
+    procedure TestValue; override;
+    procedure TestValueWithID;
+  end;
+
   TestTIdSipFromToHeader = class(THeaderTestCase)
   private
     F: TIdSipFromToHeader;
@@ -673,6 +686,7 @@ begin
   Result.AddTest(TestTIdSipContentDispositionHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
+  Result.AddTest(TestTIdSipEventHeader.Suite);
   Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
@@ -2482,6 +2496,47 @@ begin
   // A degenerate case.
   Self.D.Value := 'Wed, 30 Dec 1899 00:00:00 GMT';
   CheckEquals(0, Self.D.Time.AsTDateTime, 'Zero Time');
+end;
+
+//******************************************************************************
+//* TestTIdSipEventHeader                                                      *
+//******************************************************************************
+//* TestTIdSipEventHeader Public methods ***************************************
+
+procedure TestTIdSipEventHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.E := Self.Header as TIdSipEventHeader;
+end;
+
+function TestTIdSipEventHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipEventHeader;
+end;
+
+procedure TestTIdSipEventHeader.TestGetSetID;
+begin
+  Self.E.ID := 'foo';
+  CheckEquals('foo', Self.E.ID, 'First set/get');
+
+  Self.E.ID := 'bar';
+  CheckEquals('bar', Self.E.ID, 'Second set/get');
+end;
+
+procedure TestTIdSipEventHeader.TestValue;
+begin
+  Self.E.Value := 'foo';
+
+  CheckEquals('foo', Self.E.Value, 'Value');
+  CheckEquals('foo', Self.E.PackageName, 'PackageName');
+end;
+
+procedure TestTIdSipEventHeader.TestValueWithID;
+begin
+  Self.E.Value := 'foo;id=bar';
+
+  CheckEquals('bar', Self.E.ID, 'ID not set');
 end;
 
 //******************************************************************************
@@ -5007,6 +5062,7 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
   CheckType(TIdSipCSeqHeader,                   Self.Headers.Add(CSeqHeader),                 CSeqHeader);
   CheckType(TIdSipDateHeader,                   Self.Headers.Add(DateHeader),                 DateHeader);
+  CheckType(TIdSipEventHeader,                  Self.Headers.Add(EventHeader),                EventHeader);
   CheckType(TIdSipUriHeader,                    Self.Headers.Add(ErrorInfoHeader),            ErrorInfoHeader);
   CheckType(TIdSipNumericHeader,                Self.Headers.Add(ExpiresHeader),              ExpiresHeader);
   CheckType(TIdSipFromHeader,                   Self.Headers.Add(FromHeaderFull),             FromHeaderFull);
