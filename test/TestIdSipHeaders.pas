@@ -3582,7 +3582,7 @@ procedure TestTIdSipTimestampHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.T := TIdSipTimestampHeader.Create;
+  Self.T := Self.Header as TIdSipTimestampHeader;
 end;
 
 //* TestTIdSipTimestampHeader Protected methods ********************************
