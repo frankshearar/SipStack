@@ -141,6 +141,7 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
+    procedure RejectCall(ActionHandle: TIdSipHandle);
     procedure Send(ActionHandle: TIdSipHandle);
   end;
 
@@ -407,6 +408,20 @@ begin
     Action := Self.GetAndCheckAction(ActionHandle, TIdSipSession);
 
     (Action as TIdSipSession).Modify(Offer, ContentType);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
+procedure TIdSipStackInterface.RejectCall(ActionHandle: TIdSipHandle);
+var
+  Action: TIdSipAction;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
+
+    (Action as TIdSipInboundSession).RejectCallBusy;
   finally
     Self.ActionLock.Release;
   end;
