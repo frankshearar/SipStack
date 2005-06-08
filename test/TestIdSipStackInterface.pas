@@ -142,6 +142,9 @@ type
     procedure TestModifyCallWithInvalidHandle;
     procedure TestModifyCallWithNonExistentHandle;
     procedure TestOutboundCall;
+    procedure TestRejectCall;
+    procedure TestRejectCallWithInvalidHandle;
+    procedure TestRejectCallWithNonExistentHandle;
 {
 //    procedure TestNetworkFailure;
     procedure TestRegistrationFails;
@@ -817,6 +820,39 @@ begin
               Self.DataList[Self.DataList.Count - 1].ClassName,
               'Unexpected event data');
 
+end;
+
+procedure TestTIdSipStackInterface.TestRejectCall;
+begin
+  Fail('Not yet implemented');
+end;
+
+procedure TestTIdSipStackInterface.TestRejectCallWithInvalidHandle;
+var
+  R: TIdSipHandle;
+begin
+  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+
+  try
+    // You can't, obviously, "reject" a registration attempt.
+    Self.Intf.RejectCall(R);
+
+    Fail('No exception raised for an invalid handle');
+  except
+    on EInvalidHandle do;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestRejectCallWithNonExistentHandle;
+const
+  ArbValue = 42;
+begin
+  try
+    Self.Intf.RejectCall(ArbValue);
+    Fail('No exception raised for a non-existent handle');
+  except
+    on EInvalidHandle do;
+  end;
 end;
 {
 procedure TestTIdSipStackInterface.TestNetworkFailure;
