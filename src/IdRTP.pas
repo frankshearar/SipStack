@@ -135,9 +135,9 @@ type
     property Data: String read fData write fData;
   end;
 
-  // I am a T.140 payload, as defined in RFC 2793 (and the bis draft). Note that
-  // while I provide Unicode (i.e., UCS-2) access to my data, I read to and
-  // write from the network in UTF-8, as per RFC 2793 and its successor(s).
+  // I am a T.140 payload, as defined in RFC 4103 (which obsoletes RFC 2793).
+  // Note that while I provide Unicode (i.e., UCS-2) access to my data, I read
+  // to and write from the network in UTF-8, as per RFC 4103.
   TIdRTPT140Payload = class(TIdRTPPayload)
   private
     fBlock: WideString;
@@ -1233,22 +1233,24 @@ const
   SDESNote  = 7;
   SDESPriv  = 8;
 
-// From RFC 2793 and T.140
+// From RFC 4103 (which obsoletes RFC 2793)
 const
   InterleavedT140ClockRate    = 8000;
-  RedundancyEncoding          = 'RED'; // same as in RFC 2198
+  RedundancyEncodingName          = 'red'; // RFC 4102
   RedundancyEncodingParameter = RedundancyEncoding;
   T140ClockRate               = 1000;
-  T140EncodingName            = 'T140';
+  T140EncodingName            = 't140'; // RFC 4103
   T140LostChar                = #$ff#$fd;
   InterleavedT140MimeType     = AudioMediaType + '/' + T140EncodingName;
-  RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncoding;
+  RedundantT140MimeType       = TextMediaType + '/' + RedundancyEncodingName;
   T140MimeType                = TextMediaType + '/' + T140EncodingName;
   T140RecommendedBufferTime   = 300;
   T140ByteOrderMark           = WideChar($feff);
   T140Escape                  = WideChar($001b);
   T140StartOfString           = WideChar($0098);
   T140StringTerminator        = WideChar($009C);
+
+  RedundancyEncoding          = RedundancyEncodingEncodingName + '/1000';
   T140Encoding                = T140EncodingName + '/1000';
 
 // From RFC 2833

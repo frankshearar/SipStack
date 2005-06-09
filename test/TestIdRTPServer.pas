@@ -453,7 +453,7 @@ begin
   Session.AddReceiver(Self.Server.Bindings[0].IP,
                       Self.Server.Bindings[0].Port);
 
-  Self.ExceptionMessage := 'Waiting for RFC 2793 data';
+  Self.ExceptionMessage := 'Waiting for RFC 4103 data';
   Payload := Self.Client.Profile.EncodingFor(Self.T140PT).Clone as TIdRTPT140Payload;
   try
     Payload.Block := Self.Msg;
