@@ -1426,11 +1426,14 @@ type
 
     procedure SetDestination(Value: TIdSipAddressHeader);
   protected
+    function  ReceiveOKResponse(Response: TIdSipResponse;
+                                UsingSecureTransport: Boolean): TIdSipActionStatus; override;
   public
     constructor Create(UA: TIdSipAbstractUserAgent); overload; override;
     destructor  Destroy; override;
 
     procedure AddListener(Listener: IIdSipSubscribeListener);
+    function  Match(Msg: TIdSipMessage): Boolean; override;
     procedure RemoveListener(Listener: IIdSipSubscribeListener);
     procedure Send; override;
 
@@ -7357,6 +7360,31 @@ begin
   Self.Listeners.AddListener(Listener);
 end;
 
+function TIdSipOutboundSubscribe.Match(Msg: TIdSipMessage): Boolean;
+var
+  Req: TIdSipRequest;
+begin
+  Result := false;
+  if Msg.IsRequest then begin
+    Req := Msg as TIdSipRequest;
+
+    if Req.IsNotify then begin
+      Result := (Self.InitialRequest.CallID = Req.CallID)
+            and (Self.InitialRequest.From.Tag = Req.ToHeader.Tag)
+            and Req.HasHeader(EventHeader)
+            and (Self.InitialRequest.FirstHeader(EventHeader).Equals(Req.FirstHeader(EventHeader)));
+    end;
+    // Not sure if we need this:
+//    else
+//      Result := Self.InitialRequest.Match(Req);
+  end    
+  else begin
+    Result := Self.InitialRequest.CSeq.Equals(Msg.CSeq)
+          and (Self.InitialRequest.CallID = Msg.CallID)
+          and (Self.InitialRequest.From.Tag = Msg.From.Tag);
+  end;
+end;
+
 procedure TIdSipOutboundSubscribe.RemoveListener(Listener: IIdSipSubscribeListener);
 begin
   Self.Listeners.RemoveListener(Listener);
@@ -7376,6 +7404,14 @@ begin
   finally
     Sub.Free;
   end;
+end;
+
+//* TIdSipOutboundSubscribe Protected methods **********************************
+
+function TIdSipOutboundSubscribe.ReceiveOKResponse(Response: TIdSipResponse;
+                                                   UsingSecureTransport: Boolean): TIdSipActionStatus;
+begin
+  Result := inherited ReceiveOKResponse(Response, UsingSecureTransport);
 end;
 
 //* TIdSipOutboundSubscribe Private methods ************************************
