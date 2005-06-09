@@ -392,6 +392,8 @@ type
     procedure TestMatchAckWithDifferentCSeq;
     procedure TestMethod;
     procedure TestNotifyOfNetworkFailure;
+    procedure TestNotifyOfSuccess;
+    procedure TestReceiveResentAck;
     procedure TestRedirectCall;
     procedure TestRedirectCallPermanent;
     procedure TestRejectCallBusy;
@@ -5823,6 +5825,63 @@ begin
   end;
 end;
 
+procedure TestTIdSipInboundInvite.TestNotifyOfSuccess;
+var
+  Ack:    TIdSipRequest;
+  L1, L2: TIdSipTestInboundInviteListener;
+begin
+  L1 := TIdSipTestInboundInviteListener.Create;
+  try
+    L2 := TIdSipTestInboundInviteListener.Create;
+    try
+      Self.InviteAction.AddListener(L1);
+      Self.InviteAction.AddListener(L2);
+
+      Self.InviteAction.Accept('', '');
+
+      Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
+      try
+        Self.InviteAction.ReceiveRequest(Ack);
+      finally
+        Ack.Free;
+      end;
+
+      Check(L1.Succeeded, 'L1 not notified of action success');
+      Check(L2.Succeeded, 'L2 not notified of action success');
+    finally
+       Self.InviteAction.RemoveListener(L2);
+       L2.Free;
+    end;
+  finally
+     Self.InviteAction.RemoveListener(L1);
+    L1.Free;
+  end;
+end;
+
+procedure TestTIdSipInboundInvite.TestReceiveResentAck;
+var
+  Ack:      TIdSipRequest;
+  Listener: TIdSipTestInboundInviteListener;
+begin
+  Self.InviteAction.Accept('', '');
+
+  Ack := Self.InviteAction.InitialRequest.AckFor(Self.LastSentResponse);
+  try
+    Self.InviteAction.ReceiveRequest(Ack);
+
+    Listener := TIdSipTestInboundInviteListener.Create;
+    try
+      Self.InviteAction.AddListener(Listener);
+
+      Self.InviteAction.ReceiveRequest(Ack);
+      Check(not Listener.Succeeded, 'The InboundInvite renotified its listeners of success');
+    finally
+      Listener.Free;
+    end;
+  finally
+    Ack.Free;
+  end;
+end;
 
 procedure TestTIdSipInboundInvite.TestRedirectCall;
 var

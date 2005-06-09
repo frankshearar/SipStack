@@ -4814,8 +4814,10 @@ procedure TIdSipInboundInvite.ReceiveAck(Ack: TIdSipRequest);
 begin
   inherited ReceiveAck(Ack);
 
-  Self.ReceivedAck := true;
-  Self.NotifyOfSuccess(Ack);
+  if not Self.ReceivedAck then begin
+    Self.ReceivedAck := true;
+    Self.NotifyOfSuccess(Ack);
+  end;
 end;
 
 procedure TIdSipInboundInvite.ReceiveCancel(Cancel: TIdSipRequest);
