@@ -6933,7 +6933,7 @@ begin
     end;
 
     Self.NotifyOfEstablishedSession(Self.InitialInvite.InitialRequest.Body,
-                                     Self.InitialInvite.InitialRequest.ContentType);
+                                    Self.InitialInvite.InitialRequest.ContentType);
   end;
 end;
 
