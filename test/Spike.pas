@@ -137,11 +137,12 @@ type
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
+                             ErrorCode: Cardinal);
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
-                        const Reason: String);
+                               ErrorCode: Cardinal;
+                               const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
                         const Reason: String);
@@ -426,11 +427,11 @@ begin
 end;
 
 procedure TrnidSpike.OnEndedSession(Session: TIdSipSession;
-                                    const Reason: String);
+                                    ErrorCode: Cardinal);
 begin
   Self.Lock.Acquire;
   try
-    Self.Log.Lines.Add('Session ended: ' + Reason);
+    Self.Log.Lines.Add('Session ended: ' + IntToStr(ErrorCode));
   finally
     Self.Lock.Release;
   end;
@@ -455,13 +456,14 @@ begin
 end;
 
 procedure TrnidSpike.OnNetworkFailure(Action: TIdSipAction;
+                                      ErrorCode: Cardinal;
                                       const Reason: String);
 begin
   Self.Lock.Acquire;
   try
     Self.Log.Lines.Add('|||| ' + FormatDateTime('yyyy/mm/dd hh:mm:ss.zzz', Now));
 
-    Self.Log.Lines.Add(Reason);
+    Self.Log.Lines.Add(IntToStr(ErrorCode) + ': ' + Reason);
   finally
     Self.Lock.Release;
   end;

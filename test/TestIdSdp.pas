@@ -909,23 +909,23 @@ procedure TestTIdSdpAttribute.TestCreateAttribute;
 var
   Att: TIdSdpAttribute;
 begin
-  Att := TIdSdpAttribute.CreateAttribute('rtpmap:98 T140/1000');
+  Att := TIdSdpAttribute.CreateAttribute('rtpmap:98 t140/1000');
   try
     CheckEquals(TIdSdpRTPMapAttribute.ClassName,
                 Att.ClassName,
                 'Incorrect class for rtpmap attribute');
     CheckEquals('rtpmap',       Att.Name,  'rtpmap attribute name');
-    CheckEquals('98 T140/1000', Att.Value, 'rtpmap attribute value');
+    CheckEquals('98 t140/1000', Att.Value, 'rtpmap attribute value');
   finally
     Att.Free;
   end;
 
-  Att := TIdSdpAttribute.CreateAttribute('98 T140/1000');
+  Att := TIdSdpAttribute.CreateAttribute('98 t140/1000');
   try
     CheckEquals(TIdSdpAttribute.ClassName,
                 Att.ClassName,
                 'Incorrect class for "unspecial" attribute');
-    CheckEquals('98 T140/1000', Att.Name,  'attribute name');
+    CheckEquals('98 t140/1000', Att.Name,  'attribute name');
     CheckEquals('',             Att.Value, 'attribute value');
   finally
     Att.Free;
@@ -1552,7 +1552,7 @@ var
 begin
   Self.M.AddAttribute(RTPMapAttribute, '98 L16/16000/2');
 
-  Self.M.AddAttribute(RTPMapAttribute, '100 T140/1000');
+  Self.M.AddAttribute(RTPMapAttribute, '100 ' + T140Encoding);
 
   Self.M.Bandwidths.Add;
   Self.M.Bandwidths[0].Bandwidth := 666;
@@ -1586,7 +1586,7 @@ begin
               + 'b=CT:42'#13#10
               + 'k=base64:DEADBEEF'#13#10
               + 'a=rtpmap:98 L16/16000/2'#13#10
-              + 'a=rtpmap:100 T140/1000'#13#10,
+              + 'a=rtpmap:100 ' + T140Encoding + #13#10,
                 S.DataString,
                 'PrintOn');
   finally
@@ -2188,14 +2188,14 @@ begin
   Self.A.Add;
 
   Self.A[0].Name  := 'rtpmap';
-  Self.A[0].Value := '98 T140/1000';
+  Self.A[0].Value := '98 t140/1000';
   Self.A[1].Name  := 'rtpmap';
   Self.A[1].Value := '99 dead/8000';
 
   S := TStringStream.Create('');
   try
     Self.A.PrintOn(S);
-    CheckEquals('a=rtpmap:98 T140/1000'#13#10
+    CheckEquals('a=rtpmap:98 t140/1000'#13#10
               + 'a=rtpmap:99 dead/8000'#13#10,
                 S.DataString,
                 'PrintOn');
@@ -3246,12 +3246,12 @@ var
   S:          TStringStream;
 begin
   S := TStringStream.Create(MinimumPayload
-                          + 'a=rtpmap:96 T140/8000'#13#10
+                          + 'a=rtpmap:96 t140/8000'#13#10
                           + 'a=fmtp:96 98/98'#13#10
                           + 'm=text 11000 RTP/AVP 98'#13#10
-                          + 'a=rtpmap:98 T140/1000'#13#10
+                          + 'a=rtpmap:98 t140/1000'#13#10
                           + 'm=text 12000 RTP/AVP 97 100'#13#10
-                          + 'a=rtpmap:97 T140/1000'#13#10
+                          + 'a=rtpmap:97 t140/1000'#13#10
                           + 'a=rtpmap:100 red/1000'#13#10
                           + 'a=fmtp:100 98/98'#13#10);
   try
@@ -3264,9 +3264,9 @@ begin
       try
         Self.Payload.GetRtpMapAttributes(Attributes);
         CheckEquals(4, Attributes.Count, 'Number of attributes');
-        CheckEquals('96 T140/8000', Attributes[0].Value, '1st attribute value');
-        CheckEquals('98 T140/1000', Attributes[1].Value, '2nd attribute value');
-        CheckEquals('97 T140/1000', Attributes[2].Value, '3rd attribute value');
+        CheckEquals('96 t140/8000', Attributes[0].Value, '1st attribute value');
+        CheckEquals('98 t140/1000', Attributes[1].Value, '2nd attribute value');
+        CheckEquals('97 t140/1000', Attributes[2].Value, '3rd attribute value');
         CheckEquals('100 red/1000', Attributes[3].Value, '4th attribute value');
       finally
         Attributes.Free;
@@ -3547,7 +3547,7 @@ begin
     Self.SetToMinimumPayload(Self.Payload);
     MD := Self.Payload.AddMediaDescription;
     MD.AddFormat('98');
-    MD.AddAttribute(RTPMapAttribute, '98 T140/1000');
+    MD.AddAttribute(RTPMapAttribute, '98 t140/1000');
 
     MD.MediaType := mtText;
     MD.Transport := Id_SDP_RTPAVP;
@@ -3560,7 +3560,7 @@ begin
               + 's=Minimum Session Info'#13#10
               + 'm=text 8000 RTP/AVP 98'#13#10
               + 'c=IN IP4 224.2.17.12/127'#13#10
-              + 'a=rtpmap:98 T140/1000'#13#10,
+              + 'a=rtpmap:98 t140/1000'#13#10,
                 S.DataString,
                 'PrintOn');
   finally

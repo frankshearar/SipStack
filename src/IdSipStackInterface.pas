@@ -96,7 +96,7 @@ type
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
+                             ErrorCode: Cardinal);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -111,6 +111,7 @@ type
     procedure OnModifiedSession(Session: TIdSipSession;
                                 Answer: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
@@ -141,6 +142,8 @@ type
     procedure ModifyCall(ActionHandle: TIdSipHandle;
                          const Offer: String;
                          const ContentType: String);
+    procedure RedirectCall(ActionHandle: TIdSipHandle;
+                           NewTarget: TIdSipAddressHeader);
     procedure RejectCall(ActionHandle: TIdSipHandle);
     procedure Send(ActionHandle: TIdSipHandle);
   end;
@@ -160,29 +163,25 @@ type
 
   TIdEventDataClass = class of TIdEventData;
 
-  TIdInformationalData = class(TIdEventData)
-  private
-    fReason: String;
-  public
-    procedure Assign(Src: TPersistent); override;
-
-    property Reason: String read fReason write fReason;
-  end;
-
-  TIdFailData = class(TIdInformationalData);
-
   // An ErrorCode of 0 means "no error".
   // Usually the ErrorCode will map to a SIP response Status-Code.
-  TIdCallEndedData = class(TIdInformationalData)
+  TIdInformationalData = class(TIdEventData)
   private
     fErrorCode: Cardinal;
+
+    fReason: String;
+    procedure SetErrorCode(Value: Cardinal);  private
   public
     constructor Create; override;
 
     procedure Assign(Src: TPersistent); override;
 
-    property ErrorCode: Cardinal read fErrorCode write fErrorCode;
+    property ErrorCode: Cardinal read fErrorCode write SetErrorCode;
+    property Reason: String read fReason write fReason;
   end;
+
+  TIdFailData = class(TIdInformationalData);
+  TIdCallEndedData = class(TIdInformationalData);
 
   TIdDebugMessageData = class(TIdEventData)
   private
@@ -432,6 +431,21 @@ begin
   end;
 end;
 
+procedure TIdSipStackInterface.RedirectCall(ActionHandle: TIdSipHandle;
+                                            NewTarget: TIdSipAddressHeader);
+var
+  Action: TIdSipAction;
+begin
+  Self.ActionLock.Acquire;
+  try
+    Action := Self.GetAndCheckAction(ActionHandle, TIdSipInboundSession);
+
+    (Action as TIdSipInboundSession).RedirectCall(NewTarget);
+  finally
+    Self.ActionLock.Release;
+  end;
+end;
+
 procedure TIdSipStackInterface.RejectCall(ActionHandle: TIdSipHandle);
 var
   Action: TIdSipAction;
@@ -630,14 +644,14 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnEndedSession(Session: TIdSipSession;
-                                              const Reason: String);
+                                              ErrorCode: Cardinal);
 var
   Data: TIdCallEndedData;
 begin
   Data := TIdCallEndedData.Create;
   try
     Data.Handle := Self.HandleFor(Session);
-    Data.Reason := Reason;
+    Data.ErrorCode := ErrorCode;
     Self.NotifyEvent(Session, CM_CALL_ENDED, Data);
 
     Self.RemoveAction(Data.Handle);
@@ -743,14 +757,16 @@ begin
 end;
 
 procedure TIdSipStackInterface.OnNetworkFailure(Action: TIdSipAction;
+                                                ErrorCode: Cardinal;
                                                 const Reason: String);
 var
   Data: TIdFailData;
 begin
   Data := TIdFailData.Create;
   try
-    Data.Handle := Self.HandleFor(Action);
-    Data.Reason := Reason;
+    Data.Handle    := Self.HandleFor(Action);
+    Data.ErrorCode := ErrorCode;
+    Data.Reason    := Reason;
 
     Self.NotifyEvent(Action, CM_NETWORK_FAILURE, Data);
   finally
@@ -870,6 +886,13 @@ end;
 //******************************************************************************
 //* TIdInformationalData Public methods ****************************************
 
+constructor TIdInformationalData.Create;
+begin
+  inherited Create;
+
+  Self.ErrorCode := CallEndedSuccess;
+end;
+
 procedure TIdInformationalData.Assign(Src: TPersistent);
 var
   Other: TIdInformationalData;
@@ -878,34 +901,21 @@ begin
 
   if (Src is TIdInformationalData) then begin
     Other := Src as TIdInformationalData;
-    Self.Reason := Other.Reason;
-  end;
-end;
-
-//******************************************************************************
-//* TIdCallEndedData                                                           *
-//******************************************************************************
-//* TIdCallEndedData Public methods ********************************************
-
-constructor TIdCallEndedData.Create;
-begin
-  inherited Create;
-
-  Self.ErrorCode := CallEndedSuccess;
-end;
-
-procedure TIdCallEndedData.Assign(Src: TPersistent);
-var
-  Other: TIdCallEndedData;
-begin
-  inherited Assign(Src);
-
-  if (Src is TIdCallEndedData) then begin
-    Other := Src as TIdCallEndedData;
 
     Self.ErrorCode := Other.ErrorCode;
+    Self.Reason    := Other.Reason;
   end;
 end;
+
+//* TIdInformationalData Private methods ***************************************
+
+procedure TIdInformationalData.SetErrorCode(Value: Cardinal);
+begin
+  Self.fErrorCode := Value;
+
+  // TODO: Look up the reason string corresponding to ErrorCode here.
+end;
+
 
 //******************************************************************************
 //* TIdRegistrationData                                                        *

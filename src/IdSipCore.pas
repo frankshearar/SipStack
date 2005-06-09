@@ -78,12 +78,13 @@ type
 
   // I provide a protocol for generic Actions.
   // OnAuthenticationChallenge right now isn't used: it's here in anticipation
-  // of a rewrite of the stack's authentication mechanism. 
+  // of a rewrite of the stack's authentication mechanism.
   IIdSipActionListener = interface
     ['{C3255325-A52E-46FF-9C21-478880FB350A}']
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Challenge: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
   end;
 
@@ -158,7 +159,7 @@ type
   IIdSipSessionListener = interface(IIdSipActionListener)
     ['{59B3C476-D3CA-4C5E-AA2B-2BB587A5A716}']
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
+                             ErrorCode: Cardinal);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -844,7 +845,8 @@ type
     function  CreateNewAttempt: TIdSipRequest; virtual; abstract;
     procedure MarkAsTerminated; virtual;
     procedure NotifyOfFailure(Response: TIdSipResponse); virtual;
-    procedure NotifyOfNetworkFailure(const Reason: String); virtual;
+    procedure NotifyOfNetworkFailure(ErrorCode: Cardinal;
+                                     const Reason: String); virtual;
     procedure ReceiveAck(Ack: TIdSipRequest); virtual;
     procedure ReceiveBye(Bye: TIdSipRequest); virtual;
     procedure ReceiveCancel(Cancel: TIdSipRequest); virtual;
@@ -1274,7 +1276,7 @@ type
     function  CreateNewAttempt: TIdSipRequest; override;
     function  GetDialog: TIdSipDialog; virtual;
     function  GetInvite: TIdSipRequest; virtual;
-    procedure NotifyOfEndedSession(const Reason: String);
+    procedure NotifyOfEndedSession(ErrorCode: Cardinal);
     procedure NotifyOfEstablishedSession(const RemoteSessionDescription: String;
                                          const MimeType: String);
     procedure NotifyOfFailure(Response: TIdSipResponse); overload; override;
@@ -1284,6 +1286,7 @@ type
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog); virtual;
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String); virtual;
     procedure OnFailure(InviteAgent: TIdSipOutboundInvite;
                         Response: TIdSipResponse;
@@ -1467,11 +1470,13 @@ type
   TIdSipActionNetworkFailureMethod = class(TIdNotification)
   private
     fActionAgent: TIdSipAction;
+    fErrorCode:   Cardinal;
     fReason:      String;
   public
     procedure Run(const Subject: IInterface); override;
 
     property ActionAgent: TIdSipAction read fActionAgent write fActionAgent;
+    property ErrorCode:   Cardinal     read fErrorCode write fErrorCode;
     property Reason:      String       read fReason write fReason;
   end;
 
@@ -1576,11 +1581,11 @@ type
 
   TIdSipEndedSessionMethod = class(TIdSipSessionMethod)
   private
-    fReason: String;
+    fErrorCode: Cardinal;
   public
     procedure Run(const Subject: IInterface); override;
 
-    property Reason: String read fReason write fReason;
+    property ErrorCode: Cardinal read fErrorCode write fErrorCode;
   end;
 
   TIdSipEstablishedSessionMethod = class(TIdSipSessionMethod)
@@ -1661,6 +1666,21 @@ type
   end;
   EIdSipTransactionUser = class(EIdException);
 
+// Stack error codes
+const
+  NoError                        = 0;
+  BusyHere                       = NoError;
+  CallRedirected                 = NoError;
+  LocalHangUp                    = NoError;
+  InboundActionFailed            = NoError + 1;
+  NoLocationFound                = NoError + 2;
+  NoLocationSucceeded            = NoError + 3;
+  RedirectWithNoContacts         = NoError + 4;
+  RedirectWithNoMoreTargets      = NoError + 5;
+  RedirectWithNoSuccess          = NoError + 6;
+  RemoteCancel                   = NoError;
+  RemoteHangUp                   = NoError;
+
 // Configuration file constants
 const
   AuthenticationDirective = 'Authentication';
@@ -1673,6 +1693,7 @@ const
   ProxyDirective          = 'Proxy';
   RegisterDirective       = 'Register';
 
+// Generally useful constants
 const
   BadAuthorizationTokens     = 'Bad Authorization tokens';
   MalformedConfigurationLine = 'Malformed configuration line: %s';
@@ -1690,26 +1711,29 @@ uses
   IdSipMockLocator, IdRandom, IdSdp, IdSystem, IdUnicode, Math, SysUtils;
 
 const
-  BusyHere                       = 'Incoming call rejected - busy here';
-  CallRedirected                 = 'Incoming call redirected';
+  ItemNotFoundIndex = -1;
+
+const
+  RSBusyHere                  = 'Incoming call rejected - busy here';
+  RSCallRedirected            = 'Incoming call redirected';
+  RSLocalHangUp               = 'Local end hung up';
+  RSInboundActionFailed       = 'For an inbound %s, sending a response failed because: %s';
+  RSNoLocationFound           = 'No destination addresses found for URI %s';
+  RSNoLocationSucceeded       = 'Attempted message sends to all destination addresses failed for URI %s';
+  RSRedirectWithNoContacts    = 'Call redirected to nowhere';
+  RSRedirectWithNoMoreTargets = 'Call redirected but no more targets';
+  RSRedirectWithNoSuccess     = 'Call redirected but no target answered';
+  RSRemoteCancel              = 'Remote end cancelled call';
+  RSRemoteHangUp              = 'Remote end hung up';
+
+// Exception messages
+const
   CannotModifyBeforeEstablished  = 'Cannot modify a session before it''s fully established';
   CannotModifyDuringModification = 'Cannot modify a session while a modification is in progress';
   MethodInProgress               = 'A(n) %s is already in progress';
-  InviteTimeout                  = 'Incoming call timed out';
-  LocalCancel                    = 'Local end cancelled call';
-  LocalHangUp                    = 'Local end hung up';
-  InboundActionFailed            = 'An inbound %s failed because: %s';
-  ItemNotFoundIndex              = -1;
-  NoLocationFound                = 'No destination addresses found for URI %s';
-  NoLocationSucceeded            = 'Attempted message sends to all destination addresses failed for URI %s';
   NoSuchRegistrar                = 'No such registrar known: %s';
   OutboundActionFailed           = 'An outbound %s failed because: %s';
   PrematureInviteMessage         = 'Don''t attempt to modify the session before it''s fully established';
-  RedirectWithNoContacts         = 'Call redirected to nowhere';
-  RedirectWithNoMoreTargets      = 'Call redirected but no more targets';
-  RedirectWithNoSuccess          = 'Call redirected but no target answered';
-  RemoteCancel                   = 'Remote end cancelled call';
-  RemoteHangUp                   = 'Remote end hung up';
 
 //******************************************************************************
 //* TIdSipActionClosure                                                        *
@@ -4351,13 +4375,15 @@ begin
   // By default do nothing
 end;
 
-procedure TIdSipAction.NotifyOfNetworkFailure(const Reason: String);
+procedure TIdSipAction.NotifyOfNetworkFailure(ErrorCode: Cardinal;
+                                              const Reason: String);
 var
   Notification: TIdSipActionNetworkFailureMethod;
 begin
   Notification := TIdSipActionNetworkFailureMethod.Create;
   try
     Notification.ActionAgent := Self;
+    Notification.ErrorCode   := ErrorCode;
     Notification.Reason      := Reason;
 
     Self.Listeners.Notify(Notification);
@@ -4485,15 +4511,17 @@ begin
       // Request-URI. Thus this clause should never execute. Still, this
       // clause protects the code that follows.
 
-      FailReason := Format(NoLocationFound, [Request.DestinationUri]);
-      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed,
+      FailReason := Format(RSNoLocationFound, [Request.DestinationUri]);
+      Self.NotifyOfNetworkFailure(NoLocationFound,
+                                  Format(OutboundActionFailed,
                                          [Self.Method, FailReason]));
       Exit;
     end;
 
     if not Self.TrySendRequest(Request, TargetLocations) then begin
-      FailReason := Format(NoLocationSucceeded, [Request.DestinationUri]);
-      Self.NotifyOfNetworkFailure(Format(OutboundActionFailed,
+      FailReason := Format(RSNoLocationSucceeded, [Request.DestinationUri]);
+      Self.NotifyOfNetworkFailure(NoLocationSucceeded,
+                                  Format(OutboundActionFailed,
                                          [Self.Method, FailReason]));
     end;
   finally
@@ -4508,7 +4536,8 @@ begin
     Self.UA.SendResponse(Response);
   except
     on E: EIdSipTransport do
-      Self.NotifyOfNetworkFailure(Format(InboundActionFailed, [Self.Method, E.Message]));
+      Self.NotifyOfNetworkFailure(InboundActionFailed,
+                                  Format(RSInboundActionFailed, [Self.Method, E.Message]));
   end;
 end;
 
@@ -6393,14 +6422,14 @@ begin
   Result := Self.InitialRequest;
 end;
 
-procedure TIdSipSession.NotifyOfEndedSession(const Reason: String);
+procedure TIdSipSession.NotifyOfEndedSession(ErrorCode: Cardinal);
 var
   Notification: TIdSipEndedSessionMethod;
 begin
   Notification := TIdSipEndedSessionMethod.Create;
   try
-    Notification.Reason  := Reason;
-    Notification.Session := Self;
+    Notification.ErrorCode := ErrorCode;
+    Notification.Session   := Self;
 
     Self.Listeners.Notify(Notification);
   finally
@@ -6428,7 +6457,7 @@ end;
 procedure TIdSipSession.NotifyOfFailure(Response: TIdSipResponse);
 begin
   Self.MarkAsTerminated;
-  Self.NotifyOfEndedSession(Response.Description);
+  Self.NotifyOfEndedSession(Response.StatusCode);
 end;
 
 procedure TIdSipSession.NotifyOfModifySession(Modify: TIdSipInboundInvite);
@@ -6466,9 +6495,10 @@ begin
 end;
 
 procedure TIdSipSession.OnNetworkFailure(Action: TIdSipAction;
+                                         ErrorCode: Cardinal;
                                          const Reason: String);
 begin
-  Self.NotifyOfNetworkFailure(Reason);
+  Self.NotifyOfNetworkFailure(ErrorCode, Reason);
 end;
 
 procedure TIdSipSession.OnFailure(InviteAgent: TIdSipOutboundInvite;
@@ -7103,7 +7133,7 @@ begin
     if (InviteAgent = Self.InitialInvite) then begin
       Self.InitialInvite := nil;
       Self.MarkAsTerminated;
-      Self.NotifyOfEndedSession(Reason);
+      Self.NotifyOfEndedSession(Response.StatusCode);
       Exit;
     end;
 
@@ -7426,6 +7456,7 @@ end;
 procedure TIdSipActionNetworkFailureMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipActionListener).OnNetworkFailure(Self.ActionAgent,
+                                                     Self.ErrorCode,
                                                      Self.Reason);
 end;
 
@@ -7536,7 +7567,7 @@ end;
 procedure TIdSipEndedSessionMethod.Run(const Subject: IInterface);
 begin
   (Subject as IIdSipSessionListener).OnEndedSession(Self.Session,
-                                                    Self.Reason);
+                                                    Self.ErrorCode);
 end;
 
 //******************************************************************************

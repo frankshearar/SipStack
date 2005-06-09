@@ -130,7 +130,7 @@ type
                                         Message: TIdSipMessage;
                                         Receiver: TIdSipTransport);
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String);
+                             ErrorCode: Cardinal);
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -142,6 +142,7 @@ type
                               const RemoteSessionDescription: String;
                               const MimeType: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
     procedure OnSendRequest(Request: TIdSipRequest;
                             Sender: TIdSipTransport);
@@ -300,6 +301,7 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
     procedure ReceiveBadExtensionResponse;
     procedure ReceiveOkWithBody(Invite: TIdSipRequest;
@@ -338,6 +340,7 @@ type
     procedure OnDialogEstablished(InviteAgent: TIdSipOutboundInvite;
                                   NewDialog: TIdSipDialog);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
     procedure OnRedirect(InviteAgent: TIdSipOutboundInvite;
                          Redirect: TIdSipResponse);
@@ -597,6 +600,7 @@ type
   TestTIdSipSession = class(TestTIdSipAction,
                             IIdSipSessionListener)
   protected
+    ErrorCode:                 Cardinal;
     MimeType:                  String;
     MultiStreamSdp:            TIdSdpPayload;
     OnEndedSessionFired:       Boolean;
@@ -614,7 +618,7 @@ type
     function  CreateSimpleSdp: TIdSdpPayload;
     procedure EstablishSession(Session: TIdSipSession); virtual; abstract;
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String); virtual;
+                             ErrorCode: Cardinal); virtual;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); virtual;
@@ -682,7 +686,7 @@ type
     function  CreateAction: TIdSipAction; override;
     procedure EstablishSession(Session: TIdSipSession); override;
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String); override;
+                             ErrorCode: Cardinal); override;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String); override;
@@ -1793,7 +1797,7 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnEndedSession(Session: TIdSipSession;
-                                             const Reason: String);
+                                             ErrorCode: Cardinal);
 begin
   Self.OnEndedSessionFired := true;
   Self.ThreadEvent.SetEvent;
@@ -1833,6 +1837,7 @@ begin
 end;
 
 procedure TestTIdSipUserAgent.OnNetworkFailure(Action: TIdSipAction;
+                                               ErrorCode: Cardinal;
                                                const Reason: String);
 begin
   Self.FailReason := Reason;
@@ -4431,6 +4436,7 @@ begin
 end;
 
 procedure TestTIdSipAction.OnNetworkFailure(Action: TIdSipAction;
+                                            ErrorCode: Cardinal;
                                             const Reason: String);
 begin
   Self.FailReason  := Reason;
@@ -4596,6 +4602,7 @@ begin
 end;
 
 procedure TestLocation.OnNetworkFailure(Action: TIdSipAction;
+                                        ErrorCode: Cardinal;
                                         const Reason: String);
 begin
   Self.NetworkFailure := true;
@@ -4897,9 +4904,10 @@ begin
 end;
 
 procedure TestTIdSipSession.OnEndedSession(Session: TIdSipSession;
-                                           const Reason: String);
+                                           ErrorCode: Cardinal);
 begin
   Self.OnEndedSessionFired := true;
+  Self.ErrorCode           := ErrorCode;
 end;
 
 procedure TestTIdSipSession.OnEstablishedSession(Session: TIdSipSession;
@@ -7702,9 +7710,9 @@ begin
 end;
 
 procedure TestTIdSipInboundSession.OnEndedSession(Session: TIdSipSession;
-                                                  const Reason: String);
+                                                  ErrorCode: Cardinal);
 begin
-  inherited OnEndedSession(Session, Reason);
+  inherited OnEndedSession(Session, ErrorCode);
   Self.ActionFailed := true;
 
   Self.ThreadEvent.SetEvent;
@@ -9337,6 +9345,8 @@ begin
 
   Check(Self.OnEndedSessionFired,
         'Session didn''t notify listeners of ended session');
+  CheckEquals(RedirectWithNoMoreTargets, Self.ErrorCode,
+              'Session reported wrong error code for no more redirect targets');
 end;
 
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
@@ -9386,6 +9396,8 @@ begin
 
   Check(Self.OnEndedSessionFired,
         'Session didn''t notify listeners of ended session');
+  CheckEquals(RedirectWithNoSuccess, Self.ErrorCode,
+              'Session reported wrong error code for no successful rings');
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;
@@ -9961,13 +9973,15 @@ end;
 //* TestTIdSipEndedSessionMethod Public methods ********************************
 
 procedure TestTIdSipEndedSessionMethod.SetUp;
+const
+  ArbValue = 42;
 begin
   inherited SetUp;
 
   Self.Method := TIdSipEndedSessionMethod.Create;
 
-  Self.Method.Session := Self.Session;
-  Self.Method.Reason  := 'No reason';
+  Self.Method.Session   := Self.Session;
+  Self.Method.ErrorCode := ArbValue;
 end;
 
 procedure TestTIdSipEndedSessionMethod.TearDown;
@@ -9989,9 +10003,9 @@ begin
 
     Check(Self.Method.Session = L.SessionParam,
           'Session param');
-    CheckEquals(Self.Method.Reason,
-                L.ReasonParam,
-                'Reason param');
+    CheckEquals(Self.Method.ErrorCode,
+                L.ErrorCodeParam,
+                'ErrorCode param');
   finally
     L.Free;
   end;

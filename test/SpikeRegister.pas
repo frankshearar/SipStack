@@ -46,6 +46,7 @@ type
     procedure OnException(E: Exception;
                           const Reason: String);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
     procedure OnFailure(RegisterAgent: TIdSipOutboundRegistration;
                         CurrentBindings: TIdSipContacts;
@@ -170,6 +171,7 @@ begin
 end;
 
 procedure TrnidSpikeRegister.OnNetworkFailure(Action: TIdSipAction;
+                                              ErrorCode: Cardinal;
                                               const Reason: String);
 begin
 end;

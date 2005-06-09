@@ -113,6 +113,7 @@ type
   private
     fActionParam:              TIdSipAction;
     fAuthenticationChallenged: Boolean;
+    fErrorCodeParam:           Cardinal;
     fFailWith:                 ExceptClass;
     fNetworkFailed:            Boolean;
     fResponseParam:            TIdSipResponse;
@@ -120,17 +121,19 @@ type
     procedure OnAuthenticationChallenge(Action: TIdSipAction;
                                         Response: TIdSipResponse);
     procedure OnNetworkFailure(Action: TIdSipAction;
+                               ErrorCode: Cardinal;
                                const Reason: String);
   protected
     fReasonParam: String;
   public
     constructor Create; virtual;
 
-    property ActionParam:   TIdSipAction   read fActionParam;
-    property FailWith:      ExceptClass    read fFailWith write fFailWith;
-    property NetworkFailed: Boolean        read fNetworkFailed;
-    property ReasonParam:   String         read fReasonParam;
-    property ResponseParam: TIdSipResponse read fResponseParam;
+    property ActionParam:    TIdSipAction   read fActionParam;
+    property ErrorCodeParam: Cardinal       read fErrorCodeParam;
+    property FailWith:       ExceptClass    read fFailWith write fFailWith;
+    property NetworkFailed:  Boolean        read fNetworkFailed;
+    property ReasonParam:    String         read fReasonParam;
+    property ResponseParam:  TIdSipResponse read fResponseParam;
   end;
 
   TIdSipTestDataListener = class(TIdSipMockListener,
@@ -297,12 +300,12 @@ type
   private
     fAnswerParam:              TIdSipResponse;
     fEndedSession:             Boolean;
+    fErrorCodeParam:           Cardinal;
     fEstablishedSession:       Boolean;
     fMimeType:                 String;
     fModifiedSession:          Boolean;
     fModifySession:            Boolean;
     fNewSession:               Boolean;
-    fReasonParam:              String;
     fRedirect:                 Boolean;
     fRemoteSessionDescription: String;
     fSessionParam:             TIdSipSession;
@@ -312,7 +315,7 @@ type
     procedure OnRedirect(Action: TIdSipAction;
                          Redirect: TIdSipResponse);
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String); virtual;
+                             ErrorCode: Cardinal); virtual;
     procedure OnEstablishedSession(Session: TIdSipSession;
                                    const RemoteSessionDescription: String;
                                    const MimeType: String);
@@ -325,6 +328,7 @@ type
 
     property AnswerParam:              TIdSipResponse      read fAnswerParam;
     property EndedSession:             Boolean             read fEndedSession;
+    property ErrorCodeParam:           Cardinal            read fErrorCodeParam;
     property EstablishedSession:       Boolean             read fEstablishedSession;
     property MimeType:                 String              read fMimeType;
     property ModifiedSession:          Boolean             read fModifiedSession;
@@ -332,7 +336,6 @@ type
     property NewSession:               Boolean             read fNewSession;
     property Redirect:                 Boolean             read fRedirect;
     property RemoteSessionDescription: String              read fRemoteSessionDescription;
-    property ReasonParam:              String              read fReasonParam;
     property SessionParam:             TIdSipSession       read fSessionParam;
   end;
 
@@ -343,7 +346,7 @@ type
     constructor Create; override;
 
     procedure OnEndedSession(Session: TIdSipSession;
-                             const Reason: String); override;
+                             ErrorCode: Cardinal); override;
 
     property EndedNotificationCount: Integer read fEndedNotificationCount;
   end;
@@ -1132,11 +1135,13 @@ begin
 end;
 
 procedure TIdSipMockListener.OnNetworkFailure(Action: TIdSipAction;
+                                              ErrorCode: Cardinal;
                                               const Reason: String);
 begin
-  Self.fActionParam   := Action;
-  Self.fNetworkFailed := true;
-  Self.fReasonParam   := Reason;
+  Self.fActionParam    := Action;
+  Self.fErrorCodeParam := ErrorCode;
+  Self.fNetworkFailed  := true;
+  Self.fReasonParam    := Reason;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnFailure');
@@ -1440,11 +1445,11 @@ begin
 end;
 
 procedure TIdSipTestSessionListener.OnEndedSession(Session: TIdSipSession;
-                                                   const Reason: String);
+                                                   ErrorCode: Cardinal);
 begin
-  Self.fEndedSession := true;
-  Self.fReasonParam  := Reason;
-  Self.fSessionParam := Session;
+  Self.fEndedSession   := true;
+  Self.fErrorCodeParam := ErrorCode;
+  Self.fSessionParam   := Session;
 
   if Assigned(Self.FailWith) then
     raise Self.FailWith.Create(Self.ClassName + '.OnEndedSession');
@@ -1509,9 +1514,9 @@ begin
 end;
 
 procedure TIdSipTestSessionListenerEndedCounter.OnEndedSession(Session: TIdSipSession;
-                                                               const Reason: String);
+                                                               ErrorCode: Cardinal);
 begin
-  inherited OnEndedSession(Session, Reason);
+  inherited OnEndedSession(Session, ErrorCode);
 
   Inc(Self.fEndedNotificationCount);
 end;

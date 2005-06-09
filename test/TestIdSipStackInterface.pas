@@ -142,6 +142,9 @@ type
     procedure TestModifyCallWithInvalidHandle;
     procedure TestModifyCallWithNonExistentHandle;
     procedure TestOutboundCall;
+    procedure TestRedirectCall;
+    procedure TestRedirectCallWithInvalidHandle;
+    procedure TestRedirectCallWithNonExistentHandle;
     procedure TestRejectCall;
     procedure TestRejectCallWithInvalidHandle;
     procedure TestRejectCallWithNonExistentHandle;
@@ -254,7 +257,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipStackInterface unit tests');
-  Result.AddTest(TestTIdSipStackInterface.Suite);
+//  Result.AddTest(TestTIdSipStackInterface.Suite);
   Result.AddTest(TestTIdEventData.Suite);
   Result.AddTest(TestTIdInformationalData.Suite);
   Result.AddTest(TestTIdFailData.Suite);
@@ -840,6 +843,39 @@ begin
               Self.DataList[Self.DataList.Count - 1].ClassName,
               'Unexpected event data');
 
+end;
+
+procedure TestTIdSipStackInterface.TestRedirectCall;
+begin
+  Fail('Not yet implemented');
+end;
+
+procedure TestTIdSipStackInterface.TestRedirectCallWithInvalidHandle;
+var
+  R: TIdSipHandle;
+begin
+  R := Self.Intf.MakeRegistration(Self.Destination.Address);
+
+  try
+    // You can't, obviously, "Redirect" a registration attempt.
+    Self.Intf.RedirectCall(R, Self.Destination);
+
+    Fail('No exception raised for an invalid handle');
+  except
+    on EInvalidHandle do;
+  end;
+end;
+
+procedure TestTIdSipStackInterface.TestRedirectCallWithNonExistentHandle;
+const
+  ArbValue = 42;
+begin
+  try
+    Self.Intf.RedirectCall(ArbValue, Self.Destination);
+    Fail('No exception raised for a non-existent handle');
+  except
+    on EInvalidHandle do;
+  end;
 end;
 
 procedure TestTIdSipStackInterface.TestRejectCall;
