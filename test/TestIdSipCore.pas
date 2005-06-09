@@ -733,8 +733,11 @@ type
                                         Receiver: TIdSipTransport);
     procedure OnInboundCall(UserAgent: TIdSipAbstractUserAgent;
                             Session: TIdSipInboundSession);
+    procedure ReceiveBusyHere(Invite: TIdSipRequest);
     procedure ReceiveRemoteDecline;
     procedure ReceiveForbidden;
+    procedure ReceiveMovedTemporarily(Invite: TIdSipRequest;
+                                      const Contact: String); overload;
     procedure ReceiveMovedTemporarily(const Contact: String); overload;
     procedure ReceiveMovedTemporarily(const Contacts: array of String); overload;
     procedure ReceiveOKWithRecordRoute;
@@ -783,7 +786,9 @@ type
     procedure TestReceiveFinalResponseSendsAck;
     procedure TestRedirectAndAccept;
     procedure TestRedirectMultipleOks;
+    procedure TestRedirectNoMoreTargets;
     procedure TestRedirectWithMultipleContacts;
+    procedure TestRedirectWithNoSuccess;
     procedure TestTerminateDuringRedirect;
     procedure TestTerminateEstablishedSession;
     procedure TestTerminateUnestablishedSession;
@@ -8400,6 +8405,19 @@ procedure TestTIdSipOutboundSession.OnInboundCall(UserAgent: TIdSipAbstractUserA
 begin
 end;
 
+procedure TestTIdSipOutboundSession.ReceiveBusyHere(Invite: TIdSipRequest);
+var
+  BusyHere: TIdSipResponse;
+begin
+  BusyHere := TIdSipResponse.InResponseTo(Invite,
+                                          SIPBusyHere);
+  try
+    Self.ReceiveResponse(BusyHere);
+  finally
+    BusyHere.Free;
+  end;
+end;
+
 procedure TestTIdSipOutboundSession.ReceiveRemoteDecline;
 var
   Decline: TIdSipResponse;
@@ -8426,11 +8444,12 @@ begin
   end;
 end;
 
-procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contact: String);
+procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(Invite: TIdSipRequest;
+                                                            const Contact: String);
 var
   Response: TIdSipResponse;
 begin
-  Response := TIdSipResponse.InResponseTo(Self.LastSentRequest,
+  Response := TIdSipResponse.InResponseTo(Invite,
                                           SIPMovedTemporarily);
   try
     Response.AddHeader(ContactHeaderFull).Value := Contact;
@@ -8438,6 +8457,11 @@ begin
   finally
     Response.Free;
   end;
+end;
+
+procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contact: String);
+begin
+  Self.ReceiveMovedTemporarily(Self.LastSentRequest, Contact);
 end;
 
 procedure TestTIdSipOutboundSession.ReceiveMovedTemporarily(const Contacts: array of String);
@@ -8450,7 +8474,7 @@ begin
   try
     for I := Low(Contacts) to High(Contacts) do
       Response.AddHeader(ContactHeaderFull).Value := Contacts[I];
-      
+
     Self.ReceiveResponse(Response);
   finally
     Response.Free;
@@ -9139,6 +9163,7 @@ begin
 
     Check(Self.OnEndedSessionFired,
           'Session didn''t end despite a redirect with no Contact headers');
+    CheckEquals(RedirectWithNoContacts, Self.ErrorCode, 'Stack reports wrong error code');      
   finally
     Redirect.Free;
   end;
@@ -9283,6 +9308,37 @@ begin
               'Unexpected target for the second BYE');
 end;
 
+procedure TestTIdSipOutboundSession.TestRedirectNoMoreTargets;
+var
+  Contacts: array of String;
+begin
+  //                                           Request number:
+  //  ---              INVITE             ---> #0
+  // <---          302 (foo,bar)          ---
+  //  ---               ACK               --->
+  //  ---           INVITE (foo)          ---> #1
+  //  ---           INVITE (bar)          ---> #2
+  // <--- 302 (from foo, referencing bar) ---
+  // <--- 302 (from bar, referencing foo) ---
+  //  ---          ACK (to foo)           --->
+  //  ---          ACK (to bar)           --->
+
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  Check(Self.SentRequestCount >= 3,
+        'Not enough requests sent: 1 + 2 INVITEs: ' + Self.FailReason);
+
+  Self.ReceiveMovedTemporarily(Self.SentRequestAt(1), Contacts[1]);
+  Self.ReceiveMovedTemporarily(Self.SentRequestAt(2), Contacts[0]);
+
+  Check(Self.OnEndedSessionFired,
+        'Session didn''t notify listeners of ended session');
+end;
+
 procedure TestTIdSipOutboundSession.TestRedirectWithMultipleContacts;
 var
   Contacts: array of String;
@@ -9299,6 +9355,37 @@ begin
   CheckEquals(Self.RequestCount + Cardinal(Length(Contacts)),
               Self.Dispatcher.Transport.SentRequestCount,
               'Session didn''t attempt to contact all Contacts: ' + Self.FailReason);
+end;
+
+procedure TestTIdSipOutboundSession.TestRedirectWithNoSuccess;
+var
+  Contacts: array of String;
+begin
+  //                             Request number:
+  //  ---       INVITE      ---> #0
+  // <---   302 (foo,bar)   ---
+  //  ---        ACK        --->
+  //  ---    INVITE (foo)   ---> #1
+  //  ---    INVITE (bar)   ---> #2
+  // <---     486 (foo)     ---
+  // <---     486 (bar)     ---
+  //  ---    ACK (to foo)   --->
+  //  ---    ACK (to bar)   --->
+
+  SetLength(Contacts, 2);
+  Contacts[0] := 'sip:foo@bar.org';
+  Contacts[1] := 'sip:bar@bar.org';
+
+  Self.ReceiveMovedTemporarily(Contacts);
+
+  Check(Self.SentRequestCount >= 3,
+        'Not enough requests sent: 1 + 2 INVITEs: ' + Self.FailReason);
+
+  Self.ReceiveBusyHere(Self.SentRequestAt(1));
+  Self.ReceiveBusyHere(Self.SentRequestAt(2));
+
+  Check(Self.OnEndedSessionFired,
+        'Session didn''t notify listeners of ended session');
 end;
 
 procedure TestTIdSipOutboundSession.TestTerminateDuringRedirect;

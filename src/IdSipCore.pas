@@ -7140,6 +7140,9 @@ begin
         Self.DialogLock.Release;
       end;
 
+      // Of course, if we receive a 3xx then that INVITE's over.
+      Self.RemoveFinishedRedirectedInvite(InviteAgent);
+
       // We receive 3xxs with Contacts. We add these to our target URI set. We
       // send INVITEs to these URIs in some order. If we get 3xxs back from
       // these new targets we add the new Contacts to the target set. We of
@@ -7161,7 +7164,7 @@ begin
 
       Self.TargetUriSet.Add(Redirect.Contacts);
 
-      if not NewTargetsAdded then begin
+      if not NewTargetsAdded and Self.NoMoreRedirectedInvites then begin
         Self.MarkAsTerminated;
         Self.NotifyOfEndedSession(RedirectWithNoMoreTargets);
       end;
