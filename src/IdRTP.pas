@@ -1236,8 +1236,8 @@ const
 // From RFCs 4102, 4103
 const
   InterleavedT140ClockRate    = 8000;
-  RedundancyEncodingName          = 'red'; // RFC 4102
-  RedundancyEncodingParameter = RedundancyEncoding;
+  RedundancyEncodingName      = 'red'; // RFC 4102
+  RedundancyEncodingParameter = RedundancyEncodingName;
   T140ClockRate               = 1000;
   T140EncodingName            = 't140'; // RFC 4103
   T140LostChar                = #$ff#$fd;
@@ -1250,7 +1250,7 @@ const
   T140StartOfString           = WideChar($0098);
   T140StringTerminator        = WideChar($009C);
 
-  RedundancyEncoding          = RedundancyEncodingEncodingName + '/1000';
+  RedundancyEncoding          = RedundancyEncodingName + '/1000';
   T140Encoding                = T140EncodingName + '/1000';
 
 // From RFC 2833
