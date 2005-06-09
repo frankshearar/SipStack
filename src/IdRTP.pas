@@ -1233,7 +1233,7 @@ const
   SDESNote  = 7;
   SDESPriv  = 8;
 
-// From RFC 4103 (which obsoletes RFC 2793)
+// From RFCs 4102, 4103
 const
   InterleavedT140ClockRate    = 8000;
   RedundancyEncodingName          = 'red'; // RFC 4102
