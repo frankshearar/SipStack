@@ -405,6 +405,16 @@ type
     procedure TestValueMultipleToTags;
   end;
 
+  TestTIdSipSubscriptionStateHeader = class(THeaderTestCase)
+  private
+    SS: TIdSipSubscriptionStateHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+  end;
+
   TestTIdSipTimestampHeader = class(THeaderTestCase)
   private
     T: TIdSipTimestampHeader;
@@ -3571,6 +3581,25 @@ begin
         'Header with two to-tags not marked as malformed');
   Check(Pos(ToTagParam, Self.R.ParseFailReason) > 0,
         'Insufficiently informative ParseFailReason');
+end;
+
+//******************************************************************************
+//* TestTIdSipSubscriptionStateHeader                                          *
+//******************************************************************************
+//* TestTIdSipSubscriptionStateHeader Public methods ***************************
+
+procedure TestTIdSipSubscriptionStateHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.SS := Self.Header as TIdSipSubscriptionStateHeader;
+end;
+
+//* TestTIdSipSubscriptionStateHeader Protected methods ************************
+
+function TestTIdSipSubscriptionStateHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipSubscriptionStateHeader;
 end;
 
 //******************************************************************************

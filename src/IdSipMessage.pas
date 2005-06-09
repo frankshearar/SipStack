@@ -533,7 +533,7 @@ type
     property Time: TIdDateTimeStamp read GetAbsoluteTime;
   end;
 
-  // cf. RFC 3265. 
+  // cf. RFC 3265, section 7.2.1
   TIdSipEventHeader = class(TIdSipHeader)
   private
     function GetID: String;
@@ -673,6 +673,12 @@ type
   end;
 
   TIdSipRecordRouteHeader = class(TIdSipRouteHeader)
+  protected
+    function GetName: String; override;
+  end;
+
+  // cf RFC 3265, section 7.2.3
+  TIdSipSubscriptionStateHeader = class(TIdSipHeader)
   protected
     function GetName: String; override;
   end;
@@ -1543,6 +1549,7 @@ const
   StaleParam                 = 'stale';
   SubjectHeaderFull          = 'Subject';
   SubjectHeaderShort         = 's';
+  SubscriptionStateHeader    = 'Subscription-State';
   SupportedHeaderFull        = 'Supported';
   SupportedHeaderShort       = 'k';
   TagParam                   = 'tag';
@@ -4601,6 +4608,16 @@ end;
 function TIdSipRecordRouteHeader.GetName: String;
 begin
   Result := RecordRouteHeader;
+end;
+
+//******************************************************************************
+//* TIdSipSubscriptionStateHeader                                              *
+//******************************************************************************
+//* TIdSipSubscriptionStateHeader Protected methods ****************************
+
+function TIdSipSubscriptionStateHeader.GetName: String;
+begin
+  Result := SubscriptionStateHeader;
 end;
 
 //******************************************************************************
