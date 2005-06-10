@@ -646,13 +646,15 @@ type
     fLowestAllowedPort:  Cardinal;
     fOnHold:             Boolean;
     fStreams:            TObjectList;
-    Profile:             TIdRTPProfile;
+    fLocalProfile:       TIdRTPProfile;
+    fRemoteProfile:      TIdRTPProfile;
     StreamLock:          TCriticalSection;
 
     function  AllowedPort(Port: Cardinal): Boolean;
     procedure EstablishStream(Desc: TIdSdpMediaDescription);
     function  GetStreams(Index: Integer): TIdSDPMediaStream;
-    procedure RegisterEncodingMaps(Maps: TIdSdpRTPMapAttributes);
+    procedure RegisterEncodingMaps(Profile: TIdRTPProfile;
+                                   Maps: TIdSdpRTPMapAttributes); overload;
   public
     constructor Create(Profile: TIdRTPProfile);
     destructor  Destroy; override;
@@ -667,8 +669,10 @@ type
     procedure TakeOffHold;
 
     property HighestAllowedPort:      Cardinal          read fHighestAllowedPort write fHighestAllowedPort;
+    property LocalProfile:            TIdRTPProfile     read fLocalProfile;
     property LowestAllowedPort:       Cardinal          read fLowestAllowedPort write fLowestAllowedPort;
     property OnHold:                  Boolean           read fOnHold;
+    property RemoteProfile:           TIdRTPProfile     read fRemoteProfile;
     property Streams[Index: Integer]: TIdSDPMediaStream read GetStreams;
   end;
 
@@ -4025,7 +4029,11 @@ constructor TIdSDPMultimediaSession.Create(Profile: TIdRTPProfile);
 begin
   inherited Create;
 
-  Self.Profile := Profile;
+  Self.fLocalProfile  := TIdRTPProfile.Create;
+  Self.fRemoteProfile := TIdRTPProfile.Create;
+
+  Self.LocalProfile.Assign(Profile);
+  Self.RemoteProfile.Assign(Profile);
 
   Self.fStreams := TObjectList.Create;
   Self.StreamLock := TCriticalSection.Create;
@@ -4043,6 +4051,9 @@ begin
     Self.StreamLock.Release;
   end;
   Self.StreamLock.Free;
+
+  Self.fRemoteProfile.Free;
+  Self.fLocalProfile.Free;
 
   inherited Destroy;
 end;
@@ -4080,7 +4091,7 @@ begin
   //
   // As an example, if there's one media description with port 8000, and we're
   // already running servers on ports 8000-8099, we'll start aa server on 8100.
-  // Result contains the ACTUAL port numbers used.  
+  // Result contains the ACTUAL port numbers used.
 
   Self.StreamLock.Acquire;
   try
@@ -4088,7 +4099,8 @@ begin
     try
       for I := 0 to SDP.MediaDescriptionCount - 1 do begin
         Self.EstablishStream(SDP.MediaDescriptionAt(I));
-        Self.RegisterEncodingMaps(SDP.MediaDescriptionAt(I).RTPMapAttributes);
+        Self.RegisterEncodingMaps(Self.LocalProfile,
+                                  SDP.MediaDescriptionAt(I).RTPMapAttributes);
       end;
 
       Result := SDP.AsString;
@@ -4121,8 +4133,11 @@ begin
     SDP := TIdSdpPayload.CreateFrom(RemoteSessionDesc);
     try
       for I := 0 to SDP.MediaDescriptionCount - 1 do begin
+        Self.RegisterEncodingMaps(Self.RemoteProfile,
+                                  SDP.MediaDescriptionAt(I).RTPMapAttributes);
+
         Self.Streams[I].RemoteDescription := SDP.MediaDescriptionAt(I);
-        Self.RegisterEncodingMaps(SDP.MediaDescriptionAt(I).RTPMapAttributes);
+        Self.Streams[I].Profile.Assign(Self.RemoteProfile);
       end;
     finally
       SDP.Free;
@@ -4177,7 +4192,7 @@ var
   NewStream:   TIdSDPMediaStream;
   SocketBound: Boolean;
 begin
-  NewStream := TIdSDPMediaStream.Create(Self.Profile);
+  NewStream := TIdSDPMediaStream.Create(Self.RemoteProfile);
   try
     Self.fStreams.Add(NewStream);
 
@@ -4219,12 +4234,13 @@ begin
   end;
 end;
 
-procedure TIdSDPMultimediaSession.RegisterEncodingMaps(Maps: TIdSdpRTPMapAttributes);
+procedure TIdSDPMultimediaSession.RegisterEncodingMaps(Profile: TIdRTPProfile;
+                                                       Maps: TIdSdpRTPMapAttributes);
 var
   I: Integer;
 begin
   for I := 0 to Maps.Count - 1 do
-    Self.Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
+    Profile.AddEncoding(Maps.Items[I].Encoding, Maps.Items[I].PayloadType);
 end;
 
 end.

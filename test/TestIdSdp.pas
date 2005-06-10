@@ -532,11 +532,15 @@ type
     procedure TestTakeOffHold;
   end;
 
-  TestTIdSDPMultimediaSession = class(TTestCase)
+  TestTIdSDPMultimediaSession = class(TThreadingTestCase,
+                                      IIdRTPListener)
   private
-    MS:      TIdSDPMultimediaSession;
-    Profile: TIdRTPProfile;
-    Server:  TIdUDPServer;
+    Payload:    TClass;
+    LocalPort:  Cardinal;
+    MS:         TIdSDPMultimediaSession;
+    Profile:    TIdRTPProfile;
+    RemotePort: Cardinal;
+    Server:     TIdUDPServer;
 
     procedure CheckPortActive(Address: String;
                               Port: Cardinal;
@@ -544,12 +548,19 @@ type
     procedure CheckPortFree(Address: String;
                               Port: Cardinal;
                               Msg: String);
-    function MultiStreamSDP(LowPort, HighPort: Cardinal): String;
-    function SingleStreamSDP(Port: Cardinal): String;
+    function  MultiStreamSDP(LowPort, HighPort: Cardinal): String;
+    procedure OnRTCP(Packet: TIdRTCPPacket;
+                     Binding: TIdConnection);
+    procedure OnRTP(Packet: TIdRTPPacket;
+                    Binding: TIdConnection);
+    procedure ReceiveDataOfType(PayloadType: Cardinal);
+    function  SingleStreamSDP(Port: Cardinal;
+                              PayloadType: Cardinal = 96): String;
   public
     procedure SetUp; override;
     procedure TearDown; override;
   published
+    procedure TestDifferentPayloadTypesForSameEncoding;
     procedure TestHighestAllowedPort;
     procedure TestIsListening;
     procedure TestLowestAllowedPort;
@@ -6614,17 +6625,73 @@ begin
           + 'a=rtpmap:96 t140/1000'#13#10
 end;
 
-function TestTIdSDPMultimediaSession.SingleStreamSDP(Port: Cardinal): String;
+procedure TestTIdSDPMultimediaSession.OnRTCP(Packet: TIdRTCPPacket;
+                                             Binding: TIdConnection);
+begin
+end;
+
+procedure TestTIdSDPMultimediaSession.OnRTP(Packet: TIdRTPPacket;
+                                            Binding: TIdConnection);
+begin
+  Self.Payload := Packet.Payload.ClassType;
+  Self.ThreadEvent.SetEvent;
+end;
+
+procedure TestTIdSDPMultimediaSession.ReceiveDataOfType(PayloadType: Cardinal);
+var
+  Client: TIdRTPServer;
+  NoData: TIdRTPPacket;
+begin
+  Client := TIdRTPServer.Create(nil);
+  try
+    Client.DefaultPort := Self.RemotePort + 1000;
+    NoData := TIdRTPPacket.Create(Client.Profile);
+    try
+      NoData.PayloadType := PayloadType;
+      Client.SendPacket('127.0.0.1', Self.LocalPort, NoData);
+    finally
+      NoData.Free;
+    end;
+  finally
+    Client.Free;
+  end;
+end;
+
+function TestTIdSDPMultimediaSession.SingleStreamSDP(Port: Cardinal;
+                                                     PayloadType: Cardinal = 96): String;
 begin
   Result := 'v=0'#13#10
           + 'o=local 0 0 IN IP4 127.0.0.1'#13#10
           + 's=-'#13#10
           + 'c=IN IP4 127.0.0.1'#13#10
-          + 'm=text ' + IntToStr(Port) + ' RTP/AVP 96'#13#10
-          + 'a=rtpmap:96 t140/1000'#13#10
+          + 'm=text ' + IntToStr(Port) + ' RTP/AVP ' + IntToStr(PayloadType) + #13#10
+          + 'a=rtpmap:' + IntToStr(PayloadType) + ' t140/1000'#13#10
 end;
 
 //* TestTIdSDPMultimediaSession Published methods ******************************
+
+procedure TestTIdSDPMultimediaSession.TestDifferentPayloadTypesForSameEncoding;
+const
+  LocalPT  = 96;
+  RemotePT = 98;
+begin
+  Self.LocalPort  := 8000;
+  Self.RemotePort := 9000;
+
+  Self.MS.StartListening(Self.SingleStreamSDP(Self.LocalPort, LocalPT));
+  Self.MS.SetRemoteDescription(Self.SingleStreamSDP(Self.RemotePort, RemotePT));
+
+  Check(Self.MS.StreamCount > 0, 'Sanity check: no ports open!');
+  Self.MS.Streams[0].AddRTPListener(Self);
+
+  Self.ReceiveDataOfType(RemotePT);
+
+  Self.WaitForSignaled('Waiting for RTP data');
+
+  CheckEquals(TIdRTPT140Payload.ClassName,
+              Self.Payload.ClassName,
+              'Remote profile not used to determine payload');
+end;
 
 procedure TestTIdSDPMultimediaSession.TestHighestAllowedPort;
 var
@@ -6809,16 +6876,16 @@ begin
         + 'm=audio 8002 RTP/AVP ' + IntToStr(TEPayloadType) + #13#10
         + 'a=rtpmap:' + IntToStr(TEPayloadType) + ' ' + TEEncodingName + #13#10;
 
-  Check(not Self.Profile.HasPayloadType(PayloadType),
+  Check(not Self.MS.LocalProfile.HasPayloadType(PayloadType),
         'Sanity check: profile already knows about ' + EncodingName + '!');
-  Check(not Self.Profile.HasPayloadType(TEPayloadType),
+  Check(not Self.MS.LocalProfile.HasPayloadType(TEPayloadType),
         'Sanity check: profile already knows about ' + TEEncodingName + '!');
 
   Self.MS.StartListening(SDP);
 
-  Check(Self.Profile.HasPayloadType(PayloadType),
+  Check(Self.MS.LocalProfile.HasPayloadType(PayloadType),
         EncodingName + ' not registered');
-  Check(Self.Profile.HasPayloadType(TEPayloadType),
+  Check(Self.MS.LocalProfile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
 end;
 
@@ -6849,17 +6916,17 @@ begin
             + 'm=audio 9000 RTP/AVP 0'#13#10
             + 'm=audio 9002 RTP/AVP 0'#13#10;
 
-  Check(not Self.Profile.HasPayloadType(PayloadType),
+  Check(not Self.MS.RemoteProfile.HasPayloadType(PayloadType),
         'Sanity check: profile already knows about ' + EncodingName + '!');
-  Check(not Self.Profile.HasPayloadType(TEPayloadType),
+  Check(not Self.MS.RemoteProfile.HasPayloadType(TEPayloadType),
         'Sanity check: profile already knows about ' + TEEncodingName + '!');
 
   Self.MS.StartListening(LocalSDP);
   Self.MS.SetRemoteDescription(SDP);
 
-  Check(Self.Profile.HasPayloadType(PayloadType),
+  Check(Self.MS.RemoteProfile.HasPayloadType(PayloadType),
         EncodingName + ' not registered');
-  Check(Self.Profile.HasPayloadType(TEPayloadType),
+  Check(Self.MS.RemoteProfile.HasPayloadType(TEPayloadType),
         TEEncodingName + ' not registered');
 end;
 
