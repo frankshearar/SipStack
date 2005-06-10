@@ -225,6 +225,7 @@ type
     procedure SetUp; override;
   published
     procedure TestGetSetID;
+    procedure TestMalformedValue;
     procedure TestValue; override;
     procedure TestValueWithID;
   end;
@@ -686,6 +687,7 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
+{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -696,7 +698,9 @@ begin
   Result.AddTest(TestTIdSipContentDispositionHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
+}
   Result.AddTest(TestTIdSipEventHeader.Suite);
+{
   Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
@@ -720,6 +724,7 @@ begin
   Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
+}  
 end;
 
 //******************************************************************************
@@ -2534,12 +2539,27 @@ begin
   CheckEquals('bar', Self.E.ID, 'Second set/get');
 end;
 
+procedure TestTIdSipEventHeader.TestMalformedValue;
+begin
+  // Too many dot-limited tokens
+  Self.E.Value := 'foo.bar.baz';
+  Check(Self.E.IsMalformed, 'Header not marked as malformed');
+end;
+
 procedure TestTIdSipEventHeader.TestValue;
 begin
   Self.E.Value := 'foo';
 
-  CheckEquals('foo', Self.E.Value, 'Value');
-  CheckEquals('foo', Self.E.PackageName, 'PackageName');
+  CheckEquals('foo', Self.E.Value,         'foo: Value');
+  CheckEquals('foo', Self.E.EventType,     'foo: EventType');
+  CheckEquals('foo', Self.E.EventPackage,  'foo: EventPackage');
+  CheckEquals('',    Self.E.EventTemplate, 'foo: EventTemplate');
+
+  Self.E.Value := 'foo.bar';
+  CheckEquals('foo.bar', Self.E.Value,         'foo.bar: Value');
+  CheckEquals('foo.bar', Self.E.EventType,     'foo.bar: EventType');
+  CheckEquals('foo',     Self.E.EventPackage,  'foo.bar: EventPackage');
+  CheckEquals('bar',     Self.E.EventTemplate, 'foo.bar: EventTemplate');
 end;
 
 procedure TestTIdSipEventHeader.TestValueWithID;

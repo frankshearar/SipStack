@@ -233,6 +233,7 @@ type
   // * find a suitable subclass (e.g., if the header primarily consists of an
   //   address, subclass TIdSipAddressHeader);
   // * override GetName;
+  // * override GetValue, if necessary;
   // * override Parse, if necessary;
   // * add the header type to TIdSipHeaderList.HeaderTypes;
   // * add the header name (possibly both full and short forms) to
@@ -536,14 +537,21 @@ type
   // cf. RFC 3265, section 7.2.1
   TIdSipEventHeader = class(TIdSipHeader)
   private
-    function GetID: String;
+    fEventPackage:  String;
+    fEventTemplate: String;
+
+    function  GetID: String;
     procedure SetID(const Value: String);
   protected
-    function GetName: String; override;
+    function  GetName: String; override;
+    function  GetValue: String; override;
+    procedure Parse(const Value: String); override;
   public
-    function PackageName: String;
+    function EventType: String;
 
-    property ID: String read GetID write SetID;
+    property EventPackage:  String read fEventPackage write fEventPackage;
+    property EventTemplate: String read fEventTemplate write fEventTemplate;
+    property ID:            String read GetID write SetID;
   end;
 
   TIdSipFromToHeader = class(TIdSipAddressHeader)
@@ -1787,6 +1795,7 @@ const
   InvalidDecimal              = 'Invalid decimal value';
   InvalidDelay                = 'Invalid delay value';
   InvalidDigestResponse       = 'Invalid digest-response';
+  InvalidEventType            = 'Invalid event-type';
   InvalidExpires              = 'Invalid Expires parameter';
   InvalidMaddr                = 'Invalid maddr';
   InvalidMethod               = 'Invalid method';
@@ -4080,9 +4089,12 @@ end;
 //******************************************************************************
 //* TIdSipEventHeader Public methods *******************************************
 
-function TIdSipEventHeader.PackageName: String;
+function TIdSipEventHeader.EventType: String;
 begin
-  Result := Self.Value;
+  Result := Self.EventPackage;
+
+  if (Self.EventTemplate <> '') then
+    Result := Result + '.' + Self.EventTemplate;
 end;
 
 //* TIdSipEventHeader Protected methods ****************************************
@@ -4090,6 +4102,30 @@ end;
 function TIdSipEventHeader.GetName: String;
 begin
   Result := EventHeader;
+end;
+
+function TIdSipEventHeader.GetValue: String;
+begin
+  Result := Self.EventType;
+end;
+
+procedure TIdSipEventHeader.Parse(const Value: String);
+var
+  EventName: String;
+  S:         String;
+begin
+  S := Value;
+
+  EventName := Fetch(S, ';');
+
+  Self.EventPackage  := Fetch(EventName, '.');
+  Self.EventTemplate := EventName;
+
+  // Only one dot is allowed in an event-type
+  if (Pos('.', Self.EventTemplate) > 0) then
+    Self.FailParse(InvalidEventType);
+
+  inherited Parse(Value);
 end;
 
 //* TIdSipEventHeader Private methods ****************************************
