@@ -324,6 +324,21 @@ type
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
+  TIdSipAllowEventHeader = class(TIdSipHeader)
+  private
+    fEventPackage:  String;
+    fEventTemplate: String;
+  protected
+    function  GetName: String; override;
+    function  GetValue: String; override;
+    procedure Parse(const Value: String); override;
+  public
+    function EventType: String;
+
+    property EventPackage:  String read fEventPackage write fEventPackage;
+    property EventTemplate: String read fEventTemplate write fEventTemplate;
+  end;
+
   TIdSipHttpAuthHeader = class(TIdSipHeader)
   private
     fAuthorizationScheme: String;
@@ -535,23 +550,14 @@ type
   end;
 
   // cf. RFC 3265, section 7.2.1
-  TIdSipEventHeader = class(TIdSipHeader)
+  TIdSipEventHeader = class(TIdSipAllowEventHeader)
   private
-    fEventPackage:  String;
-    fEventTemplate: String;
-
     function  GetID: String;
     procedure SetID(const Value: String);
   protected
-    function  GetName: String; override;
-    function  GetValue: String; override;
-    procedure Parse(const Value: String); override;
+    function GetName: String; override;
   public
-    function EventType: String;
-
-    property EventPackage:  String read fEventPackage write fEventPackage;
-    property EventTemplate: String read fEventTemplate write fEventTemplate;
-    property ID:            String read GetID write SetID;
+    property ID: String read GetID write SetID;
   end;
 
   TIdSipFromToHeader = class(TIdSipAddressHeader)
@@ -1463,6 +1469,7 @@ const
   AcceptLanguageHeader       = 'Accept-Language';
   AlertInfoHeader            = 'Alert-Info';
   AlgorithmParam             = 'algorithm';
+  AllowEventHeader           = 'Allow-Event';
   AllowHeader                = 'Allow';
   AuthenticationInfoHeader   = 'Authentication-Info';
   AuthorizationHeader        = 'Authorization';
@@ -3299,6 +3306,50 @@ begin
 end;
 
 //******************************************************************************
+//* TIdSipAllowEventHeader                                                     *
+//******************************************************************************
+//* TIdSipAllowEventHeader Public methods **************************************
+
+function TIdSipAllowEventHeader.EventType: String;
+begin
+  Result := Self.EventPackage;
+
+  if (Self.EventTemplate <> '') then
+    Result := Result + '.' + Self.EventTemplate;
+end;
+
+//* TIdSipAllowEventHeader Protected methods ***********************************
+
+function TIdSipAllowEventHeader.GetName: String;
+begin
+  Result := AllowEventHeader;
+end;
+
+function TIdSipAllowEventHeader.GetValue: String;
+begin
+  Result := Self.EventType;
+end;
+
+procedure TIdSipAllowEventHeader.Parse(const Value: String);
+var
+  EventName: String;
+  S:         String;
+begin
+  S := Value;
+
+  EventName := Fetch(S, ';');
+
+  Self.EventPackage  := Fetch(EventName, '.');
+  Self.EventTemplate := EventName;
+
+  // Only one dot is allowed in an event-type
+  if (Pos('.', Self.EventTemplate) > 0) then
+    Self.FailParse(InvalidEventType);
+
+  inherited Parse(Value);
+end;
+
+//******************************************************************************
 //* TIdSipHttpAuthHeader                                                       *
 //******************************************************************************
 //* TIdSipHttpAuthHeader Public methods ****************************************
@@ -4087,45 +4138,11 @@ end;
 //******************************************************************************
 //* TIdSipEventHeader                                                          *
 //******************************************************************************
-//* TIdSipEventHeader Public methods *******************************************
-
-function TIdSipEventHeader.EventType: String;
-begin
-  Result := Self.EventPackage;
-
-  if (Self.EventTemplate <> '') then
-    Result := Result + '.' + Self.EventTemplate;
-end;
-
 //* TIdSipEventHeader Protected methods ****************************************
 
 function TIdSipEventHeader.GetName: String;
 begin
   Result := EventHeader;
-end;
-
-function TIdSipEventHeader.GetValue: String;
-begin
-  Result := Self.EventType;
-end;
-
-procedure TIdSipEventHeader.Parse(const Value: String);
-var
-  EventName: String;
-  S:         String;
-begin
-  S := Value;
-
-  EventName := Fetch(S, ';');
-
-  Self.EventPackage  := Fetch(EventName, '.');
-  Self.EventTemplate := EventName;
-
-  // Only one dot is allowed in an event-type
-  if (Pos('.', Self.EventTemplate) > 0) then
-    Self.FailParse(InvalidEventType);
-
-  inherited Parse(Value);
 end;
 
 //* TIdSipEventHeader Private methods ****************************************
@@ -5338,6 +5355,7 @@ begin
     GCanonicalHeaderNames.Add(AcceptLanguageHeader       + '=' + AcceptLanguageHeader);
     GCanonicalHeaderNames.Add(AlertInfoHeader            + '=' + AlertInfoHeader);
     GCanonicalHeaderNames.Add(AllowHeader                + '=' + AllowHeader);
+    GCanonicalHeaderNames.Add(AllowEventHeader           + '=' + AllowEventHeader);
     GCanonicalHeaderNames.Add(AuthenticationInfoHeader   + '=' + AuthenticationInfoHeader);
     GCanonicalHeaderNames.Add(AuthorizationHeader        + '=' + AuthorizationHeader);
     GCanonicalHeaderNames.Add(CallIDHeaderFull           + '=' + CallIDHeaderFull);
@@ -5516,6 +5534,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowEventHeader,           TIdSipAllowEventHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticationInfoHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));

@@ -94,6 +94,18 @@ type
     procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
+  TestTIdSipAllowEventHeader = class(THeaderTestCase)
+  private
+    AE: TIdSipAllowEventHeader;
+  protected
+    function HeaderType: TIdSipHeaderClass; override;
+  public
+    procedure SetUp; override;
+  published
+    procedure TestMalformedValue;
+    procedure TestValue; override;
+  end;
+
   TestTIdSipAuthorizationHeader = class(THeaderTestCase)
   private
     A: TIdSipAuthorizationHeader;
@@ -216,7 +228,7 @@ type
     procedure TestValueZeroTime;
   end;
 
-  TestTIdSipEventHeader = class(THeaderTestCase)
+  TestTIdSipEventHeader = class(TestTIdSipAllowEventHeader)
   private
     E: TIdSipEventHeader;
   protected
@@ -225,8 +237,6 @@ type
     procedure SetUp; override;
   published
     procedure TestGetSetID;
-    procedure TestMalformedValue;
-    procedure TestValue; override;
     procedure TestValueWithID;
   end;
 
@@ -690,6 +700,7 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
+  Result.AddTest(TestTIdSipAllowEventHeader.Suite);
   Result.AddTest(TestTIdSipAuthorizationHeader.Suite);
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
@@ -1590,6 +1601,50 @@ begin
   Self.A.Value := 'Bell, Alexander <sip:a.g.bell@bell-tel.com>;tag=43';
   Check(Self.A.IsMalformed,
         'Failed to bail out with unquoted non-tokens');
+end;
+
+//******************************************************************************
+//* TestTIdSipAllowEventHeader                                                 *
+//******************************************************************************
+//* TestTIdSipAllowEventHeader Public methods **********************************
+
+procedure TestTIdSipAllowEventHeader.SetUp;
+begin
+  inherited SetUp;
+
+  Self.AE := Self.Header as TIdSipAllowEventHeader;
+end;
+
+//* TestTIdSipAllowEventHeader Protected methods *******************************
+
+function TestTIdSipAllowEventHeader.HeaderType: TIdSipHeaderClass;
+begin
+  Result := TIdSipAllowEventHeader;
+end;
+
+//* TestTIdSipAllowEventHeader Published methods *******************************
+
+procedure TestTIdSipAllowEventHeader.TestMalformedValue;
+begin
+  // Too many dot-limited tokens
+  Self.AE.Value := 'foo.bar.baz';
+  Check(Self.AE.IsMalformed, 'Header not marked as malformed');
+end;
+
+procedure TestTIdSipAllowEventHeader.TestValue;
+begin
+  Self.AE.Value := 'foo';
+
+  CheckEquals('foo', Self.AE.Value,         'foo: Value');
+  CheckEquals('foo', Self.AE.EventType,     'foo: EventType');
+  CheckEquals('foo', Self.AE.EventPackage,  'foo: EventPackage');
+  CheckEquals('',    Self.AE.EventTemplate, 'foo: EventTemplate');
+
+  Self.AE.Value := 'foo.bar';
+  CheckEquals('foo.bar', Self.AE.Value,         'foo.bar: Value');
+  CheckEquals('foo.bar', Self.AE.EventType,     'foo.bar: EventType');
+  CheckEquals('foo',     Self.AE.EventPackage,  'foo.bar: EventPackage');
+  CheckEquals('bar',     Self.AE.EventTemplate, 'foo.bar: EventTemplate');
 end;
 
 //******************************************************************************
@@ -2533,29 +2588,6 @@ begin
 
   Self.E.ID := 'bar';
   CheckEquals('bar', Self.E.ID, 'Second set/get');
-end;
-
-procedure TestTIdSipEventHeader.TestMalformedValue;
-begin
-  // Too many dot-limited tokens
-  Self.E.Value := 'foo.bar.baz';
-  Check(Self.E.IsMalformed, 'Header not marked as malformed');
-end;
-
-procedure TestTIdSipEventHeader.TestValue;
-begin
-  Self.E.Value := 'foo';
-
-  CheckEquals('foo', Self.E.Value,         'foo: Value');
-  CheckEquals('foo', Self.E.EventType,     'foo: EventType');
-  CheckEquals('foo', Self.E.EventPackage,  'foo: EventPackage');
-  CheckEquals('',    Self.E.EventTemplate, 'foo: EventTemplate');
-
-  Self.E.Value := 'foo.bar';
-  CheckEquals('foo.bar', Self.E.Value,         'foo.bar: Value');
-  CheckEquals('foo.bar', Self.E.EventType,     'foo.bar: EventType');
-  CheckEquals('foo',     Self.E.EventPackage,  'foo.bar: EventPackage');
-  CheckEquals('bar',     Self.E.EventTemplate, 'foo.bar: EventTemplate');
 end;
 
 procedure TestTIdSipEventHeader.TestValueWithID;
@@ -5090,6 +5122,7 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
   CheckType(TIdSipUriHeader,                    Self.Headers.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(AllowHeader),                AllowHeader);
+  CheckType(TIdSipAllowEventHeader,             Self.Headers.Add(AllowEventHeader),           AllowEventHeader);
   CheckType(TIdSipAuthenticationInfoHeader,     Self.Headers.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
   CheckType(TIdSipAuthorizationHeader,          Self.Headers.Add(AuthorizationHeader),        AuthorizationHeader);
   CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderFull),           CallIDHeaderFull);
