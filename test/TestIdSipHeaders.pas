@@ -687,7 +687,6 @@ uses
 function Suite: ITestSuite;
 begin
   Result := TTestSuite.Create('IdSipMessage tests (Headers)');
-{
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
@@ -698,9 +697,7 @@ begin
   Result.AddTest(TestTIdSipContentDispositionHeader.Suite);
   Result.AddTest(TestTIdSipCSeqHeader.Suite);
   Result.AddTest(TestTIdSipDateHeader.Suite);
-}
   Result.AddTest(TestTIdSipEventHeader.Suite);
-{
   Result.AddTest(TestTIdSipFromToHeader.Suite);
   Result.AddTest(TestTIdSipMaxForwardsHeader.Suite);
   Result.AddTest(TestTIdSipNumericHeader.Suite);
@@ -724,7 +721,6 @@ begin
   Result.AddTest(TestTIdSipExpiresHeaders.Suite);
   Result.AddTest(TestTIdSipRoutePath.Suite);
   Result.AddTest(TestTIdSipViaPath.Suite);
-}  
 end;
 
 //******************************************************************************
