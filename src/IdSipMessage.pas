@@ -1291,6 +1291,9 @@ type
   // keeping knowledge of Transactions where they belong - in the Transaction
   // layer. Both TIdSipResponse.InResponseTo methods set RequestRequestUri for
   // you.
+  //
+  // If you add new response codes (for instance because you're implementing a
+  // new SIP RFC), be sure to change SetStatusCode as well.
   TIdSipResponse = class(TIdSipMessage)
   private
     fRequestRequestUri: TIdSipUri;
