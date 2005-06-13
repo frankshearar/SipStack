@@ -328,7 +328,7 @@ type
     property DisplayName: String read fDisplayName write fDisplayName;
   end;
 
-  TIdSipAllowEventHeader = class(TIdSipHeader)
+  TIdSipAllowEventsHeader = class(TIdSipHeader)
   private
     fEventPackage:  String;
     fEventTemplate: String;
@@ -554,7 +554,7 @@ type
   end;
 
   // cf. RFC 3265, section 7.2.1
-  TIdSipEventHeader = class(TIdSipAllowEventHeader)
+  TIdSipEventHeader = class(TIdSipAllowEventsHeader)
   private
     function  GetID: String;
     procedure SetID(const Value: String);
@@ -1498,7 +1498,8 @@ const
   AcceptLanguageHeader           = 'Accept-Language';
   AlertInfoHeader                = 'Alert-Info';
   AlgorithmParam                 = 'algorithm';
-  AllowEventHeader               = 'Allow-Event';
+  AllowEventsHeaderFull          = 'Allow-Events'; // cf. RFC 3265
+  AllowEventsHeaderShort         = 'u';            // cf. RFC 3265
   AllowHeader                    = 'Allow';
   AuthenticationInfoHeader       = 'Authentication-Info';
   AuthorizationHeader            = 'Authorization';
@@ -1532,7 +1533,8 @@ const
   DurationParam                  = 'duration';
   EarlyOnlyParam                 = 'early-only';
   ErrorInfoHeader                = 'Error-Info';
-  EventHeader                    = 'Event';
+  EventHeaderFull                = 'Event'; // cf. RFC 3265
+  EventHeaderShort               = 'o';     // cf. RFC 3265
   ExpireNow                      = 0;
   ExpiresHeader                  = 'Expires';
   ExpiresParam                   = 'expires';
@@ -1576,14 +1578,14 @@ const
   QopParam                       = 'qop';
   QParam                         = 'q';
   RealmParam                     = 'realm';
-  ReasonParam                    = 'reason';
-  RetryAfterParam                = 'retry-after';
-  EventReasonDeactivated         = 'deactivated';
-  EventReasonGiveUp              = 'giveup';
-  EventReasonNoResource          = 'noresource';
-  EventReasonProbation           = 'probation';
-  EventReasonRejected            = 'rejected';
-  EventReasonTimeout             = 'timeout';
+  ReasonParam                    = 'reason';      // cf. RFC 3265
+  RetryAfterParam                = 'retry-after'; // cf. RFC 3265
+  EventReasonDeactivated         = 'deactivated'; // cf. RFC 3265
+  EventReasonGiveUp              = 'giveup';      // cf. RFC 3265
+  EventReasonNoResource          = 'noresource';  // cf. RFC 3265
+  EventReasonProbation           = 'probation';   // cf. RFC 3265
+  EventReasonRejected            = 'rejected';    // cf. RFC 3265
+  EventReasonTimeout             = 'timeout';     // cf. RFC 3265
   ReceivedParam                  = 'received';
   RecordRouteHeader              = 'Record-Route';
   ReferToHeader                  = 'Refer-To';
@@ -1601,10 +1603,10 @@ const
   StaleParam                     = 'stale';
   SubjectHeaderFull              = 'Subject';
   SubjectHeaderShort             = 's';
-  SubscriptionStateHeader        = 'Subscription-State';
-  SubscriptionSubstateActive     = 'active';
-  SubscriptionSubstatePending    = 'pending';
-  SubscriptionSubstateTerminated = 'terminated';
+  SubscriptionStateHeader        = 'Subscription-State';  // cf. RFC 3265
+  SubscriptionSubstateActive     = 'active';              // cf. RFC 3265
+  SubscriptionSubstatePending    = 'pending';             // cf. RFC 3265
+  SubscriptionSubstateTerminated = 'terminated';          // cf. RFC 3265
   SupportedHeaderFull            = 'Supported';
   SupportedHeaderShort           = 'k';
   TagParam                       = 'tag';
@@ -3365,11 +3367,11 @@ begin
 end;
 
 //******************************************************************************
-//* TIdSipAllowEventHeader                                                     *
+//* TIdSipAllowEventsHeader                                                    *
 //******************************************************************************
-//* TIdSipAllowEventHeader Public methods **************************************
+//* TIdSipAllowEventsHeader Public methods *************************************
 
-function TIdSipAllowEventHeader.EventType: String;
+function TIdSipAllowEventsHeader.EventType: String;
 begin
   Result := Self.EventPackage;
 
@@ -3377,19 +3379,19 @@ begin
     Result := Result + '.' + Self.EventTemplate;
 end;
 
-//* TIdSipAllowEventHeader Protected methods ***********************************
+//* TIdSipAllowEventsHeader Protected methods **********************************
 
-function TIdSipAllowEventHeader.GetName: String;
+function TIdSipAllowEventsHeader.GetName: String;
 begin
-  Result := AllowEventHeader;
+  Result := AllowEventsHeaderFull;
 end;
 
-function TIdSipAllowEventHeader.GetValue: String;
+function TIdSipAllowEventsHeader.GetValue: String;
 begin
   Result := Self.EventType;
 end;
 
-procedure TIdSipAllowEventHeader.Parse(const Value: String);
+procedure TIdSipAllowEventsHeader.Parse(const Value: String);
 var
   EventName: String;
   S:         String;
@@ -4214,7 +4216,7 @@ end;
 
 function TIdSipEventHeader.GetName: String;
 begin
-  Result := EventHeader;
+  Result := EventHeaderFull;
 end;
 
 //* TIdSipEventHeader Private methods ****************************************
@@ -5468,7 +5470,8 @@ begin
     GCanonicalHeaderNames.Add(AcceptLanguageHeader       + '=' + AcceptLanguageHeader);
     GCanonicalHeaderNames.Add(AlertInfoHeader            + '=' + AlertInfoHeader);
     GCanonicalHeaderNames.Add(AllowHeader                + '=' + AllowHeader);
-    GCanonicalHeaderNames.Add(AllowEventHeader           + '=' + AllowEventHeader);
+    GCanonicalHeaderNames.Add(AllowEventsHeaderFull      + '=' + AllowEventsHeaderFull);
+    GCanonicalHeaderNames.Add(AllowEventsHeaderShort     + '=' + AllowEventsHeaderFull);
     GCanonicalHeaderNames.Add(AuthenticationInfoHeader   + '=' + AuthenticationInfoHeader);
     GCanonicalHeaderNames.Add(AuthorizationHeader        + '=' + AuthorizationHeader);
     GCanonicalHeaderNames.Add(CallIDHeaderFull           + '=' + CallIDHeaderFull);
@@ -5486,7 +5489,8 @@ begin
     GCanonicalHeaderNames.Add(ContentTypeHeaderShort     + '=' + ContentTypeHeaderFull);
     GCanonicalHeaderNames.Add(CSeqHeader                 + '=' + CSeqHeader);
     GCanonicalHeaderNames.Add(DateHeader                 + '=' + DateHeader);
-    GCanonicalHeaderNames.Add(EventHeader                + '=' + EventHeader);
+    GCanonicalHeaderNames.Add(EventHeaderFull            + '=' + EventHeaderFull);
+    GCanonicalHeaderNames.Add(EventHeaderShort           + '=' + EventHeaderFull);
     GCanonicalHeaderNames.Add(ErrorInfoHeader            + '=' + ErrorInfoHeader);
     GCanonicalHeaderNames.Add(ExpiresHeader              + '=' + ExpiresHeader);
     GCanonicalHeaderNames.Add(FromHeaderFull             + '=' + FromHeaderFull);
@@ -5647,7 +5651,7 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AcceptEncodingHeader,       TIdSipCommaSeparatedHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AlertInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowHeader,                TIdSipCommaSeparatedHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowEventHeader,           TIdSipAllowEventHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AllowEventsHeaderFull,      TIdSipAllowEventsHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthenticationInfoHeader,   TIdSipAuthenticationInfoHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(AuthorizationHeader,        TIdSipAuthorizationHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CallIDHeaderFull,           TIdSipCallIDHeader));
@@ -5661,7 +5665,8 @@ begin
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ContentLengthHeaderFull,    TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(CSeqHeader,                 TIdSipCSeqHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(DateHeader,                 TIdSipDateHeader));
-    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeader,                TIdSipEventHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderFull,            TIdSipEventHeader));
+    GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(EventHeaderShort,           TIdSipEventHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ErrorInfoHeader,            TIdSipUriHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(ExpiresHeader,              TIdSipNumericHeader));
     GIdSipHeadersMap.Add(TIdSipHeaderMap.Create(FromHeaderFull,             TIdSipFromHeader));

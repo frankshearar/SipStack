@@ -2853,7 +2853,7 @@ function TIdSipAbstractUserAgent.CreateSubscribe(Dest: TIdSipAddressHeader;
 begin
   Result := Self.CreateRequest(MethodSubscribe, Dest);
   try
-    Result.AddHeader(EventHeader).Value := EventPackage;
+    Result.AddHeader(EventHeaderFull).Value := EventPackage;
   except
     FreeAndNil(Result);
 
@@ -7373,8 +7373,8 @@ begin
     if Req.IsNotify then begin
       Result := (Self.InitialRequest.CallID = Req.CallID)
             and (Self.InitialRequest.From.Tag = Req.ToHeader.Tag)
-            and Req.HasHeader(EventHeader)
-            and (Self.InitialRequest.FirstHeader(EventHeader).Equals(Req.FirstHeader(EventHeader)));
+            and Req.HasHeader(EventHeaderFull)
+            and (Self.InitialRequest.FirstHeader(EventHeaderFull).Equals(Req.FirstHeader(EventHeaderFull)));
     end;
     // Not sure if we need this:
 //    else

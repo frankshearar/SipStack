@@ -94,9 +94,9 @@ type
     procedure TestValueWithUnquotedNonTokensPlusParam;
   end;
 
-  TestTIdSipAllowEventHeader = class(THeaderTestCase)
+  TestTIdSipAllowEventsHeader = class(THeaderTestCase)
   private
-    AE: TIdSipAllowEventHeader;
+    AE: TIdSipAllowEventsHeader;
   protected
     function HeaderType: TIdSipHeaderClass; override;
   public
@@ -228,7 +228,7 @@ type
     procedure TestValueZeroTime;
   end;
 
-  TestTIdSipEventHeader = class(TestTIdSipAllowEventHeader)
+  TestTIdSipEventHeader = class(TestTIdSipAllowEventsHeader)
   private
     E: TIdSipEventHeader;
   protected
@@ -704,7 +704,7 @@ begin
   Result.AddTest(TestFunctions.Suite);
   Result.AddTest(TestTIdSipHeader.Suite);
   Result.AddTest(TestTIdSipAddressHeader.Suite);
-  Result.AddTest(TestTIdSipAllowEventHeader.Suite);
+  Result.AddTest(TestTIdSipAllowEventsHeader.Suite);
   Result.AddTest(TestTIdSipAuthorizationHeader.Suite);
   Result.AddTest(TestTIdSipCallIDHeader.Suite);
   Result.AddTest(TestTIdSipCommaSeparatedHeader.Suite);
@@ -1609,34 +1609,34 @@ begin
 end;
 
 //******************************************************************************
-//* TestTIdSipAllowEventHeader                                                 *
+//* TestTIdSipAllowEventsHeader                                                 *
 //******************************************************************************
-//* TestTIdSipAllowEventHeader Public methods **********************************
+//* TestTIdSipAllowEventsHeader Public methods **********************************
 
-procedure TestTIdSipAllowEventHeader.SetUp;
+procedure TestTIdSipAllowEventsHeader.SetUp;
 begin
   inherited SetUp;
 
-  Self.AE := Self.Header as TIdSipAllowEventHeader;
+  Self.AE := Self.Header as TIdSipAllowEventsHeader;
 end;
 
-//* TestTIdSipAllowEventHeader Protected methods *******************************
+//* TestTIdSipAllowEventsHeader Protected methods *******************************
 
-function TestTIdSipAllowEventHeader.HeaderType: TIdSipHeaderClass;
+function TestTIdSipAllowEventsHeader.HeaderType: TIdSipHeaderClass;
 begin
-  Result := TIdSipAllowEventHeader;
+  Result := TIdSipAllowEventsHeader;
 end;
 
-//* TestTIdSipAllowEventHeader Published methods *******************************
+//* TestTIdSipAllowEventsHeader Published methods *******************************
 
-procedure TestTIdSipAllowEventHeader.TestMalformedValue;
+procedure TestTIdSipAllowEventsHeader.TestMalformedValue;
 begin
   // Too many dot-limited tokens
   Self.AE.Value := 'foo.bar.baz';
   Check(Self.AE.IsMalformed, 'Header not marked as malformed');
 end;
 
-procedure TestTIdSipAllowEventHeader.TestValue;
+procedure TestTIdSipAllowEventsHeader.TestValue;
 begin
   Self.AE.Value := 'foo';
 
@@ -5199,7 +5199,8 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(AcceptLanguageHeader),       AcceptLanguageHeader);
   CheckType(TIdSipUriHeader,                    Self.Headers.Add(AlertInfoHeader),            AlertInfoHeader);
   CheckType(TIdSipCommaSeparatedHeader,         Self.Headers.Add(AllowHeader),                AllowHeader);
-  CheckType(TIdSipAllowEventHeader,             Self.Headers.Add(AllowEventHeader),           AllowEventHeader);
+  CheckType(TIdSipAllowEventsHeader,            Self.Headers.Add(AllowEventsHeaderFull),      AllowEventsHeaderFull);
+  CheckType(TIdSipAllowEventsHeader,            Self.Headers.Add(AllowEventsHeaderShort),     AllowEventsHeaderShort);
   CheckType(TIdSipAuthenticationInfoHeader,     Self.Headers.Add(AuthenticationInfoHeader),   AuthenticationInfoHeader);
   CheckType(TIdSipAuthorizationHeader,          Self.Headers.Add(AuthorizationHeader),        AuthorizationHeader);
   CheckType(TIdSipCallIdHeader,                 Self.Headers.Add(CallIDHeaderFull),           CallIDHeaderFull);
@@ -5217,7 +5218,8 @@ begin
   CheckType(TIdSipHeader,                       Self.Headers.Add(ContentTypeHeaderShort),     ContentTypeHeaderShort);
   CheckType(TIdSipCSeqHeader,                   Self.Headers.Add(CSeqHeader),                 CSeqHeader);
   CheckType(TIdSipDateHeader,                   Self.Headers.Add(DateHeader),                 DateHeader);
-  CheckType(TIdSipEventHeader,                  Self.Headers.Add(EventHeader),                EventHeader);
+  CheckType(TIdSipEventHeader,                  Self.Headers.Add(EventHeaderFull),            EventHeaderFull);
+  CheckType(TIdSipEventHeader,                  Self.Headers.Add(EventHeaderShort),           EventHeaderShort);
   CheckType(TIdSipUriHeader,                    Self.Headers.Add(ErrorInfoHeader),            ErrorInfoHeader);
   CheckType(TIdSipNumericHeader,                Self.Headers.Add(ExpiresHeader),              ExpiresHeader);
   CheckType(TIdSipFromHeader,                   Self.Headers.Add(FromHeaderFull),             FromHeaderFull);
