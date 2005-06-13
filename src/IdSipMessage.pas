@@ -561,6 +561,8 @@ type
   protected
     function GetName: String; override;
   public
+    function Equals(Header: TIdSipHeader): Boolean; override;
+
     property ID: String read GetID write SetID;
   end;
 
@@ -4195,6 +4197,19 @@ end;
 //******************************************************************************
 //* TIdSipEventHeader                                                          *
 //******************************************************************************
+//* TIdSipEventHeader Public methods *******************************************
+
+function TIdSipEventHeader.Equals(Header: TIdSipHeader): Boolean;
+begin
+  Result := IsEqual(Header.Name, Self.Name)
+        and (Header.Value = Self.Value)
+        and (Header.HasParam(IdParam) = Self.HasParam(IdParam));
+
+  if (Self.HasParam(IdParam) or Header.HasParam(IdParam)) then
+    Result := Result
+          and (Header.Params[IdParam] = Self.ID);
+end;
+
 //* TIdSipEventHeader Protected methods ****************************************
 
 function TIdSipEventHeader.GetName: String;

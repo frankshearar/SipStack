@@ -236,6 +236,9 @@ type
   public
     procedure SetUp; override;
   published
+    procedure TestEquals;
+    procedure TestEqualsWithID;
+    procedure TestEqualsWithNonIDParams;
     procedure TestGetSetID;
     procedure TestValueWithID;
   end;
@@ -2581,6 +2584,66 @@ end;
 function TestTIdSipEventHeader.HeaderType: TIdSipHeaderClass;
 begin
   Result := TIdSipEventHeader;
+end;
+
+procedure TestTIdSipEventHeader.TestEquals;
+var
+  Other: TIdSipEventHeader;
+begin
+  Other := TIdSipEventHeader.Create;
+  try
+    Self.E.Value := 'foo';
+    Other.Value := Self.E.Value;
+    Check(Self.E.Equals(Other), 'E <> Other');
+    Check(Other.Equals(Self.E), 'Other <> E');
+
+    Other.Value := 'bar';
+    Check(not Self.E.Equals(Other), 'E = Other');
+    Check(not Other.Equals(Self.E), 'Other = E');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipEventHeader.TestEqualsWithID;
+var
+  Other: TIdSipEventHeader;
+begin
+  Other := TIdSipEventHeader.Create;
+  try
+    Self.E.Value := 'foo;id=bar';
+    Other.Value := Self.E.FullValue;
+
+    Check(Self.E.Equals(Other), 'E <> Other');
+    Check(Other.Equals(Self.E), 'Other <> E');
+
+    Other.ID := 'baz';
+    Check(not Self.E.Equals(Other), 'E = Other');
+    Check(not Other.Equals(Self.E), 'Other = E');
+
+    Other.Params['unused'] := '1';
+    Check(not Self.E.Equals(Other), 'E = Other: non-id param not ignored');
+    Check(not Other.Equals(Self.E), 'Other = E: non-id param not ignored');
+  finally
+    Other.Free;
+  end;
+end;
+
+procedure TestTIdSipEventHeader.TestEqualsWithNonIDParams;
+var
+  Other: TIdSipEventHeader;
+begin
+  Other := TIdSipEventHeader.Create;
+  try
+    Self.E.Value := 'foo;id=bar';
+    Other.Value := Self.E.FullValue;
+    Self.E.Params['baz'] := '2';
+
+    Check(Self.E.Equals(Other), 'E <> Other: non-id param not ignored');
+    Check(Other.Equals(Self.E), 'Other <> E: non-id param not ignored');
+  finally
+    Other.Free;
+  end;
 end;
 
 procedure TestTIdSipEventHeader.TestGetSetID;
